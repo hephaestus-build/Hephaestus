@@ -57,7 +57,7 @@ class WorkerMentorSessionsTest extends BaseUnitTest {
                 Map.of());
         when(attached.identity()).thenReturn(new SandboxIdentity(spec.sessionId(), "1", "1"));
         when(adapter.attach(any())).thenReturn(attached);
-        when(attached.subscribeWithReplay(any(), any())).thenReturn(() -> {});
+        when(attached.subscribe(any(), any())).thenReturn(() -> {});
         when(client.sendRequired(any())).thenAnswer(invocation -> {
             replies.add(invocation.getArgument(0));
             return true;
@@ -143,5 +143,88 @@ class WorkerMentorSessionsTest extends BaseUnitTest {
                         .anySatisfy(event -> assertThat(event.kind()).isEqualTo(MentorSessionEvent.Kind.CLOSED)));
         assertThat(capacity.snapshot().inFlightMentor()).isZero();
         assertThat(credentials.validate("scoped-token")).isEmpty();
+    }
+
+    @Test
+    void aStalledSendDoesNotBlockAnotherSession() throws Exception {
+        assertOtherSessionProgressesWhileBlocked(false);
+    }
+
+    @Test
+    void aStalledCloseReleasesCapacityWithoutBlockingAnotherSession() throws Exception {
+        assertOtherSessionProgressesWhileBlocked(true);
+    }
+
+    private void assertOtherSessionProgressesWhileBlocked(boolean close) throws Exception {
+        sessions.stop();
+        var environment = new MockEnvironment().withProperty("hephaestus.worker.capacity.mentor-max", "2");
+        capacity = new WorkerCapacityState(
+                Binder.get(environment).bindOrCreate("hephaestus.worker", WorkerProperties.class));
+        sessions = new WorkerMentorSessions(
+                client,
+                capacity,
+                adapter,
+                credentials,
+                mapper,
+                Binder.get(environment).bindOrCreate("hephaestus.mentor", InteractiveSandboxProperties.class));
+        var firstSpec = spec;
+        sessions.handle(open(spec.sessionId()));
+        await().untilAsserted(() -> verify(adapter).attach(firstSpec));
+        await().until(() -> replies.stream().anyMatch(event -> event.kind() == MentorSessionEvent.Kind.ACK));
+        var second = mock(AttachedSandbox.class);
+        spec = new InteractiveSandboxSpec(
+                UUID.randomUUID(),
+                "2",
+                "1",
+                "runner",
+                List.of("runner"),
+                Map.of(),
+                new NetworkPolicy(false, "http://gateway/internal/llm", "second-token"),
+                ResourceLimits.DEFAULT,
+                SecurityProfile.DEFAULT,
+                Map.of());
+        when(second.identity()).thenReturn(new SandboxIdentity(spec.sessionId(), "2", "1"));
+        when(second.subscribe(any(), any())).thenReturn(() -> {});
+        when(adapter.attach(spec)).thenReturn(second);
+        var secondOpen = open(spec.sessionId());
+        sessions.handle(secondOpen);
+        await().until(() ->
+                replies.stream().anyMatch(event -> secondOpen.requestId().equals(event.requestId())));
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        org.mockito.stubbing.Answer<Void> stalled = invocation -> {
+            entered.countDown();
+            release.await(10, java.util.concurrent.TimeUnit.SECONDS);
+            return null;
+        };
+        if (close) doAnswer(stalled).when(attached).close(Duration.ZERO);
+        else doAnswer(stalled).when(attached).send(any());
+        var blocking = new MentorSessionCommand(
+                firstSpec.sessionId(),
+                UUID.randomUUID(),
+                close ? MentorSessionCommand.Operation.CLOSE : MentorSessionCommand.Operation.SEND,
+                mapper.createObjectNode());
+        try {
+            sessions.handle(blocking);
+            assertThat(entered.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            if (close) {
+                assertThat(capacity.snapshot().inFlightMentor()).isEqualTo(1);
+                assertThat(credentials.validate("scoped-token")).isEmpty();
+            }
+            var healthy = new MentorSessionCommand(
+                    spec.sessionId(),
+                    UUID.randomUUID(),
+                    MentorSessionCommand.Operation.SEND,
+                    mapper.createObjectNode().put("method", "hello"));
+            sessions.handle(healthy);
+            await().atMost(Duration.ofSeconds(2))
+                    .untilAsserted(() -> assertThat(replies).anySatisfy(event -> {
+                        assertThat(event.requestId()).isEqualTo(healthy.requestId());
+                        assertThat(event.kind()).isEqualTo(MentorSessionEvent.Kind.ACK);
+                    }));
+            verify(second).send(healthy.body());
+        } finally {
+            release.countDown();
+        }
     }
 }

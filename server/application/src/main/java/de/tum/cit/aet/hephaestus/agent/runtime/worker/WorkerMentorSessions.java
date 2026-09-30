@@ -17,7 +17,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,7 +39,7 @@ public final class WorkerMentorSessions {
     private final MentorProxyCredentialRegistry credentials;
     private final ObjectMapper mapper;
     private final InteractiveSandboxProperties properties;
-    private final ThreadPoolExecutor startup;
+    private final ExecutorService cleanup = Executors.newVirtualThreadPerTaskExecutor();
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
     private volatile boolean running = true;
 
@@ -54,15 +56,6 @@ public final class WorkerMentorSessions {
         this.credentials = credentials;
         this.mapper = mapper;
         this.properties = properties;
-        int threads = Math.max(1, Math.min(4, capacity.mentorMax()));
-        startup = new ThreadPoolExecutor(
-                threads,
-                threads,
-                0,
-                TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(Math.max(1, capacity.mentorMax())),
-                Thread.ofPlatform().name("worker-mentor-start-", 0).daemon(true).factory(),
-                new ThreadPoolExecutor.AbortPolicy());
         client.setMentorHandlers(this::handle, this::disconnected);
     }
 
@@ -73,6 +66,30 @@ public final class WorkerMentorSessions {
         }
         Session session = sessions.get(command.sessionId());
         if (session == null) {
+            reply(command, MentorSessionEvent.Kind.CLOSED);
+            return;
+        }
+        if (command.operation() == MentorSessionCommand.Operation.CLOSE) {
+            retire(
+                    command.sessionId(),
+                    session,
+                    Duration.ofMillis(Math.clamp(
+                            command.body().path("graceMillis").asLong(0),
+                            0,
+                            properties.graceTimeoutSeconds() * 1000L)));
+            reply(command, MentorSessionEvent.Kind.ACK);
+            return;
+        }
+        try {
+            session.commands.execute(() -> execute(command, session));
+        } catch (RejectedExecutionException full) {
+            reply(command, MentorSessionEvent.Kind.FAILED);
+            retire(command.sessionId(), session);
+        }
+    }
+
+    private void execute(MentorSessionCommand command, Session session) {
+        if (session.closed.get()) {
             reply(command, MentorSessionEvent.Kind.CLOSED);
             return;
         }
@@ -105,15 +122,7 @@ public final class WorkerMentorSessions {
                         session.meter = null;
                     }
                 }
-                case CLOSE ->
-                    retire(
-                            command.sessionId(),
-                            session,
-                            Duration.ofMillis(Math.clamp(
-                                    command.body().path("graceMillis").asLong(0),
-                                    0,
-                                    properties.graceTimeoutSeconds() * 1000L)));
-                case OPEN -> throw new IllegalStateException("Open dispatched twice");
+                case CLOSE, OPEN -> throw new IllegalStateException("Lifecycle command dispatched twice");
             }
             reply(command, MentorSessionEvent.Kind.ACK);
         } catch (RuntimeException failure) {
@@ -128,11 +137,11 @@ public final class WorkerMentorSessions {
                 reply(command, MentorSessionEvent.Kind.BUSY);
                 return;
             }
-            Session session = new Session();
+            Session session = new Session(command.sessionId(), properties.sendQueueCapacity());
             sessions.put(command.sessionId(), session);
             try {
-                startup.execute(() -> attach(command, session));
-            } catch (java.util.concurrent.RejectedExecutionException full) {
+                session.commands.execute(() -> attach(command, session));
+            } catch (RejectedExecutionException full) {
                 retire(command.sessionId(), session);
                 reply(command, MentorSessionEvent.Kind.BUSY);
             }
@@ -152,26 +161,41 @@ public final class WorkerMentorSessions {
                     || !spec.workspaceId().equals(route.workspaceId().toString())) {
                 throw new InteractiveSandboxException("Session workspace or credential missing");
             }
-            credentials.install(spec.sessionId(), token, route);
+            synchronized (session) {
+                if (session.closed.get()) return;
+                credentials.install(spec.sessionId(), token, route);
+            }
             AttachedSandbox attached = sandbox.attach(spec);
             // Placement must not accidentally adopt a sandbox left by a previous hub connection.
             if (!attached.identity().sessionId().equals(command.sessionId())) {
+                closeAttached(command.sessionId(), attached, null, Duration.ZERO);
                 throw new InteractiveSandboxException("Session identity changed");
             }
+            boolean closed;
             synchronized (session) {
-                if (session.closed.get()) {
-                    attached.close(Duration.ZERO);
-                    return;
-                }
-                session.attached = attached;
-                session.subscription = attached.subscribeWithReplay(
-                        frame -> {
-                            if (!client.sendRequired(new MentorSessionEvent(
-                                    command.sessionId(), null, MentorSessionEvent.Kind.FRAME, frame))) {
-                                retire(command.sessionId(), session);
-                            }
-                        },
-                        () -> retire(command.sessionId(), session));
+                closed = session.closed.get();
+                if (!closed) session.attached = attached;
+            }
+            if (closed) {
+                closeAttached(command.sessionId(), attached, null, Duration.ZERO);
+                return;
+            }
+            var subscription = attached.subscribe(
+                    frame -> {
+                        if (!session.closed.get()
+                                && !client.sendRequired(new MentorSessionEvent(
+                                        command.sessionId(), null, MentorSessionEvent.Kind.FRAME, frame))) {
+                            retire(command.sessionId(), session);
+                        }
+                    },
+                    () -> retire(command.sessionId(), session));
+            synchronized (session) {
+                closed = session.closed.get();
+                if (!closed) session.subscription = subscription;
+            }
+            if (closed) {
+                subscription.dispose();
+                return;
             }
             reply(command, MentorSessionEvent.Kind.ACK);
         } catch (RuntimeException failure) {
@@ -206,33 +230,36 @@ public final class WorkerMentorSessions {
         Disposable subscription;
         synchronized (session) {
             if (!session.closed.compareAndSet(false, true)) return;
-            sessions.remove(id, session);
             capacity.releaseMentor();
             credentials.revoke(id);
             attached = session.attached;
             subscription = session.subscription;
+            session.commands.shutdownNow();
+            if (attached != null || subscription != null) {
+                cleanup.execute(() -> closeAttached(id, attached, subscription, grace));
+            }
+            sessions.remove(id, session);
         }
         client.sendRequired(
                 new MentorSessionEvent(id, null, MentorSessionEvent.Kind.CLOSED, mapper.createObjectNode()));
+    }
+
+    private void closeAttached(
+            UUID id, @Nullable AttachedSandbox attached, @Nullable Disposable subscription, Duration grace) {
         if (subscription != null) subscription.dispose();
-        if (attached != null) {
-            try {
-                attached.close(grace);
-            } catch (RuntimeException failure) {
-                log.warn(
-                        "Worker mentor close failed for {}: {}",
-                        id,
-                        failure.getClass().getSimpleName());
-            }
+        if (attached == null) return;
+        try {
+            attached.close(grace);
+        } catch (RuntimeException failure) {
+            log.warn(
+                    "Worker mentor close failed for {}: {}",
+                    id,
+                    failure.getClass().getSimpleName());
         }
     }
 
     private void disconnected() {
-        // Docker close already has a bounded wait. Run those waits together, outside session locks,
-        // so a full worker drains in one close budget rather than one budget per live session.
-        try (var cleanup = Executors.newVirtualThreadPerTaskExecutor()) {
-            sessions.forEach((id, session) -> cleanup.submit(() -> retire(id, session)));
-        }
+        sessions.forEach((id, session) -> retire(id, session));
     }
 
     @PreDestroy
@@ -241,11 +268,32 @@ public final class WorkerMentorSessions {
             running = false;
         }
         disconnected();
-        startup.shutdownNow();
+        cleanup.shutdown();
+        try {
+            if (!cleanup.awaitTermination(properties.graceTimeoutSeconds() + 5L, TimeUnit.SECONDS)) {
+                cleanup.shutdownNow();
+            }
+        } catch (InterruptedException interrupted) {
+            cleanup.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     private static final class Session {
         final AtomicBoolean closed = new AtomicBoolean();
+        final ThreadPoolExecutor commands;
+
+        Session(UUID id, int queueCapacity) {
+            commands = new ThreadPoolExecutor(
+                    0,
+                    1,
+                    30,
+                    TimeUnit.SECONDS,
+                    new ArrayBlockingQueue<>(queueCapacity),
+                    Thread.ofPlatform().name("worker-mentor-" + id).daemon(true).factory(),
+                    new ThreadPoolExecutor.AbortPolicy());
+        }
+
         volatile @Nullable AttachedSandbox attached;
         volatile @Nullable Disposable subscription;
         volatile @Nullable MentorTurnMeter meter;

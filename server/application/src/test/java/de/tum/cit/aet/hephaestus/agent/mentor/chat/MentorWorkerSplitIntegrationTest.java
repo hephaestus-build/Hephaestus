@@ -63,6 +63,9 @@ class MentorWorkerSplitIntegrationTest extends AbstractWorkspaceIntegrationTest 
     ChatMessageRepository messages;
 
     @Autowired
+    MentorTurnLock turnLock;
+
+    @Autowired
     ChatThreadRepository threads;
 
     @Autowired
@@ -183,6 +186,7 @@ class MentorWorkerSplitIntegrationTest extends AbstractWorkspaceIntegrationTest 
         try (var first = worker();
                 var second = worker()) {
             assertThat(webTurn(thread)).contains("finish");
+            await().atMost(Duration.ofSeconds(10)).until(() -> turnLock.activeKeys() == 0);
             var owning = first.sandboxes.isEmpty() ? second : first;
             var replacement = owning == first ? second : first;
             owning.sandboxes.getFirst().promptReceived = false;
@@ -207,7 +211,14 @@ class MentorWorkerSplitIntegrationTest extends AbstractWorkspaceIntegrationTest 
                     .build();
             var response = java.net.http.HttpClient.newHttpClient()
                     .sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString());
-            await().atMost(Duration.ofSeconds(10)).until(() -> owning.sandboxes.getFirst().promptReceived);
+            await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+                if (response.isDone()) {
+                    assertThat(response.get().body())
+                            .as("turn ended before the held prompt reached its worker")
+                            .isEmpty();
+                }
+                assertThat(owning.sandboxes.getFirst().promptReceived).isTrue();
+            });
             owning.drain();
             var terminal = response.get(15, java.util.concurrent.TimeUnit.SECONDS);
             assertThat(terminal.statusCode()).isEqualTo(200);

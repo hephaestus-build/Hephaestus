@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionComma
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionEvent;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -43,7 +42,6 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
     private final Map<UUID, CompletableFuture<JsonNode>> pending = new ConcurrentHashMap<>();
     private final CompletableFuture<Void> opened = new CompletableFuture<>();
     private final AtomicBoolean closed = new AtomicBoolean();
-    private volatile Instant lastActivity = Instant.now();
     private volatile int frameByteBudget;
 
     RemoteAttachedSandbox(
@@ -118,7 +116,6 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
                 lost("The worker connection ended. Please try again.");
                 throw new InteractiveSandboxException("Worker session send failed");
             }
-            lastActivity = Instant.now();
             return await(result, timeout);
         } catch (RuntimeException failure) {
             // A missing acknowledgement leaves command execution unknown. Do not reuse that runtime.
@@ -181,7 +178,6 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
 
     synchronized void receive(MentorSessionEvent event) {
         if (closed.get()) return;
-        lastActivity = Instant.now();
         switch (event.kind()) {
             case FRAME -> {
                 if (mapper.writeValueAsBytes(event.body()).length > frameByteBudget) {
@@ -212,12 +208,7 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
     }
 
     @Override
-    public Disposable subscribe(Consumer<JsonNode> listener) {
-        return subscribeAfter(-1, listener, () -> {});
-    }
-
-    @Override
-    public Disposable subscribeWithReplay(Consumer<JsonNode> listener, Runnable onLost) {
+    public Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost) {
         return subscribeAfter(-1, listener, onLost);
     }
 
@@ -262,16 +253,6 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
             else sub.lose("the worker session ended");
         });
         onClosed.accept(this);
-    }
-
-    @Override
-    public Instant lastActivityAt() {
-        return lastActivity;
-    }
-
-    @Override
-    public Duration idleFor() {
-        return Duration.between(lastActivity, Instant.now());
     }
 
     @Override

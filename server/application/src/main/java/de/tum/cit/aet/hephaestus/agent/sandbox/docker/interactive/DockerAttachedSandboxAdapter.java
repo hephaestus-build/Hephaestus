@@ -165,12 +165,10 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         return Objects.requireNonNull(state.get());
     }
 
-    @Override
     public Instant lastActivityAt() {
         return lastActivityAt;
     }
 
-    @Override
     public Duration idleFor() {
         return Duration.between(lastActivityAt, Instant.now());
     }
@@ -185,13 +183,12 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         lastActivityAt = Instant.now();
     }
 
-    @Override
     public Disposable subscribe(Consumer<JsonNode> listener) {
         return subscribeInternal(listener, -1L, () -> {});
     }
 
     @Override
-    public Disposable subscribeWithReplay(Consumer<JsonNode> listener, Runnable onLost) {
+    public Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost) {
         return subscribeInternal(listener, -1L, onLost);
     }
 

@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxIdentity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -345,7 +344,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
         }
 
         @Override
-        public Disposable subscribe(Consumer<JsonNode> listener) {
+        public Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost) {
             listeners.add(listener);
             return () -> listeners.remove(listener);
         }
@@ -353,17 +352,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
         @Override
         public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
             this.onLost = onLost;
-            return subscribe(listener);
-        }
-
-        @Override
-        public Instant lastActivityAt() {
-            return Instant.now();
-        }
-
-        @Override
-        public Duration idleFor() {
-            return Duration.ZERO;
+            return subscribe(listener, onLost);
         }
 
         @Override

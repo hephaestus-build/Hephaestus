@@ -20,11 +20,11 @@ import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslat
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
-import de.tum.cit.aet.hephaestus.agent.proxy.MentorTurnMeter;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -288,7 +288,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         UUID assistantMessageId = UUID.randomUUID();
         // Read model only: it makes this turn's completed calls visible to the budget gate while the
         // turn is still running. Billing comes from the turn's row, which the proxy writes per call.
-        MentorTurnMeter proxyMeter = new MentorTurnMeter(assistantMessageId, llmConfig.priceSnapshot());
         MentorTurnPersistence.TurnPersistenceCookie cookie;
         MentorTurnRequest request;
         if (retryOf == null) {
@@ -371,15 +370,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     // Bind and unbind INSIDE the sandbox lock: that exclusivity is what stops a call being
                     // attributed to the wrong turn. A late call outside the window has no row to bill and
                     // the proxy refuses it.
-                    UUID sandboxSessionId = sandbox.identity().sessionId();
-                    if (!proxyCredentialRegistry.bindTurn(sandboxSessionId, proxyMeter)) {
-                        log.warn(
-                                "Mentor sandbox session {} has no live proxy credential; this turn has no billing "
-                                        + "target, so the proxy will refuse its LLM calls",
-                                sandboxSessionId);
-                    }
                     try {
-                        sandbox.bindTurn(proxyMeter.turnId(), llmConfig.priceSnapshot());
+                        sandbox.bindTurn(assistantMessageId, llmConfig.priceSnapshot());
                         var prompt = client.prompt(
                                 request.threadId(), MentorTurnPromptFactory.forRunner(request, contextInputs));
                         state.markLlmCallStarted();
@@ -392,11 +384,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         turn.done.get(
                                 MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis() + 30_000, TimeUnit.MILLISECONDS);
                     } finally {
-                        try {
-                            sandbox.unbindTurn(proxyMeter.turnId());
-                        } finally {
-                            proxyCredentialRegistry.unbindTurn(sandboxSessionId, proxyMeter);
-                        }
+                        sandbox.unbindTurn(assistantMessageId);
                     }
                 } catch (Exception failure) {
                     poisoning = isPoisoning(failure);
@@ -806,8 +794,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
      * internal ids or upstream errors. The server log retains those details.
      */
     private static String userFacingError(Throwable e) {
-        if (e instanceof de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException
-                || e.getCause() instanceof de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException) {
+        if (e instanceof MentorBusyException || e.getCause() instanceof MentorBusyException) {
             return "Heph is busy. Please try again.";
         }
         if (e.getCause() instanceof MentorStreamLostException || e instanceof MentorStreamLostException) {

@@ -19,7 +19,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.function.Consumer;
@@ -215,14 +214,13 @@ public final class TestMentorWorker implements AutoCloseable {
             listeners.forEach(listener -> listener.accept(frame));
         }
 
-        @Override
         public Disposable subscribe(Consumer<JsonNode> listener) {
             listeners.add(listener);
             return () -> listeners.remove(listener);
         }
 
         @Override
-        public Disposable subscribeWithReplay(Consumer<JsonNode> listener, Runnable lost) {
+        public Disposable subscribe(Consumer<JsonNode> listener, Runnable lost) {
             onLost = lost;
             return subscribe(listener);
         }
@@ -231,16 +229,6 @@ public final class TestMentorWorker implements AutoCloseable {
         public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable lost) {
             onLost = lost;
             return subscribe(listener);
-        }
-
-        @Override
-        public Instant lastActivityAt() {
-            return Instant.now();
-        }
-
-        @Override
-        public Duration idleFor() {
-            return Duration.ZERO;
         }
 
         @Override
