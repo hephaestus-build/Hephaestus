@@ -122,8 +122,8 @@ as triggers, partitioning and partial-index predicates; verify those through dat
 ## Baseline release gates
 
 The v0.77.4 baseline remains the baseline for 1.0. **A future baseline is permitted only at a
-major-version boundary and only with automated synchronization.** Do not add a second manual
-synchronization immediately before 1.0. Released migrations and the archived chain remain immutable.
+major-version boundary and only with automated synchronization.** Released migrations and the
+archived chain remain immutable.
 
 A global Liquibase precondition checks the database cut-point before either update or synchronization.
 Liquibase permits one global `preConditions` container, so the guard shares it with the PostgreSQL 18
@@ -135,11 +135,7 @@ baseline's existing schema precondition still refuses a partially populated sche
 evaluation, so a missing history table never reaches the row query.
 [Liquibase 5.0.4 validates the changelog](https://github.com/liquibase/liquibase/blob/v5.0.4/liquibase-standard/src/main/java/liquibase/command/core/helpers/DatabaseChangelogCommandStep.java)
 before `changeLogSyncToTag`; changeset-level preconditions cannot protect that command.
-The refusal fixture is v0.76.0, not v0.77.3: the released
-[v0.77.3 and v0.77.4 changelog chains](https://github.com/hephaestus-build/Hephaestus/compare/v0.77.3...v0.77.4)
-are byte-identical and both contain `1788679885460-1`. Refusing v0.77.3 would contradict the
-history-based cut-point check. The
-baseline integration suite proves refusal without DDL, fresh initialization, native-object
+The baseline integration suite proves refusal without DDL, fresh initialization, native-object
 equivalence, synchronization without DDL or data loss, subsequent upgrades and lock recovery in
 both `dev` and `prod`.
 

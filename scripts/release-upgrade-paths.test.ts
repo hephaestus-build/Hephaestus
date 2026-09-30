@@ -6,7 +6,7 @@ import path from "node:path";
 import process from "node:process";
 import { test } from "node:test";
 
-import { isSeq, parseDocument } from "yaml";
+import { isMap, isSeq, parseDocument } from "yaml";
 
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
@@ -18,9 +18,18 @@ await test("release and weekly runs require latest, baseline, and refusal paths"
 	assert.equal(workflow.getIn(["jobs", "upgrade", "strategy", "fail-fast"]), false);
 	assert.equal(workflow.hasIn(["on", "schedule"]), true);
 	assert.equal(workflow.hasIn(["on", "workflow_call"]), true);
-	const source = readFileSync(".github/workflows/release-upgrade.yml", "utf8");
-	assert.equal((source.match(/UPGRADE_PATH: \$\{\{ matrix.path \}\}/gu) ?? []).length, 2);
-	assert.match(source, /release-upgrade-test.ts.*"\$UPGRADE_PATH"/u);
+	const steps = workflow.getIn(["jobs", "upgrade", "steps"]);
+	assert.ok(isSeq(steps));
+	const resolver = steps.items.find((step) => isMap(step) && step.get("id") === "images");
+	const driver = steps.items.find(
+		(step) => isMap(step) && String(step.get("run")).includes("scripts/release-upgrade-test.ts"),
+	);
+	assert.ok(isMap(resolver));
+	assert.ok(isMap(driver));
+	for (const step of [resolver, driver]) {
+		assert.equal(step.getIn(["env", "UPGRADE_PATH"]), `\${{ matrix.path }}`);
+	}
+	assert.match(String(driver.get("run")), /"\$UPGRADE_PATH"$/u);
 	const release = parseDocument(readFileSync(".github/workflows/release.yml", "utf8"));
 	assert.equal(
 		release.getIn(["jobs", "upgrade-test", "uses"]),
@@ -33,47 +42,54 @@ for (const [upgradePath, version] of [
 	["baseline", "0.77.4"],
 	["refusal", "0.76.0"],
 ] as const) {
-	await test(`${upgradePath} resolves its own immutable historical image`, () => {
-		const directory = mkdtempSync(path.join(tmpdir(), "upgrade-images-"));
-		try {
-			const executable = path.join(directory, "docker");
-			const output = path.join(directory, "output");
-			const invocations = path.join(directory, "invocations");
-			writeFileSync(
-				executable,
-				`#!${process.execPath}
+	for (const source of ["release", "dispatch"] as const) {
+		await test(`${source}: ${upgradePath} resolves its own immutable historical image`, () => {
+			const directory = mkdtempSync(path.join(tmpdir(), "upgrade-images-"));
+			try {
+				const executable = path.join(directory, "docker");
+				const output = path.join(directory, "output");
+				const invocations = path.join(directory, "invocations");
+				writeFileSync(
+					executable,
+					`#!${process.execPath}
 import { appendFileSync } from "node:fs";
 appendFileSync(${JSON.stringify(invocations)}, process.argv.slice(2).join(" ") + "\\n");
 console.log(JSON.stringify({ digest: "sha256:" + "a".repeat(64) }));
 `,
-			);
-			chmodSync(executable, 0o755);
-			const { namespace } = currentReleaseIdentity();
-			const result = spawnSync(process.execPath, ["scripts/resolve-release-upgrade-images.ts"], {
-				encoding: "utf8",
-				env: {
-					...process.env,
-					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
-					UPGRADE_PATH: upgradePath,
-					INPUT_PREVIOUS_VERSION: "0.80.0",
-					INPUT_CANDIDATE_APP: `${namespace}/application-server:candidate`,
-					INPUT_POSTGRES: `${namespace}/postgres:candidate`,
-					GITHUB_OUTPUT: output,
-				},
-			});
-			assert.equal(result.status, 0, result.stdout + result.stderr);
-			const historicalNamespace = releaseIdentityFor(version).namespace;
-			assert.ok(
-				readFileSync(invocations, "utf8").includes(
-					`${historicalNamespace}/application-server:${version} `,
-				),
-			);
-			assert.match(readFileSync(output, "utf8"), /^previous-app=.*@sha256:[a-f0-9]{64}$/mu);
-			assert.match(readFileSync(output, "utf8"), /^candidate-app=.*@sha256:[a-f0-9]{64}$/mu);
-		} finally {
-			rmSync(directory, { recursive: true, force: true });
-		}
-	});
+				);
+				chmodSync(executable, 0o755);
+				const { namespace } = currentReleaseIdentity();
+				const result = spawnSync(process.execPath, ["scripts/resolve-release-upgrade-images.ts"], {
+					encoding: "utf8",
+					env: {
+						...process.env,
+						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+						UPGRADE_PATH: upgradePath,
+						INPUT_PREVIOUS_VERSION: source === "release" ? "0.80.0" : "",
+						INPUT_CANDIDATE_APP:
+							source === "release" ? `${namespace}/application-server:candidate` : "",
+						INPUT_POSTGRES: source === "release" ? `${namespace}/postgres:candidate` : "",
+						// A pinned path must ignore the caller's latest-release selection.
+						REQUESTED_PREVIOUS: upgradePath === "latest" ? "v0.80.0" : "not-a-release",
+						GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
+						GITHUB_SHA: "b".repeat(40),
+						GITHUB_OUTPUT: output,
+					},
+				});
+				assert.equal(result.status, 0, result.stdout + result.stderr);
+				const historicalNamespace = releaseIdentityFor(version).namespace;
+				assert.ok(
+					readFileSync(invocations, "utf8").includes(
+						`${historicalNamespace}/application-server:${version} `,
+					),
+				);
+				assert.match(readFileSync(output, "utf8"), /^previous-app=.*@sha256:[a-f0-9]{64}$/mu);
+				assert.match(readFileSync(output, "utf8"), /^candidate-app=.*@sha256:[a-f0-9]{64}$/mu);
+			} finally {
+				rmSync(directory, { recursive: true, force: true });
+			}
+		});
+	}
 }
 
 // Exercise the release driver as a process. The transport stubs model only the old release fixture;
@@ -85,9 +101,11 @@ for (const [scenario, expectedError] of [
 	["startup-accepted", "Expected cut-point refusal at startup"],
 	["startup-unrelated-error", "Expected cut-point refusal at startup"],
 	["history-changed", "Refused synchronization changed migration history or seeded data"],
+	["startup-history-changed", "Refused startup changed migration history or seeded data"],
+	["startup-data-changed", "Refused startup changed migration history or seeded data"],
 	["lock-held", "Refused upgrade left the Liquibase lock held"],
 ] as const) {
-	await test(`refusal driver rejects false evidence: ${scenario}`, () => {
+	await test(`refusal driver: ${scenario}`, () => {
 		const directory = mkdtempSync(path.join(tmpdir(), "upgrade-refusal-"));
 		try {
 			const executable = path.join(directory, "docker");
@@ -133,10 +151,16 @@ else if (args[0] === "inspect") {
 else if (args[0] === "logs") console.error(scenario === "startup-unrelated-error" ? "unrelated failure" : message);
 else if (args.includes("--command")) {
   const sql = args.at(-1);
-  if (sql.includes("SELECT kind ||")) console.log("account|1\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1");
+  if (sql.includes("SELECT kind ||")) {
+    const started = readFileSync(commands, "utf8").includes("-refused");
+    console.log("account|" + (scenario === "startup-data-changed" && started ? "changed" : "1") +
+      "\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1");
+  }
   else if (sql.includes("row_to_json")) {
     const synced = readFileSync(commands, "utf8").includes("changeLogSyncToTag");
-    console.log(scenario === "history-changed" && synced ? "changed" : "history");
+    const started = readFileSync(commands, "utf8").includes("-refused");
+    console.log((scenario === "history-changed" && synced) ||
+      (scenario === "startup-history-changed" && started) ? "changed" : "history");
   }
   else if (sql.includes("databasechangeloglock")) console.log(scenario === "lock-held" ? "1" : "0");
   else if (sql.includes("1788679885460-1")) console.log("0");
