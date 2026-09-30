@@ -115,6 +115,11 @@ public class PullRequestSignalResubmitter implements PendingSignalResubmitter {
                 signalRecorder.markRefused(key, skip.resolvedSignalReason());
             }
             case GateDecision.Detect detect -> {
+                if (MergeActorAdmission.awaitsMerger(pr, key.signalName(), detect.matchedPractices())) {
+                    log.debug("Pending merge review still waits for its merger: prId={}", pr.getId());
+                    signalRecorder.markRefused(key, SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
+                    return;
+                }
                 ScmEventPayload.PullRequestData prData = ScmEventPayload.PullRequestData.from(pr);
                 PullRequestReviewSubmissionRequest request = new PullRequestReviewSubmissionRequest(
                         prData,

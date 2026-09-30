@@ -215,7 +215,19 @@ public class AgentJobEventListener {
                             skip.reason());
                     signalRecorder.markRefused(key, skip.resolvedSignalReason());
                 }
-                case GateDecision.Detect detect -> submitJob(prData, pr, detect, key, reviewData);
+                case GateDecision.Detect detect -> {
+                    if (MergeActorAdmission.awaitsMerger(pr, key.signalName(), detect.matchedPractices())) {
+                        log.debug(
+                                "Merge review waits for its merger: prNumber={}, repoName={}",
+                                prData.number(),
+                                repositoryNameOf(prData));
+                        signalRecorder.markRefused(key, SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
+                        return;
+                    }
+                    // The job carries the merge request as stored now, not as the event saw it: a merger or merge
+                    // commit recorded since the event is what the review judges.
+                    submitJob(ScmEventPayload.PullRequestData.from(pr), pr, detect, key, reviewData);
+                }
             }
         } catch (Exception e) {
             log.error(

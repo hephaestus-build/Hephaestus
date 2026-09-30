@@ -130,6 +130,12 @@ including live events and pending retries. Ordinary sync can restore the row
 ([ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)).
 A manual request is not retried after restoration; the person can request another review.
 
+`MERGE_ACTOR_UNAVAILABLE` holds a merge occasion whose matched practices judge the merger while the mirror
+does not know who merged. It is not `SUBJECT_UNLINKED`: the author may be a known member, and the missing
+fact is the merger. Reviewing without it would pass over the merger practice silently, and naming the author
+or the hook's sender instead would judge someone who may not have merged. A provider read or an ordinary
+sync that records the merger clears it.
+
 `COALESCED` means an issue-update snapshot was displaced before admission. It is suppressed, not pending:
 the reaper does not retry it, but a later live transition back to that content can offer it again.
 It says nothing about whether earlier observations were resolved. See

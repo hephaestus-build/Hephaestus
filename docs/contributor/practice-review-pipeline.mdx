@@ -119,6 +119,17 @@ re-offers it and an ordinary sync can restore reviewability without another webh
 committed mirror state at admission; work deleted during capture or delivery belongs to that stage's
 refusal policy.
 
+A GitLab merge occasion is offered only after the merge hook's read of the merge request has completed and
+recorded what it could, so a read that names the merger admits at once. When the read fails or names no merger,
+the occasion is still offered with live provenance, and if its matched practices include one about the merger
+(`subject: MERGER`) it waits as `PENDING / MERGE_ACTOR_UNAVAILABLE`, in the live listener and in pending
+retries alike, until an ordinary sync records the merger and the reaper re-offers it. GitHub's merge event
+names the merger itself and keeps its path. The job is built from the merge request as stored at admission
+rather than as the event saw it. A self-merge then makes the merger practice attributable to the author; another merger leaves
+it withheld as before. The merger is never inferred; an occasion whose merger stays unknown lapses at the
+ledger deadline. Merge commit and merge time are recorded when the provider names them and are not
+admission conditions.
+
 The occurrence ledger has no pruning job; capacity planning must treat it as append-only. Retry and lapse
 thresholds are `hephaestus.signal-ledger.pending-retry-after` and `pending-lapse-after`.
 

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -21,11 +22,15 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
+import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeserializer;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -46,8 +51,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
+import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
+import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
@@ -68,11 +78,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -199,6 +213,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     @Autowired
     private GitLabProperties gitLabProperties;
 
+    @Autowired
+    private GitLabWebhookContextResolver webhookContextResolver;
+
+    @Autowired
+    private NatsMessageDeserializer natsMessageDeserializer;
+
     private Repository savedRepo;
     private IdentityProvider savedProvider;
     private Workspace savedWorkspace;
@@ -308,7 +328,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             eventListener.clear();
 
             // Merge MR !2
-            receive(loadPayload("merge_request.merge"));
+            deliver(loadPayload("merge_request.merge"));
 
             transactionTemplate.executeWithoutResult(status -> {
                 PullRequest pr = pullRequestRepository
@@ -1086,7 +1106,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     mergeable,
                     GitLabHeadPipeline.NOT_CAPTURED,
                     List.of(),
-                    mergeable ? List.of(approver()) : List.of());
+                    mergeable ? List.of(approver()) : List.of(),
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
         }
 
         @Test
@@ -1204,7 +1225,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     approved,
                     pipeline,
                     List.of(),
-                    approvers);
+                    approvers,
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
         }
     }
 
@@ -1302,51 +1324,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             return node;
         }
 
-        private Map<String, Object> connection(List<Map<String, @Nullable Object>> nodes) {
-            Map<String, @Nullable Object> pageInfo = new HashMap<>();
-            pageInfo.put("hasNextPage", false);
-            pageInfo.put("endCursor", null);
-            return Map.of("count", nodes.size(), "pageInfo", pageInfo, "nodes", nodes);
-        }
-
         private Map<String, @Nullable Object> approverNode() {
             return userNode(NATIVE_APPROVER_ID, "project_246765_bot_75d5fb2b096a67c668541ae88aa22385");
         }
 
         private Map<String, @Nullable Object> tutorNode() {
             return userNode(NATIVE_TUTOR_ID, "tutor");
-        }
-
-        private Map<String, @Nullable Object> userNode(long id, String username) {
-            Map<String, @Nullable Object> user = new HashMap<>();
-            user.put("id", "gid://gitlab/User/" + id);
-            user.put("username", username);
-            user.put("name", username);
-            return user;
-        }
-
-        /** Runs the merge request sync over one page GitLab answered with {@code node} and {@code errors}. */
-        private void syncPage(Map<String, @Nullable Object> node, List<Map<String, ?>> errors) {
-            Map<String, @Nullable Object> pageInfo = new HashMap<>();
-            pageInfo.put("hasNextPage", false);
-            pageInfo.put("endCursor", null);
-            List<Map<String, @Nullable Object>> nodes = List.of(node);
-            assertVendorCouldReturn(GITLAB, "GetProjectMergeRequests", "project.mergeRequests.nodes", nodes);
-            ClientGraphQlResponse response = GraphQlResponses.of(
-                    Map.of(
-                            "project",
-                            Map.of("mergeRequests", Map.of("count", 1, "pageInfo", pageInfo, "nodes", nodes))),
-                    errors);
-            GitLabGraphQlClientProvider provider = mock(GitLabGraphQlClientProvider.class);
-            when(provider.forScope(any())).thenReturn(ScriptedGraphQlClient.of(request -> Mono.just(response)));
-            new GitLabMergeRequestSyncService(
-                            provider,
-                            graphQlResponseHandler,
-                            mergeRequestProcessor,
-                            mock(GitLabDiscussionSyncService.class),
-                            mock(GitLabClosingIssueClient.class),
-                            gitLabProperties)
-                    .syncMergeRequests(1L, savedRepo, null);
         }
 
         private PullRequest mr2() {
@@ -1426,6 +1409,43 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .orElseThrow()
                     .getMergeStateStatus();
         }
+    }
+
+    private Map<String, Object> connection(List<Map<String, @Nullable Object>> nodes) {
+        Map<String, @Nullable Object> pageInfo = new HashMap<>();
+        pageInfo.put("hasNextPage", false);
+        pageInfo.put("endCursor", null);
+        return Map.of("count", nodes.size(), "pageInfo", pageInfo, "nodes", nodes);
+    }
+
+    private Map<String, @Nullable Object> userNode(long id, String username) {
+        Map<String, @Nullable Object> user = new HashMap<>();
+        user.put("id", "gid://gitlab/User/" + id);
+        user.put("username", username);
+        user.put("name", username);
+        return user;
+    }
+
+    /** Runs the merge request sync over one page GitLab answered with {@code node} and {@code errors}. */
+    private void syncPage(Map<String, @Nullable Object> node, List<Map<String, ?>> errors) {
+        Map<String, @Nullable Object> pageInfo = new HashMap<>();
+        pageInfo.put("hasNextPage", false);
+        pageInfo.put("endCursor", null);
+        List<Map<String, @Nullable Object>> nodes = List.of(node);
+        assertVendorCouldReturn(GITLAB, "GetProjectMergeRequests", "project.mergeRequests.nodes", nodes);
+        ClientGraphQlResponse response = GraphQlResponses.of(
+                Map.of("project", Map.of("mergeRequests", Map.of("count", 1, "pageInfo", pageInfo, "nodes", nodes))),
+                errors);
+        GitLabGraphQlClientProvider provider = mock(GitLabGraphQlClientProvider.class);
+        when(provider.forScope(any())).thenReturn(ScriptedGraphQlClient.of(request -> Mono.just(response)));
+        new GitLabMergeRequestSyncService(
+                        provider,
+                        graphQlResponseHandler,
+                        mergeRequestProcessor,
+                        mock(GitLabDiscussionSyncService.class),
+                        mock(GitLabClosingIssueClient.class),
+                        gitLabProperties)
+                .syncMergeRequests(1L, savedRepo, null);
     }
 
     private static final String FIXTURE_HEAD = "2be093fe73e06752381b635b99518c2255ee7946";
@@ -1612,7 +1632,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .hasSize(1);
 
             // Merge MR !2
-            receive(loadPayload("merge_request.merge"));
+            deliver(loadPayload("merge_request.merge"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestMerged.class))
                     .hasSize(1);
 
@@ -1715,8 +1735,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             receive(loadPayload("merge_request.update"));
             eventListener.clear();
 
-            // Merge -> PullRequestClosed(wasMerged=true) + PullRequestMerged
-            receive(loadPayload("merge_request.merge"));
+            // Merge -> PullRequestClosed(wasMerged=true), then PullRequestMerged once the read after it ran
+            deliver(loadPayload("merge_request.merge"));
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
                     .hasSize(1);
             assertThat(eventListener
@@ -1763,6 +1783,335 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 assertThat(author.getLogin()).isEqualTo(FIXTURE_AUTHOR_LOGIN);
                 assertThat(author.getProvider().getType()).isEqualTo(IdentityProviderType.GITLAB);
             });
+        }
+    }
+
+    /**
+     * A merge's review judges who merged only once Hephaestus knows who that was. MR !2's recorded merge hook names a
+     * merge commit but no merger and no merge time, and its user is the author, which says nothing about who merged.
+     * The listener and resubmitter are constructed here, as in {@link TombstonedWork}.
+     */
+    @Nested
+    class MergeAdmission {
+
+        private static final String MERGE_SHA = "b186370e62e2ae348df64fb187c13aff4008457b";
+        private static final Instant MERGE_VERSION = Instant.parse("2026-01-31T18:04:07Z");
+        private static final Instant MERGED_AT = Instant.parse("2026-01-31T18:04:06Z");
+
+        private final AgentJobService jobs = mock(AgentJobService.class);
+        private final PracticeReviewDetectionGate gate = mock(PracticeReviewDetectionGate.class);
+
+        /** Settles the occasion as the real submission does, so a redelivery meets a decided signal. */
+        @BeforeEach
+        void submissionSettlesTheOccasion() {
+            when(jobs.submit(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+                signalRecorder.markTriggered(invocation.getArgument(3), UUID.randomUUID());
+                return Optional.empty();
+            });
+        }
+
+        @Test
+        void shouldKeepTheMergeCommitTheHookNamesWithoutTakingAnyoneForTheMerger() throws Exception {
+            receive(loadPayload("merge_request.update"));
+            receive(loadPayload("merge_request.merge"));
+
+            PullRequest merged = mr2();
+            assertThat(merged.getState()).isEqualTo(Issue.State.MERGED);
+            assertThat(merged.getMergeCommitSha()).isEqualTo(MERGE_SHA);
+            assertThat(merged.getMergedBy()).isNull();
+        }
+
+        @Test
+        void shouldRecordTheMergerAndTimeGitLabNamesAfterTheHook() throws Exception {
+            merge();
+
+            assertThat(mergeRead(MR2_HEAD, MERGE_VERSION, author())).isTrue();
+
+            PullRequest merged = mr2();
+            assertThat(Objects.requireNonNull(merged.getMergedBy()).getLogin()).isEqualTo(FIXTURE_AUTHOR_LOGIN);
+            assertThat(merged.getMergedAt()).isEqualTo(MERGED_AT);
+            assertThat(merged.getMergeCommitSha()).isEqualTo(MERGE_SHA);
+        }
+
+        @Test
+        void shouldRecordNoMergeFactsReadForAnotherHeadOrAnOlderVersion() throws Exception {
+            merge();
+
+            assertThat(mergeRead("f".repeat(40), MERGE_VERSION, author())).isFalse();
+            assertThat(mergeRead(MR2_HEAD, MERGE_VERSION.minusSeconds(60), author()))
+                    .isFalse();
+
+            assertThat(mr2().getMergedBy()).isNull();
+        }
+
+        @Test
+        void shouldHoldTheMergeReviewUntilTheMergerIsKnownThenReviewTheSelfMerge() throws Exception {
+            ScmDomainEvent.PullRequestMerged event = merge();
+            detect(mergerPractice());
+
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(event));
+
+            ArtifactSignal held = mergeSignal();
+            assertThat(held.getState()).isEqualTo(SignalState.PENDING);
+            assertThat(held.getStateReason()).isEqualTo(SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
+            transactionTemplate.executeWithoutResult(status -> resubmitter().resubmit(held));
+            assertThat(mergeSignal().getStateReason()).isEqualTo(SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
+            verifyNoInteractions(jobs);
+
+            mergeRead(MR2_HEAD, MERGE_VERSION, author());
+            transactionTemplate.executeWithoutResult(status -> resubmitter().resubmit(held));
+
+            ScmEventPayload.PullRequestData submitted = submitted();
+            assertThat(submitted.mergedById()).isNotNull().isEqualTo(submitted.authorId());
+        }
+
+        @Test
+        void shouldNameAnotherMergerRatherThanTheAuthor() throws Exception {
+            ScmDomainEvent.PullRequestMerged event = merge();
+            mergeRead(MR2_HEAD, MERGE_VERSION, syncedUser(NATIVE_TUTOR_ID, "tutor"));
+            detect(mergerPractice());
+
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(event));
+
+            ScmEventPayload.PullRequestData submitted = submitted();
+            assertThat(submitted.mergedById())
+                    .isEqualTo(userRepository
+                            .findByNativeIdAndProviderId(NATIVE_TUTOR_ID, persistedId(savedProvider))
+                            .orElseThrow()
+                            .getId());
+            assertThat(submitted.mergedById()).isNotEqualTo(submitted.authorId());
+        }
+
+        @Test
+        void shouldReviewAMergeRightAwayWhenNoPracticeJudgesTheMerger() throws Exception {
+            ScmDomainEvent.PullRequestMerged event = merge();
+            detect(new Practice());
+
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(event));
+
+            assertThat(submitted().mergedById()).isNull();
+        }
+
+        @Test
+        void shouldLetTheLiveMergeClaimTheMergeASyncRecordedFirstAndReviewItOnce() throws Exception {
+            receive(loadPayload("merge_request.update"));
+            syncPage(mergedPage(), List.of());
+            ScmDomainEvent.PullRequestMerged synced =
+                    eventListener.ofType(ScmDomainEvent.PullRequestMerged.class).getLast();
+            assertThat(synced.context().isSync()).isTrue();
+            detect(mergerPractice());
+
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(synced));
+            assertThat(mergeSignal().getState()).isEqualTo(SignalState.RECORDED);
+            verifyNoInteractions(jobs);
+
+            eventListener.clear();
+            // Older than the page the sync stored, so it changes nothing; the merge request is merged all the same.
+            deliver(loadPayload("merge_request.merge"));
+            ScmDomainEvent.PullRequestMerged live =
+                    eventListener.ofType(ScmDomainEvent.PullRequestMerged.class).getFirst();
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(live));
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(live));
+
+            // Once: the redelivery finds the occasion taken.
+            assertThat(submitted().mergedById())
+                    .isNotNull()
+                    .isEqualTo(submitted().authorId());
+        }
+
+        @Test
+        void shouldOfferTheMergeOnlyAfterItsReadAndWithTheMergerTheReadNamed() throws Exception {
+            receive(loadPayload("merge_request.update"));
+            eventListener.clear();
+            AtomicBoolean offeredDuringRead = new AtomicBoolean(true);
+            AtomicReference<Issue.@Nullable State> storedDuringRead = new AtomicReference<>();
+            GitLabMergeRequestReadinessReader reader = mock(GitLabMergeRequestReadinessReader.class);
+            when(reader.read(any(), anyString(), eq(MR2_IID))).thenAnswer(invocation -> {
+                offeredDuringRead.set(!eventListener
+                        .ofType(ScmDomainEvent.PullRequestMerged.class)
+                        .isEmpty());
+                storedDuringRead.set(mr2().getState());
+                return mergedFacts(author());
+            });
+
+            handlerReading(reader).dispatchEvent(loadPayload("merge_request.merge"), Instant.now());
+
+            assertThat(storedDuringRead.get()).isEqualTo(Issue.State.MERGED);
+            assertThat(offeredDuringRead.get()).isFalse();
+            ScmDomainEvent.PullRequestMerged offered =
+                    eventListener.ofType(ScmDomainEvent.PullRequestMerged.class).getFirst();
+            assertThat(offered.context().isSync()).isFalse();
+            detect(mergerPractice());
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(offered));
+            ScmEventPayload.PullRequestData submitted = submitted();
+            assertThat(submitted.mergedById()).isNotNull().isEqualTo(submitted.authorId());
+            assertThat(submitted.mergedAt()).isEqualTo(MERGED_AT);
+            assertThat(mr2().getMergeCommitSha()).isEqualTo(MERGE_SHA);
+        }
+
+        @Test
+        void shouldHoldTheMergeTheReadCouldNotNameAMergerForUntilASyncDoesThenReviewItOnce() throws Exception {
+            receive(loadPayload("merge_request.update"));
+            eventListener.clear();
+            GitLabMergeRequestReadinessReader reader = mock(GitLabMergeRequestReadinessReader.class);
+
+            handlerReading(reader).dispatchEvent(loadPayload("merge_request.merge"), Instant.now());
+
+            ScmDomainEvent.PullRequestMerged offered =
+                    eventListener.ofType(ScmDomainEvent.PullRequestMerged.class).getFirst();
+            detect(mergerPractice());
+            transactionTemplate.executeWithoutResult(status -> listener().onPullRequestMerged(offered));
+            ArtifactSignal held = mergeSignal();
+            assertThat(mr2().getState()).isEqualTo(Issue.State.MERGED);
+            assertThat(held.getState()).isEqualTo(SignalState.PENDING);
+            assertThat(held.getStateReason()).isEqualTo(SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
+            assertThat(held.getDiscoveredVia()).isEqualTo(DiscoveredVia.EVENT);
+            verifyNoInteractions(jobs);
+
+            syncPage(mergedPage(), List.of());
+            transactionTemplate.executeWithoutResult(status -> resubmitter().resubmit(held));
+
+            ScmEventPayload.PullRequestData submitted = submitted();
+            assertThat(submitted.mergedById()).isNotNull().isEqualTo(submitted.authorId());
+            // Settled, so the reaper, which re-offers only pending occasions, does not offer it again.
+            assertThat(mergeSignal().getState()).isEqualTo(SignalState.TRIGGERED);
+            assertThat(mergeSignal().getDiscoveredVia()).isEqualTo(DiscoveredVia.EVENT);
+        }
+
+        /** The merge request handler, reading GitLab through {@code reader}. */
+        private GitLabMergeRequestMessageHandler handlerReading(GitLabMergeRequestReadinessReader reader) {
+            return new GitLabMergeRequestMessageHandler(
+                    mergeRequestProcessor,
+                    webhookContextResolver,
+                    mock(GitLabClosingIssueClient.class),
+                    reader,
+                    natsMessageDeserializer,
+                    transactionTemplate);
+        }
+
+        private GitLabMergeRequestReadinessReader.Facts mergedFacts(GitLabMergeRequestProcessor.SyncUserData merger) {
+            return new GitLabMergeRequestReadinessReader.Facts(
+                    savedRepo.getNativeId(),
+                    NATIVE_MR2_ID,
+                    "merged",
+                    MERGE_VERSION,
+                    MR2_HEAD,
+                    false,
+                    "not_open",
+                    null,
+                    GitLabHeadPipeline.NOT_CAPTURED,
+                    null,
+                    null,
+                    new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, MERGE_SHA));
+        }
+
+        private ScmDomainEvent.PullRequestMerged merge() throws Exception {
+            receive(loadPayload("merge_request.update"));
+            eventListener.clear();
+            deliver(loadPayload("merge_request.merge"));
+            return eventListener.ofType(ScmDomainEvent.PullRequestMerged.class).getFirst();
+        }
+
+        private boolean mergeRead(
+                String head, Instant version, GitLabMergeRequestProcessor.@Nullable SyncUserData merger) {
+            return mergeRequestProcessor.applyTerminalFacts(
+                    savedRepo,
+                    MR2_IID,
+                    new GitLabMergeRequestReadinessReader.Facts(
+                            savedRepo.getNativeId(),
+                            NATIVE_MR2_ID,
+                            "merged",
+                            version,
+                            head,
+                            false,
+                            "not_open",
+                            null,
+                            GitLabHeadPipeline.NOT_CAPTURED,
+                            null,
+                            null,
+                            new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, MERGE_SHA)));
+        }
+
+        /** MR !2 merged by its author, as a sync reads it after the merge. */
+        private Map<String, @Nullable Object> mergedPage() {
+            Map<String, @Nullable Object> node = new HashMap<>();
+            node.put("id", "gid://gitlab/MergeRequest/" + NATIVE_MR2_ID);
+            node.put("iid", String.valueOf(MR2_IID));
+            node.put("title", MR2_TITLE);
+            node.put("state", "merged");
+            node.put("createdAt", "2026-01-31T18:00:00Z");
+            node.put("updatedAt", "2026-01-31T18:30:00Z");
+            node.put("mergedAt", MERGED_AT.toString());
+            node.put("sourceBranch", "feature/oauth");
+            node.put("targetBranch", "main");
+            node.put("diffHeadSha", MR2_HEAD);
+            node.put("mergeCommitSha", MERGE_SHA);
+            node.put("mergeable", false);
+            node.put("detailedMergeStatus", "not_open");
+            node.put("approved", true);
+            node.put("headPipeline", null);
+            node.put("reviewers", connection(List.of()));
+            node.put("approvedBy", connection(List.of()));
+            node.put("author", userNode(NATIVE_AUTHOR_ID, FIXTURE_AUTHOR_LOGIN));
+            node.put("mergeUser", userNode(NATIVE_AUTHOR_ID, FIXTURE_AUTHOR_LOGIN));
+            return node;
+        }
+
+        private GitLabMergeRequestProcessor.SyncUserData author() {
+            return syncedUser(NATIVE_AUTHOR_ID, FIXTURE_AUTHOR_LOGIN);
+        }
+
+        /** A practice judging the merger's conduct when the merge request is merged. */
+        private Practice mergerPractice() {
+            Practice practice = new Practice();
+            practice.setBindings(List.of(new PracticeBinding(
+                    List.of(ScmSignals.PULL_REQUEST_MERGED),
+                    PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                    false,
+                    ActorRole.MERGER)));
+            return practice;
+        }
+
+        private void detect(Practice practice) {
+            when(gate.evaluate(any(), eq(ScmSignals.PULL_REQUEST_MERGED), eq(TriggerMode.AUTO)))
+                    .thenReturn(new GateDecision.Detect(savedWorkspace, List.of(practice), 1, TriggerMode.AUTO));
+        }
+
+        private AgentJobEventListener listener() {
+            return new AgentJobEventListener(jobs, pullRequestRepository, gate, workspaceResolver, signalRecorder);
+        }
+
+        private PullRequestSignalResubmitter resubmitter() {
+            return new PullRequestSignalResubmitter(
+                    jobs, pullRequestRepository, gate, signalRecorder, reviewRepository);
+        }
+
+        private ArtifactSignal mergeSignal() {
+            return artifactSignalRepository
+                    .findForArtifact(savedWorkspace.getId(), ScmSignals.PULL_REQUEST.value(), mr2().getId())
+                    .stream()
+                    .filter(signal -> signal.key().signalName().equals(ScmSignals.PULL_REQUEST_MERGED))
+                    .findFirst()
+                    .orElseThrow();
+        }
+
+        /** The one review submitted, as the job carries the merge request. */
+        private ScmEventPayload.PullRequestData submitted() {
+            var request = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
+            verify(jobs)
+                    .submit(
+                            eq(savedWorkspace.getId()),
+                            eq(AgentJobType.PULL_REQUEST_REVIEW),
+                            request.capture(),
+                            any(),
+                            any());
+            return request.getValue().pullRequest();
+        }
+
+        private PullRequest mr2() {
+            return pullRequestRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                    .orElseThrow();
         }
     }
 
@@ -1912,6 +2261,11 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 null, // milestoneIid
                 headPipeline,
                 null); // closingIssueNumbers
+    }
+
+    /** Delivers {@code event} as the stream does: stored, then read from GitLab, then offered for review. */
+    private void deliver(GitLabMergeRequestEventDTO event) {
+        handler.dispatchEvent(event, Instant.now());
     }
 
     /** Handles {@code event} as a delivery that reached the stream now. */

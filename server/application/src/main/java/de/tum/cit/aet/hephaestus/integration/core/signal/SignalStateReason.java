@@ -71,6 +71,14 @@ public enum SignalStateReason {
      */
     SUBJECT_UNLINKED(SignalState.PENDING),
 
+    /**
+     * A merge whose review would judge who merged it, before Hephaestus knows who that was. Retryable: a read of the
+     * merge request or an ordinary sync records the merger, and the review then runs with it. Reviewing without it
+     * would pass over that practice silently, and naming anyone else, such as the author, would judge a person who
+     * did not merge.
+     */
+    MERGE_ACTOR_UNAVAILABLE(SignalState.PENDING),
+
     MODEL_UNAVAILABLE(SignalState.PENDING),
 
     ARTIFACT_NOT_VISIBLE(SignalState.PENDING),
@@ -128,6 +136,8 @@ public enum SignalStateReason {
                 "The budget funding this review was exhausted; it is re-offered when the budget refills.";
             case SUBJECT_UNLINKED ->
                 "The author is unknown or not yet a workspace member Hephaestus reviews; it is re-offered once they are one.";
+            case MERGE_ACTOR_UNAVAILABLE ->
+                "Who merged this is not known yet; the review waits until Hephaestus learns who merged it.";
             case MODEL_UNAVAILABLE ->
                 "The model this review is bound to left the catalog; re-pointing the binding re-offers it.";
             case ARTIFACT_NOT_VISIBLE ->

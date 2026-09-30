@@ -114,6 +114,32 @@ class GitLabMergeRequestReadinessReaderTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldReadWhoMergedWhenAndTheCommitAndLeaveAFailedOrMissingOneUnknown() {
+        Map<String, @Nullable Object> merged = mergeRequest();
+        merged.put("state", "merged");
+        merged.put("mergeUser", user(7, "tutor"));
+        merged.put("mergedAt", "2026-09-30T10:05:00Z");
+        merged.put("mergeCommitSha", "b".repeat(40));
+        Map<String, @Nullable Object> failedMerger = mergeRequest();
+        failedMerger.put("state", "merged");
+        failedMerger.put("mergeUser", null);
+        failedMerger.put("mergedAt", "2026-09-30T10:05:00Z");
+        // A fast-forward merge leaves no merge commit.
+        failedMerger.put("mergeCommitSha", null);
+
+        GitLabMergeRequestReadinessReader.Merge merge =
+                decode(merged, List.of()).merge();
+        assertThat(Objects.requireNonNull(merge.user()).username()).isEqualTo("tutor");
+        assertThat(merge.mergedAt()).isEqualTo(Instant.parse("2026-09-30T10:05:00Z"));
+        assertThat(merge.commitSha()).isEqualTo("b".repeat(40));
+        GitLabMergeRequestReadinessReader.Merge unknown =
+                decode(failedMerger, List.of(error("mergeUser"))).merge();
+        assertThat(unknown.user()).isNull();
+        assertThat(unknown.commitSha()).isNull();
+        assertThat(unknown.mergedAt()).isEqualTo(Instant.parse("2026-09-30T10:05:00Z"));
+    }
+
+    @Test
     void shouldDescribeNothingWithoutTheHeadOrTheMergeRequest() {
         Map<String, @Nullable Object> headless = mergeRequest();
         headless.put("diffHeadSha", null);

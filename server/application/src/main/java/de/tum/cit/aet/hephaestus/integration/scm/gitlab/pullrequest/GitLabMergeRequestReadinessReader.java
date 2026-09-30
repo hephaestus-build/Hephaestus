@@ -70,7 +70,23 @@ public class GitLabMergeRequestReadinessReader {
             @Nullable Boolean approved,
             GitLabHeadPipeline headPipeline,
             @Nullable List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers,
-            @Nullable List<GitLabMergeRequestProcessor.SyncUserData> approvers) {}
+            @Nullable List<GitLabMergeRequestProcessor.SyncUserData> approvers,
+            Merge merge) {}
+
+    /**
+     * What GitLab says about a merged merge request's merge: who merged it, when, and the commit it left. Each is
+     * {@code null} where GitLab named none or failed to give it — a fast-forward merge can leave no merge commit, and a
+     * missing merger is never someone else, such as the author or whoever sent the hook.
+     *
+     * @see <a href="https://docs.gitlab.com/api/merge_requests/#retrieve-a-merge-request">GitLab merge request
+     *     fields</a>
+     */
+    public record Merge(
+            GitLabMergeRequestProcessor.@Nullable SyncUserData user,
+            @Nullable Instant mergedAt,
+            @Nullable String commitSha) {
+        public static final Merge UNKNOWN = new Merge(null, null, null);
+    }
 
     /**
      * Reads merge request {@code iid} of {@code projectPath} with the scope's connection.
@@ -167,7 +183,26 @@ public class GitLabMergeRequestReadinessReader {
                 GitLabMergeRequestFields.wholePage(
                         response, MERGE_REQUEST, node, "reviewers", GitLabMergeRequestFields::reviewer),
                 GitLabMergeRequestFields.wholePage(
-                        response, MERGE_REQUEST, node, "approvedBy", GitLabMergeRequestFields::user));
+                        response, MERGE_REQUEST, node, "approvedBy", GitLabMergeRequestFields::user),
+                merge(response, node));
+    }
+
+    /** The merge's facts, each read without an error or left unknown. */
+    @SuppressWarnings("unchecked")
+    private static Merge merge(ClientGraphQlResponse response, Map<String, Object> node) {
+        GitLabMergeRequestProcessor.SyncUserData user = null;
+        if (!GitLabMergeRequestFields.failed(response, MERGE_REQUEST + ".mergeUser")
+                && node.get("mergeUser") instanceof Map<?, ?> mergeUser
+                && mergeUser.get("id") instanceof String) {
+            user = GitLabMergeRequestFields.user((Map<String, Object>) mergeUser);
+        }
+        Instant mergedAt = GitLabMergeRequestFields.failed(response, MERGE_REQUEST + ".mergedAt")
+                ? null
+                : BaseGitLabProcessor.parseGitLabTimestamp(node.get("mergedAt") instanceof String text ? text : null);
+        String commitSha = GitLabMergeRequestFields.failed(response, MERGE_REQUEST + ".mergeCommitSha")
+                ? null
+                : node.get("mergeCommitSha") instanceof String text && !text.isBlank() ? text : null;
+        return new Merge(user, mergedAt, commitSha);
     }
 
     /** A field the facts are identified by: present, a non-blank string, and read without an error. */

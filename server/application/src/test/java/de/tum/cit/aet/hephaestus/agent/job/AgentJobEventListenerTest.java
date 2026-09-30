@@ -147,6 +147,12 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         PullRequest pr = new PullRequest();
         pr.setId(PR_ID);
         pr.setBaseRefOid("a".repeat(40));
+        // Loaded with its repository, as the gate query does; the job is built from the loaded pull request.
+        Repository repository = new Repository();
+        repository.setId(REPO_REF.id());
+        repository.setNameWithOwner(REPO_REF.nameWithOwner());
+        repository.setDefaultBranch(REPO_REF.defaultBranch());
+        pr.setRepository(repository);
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefOid", headRefOid);
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefName", headRefName);
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "baseRefName", baseRefName);
@@ -450,7 +456,8 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                     .submit(eq(WORKSPACE_ID), eq(AgentJobType.PULL_REQUEST_REVIEW), captor.capture(), any(), any());
 
             PullRequestReviewSubmissionRequest request = captor.getValue();
-            assertThat(request.pullRequest()).isSameAs(prData);
+            // Built from the pull request just loaded, not the event, so it carries the canonical row.
+            assertThat(request.pullRequest()).isEqualTo(ScmEventPayload.PullRequestData.from(pr));
             assertThat(request.headRefOid()).isEqualTo("sha256abc");
             assertThat(request.headRefName()).isEqualTo("feature/my-branch");
             assertThat(request.baseRefName()).isEqualTo("develop");
