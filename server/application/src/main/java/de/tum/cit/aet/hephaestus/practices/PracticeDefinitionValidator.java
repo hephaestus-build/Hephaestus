@@ -1,12 +1,15 @@
 package de.tum.cit.aet.hephaestus.practices;
 
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceContract;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -62,7 +65,8 @@ public final class PracticeDefinitionValidator {
         ArtifactKind artifactKind = PracticeBinding.artifactKindOf(bindings);
         Set<SignalName> declared = signalOptions.eligibleFor(artifactKind);
         if (declared.isEmpty()) {
-            throw new IllegalArgumentException("No registered domain declares signals for " + artifactKind);
+            throw new IllegalArgumentException("The chosen moments do not belong to a kind of work Hephaestus reviews. "
+                    + "Choose a kind of work, then the moments it offers.");
         }
         Set<ActorRole> roles = signalOptions.rolesFor(artifactKind);
         for (PracticeBinding binding : bindings) {
@@ -70,27 +74,61 @@ public final class PracticeDefinitionValidator {
             // in. Attributing a result to a role the artifact cannot resolve leaves an observation about
             // nobody — or, worse, one filed against whichever person the kind happens to name.
             if (!roles.contains(binding.subject())) {
-                throw new IllegalArgumentException("This work type cannot identify a " + binding.subject()
-                        + ", so a review of it cannot be about one");
+                throw new IllegalArgumentException("This kind of work does not record “" + roleLabel(binding.subject())
+                        + "”, so a review of it cannot be about them. Choose from the people listed under “Person "
+                        + "this practice judges”.");
             }
             for (SignalName signal : binding.signals()) {
                 if (signalOptions.isManualRequest(signal)) {
-                    throw new IllegalArgumentException(
-                            "A review somebody asks for by hand already reviews every practice on this work type, "
-                                    + "whatever state the work is in, so it is not an occasion to choose: remove "
-                                    + signal);
+                    throw new IllegalArgumentException("Remove “" + signalOptions.displayNameOf(signal)
+                            + "”. A review somebody asks for by hand already reviews every practice on this work "
+                            + "type, whatever state the work is in, so it is not a moment to choose.");
                 }
                 if (!declared.contains(signal)) {
-                    throw new IllegalArgumentException("Choose signals declared for the selected work type");
+                    // Every declared signal but the hand-asked one is bindable, so this one is undeclared and
+                    // has no words to name it by.
+                    throw new IllegalArgumentException("One of the chosen moments is not one this kind of work offers. "
+                            + "Choose from the moments listed for it.");
                 }
             }
         }
     }
 
+    /**
+     * A source's display name, or empty for one the catalogue does not declare: that is the author's input,
+     * not a stale row, so it is answered in the message rather than logged.
+     */
+    private Optional<String> named(SourceKind source) {
+        return sourceCatalogs.current().source(source).map(ArtifactSourceContract::displayName);
+    }
+
+    /**
+     * A source the catalogue does not declare has no label, so the id the author gave stands alone, and the
+     * message says where the sources this kind of work has are listed.
+     */
+    private static String unknownSource(SourceKind source) {
+        return source.value() + " is not an evidence source Hephaestus knows. Choose from the sources listed under "
+                + "“Reads” in “When this practice is reviewed”.";
+    }
+
+    /** The editor's label for each relation, as its “Person this practice judges” list shows it. */
+    private static String roleLabel(ActorRole role) {
+        return switch (role) {
+            case AUTHOR -> "Author";
+            case ASSIGNEE -> "Assignee";
+            case REVIEWER -> "Reviewer";
+            case MERGER -> "Whoever merged it";
+        };
+    }
+
     private static void rejectDetectorVocabulary(String field, @Nullable String value) {
-        if (value != null && DETECTOR_VOCAB.matcher(value).find()) {
-            throw new IllegalArgumentException(
-                    field + " is guidance for people and must not use detector result labels");
+        if (value == null) {
+            return;
+        }
+        Matcher label = DETECTOR_VOCAB.matcher(value);
+        if (label.find()) {
+            throw new IllegalArgumentException(field + " is guidance for people. Remove the review result label “"
+                    + label.group() + "” and say it in plain words.");
         }
     }
 
@@ -109,18 +147,18 @@ public final class PracticeDefinitionValidator {
             for (PracticeSubjectClause clause : subject.anyOf()) {
                 SourceKind readFrom = clause.readsFrom();
                 if (!applicable.contains(readFrom)) {
-                    throw new IllegalArgumentException("This work type has no " + readFrom
-                            + ", so \""
-                            + clause.describe()
-                            + "\" could never be decided about it");
+                    // The gate is typed as JSON, so the source is named by its label and its id together.
+                    throw new IllegalArgumentException(named(readFrom)
+                            .map(source -> "This kind of work has no “" + source + "” (" + readFrom.value()
+                                    + "), so a condition that reads it could never be decided. Choose a "
+                                    + "condition this kind of work can answer, or remove it.")
+                            .orElseGet(() -> unknownSource(readFrom)));
                 }
-                if (!sourceCatalogs
-                        .requireSource(version, readFrom)
-                        .completenessPolicy()
-                        .supportsComplete()) {
-                    throw new IllegalArgumentException("Evidence source " + readFrom
-                            + " can never be captured completely, so its silence can never establish that "
-                            + "this practice does not apply");
+                ArtifactSourceContract source = sourceCatalogs.requireSource(version, readFrom);
+                if (!source.completenessPolicy().supportsComplete()) {
+                    throw new IllegalArgumentException("“" + source.displayName() + "” (" + readFrom.value()
+                            + ") can never be captured completely, so finding nothing in it cannot show that this "
+                            + "practice does not apply. Choose a condition that reads other evidence.");
                 }
             }
         }
@@ -136,18 +174,22 @@ public final class PracticeDefinitionValidator {
         validateSubject(definition, applicable);
         for (PracticeBinding binding : definition.bindings()) {
             for (PracticeEvidenceRequirement need : binding.needs()) {
-                var contract = sourceCatalogs.requireSource(version, need.sourceKind());
                 if (!applicable.contains(need.sourceKind())) {
-                    throw new IllegalArgumentException("Evidence source is not available for the selected work type");
+                    throw new IllegalArgumentException(named(need.sourceKind())
+                            .map(source -> "“" + source
+                                    + "” is not available for this kind of work. Turn it off, or choose "
+                                    + "evidence this kind of work has.")
+                            .orElseGet(() -> unknownSource(need.sourceKind())));
                 }
+                var contract = sourceCatalogs.requireSource(version, need.sourceKind());
                 // An exhaustive claim over a source that can never report a complete capture refuses
                 // every review it triggers. Caught at authoring time, because at review time
                 // "permanently refusing" and "nobody has done this yet" produce the same report.
                 if (need.stance().demandsCompleteCapture()
                         && !contract.completenessPolicy().supportsComplete()) {
-                    throw new IllegalArgumentException(
-                            "Evidence source " + need.sourceKind()
-                                    + " can never be captured completely, so no claim about what is absent from it can rest on it");
+                    throw new IllegalArgumentException("“" + contract.displayName()
+                            + "” can never be captured completely, so a review cannot claim something is absent "
+                            + "from it. Untick “May claim something is absent” for this source.");
                 }
             }
         }

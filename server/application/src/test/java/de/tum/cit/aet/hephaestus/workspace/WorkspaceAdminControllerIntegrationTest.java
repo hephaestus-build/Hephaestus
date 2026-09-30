@@ -51,7 +51,7 @@ class WorkspaceAdminControllerIntegrationTest extends AbstractWorkspaceIntegrati
         assertThat(acme.displayName()).isEqualTo("Acme");
         assertThat(acme.ownerLogin()).isEqualTo("acme-owner");
         assertThat(acme.memberCount()).isEqualTo(1L);
-        assertThat(acme.status()).isNotBlank();
+        assertThat(acme.status()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
     }
 
     @Test

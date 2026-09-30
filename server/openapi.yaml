@@ -9065,6 +9065,9 @@ components:
       properties:
         appRole:
           type: string
+          enum:
+          - USER
+          - APP_ADMIN
         displayName:
           type: string
         id:
@@ -9074,6 +9077,14 @@ components:
           type: string
         status:
           type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - DELETING
+          - DELETED
+      required:
+      - appRole
+      - status
     AdminLlmUsageReport:
       type: object
       description: "Instance-admin per-workspace month rollup (metadata only, no tenant\
@@ -9194,6 +9205,10 @@ components:
           - OUTLINE
         status:
           type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - PURGED
         workspaceSlug:
           type: string
       required:
@@ -9453,13 +9468,6 @@ components:
           format: int64
         artifactKind:
           type: string
-        container:
-          type: string
-          description: "Repository, collection or channel it sits in"
-        number:
-          type: integer
-          format: int32
-          description: "The number the provider shows, for kinds that have one"
         practices:
           type: array
           description: "Every practice this workspace runs against this kind of work,\
@@ -9467,25 +9475,22 @@ components:
             \ by practice name"
           items:
             $ref: "#/components/schemas/PracticeTraceEntry"
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: "The work as every surface names it: its provider, the label\
+            \ the provider writes (\"#1423\", \"!1423\"), its title, where it sits\
+            \ and where to open it; the link is absent for deleted work"
         signals:
           type: array
           description: "Everything recorded about this artifact, oldest first"
           items:
             $ref: "#/components/schemas/TracedSignal"
-        title:
-          type: string
-          description: The label a person recognises; the kind's display name when
-            the mirror cannot name it
-        url:
-          type: string
-          description: Where to open it upstream; absent for a deleted or unlinkable
-            artifact
       required:
       - artifactId
       - artifactKind
       - practices
+      - reviewedWork
       - signals
-      - title
     AssignRoleRequest:
       type: object
       description: Request to assign or update a user's role in a workspace
@@ -14410,19 +14415,6 @@ components:
       required:
       - group
       - practices
-    PracticeManualReviewSignal:
-      type: object
-      description: The signal a person raises by asking for a review of this work
-        type by hand
-      properties:
-        displayName:
-          type: string
-        signal:
-          type: string
-          example: scm.pull_request.manual_review
-      required:
-      - displayName
-      - signal
     PracticeProfileOverview:
       type: object
       description: "What held, what changed and which work was reviewed over a window\
@@ -14754,6 +14746,20 @@ components:
       - etag
       - reviewScope
       - revision
+    PracticeSignal:
+      type: object
+      description: A signal and the words a reader sees for it
+      properties:
+        displayName:
+          type: string
+          description: What to print for the signal
+        signal:
+          type: string
+          description: "Signal name, for matching and linking; never printed"
+          example: scm.pull_request.ready
+      required:
+      - displayName
+      - signal
     PracticeSignalOption:
       type: object
       description: A signal a practice can start an automated review on
@@ -14979,9 +14985,9 @@ components:
           format: int32
           description: Measurements this practice produced on this artifact
         occasionedBy:
-          type: string
-          description: The occurrence this answer is about; null when nothing it watches
-            happened
+          $ref: "#/components/schemas/PracticeSignal"
+          description: "The signal of the occurrence this answer is about, with its\
+            \ display name; null when nothing it watches happened"
         occasionedById:
           type: string
           format: uuid
@@ -15012,9 +15018,9 @@ components:
           description: "The review this answer came from, when one ran"
         watches:
           type: array
-          description: The signals this practice watches
+          description: "The signals this practice watches, each with its display name"
           items:
-            type: string
+            $ref: "#/components/schemas/PracticeSignal"
         withheldReasons:
           type: array
           description: Why prepared feedback was withheld. Non-empty with observations
@@ -15101,7 +15107,7 @@ components:
         artifactKind:
           type: string
         manualReviewSignal:
-          $ref: "#/components/schemas/PracticeManualReviewSignal"
+          $ref: "#/components/schemas/PracticeSignal"
           description: "How a person asks for a review of this work type by hand,\
             \ or absent where the work type admits no such request. Not an occasion\
             \ to bind to: such a request reviews every practice on the work type whatever\
@@ -16872,6 +16878,11 @@ components:
       description: "A piece of reviewed work as every surface names it: enough to\
         \ print a link"
       properties:
+        container:
+          type: string
+          description: "Where the work sits, by name: a pull request's or an issue's\
+            \ repository, a document's collection; a conversation's channel is its\
+            \ label"
         id:
           type: string
           description: Identifier of the work within its kind
@@ -16892,9 +16903,6 @@ components:
           - GITLAB
           - SLACK
           - OUTLINE
-        repositoryName:
-          type: string
-          description: "Repository the work belongs to, for pull requests and issues"
         title:
           type: string
           description: "The work's own title where the label does not already say\
@@ -17659,37 +17667,29 @@ components:
           format: int64
         artifactKind:
           type: string
-        container:
-          type: string
-          description: "Repository, collection or channel it sits in"
         lastSignalAt:
           type: string
           format: date-time
-        number:
-          type: integer
-          format: int32
-          description: "The number the provider shows, for kinds that have one"
         reviewedSignalCount:
           type: integer
           format: int32
           description: How many of them started a review
+        reviewedWork:
+          $ref: "#/components/schemas/ReviewedWorkRef"
+          description: "The work as every surface names it: its provider, the label\
+            \ the provider writes (\"#1423\", \"!1423\"), its title, where it sits\
+            \ and where to open it; the link is absent for deleted work"
         signalCount:
           type: integer
           format: int32
           description: Occurrences recorded on this artifact
-        title:
-          type: string
-        url:
-          type: string
-          description: Where to open it upstream; absent for a deleted or unlinkable
-            artifact
       required:
       - artifactId
       - artifactKind
       - lastSignalAt
       - reviewedSignalCount
+      - reviewedWork
       - signalCount
-      - title
     TracedSignal:
       type: object
       description: "One thing that happened to this artifact, and what the system\
@@ -17706,7 +17706,7 @@ components:
           - SWEEP
         displayName:
           type: string
-          description: "Human label for the signal, from the artifact kind's descriptor"
+          description: "What to print for the signal, from the artifact kind's descriptor"
         id:
           type: string
           format: uuid
@@ -17728,7 +17728,7 @@ components:
             put
         signal:
           type: string
-          description: "Signal name, e.g. scm.pull_request.ready"
+          description: "Signal name, for matching and linking; never printed"
         state:
           type: string
           enum:
@@ -17762,6 +17762,11 @@ components:
           - ARTIFACT_NOT_VISIBLE
           - PENDING_DEADLINE_EXCEEDED
           - ARTIFACT_GONE
+        stateReasonDescription:
+          type: string
+          description: "That reason as one sentence for a reader. Render it verbatim:\
+            \ it is written next to the reason it explains, so every surface that\
+            \ explains a silence says the same thing"
       required:
       - discoveredVia
       - displayName

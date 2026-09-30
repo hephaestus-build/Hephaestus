@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.signal;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import java.time.Instant;
 import java.util.Collection;
@@ -26,7 +27,7 @@ public interface ScmArtifactIdentityRepository extends Repository<Issue, Long> {
      */
     @Query("""
         SELECT p.id AS id, p.number AS number, p.title AS title, p.htmlUrl AS url,
-               p.repository.nameWithOwner AS container, p.deletedAt AS deletedAt
+               p.repository.nameWithOwner AS container, p.deletedAt AS deletedAt, p.provider.type AS providerType
         FROM PullRequest p
         WHERE p.id IN :ids
         """)
@@ -39,7 +40,7 @@ public interface ScmArtifactIdentityRepository extends Repository<Issue, Long> {
      */
     @Query("""
         SELECT i.id AS id, i.number AS number, i.title AS title, i.htmlUrl AS url,
-               i.repository.nameWithOwner AS container, i.deletedAt AS deletedAt
+               i.repository.nameWithOwner AS container, i.deletedAt AS deletedAt, i.provider.type AS providerType
         FROM Issue i
         WHERE TYPE(i) = Issue AND i.id IN :ids
         """)
@@ -61,5 +62,8 @@ public interface ScmArtifactIdentityRepository extends Repository<Issue, Long> {
         /** Non-null for a row the mirror tombstoned; such an artifact is named but no longer linked. */
         @Nullable
         Instant getDeletedAt();
+
+        /** GitHub or GitLab, which decides the work's noun and how its number is written. */
+        IdentityProviderType getProviderType();
     }
 }

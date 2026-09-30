@@ -54,7 +54,7 @@ class ProfileChangeDetectorTest {
             // Named without a run to read the name off: the kind alone, never a number that was not there.
             assertThat(change.evidence())
                     .extracting(ReviewedWorkRefDTO::id, ReviewedWorkRefDTO::label)
-                    .containsExactly(tuple("22", "Pull request"), tuple("21", "Pull request"));
+                    .containsExactly(tuple("22", "Pull or merge request"), tuple("21", "Pull or merge request"));
         });
     }
 

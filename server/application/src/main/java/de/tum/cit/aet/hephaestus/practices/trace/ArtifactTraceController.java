@@ -124,12 +124,12 @@ public class ArtifactTraceController {
                     UUID reviewId) {
         ArtifactKind kind = parseKind(artifactKind);
         if (kind == null) {
-            throw new IllegalArgumentException("An artifact kind is required");
+            throw new IllegalArgumentException("Name the kind of work to trace.");
         }
         Long developerId = null;
         if (!access.isAdmin()) {
             if (reviewId == null) {
-                throw new EntityNotFoundException("Traced artifact", kind.value() + "/" + artifactId);
+                throw new EntityNotFoundException("Reviewed work", artifactId);
             }
             String review = reviewId.toString();
             developerId = reviewRuns

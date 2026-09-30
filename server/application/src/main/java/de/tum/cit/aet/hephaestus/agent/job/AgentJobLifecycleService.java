@@ -112,7 +112,7 @@ public class AgentJobLifecycleService {
                     AgentJobTelemetry.Outcome.DELIVERY_FAILED,
                     Duration.between(deliveryStarted, Instant.now()));
             log.warn("Delivery retry failed: jobId={}, error={}", jobId, e.getMessage(), e);
-            throw new AgentJobStateConflictException("Delivery retry failed: " + e.getMessage(), e);
+            throw new AgentJobStateConflictException("The feedback could not be posted. Try again later.", e);
         }
 
         return transactionTemplate.execute(status -> requireJob(workspaceId, jobId));
@@ -171,14 +171,14 @@ public class AgentJobLifecycleService {
         }
 
         if (job.getStatus().isTerminal()) {
-            throw new AgentJobStateConflictException("Cannot cancel job " + jobId + " in status " + job.getStatus());
+            throw new AgentJobStateConflictException("This review has already finished, so it cannot be cancelled.");
         }
 
         if (casToCancelled(jobId) == 0) {
             AgentJob raced = requireJob(workspaceId, jobId);
             if (raced.getStatus().isTerminal()) {
                 throw new AgentJobStateConflictException(
-                        "Cannot cancel job " + jobId + " — executor already moved it to " + raced.getStatus());
+                        "This review finished while it was being cancelled, so it cannot be cancelled.");
             }
             // Back inside the CAS window, so a concurrent claim moved it there; retry once and then
             // report whatever state the loser observes rather than spinning against the executor.
@@ -186,7 +186,7 @@ public class AgentJobLifecycleService {
                 AgentJob racedAgain = requireJob(workspaceId, jobId);
                 if (racedAgain.getStatus() != AgentJobStatus.CANCELLED) {
                     throw new AgentJobStateConflictException(
-                            "Cannot cancel job " + jobId + " — executor moved it to " + racedAgain.getStatus());
+                            "This review changed state while it was being cancelled. Reload it and try again.");
                 }
                 return new CancelOutcome(racedAgain, false);
             }

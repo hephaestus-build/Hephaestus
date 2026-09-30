@@ -83,9 +83,10 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
         assertThat(dormant).hasSize(1);
         assertThat(dormant.getFirst().signals()).containsExactly(FixtureIntegration.WIDGET_ASSEMBLED);
         assertThat(dormant.getFirst().raisedByAnyOf())
-                .as("the reason names what to connect, so it is actionable rather than merely true")
+                .as("the reason names what would report it, so it is actionable rather than merely true")
                 .containsExactly(FixtureIntegration.KIND);
-        assertThat(dormant.getFirst().reason()).contains("connect " + FixtureIntegration.KIND.name());
+        assertThat(dormant.getFirst().reason(signal -> "Widget assembled", kind -> "Fixture"))
+                .endsWith("(Widget assembled); Fixture would.");
     }
 
     @Test

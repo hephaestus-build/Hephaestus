@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.trace.dto;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.trace.PracticeTraceOutcome;
@@ -43,11 +43,14 @@ public record PracticeTraceEntryDTO(
         @NonNull @Schema(description = "The outcome in a sentence, phrased as what would change it")
         String explanation,
 
-        @NonNull @Schema(description = "The signals this practice watches")
-        List<SignalName> watches,
+        @NonNull @Schema(description = "The signals this practice watches, each with its display name")
+        List<PracticeSignalDTO> watches,
 
-        @Schema(description = "The occurrence this answer is about; null when nothing it watches happened") @Nullable
-        SignalName occasionedBy,
+        @Schema(
+                description = "The signal of the occurrence this answer is about, with its display name; null when "
+                        + "nothing it watches happened")
+        @Nullable
+        PracticeSignalDTO occasionedBy,
 
         @Schema(
                 description = "That occurrence's id in this trace's signals list. The name alone cannot identify "

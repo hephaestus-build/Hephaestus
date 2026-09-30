@@ -119,8 +119,8 @@ class ReviewRunTargetMapperTest extends BaseUnitTest {
                                 IntegrationKind.OUTLINE,
                                 null,
                                 "Deployment runbook",
-                                null,
                                 "Engineering",
+                                null,
                                 null)),
                 Arguments.of(
                         "a document whose title the mirror lost still names its kind",

@@ -96,44 +96,43 @@ public enum SignalStateReason {
     }
 
     /**
-     * One sentence per reason, for every surface that has to explain a silence. It lives beside the reason
-     * because a second hand-written copy is how a cooldown comes to be reported as an exhausted budget,
-     * sending an operator to raise a cap that was never set.
+     * One sentence per reason, for every surface that has to explain a silence — the trace timeline, the
+     * trace's per-practice explanation and the answer to a review somebody asked for. It lives beside the
+     * reason because a second hand-written copy is how a cooldown comes to be reported as an exhausted
+     * budget, sending an operator to raise a cap that was never set.
+     *
+     * <p>Written for any reader: the developer whose work it is and an admin reading about somebody else's
+     * work see the same sentence, so it states the fact in the product's words and leaves the fix to a link
+     * only a reader who can act on it is shown.
      */
     public String describe() {
         return switch (this) {
-            case GATE_SKIPPED -> "The workspace's review gate declined this occurrence.";
-            case COOLDOWN_ACTIVE -> "Another review ran on this artifact inside the workspace's cooldown window.";
-            case REQUEST_COOLDOWN_ACTIVE ->
-                "A review of this was already asked for inside the workspace's cooldown window.";
+            case GATE_SKIPPED -> "This workspace's review settings turned it away.";
+            case COOLDOWN_ACTIVE -> "This work was already reviewed within the workspace's cooldown period.";
+            case REQUEST_COOLDOWN_ACTIVE -> "A review of this work was already asked for recently.";
             case REQUESTER_QUOTA_EXHAUSTED ->
-                "You have asked for as many reviews as an hour allows; the allowance refills.";
-            case CONCURRENT_DUPLICATE -> "Another submission for the same work carries this review.";
-            case COALESCED ->
-                "A newer artifact revision or lifecycle state replaced this review occasion before submission.";
+                "Whoever asked has used up their review requests for this hour; the allowance refills.";
+            case CONCURRENT_DUPLICATE -> "The same review was already running.";
+            case COALESCED -> "A later change to this work replaced this update before a review started.";
             case OUT_OF_REVIEW_SCOPE ->
-                "This artifact is outside the branches and repositories this workspace reviews.";
+                "The author, repository or base branch is outside the workspace's review coverage.";
             case STALE_ROLLOUT_REVISION ->
-                "The review rollout changed after this work was admitted; it is not replayed under the new configuration.";
-            case WORKSPACE_INACTIVE -> "The workspace was not active; it is re-offered when the workspace is.";
+                "The workspace's review settings changed before this review could start, so it did not run.";
+            case WORKSPACE_INACTIVE -> "The workspace was not active; it is tried again once it is.";
             case PRACTICES_DISABLED ->
-                "Practice review is switched off for this workspace; it is re-offered when it is switched on.";
-            case NO_ACTIVE_PRACTICE -> "No practice was bound to this occurrence when it was recorded.";
-            case MEMBER_AI_DECLINED -> "The developer has not enabled AI practice reviews in this workspace.";
-            case REVIEW_MODEL_UNBOUND ->
-                "No AI model is bound to practice review for this workspace; binding one in Administration re-offers it.";
-            case PRACTICE_AUTONOMY_OFF ->
-                "Every practice bound to this occurrence sits at Off; raising one re-offers it.";
-            case BUDGET_EXHAUSTED ->
-                "The budget funding this review was exhausted; it is re-offered when the budget refills.";
+                "Practice reviews are switched off for this workspace; it is tried again once they are on.";
+            case NO_ACTIVE_PRACTICE -> "No practice was watching for this when it happened.";
+            case MEMBER_AI_DECLINED -> "The developer has not allowed AI practice reviews of their work.";
+            case REVIEW_MODEL_UNBOUND -> "No AI model is set up to run practice reviews in this workspace.";
+            case PRACTICE_AUTONOMY_OFF -> "Every practice watching for this is turned off.";
+            case BUDGET_EXHAUSTED -> "The workspace's AI budget was used up; it is tried again once it refills.";
             case SUBJECT_UNLINKED ->
-                "The author is unknown or not yet a workspace member Hephaestus reviews; it is re-offered once they are one.";
-            case MODEL_UNAVAILABLE ->
-                "The model this review is bound to left the catalog; re-pointing the binding re-offers it.";
+                "The author is unknown or not yet a member of this workspace; it is tried again once they are.";
+            case MODEL_UNAVAILABLE -> "The AI model set up for practice reviews is no longer available.";
             case ARTIFACT_NOT_VISIBLE ->
-                "The artifact is not visible upstream right now; it is re-offered if it returns.";
-            case PENDING_DEADLINE_EXCEEDED -> "It waited longer than the ledger keeps re-offering a signal.";
-            case ARTIFACT_GONE -> "The artifact was deleted before a review could run.";
+                "This work is not showing at its provider right now; it is tried again if it comes back.";
+            case PENDING_DEADLINE_EXCEEDED -> "It waited too long to be picked up for review.";
+            case ARTIFACT_GONE -> "This work no longer exists or can no longer be reviewed.";
         };
     }
 }
