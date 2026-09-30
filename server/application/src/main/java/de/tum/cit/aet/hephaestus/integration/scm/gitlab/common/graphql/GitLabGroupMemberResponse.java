@@ -38,6 +38,7 @@ public record GitLabGroupMemberResponse(
      * @param name      the user's display name (nullable)
      * @param avatarUrl the user's avatar URL (nullable)
      * @param webUrl    the user's profile URL (nullable)
+     * @param bot       GitLab's statement that the account is a bot, or {@code null} when the read did not carry it
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record GitLabMemberUser(
@@ -45,7 +46,8 @@ public record GitLabGroupMemberResponse(
             String username,
             @Nullable String name,
             @Nullable String avatarUrl,
-            @Nullable String webUrl) {}
+            @Nullable String webUrl,
+            @Nullable Boolean bot) {}
 
     /**
      * Access level for a group member.

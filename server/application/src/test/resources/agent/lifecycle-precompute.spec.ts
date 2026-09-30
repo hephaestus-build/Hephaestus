@@ -889,6 +889,13 @@ void test("the merge practices read the threads and decisions as rows against th
 				},
 				{ state: "APPROVED", author: "ada", submittedAt: "2026-04-13T14:30:00Z" },
 				{ state: "APPROVED", author: "jennifer", submittedAt: "2026-04-13T15:00:00Z" },
+				// A bot whose login looks like anyone's: its approval is recorded but is nobody's review.
+				{
+					state: "APPROVED",
+					author: "heph_introcourse_tutor_e2e",
+					bot: true,
+					submittedAt: "2026-04-13T15:02:00Z",
+				},
 				{ state: "APPROVED", author: "tom", submittedAt: "2026-04-13T16:00:00Z" },
 			],
 		},
@@ -942,8 +949,9 @@ void test("the merge practices read the threads and decisions as rows against th
 			approval.contextDir,
 			approval.changeDir,
 		);
-		assert.equal(decisions.metrics.decisions, 4);
-		// Jennifer's approval at 15:00 is before the 15:06 merge and by someone else; Ada's is the author's, Tom's is after.
+		assert.equal(decisions.metrics.decisions, 5);
+		// Jennifer's approval at 15:00 is before the 15:06 merge and by someone else; Ada's is the author's, the bot's is
+		// no person's, Tom's is after.
 		assert.equal(decisions.metrics.approvalsBeforeMergeByOthers, 1);
 		const rows = decisions.hints.filter((h) => h.pattern === "review decision");
 		assert.deepEqual(
@@ -952,9 +960,11 @@ void test("the merge practices read the threads and decisions as rows against th
 				["jennifer", "CHANGES_REQUESTED", true, false],
 				["ada", "APPROVED", true, true],
 				["jennifer", "APPROVED", true, false],
+				["heph_introcourse_tutor_e2e", "APPROVED", true, false],
 				["tom", "APPROVED", false, false],
 			],
 		);
+		assert.equal(rows[3]?.flags.bot, true);
 		assert.match(
 			rows[0]?.context ?? "",
 			/^jennifer: CHANGES_REQUESTED — Please fix the stock check$/u,
@@ -965,6 +975,7 @@ void test("the merge practices read the threads and decisions as rows against th
 			[
 				["jennifer", "APPROVED"],
 				["ada", "APPROVED"],
+				["heph_introcourse_tutor_e2e", "APPROVED"],
 				["tom", "APPROVED"],
 			],
 		);

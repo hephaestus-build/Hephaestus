@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -23,10 +24,15 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import java.util.List;
 import java.util.Optional;
+import mockwebserver3.MockResponse;
+import mockwebserver3.MockWebServer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.env.MockEnvironment;
@@ -237,5 +243,58 @@ class WorkspaceProvisioningServiceTest {
         provisioningService.bootstrapDefaultGitLabPatWorkspace();
 
         verify(workspaceService, never()).createWorkspace(anyString(), anyString(), anyString(), any(), anyLong());
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+            nullValues = "unstated",
+            value = {"true, BOT", "false, USER", "unstated, unstated"})
+    void shouldRecordAGitLabTokensOwnerAsTheBotOrPersonGitLabSaysTheyAre(@Nullable Boolean bot, @Nullable String type)
+            throws Exception {
+        try (MockWebServer gitlab = new MockWebServer()) {
+            gitlab.start();
+            String origin = "http://127.0.0.1:" + gitlab.getPort();
+            MockEnvironment environment = new MockEnvironment().withProperty("hephaestus.e2e.scm-origin", origin);
+            environment.setActiveProfiles("e2e");
+            WorkspaceProvisioningService service = new WorkspaceProvisioningService(
+                    workspaceProperties,
+                    workspaceRepository,
+                    repositoryToMonitorRepository,
+                    workspaceService,
+                    userRepository,
+                    gitProviderRepository,
+                    workspaceMembershipRepository,
+                    workspaceMembershipService,
+                    connectionService,
+                    List.of(),
+                    new ScmServerEndpointPolicy(environment));
+            gitlab.enqueue(new MockResponse.Builder()
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"id\":18024,\"username\":\"ga84xah\",\"name\":\"Student\""
+                            + (bot == null ? "" : ",\"bot\":" + bot) + "}")
+                    .build());
+            when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, origin))
+                    .thenReturn(Optional.of(TestEntities.gitProvider(5L, IdentityProviderType.GITLAB)));
+            when(userRepository.findByLoginAndProviderId("course", 5L)).thenReturn(Optional.empty());
+            User owner = new User();
+            owner.setId(7L);
+            when(userRepository.findByLoginAndProviderId("ga84xah", 5L)).thenReturn(Optional.of(owner));
+
+            assertThat(service.resolveOrCreateGitLabUser("pat", origin, "course"))
+                    .isEqualTo(7L);
+
+            verify(userRepository)
+                    .upsertUser(
+                            eq(18024L),
+                            eq(5L),
+                            eq("ga84xah"),
+                            any(),
+                            any(),
+                            any(),
+                            type == null ? isNull() : eq(type),
+                            any(),
+                            any(),
+                            any());
+        }
     }
 }

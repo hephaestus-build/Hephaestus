@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -110,7 +111,8 @@ final class GitLabMergeRequestFields {
                 (String) userMap.get("name"),
                 (String) userMap.get("avatarUrl"),
                 (String) userMap.get("webUrl"),
-                (String) userMap.get("publicEmail"));
+                (String) userMap.get("publicEmail"),
+                GitLabUserLookup.botOf(userMap));
     }
 
     /**

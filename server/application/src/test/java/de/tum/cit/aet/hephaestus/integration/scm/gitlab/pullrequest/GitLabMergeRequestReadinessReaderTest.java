@@ -54,6 +54,20 @@ class GitLabMergeRequestReadinessReaderTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCarryGitLabsBotFlagOfEachApproverAndLeaveItUnknownWhereTheReadLacksIt() {
+        Map<String, @Nullable Object> node = mergeRequest();
+        Map<String, @Nullable Object> tutor = user(90393, "heph_introcourse_tutor_e2e");
+        tutor.put("bot", true);
+        Map<String, @Nullable Object> student = user(18024, "ga84xah");
+        student.put("bot", false);
+        node.put("approvedBy", connection(3, false, List.of(tutor, student, user(7, "tutor"))));
+
+        assertThat(decode(node, List.of()).approvers())
+                .extracting(GitLabMergeRequestProcessor.SyncUserData::bot)
+                .containsExactly(true, false, null);
+    }
+
+    @Test
     void shouldTellNoPipelineFromASkippedOne() {
         Map<String, @Nullable Object> none = mergeRequest();
         none.put("headPipeline", null);

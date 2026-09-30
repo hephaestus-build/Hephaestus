@@ -150,6 +150,7 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
             @Nullable String authorName,
             @Nullable String authorAvatarUrl,
             @Nullable String authorWebUrl,
+            @Nullable Boolean authorBot,
             @Nullable String createdAt,
             @Nullable String updatedAt) {}
 
@@ -167,7 +168,8 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
                         data.authorUsername(),
                         data.authorName(),
                         data.authorAvatarUrl(),
-                        data.authorWebUrl()),
+                        data.authorWebUrl(),
+                        data.authorBot()),
                 providerId);
 
         Optional<IssueComment> existingOpt = commentRepository.findByNativeIdAndProviderId(data.id(), providerId);

@@ -12,6 +12,7 @@ query GetProjectMembers($fullPath: ID!, $first: Int!, $after: String) {
                     name
                     avatarUrl
                     webUrl
+                    bot
                 }
                 accessLevel {
                     stringValue

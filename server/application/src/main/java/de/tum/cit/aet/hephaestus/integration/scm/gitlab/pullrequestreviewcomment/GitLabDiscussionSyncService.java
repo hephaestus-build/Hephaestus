@@ -321,7 +321,8 @@ public class GitLabDiscussionSyncService {
                                 (String) resolvedByMap.get("username"),
                                 (String) resolvedByMap.get("name"),
                                 (String) resolvedByMap.get("avatarUrl"),
-                                (String) resolvedByMap.get("webUrl")),
+                                (String) resolvedByMap.get("webUrl"),
+                                GitLabUserLookup.botOf(resolvedByMap)),
                         providerId);
             }
         }
@@ -567,6 +568,7 @@ public class GitLabDiscussionSyncService {
                         authorMap != null ? (String) authorMap.get("name") : null,
                         authorMap != null ? (String) authorMap.get("avatarUrl") : null,
                         authorMap != null ? (String) authorMap.get("webUrl") : null,
+                        GitLabUserLookup.botOf(authorMap),
                         noteNode.get("createdAt") != null
                                 ? noteNode.get("createdAt").toString()
                                 : null,
@@ -637,7 +639,8 @@ public class GitLabDiscussionSyncService {
                         (String) authorMap.get("username"),
                         (String) authorMap.get("name"),
                         (String) authorMap.get("avatarUrl"),
-                        (String) authorMap.get("webUrl")),
+                        (String) authorMap.get("webUrl"),
+                        GitLabUserLookup.botOf(authorMap)),
                 providerId);
     }
 

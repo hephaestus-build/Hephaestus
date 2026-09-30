@@ -104,7 +104,7 @@ class GitLabTeamSyncServiceMembershipLookupTest extends BaseUnitTest {
     void shouldReportAGrantTheGroupHoldsOnlyThroughAnInvitedGroup() {
         var invitedMaintainer = new GitLabGroupMemberResponse(
                 new GitLabGroupMemberResponse.GitLabMemberUser(
-                        "gid://gitlab/User/" + USER_ID, "tutor", null, null, null),
+                        "gid://gitlab/User/" + USER_ID, "tutor", null, null, null, null),
                 new GitLabGroupMemberResponse.GitLabAccessLevel("MAINTAINER", 40));
         when(nodes.toEntityList(GitLabGroupMemberResponse.class)).thenReturn(List.of(invitedMaintainer));
 

@@ -287,7 +287,9 @@ public class GitLabMemberMessageHandler extends AbstractIntegrationMessageHandle
                     name,
                     avatarUrl,
                     "", // htmlUrl not available in member webhook payload
-                    GitLabUserClassifier.classify(login).name(),
+                    // The hook carries no bot flag: a stored type stays, and only a new user's is guessed.
+                    null,
+                    GitLabUserClassifier.insertionType(login, null),
                     null,
                     null,
                     null);

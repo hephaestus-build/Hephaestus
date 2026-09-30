@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -215,7 +216,8 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             any(),
                             anyString(),
                             anyString(),
-                            eq("USER"),
+                            isNull(),
+                            anyString(),
                             any(),
                             any(),
                             any());
@@ -451,6 +453,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             anyString(),
                             anyString(),
                             anyString(),
+                            anyString(),
                             any(),
                             any(),
                             any());
@@ -583,7 +586,8 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                     "alice",
                     "Alice A.",
                     "https://gitlab.com/avatar.png",
-                    "https://gitlab.com/alice");
+                    "https://gitlab.com/alice",
+                    true);
 
             Long userId = service.upsertUser(memberUser, TEST_PROVIDER_ID);
 
@@ -604,7 +608,8 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             "Alice A.",
                             "https://gitlab.com/avatar.png",
                             "https://gitlab.com/alice",
-                            "USER",
+                            "BOT",
+                            "BOT",
                             null,
                             null,
                             null);
@@ -616,8 +621,8 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             when(userRepository.tryAcquireLoginLock("alice", TEST_PROVIDER_ID)).thenReturn(false);
             stubUserLookup(42L, 1042L);
 
-            var memberUser =
-                    new GitLabMemberUser("gid://gitlab/User/42", "alice", "Alice", null, "https://gitlab.com/alice");
+            var memberUser = new GitLabMemberUser(
+                    "gid://gitlab/User/42", "alice", "Alice", null, "https://gitlab.com/alice", null);
 
             Long userId = service.upsertUser(memberUser, TEST_PROVIDER_ID);
 
@@ -631,6 +636,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             eq("Alice"),
                             eq(""),
                             eq("https://gitlab.com/alice"),
+                            isNull(),
                             eq("USER"),
                             any(),
                             any(),
@@ -642,7 +648,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             stubUserLookup(42L, 1042L);
 
             var memberUser =
-                    new GitLabMemberUser("gid://gitlab/User/42", "alice", null, null, "https://gitlab.com/alice");
+                    new GitLabMemberUser("gid://gitlab/User/42", "alice", null, null, "https://gitlab.com/alice", null);
 
             Long userId = service.upsertUser(memberUser, TEST_PROVIDER_ID);
 
@@ -655,6 +661,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             any(),
                             eq(""),
                             eq("https://gitlab.com/alice"),
+                            isNull(),
                             eq("USER"),
                             any(),
                             any(),
@@ -664,7 +671,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         @Test
         void invalidGid_returnsNull() {
             var memberUser =
-                    new GitLabMemberUser("not-a-valid-gid", "alice", "Alice", null, "https://gitlab.com/alice");
+                    new GitLabMemberUser("not-a-valid-gid", "alice", "Alice", null, "https://gitlab.com/alice", null);
 
             Long userId = service.upsertUser(memberUser, TEST_PROVIDER_ID);
 
@@ -678,6 +685,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             anyString(),
                             anyString(),
                             anyString(),
+                            anyString(),
                             any(),
                             any(),
                             any());
@@ -688,8 +696,8 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             when(userRepository.findByNativeIdAndProviderId(42L, TEST_PROVIDER_ID))
                     .thenReturn(Optional.empty());
 
-            var memberUser =
-                    new GitLabMemberUser("gid://gitlab/User/42", "alice", "Alice", null, "https://gitlab.com/alice");
+            var memberUser = new GitLabMemberUser(
+                    "gid://gitlab/User/42", "alice", "Alice", null, "https://gitlab.com/alice", null);
 
             Long userId = service.upsertUser(memberUser, TEST_PROVIDER_ID);
 
@@ -703,7 +711,8 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             any(),
                             anyString(),
                             anyString(),
-                            eq("USER"),
+                            isNull(),
+                            anyString(),
                             any(),
                             any(),
                             any());
@@ -771,7 +780,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
     private GitLabGroupMemberResponse createMember(String gid, String username, String name, int accessLevel) {
         return new GitLabGroupMemberResponse(
-                new GitLabMemberUser(gid, username, name, null, "https://gitlab.com/" + username),
+                new GitLabMemberUser(gid, username, name, null, "https://gitlab.com/" + username, null),
                 new GitLabAccessLevel(accessLevelName(accessLevel), accessLevel));
     }
 

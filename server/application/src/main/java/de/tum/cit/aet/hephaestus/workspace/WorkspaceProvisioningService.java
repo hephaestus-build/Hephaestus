@@ -336,13 +336,16 @@ public class WorkspaceProvisioningService {
         }
 
         if (userInfo != null && userInfo.id() != null) {
+            Boolean bot = userInfo.bot();
             return upsertGitLabUser(
                     userInfo.id(),
                     userInfo.username() != null ? userInfo.username() : groupPath,
                     userInfo.name(),
                     userInfo.avatarUrl(),
                     userInfo.webUrl(),
-                    serverUrl);
+                    serverUrl,
+                    // GitLab says whether the token's owner is a bot, as it is for an access token's user.
+                    bot == null ? null : (bot ? User.Type.BOT : User.Type.USER));
         }
 
         log.info("Falling back to group API for token validation: serverUrl={}, groupPath={}", serverUrl, groupPath);
@@ -365,12 +368,9 @@ public class WorkspaceProvisioningService {
                 groupInfo.name() != null ? groupInfo.name() : groupPath,
                 groupInfo.avatarUrl(),
                 groupInfo.webUrl(),
-                serverUrl);
-    }
-
-    private Long upsertGitLabUser(
-            Long nativeId, String login, String name, String avatarUrl, String webUrl, String serverUrl) {
-        return upsertGitLabUser(nativeId, login, name, avatarUrl, webUrl, serverUrl, User.Type.BOT);
+                serverUrl,
+                // No user stands for a group token here, so the group itself is recorded as the workspace's bot.
+                User.Type.BOT);
     }
 
     private Long upsertGitLabUser(
@@ -380,7 +380,7 @@ public class WorkspaceProvisioningService {
             String avatarUrl,
             String webUrl,
             String serverUrl,
-            User.Type userType) {
+            User.@Nullable Type userType) {
         String safeName = name != null ? name : login;
         // GitLab self-hosted instances return relative avatar paths (e.g. /uploads/-/system/user/avatar/123/avatar.png)
         String safeAvatar = avatarUrl != null ? (avatarUrl.startsWith("/") ? serverUrl + avatarUrl : avatarUrl) : "";
@@ -397,7 +397,16 @@ public class WorkspaceProvisioningService {
         userRepository.acquireLoginLock(login, providerId);
         userRepository.freeLoginConflicts(login, nativeId, providerId);
         userRepository.upsertUser(
-                nativeId, providerId, login, safeName, safeAvatar, safeWebUrl, userType.name(), null, null, null);
+                nativeId,
+                providerId,
+                login,
+                safeName,
+                safeAvatar,
+                safeWebUrl,
+                userType != null ? userType.name() : null,
+                null,
+                null,
+                null);
         log.info(
                 "Upserted user for GitLab workspace bootstrap: userLogin={}, nativeId={}, type={}",
                 LoggingUtils.sanitizeForLog(login),
@@ -519,7 +528,8 @@ public class WorkspaceProvisioningService {
             String username,
             String name,
             @JsonProperty("avatar_url") String avatarUrl,
-            @JsonProperty("web_url") String webUrl) {}
+            @JsonProperty("web_url") String webUrl,
+            @Nullable Boolean bot) {}
 
     private record GitLabGroupResponse(
             Long id,

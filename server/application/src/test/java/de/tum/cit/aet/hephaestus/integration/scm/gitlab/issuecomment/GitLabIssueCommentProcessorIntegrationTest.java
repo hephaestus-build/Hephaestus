@@ -220,6 +220,7 @@ class GitLabIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                 "Felix Dietrich",
                 "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
                 "https://gitlab.lrz.de/ga84xah",
+                null,
                 createdAt,
                 updatedAt);
     }

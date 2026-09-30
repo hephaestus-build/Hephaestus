@@ -250,7 +250,8 @@ public class GitLabCollaboratorSyncService {
                             username,
                             user.get("name") instanceof String name ? name : null,
                             user.get("avatarUrl") instanceof String avatarUrl ? avatarUrl : null,
-                            user.get("webUrl") instanceof String webUrl ? webUrl : null),
+                            user.get("webUrl") instanceof String webUrl ? webUrl : null,
+                            GitLabUserLookup.botOf(user)),
                     level.intValue());
         }
 
