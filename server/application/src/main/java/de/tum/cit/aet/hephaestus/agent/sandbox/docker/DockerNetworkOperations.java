@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Network management operations against the Docker daemon.
@@ -14,9 +15,10 @@ interface DockerNetworkOperations {
      *
      * @param name installation-scoped network name
      * @param internal if true, creates an {@code --internal} network with no external connectivity
+     * @param labels set atomically with the network, so no reader ever sees it unlabelled
      * @return the network ID
      */
-    String createNetwork(String name, boolean internal);
+    String createNetwork(String name, boolean internal, Map<String, String> labels);
 
     /**
      * Connect a container to a network and return its assigned IP.
@@ -35,4 +37,7 @@ interface DockerNetworkOperations {
 
     /** List networks whose name starts with the given prefix. */
     List<DockerOperations.NetworkInfo> listNetworksByName(String namePrefix);
+
+    /** The containers attached to a network now; empty when the network is gone. */
+    List<DockerOperations.NetworkEndpoint> inspectEndpoints(String networkId);
 }

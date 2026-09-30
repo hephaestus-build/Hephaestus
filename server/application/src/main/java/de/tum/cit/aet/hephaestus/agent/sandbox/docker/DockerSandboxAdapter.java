@@ -168,7 +168,8 @@ public class DockerSandboxAdapter implements SandboxManager {
 
             boolean allowInternet =
                     spec.networkPolicy() != null && spec.networkPolicy().internetAccess();
-            networkId = networkManager.createJobNetwork(jobId, allowInternet);
+            Map<String, String> labels = securityPolicy.buildLabels(jobId);
+            networkId = networkManager.createJobNetwork(jobId, allowInternet, labels);
 
             // Null when the app-server runs on the host rather than in Docker.
             String appServerIp = networkManager.connectAppServer(networkId);
@@ -190,7 +191,6 @@ public class DockerSandboxAdapter implements SandboxManager {
             if (!spec.outputPath().equals(SandboxLayout.OUTPUT_PATH)) {
                 throw new SandboxException("Sandbox results must use the runtime output directory");
             }
-            Map<String, String> labels = securityPolicy.buildLabels(jobId);
             attempt = launcher.open(
                     jobId,
                     spec.networkPolicy(),

@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.io.IOException;
 import java.lang.reflect.RecordComponent;
+import java.time.Clock;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -111,7 +112,7 @@ class DockerSandboxPropertiesTest {
                     assertThat(docker.host()).isEqualTo("unix:///var/run/docker.sock");
                     assertThat(docker.tlsVerify()).isFalse();
                     assertThat(docker.resolvedAppServerContainerId()).isNull();
-                    var configuration = new DockerSandboxConfiguration();
+                    var configuration = new DockerSandboxConfiguration(Clock.systemUTC());
                     assertThatCode(() -> {
                                 configuration.dockerClient(sandbox, docker).close();
                                 configuration

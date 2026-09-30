@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerVolumeOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxAttemptLauncher;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxEnvBlocklist;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxNetworkManager;
@@ -52,6 +53,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
 
     private final InteractiveSandboxProperties properties;
     private final SandboxNetworkManager networkManager;
+    private final SandboxCreator creator;
     private final SandboxWorkspaceManager workspaceManager;
     private final SandboxContainerManager containerManager;
     private final ContainerSecurityPolicy securityPolicy;
@@ -80,8 +82,10 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             int gatewayPort,
             MentorProxyCredentialRegistry mentorProxyCredentialRegistry,
             SandboxGatewaySessions gatewaySessions,
-            DockerVolumeOperations volumeOperations) {
+            DockerVolumeOperations volumeOperations,
+            SandboxCreator creator) {
         this.properties = properties;
+        this.creator = creator;
         this.networkManager = networkManager;
         this.workspaceManager = workspaceManager;
         this.containerManager = containerManager;
@@ -138,7 +142,11 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             }
             boolean allowInternet =
                     spec.networkPolicy() != null && spec.networkPolicy().internetAccess();
-            networkId = networkManager.createJobNetwork(spec.sessionId(), allowInternet);
+            Map<String, String> labels = new HashMap<>(creator.labels());
+            labels.put(SandboxLabels.OWNER, owner);
+            labels.put(SandboxLabels.KIND, SandboxLabels.KIND_INTERACTIVE);
+            labels.put(SandboxLabels.SESSION_ID, spec.sessionId().toString());
+            networkId = networkManager.createJobNetwork(spec.sessionId(), allowInternet, labels);
             String appServerIp = networkManager.connectAppServer(networkId);
             List<String> extraHosts = List.of();
             if (appServerIp == null) {
@@ -152,13 +160,6 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
 
             SecurityProfile secProfile =
                     spec.securityProfile() != null ? spec.securityProfile() : SecurityProfile.DEFAULT;
-            Map<String, String> labels = Map.of(
-                    SandboxLabels.OWNER,
-                    owner,
-                    SandboxLabels.KIND,
-                    SandboxLabels.KIND_INTERACTIVE,
-                    SandboxLabels.SESSION_ID,
-                    spec.sessionId().toString());
             Map<String, String> runnerEnv = buildRunnerEnvironment(spec, appServerIp);
 
             var attempt = launcher.open(

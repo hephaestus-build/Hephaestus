@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -19,12 +20,14 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
 class SandboxReconcilerTest extends BaseUnitTest {
@@ -45,12 +48,16 @@ class SandboxReconcilerTest extends BaseUnitTest {
     @Mock
     private DockerVolumeOperations volumes;
 
+    @Mock
+    private DockerInspectOperations creatorContainers;
+
     private SandboxReconciler reconciler;
     private SimpleMeterRegistry meterRegistry;
 
     @BeforeEach
     void setUp() {
         lenient().when(networkManager.networkPrefix()).thenReturn("hephaestus-sandbox-default--");
+        lenient().when(networkManager.removeUnlessInUse(any(), any())).thenReturn(true);
         meterRegistry = new SimpleMeterRegistry();
         reconciler = new SandboxReconciler(
                 jobRepository,
@@ -59,6 +66,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
                 new SandboxVolumeManager(
                         volumes,
                         new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default")),
+                new SandboxCreator(creatorContainers, () -> "reconciling-worker"),
                 meterRegistry,
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
@@ -101,6 +109,15 @@ class SandboxReconcilerTest extends BaseUnitTest {
         verify(volumes).removeVolume("orphan");
         verify(volumes, never()).removeVolume("active");
         verify(volumes, never()).removeVolume("starting");
+    }
+
+    /** A practice review's network, labelled as the batch adapter creates it. */
+    private static DockerOperations.NetworkInfo jobNetwork(String id, UUID jobId, @Nullable Instant createdAt) {
+        return new DockerOperations.NetworkInfo(
+                id,
+                "hephaestus-sandbox-default--" + jobId,
+                createdAt,
+                Map.of(SandboxLabels.OWNER, "default", SandboxLabels.JOB_ID, jobId.toString()));
     }
 
     private static DockerOperations.ContainerInfo container(String id, UUID jobId, @Nullable Instant createdAt) {
@@ -156,13 +173,12 @@ class SandboxReconcilerTest extends BaseUnitTest {
             when(containerManager.listManagedContainers())
                     .thenReturn(List.of(container("orphaned-ctr", orphanedJobId, LONG_AGO)));
             when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(
-                            new DockerOperations.NetworkInfo("net-1", "hephaestus-sandbox-default--" + orphanedJobId)));
+                    .thenReturn(List.of(jobNetwork("net-1", orphanedJobId, LONG_AGO)));
 
             reconciler.onStartup();
 
             verify(containerManager).forceRemove("orphaned-ctr");
-            verify(networkManager).forceRemoveNetwork("net-1", "hephaestus-sandbox-default--" + orphanedJobId);
+            verify(networkManager).removeUnlessInUse("net-1", "hephaestus-sandbox-default--" + orphanedJobId);
         }
 
         @Test
@@ -250,12 +266,11 @@ class SandboxReconcilerTest extends BaseUnitTest {
             when(containerManager.listManagedContainers()).thenReturn(List.of());
 
             when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo(
-                            networkId, "hephaestus-sandbox-default--" + orphanedJobId)));
+                    .thenReturn(List.of(jobNetwork(networkId, orphanedJobId, LONG_AGO)));
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager).forceRemoveNetwork(networkId, "hephaestus-sandbox-default--" + orphanedJobId);
+            verify(networkManager).removeUnlessInUse(networkId, "hephaestus-sandbox-default--" + orphanedJobId);
             assertThat(meterRegistry
                             .counter("sandbox.reconciler.orphaned", "resource", "network")
                             .count())
@@ -291,12 +306,11 @@ class SandboxReconcilerTest extends BaseUnitTest {
             // Orphaned by the job set alone; only the unreadable inventory can spare it.
             lenient()
                     .when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(new DockerOperations.NetworkInfo(
-                            "net-live", "hephaestus-sandbox-default--" + UUID.randomUUID())));
+                    .thenReturn(List.of(jobNetwork("net-live", UUID.randomUUID(), LONG_AGO)));
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager, never()).forceRemoveNetwork(any(), any());
+            verify(networkManager, never()).removeUnlessInUse(any(), any());
             assertThat(meterRegistry
                             .counter("sandbox.reconciler.sweeps", "outcome", "skipped")
                             .count())
@@ -315,13 +329,12 @@ class SandboxReconcilerTest extends BaseUnitTest {
                     .thenReturn(List.of(container("ctr-live", jobId, LONG_AGO)));
             lenient()
                     .when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(
-                            new DockerOperations.NetworkInfo("net-live", "hephaestus-sandbox-default--" + jobId)));
+                    .thenReturn(List.of(jobNetwork("net-live", jobId, LONG_AGO)));
 
             reconciler.periodicReconciliation();
 
             verify(containerManager, never()).forceRemove(any());
-            verify(networkManager, never()).forceRemoveNetwork(any(), any());
+            verify(networkManager, never()).removeUnlessInUse(any(), any());
             assertThat(meterRegistry
                             .counter("sandbox.reconciler.sweeps", "outcome", "skipped")
                             .count())
@@ -373,11 +386,57 @@ class SandboxReconcilerTest extends BaseUnitTest {
                     .thenReturn(List.of(mentorContainer("ctr-mentor", sessionId)));
             when(networkManager.listOrphanedNetworks())
                     .thenReturn(List.of(new DockerOperations.NetworkInfo(
-                            "net-mentor", "hephaestus-sandbox-default--" + sessionId)));
+                            "net-mentor",
+                            "hephaestus-sandbox-default--" + sessionId,
+                            LONG_AGO,
+                            Map.of(SandboxLabels.SESSION_ID, sessionId.toString()))));
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager, never()).forceRemoveNetwork(any(), any());
+            verify(networkManager, never()).removeUnlessInUse(any(), any());
+        }
+
+        @Test
+        void shouldKeepAJobNetworkThatNoContainerClaimsYetWhileInsideTheGraceWindow() {
+            // The job set is read before the containers and networks, so a job started since is not in it.
+            UUID jobId = UUID.randomUUID();
+            String name = "hephaestus-sandbox-default--" + jobId;
+
+            when(jobRepository.findByStatusIn(any())).thenReturn(List.of());
+            when(containerManager.listManagedContainers()).thenReturn(List.of());
+            when(networkManager.listOrphanedNetworks())
+                    .thenReturn(List.of(jobNetwork("net-starting", jobId, NOW.minus(Duration.ofSeconds(2)))));
+
+            reconciler.periodicReconciliation();
+
+            verify(networkManager, never()).removeUnlessInUse(any(), any());
+        }
+
+        @Test
+        void shouldReapAJobNetworkThatNoContainerClaimedOnceTheGraceWindowHasPassed() {
+            UUID jobId = UUID.randomUUID();
+            String name = "hephaestus-sandbox-default--" + jobId;
+
+            when(jobRepository.findByStatusIn(any())).thenReturn(List.of());
+            when(containerManager.listManagedContainers()).thenReturn(List.of());
+            when(networkManager.listOrphanedNetworks())
+                    .thenReturn(List.of(jobNetwork("net-abandoned", jobId, NOW.minus(Duration.ofSeconds(121)))));
+
+            reconciler.periodicReconciliation();
+
+            verify(networkManager).removeUnlessInUse("net-abandoned", name);
+        }
+
+        @Test
+        void shouldNotReapANetworkWhenTheDaemonReportedNoCreationTime() {
+            when(jobRepository.findByStatusIn(any())).thenReturn(List.of());
+            when(containerManager.listManagedContainers()).thenReturn(List.of());
+            when(networkManager.listOrphanedNetworks())
+                    .thenReturn(List.of(jobNetwork("net-ageless", UUID.randomUUID(), null)));
+
+            reconciler.periodicReconciliation();
+
+            verify(networkManager, never()).removeUnlessInUse(any(), any());
         }
 
         @Test
@@ -387,13 +446,11 @@ class SandboxReconcilerTest extends BaseUnitTest {
             when(jobRepository.findByStatusIn(any())).thenReturn(List.of());
             when(containerManager.listManagedContainers())
                     .thenReturn(List.of(container("ctr-young", jobId, NOW.minus(Duration.ofSeconds(30)))));
-            when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(
-                            new DockerOperations.NetworkInfo("net-young", "hephaestus-sandbox-default--" + jobId)));
+            when(networkManager.listOrphanedNetworks()).thenReturn(List.of(jobNetwork("net-young", jobId, LONG_AGO)));
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager, never()).forceRemoveNetwork(any(), any());
+            verify(networkManager, never()).removeUnlessInUse(any(), any());
         }
 
         @Test
@@ -405,13 +462,11 @@ class SandboxReconcilerTest extends BaseUnitTest {
             doThrow(new RuntimeException("stuck container"))
                     .when(containerManager)
                     .forceRemove("ctr-stuck");
-            when(networkManager.listOrphanedNetworks())
-                    .thenReturn(List.of(
-                            new DockerOperations.NetworkInfo("net-stuck", "hephaestus-sandbox-default--" + jobId)));
+            when(networkManager.listOrphanedNetworks()).thenReturn(List.of(jobNetwork("net-stuck", jobId, LONG_AGO)));
 
             reconciler.periodicReconciliation();
 
-            verify(networkManager, never()).forceRemoveNetwork(any(), any());
+            verify(networkManager, never()).removeUnlessInUse(any(), any());
         }
 
         @Test
@@ -442,6 +497,176 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
             assertThat(meterRegistry.timer("sandbox.reconciler.duration").count())
                     .isEqualTo(1);
+        }
+    }
+
+    /**
+     * A real network manager and creator over the Docker boundary: what reaches the daemon is what is
+     * asserted. The mentor admission creates its network and volumes minutes before any container
+     * claims them — through an image pull, the initializer, and the handoff after the initializer is
+     * removed and before the runtime is created — so the sweep below sees no claiming container.
+     */
+    @Nested
+    class InteractiveAdmission {
+
+        private static final UUID SESSION = UUID.randomUUID();
+        private static final String NAME = "hephaestus-sandbox-default--" + SESSION;
+        private static final Instant MINUTES_AGO = NOW.minus(Duration.ofMinutes(10));
+
+        @Mock
+        private DockerNetworkOperations networkOps;
+
+        private SandboxReconciler sweeper;
+
+        @BeforeEach
+        void setUp() {
+            var properties =
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "proxy", "default");
+            var creator = new SandboxCreator(creatorContainers, () -> "reconciling-worker");
+            sweeper = new SandboxReconciler(
+                    jobRepository,
+                    containerManager,
+                    new SandboxNetworkManager(networkOps, properties, creator),
+                    new SandboxVolumeManager(volumes, properties),
+                    creator,
+                    meterRegistry,
+                    Clock.fixed(NOW, ZoneOffset.UTC));
+            when(jobRepository.findByStatusIn(any())).thenReturn(List.of());
+            when(containerManager.listManagedContainers()).thenReturn(List.of());
+        }
+
+        private void admissionCreatedBy(String container, String startedAt) {
+            var labels = Map.of(
+                    SandboxLabels.OWNER,
+                    "default",
+                    SandboxLabels.KIND,
+                    SandboxLabels.KIND_INTERACTIVE,
+                    SandboxLabels.SESSION_ID,
+                    SESSION.toString(),
+                    SandboxLabels.CREATOR_CONTAINER,
+                    container,
+                    SandboxLabels.CREATOR_STARTED_AT,
+                    startedAt);
+            when(networkOps.listNetworksByName("hephaestus-sandbox-default--"))
+                    .thenReturn(List.of(new DockerOperations.NetworkInfo("net-session", NAME, MINUTES_AGO, labels)));
+            // The attempt volumes carry whatever labels the workspace itself writes, created minutes ago.
+            new DockerAttemptWorkspace(volumes, SESSION, labels);
+            ArgumentCaptor<Map<String, String>> written = ArgumentCaptor.captor();
+            verify(volumes, atLeastOnce()).createVolume(any(), written.capture());
+            var volumeLabels = new java.util.HashMap<>(written.getValue());
+            volumeLabels.put(SandboxLabels.CREATED_AT, MINUTES_AGO.toString());
+            when(volumes.listVolumes(Map.of(
+                            SandboxLabels.OWNER, "default", SandboxLabels.KIND, SandboxLabels.KIND_ATTEMPT_WORKSPACE)))
+                    .thenReturn(List.of(new DockerOperations.VolumeInfo("vol-session", volumeLabels)));
+        }
+
+        private void creatorIs(String container, DockerOperations.@Nullable ContainerIdentity identity) {
+            when(creatorContainers.inspectContainerIdentity(container)).thenReturn(Optional.ofNullable(identity));
+        }
+
+        private void assertUntouched() {
+            verify(networkOps, never()).disconnectFromNetwork(any(), any());
+            verify(networkOps, never()).removeNetwork(any());
+            verify(volumes, never()).removeVolume(any());
+        }
+
+        @Test
+        void shouldKeepTheNetworkAndVolumesWhileTheCreatorRunsLongAfterTheGraceWindow() {
+            admissionCreatedBy("creator-worker", "t1");
+            creatorIs(
+                    "creator-worker",
+                    new DockerOperations.ContainerIdentity("creator-worker", true, "t1", "creator-worker"));
+
+            sweeper.periodicReconciliation();
+            sweeper.onStartup();
+
+            assertUntouched();
+        }
+
+        @Test
+        void shouldKeepTheNetworkAndVolumesWhenTheCreatorCannotBeRead() {
+            admissionCreatedBy("creator-worker", "t1");
+            when(creatorContainers.inspectContainerIdentity("creator-worker"))
+                    .thenThrow(new RuntimeException("daemon busy"));
+
+            sweeper.periodicReconciliation();
+
+            assertUntouched();
+        }
+
+        @Test
+        void shouldKeepNetworksWhoseOwnerIsUnknownHoweverOld() {
+            // One mentor network records no creator (its process could not identify itself); one predates labels.
+            UUID legacy = UUID.randomUUID();
+            when(networkOps.listNetworksByName("hephaestus-sandbox-default--"))
+                    .thenReturn(List.of(
+                            new DockerOperations.NetworkInfo(
+                                    "net-unrecorded",
+                                    NAME,
+                                    MINUTES_AGO,
+                                    Map.of(SandboxLabels.SESSION_ID, SESSION.toString())),
+                            new DockerOperations.NetworkInfo(
+                                    "net-legacy", "hephaestus-sandbox-default--" + legacy, MINUTES_AGO, Map.of())));
+
+            sweeper.periodicReconciliation();
+
+            verify(networkOps, never()).removeNetwork(any());
+        }
+
+        @Test
+        void shouldReapTheNetworkAndVolumesWhenTheCreatorIsGone() {
+            admissionCreatedBy("creator-worker", "t1");
+            creatorIs("creator-worker", null);
+            when(networkOps.inspectEndpoints("net-session"))
+                    .thenReturn(List.of(new DockerOperations.NetworkEndpoint("proxy-full-id", "proxy")));
+
+            sweeper.periodicReconciliation();
+
+            verify(networkOps).disconnectFromNetwork("net-session", "proxy");
+            verify(networkOps).removeNetwork("net-session");
+            verify(volumes).removeVolume("vol-session");
+        }
+
+        @Test
+        void shouldReapTheNetworkWhenTheCreatorHasRestartedOrStopped() {
+            admissionCreatedBy("creator-worker", "t1");
+            creatorIs(
+                    "creator-worker",
+                    new DockerOperations.ContainerIdentity("creator-worker", true, "t2", "creator-worker"));
+
+            sweeper.periodicReconciliation();
+
+            verify(networkOps).removeNetwork("net-session");
+        }
+
+        @Test
+        void shouldKeepTheProxyConnectedWhenASandboxAttachedAfterTheInventory() {
+            admissionCreatedBy("creator-worker", "t1");
+            creatorIs(
+                    "creator-worker",
+                    new DockerOperations.ContainerIdentity("creator-worker", false, "t1", "creator-worker"));
+            when(networkOps.inspectEndpoints("net-session"))
+                    .thenReturn(List.of(
+                            new DockerOperations.NetworkEndpoint("proxy-full-id", "proxy"),
+                            new DockerOperations.NetworkEndpoint("runtime-full-id", "mentor-runtime")));
+
+            sweeper.periodicReconciliation();
+
+            verify(networkOps, never()).disconnectFromNetwork(any(), any());
+            verify(networkOps, never()).removeNetwork(any());
+        }
+
+        @Test
+        void shouldReapAnOldJobNetworkOnTheJobRulesAlone() {
+            UUID jobId = UUID.randomUUID();
+            String name = "hephaestus-sandbox-default--" + jobId;
+            when(networkOps.listNetworksByName("hephaestus-sandbox-default--"))
+                    .thenReturn(List.of(jobNetwork("net-job", jobId, MINUTES_AGO)));
+
+            sweeper.periodicReconciliation();
+
+            verify(networkOps).removeNetwork("net-job");
+            verify(creatorContainers, never()).inspectContainerIdentity(any());
         }
     }
 }

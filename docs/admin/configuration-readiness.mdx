@@ -196,6 +196,15 @@ job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
 This prevents accidental cross-installation cleanup; it is not an authorization boundary against
 a process with Docker daemon access.
 
+Interactive-session networks, attempt volumes and containers also record the application container
+that started them, found by its own `HOSTNAME`, and when it started. Cleanup removes them only
+after that container has stopped or restarted, and keeps any whose owner it cannot establish. So
+keep the default container hostname: with a customised `hostname:` or an application running
+outside Docker, the application logs that it cannot identify its container, and interactive
+resources a crash leaves behind must be removed by hand; until then that session cannot start a
+new sandbox, and the error names the network. Networks created before this record
+existed are kept for the same reason.
+
 Before upgrading from unscoped sandbox ownership or changing `owner`, drain reviews and interactive
 sessions and stop that installation's workers. Remove its remaining containers and networks only
 after verifying ownership. The new cleanup does not adopt legacy `hephaestus.managed=true`

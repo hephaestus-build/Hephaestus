@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerClientOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.LiveSandboxGateway;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxNetworkManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxWorkspaceManager;
@@ -130,14 +131,19 @@ class DockerInteractiveSandboxLiveTest {
         dockerWaitExecutor = Executors.newCachedThreadPool();
         containerManager =
                 new SandboxContainerManager(dockerOps, image -> {}, sandboxProperties, "default", dockerWaitExecutor);
-        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
+        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties, new SandboxCreator(dockerOps));
         workspaceManager = new SandboxWorkspaceManager();
         securityPolicy = new ContainerSecurityPolicy(dockerProperties, null);
         meterRegistry = new SimpleMeterRegistry();
         metrics = new InteractiveSandboxMetrics(meterRegistry);
         watchdog = new StdinWriteWatchdog();
         registry = new InteractiveSandboxRegistry(
-                interactiveProperties, containerManager, metrics, watchdog, meterRegistry);
+                interactiveProperties,
+                containerManager,
+                metrics,
+                watchdog,
+                meterRegistry,
+                new SandboxCreator(dockerOps));
         proxyCredentialRegistry = new MentorProxyCredentialRegistry();
         adapter = new DockerInteractiveSandboxAdapter(
                 interactiveProperties,
@@ -153,7 +159,8 @@ class DockerInteractiveSandboxLiveTest {
                 gateway.port(),
                 proxyCredentialRegistry,
                 gateway.sessions(),
-                dockerOps);
+                dockerOps,
+                new SandboxCreator(dockerOps));
 
         runnerBytes = Files.readAllBytes(Path.of("src/main/resources/agent/pi-mentor-runner.ts"));
     }
