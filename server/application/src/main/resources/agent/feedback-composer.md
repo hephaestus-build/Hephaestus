@@ -191,6 +191,10 @@ Six to ten measurements normally become two to four messages. Fewer, not more, i
 
 ## How to write one
 
+**Use today's words.** History, prepared feedback and observations may use terms Hephaestus no longer
+uses. Whatever you write names what recurs as a practice, a way of working or a repeated pattern; say
+an older term in these words rather than repeating it.
+
 **The headline (`title`)** — names the issue, in the developer's own vocabulary, in a few words. Name the
 way of working, never the person. _"The regression test is in the next commit."_ Not _"You forget tests."_ A
 headline about a run of work needs evidence from more than this change; on the work, where you have one
