@@ -400,7 +400,6 @@ class SandboxReconcilerTest extends BaseUnitTest {
         void shouldKeepAJobNetworkThatNoContainerClaimsYetWhileInsideTheGraceWindow() {
             // The job set is read before the containers and networks, so a job started since is not in it.
             UUID jobId = UUID.randomUUID();
-            String name = "hephaestus-sandbox-default--" + jobId;
 
             when(jobRepository.findByStatusIn(any())).thenReturn(List.of());
             when(containerManager.listManagedContainers()).thenReturn(List.of());
@@ -659,7 +658,6 @@ class SandboxReconcilerTest extends BaseUnitTest {
         @Test
         void shouldReapAnOldJobNetworkOnTheJobRulesAlone() {
             UUID jobId = UUID.randomUUID();
-            String name = "hephaestus-sandbox-default--" + jobId;
             when(networkOps.listNetworksByName("hephaestus-sandbox-default--"))
                     .thenReturn(List.of(jobNetwork("net-job", jobId, MINUTES_AGO)));
 
