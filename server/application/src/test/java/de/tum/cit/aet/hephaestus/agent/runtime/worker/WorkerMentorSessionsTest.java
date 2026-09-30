@@ -13,10 +13,14 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.*;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.stubbing.Answer;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
 import tools.jackson.databind.ObjectMapper;
@@ -114,24 +118,27 @@ class WorkerMentorSessionsTest extends BaseUnitTest {
     }
 
     @Test
-    void reservesCapacityWhileAttachmentIsStillStarting() {
-        var entered = new java.util.concurrent.CountDownLatch(1);
-        var release = new java.util.concurrent.CountDownLatch(1);
+    void reservesStartingCapacityAndClosesAttachmentThatFinishesAfterDrain() {
+        var entered = new CountDownLatch(1);
+        var startupResult = new CompletableFuture<AttachedSandbox>();
         when(adapter.attach(any())).thenAnswer(invocation -> {
             entered.countDown();
-            release.await(3, java.util.concurrent.TimeUnit.SECONDS);
-            return attached;
+            return startupResult.join();
         });
-        sessions.handle(open(spec.sessionId()));
-        await().atMost(Duration.ofSeconds(2)).until(() -> entered.getCount() == 0);
-        sessions.handle(open(UUID.randomUUID()));
-        assertThat(replies).anySatisfy(event -> assertThat(event.kind()).isEqualTo(MentorSessionEvent.Kind.BUSY));
-        sessions.stop();
-        release.countDown();
+        try {
+            sessions.handle(open(spec.sessionId()));
+            await().atMost(Duration.ofSeconds(2)).until(() -> entered.getCount() == 0);
+            sessions.handle(open(UUID.randomUUID()));
+            assertThat(replies).anySatisfy(event -> assertThat(event.kind()).isEqualTo(MentorSessionEvent.Kind.BUSY));
+            sessions.stop();
+            assertThat(credentials.validate("scoped-token")).isEmpty();
+            assertThat(capacity.snapshot().inFlightMentor()).isZero();
+        } finally {
+            startupResult.complete(attached);
+        }
         await().atMost(Duration.ofSeconds(3))
-                .untilAsserted(
-                        () -> assertThat(credentials.validate("scoped-token")).isEmpty());
-        assertThat(capacity.snapshot().inFlightMentor()).isZero();
+                .untilAsserted(() -> verify(attached).close(Duration.ZERO));
+        assertThat(credentials.validate("scoped-token")).isEmpty();
     }
 
     @Test
@@ -190,12 +197,11 @@ class WorkerMentorSessionsTest extends BaseUnitTest {
         sessions.handle(secondOpen);
         await().until(() ->
                 replies.stream().anyMatch(event -> secondOpen.requestId().equals(event.requestId())));
-        var entered = new java.util.concurrent.CountDownLatch(1);
-        var release = new java.util.concurrent.CountDownLatch(1);
-        org.mockito.stubbing.Answer<Void> stalled = invocation -> {
+        var entered = new CountDownLatch(1);
+        var release = new CompletableFuture<Void>();
+        Answer<Void> stalled = invocation -> {
             entered.countDown();
-            release.await(10, java.util.concurrent.TimeUnit.SECONDS);
-            return null;
+            return release.join();
         };
         if (close) doAnswer(stalled).when(attached).close(Duration.ZERO);
         else doAnswer(stalled).when(attached).send(any());
@@ -206,7 +212,7 @@ class WorkerMentorSessionsTest extends BaseUnitTest {
                 mapper.createObjectNode());
         try {
             sessions.handle(blocking);
-            assertThat(entered.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
             if (close) {
                 assertThat(capacity.snapshot().inFlightMentor()).isEqualTo(1);
                 assertThat(credentials.validate("scoped-token")).isEmpty();
@@ -224,7 +230,7 @@ class WorkerMentorSessionsTest extends BaseUnitTest {
                     }));
             verify(second).send(healthy.body());
         } finally {
-            release.countDown();
+            release.complete(null);
         }
     }
 }
