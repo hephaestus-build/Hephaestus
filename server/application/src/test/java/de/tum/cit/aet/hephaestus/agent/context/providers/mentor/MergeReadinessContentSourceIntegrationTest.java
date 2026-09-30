@@ -274,6 +274,48 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
     }
 
     @Test
+    void shouldTellTheDevelopersOwnRepliesFromOtherParticipantsAndAnAutomatedReviewFromAPerson() {
+        User bot = TestUserFactory.createUser(nativeIds.incrementAndGet(), "ci-bot", instance);
+        bot.setType(User.Type.BOT);
+        bot = userRepository.save(bot);
+        PullRequest mr = mergeRequest(course, 20, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        review(mr, bot, PullRequestReview.State.APPROVED, "", at("10:00"));
+        review(mr, tutor, PullRequestReview.State.COMMENTED, "", at("10:01"));
+        note(mr, tutor, "Please say which issue this closes.", at("10:02"));
+        posted(mr, "gid://gitlab/Note/" + note(mr, tutor, NOTE, at("10:03")).getNativeId());
+        note(mr, student, "Added the issue to the description.", at("10:04"));
+        note(mr, bot, "Pipeline passed.", at("10:05"));
+        PullRequestReviewThread thread =
+                thread(mr, PullRequestReviewThread.State.RESOLVED, tutor, "Why is the timeout this long?");
+        reply(thread, student, "The course server is slow; I explained it in the description.");
+
+        JsonNode entry = inspect(mr);
+
+        assertThat(entry.path("latestReviews")
+                        .valueStream()
+                        .map(r -> r.path("reviewer").asString() + " "
+                                + r.path("state").asString() + " bot="
+                                + r.path("bot").asBoolean()))
+                .containsExactly("tutor COMMENTED bot=false", "ci-bot APPROVED bot=true");
+        assertThat(entry.path("generalNotes")
+                        .valueStream()
+                        .map(n -> n.path("author").asString() + " "
+                                + n.path("authorRelation").asString() + " bot="
+                                + n.path("bot").asBoolean()))
+                .containsExactly(
+                        "tutor OTHER_PARTICIPANT bot=false",
+                        "student WORK_AUTHOR bot=false",
+                        "ci-bot OTHER_PARTICIPANT bot=true");
+        assertThat(entry.path("threads")
+                        .get(0)
+                        .path("comments")
+                        .valueStream()
+                        .map(c -> c.path("author").asString() + " "
+                                + c.path("authorRelation").asString()))
+                .containsExactly("tutor OTHER_PARTICIPANT", "student WORK_AUTHOR");
+    }
+
+    @Test
     void shouldFindATutorConditionBehindAPageOfHephaestusNotes() {
         JsonNode entry = mergeRequestBehindOwnNotes(11, 60);
 
