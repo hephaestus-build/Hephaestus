@@ -44,6 +44,10 @@ public class PullRequestArtifactDescriptor implements ArtifactDescriptor {
                     ScmSignals.PULL_REQUEST_SYNCHRONIZED,
                     "New commits pushed",
                     Set.of(GITHUB_PULL_REQUEST, GITLAB_MERGE_REQUEST)),
+            declare(
+                    ScmSignals.PULL_REQUEST_EDITED,
+                    "Title or description edited",
+                    Set.of(GITHUB_PULL_REQUEST, GITLAB_MERGE_REQUEST)),
             // GitHub has a dedicated review event; GitLab splits the same fact across an approval on the
             // merge request and a review note.
             declare(

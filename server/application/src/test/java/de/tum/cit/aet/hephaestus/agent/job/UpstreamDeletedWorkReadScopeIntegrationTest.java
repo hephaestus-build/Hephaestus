@@ -313,7 +313,8 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         upsertPullRequest();
         assertThat(gateLoadedPullRequest().getDeletedAt()).isNull();
         var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
-        when(detectionGate.evaluate(any(), eq(ScmSignals.PULL_REQUEST_OPENED), eq(TriggerMode.AUTO)))
+        when(detectionGate.evaluateQueued(
+                        any(), eq(workspace.getId()), eq(ScmSignals.PULL_REQUEST_OPENED), any(), eq(false)))
                 .thenReturn(decision);
         resubmit(
                 new PullRequestSignalResubmitter(
@@ -419,6 +420,10 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
 
     /** Supplies the transaction the bean's own {@code REQUIRES_NEW} would open around the ledger writes. */
     private void resubmit(PendingSignalResubmitter resubmitter, ArtifactSignal signal) {
+        transactionTemplate.executeWithoutResult(status -> resubmitter.resubmit(signal));
+    }
+
+    private void resubmit(PullRequestSignalResubmitter resubmitter, ArtifactSignal signal) {
         transactionTemplate.executeWithoutResult(status -> resubmitter.resubmit(signal));
     }
 

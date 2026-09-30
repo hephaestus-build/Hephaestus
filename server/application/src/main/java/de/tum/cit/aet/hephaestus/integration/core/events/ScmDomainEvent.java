@@ -27,6 +27,7 @@ public final class ScmDomainEvent {
         public static final String PULL_REQUEST_CREATED = "PullRequestCreated";
         public static final String PULL_REQUEST_READY = "PullRequestReady";
         public static final String PULL_REQUEST_SYNCHRONIZED = "PullRequestSynchronized";
+        public static final String PULL_REQUEST_UPDATED = "PullRequestUpdated";
         public static final String REVIEW_SUBMITTED = "ReviewSubmitted";
         /** Retrospective: a PR landed. Drives at-merge, feed-forward detection (loop-closure before merge). */
         public static final String PULL_REQUEST_MERGED = "PullRequestMerged";

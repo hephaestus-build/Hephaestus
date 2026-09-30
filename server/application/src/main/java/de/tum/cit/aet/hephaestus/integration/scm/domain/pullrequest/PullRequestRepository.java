@@ -54,6 +54,13 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     Optional<PullRequest> findForUpdateByRepositoryIdAndNumber(
             @Param("repositoryId") long repositoryId, @Param("number") int number);
 
+    /**
+     * Takes the lock {@link #findForUpdateByRepositoryIdAndNumber} and {@link #upsertCore} take, without loading the
+     * entity, so the transaction's next read of the pull request sees what the last writer committed.
+     */
+    @Query(value = "SELECT id FROM issue WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
+    Optional<Long> lockById(@Param("id") long id);
+
     /** Pull request by id with assignees eagerly fetched, for access after the Hibernate session closes. */
     @Query("""
         SELECT p FROM PullRequest p

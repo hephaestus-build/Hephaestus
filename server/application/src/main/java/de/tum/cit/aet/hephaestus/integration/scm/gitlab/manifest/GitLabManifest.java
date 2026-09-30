@@ -72,6 +72,7 @@ public class GitLabManifest implements IntegrationManifest {
                                 ScmSignals.PULL_REQUEST_OPENED,
                                 ScmSignals.PULL_REQUEST_READY,
                                 ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+                                ScmSignals.PULL_REQUEST_EDITED,
                                 ScmSignals.PULL_REQUEST_REVIEWED,
                                 ScmSignals.PULL_REQUEST_MERGED,
                                 ScmSignals.PULL_REQUEST_CLOSED),

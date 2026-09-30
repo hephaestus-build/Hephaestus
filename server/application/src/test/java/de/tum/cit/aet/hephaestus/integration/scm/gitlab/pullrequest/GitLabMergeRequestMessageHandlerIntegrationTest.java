@@ -58,6 +58,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -251,6 +252,20 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             // Domain event
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
                     .hasSize(1);
+        }
+
+        @Test
+        void shouldReportAnEditedDescriptionButNotAnUpdateThatLeftTheTextAlone() throws Exception {
+            receive(update("2026-01-31 19:04:04 +0100", null));
+            eventListener.clear();
+            String repaired = "This MR implements OAuth2 so partners can sign in without a password.\n\nCloses #5";
+
+            receive(update("2026-01-31 19:10:00 +0100", repaired));
+            receive(update("2026-01-31 19:12:00 +0100", repaired));
+
+            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+                    .extracting(ScmDomainEvent.PullRequestUpdated::changedFields)
+                    .containsExactly(Set.of("body"), Set.of());
         }
 
         @Test
@@ -1121,7 +1136,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .isNull();
 
             var decision = new GateDecision.Detect(savedWorkspace, List.of(), 1, TriggerMode.AUTO);
-            when(gate.evaluate(any(), eq(ScmSignals.PULL_REQUEST_OPENED), eq(TriggerMode.AUTO)))
+            when(gate.evaluateQueued(
+                            any(), eq(savedWorkspace.getId()), eq(ScmSignals.PULL_REQUEST_OPENED), any(), eq(false)))
                     .thenReturn(decision);
             transactionTemplate.executeWithoutResult(status -> new PullRequestSignalResubmitter(
                             jobs, pullRequestRepository, gate, signalRecorder, reviewRepository)
@@ -1212,6 +1228,18 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     /** Handles {@code event} as a delivery that reached the stream now. */
     private void receive(GitLabMergeRequestEventDTO event) {
         handler.handle(event, Instant.now());
+    }
+
+    /** MR !2's update hook at {@code updatedAt}, carrying {@code description} where one is given. */
+    private GitLabMergeRequestEventDTO update(String updatedAt, @Nullable String description) throws IOException {
+        ObjectNode payload = (ObjectNode) objectMapper.readTree(
+                new ClassPathResource("gitlab/merge_request.update.json").getContentAsString(StandardCharsets.UTF_8));
+        ObjectNode attributes = (ObjectNode) payload.get("object_attributes");
+        attributes.put("updated_at", updatedAt);
+        if (description != null) {
+            attributes.put("description", description);
+        }
+        return objectMapper.treeToValue(payload, GitLabMergeRequestEventDTO.class);
     }
 
     private GitLabMergeRequestEventDTO loadPayload(String filename) throws IOException {
