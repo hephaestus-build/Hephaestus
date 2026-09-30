@@ -60,6 +60,17 @@ function previousApplicationReference(version: string): {
 	return { reference: `${repository}:${version}`, repository };
 }
 
+const upgradePath = process.env.UPGRADE_PATH ?? "latest";
+// v0.77.3 already contains the cut-point; v0.76.0 is the last release before it.
+let pinnedVersion: string | undefined;
+if (upgradePath === "baseline") {
+	pinnedVersion = "0.77.4";
+} else if (upgradePath === "refusal") {
+	pinnedVersion = "0.76.0";
+} else if (upgradePath !== "latest") {
+	throw new Error(`Unknown upgrade path: ${upgradePath}`);
+}
+
 const supplied = [
 	process.env.INPUT_PREVIOUS_VERSION,
 	process.env.INPUT_CANDIDATE_APP,
@@ -83,10 +94,11 @@ if (
 	if (!/^[0-9]+\.[0-9]+\.[0-9]+$/u.test(suppliedPreviousVersion)) {
 		throw new Error("Previous version must be a stable X.Y.Z version");
 	}
-	previousApplication = previousApplicationReference(suppliedPreviousVersion);
+	previousApplication = previousApplicationReference(pinnedVersion ?? suppliedPreviousVersion);
 } else {
 	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
-	const requestedPrevious = nonEmpty(process.env.REQUESTED_PREVIOUS);
+	const requestedPrevious =
+		pinnedVersion === undefined ? nonEmpty(process.env.REQUESTED_PREVIOUS) : `v${pinnedVersion}`;
 	const previous =
 		requestedPrevious ??
 		command("gh", [

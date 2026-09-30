@@ -197,7 +197,11 @@ class LiquibaseBaselineIntegrationTest {
                 """);
         List<String> oldHistory =
                 query(archived, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
-        try (Liquibase liquibase = liquibase(archived, BASELINE)) {
+        assertThatThrownBy(() -> update(archived, "db/master.xml", context))
+                .isInstanceOf(LiquibaseException.class)
+                .hasStackTraceContaining(
+                        "Existing databases must complete the baseline synchronization runbook before deployment.");
+        try (Liquibase liquibase = liquibase(archived, "db/master.xml")) {
             liquibase.changeLogSync("baseline_v0_77_4", new Contexts(context), new LabelExpression());
         }
         update(archived, BASELINE, context);
@@ -212,6 +216,89 @@ class LiquibaseBaselineIntegrationTest {
         update(archived, BASELINE, context);
         assertThat(query(archived, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
                 .isEqualTo(syncedHistory);
+        execute(archived, "DROP EVENT TRIGGER reject_baseline_ddl; DROP FUNCTION reject_baseline_ddl()");
+        update(archived, "db/master.xml", context);
+        assertThat(query(archived, "SELECT id FROM databasechangelog")).contains("baseline_v0_77_4-tag");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"dev", "prod"})
+    void shouldRejectPreCutPointHistoryForUpdateAndSynchronization(String context) throws Exception {
+        TestDatabase database = emptyDatabase();
+        try (Liquibase liquibase = liquibase(database, "db/archive-master.xml")) {
+            var chain = liquibase.getDatabaseChangeLog();
+            chain.getChangeSets().removeIf(change -> change.getId().equals("1788679885460-1"));
+            liquibase.update(new Contexts(context));
+        }
+        List<String> history =
+                query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
+        assertThat(history).isNotEmpty().noneMatch(row -> row.startsWith("1788679885460-1:"));
+        execute(database, """
+                CREATE FUNCTION reject_upgrade_ddl() RETURNS event_trigger LANGUAGE plpgsql AS $$
+                BEGIN RAISE EXCEPTION 'refused upgrade must not execute DDL'; END $$;
+                CREATE EVENT TRIGGER reject_upgrade_ddl ON ddl_command_start EXECUTE FUNCTION reject_upgrade_ddl();
+                """);
+
+        assertThatThrownBy(() -> update(database, "db/master.xml", context))
+                .isInstanceOf(LiquibaseException.class)
+                .hasStackTraceContaining(
+                        "install v0.77.4 and start it once, then follow the baseline synchronization runbook");
+        try (Liquibase liquibase = liquibase(database, "db/master.xml")) {
+            assertThatThrownBy(() ->
+                            liquibase.changeLogSync("baseline_v0_77_4", new Contexts(context), new LabelExpression()))
+                    .isInstanceOf(LiquibaseException.class)
+                    .hasStackTraceContaining(
+                            "install v0.77.4 and start it once, then follow the baseline synchronization runbook");
+        }
+
+        assertThat(query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
+                .isEqualTo(history);
+        assertThat(query(database, "SELECT locked::text FROM databasechangeloglock WHERE id = 1"))
+                .containsExactly("false");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"author", "filename"})
+    void shouldRejectBaselineTagWithWrongMigrationIdentity(String field) throws Exception {
+        TestDatabase database = emptyDatabase();
+        update(database, BASELINE, "prod");
+        // Only the identity is false: a complete schema must not turn a false history into proof.
+        execute(
+                database,
+                "UPDATE databasechangelog SET " + field
+                        + " = 'not-the-released-identity' WHERE id = 'baseline_v0_77_4-tag'");
+        List<String> history = query(
+                database,
+                "SELECT id || ':' || author || ':' || filename || ':' || md5sum "
+                        + "FROM databasechangelog ORDER BY orderexecuted");
+
+        assertThatThrownBy(() -> update(database, "db/master.xml", "prod"))
+                .isInstanceOf(LiquibaseException.class)
+                .hasStackTraceContaining("install v0.77.4 and start it once");
+        try (Liquibase liquibase = liquibase(database, "db/master.xml")) {
+            assertThatThrownBy(() ->
+                            liquibase.changeLogSync("baseline_v0_77_4", new Contexts("prod"), new LabelExpression()))
+                    .isInstanceOf(LiquibaseException.class)
+                    .hasStackTraceContaining("install v0.77.4 and start it once");
+        }
+        assertThat(query(
+                        database,
+                        "SELECT id || ':' || author || ':' || filename || ':' || md5sum "
+                                + "FROM databasechangelog ORDER BY orderexecuted"))
+                .isEqualTo(history);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"dev", "prod"})
+    void shouldApplyMasterToFreshAndSynchronizedDatabases(String context) throws Exception {
+        TestDatabase database = emptyDatabase();
+        update(database, "db/master.xml", context);
+        List<String> history =
+                query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted");
+        assertThat(history).anyMatch(row -> row.startsWith("baseline_v0_77_4-tag:"));
+        update(database, "db/master.xml", context);
+        assertThat(query(database, "SELECT id || ':' || md5sum FROM databasechangelog ORDER BY orderexecuted"))
+                .isEqualTo(history);
     }
 
     private static void assertNativeSchemaEqual(
