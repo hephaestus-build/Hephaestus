@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MentorContextKeys;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
@@ -99,6 +100,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final MemberAiRoutingAdapter memberAiRouting;
     private final MemberAiPreferences memberAiPreferences;
     private final MergeReadinessContentSource mergeReadiness;
+    private final ObservationHistoryContentSource observationHistory;
 
     /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
     @Override
@@ -712,32 +714,27 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         if (!turn.terminal.compareAndSet(null, Terminal.COMPLETING)) {
             return;
         }
-        UIMessageChunk.Finish toSend = finish;
+        Optional<UIMessageChunk.Finish> recorded;
         try {
-            toSend = persistence.augmentFinishWithCost(finish, state);
-        } catch (RuntimeException costEx) {
-            // Cost-coverage metrics expose missing prices; avoid a warning on every affected turn.
-            log.debug("Cost augmentation failed — sending raw Finish: {}", costEx.toString());
-        }
-        boolean completed;
-        try {
-            completed = persistence.complete(cookie, state, toSend);
-            if (!completed) {
+            recorded = persistence.complete(cookie, state, finish);
+            if (recorded.isEmpty()) {
                 log.warn(
                         "Mentor reply {} was already settled by another writer; not reporting it finished",
                         cookie.assistantMessageId());
             }
         } catch (RuntimeException saveFailure) {
             log.warn("Mentor reply {} could not be saved", cookie.assistantMessageId(), saveFailure);
-            completed = false;
+            recorded = Optional.empty();
             interruptOrLeaveForReaper(cookie, state, saveFailure);
         }
-        if (!completed) {
+        if (recorded.isEmpty()) {
             turn.terminal.set(Terminal.FAILED_IN_STREAM);
             sendTerminal(channel, new UIMessageChunk.Error(REPLY_NOT_SAVED));
             turn.done.complete(null);
             return;
         }
+        // The Finish carries the usage and cost the row and the ledger record, so the reply and its reload agree.
+        UIMessageChunk.Finish toSend = recorded.get();
         turn.terminal.set(Terminal.COMPLETED);
         sendTerminal(channel, toSend);
         // Slack learns whether its buffered reply was suppressed only as it closes, so delivery is settled after.
@@ -865,6 +862,10 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         Optional<Long> mergeRequest = MergeReadinessContentSource.artifactIdOf(path);
         if (mergeRequest.isPresent()) {
             return mergeReadiness.inspect(workspaceId, developerId, mergeRequest.get());
+        }
+        Optional<UUID> observation = ObservationHistoryContentSource.observationIdOf(path);
+        if (observation.isPresent()) {
+            return observationHistory.inspect(workspaceId, developerId, observation.get());
         }
         if (!MentorContextKeys.ALLOWED_OUTPUT_KEYS.contains(path)) {
             throw new IllegalArgumentException("fetch_context path not allowed: " + path);

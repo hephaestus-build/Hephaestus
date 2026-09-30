@@ -63,6 +63,25 @@ class MentorContextKeysRunnerMirrorTest {
     }
 
     @Test
+    @DisplayName("an observation detail key is one canonical lowercase id, mirrored by the runner")
+    void observationDetailKeyIsCanonical() throws IOException {
+        String id = "0b7e1c9a-3f5d-4a8e-9c21-6d4f8e2a1b3c";
+        assertThat(ObservationHistoryContentSource.observationIdOf(
+                        "inputs/context/observations_history/" + id + ".json"))
+                .contains(java.util.UUID.fromString(id));
+        assertThat(ObservationHistoryContentSource.observationIdOf(
+                        "inputs/context/observations_history/" + id.toUpperCase(java.util.Locale.ROOT) + ".json"))
+                .isEmpty();
+        assertThat(ObservationHistoryContentSource.observationIdOf("inputs/context/observations_history/../user.json"))
+                .isEmpty();
+        assertThat(ObservationHistoryContentSource.observationIdOf("inputs/context/observations_history/42.json"))
+                .isEmpty();
+        assertThat(Files.readString(PROTOCOL, StandardCharsets.UTF_8))
+                .contains(
+                        "/^inputs\\/context\\/observations_history\\/[\\da-f]{8}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{12}\\.json$/u");
+    }
+
+    @Test
     @DisplayName("system prompt lists every mentor context file path")
     void systemPromptListsContextBasenames() throws IOException {
         String prompt = Files.readString(SYSTEM_PROMPT, StandardCharsets.UTF_8);

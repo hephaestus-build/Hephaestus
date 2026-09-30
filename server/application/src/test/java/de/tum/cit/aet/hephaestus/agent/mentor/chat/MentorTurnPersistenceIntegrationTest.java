@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageProvenance;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -32,6 +33,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
@@ -51,6 +53,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -643,7 +647,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         state.closeTextBlock();
         assertThat(persistence.complete(
                         cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null)))
-                .isTrue();
+                .isPresent();
     }
 
     private List<ChatMessage> messagesIn(ChatThread thread) {
@@ -676,7 +680,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
                 /* costUsd */ null);
         UIMessageChunk.Finish finish = new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, finishMeta);
 
-        assertThat(persistence.complete(cookie, state, finish)).isTrue();
+        assertThat(persistence.complete(cookie, state, finish)).isPresent();
 
         ChatMessage assistant = chatMessageRepository.findById(assistantId).orElseThrow();
         assertThat(assistant.getStatus()).isEqualTo(ChatMessage.Status.completed);
@@ -879,6 +883,148 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         assertThat(event.getCostUsd()).isEqualByComparingTo("1.000000");
     }
 
+    @ParameterizedTest(name = "summary calls recorded by the proxy: {0}")
+    @ValueSource(ints = {2, 1})
+    @DisplayName("a turn the watchdog ends after compacting keeps its checkpoint and bills every call the proxy saw")
+    void shouldKeepTheCheckpointAndBillTheProxysCallsWhenACompactedTurnIsInterrupted(int summaryCalls) {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID threadId = thread.getId();
+        chatThreadRepository.updateSessionJsonl(threadId, "{\"type\":\"before\"}\n".getBytes(StandardCharsets.UTF_8));
+        UUID assistantId = UUID.randomUUID();
+        MentorTurnPersistence.TurnPersistenceCookie cookie =
+                persistence.persistInFlight(thread, "hello", assistantId, null, admittedMentorConfig());
+        // The runner saw one ordinary call; Pi reports its summaries as one total, or nothing when the second
+        // of a split summary failed. The proxy recorded each call.
+        TranslatorState state = new TranslatorState(assistantId);
+        state.markLlmCallStarted();
+        state.completeUsage(NODES.objectNode().put("input", 90_000).put("output", 40));
+        state.markCompactionAttempted();
+        accumulateProxyCall(assistantId, 90_000, 40, 0, 0, 0);
+        for (int i = 0; i < summaryCalls; i++) {
+            accumulateProxyCall(assistantId, 20_000, 3_000, 0, 0, 0);
+        }
+        byte[] checkpoint = "{\"type\":\"compaction\"}\n".getBytes(StandardCharsets.UTF_8);
+        state.observeSessionJsonl(checkpoint);
+
+        persistence.interrupt(cookie, state, new IllegalStateException("Mentor turn timed out before completion."));
+
+        assertThat(chatMessageRepository.findById(assistantId).orElseThrow().getStatus())
+                .isEqualTo(ChatMessage.Status.interrupted);
+        assertThat(chatThreadRepository.findSessionJsonl(threadId)).contains(checkpoint);
+        var event = usageEventRepository.findAll().stream()
+                .filter(row -> row.getSourceId().equals(assistantId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(event.getTotalCalls()).isEqualTo(1 + summaryCalls);
+        assertThat(event.getInputTokens()).isEqualTo(90_000 + 20_000L * summaryCalls);
+        assertThat(event.getOutputTokens()).isEqualTo(40 + 3_000L * summaryCalls);
+        assertThat(event.getUsageProvenance()).isEqualTo(UsageProvenance.PROXY);
+    }
+
+    @ParameterizedTest(name = "summary calls recorded by the proxy: {0}")
+    @ValueSource(ints = {2, 1})
+    @DisplayName("a compacted turn's live Finish reports the usage and cost its row and ledger record")
+    void shouldReportTheRecordedUsageOnTheFinishWhenACompactedTurnCompletes(int summaryCalls) {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID assistantId = UUID.randomUUID();
+        LlmPriceSnapshot price = new LlmPriceSnapshot(
+                FundingSource.INSTANCE,
+                PricingState.PRICED,
+                12L,
+                null,
+                new BigDecimal("10"),
+                new BigDecimal("20"),
+                new BigDecimal("2"),
+                new BigDecimal("3"));
+        MentorTurnPersistence.TurnPersistenceCookie cookie =
+                persistence.persistInFlight(thread, "hello", assistantId, null, pricedMentorConfig(price));
+        TranslatorState state = new TranslatorState(assistantId);
+        state.bindAdmission("test-model", price);
+        state.markLlmCallStarted();
+        // The runner's own report covers the ordinary call only, with its provider total.
+        state.completeUsage(
+                NODES.objectNode().put("input", 90_000).put("output", 40).put("cacheRead", 1_000));
+        state.markCompactionAttempted();
+        accumulateProxyCall(assistantId, 90_000, 40, 0, 1_000, 0);
+        for (int i = 0; i < summaryCalls; i++) {
+            accumulateProxyCall(assistantId, 20_000, 3_000, 0, 500, 100);
+        }
+        UIMessageChunk.Finish streamed = new UIMessageChunk.Finish(
+                UIMessageChunk.FinishReason.STOP,
+                new UIMessageChunk.MessageMetadata(
+                        "test-model", new UIMessageChunk.MessageMetadata.Usage(90_000, 40, 1_000, 0, 91_040), null));
+
+        UIMessageChunk.Finish sent =
+                persistence.complete(cookie, state, streamed).orElseThrow();
+
+        int input = 90_000 + 20_000 * summaryCalls;
+        int output = 40 + 3_000 * summaryCalls;
+        int cacheRead = 1_000 + 500 * summaryCalls;
+        int cacheWrite = 100 * summaryCalls;
+        var recorded = new UIMessageChunk.MessageMetadata.Usage(
+                input, output, cacheRead, cacheWrite, input + output + cacheRead + cacheWrite);
+        var metadata = java.util.Objects.requireNonNull(sent.messageMetadata());
+        assertThat(metadata.usage()).isEqualTo(recorded);
+        double costUsd = java.util.Objects.requireNonNull(metadata.costUsd());
+        JsonNode row = chatMessageRepository.findById(assistantId).orElseThrow().getMetadata();
+        assertThat(row.path("usage").path("input").asInt()).isEqualTo(input);
+        assertThat(row.path("usage").path("output").asInt()).isEqualTo(output);
+        assertThat(row.path("usage").path("cacheRead").asInt()).isEqualTo(cacheRead);
+        assertThat(row.path("usage").path("cacheWrite").asInt()).isEqualTo(cacheWrite);
+        assertThat(row.path("usage").path("totalTokens").asInt()).isEqualTo(input + output + cacheRead + cacheWrite);
+        assertThat(row.path("costUsd").asDouble()).isEqualTo(costUsd);
+        var event = usageEventRepository.findAll().stream()
+                .filter(e -> e.getSourceId().equals(assistantId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(event.getTotalCalls()).isEqualTo(1 + summaryCalls);
+        assertThat(event.getInputTokens()).isEqualTo(input);
+        assertThat(event.getCostUsd()).isEqualByComparingTo(BigDecimal.valueOf(costUsd));
+    }
+
+    private static MentorLlmConfig pricedMentorConfig(LlmPriceSnapshot price) {
+        return new MentorLlmConfig(
+                "openai-responses",
+                "https://api.openai.com/v1",
+                "test-model",
+                null,
+                null,
+                null,
+                FundingSource.INSTANCE,
+                1L,
+                1L,
+                null,
+                price,
+                false,
+                600);
+    }
+
+    @Test
+    @DisplayName("a turn that never compacted bills the runner's own report, not the proxy's as well")
+    void shouldBillTheRunnersReportWhenTheTurnDidNotCompact() {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID assistantId = UUID.randomUUID();
+        MentorTurnPersistence.TurnPersistenceCookie cookie =
+                persistence.persistInFlight(thread, "hello", assistantId, null, admittedMentorConfig());
+        TranslatorState state = new TranslatorState(assistantId);
+        state.markLlmCallStarted();
+        state.completeUsage(NODES.objectNode().put("input", 1_000).put("output", 40));
+        accumulateProxyCall(assistantId, 1_000, 40, 0, 0, 0);
+
+        persistence.interrupt(cookie, state, new IllegalStateException("upstream timeout"));
+
+        var event = usageEventRepository.findAll().stream()
+                .filter(row -> row.getSourceId().equals(assistantId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(event.getTotalCalls()).isEqualTo(1);
+        assertThat(event.getInputTokens()).isEqualTo(1_000);
+        assertThat(event.getUsageProvenance()).isEqualTo(UsageProvenance.RUNNER);
+    }
+
     @Test
     void interrupt_beforeLlmCallStarted_doesNotInventAUsageEvent() {
         ChatThread thread =
@@ -934,10 +1080,10 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         state.appendText("Hello there!");
         state.closeTextBlock();
 
-        boolean completed =
+        var completed =
                 persistence.complete(cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null));
 
-        assertThat(completed).isFalse();
+        assertThat(completed).isEmpty();
         ChatMessage row = chatMessageRepository.findById(assistantId).orElseThrow();
         assertThat(row.getStatus()).isEqualTo(ChatMessage.Status.interrupted);
         assertThat(row.getMetadata().path("error").asString()).isEqualTo("server restart");
@@ -954,7 +1100,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         TranslatorState state = new TranslatorState(assistantId);
         assertThat(persistence.complete(
                         cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null)))
-                .isTrue();
+                .isPresent();
 
         persistence.interrupt(cookie, state, new IllegalStateException("late loss"));
 
