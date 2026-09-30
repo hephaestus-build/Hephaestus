@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
@@ -13,15 +14,18 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
+import de.tum.cit.aet.hephaestus.mentor.ChatMessageDTO;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
+import de.tum.cit.aet.hephaestus.mentor.ChatThreadService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -41,6 +45,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.assertj.core.api.Assertions;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -97,6 +102,9 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private ChatThreadService chatThreadService;
 
     private Workspace workspace;
     private User user;
@@ -325,6 +333,323 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    @Test
+    void shouldAnswerAnInterruptedPromptAgainWithoutStoringItTwice() {
+        FailedTurn failed = failedTurn("Plan issue 12");
+        UUID retryId = UUID.randomUUID();
+
+        MentorTurnPersistence.RetryAdmission retry = persistence.persistRetry(
+                failed.thread(), failed.prompt(), failed.reply(), retryId, admittedMentorConfig());
+
+        assertThat(retry.prompt()).isEqualTo("Plan issue 12");
+        assertThat(retry.cookie().userMessageId()).isEqualTo(failed.prompt());
+        ChatMessage attempt = chatMessageRepository.findById(retryId).orElseThrow();
+        assertThat(attempt.getStatus()).isEqualTo(ChatMessage.Status.in_flight);
+        assertThat(attempt.getParentMessageId()).isEqualTo(failed.prompt());
+        ChatMessage interrupted = chatMessageRepository.findById(failed.reply()).orElseThrow();
+        assertThat(interrupted.getStatus()).isEqualTo(ChatMessage.Status.interrupted);
+        assertThat(interrupted.getMetadata().path("error").asString())
+                .isEqualTo("Mentor turn timed out before completion.");
+        assertThat(messagesIn(failed.thread()))
+                .extracting(ChatMessage::getRole)
+                .containsExactly(ChatMessage.Role.USER, ChatMessage.Role.ASSISTANT, ChatMessage.Role.ASSISTANT);
+    }
+
+    @Test
+    void shouldAdmitOneRetryPerFailedReply() {
+        FailedTurn failed = failedTurn("Plan issue 12");
+        UUID retryId = UUID.randomUUID();
+        MentorTurnPersistence.RetryAdmission retry = persistence.persistRetry(
+                failed.thread(), failed.prompt(), failed.reply(), retryId, admittedMentorConfig());
+
+        assertThatThrownBy(() -> persistence.persistRetry(
+                        failed.thread(), failed.prompt(), failed.reply(), UUID.randomUUID(), admittedMentorConfig()))
+                .isInstanceOf(TurnAlreadyInFlightException.class);
+        assertThatThrownBy(() -> persistence.persistRetry(
+                        failed.thread(), failed.prompt(), retryId, UUID.randomUUID(), admittedMentorConfig()))
+                .isInstanceOf(TurnAlreadyInFlightException.class);
+
+        completeWithText(retry.cookie(), "Here is a plan.");
+
+        assertThatThrownBy(() -> persistence.persistRetry(
+                        failed.thread(), failed.prompt(), failed.reply(), UUID.randomUUID(), admittedMentorConfig()))
+                .isInstanceOf(MentorRetryRejectedException.class)
+                .hasMessage(MentorRetryRejectedException.SUPERSEDED);
+        assertThatThrownBy(() -> persistence.persistRetry(
+                        failed.thread(), failed.prompt(), retryId, UUID.randomUUID(), admittedMentorConfig()))
+                .isInstanceOf(MentorRetryRejectedException.class)
+                .hasMessage(MentorRetryRejectedException.SUPERSEDED);
+        // An ordinary resubmit of the stored prompt is still a replay.
+        assertThatThrownBy(() -> persistence.persistInFlight(
+                        failed.thread(), "Plan issue 12", UUID.randomUUID(), failed.prompt(), admittedMentorConfig()))
+                .isInstanceOf(TurnAlreadyInFlightException.class);
+        assertThat(messagesIn(failed.thread())).hasSize(3);
+    }
+
+    @Test
+    void shouldLetOneOfTwoConcurrentRetriesRun() throws Exception {
+        FailedTurn failed = failedTurn("Plan issue 12");
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch fire = new CountDownLatch(1);
+        try {
+            Callable<Object> attempt = () -> {
+                ready.countDown();
+                fire.await(5, TimeUnit.SECONDS);
+                try {
+                    return persistence.persistRetry(
+                            failed.thread(),
+                            failed.prompt(),
+                            failed.reply(),
+                            UUID.randomUUID(),
+                            admittedMentorConfig());
+                } catch (RuntimeException ex) {
+                    return ex;
+                }
+            };
+            var first = pool.submit(attempt);
+            var second = pool.submit(attempt);
+            ready.await(5, TimeUnit.SECONDS);
+            fire.countDown();
+            List<Object> outcomes = List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS));
+
+            assertThat(outcomes)
+                    .filteredOn(MentorTurnPersistence.RetryAdmission.class::isInstance)
+                    .hasSize(1);
+            assertThat(outcomes)
+                    .filteredOn(TurnAlreadyInFlightException.class::isInstance)
+                    .hasSize(1);
+        } finally {
+            pool.shutdownNow();
+        }
+        assertThat(messagesIn(failed.thread())).hasSize(3);
+    }
+
+    @Test
+    void shouldRefuseARetryThatNamesNoFailedReplyOfThisPrompt() {
+        FailedTurn failed = failedTurn("Plan issue 12");
+        FailedTurn elsewhere = failedTurn("Another thread");
+
+        assertThatThrownBy(() -> persistence.persistRetry(
+                        failed.thread(),
+                        elsewhere.prompt(),
+                        elsewhere.reply(),
+                        UUID.randomUUID(),
+                        admittedMentorConfig()))
+                .hasMessage(MentorRetryRejectedException.NOT_RETRYABLE);
+        assertThatThrownBy(() -> persistence.persistRetry(
+                        failed.thread(), UUID.randomUUID(), failed.reply(), UUID.randomUUID(), admittedMentorConfig()))
+                .hasMessage(MentorRetryRejectedException.NOT_RETRYABLE);
+        assertThatThrownBy(() -> persistence.persistRetry(
+                        failed.thread(), failed.prompt(), failed.prompt(), UUID.randomUUID(), admittedMentorConfig()))
+                .hasMessage(MentorRetryRejectedException.NOT_RETRYABLE);
+        assertThat(messagesIn(failed.thread())).hasSize(2);
+        assertThat(messagesIn(elsewhere.thread())).hasSize(2);
+    }
+
+    @Test
+    void shouldRefuseARetryOfAnEarlierPromptOnceTheConversationMovedOn() {
+        FailedTurn failed = failedTurn("Plan issue 12");
+        completeWithText(
+                persistence.persistInFlight(
+                        failed.thread(), "And issue 13?", UUID.randomUUID(), UUID.randomUUID(), admittedMentorConfig()),
+                "Issue 13 needs a plan too.");
+
+        assertThatThrownBy(() -> persistence.persistRetry(
+                        failed.thread(), failed.prompt(), failed.reply(), UUID.randomUUID(), admittedMentorConfig()))
+                .hasMessage(MentorRetryRejectedException.NOT_RETRYABLE);
+        assertThat(messagesIn(failed.thread())).hasSize(4);
+    }
+
+    @Test
+    void shouldRefuseAnOlderRetryThatWaitedWhileItsReplyWasAnsweredElsewhere() throws Exception {
+        FailedTurn failed = failedTurn("Plan issue 12");
+
+        Object waiter = whileAnotherAdmissionHolds(
+                failed.thread(),
+                () -> message(failed.thread(), ChatMessage.Role.ASSISTANT, failed.prompt()),
+                () -> persistence.persistRetry(
+                        failed.thread(), failed.prompt(), failed.reply(), UUID.randomUUID(), admittedMentorConfig()));
+
+        assertThat(waiter)
+                .isInstanceOfSatisfying(
+                        MentorRetryRejectedException.class,
+                        rejected ->
+                                assertThat(rejected.getMessage()).isEqualTo(MentorRetryRejectedException.SUPERSEDED));
+        assertThat(messagesIn(failed.thread())).hasSize(3);
+    }
+
+    @Test
+    void shouldRefuseAnOlderRetryThatWaitedWhileANewerPromptWasAnswered() throws Exception {
+        FailedTurn failed = failedTurn("Plan issue 12");
+
+        Object waiter = whileAnotherAdmissionHolds(
+                failed.thread(),
+                () -> message(
+                        failed.thread(),
+                        ChatMessage.Role.ASSISTANT,
+                        message(failed.thread(), ChatMessage.Role.USER, null)),
+                () -> persistence.persistRetry(
+                        failed.thread(), failed.prompt(), failed.reply(), UUID.randomUUID(), admittedMentorConfig()));
+
+        assertThat(waiter)
+                .isInstanceOfSatisfying(
+                        MentorRetryRejectedException.class,
+                        rejected -> assertThat(rejected.getMessage())
+                                .isEqualTo(MentorRetryRejectedException.NOT_RETRYABLE));
+        assertThat(messagesIn(failed.thread())).hasSize(4);
+    }
+
+    @Test
+    void shouldAdmitANewPromptOnlyAfterTheThreadsOtherAdmissionCommits() throws Exception {
+        FailedTurn failed = failedTurn("Plan issue 12");
+
+        Object waiter = whileAnotherAdmissionHolds(
+                failed.thread(),
+                () -> failed.prompt(),
+                () -> persistence.persistInFlight(
+                        failed.thread(),
+                        "And issue 13?",
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        admittedMentorConfig()));
+
+        assertThat(waiter).isInstanceOf(MentorTurnPersistence.TurnPersistenceCookie.class);
+    }
+
+    /**
+     * Holds {@code thread}'s admission lock on another connection while {@code admission} writes, starts {@code
+     * waiter}, requires it to block on that lock, then commits and returns what the waiter produced.
+     */
+    private Object whileAnotherAdmissionHolds(ChatThread thread, Callable<UUID> admission, Callable<Object> waiter)
+            throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        CountDownLatch holding = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            var holder = pool.submit(() -> new TransactionTemplate(transactionManager).executeWithoutResult(tx -> {
+                chatThreadRepository
+                        .lockForTurnAdmission(thread.getId(), workspace.getId())
+                        .orElseThrow();
+                try {
+                    admission.call();
+                } catch (Exception e) {
+                    throw new IllegalStateException(e);
+                }
+                holding.countDown();
+                awaitQuietly(release);
+            }));
+            assertThat(holding.await(10, TimeUnit.SECONDS)).isTrue();
+            var waiting = pool.submit(() -> {
+                try {
+                    return waiter.call();
+                } catch (RuntimeException ex) {
+                    return ex;
+                }
+            });
+            awaitAWaitingLock();
+            release.countDown();
+            holder.get(10, TimeUnit.SECONDS);
+            return waiting.get(10, TimeUnit.SECONDS);
+        } finally {
+            release.countDown();
+            pool.shutdownNow();
+        }
+    }
+
+    private UUID message(ChatThread thread, ChatMessage.Role role, @Nullable UUID parent) {
+        ChatMessage message = new ChatMessage();
+        message.setId(UUID.randomUUID());
+        message.setThread(thread);
+        message.setRole(role);
+        if (parent != null) {
+            message.setParentMessage(chatMessageRepository.getReferenceById(parent));
+        }
+        message.setParts(NODES.arrayNode());
+        message.setStatus(ChatMessage.Status.completed);
+        return chatMessageRepository.saveAndFlush(message).getId();
+    }
+
+    private void awaitAWaitingLock() throws Exception {
+        Instant deadline = Instant.now().plusSeconds(10);
+        while (true) {
+            try (var connection = dataSource.getConnection();
+                    var statement = connection.createStatement();
+                    var waiting = statement.executeQuery("SELECT count(*) FROM pg_locks WHERE NOT granted")) {
+                waiting.next();
+                if (waiting.getLong(1) > 0) return;
+            }
+            assertThat(Instant.now())
+                    .as("the second admission never waited for the first")
+                    .isBefore(deadline);
+            Thread.sleep(20);
+        }
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    @Test
+    void shouldShowTheRetriedAnswerInPlaceOfTheInterruptedOneAfterReload() {
+        FailedTurn failed = failedTurn("Plan issue 12");
+        UUID retryId = UUID.randomUUID();
+        completeWithText(
+                persistence
+                        .persistRetry(failed.thread(), failed.prompt(), failed.reply(), retryId, admittedMentorConfig())
+                        .cookie(),
+                "Here is a plan.");
+
+        CurrentScmIdentityHolder.set(user.getId(), user.getLogin(), Set.of(user.getId()));
+        try {
+            assertThat(chatThreadService
+                            .loadOwnedThreadDetail(
+                                    workspace.getId(), failed.thread().getId())
+                            .messages())
+                    .extracting(ChatMessageDTO::id)
+                    .containsExactly(failed.prompt(), retryId);
+        } finally {
+            CurrentScmIdentityHolder.clear();
+        }
+    }
+
+    private record FailedTurn(ChatThread thread, UUID prompt, UUID reply) {}
+
+    /** A prompt whose only reply the watchdog interrupted before it wrote anything. */
+    private FailedTurn failedTurn(String prompt) {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), prompt);
+        UUID promptId = UUID.randomUUID();
+        UUID replyId = UUID.randomUUID();
+        MentorTurnPersistence.TurnPersistenceCookie cookie =
+                persistence.persistInFlight(thread, prompt, replyId, promptId, admittedMentorConfig());
+        persistence.interrupt(
+                cookie,
+                new TranslatorState(replyId),
+                new IllegalStateException("Mentor turn timed out before completion."));
+        return new FailedTurn(thread, promptId, replyId);
+    }
+
+    private void completeWithText(MentorTurnPersistence.TurnPersistenceCookie cookie, String text) {
+        TranslatorState state = new TranslatorState(cookie.assistantMessageId());
+        state.openTextBlock("text-0");
+        state.appendText(text);
+        state.closeTextBlock();
+        assertThat(persistence.complete(
+                        cookie, state, new UIMessageChunk.Finish(UIMessageChunk.FinishReason.STOP, null)))
+                .isTrue();
+    }
+
+    private List<ChatMessage> messagesIn(ChatThread thread) {
+        return chatMessageRepository.findAll().stream()
+                .filter(message -> thread.getId().equals(message.getThread().getId()))
+                .toList();
     }
 
     @Test

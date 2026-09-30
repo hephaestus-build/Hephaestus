@@ -123,7 +123,7 @@ public class DeliveredFeedbackContentSource implements ContentSource {
             }
             ObjectNode state = describe(states.addObject(), row)
                     .put("status", status(row))
-                    .put("evidenceCurrentness", usable.evidence().name())
+                    .put("recordedClaimCurrentness", usable.evidence().name())
                     .put("createdAt", row.getCreatedAt().toString());
             if (usable.withdrawn()) {
                 state.put("withdrawn", true);

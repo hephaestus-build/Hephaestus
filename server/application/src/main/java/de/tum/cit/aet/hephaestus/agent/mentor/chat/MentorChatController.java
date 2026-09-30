@@ -68,8 +68,10 @@ public class MentorChatController {
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
         UUID threadId = body.id() != null ? body.id() : UUID.randomUUID();
         UUID clientUserMessageId = extractMessageId(body.message());
+        // A regenerate that names no reply is the SDK resending a prompt nothing answered; it is an ordinary submit.
+        UUID retryOf = MentorChatRequestBody.REGENERATE.equals(body.trigger()) ? body.messageId() : null;
         MentorTurnRequest serviceRequest =
-                MentorTurnRequest.web(workspaceContext.id(), threadId, userMessage, clientUserMessageId);
+                MentorTurnRequest.web(workspaceContext.id(), threadId, userMessage, clientUserMessageId, retryOf);
         mentorChatStarter.start(serviceRequest, emitter);
         return emitter;
     }

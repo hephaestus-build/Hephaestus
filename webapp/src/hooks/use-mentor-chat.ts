@@ -34,6 +34,8 @@ interface UseMentorChatReturn extends Omit<
 	"sendMessage" | "addToolResult"
 > {
 	sendMessage: (text: string) => void;
+	/** Answers the latest prompt again, replacing the reply that failed. */
+	retry: () => void;
 	threadDetail: ChatThreadDetail | undefined;
 	isThreadLoading: boolean;
 	threadError: unknown;
@@ -118,13 +120,19 @@ export function useMentorChat({
 	// only when `id` changes, so the transport is read once and a later instance is never looked at.
 	const transport = new DefaultChatTransport<ChatMessage>({
 		api: `${environment.serverUrl}/workspaces/${slug}/mentor/chat`,
-		prepareSendMessagesRequest: ({ id, messages }) => {
+		prepareSendMessagesRequest: ({ id, messages, trigger, messageId, requestMetadata }) => {
 			const effectiveId = id || stableThreadId;
 			// Only the latest message travels: the server rebuilds context and parent linkage from the
-			// thread id, so anything else in `messages` is bytes it ignores.
+			// thread id, so anything else in `messages` is bytes it ignores. A custom body replaces the
+			// SDK's default one, so the trigger and the replaced reply have to be carried over by hand.
 			const lastMessage = messages.at(-1);
 			return {
-				body: { id: effectiveId, message: lastMessage },
+				body: {
+					id: effectiveId,
+					message: lastMessage,
+					trigger,
+					messageId: messageId ?? retriedReplyOf(requestMetadata),
+				},
 				// Cookie-session auth (ADR 0017): session cookie rides credentials:include;
 				// CSRF double-submit header for this state-changing POST.
 				credentials: "include",
@@ -210,12 +218,28 @@ export function useMentorChat({
 		hydratedRef.current = threadId;
 	}, [threadId, threadDetail?.messages, status, setMessages]);
 
+	// `regenerate` drops the failed reply before it posts, and only accepts a reply still in the list, so
+	// after a retry refused before a new reply started, the target travels as request metadata.
+	const retryTarget = useRef<string | undefined>(undefined);
+
 	const sendMessage = (text: string) => {
 		if (!text.trim() || !hasWorkspace) {
 			return;
 		}
 
+		retryTarget.current = undefined;
 		void originalSendMessage({ text });
+	};
+
+	const retry = () => {
+		const last = messages.at(-1);
+		if (last?.role === "assistant") {
+			retryTarget.current = last.id;
+			void regenerate({ messageId: last.id });
+			return;
+		}
+		const dropped = retryTarget.current;
+		void regenerate(dropped === undefined ? undefined : { metadata: { retryOf: dropped } });
 	};
 
 	// No greeting request: the server has no greeting flag, so a POST asking for one comes back
@@ -276,6 +300,7 @@ export function useMentorChat({
 		id,
 		clearError,
 		sendMessage,
+		retry,
 		threadDetail,
 		isThreadLoading,
 		threadError,
@@ -288,4 +313,13 @@ export function useMentorChat({
 	};
 
 	return result;
+}
+
+function retriedReplyOf(requestMetadata: unknown): string | undefined {
+	return typeof requestMetadata === "object" &&
+		requestMetadata !== null &&
+		"retryOf" in requestMetadata &&
+		typeof requestMetadata.retryOf === "string"
+		? requestMetadata.retryOf
+		: undefined;
 }

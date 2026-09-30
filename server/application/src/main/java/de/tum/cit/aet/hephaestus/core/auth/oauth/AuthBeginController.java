@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.view.RedirectView;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Entry point for the OAuth login dance — stamps the {@link AuthIntentCookie} with the
@@ -96,7 +97,7 @@ public class AuthBeginController {
                 // The dance has not started yet, so there is nothing to resume: send the browser to the
                 // SPA's confirmation copy instead of an OAuth redirect it would have to unwind.
                 authIntentCookie.clear(response);
-                return new RedirectView("/auth/error?code=" + StepUpRequiredException.CODE, false);
+                return new RedirectView(stepUpRequiredPath(safeReturnTo), false);
             }
             if (currentAccountId == null) {
                 log.warn("auth.begin: link mode rejected — no valid session");
@@ -113,5 +114,23 @@ public class AuthBeginController {
         // not the SPA. (The /auth/error targets above are SPA routes at the origin root, so they keep none.)
         String urlEncodedRegistration = URLEncoder.encode(registrationId, StandardCharsets.UTF_8);
         return new RedirectView(apiBasePath + OAUTH_INIT_PATH + urlEncodedRegistration, false);
+    }
+
+    /**
+     * The SPA's recent-sign-in page, carrying where linking was headed so the developer can confirm access and come
+     * back to retry it. The destination is a query value, so its own query delimiters are encoded; the fallback
+     * destination adds nothing.
+     */
+    static String stepUpRequiredPath(@Nullable String returnTo) {
+        String safe = ReturnToValidator.safeOrFallback(returnTo);
+        UriComponentsBuilder page =
+                UriComponentsBuilder.fromPath("/auth/error").queryParam("code", StepUpRequiredException.CODE);
+        if ("/".equals(safe)) {
+            return page.build().toUriString();
+        }
+        return page.queryParam("returnTo", "{returnTo}")
+                .encode()
+                .buildAndExpand(safe)
+                .toUriString();
     }
 }

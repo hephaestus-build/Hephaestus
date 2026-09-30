@@ -50,7 +50,7 @@ function SlackIntegrationPage() {
 				<ConnectionStateNotice
 					connectionState={slack.connectionState}
 					credentialsUnreadableSince={slack.credentialsUnreadableSince}
-					credentialRecovery="Replace it by disconnecting and connecting again"
+					credentialRecovery="Replace it with Reconnect Slack below"
 					displayName="Slack"
 				/>
 			)}

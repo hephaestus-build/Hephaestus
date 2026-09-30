@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
@@ -38,8 +39,11 @@ describe("instance users route", () => {
 				return stepUpRefusal();
 			}),
 			// The instance also offers GitHub, but this account has only ever signed in with GitLab.
-			http.get("*/user/identities", () =>
-				HttpResponse.json([{ id: 2, providerType: "GITLAB", username: "ada" }]),
+			http.get("*/user", () =>
+				HttpResponse.json({
+					...currentUser,
+					linkedProviders: [{ type: "GITLAB", serverUrl: "https://gitlab.lrz.de" }],
+				}),
 			),
 		);
 

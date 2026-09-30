@@ -224,7 +224,7 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
                 new GitLabReviewReconciler.SystemNote(note.note(), at, "gid://gitlab/Note/" + note.id(), true),
                 pullRequest.getProvider(),
                 new HashSet<>())) {
-            mergeRequestProcessor.forgetReviewDecision(pullRequest);
+            mergeRequestProcessor.forgetReviewReadiness(pullRequest);
         }
     }
 

@@ -2633,7 +2633,7 @@ export type ObservationDetail = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2767,7 +2767,7 @@ export type ObservationList = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4486,7 +4486,7 @@ export type ReviewBoundObservation = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4690,7 +4690,7 @@ export type ReviewObservation = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4765,7 +4765,7 @@ export type ReviewObservationDetail = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6361,7 +6361,7 @@ export type WorkItem = {
   /**
    * What the checks said about the pull request's current head, when known
    */
-  checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'CANCELLED' | 'NONE';
+  checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'CANCELLED' | 'NONE' | 'NO_PIPELINE' | 'SKIPPED';
   /**
    * When it was created
    */
@@ -6964,7 +6964,7 @@ export type ObservationDetailWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -7048,7 +7048,7 @@ export type ObservationListWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -7295,7 +7295,7 @@ export type ReviewBoundObservationWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -7408,7 +7408,7 @@ export type ReviewObservationWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -7463,7 +7463,7 @@ export type ReviewObservationDetailWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**

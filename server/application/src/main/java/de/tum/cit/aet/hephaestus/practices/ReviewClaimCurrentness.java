@@ -6,7 +6,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "Whether an observation still has current review rules and supporting work snapshot")
+@Schema(
+        description =
+                "Whether an observation's claim still stands: its practice's review rules are unchanged and it was"
+                        + " not superseded, which an issue's observations are when a change to its reviewable content is"
+                        + " recorded. It says neither whether a later review ran nor whether the work changed since it was"
+                        + " reviewed")
 public enum ReviewClaimCurrentness {
     CURRENT,
     STALE,
