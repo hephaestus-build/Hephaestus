@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -80,8 +81,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -2092,8 +2093,12 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         private void detect(Practice practice) {
+            var decision = new GateDecision.Detect(savedWorkspace, List.of(practice), 1, TriggerMode.AUTO);
             when(gate.evaluate(any(), eq(ScmSignals.PULL_REQUEST_MERGED), eq(TriggerMode.AUTO)))
-                    .thenReturn(new GateDecision.Detect(savedWorkspace, List.of(practice), 1, TriggerMode.AUTO));
+                    .thenReturn(decision);
+            when(gate.evaluateQueued(
+                            any(), eq(savedWorkspace.getId()), eq(ScmSignals.PULL_REQUEST_MERGED), any(), anyBoolean()))
+                    .thenReturn(decision);
         }
 
         private AgentJobEventListener listener() {
