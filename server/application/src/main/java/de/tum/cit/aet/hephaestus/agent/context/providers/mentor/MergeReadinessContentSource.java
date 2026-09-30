@@ -52,7 +52,9 @@ import tools.jackson.databind.node.ObjectNode;
  * general note or an inline thread beside it, and resolving that thread does not show the condition was met. Its description and the issues the provider records it closing, with their bodies,
  * carry conditions too: a closing link says the provider will close the issue on merge, not that the issue's
  * conditions are met, and a stored list can miss a link whose read failed. One that is only listed in
- * {@code notLoaded} is read on demand as {@code inputs/context/merge_readiness/<artifactId>.json}.
+ * {@code notLoaded} is read on demand as {@code inputs/context/merge_readiness/<artifactId>.json}, which also reads
+ * the developer's closed or merged work: the list is for work still to merge, the detail for any work they authored,
+ * with its stored state saying which.
  *
  * <p>Each read is one snapshot: the pages of a scan are ordered by thread state a sync may change between them, so
  * under read-committed a row could slip past the offset unread.
@@ -131,19 +133,22 @@ public class MergeReadinessContentSource implements ContentSource {
         return matcher.matches() ? Optional.of(Long.parseLong(matcher.group(1))) : Optional.empty();
     }
 
-    /** One open authored pull request, in the same shape and scope as the list; {@code NOT_FOUND} otherwise. */
+    /**
+     * One pull request the developer authored, open, closed or merged, in the shape of the list and its scope apart
+     * from state; {@code NOT_FOUND} otherwise.
+     */
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW, isolation = Isolation.REPEATABLE_READ)
     public ObjectNode inspect(long workspaceId, long developerId, long artifactId) {
         return build(workspaceId, (root, providerId) -> {
             // A list: two monitor rows with one path would make a single-result query throw.
             Optional<PullRequest> pr =
                     queryRepository
-                            .findOpenAuthoredPullRequestOnInstance(workspaceId, developerId, providerId, artifactId)
+                            .findAuthoredPullRequestOnInstance(workspaceId, developerId, providerId, artifactId)
                             .stream()
                             .findFirst();
             if (pr.isEmpty()) {
                 root.put("status", "NOT_FOUND");
-                root.put("reason", "No open pull request by this developer has that artifactId in this workspace.");
+                root.put("reason", "No pull request by this developer has that artifactId in this workspace.");
                 return;
             }
             root.putArray("pullRequests").add(describe(workspaceId, developerId, providerId, pr.get()));
@@ -229,7 +234,19 @@ public class MergeReadinessContentSource implements ContentSource {
         node.put("number", pr.getNumber());
         node.put("title", pr.getTitle());
         node.put("url", pr.getHtmlUrl());
+        node.put("state", pr.getState().name());
         node.put("isDraft", pr.isDraft());
+        node.put("isMerged", pr.isMerged());
+        if (pr.getMergedAt() != null) {
+            node.put("mergedAt", pr.getMergedAt().toString());
+        }
+        User merger = pr.getMergedBy();
+        if (merger != null) {
+            node.put("mergedBy", merger.getLogin());
+            if (merger.getType() == User.Type.BOT) {
+                node.put("mergedByBot", true);
+            }
+        }
         if (pr.getBody() != null && !pr.getBody().isBlank()) {
             putText(node, "description", pr.getBody());
         }
@@ -358,7 +375,7 @@ public class MergeReadinessContentSource implements ContentSource {
         }
         node.put("threadsStatus", threadsCut ? "TRUNCATED" : "COMPLETE");
 
-        List<Issue> closing = queryRepository.findClosingIssuesOfOpenAuthoredPullRequest(
+        List<Issue> closing = queryRepository.findClosingIssuesOfAuthoredPullRequest(
                 workspaceId, developerId, providerId, pr.getId(), PageRequest.of(0, MAX_CLOSING_ISSUES + 1));
         boolean closingCut = closing.size() > MAX_CLOSING_ISSUES;
         ArrayNode closes = node.putArray("closingIssues");

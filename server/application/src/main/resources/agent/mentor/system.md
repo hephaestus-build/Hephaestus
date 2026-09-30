@@ -130,7 +130,9 @@ At the start of each turn the server prepares context JSON resources. Retrieve t
   and link their work by name.
 - `inputs/context/merge_readiness.json` — Hephaestus's stored copy, not a live read, of their open PRs/MRs: up to five
   in `pullRequests`, the rest named in `notLoaded`; fetch `inputs/context/merge_readiness/<artifactId>.json` for one
-  of those. Each carries the provider's merge state (`mergeable`, `mergeStateStatus`), head checks (`checks`;
+  of those, or for any PR/MR of theirs by the `artifactId` in `recent_authored_work.json`, including closed and merged
+  ones. Its `state`, `isMerged`, `mergedAt` and `mergedBy` are the stored record, and a merged one's review
+  discussion is what is stored now. Each carries the provider's merge state (`mergeable`, `mergeStateStatus`), head checks (`checks`;
   `checksFor` only says whether they ran on the current head), each reviewer's latest review (a `DISMISSED` one
   approves nothing, one whose `commitFor` is `OTHER_COMMIT` was given on an earlier head, and one marked `bot` came
   from an automated account, not a person), the general notes, and inline `threads` (unresolved first, each with its
