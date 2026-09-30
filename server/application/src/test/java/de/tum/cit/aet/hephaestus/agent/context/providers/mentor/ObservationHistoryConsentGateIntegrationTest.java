@@ -211,8 +211,8 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
     }
 
     @Test
-    @DisplayName("however long the stored text, the file fits the runner's read limit, newest verdicts last to go")
-    void shouldFitTheRunnersReadLimit() {
+    @DisplayName("however long the stored text, the overview fits its bound with every row, and a detail fits its own")
+    void shouldFitTheOverviewAndDetailBounds() {
         Instant base = Instant.now().minus(1, ChronoUnit.DAYS);
         String hostile = "\"\\\u0001x".repeat(2_500);
         UUID newest = null;
@@ -244,11 +244,100 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
         String file = contributed(recipient.getId());
         JsonNode root = objectMapper.readTree(file);
 
-        assertThat(file).hasSizeLessThanOrEqualTo(MentorContextKeys.FETCH_CONTEXT_MAX_CHARS);
-        assertThat(root.get("earlierObservations")).isEmpty();
+        assertThat(file).hasSizeLessThanOrEqualTo(ObservationHistoryContentSource.OVERVIEW_MAX_CHARS);
+        assertThat(root.get("recentObservations")).hasSize(30);
         assertThat(ids(root.get("recentObservations"))).first().isEqualTo(String.valueOf(newest));
-        assertThat(root.get("summary").get("includedObservations").asInt())
-                .isEqualTo(root.get("recentObservations").size());
+        assertThat(root.get("earlierObservations")).hasSize(20);
+        assertThat(root.findValues("evidenceRationale")).isEmpty();
+        assertThat(root.has("omittedForSize")).isFalse();
+
+        ObjectNode detail = contentSource.inspect(
+                workspace.getId(),
+                recipient.getId(),
+                UUID.fromString(ids(root.get("recentObservations")).getFirst()));
+        assertThat(objectMapper.writeValueAsString(detail))
+                .hasSizeLessThanOrEqualTo(ObservationHistoryContentSource.DETAIL_MAX_CHARS);
+        assertThat(detail.get("observation")
+                        .get("evidence")
+                        .get("citations")
+                        .get(0)
+                        .get("path")
+                        .asString())
+                .isEqualTo("source.json");
+        assertThat(detail.get("observation").get("evidenceRationale").asString())
+                .contains("x");
+    }
+
+    @Test
+    @DisplayName("a detail answers only for an observation the overview lists, and alike for every other")
+    void detailAnswersOnlyForListedObservations() {
+        Instant base = Instant.now().minus(1, ChronoUnit.DAYS);
+        UUID earlier = observe(newJob(), practice, 3L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
+        AgentJob repair = newJob();
+        UUID latest = observe(
+                repair, practice, 3L, recipient.getId(), "PRESENT", "GOOD", null, EVIDENCE, base.plusSeconds(60));
+        // A later run this conversation may not use hides its claim's earlier run too.
+        UUID orphaned = observe(newJob(), practice, 5L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
+        UUID unusable = observe(
+                newJob(), practice, 5L, recipient.getId(), "PRESENT", "GOOD", null, NO_CITATIONS, base.plusSeconds(60));
+        User colleague = userRepository.save(TestUserFactory.createUser(101L, "colleague", recipient.getProvider()));
+        UUID colleagues = observe(
+                repair, practice, 3L, colleague.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base.plusSeconds(120));
+        Workspace own = workspace;
+        workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("obs-history-detail-other"));
+        UUID foreign = observe(
+                repair, practice("test-practice"), 3L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
+        workspace = own;
+
+        ObjectNode current = contentSource.inspect(workspace.getId(), recipient.getId(), latest);
+        assertThat(current.get("list").asString()).isEqualTo("recentObservations");
+        assertThat(current.get("observation").get("evidence").get("citations")).hasSize(1);
+        assertThat(contentSource
+                        .inspect(workspace.getId(), recipient.getId(), earlier)
+                        .get("list")
+                        .asString())
+                .isEqualTo("earlierObservations");
+
+        ObjectNode unknown = notFound(contentSource.inspect(workspace.getId(), recipient.getId(), UUID.randomUUID()));
+        for (UUID hidden : List.of(orphaned, unusable, colleagues, foreign)) {
+            assertThat(notFound(contentSource.inspect(workspace.getId(), recipient.getId(), hidden)))
+                    .as("observation %s", hidden)
+                    .isEqualTo(unknown);
+        }
+        // Another developer's own history does not answer for this developer's observation either.
+        assertThat(notFound(contentSource.inspect(workspace.getId(), colleague.getId(), latest)))
+                .isEqualTo(unknown);
+    }
+
+    @Test
+    @DisplayName("a conversation's detail carries the untrusted envelope, and none once its consent is revoked")
+    void conversationDetailFollowsCurrentConsent() {
+        long threadId = seedThread("C-detail", "400.0", ConsentState.ACTIVE);
+        Observation conversation = saveObservation("occ-detail", "chat.conversation_thread", threadId);
+        assertThat(ids(contribute().get("recentObservations")))
+                .contains(conversation.getId().toString());
+
+        ObjectNode active = contentSource.inspect(workspace.getId(), recipient.getId(), conversation.getId());
+        assertThat(active.get("_meta").get("trustLevel").asString()).isEqualTo("UNTRUSTED_EXTERNAL");
+        assertThat(active.get("observation").get("evidence").get("citations")).hasSize(1);
+
+        slackMonitoredChannelRepository.findAll().stream()
+                .filter(channel -> "C-detail".equals(channel.getSlackChannelId()))
+                .forEach(channel -> {
+                    channel.setConsentState(ConsentState.REVOKED);
+                    slackMonitoredChannelRepository.save(channel);
+                });
+
+        ObjectNode revoked = contentSource.inspect(workspace.getId(), recipient.getId(), conversation.getId());
+        assertThat(revoked.get("status").asString()).isEqualTo("NOT_FOUND");
+        assertThat(revoked.has("_meta")).isFalse();
+        assertThat(revoked.has("observation")).isFalse();
+    }
+
+    private static ObjectNode notFound(ObjectNode detail) {
+        assertThat(detail.get("status").asString()).isEqualTo("NOT_FOUND");
+        detail.remove("readAt");
+        return detail;
     }
 
     private JsonNode contribute() {

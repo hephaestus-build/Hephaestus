@@ -452,6 +452,27 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("a compaction marks the turn as one its own usage report cannot account for")
+    void compactionHandsTheTurnsAccountToTheProxy() throws Exception {
+        translator.translate(fixture("message_end_assistant.json"), state);
+        assertThat(state.compactionAttempted()).isFalse();
+
+        assertThat(translator.translate(
+                        mapper.readTree("{\"type\":\"compaction_start\",\"reason\":\"threshold\"}"), state))
+                .isEmpty();
+        // Its aggregate usage adds nothing: it may cover two calls, or miss a call that failed.
+        assertThat(translator.translate(fixture("compaction_end_success.json"), state))
+                .isEmpty();
+
+        assertThat(state.compactionAttempted()).isTrue();
+        assertThat(java.util.Objects.requireNonNull(state.observedUsage())
+                        .get("input")
+                        .asInt())
+                .isEqualTo(25);
+        assertThat(state.observedCallCount()).isEqualTo(1);
+    }
+
+    @Test
     void piSessionLevelEvents_explicitlyDropped() throws Exception {
         // Unknown types fail the turn, so every housekeeping event Pi 0.84.4 emits must stay a no-op.
         String[] sessionEvents = {

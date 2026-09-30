@@ -2,7 +2,7 @@
 id: unified-pi-runtime
 sidebar_position: 3
 title: Unified Pi Runtime
-description: Mentor replica affinity and how to disable it for debugging.
+description: Mentor replica affinity, conversation checkpoints, and how to disable affinity for debugging.
 ---
 
 ## Why mentor traffic is sticky
@@ -15,6 +15,12 @@ Traefik pins workspace traffic to the originating replica via a cookie scoped to
 - Response header: `X-Hephaestus-Replica: <container-id-prefix>` — emitted by `ReplicaIdentityFilter` from `$HOSTNAME`, CORS-exposed for the webapp.
 
 Labels are HTTPS-only; the HTTP router redirects to HTTPS, so pinning it would just double-issue cookies. The `cookie.path` attribute requires Traefik >= 3.3. Previews (`docker/preview/compose.app.yaml`) are single-replica and omit the labels.
+
+## Conversation size and checkpoints
+
+Heph keeps the model's real context window and gives Pi a mentor-only working policy in Pi's own settings: compact once the conversation passes 32,768 estimated tokens and keep at most 8,192 unsummarised, both scaled down for a smaller window. Pi compacts between tool batches on that trigger. Before a prompt, the runner checks the restored conversation by Pi's estimate — which, unlike Pi's own check, counts what came after the last reply — and compacts it inside the accepted turn, so the summary is billed to that turn and spends its budget. If that compaction fails, or leaves the conversation past the trigger, the turn ends with an error instead of sending the history. Pi never cuts inside a tool batch, so a tool result larger than the unsummarised window stays whole; context resources stay small for that reason: `observations_history.json` lists observations without their evidence, and `observations_history/<id>.json` reads one listed observation's evidence on demand, each bounded in size. The trigger also caps Pi's summary output, at the model's own output limit, so a compacted conversation is not guaranteed to stay under 32k.
+
+The server stores only what the runner sent before a turn's outcome (`session_persisted`). The runner sends the session after every completed compaction and, when the watchdog ends a turn, once the abort has settled and before the failure; a failed or aborted compaction sends none, so the stored session stays the last good one. A timed-out turn whose abort has not settled after ten seconds still fails, and the runner refuses a new prompt until Pi settles; an abort that fails outright makes the runner refuse every later prompt with a code that has the server discard the sandbox. A turn that compacted is accounted from the proxy's record of its calls, because Pi reports a compaction's summary calls as one total, and nothing for one that failed partway; the reply's Finish, its stored row and its ledger entry all carry that one account, read once the row is no longer in flight.
 
 ## Known limitations
 
