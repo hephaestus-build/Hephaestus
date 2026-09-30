@@ -65,6 +65,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
 
     private static final long REPO_ID = 1L;
     private static final long RAW_MR_ID = 999555L;
+    private static final String APPROVAL_HEAD = "a".repeat(40);
     private static final long ENTITY_MR_ID = 100L;
     private static final int MR_IID = 5;
     private static final long RAW_USER_ID = 12345L;
@@ -734,6 +735,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processApprovedCreatesReview() {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
+            pr.setHeadRefOid(APPROVAL_HEAD);
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr))
@@ -753,7 +755,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(reviewRepository.findByNativeIdAndProviderId(expectedReviewId, PROVIDER_ID))
                     .thenReturn(Optional.empty());
 
-            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened");
+            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened", APPROVAL_HEAD);
             PullRequest result = processor.processApproved(event, createContext());
 
             assertThat(result).isNotNull();
@@ -829,6 +831,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processApprovedIdempotent() {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
+            pr.setHeadRefOid(APPROVAL_HEAD);
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr));
@@ -848,10 +851,11 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             PullRequestReview existingReview = new PullRequestReview();
             existingReview.setNativeId(expectedNativeId);
             existingReview.setState(PullRequestReview.State.APPROVED);
+            existingReview.setCommitId(APPROVAL_HEAD);
             when(reviewRepository.findByNativeIdAndProviderId(expectedNativeId, PROVIDER_ID))
                     .thenReturn(Optional.of(existingReview));
 
-            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened");
+            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened", APPROVAL_HEAD);
             PullRequest result = processor.processApproved(event, createContext());
 
             assertThat(result).isNotNull();
@@ -1086,6 +1090,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void shouldGiveADismissedApprovalAgainWhenTheApproverApprovesAgain() {
             PullRequest pr = createPullRequestEntity();
             pr.setNativeId(RAW_MR_ID);
+            pr.setHeadRefOid(APPROVAL_HEAD);
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
@@ -1115,7 +1120,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(reviewRepository.findByNativeIdAndProviderId(expectedNativeId, PROVIDER_ID))
                     .thenReturn(Optional.of(existingReview));
 
-            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened");
+            GitLabMergeRequestEventDTO event = createApprovalEvent("approved", "opened", APPROVAL_HEAD);
             PullRequest result = processor.processApproved(event, createContext());
 
             assertThat(result).isNotNull();
@@ -2308,6 +2313,11 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
     }
 
     private GitLabMergeRequestEventDTO createApprovalEvent(String action, String state) {
+        return createApprovalEvent(action, state, null);
+    }
+
+    /** An approval hook of MR !5 naming {@code head} as its last commit, or none. */
+    private GitLabMergeRequestEventDTO createApprovalEvent(String action, String state, @Nullable String head) {
         var attrs = new GitLabMergeRequestEventDTO.ObjectAttributes(
                 RAW_MR_ID,
                 MR_IID,
@@ -2326,7 +2336,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
-                null,
+                head == null ? null : new GitLabMergeRequestEventDTO.LastCommit(head, "Fix", "Fix"),
                 null,
                 null,
                 null,

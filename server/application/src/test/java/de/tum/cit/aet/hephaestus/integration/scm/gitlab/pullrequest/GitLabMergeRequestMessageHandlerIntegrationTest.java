@@ -999,6 +999,32 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .hasSize(1);
         }
 
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void shouldKeepTheStandingApprovalWhenAnApprovalAfterThePushNamesNoHead(boolean blank) throws Exception {
+            handler.handle(loadPayload("merge_request.approved"), Instant.now());
+            receive(systemReset(NEXT_HEAD, "2026-01-31 22:30:00 +0100", "approvals_reset_on_push"));
+            eventListener.clear();
+
+            receive(headless("merge_request.approved", "2026-01-31 22:30:00 +0100", blank));
+
+            PullRequestReview approval = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(approval.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(approval.getCommitId()).isEqualTo(FIXTURE_HEAD);
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
+        void shouldRecordNoApprovalThatNamesNoHead(boolean blank) throws Exception {
+            receive(headless("merge_request.approved", "2026-01-31 19:41:31 +0100", blank));
+
+            assertThat(approval(NATIVE_APPROVER_ID)).isNull();
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
+        }
+
         @Test
         void shouldRecordTwoPeoplesApprovalsReceivedAtTheSameInstant() throws Exception {
             Instant receivedAt = Instant.parse("2026-09-30T10:00:00.000001Z");
@@ -1528,6 +1554,18 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             throws IOException {
         return edited(filename, attributes -> {
             ((ObjectNode) attributes.get("last_commit")).put("id", head);
+            attributes.put("updated_at", updatedAt);
+        });
+    }
+
+    /** A recorded hook of MR !4 at GitLab's {@code updatedAt} that names no head: none, or a blank one. */
+    private GitLabMergeRequestEventDTO headless(String filename, String updatedAt, boolean blank) throws IOException {
+        return edited(filename, attributes -> {
+            if (blank) {
+                ((ObjectNode) attributes.get("last_commit")).put("id", "");
+            } else {
+                attributes.remove("last_commit");
+            }
             attributes.put("updated_at", updatedAt);
         });
     }

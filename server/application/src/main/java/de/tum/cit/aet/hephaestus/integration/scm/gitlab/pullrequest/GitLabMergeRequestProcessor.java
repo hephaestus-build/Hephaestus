@@ -665,6 +665,12 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             log.debug("Skipped approval of another head than the stored one: prId={}", pr.getId());
             return pr;
         }
+        // An approval is recorded for the head the hook names, never for one assumed from the stored merge request.
+        String approvedCommit = namedHead(event);
+        if (approvedCommit == null) {
+            log.debug("Skipped approval that names no head: prId={}", pr.getId());
+            return pr;
+        }
         if (!pr.takesReviewSnapshotAt(context.observedAt())) {
             log.debug("Skipped approval older than the stored reviews: prId={}", pr.getId());
             return pr;
@@ -677,7 +683,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         var existingReview = reviewRepository.findByNativeIdAndProviderId(
                 approvalNativeId, Objects.requireNonNull(context.providerId()));
         Instant approvedAt = context.observedAt();
-        String approvedCommit = approvedCommit(event, pr);
 
         if (existingReview.isPresent()) {
             // Re-approval: the approval row was dismissed by an unapproval, or it approves another head. GitLab's reset
@@ -685,7 +690,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             PullRequestReview review = existingReview.get();
             if (review.getState() != PullRequestReview.State.APPROVED
                     || review.isDismissed()
-                    || (approvedCommit != null && !approvedCommit.equals(review.getCommitId()))) {
+                    || !approvedCommit.equals(review.getCommitId())) {
                 review.setState(PullRequestReview.State.APPROVED);
                 review.setDismissed(false);
                 review.setSubmittedAt(approvedAt);
@@ -745,15 +750,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 || lastCommit.id().equals(pr.getHeadRefOid());
     }
 
-    /** The commit an approval hook approved: the head it names, or the stored head where it names none. */
-    private static @Nullable String approvedCommit(GitLabMergeRequestEventDTO event, PullRequest pr) {
+    /** The head {@code event} names, or {@code null} when it names none. */
+    private static @Nullable String namedHead(GitLabMergeRequestEventDTO event) {
         var attrs = event.objectAttributes();
-        if (attrs != null
-                && attrs.lastCommit() != null
-                && !attrs.lastCommit().id().isBlank()) {
-            return attrs.lastCommit().id();
-        }
-        return resolveApprovalCommit(pr);
+        return attrs != null
+                        && attrs.lastCommit() != null
+                        && !attrs.lastCommit().id().isBlank()
+                ? attrs.lastCommit().id()
+                : null;
     }
 
     /**
