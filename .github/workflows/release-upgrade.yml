@@ -40,6 +40,11 @@ concurrency:
 
 jobs:
   upgrade:
+    name: Upgrade (${{ matrix.path }})
+    strategy:
+      fail-fast: false
+      matrix:
+        path: [latest, baseline, refusal]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -61,6 +66,7 @@ jobs:
       - name: Resolve immutable image references
         id: images
         env:
+          UPGRADE_PATH: ${{ matrix.path }}
           GH_TOKEN: ${{ github.token }}
           INPUT_PREVIOUS_VERSION: ${{ inputs.previous-version }}
           INPUT_CANDIDATE_APP: ${{ inputs.candidate-application-image }}
@@ -71,9 +77,10 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
         run: node scripts/resolve-release-upgrade-images.ts
 
-      - name: Test seeded previous-release upgrade
+      - name: Test seeded upgrade or expected refusal
         env:
+          UPGRADE_PATH: ${{ matrix.path }}
           PREVIOUS_APP: ${{ steps.images.outputs.previous-app }}
           CANDIDATE_APP: ${{ steps.images.outputs.candidate-app }}
           POSTGRES_IMAGE: ${{ steps.images.outputs.postgres }}
-        run: node scripts/release-upgrade-test.ts "$PREVIOUS_APP" "$CANDIDATE_APP" "$POSTGRES_IMAGE"
+        run: node scripts/release-upgrade-test.ts "$PREVIOUS_APP" "$CANDIDATE_APP" "$POSTGRES_IMAGE" "$UPGRADE_PATH"

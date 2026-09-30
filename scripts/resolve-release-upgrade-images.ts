@@ -111,6 +111,17 @@ if (
 	postgres = `${postgresRepository}:${candidate}`;
 }
 
+// Historical paths must not move when a new stable release is published.
+// v0.77.3 already contains the cut-point: v0.76.0 is the last release that actually predates it.
+const upgradePath = process.env.UPGRADE_PATH ?? "latest";
+if (upgradePath === "baseline" || upgradePath === "refusal") {
+	previousApplication = previousApplicationReference(
+		upgradePath === "baseline" ? "0.77.4" : "0.76.0",
+	);
+} else if (upgradePath !== "latest") {
+	throw new Error(`Unknown upgrade path: ${upgradePath}`);
+}
+
 const output = requiredEnv(process.env, "GITHUB_OUTPUT");
 appendFileSync(
 	output,

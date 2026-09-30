@@ -288,6 +288,7 @@ jobs:
             --clobber \
             --repo "${{ github.repository }}"
 
+  # The reusable gate runs latest, pinned v0.77.4 synchronization, and v0.76.0 refusal.
   upgrade-test:
     needs: [release, tag-images]
     if: needs.release.outputs.released == 'true'
