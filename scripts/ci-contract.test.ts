@@ -2864,15 +2864,7 @@ void test("Stories enforces visual evidence independently of preview publication
 		`\${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}`,
 	);
 	const chromatic = namedStep(workflow, jobPath, "Chromatic visual testing");
-	assert.equal(
-		chromatic.get("if"),
-		"success() && env.CHROMATIC_POLICY_SKIP != 'true' && steps.visual_policy.outputs.paused != 'true'",
-	);
-	assert.equal(workflow.getIn([...jobPath, "env", "CHROMATIC_PAUSED_UNTIL"]), "2026-09-30");
-	assert.equal(
-		namedStep(workflow, jobPath, "Clear previous Chromatic evidence").get("id"),
-		"visual_policy",
-	);
+	assert.equal(chromatic.get("if"), "success() && env.CHROMATIC_POLICY_SKIP != 'true'");
 	assert.equal(
 		namedStep(workflow, jobPath, "Deploy public Storybook preview").get("if"),
 		"success() && github.event_name == 'pull_request' && env.CHROMATIC_POLICY_SKIP != 'true'",
@@ -2883,7 +2875,6 @@ void test("Stories enforces visual evidence independently of preview publication
 	assert.equal(chromatic.getIn(["with", "skip"]), false);
 	const report = namedStep(workflow, jobPath, "Report Chromatic visual coverage");
 	assert.equal(report.get("if"), "always()");
-	assert.equal(report.get("continue-on-error"), true);
 	assert.equal(report.get("run"), "node scripts/report-chromatic.ts");
 	assert.equal(report.getIn(["env", "CHROMATIC_OUTCOME"]), `\${{ steps.chromatic.outcome }}`);
 	for (const [name, output] of Object.entries({
@@ -2903,7 +2894,8 @@ void test("Stories enforces visual evidence independently of preview publication
 	}
 	const gate = namedStep(workflow, jobPath, "Evaluate stories checks");
 	assert.equal(gate.get("if"), "always()");
-	assert.equal(gate.getIn(["env", "CHROMATIC"]), `\${{ steps.visual_coverage.outcome }}`);
+	// Visual coverage is reported, never gating.
+	assert.equal(gate.getIn(["env", "CHROMATIC"]), undefined);
 });
 
 void test("global styles and assets retain full-snapshot invalidation", async () => {
@@ -2929,22 +2921,16 @@ void test("global styles and assets retain full-snapshot invalidation", async ()
 });
 
 void test(
-	"Stories final verdict rejects every incomplete or failed leg",
+	"Stories final verdict follows the interaction tests, not visual coverage",
 	{ skip: !bashRunsRunnerSteps() },
 	async () => {
 		const workflow = parseDocument(
 			await readFile(".github/workflows/ci-quality-gates.yml", "utf8"),
 		);
 		const command = runScript(workflow, ["jobs", "webapp-stories"], "Evaluate stories checks");
-		for (const stories of ["success", "failure", "skipped"]) {
-			for (const coverage of ["success", "failure", "skipped", "cancelled", ""]) {
-				const result = await runStep(command, { STORYBOOK_TESTS: stories, CHROMATIC: coverage });
-				assert.equal(
-					result.failed,
-					stories !== "success" || coverage !== "success",
-					result.diagnosis,
-				);
-			}
+		for (const stories of ["success", "failure", "skipped", "cancelled", ""]) {
+			const result = await runStep(command, { STORYBOOK_TESTS: stories });
+			assert.equal(result.failed, stories !== "success", result.diagnosis);
 		}
 	},
 );

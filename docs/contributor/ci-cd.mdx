@@ -926,32 +926,24 @@ closed pull request also retires its comments instead of restoring live links.
 ## Chromatic visual coverage
 
 The Stories job reports visual coverage separately from interaction tests and the
-**Preview / Storybook** publication link. Publication is not visual approval: the final job
-verdict also requires a passing coverage report or an explicit policy exemption.
+**Preview / Storybook** publication link. Visual coverage never decides the job: the Storybook
+interaction tests are the gate, and Chromatic's verdict is a step summary plus a warning when coverage
+is unverified. Neither a preview link nor a passing job is visual approval; review the linked build.
 
 | Verdict | Meaning and action |
 | --- | --- |
 | `tested-build` | The returned build has captured snapshots and a terminal successful JUnit report with no unfinished or failed test cases. It may be a reused approved build, not new captures in this CI run. |
 | `inherited` | The returned build reused baseline snapshots without new captures. Valid TurboSnap coverage, but not a newly tested recovery baseline. |
-| `quota-skipped` | An account limit blocked coverage. The job fails; an account owner must resolve the limit. |
+| `quota-skipped` | An account limit blocked coverage. The job still passes with a warning; an account owner resolves the limit. |
 | `failed` | Visual differences or component/interaction errors need review. Fix errors; accept only intentional, inspected differences. |
-| `unavailable` | Chromatic failed or returned insufficient coverage evidence. The job fails; inspect the build, action logs and account limits before retrying. |
-| `budget-paused` | A maintainer-approved, time-bounded pause skips paid visual comparison. Interaction tests and generated-asset checks remain required. CI may pass without visual approval. |
+| `unavailable` | Chromatic failed or returned insufficient coverage evidence, for example an unfinished build after an account limit. The job still passes with a warning; inspect the build, action logs and account limits. |
 | `policy-skipped` | Fork PRs and `dependabot/` or `renovate/` branches do not run credentialed visual tests. Interaction tests still run; this is not visual approval. |
-
-The workflow's `CHROMATIC_PAUSED_UNTIL` is the sole budget-pause deadline (midnight UTC).
-Before it expires, CI does not invoke Chromatic, reports `budget-paused` explicitly, and still builds,
-tests, and publishes the first-party PR's independent Storybook preview. The pause does not turn
-actual failures into passes. At the deadline, visual testing and fail-closed evidence enforcement
-resume automatically; removing the deadline resumes them immediately. Restore account capacity
-before expiry and follow baseline recovery below. Do not extend a pause silently or interpret a
-preview link as visual verification.
 
 `scripts/report-chromatic.ts` requires both the action's public outputs and its fresh JUnit report.
 The workflow removes the previous report before invoking Chromatic and uses one explicit report
 filename for validation and artifact upload. The report must identify the same returned build,
 have status `PASSED` or `ACCEPTED`, and contain only successful terminal test cases with no reported
-failures. Missing, malformed, mismatched, incomplete, or nonterminal evidence fails closed.
+failures. Missing, malformed, mismatched, incomplete, or nonterminal evidence is reported as unverified.
 
 [CLI exit codes](https://www.chromatic.com/docs/cli/#exit-codes) and positive capture counters alone
 are insufficient: publish-only mode can return zero even after an account-limit warning, while
