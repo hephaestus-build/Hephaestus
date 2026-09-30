@@ -1,8 +1,13 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment;
 
+import static de.tum.cit.aet.hephaestus.integration.scm.GraphQlResponseStubValidator.Vendor.GITLAB;
+import static de.tum.cit.aet.hephaestus.integration.scm.GraphQlResponseStubValidator.assertVendorCouldReturn;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -19,22 +24,37 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabNoteEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabPullRequestReviewCommentProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.GraphQlResponses;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
+import de.tum.cit.aet.hephaestus.testconfig.ScriptedGraphQlClient;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,9 +62,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+import reactor.core.publisher.Mono;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -116,6 +140,33 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private RecordingScmEventListener eventListener;
+
+    @Autowired
+    private PullRequestReviewThreadRepository threadRepository;
+
+    @Autowired
+    private PullRequestReviewCommentRepository reviewCommentRepository;
+
+    @Autowired
+    private GitLabPullRequestReviewThreadProcessor threadProcessor;
+
+    @Autowired
+    private GitLabPullRequestReviewCommentProcessor reviewCommentProcessor;
+
+    @Autowired
+    private GitLabIssueCommentProcessor issueCommentProcessor;
+
+    @Autowired
+    private GitLabReviewReconciler reviewReconciler;
+
+    @Autowired
+    private GitLabGraphQlResponseHandler graphQlResponseHandler;
+
+    @Autowired
+    private GitLabProperties gitLabProperties;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private Repository savedRepo;
     private IdentityProvider savedProvider;
@@ -356,6 +407,504 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     .findById(savedPr.getId())
                     .orElseThrow()
                     .setReviewDecision(decision));
+        }
+    }
+
+    // Inline discussions
+
+    /**
+     * A diff note webhook and the discussion read name one thread through the discussion's GID; a stored thread's
+     * resolution follows the newest whole read of the merge request's discussions.
+     */
+    @Nested
+    class InlineDiscussions {
+
+        private static final String DISCUSSION_ID = "7c831f954579a554aefcbfbd5a50dd77cfeb9521";
+        private static final String DISCUSSION_GID = "gid://gitlab/Discussion/" + DISCUSSION_ID;
+        private static final long THREAD_NATIVE_ID =
+                GitLabPullRequestReviewThreadProcessor.deterministicNativeId(DISCUSSION_GID);
+        private static final String OTHER_GID = "gid://gitlab/Discussion/" + "0".repeat(40);
+        private static final Instant RESOLVED_AT = Instant.parse("2026-02-01T10:00:00Z");
+        private static final long NATIVE_TUTOR_ID = 99_001L;
+
+        @Test
+        void shouldResolveAndReopenTheThreadItsDiffNoteWebhookStoredWhenTheDiscussionIsRead() throws Exception {
+            receiveDiffNote();
+            PullRequestReviewThread stored = thread();
+            assertThat(stored.getNodeId()).isEqualTo(DISCUSSION_GID);
+            assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            Long commentId = comment().getId();
+
+            sync(true);
+
+            PullRequestReviewThread resolved = thread();
+            assertThat(resolved.getId()).isEqualTo(stored.getId());
+            assertThat(resolved.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            assertThat(resolved.getResolvedAt()).isEqualTo(RESOLVED_AT);
+            assertThat(resolverLogin()).isEqualTo("tutor");
+            assertThat(comment().getId()).isEqualTo(commentId);
+            assertThat(commentThreadId()).isEqualTo(stored.getId());
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewThreadResolved.class))
+                    .hasSize(1);
+
+            sync(false);
+
+            PullRequestReviewThread reopened = thread();
+            assertThat(reopened.getId()).isEqualTo(stored.getId());
+            assertThat(reopened.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(reopened.getResolvedAt()).isNull();
+            assertThat(resolverLogin()).isNull();
+            assertThat(commentThreadId()).isEqualTo(stored.getId());
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewThreadUnresolved.class))
+                    .hasSize(1);
+        }
+
+        /** A thread a diff note webhook stored before webhooks carried the discussion's GID. */
+        @Test
+        void shouldCompleteAndResolveAThreadStoredWithoutItsDiscussionsGid() throws Exception {
+            receiveDiffNote();
+            jdbcTemplate.update("UPDATE pull_request_review_thread SET node_id = NULL WHERE id = ?", thread().getId());
+
+            sync(true);
+
+            PullRequestReviewThread stored = thread();
+            assertThat(stored.getNodeId()).isEqualTo(DISCUSSION_GID);
+            assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            assertThat(commentThreadId()).isEqualTo(stored.getId());
+        }
+
+        /** Reopened and resolved again by someone else between two reads: the second names who resolved it now. */
+        @Test
+        void shouldNameWhoResolvedTheDiscussionLastAndKeepThemWhenAReadNamesNobody() throws Exception {
+            receiveDiffNote();
+            sync(true);
+            Instant later = RESOLVED_AT.plusSeconds(3600);
+
+            syncPages(onePage(resolvedBy(user(NATIVE_USER_ID, FIXTURE_AUTHOR_LOGIN), later)));
+
+            assertThat(resolverLogin()).isEqualTo(FIXTURE_AUTHOR_LOGIN);
+            assertThat(thread().getResolvedAt()).isEqualTo(later);
+
+            syncPages(onePage(resolvedBy(null, later)));
+
+            assertThat(resolverLogin()).isEqualTo(FIXTURE_AUTHOR_LOGIN);
+            assertThat(thread().getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+        }
+
+        @Test
+        void shouldKeepTheResolutionWhenTheReadDoesNotSayIt() throws Exception {
+            receiveDiffNote();
+            sync(true);
+
+            sync(null);
+
+            PullRequestReviewThread stored = thread();
+            assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            assertThat(stored.getResolvedAt()).isEqualTo(RESOLVED_AT);
+            assertThat(resolverLogin()).isEqualTo("tutor");
+        }
+
+        @Test
+        void shouldKeepOneThreadWhenTheDiscussionIsReadBeforeItsDiffNoteWebhook() throws Exception {
+            sync(false);
+            PullRequestReviewThread read = thread();
+            assertThat(read.getNodeId()).isEqualTo(DISCUSSION_GID);
+
+            receiveDiffNote();
+
+            assertThat(thread().getId()).isEqualTo(read.getId());
+            assertThat(commentThreadId()).isEqualTo(read.getId());
+        }
+
+        /** Delayed read A saw the thread resolved; read B, begun later, saw it reopened and so changed nothing. */
+        @Test
+        void shouldNotLetAnOlderReadUndoANewerSyncThatChangedNothing() throws Exception {
+            receiveDiffNote();
+            GitLabDiscussionSyncService.DiscussionRead older = Objects.requireNonNull(
+                    service(onePage(discussion(true))).readThreadResolutions(1L, FIXTURE_REPO_FULL_NAME, MR_IID));
+
+            sync(false);
+            service(onePage(discussion(true))).applyThreadResolutions(savedRepo, MR_IID, older, 1L);
+
+            assertThat(thread().getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(thread().getResolvedAt()).isNull();
+            assertThat(discussionsObservedAt()).isAfter(older.requestedAt());
+        }
+
+        @Test
+        void shouldNotLetAnOlderWebhookReadUndoANewerOneThatChangedNothing() throws Exception {
+            receiveDiffNote();
+            sync(true);
+            GitLabDiscussionSyncService reader = service(onePage(discussion(false)));
+            GitLabDiscussionSyncService.DiscussionRead older =
+                    Objects.requireNonNull(reader.readThreadResolutions(1L, FIXTURE_REPO_FULL_NAME, MR_IID));
+            GitLabDiscussionSyncService.DiscussionRead newer = Objects.requireNonNull(
+                    service(onePage(discussion(true))).readThreadResolutions(1L, FIXTURE_REPO_FULL_NAME, MR_IID));
+
+            reader.applyThreadResolutions(savedRepo, MR_IID, newer, 1L);
+            reader.applyThreadResolutions(savedRepo, MR_IID, older, 1L);
+
+            assertThat(thread().getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            assertThat(discussionsObservedAt()).isEqualTo(newer.requestedAt());
+        }
+
+        /**
+         * A sync begins reading a discussion no thread holds yet; a webhook read begun later records the opposite
+         * resolution before the sync stores the discussion's comments. The sync's older read changes nothing.
+         */
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void shouldKeepTheNewerReadOfADiscussionAnOlderSyncStoresLater(boolean newer) {
+            GitLabDiscussionSyncService webhookRead = service(onePage(discussion(newer)));
+            GitLabDiscussionSyncService olderSync = serviceRunningFirst(
+                    () -> webhookRead.applyThreadResolutions(
+                            savedRepo,
+                            MR_IID,
+                            Objects.requireNonNull(
+                                    webhookRead.readThreadResolutions(1L, FIXTURE_REPO_FULL_NAME, MR_IID)),
+                            1L),
+                    onePage(discussion(!newer)));
+
+            olderSync.syncDiscussionsForMergeRequest(1L, savedRepo, MR_IID, savedPr);
+
+            PullRequestReviewThread stored = thread();
+            assertThat(stored.getState())
+                    .isEqualTo(
+                            newer ? PullRequestReviewThread.State.RESOLVED : PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(stored.getResolvedAt()).isEqualTo(newer ? RESOLVED_AT : null);
+            assertThat(stored.getNodeId()).isEqualTo(DISCUSSION_GID);
+            assertThat(commentThreadId()).isEqualTo(stored.getId());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"nodes", "hasNextPage"})
+        void shouldRecordNoResolutionWhenTheLastPageIsNotWhole(String missing) {
+            Map<String, @Nullable Object> last = page(List.of(), false, null);
+            if ("nodes".equals(missing)) {
+                last.put("nodes", null);
+            } else {
+                pageInfoOf(last).remove("hasNextPage");
+            }
+
+            syncPages(page(List.of(discussion(true)), true, "c1"), last);
+
+            // The first page's notes are stored on a thread, but the page's resolution is not a whole read.
+            assertThat(thread().getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(thread().getResolvedAt()).isNull();
+            assertThat(commentThreadId()).isEqualTo(thread().getId());
+            assertThat(discussionsObservedAt()).isNull();
+        }
+
+        @Test
+        void shouldReadOnPastAnEmptyPageThatSaysMoreFollow() throws Exception {
+            receiveDiffNote();
+
+            syncPages(page(List.of(), true, "c1"), page(List.of(discussion(true)), false, null));
+
+            assertThat(thread().getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+        }
+
+        @Test
+        void shouldLinkNothingToAThreadOfAnotherMergeRequest() throws Exception {
+            PullRequestReviewThread other = storeThread(anotherMergeRequest(), null);
+
+            sync(true);
+            receiveDiffNote();
+
+            assertUntouched(other, null);
+        }
+
+        @Test
+        void shouldLinkNothingToAThreadHoldingAnotherDiscussion() throws Exception {
+            PullRequestReviewThread other = storeThread(savedPr, OTHER_GID);
+
+            sync(true);
+            receiveDiffNote();
+
+            assertUntouched(other, OTHER_GID);
+            assertThat(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, providerId()))
+                    .isEmpty();
+        }
+
+        @Test
+        void shouldLinkNothingWhenTwoThreadsClaimTheDiscussion() throws Exception {
+            PullRequestReviewThread byNative = storeThread(savedPr, null);
+            PullRequestReviewThread byNode = new PullRequestReviewThread();
+            byNode.setNativeId(THREAD_NATIVE_ID + 1);
+            byNode.setNodeId(DISCUSSION_GID);
+            byNode.setProvider(savedProvider);
+            byNode.setPullRequest(savedPr);
+            byNode.setState(PullRequestReviewThread.State.UNRESOLVED);
+            byNode = threadRepository.save(byNode);
+
+            sync(true);
+            receiveDiffNote();
+
+            assertUntouched(byNative, null);
+            PullRequestReviewThread node =
+                    threadRepository.findById(byNode.getId()).orElseThrow();
+            assertThat(node.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+        }
+
+        @Test
+        void shouldNotTakeAThreadOfAnotherInstanceForThisOne() {
+            IdentityProvider otherInstance = gitProviderRepository.save(
+                    new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.other.example"));
+            PullRequestReviewThread foreign = new PullRequestReviewThread();
+            foreign.setNativeId(THREAD_NATIVE_ID);
+            foreign.setNodeId(DISCUSSION_GID);
+            foreign.setProvider(otherInstance);
+            foreign.setPullRequest(anotherMergeRequest());
+            foreign.setState(PullRequestReviewThread.State.UNRESOLVED);
+            foreign = threadRepository.save(foreign);
+
+            sync(true);
+
+            assertThat(thread().getId()).isNotEqualTo(foreign.getId());
+            assertThat(thread().getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            PullRequestReviewThread untouched =
+                    threadRepository.findById(foreign.getId()).orElseThrow();
+            assertThat(untouched.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(untouched.getResolvedAt()).isNull();
+        }
+
+        /** The stored {@code thread} still as stored, and no comment linked for the note. */
+        private void assertUntouched(PullRequestReviewThread thread, @Nullable String nodeId) {
+            PullRequestReviewThread stored =
+                    threadRepository.findById(thread.getId()).orElseThrow();
+            assertThat(stored.getNodeId()).isEqualTo(nodeId);
+            assertThat(stored.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(stored.getResolvedAt()).isNull();
+            assertThat(reviewCommentRepository.findByNativeIdAndProviderId(NATIVE_MR_NOTE_ID, providerId()))
+                    .isEmpty();
+        }
+
+        /** Handles MR !2's note hook as a diff note on a line of this discussion, in the delivery's transaction. */
+        private void receiveDiffNote() throws IOException {
+            ObjectNode payload =
+                    (ObjectNode) objectMapper.readTree(new ClassPathResource("gitlab/note.mergerequest.create.json")
+                            .getContentAsString(StandardCharsets.UTF_8));
+            ObjectNode attributes = (ObjectNode) payload.get("object_attributes");
+            attributes.put("type", "DiffNote");
+            attributes.put("discussion_id", DISCUSSION_ID);
+            ObjectNode position = attributes.putObject("position");
+            position.put("position_type", "text");
+            position.put("new_path", "src/auth.ts");
+            position.put("old_path", "src/auth.ts");
+            position.put("new_line", 12);
+            position.put("base_sha", "a".repeat(40));
+            position.put("start_sha", "a".repeat(40));
+            position.put("head_sha", "b".repeat(40));
+            GitLabNoteEventDTO event = objectMapper.treeToValue(payload, GitLabNoteEventDTO.class);
+            transactionTemplate.executeWithoutResult(status -> handler.handleEvent(event));
+        }
+
+        /** Runs the discussion sync of MR !2 over one page holding this discussion, resolved as {@code resolved} says. */
+        private void sync(@Nullable Boolean resolved) {
+            syncPages(onePage(discussion(resolved)));
+        }
+
+        /** Runs the discussion sync of MR !2 over {@code pages}, answered in order. */
+        @SafeVarargs
+        private void syncPages(Map<String, @Nullable Object>... pages) {
+            service(pages).syncDiscussionsForMergeRequest(1L, savedRepo, MR_IID, savedPr);
+        }
+
+        /** The discussion sync, reading MR !2's discussions from {@code pages} in order. */
+        @SafeVarargs
+        private GitLabDiscussionSyncService service(Map<String, @Nullable Object>... pages) {
+            AtomicInteger next = new AtomicInteger();
+            GitLabGraphQlClientProvider clients = mock(GitLabGraphQlClientProvider.class);
+            when(clients.forScope(any())).thenReturn(ScriptedGraphQlClient.of(request -> {
+                Map<String, @Nullable Object> page = pages[Math.min(next.getAndIncrement(), pages.length - 1)];
+                return Mono.just(GraphQlResponses.of(
+                        Map.of("project", Map.of("mergeRequest", Map.of("discussions", page))), List.of()));
+            }));
+            return new GitLabDiscussionSyncService(
+                    clients,
+                    graphQlResponseHandler,
+                    threadProcessor,
+                    reviewCommentProcessor,
+                    issueCommentProcessor,
+                    reviewReconciler,
+                    gitLabProperties);
+        }
+
+        /** The discussion sync, running {@code first} when GitLab is first asked, then reading {@code pages} in order. */
+        @SafeVarargs
+        private GitLabDiscussionSyncService serviceRunningFirst(
+                Runnable first, Map<String, @Nullable Object>... pages) {
+            AtomicInteger asked = new AtomicInteger();
+            GitLabGraphQlClientProvider clients = mock(GitLabGraphQlClientProvider.class);
+            AtomicInteger next = new AtomicInteger();
+            when(clients.forScope(any())).thenReturn(ScriptedGraphQlClient.of(request -> {
+                if (asked.getAndIncrement() == 0) {
+                    first.run();
+                }
+                Map<String, @Nullable Object> page = pages[Math.min(next.getAndIncrement(), pages.length - 1)];
+                return Mono.just(GraphQlResponses.of(
+                        Map.of("project", Map.of("mergeRequest", Map.of("discussions", page))), List.of()));
+            }));
+            return new GitLabDiscussionSyncService(
+                    clients,
+                    graphQlResponseHandler,
+                    threadProcessor,
+                    reviewCommentProcessor,
+                    issueCommentProcessor,
+                    reviewReconciler,
+                    gitLabProperties);
+        }
+
+        private Map<String, @Nullable Object> onePage(Map<String, @Nullable Object> discussion) {
+            return page(List.of(discussion), false, null);
+        }
+
+        /** A page of MR !2's discussions connection. */
+        private Map<String, @Nullable Object> page(
+                List<Map<String, @Nullable Object>> nodes, boolean hasNextPage, @Nullable String endCursor) {
+            assertVendorCouldReturn(
+                    GITLAB, "GetMergeRequestDiscussions", "project.mergeRequest.discussions.nodes", nodes);
+            Map<String, @Nullable Object> pageInfo = new HashMap<>();
+            pageInfo.put("hasNextPage", hasNextPage);
+            pageInfo.put("endCursor", endCursor);
+            Map<String, @Nullable Object> page = new HashMap<>();
+            page.put("pageInfo", pageInfo);
+            page.put("nodes", nodes);
+            return page;
+        }
+
+        @SuppressWarnings("unchecked")
+        private Map<String, @Nullable Object> pageInfoOf(Map<String, @Nullable Object> page) {
+            return (Map<String, @Nullable Object>) Objects.requireNonNull(page.get("pageInfo"));
+        }
+
+        /**
+         * This discussion with its diff note, resolved as {@code resolved} says; null leaves the field out, as a read
+         * that could not state it.
+         */
+        private Map<String, @Nullable Object> discussion(@Nullable Boolean resolved) {
+            return Boolean.TRUE.equals(resolved)
+                    ? resolvedBy(user(NATIVE_TUTOR_ID, "tutor"), RESOLVED_AT)
+                    : discussion(resolved, null, null);
+        }
+
+        /** This discussion resolved at {@code at} by {@code resolver}, or by nobody the read names. */
+        private Map<String, @Nullable Object> resolvedBy(@Nullable Map<String, @Nullable Object> resolver, Instant at) {
+            return discussion(true, resolver, at);
+        }
+
+        private Map<String, @Nullable Object> discussion(
+                @Nullable Boolean resolved,
+                @Nullable Map<String, @Nullable Object> resolver,
+                @Nullable Instant resolvedAt) {
+            Map<String, @Nullable Object> diffRefs = new HashMap<>();
+            diffRefs.put("baseSha", "a".repeat(40));
+            diffRefs.put("headSha", "b".repeat(40));
+            diffRefs.put("startSha", "a".repeat(40));
+            Map<String, @Nullable Object> position = new HashMap<>();
+            position.put("filePath", "src/auth.ts");
+            position.put("newPath", "src/auth.ts");
+            position.put("oldPath", "src/auth.ts");
+            position.put("newLine", 12);
+            position.put("oldLine", null);
+            position.put("positionType", "text");
+            position.put("diffRefs", diffRefs);
+            Map<String, @Nullable Object> note = new HashMap<>();
+            note.put("id", "gid://gitlab/DiffNote/" + NATIVE_MR_NOTE_ID);
+            note.put("body", FIXTURE_MR_NOTE_BODY);
+            note.put("system", false);
+            note.put("internal", false);
+            note.put("url", savedPr.getHtmlUrl() + "#note_" + NATIVE_MR_NOTE_ID);
+            note.put("position", position);
+            note.put("author", user(NATIVE_USER_ID, FIXTURE_AUTHOR_LOGIN));
+            note.put("createdAt", "2026-01-31T18:03:56Z");
+            note.put("updatedAt", "2026-01-31T18:03:56Z");
+            Map<String, @Nullable Object> notePage = new HashMap<>();
+            notePage.put("hasNextPage", false);
+            Map<String, @Nullable Object> discussion = new HashMap<>();
+            discussion.put("id", DISCUSSION_GID);
+            if (resolved != null) {
+                discussion.put("resolved", resolved);
+                discussion.put("resolvedAt", resolvedAt == null ? null : resolvedAt.toString());
+                discussion.put("resolvedBy", resolver);
+            }
+            discussion.put("notes", Map.of("pageInfo", notePage, "nodes", List.of(note)));
+            return discussion;
+        }
+
+        private Map<String, @Nullable Object> user(long id, String username) {
+            Map<String, @Nullable Object> user = new HashMap<>();
+            user.put("id", "gid://gitlab/User/" + id);
+            user.put("username", username);
+            user.put("name", username);
+            return user;
+        }
+
+        private PullRequestReviewThread storeThread(PullRequest parent, @Nullable String nodeId) {
+            PullRequestReviewThread thread = new PullRequestReviewThread();
+            thread.setNativeId(THREAD_NATIVE_ID);
+            if (nodeId != null) {
+                thread.setNodeId(nodeId);
+            }
+            thread.setProvider(savedProvider);
+            thread.setPullRequest(parent);
+            thread.setState(PullRequestReviewThread.State.UNRESOLVED);
+            return threadRepository.save(thread);
+        }
+
+        private PullRequest anotherMergeRequest() {
+            PullRequest pr = new PullRequest();
+            pr.setNativeId(NATIVE_MR_ID + 1);
+            pr.setProvider(savedProvider);
+            pr.setNumber(MR_IID + 1);
+            pr.setTitle("Another merge request");
+            pr.setState(Issue.State.OPEN);
+            pr.setHtmlUrl("https://gitlab.lrz.de/hephaestustest/demo-repository/-/merge_requests/3");
+            pr.setMerged(false);
+            pr.setAdditions(0);
+            pr.setDeletions(0);
+            pr.setChangedFiles(0);
+            pr.setCommits(0);
+            pr.setHeadRefName("feature/other");
+            pr.setBaseRefName("main");
+            pr.setCreatedAt(Instant.now());
+            pr.setUpdatedAt(Instant.now());
+            pr.setRepository(savedRepo);
+            return pullRequestRepository.save(pr);
+        }
+
+        private PullRequestReviewThread thread() {
+            return threadRepository
+                    .findByNativeIdAndProviderId(THREAD_NATIVE_ID, providerId())
+                    .orElseThrow();
+        }
+
+        private PullRequestReviewComment comment() {
+            return reviewCommentRepository
+                    .findByNativeIdAndProviderId(NATIVE_MR_NOTE_ID, providerId())
+                    .orElseThrow();
+        }
+
+        private @Nullable Long commentThreadId() {
+            return transactionTemplate.execute(status -> {
+                PullRequestReviewThread thread = comment().getThread();
+                return thread == null ? null : thread.getId();
+            });
+        }
+
+        private @Nullable String resolverLogin() {
+            return transactionTemplate.execute(status -> {
+                var resolver = thread().getResolvedBy();
+                return resolver == null ? null : resolver.getLogin();
+            });
+        }
+
+        private @Nullable Instant discussionsObservedAt() {
+            return pullRequestRepository.findById(savedPr.getId()).orElseThrow().getDiscussionsObservedAt();
+        }
+
+        private long providerId() {
+            return Objects.requireNonNull(savedProvider.getId());
         }
     }
 

@@ -481,7 +481,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
                 IntegrationKind.GITLAB,
                 "GITLAB",
                 new ConnectionConfig.GitLabConfig(
-                        INSTANCE, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of()));
+                        INSTANCE, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
     }

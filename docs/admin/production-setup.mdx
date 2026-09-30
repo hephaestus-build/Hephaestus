@@ -254,6 +254,25 @@ GitLab before 18.6 sends merge request events without each reviewer's review sta
 versions, where a reviewer's review stands — approved, changes requested, or asked to review again —
 reaches Hephaestus on the scheduled sync (`MONITORING_SYNC_CRON`), not when GitLab reports the event.
 
+GitLab tokens are inspected daily at **03:00 UTC** on the `server` runtime role, independently of
+repository sync and webhook registration. A token within `hephaestus.webhook.token-rotation.threshold-days`
+(default 7 days) is self-rotated with the configured validity (default 90 days). The token needs the
+GitLab `api` or `self_rotate` scope and an instance version that supports self-rotation. The old token
+is revoked immediately; do not share a token that Hephaestus rotates with other applications.
+Rotation is serialized with token replacement and is never automatically retried after an uncertain
+response. Replace the token if the provider rotated it but its response was lost.
+
+If rotation fails or is not permitted, workspace owners and administrators who opted into
+**Workspace alerts** receive one email for the recorded problem. A token refused by GitLab records a
+separate credential problem and sends one alert. Rotation or replacement clears the problem and
+sends the recovery email. Repeated checks do not send duplicate alerts for the same problem revision.
+The GitLab connection page shows the observed expiry date, **no expiry**, or an unknown expiry until
+inspection succeeds; it never shows the token. Replace a refused or expiring token there.
+
+GitHub App installation tokens renew automatically and need no expiry action. **GitHub personal
+access token expiry is not tracked** in 1.0; administrators must track and replace those tokens.
+Slack revocation alerts and Outline expiry information are unchanged.
+
 ### Practice review
 
 Practice review has its own page: **[Practice Review](./practice-review)** covers the deployment
@@ -339,7 +358,7 @@ Rather than a policy knob, the guard is structural: a model cannot be enabled at
 declares its price or marks it **No metered API cost**, so a correctly administered instance does not
 reach an UNVERIFIABLE month in the first place.
 
-**Alerting hook:** there is no built-in push notification when a workspace crosses its cap — wire your own alert off the Micrometer counters the budget service already emits: `llm.budget.exhausted` (incremented once per usage event whose confirmed contribution pushes a workspace's month-to-date spend across the **instance** cap — the purse you fund, so the one you are alerted on) and `llm.budget.blocked` (tagged `surface` by admission point, including `agent_job` and `mentor`; the agent-job tag also carries `cap`, naming which purse refused the work). Each EXHAUSTED transition also logs a WARN, visible in Sentry if configured.
+**Alerting hook:** there is no built-in push notification when a workspace crosses its cap — use the private endpoint and example rules in [Scrape metrics](./observability.mdx#scrape-metrics) to alert on the Micrometer counters the budget service emits: `llm.budget.exhausted` (incremented once per usage event whose confirmed contribution pushes a workspace's month-to-date spend across the **instance** cap — the purse you fund, so the one you are alerted on) and `llm.budget.blocked` (tagged `surface` by admission point, including `agent_job` and `mentor`; the agent-job tag also carries `cap`, naming which purse refused the work). Each EXHAUSTED transition also logs a WARN, visible in Sentry if configured.
 
 Reasoning tokens are retained as telemetry when the compatible endpoint reports them. They are not
 priced separately: OpenAI-compatible usage includes reasoning tokens in billable output tokens, so a

@@ -902,7 +902,8 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                         coverageService,
                         new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
                         mock(ObservationRepository.class),
-                        mock(ObservationVisibilityPolicy.class));
+                        mock(ObservationVisibilityPolicy.class),
+                        mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class));
                 // One resolver for both, as in production: the ledger key and the gate must agree on which
                 // workspace owns the repository.
                 var listener = new AgentJobEventListener(

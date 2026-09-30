@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +15,16 @@ import org.springframework.data.repository.query.Param;
  */
 @WorkspaceAgnostic("Threads scoped through pull_request_id -> repository.workspace_id")
 public interface PullRequestReviewThreadRepository extends JpaRepository<PullRequestReviewThread, Long> {
+    @Modifying
+    @Query(
+            "UPDATE PullRequestReviewThread t SET t.rootComment = NULL WHERE t.pullRequest.id = :parentId AND t.rootComment.id IN :ids")
+    int clearDeletedRoots(@Param("parentId") long parentId, @Param("ids") List<Long> ids);
+
+    @Modifying
+    @Query(
+            "DELETE FROM PullRequestReviewThread t WHERE t.pullRequest.id = :parentId AND t.id IN :ids AND NOT EXISTS (SELECT c.id FROM PullRequestReviewComment c WHERE c.thread = t)")
+    int deleteEmptyReconciled(@Param("parentId") long parentId, @Param("ids") List<Long> ids);
+
     Optional<PullRequestReviewThread> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
     Optional<PullRequestReviewThread> findByNodeIdAndProviderId(String nodeId, Long providerId);

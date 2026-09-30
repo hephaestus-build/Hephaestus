@@ -46,6 +46,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedRev
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
@@ -54,8 +56,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabPullRequestReviewCommentProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -77,7 +83,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -90,6 +95,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -224,6 +230,21 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     @Autowired
     private NatsMessageDeserializer natsMessageDeserializer;
+
+    @Autowired
+    private PullRequestReviewThreadRepository threadRepository;
+
+    @Autowired
+    private GitLabPullRequestReviewThreadProcessor threadProcessor;
+
+    @Autowired
+    private GitLabPullRequestReviewCommentProcessor reviewCommentProcessor;
+
+    @Autowired
+    private GitLabIssueCommentProcessor issueCommentProcessor;
+
+    @Autowired
+    private GitLabReviewReconciler reviewReconciler;
 
     private Repository savedRepo;
     private IdentityProvider savedProvider;
@@ -639,26 +660,30 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 assertThat(syncWritten.await(30, TimeUnit.SECONDS)).isTrue();
 
                 Future<?> webhook = threads.submit(() -> handler.handle(webhookPayload, STORED_AT));
-                String waitingStatement = statementWaitingOnALock();
+                String waitedOn = lockAnotherBackendWaitsOn();
                 releaseSync.countDown();
                 sync.get(30, TimeUnit.SECONDS);
                 webhook.get(30, TimeUnit.SECONDS);
 
                 assertThat(reviewerStates()).containsExactlyInAnyOrderEntriesOf(SYNCED);
                 assertThat(reviewersObservedAt()).isEqualTo(syncedAt);
-                assertThat(waitingStatement.toLowerCase(Locale.ROOT)).containsPattern("for (no key )?update");
+                // A row lock: a plain read never waits on another transaction.
+                assertThat(waitedOn).isIn("transactionid", "tuple");
             } finally {
                 releaseSync.countDown();
                 threads.shutdownNow();
             }
         }
 
-        /** The statement of the one other backend waiting on a lock in this database, once there is one. */
-        private String statementWaitingOnALock() throws InterruptedException {
+        /**
+         * What the one other backend waiting on a lock in this database waits on, once there is one. Its statement text
+         * is cut at {@code track_activity_query_size}, so it cannot show the locking clause of a long select.
+         */
+        private String lockAnotherBackendWaitsOn() throws InterruptedException {
             Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
             while (Instant.now().isBefore(deadline)) {
                 List<@Nullable String> waiting = jdbcTemplate.queryForList("""
-                        SELECT query FROM pg_stat_activity
+                        SELECT wait_event FROM pg_stat_activity
                         WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()
                         """, String.class);
                 if (!waiting.isEmpty()) {
@@ -1636,6 +1661,157 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 .setReviewDecision(decision));
     }
 
+    // Discussion resolution
+
+    /**
+     * An update hook names no thread, and GitLab sends one when the last open thread is resolved: the discussions are
+     * read after it and their resolution recorded where the delivery may still write.
+     */
+    @Nested
+    class DiscussionResolution {
+
+        private static final String DISCUSSION_GID = "gid://gitlab/Discussion/" + "d".repeat(40);
+        private static final long THREAD_NATIVE_ID =
+                GitLabPullRequestReviewThreadProcessor.deterministicNativeId(DISCUSSION_GID);
+
+        /** A thread stored by a diff note webhook before webhooks carried the discussion's GID. */
+        @BeforeEach
+        void storeTheMergeRequestAndTheThreadItsDiffNoteWebhookLeft() throws Exception {
+            receive(loadPayload("merge_request.update"));
+            transactionTemplate.executeWithoutResult(status -> threadProcessor.findOrCreateWebhookThread(
+                    new GitLabPullRequestReviewThreadProcessor.WebhookThreadData(
+                            THREAD_NATIVE_ID, "src/auth.ts", 12, Instant.now(), Instant.now(), null),
+                    mr2(),
+                    savedProvider));
+            eventListener.clear();
+        }
+
+        @Test
+        void shouldRecordTheResolutionAnUpdateWithoutChangesLeftUnsaid() throws Exception {
+            handlerReadingDiscussions(() -> discussions(true)).dispatchEvent(unchangedUpdate(), Instant.now());
+
+            PullRequestReviewThread thread = thread();
+            assertThat(thread.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            assertThat(thread.getNodeId()).isEqualTo(DISCUSSION_GID);
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewThreadResolved.class))
+                    .hasSize(1);
+            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+                    .extracting(ScmDomainEvent.PullRequestUpdated::changedFields)
+                    .allSatisfy(changed -> assertThat(changed).doesNotContain("title", "body"));
+        }
+
+        @Test
+        void shouldKeepTheResolutionWhenGitLabCouldNotBeRead() throws Exception {
+            handlerReadingDiscussions(
+                            () -> GraphQlResponses.of(null, List.of(GraphQlResponses.error("Internal server error"))))
+                    .dispatchEvent(unchangedUpdate(), Instant.now());
+
+            PullRequestReviewThread thread = thread();
+            assertThat(thread.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(thread.getNodeId()).isNull();
+        }
+
+        @Test
+        void shouldRecordNoResolutionOnceTheProjectLeftTheWorkspaceDuringTheRead() throws Exception {
+            handlerReadingDiscussions(() -> {
+                        transactionTemplate.executeWithoutResult(status -> repositoryRepository
+                                .findById(savedRepo.getId())
+                                .orElseThrow()
+                                .setOrganization(null));
+                        return discussions(true);
+                    })
+                    .dispatchEvent(unchangedUpdate(), Instant.now());
+
+            PullRequestReviewThread thread = thread();
+            assertThat(thread.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(thread.getNodeId()).isNull();
+        }
+
+        /** MR !2's update hook at a later time with no {@code changes}, as GitLab sends it for a resolution. */
+        private GitLabMergeRequestEventDTO unchangedUpdate() throws IOException {
+            ObjectNode payload =
+                    (ObjectNode) objectMapper.readTree(new ClassPathResource("gitlab/merge_request.update.json")
+                            .getContentAsString(StandardCharsets.UTF_8));
+            ((ObjectNode) payload.get("object_attributes")).put("updated_at", "2026-01-31 19:20:00 +0100");
+            payload.putObject("changes");
+            return objectMapper.treeToValue(payload, GitLabMergeRequestEventDTO.class);
+        }
+
+        /** One page holding MR !2's diff discussion, resolved as {@code resolved} says. */
+        private ClientGraphQlResponse discussions(boolean resolved) {
+            Map<String, @Nullable Object> position = new HashMap<>();
+            position.put("filePath", "src/auth.ts");
+            position.put("newPath", "src/auth.ts");
+            position.put("oldPath", "src/auth.ts");
+            position.put("newLine", 12);
+            position.put("oldLine", null);
+            position.put("positionType", "text");
+            Map<String, @Nullable Object> note = new HashMap<>();
+            note.put("id", "gid://gitlab/DiffNote/" + 4_406_190L);
+            note.put("body", "Please handle the error here.");
+            note.put("system", false);
+            note.put("internal", false);
+            note.put("position", position);
+            note.put("author", userNode(NATIVE_TUTOR_ID, "tutor"));
+            note.put("createdAt", "2026-01-31T18:05:00Z");
+            note.put("updatedAt", "2026-01-31T18:05:00Z");
+            Map<String, @Nullable Object> notePage = new HashMap<>();
+            notePage.put("hasNextPage", false);
+            Map<String, @Nullable Object> discussion = new HashMap<>();
+            discussion.put("id", DISCUSSION_GID);
+            discussion.put("resolved", resolved);
+            discussion.put("resolvedAt", resolved ? "2026-01-31T18:19:00Z" : null);
+            discussion.put("resolvedBy", resolved ? userNode(NATIVE_AUTHOR_ID, FIXTURE_AUTHOR_LOGIN) : null);
+            discussion.put("notes", Map.of("pageInfo", notePage, "nodes", List.of(note)));
+            List<Map<String, @Nullable Object>> nodes = List.of(discussion);
+            assertVendorCouldReturn(
+                    GITLAB, "GetMergeRequestDiscussions", "project.mergeRequest.discussions.nodes", nodes);
+            Map<String, @Nullable Object> pageInfo = new HashMap<>();
+            pageInfo.put("hasNextPage", false);
+            pageInfo.put("endCursor", null);
+            return GraphQlResponses.of(
+                    Map.of(
+                            "project",
+                            Map.of(
+                                    "mergeRequest",
+                                    Map.of("discussions", Map.of("pageInfo", pageInfo, "nodes", nodes)))),
+                    List.of());
+        }
+
+        /** The merge request handler, reading the discussions GitLab answers with {@code answer} and nothing else. */
+        private GitLabMergeRequestMessageHandler handlerReadingDiscussions(Supplier<ClientGraphQlResponse> answer) {
+            GitLabGraphQlClientProvider clients = mock(GitLabGraphQlClientProvider.class);
+            when(clients.forScope(any())).thenReturn(ScriptedGraphQlClient.of(request -> Mono.fromSupplier(answer)));
+            return new GitLabMergeRequestMessageHandler(
+                    mergeRequestProcessor,
+                    webhookContextResolver,
+                    mock(GitLabClosingIssueClient.class),
+                    mock(GitLabMergeRequestReadinessReader.class),
+                    new GitLabDiscussionSyncService(
+                            clients,
+                            graphQlResponseHandler,
+                            threadProcessor,
+                            reviewCommentProcessor,
+                            issueCommentProcessor,
+                            reviewReconciler,
+                            gitLabProperties),
+                    natsMessageDeserializer,
+                    transactionTemplate);
+        }
+
+        private PullRequestReviewThread thread() {
+            return threadRepository
+                    .findByNativeIdAndProviderId(THREAD_NATIVE_ID, persistedId(savedProvider))
+                    .orElseThrow();
+        }
+
+        private PullRequest mr2() {
+            return pullRequestRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                    .orElseThrow();
+        }
+    }
+
     // Edge Cases
 
     @Nested
@@ -2191,6 +2367,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     webhookContextResolver,
                     mock(GitLabClosingIssueClient.class),
                     reader,
+                    mock(GitLabDiscussionSyncService.class),
                     natsMessageDeserializer,
                     transactionTemplate);
         }

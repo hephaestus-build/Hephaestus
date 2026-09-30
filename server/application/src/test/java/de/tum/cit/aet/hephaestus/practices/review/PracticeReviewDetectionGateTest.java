@@ -79,7 +79,8 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                 coverageService,
                 new AutomatedReviewFence(java.util.Map.of()),
                 mock(ObservationRepository.class),
-                mock(ObservationVisibilityPolicy.class));
+                mock(ObservationVisibilityPolicy.class),
+                mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class));
         when(coverageService.assess(
                         any(Workspace.class),
                         nullable(String.class),
@@ -931,7 +932,8 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                                     null,
                                     null))),
                     mock(ObservationRepository.class),
-                    mock(ObservationVisibilityPolicy.class));
+                    mock(ObservationVisibilityPolicy.class),
+                    mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class));
             PullRequest pr = createPullRequest();
             Practice adopted = createPractice(SIGNAL);
             adopted.setSlug("withdrawn");

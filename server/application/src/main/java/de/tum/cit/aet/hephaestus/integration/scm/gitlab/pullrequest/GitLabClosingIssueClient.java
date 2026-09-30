@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -53,6 +54,7 @@ public class GitLabClosingIssueClient {
                             projectId,
                             mrIid)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                     .retrieve()
                     .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
                     .block(REQUEST_TIMEOUT);

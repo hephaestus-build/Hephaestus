@@ -63,7 +63,9 @@ if history never changes underneath an instance that already ran part of it.
    and ignores deleted changesets, so those edits desynchronise installed instances without any
    error.
 2. **`master.xml` is append-only.** Never remove or reorder existing `<include>` entries;
-   new changelogs go at the end.
+   new changelogs go at the end. The maintainer-approved v0.77.4 cut-point guard is a
+   changelog-level precondition at the head, not a change to released changesets. It protects
+   both startup and `changeLogSyncToTag` without changing checksums or include order.
 3. **Destructive changes follow deprecate-then-remove across two releases.** Renaming or
    dropping a table/column that shipped in a release happens in two steps: release *N*
    stops writing/reading it (and migrates data if needed), release *N+1* drops it. A single
@@ -100,11 +102,12 @@ changeset that drops the object also removes its exclusion.
    `db/changelog/` was modified, renamed or deleted, or if an existing `<include>` in
    `master.xml` was removed, reordered or had its attributes changed. The v0.77.4 transition additionally requires the
    pinned original master and byte-identical archives; it is not a general squash bypass.
-3. **Seeded release upgrade** — `release-upgrade.yml` boots the previous stable release, seeds
-   account and workspace data, synchronizes the baseline when crossing its verified cut-point,
-   then boots the candidate against the same database and checks
-   readiness, the seeded relationships, the practice catalog and authenticated reads. Release
-   publication depends on it; it also runs weekly.
+3. **Seeded release upgrade** — `release-upgrade.yml` runs three independent paths: the previous
+   stable release, pinned v0.77.4 → baseline synchronization → target release, and pinned v0.76.0
+   → expected refusal. Successful upgrades check readiness, seeded relationships, the practice
+   catalog and authenticated reads. The refusal path checks both startup and `changeLogSyncToTag`,
+   the required v0.77.4 message, unchanged data and history, and a released lock. Release publication
+   depends on every path; the same matrix also runs weekly.
 
 The empty-database replay sets no context filter. It evaluates the full chain, but preconditions can
 skip changesets; a successful replay does not prove that every change ran. It also does not reproduce
@@ -115,6 +118,33 @@ Empty-database replay cannot prove that existing rows satisfy a new `NOT NULL` o
 and it does not exercise rollback. Preconditions run during replay, but only against the states that
 replay reaches. The JPA diff cannot establish equivalence for objects Hibernate does not model, such
 as triggers, partitioning and partial-index predicates; verify those through database-level tests.
+
+## Baseline release gates
+
+The v0.77.4 baseline remains the baseline for 1.0. **A future baseline is permitted only at a
+major-version boundary and only with automated synchronization.** Released migrations and the
+archived chain remain immutable.
+
+A global Liquibase precondition checks the database cut-point before either update or synchronization.
+Liquibase permits one global `preConditions` container, so the guard shares it with the PostgreSQL 18
+check. Its failure message covers both prerequisites. Migration identities use id, author and logical
+filename, not just id or row count. An empty history is permitted for fresh initialization; the
+baseline's existing schema precondition still refuses a partially populated schema.
+
+[Liquibase preconditions](https://docs.liquibase.com/concepts/changelogs/preconditions.html) use lazy
+evaluation, so a missing history table never reaches the row query.
+[Liquibase 5.0.4 validates the changelog](https://github.com/liquibase/liquibase/blob/v5.0.4/liquibase-standard/src/main/java/liquibase/command/core/helpers/DatabaseChangelogCommandStep.java)
+before `changeLogSyncToTag`; changeset-level preconditions cannot protect that command.
+The baseline integration suite proves refusal without DDL, fresh initialization, native-object
+equivalence, synchronization without DDL or data loss, subsequent upgrades and lock recovery in
+both `dev` and `prod`.
+
+- Record a seven-calendar-day staging soak against a restored production snapshot before production.
+- Freeze new changelogs for at least 48 hours after production deployment.
+- Keep `docs/db/archive/v0.77.4/` for at least two release cycles. Historical regression tests use it
+  only as test resources; it must not enter the application JAR.
+- Announce the cut-point and synchronization requirement before merging. Developer reset:
+  `vp run dev:reset`, then `vp run dev`. This destroys local database data.
 
 ## Resources
 

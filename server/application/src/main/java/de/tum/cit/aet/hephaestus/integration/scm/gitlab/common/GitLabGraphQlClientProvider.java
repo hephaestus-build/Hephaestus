@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabCredentialHealthFilter;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import java.util.concurrent.TimeUnit;
@@ -11,9 +12,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.graphql.client.ClientGraphQlRequest;
+import org.springframework.graphql.client.ClientGraphQlResponse;
+import org.springframework.graphql.client.GraphQlClientInterceptor;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 /** Creates authenticated GitLab GraphQL clients from the guarded base client. */
 @Component
@@ -27,6 +32,7 @@ public class GitLabGraphQlClientProvider {
      */
     public static final String SCOPE_ID_ATTRIBUTE = "hephaestus.integration.gitlab.scopeId";
 
+    private final GitlabCredentialHealthFilter credentialHealth;
     private final HttpGraphQlClient baseClient;
     private final GitLabTokenService tokenService;
     private final CircuitBreaker circuitBreaker;
@@ -38,7 +44,9 @@ public class GitLabGraphQlClientProvider {
             GitLabTokenService tokenService,
             @Qualifier("gitlabGraphQlCircuitBreaker") CircuitBreaker circuitBreaker,
             GitLabRateLimitTracker rateLimitTracker,
-            SilentModeGraphQlClientFactory clientFactory) {
+            SilentModeGraphQlClientFactory clientFactory,
+            GitlabCredentialHealthFilter credentialHealth) {
+        this.credentialHealth = credentialHealth;
         this.baseClient = gitLabGraphQlClient;
         this.tokenService = tokenService;
         this.circuitBreaker = circuitBreaker;
@@ -102,7 +110,29 @@ public class GitLabGraphQlClientProvider {
         String serverUrl = tokenService.resolveServerUrl(scopeId);
 
         return clientFactory.withBearerTokenAndAttribute(
-                baseClient, serverUrl + GITLAB_GRAPHQL_PATH, token, SCOPE_ID_ATTRIBUTE, scopeId);
+                baseClient,
+                serverUrl + GITLAB_GRAPHQL_PATH,
+                token,
+                SCOPE_ID_ATTRIBUTE,
+                scopeId,
+                new GraphQlClientInterceptor() {
+                    @Override
+                    public Mono<ClientGraphQlResponse> intercept(ClientGraphQlRequest request, Chain chain) {
+                        return chain.next(request).flatMap(response -> {
+                            boolean refused = response.getErrors().stream().anyMatch(error -> {
+                                Object type = error.getExtensions().get("type");
+                                if (type == null) type = error.getExtensions().get("code");
+                                return "UNAUTHENTICATED".equals(type) || "UNAUTHORIZED".equals(type);
+                            });
+                            if (!refused
+                                    && (!response.isValid()
+                                            || !response.getErrors().isEmpty())) return Mono.just(response);
+                            return credentialHealth
+                                    .observe(scopeId, token, refused)
+                                    .thenReturn(response);
+                        });
+                    }
+                });
     }
 
     /**

@@ -8,6 +8,7 @@ import {
 	getRepositoriesToMonitorOptions,
 	getWorkspaceOptions,
 	removeRepositoryToMonitorMutation,
+	readOptions,
 	updateTokenMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { Workspace } from "@/api/types.gen";
@@ -48,6 +49,13 @@ export function useScmIntegration(workspaceSlug: string) {
 	const hasConnection = entry?.connected === true;
 	const isConnectionActive = entry?.connectionState === "ACTIVE";
 	const connectionId = hasConnection ? entry.connectionId : undefined;
+
+	const connectionQueryOptions = readOptions({ path: { workspaceSlug, id: connectionId ?? -1 } });
+	const connectionQuery = useQuery({
+		...connectionQueryOptions,
+		enabled: kind === "GITLAB" && connectionId != null,
+		refetchInterval: 60_000,
+	});
 
 	const sync = useConnectionSync({
 		workspaceSlug,
@@ -103,6 +111,7 @@ export function useScmIntegration(workspaceSlug: string) {
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: workspaceQueryOptions.queryKey }),
 				queryClient.invalidateQueries({ queryKey: catalogQueryOptions.queryKey }),
+				queryClient.invalidateQueries({ queryKey: connectionQueryOptions.queryKey }),
 			]);
 			sync.invalidateSyncActivity();
 			toast.success("Personal access token replaced");
@@ -132,6 +141,11 @@ export function useScmIntegration(workspaceSlug: string) {
 		jobHistoryProps: sync.jobHistoryProps,
 		tokenSettingsProps: {
 			providerLabel: label,
+			tokenExpiresAt: connectionQuery.data?.tokenExpiresAt,
+			tokenExpiryCheckedAt: connectionQuery.data?.tokenExpiryCheckedAt,
+			attentionProblem: connectionQuery.data?.attentionProblem,
+			isLoadingTokenMetadata: connectionQuery.isLoading,
+			tokenMetadataError: connectionQuery.error,
 			isSaving: replaceToken.isPending,
 			error: replaceToken.error,
 			onSave: handleReplaceToken,

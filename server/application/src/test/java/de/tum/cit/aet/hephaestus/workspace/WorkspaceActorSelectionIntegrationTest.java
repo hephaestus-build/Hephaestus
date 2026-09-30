@@ -161,7 +161,8 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
                         null,
                         null,
                         ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of()));
+                        Set.of(),
+                        null));
         Practice practice = persistPractice(workspace, null, "lrz-practice", "LRZ practice", null);
         AgentJob run = persistPullRequestReview(workspace, 3, NOW.minus(Duration.ofDays(1)));
         UUID observation = observe(

@@ -651,6 +651,12 @@ const connectionDetailSchemaResponseTransformer = (data: any) => {
   if (data.credentialsUnreadableSince) {
     data.credentialsUnreadableSince = new Date(data.credentialsUnreadableSince);
   }
+  if (data.tokenExpiresAt) {
+    data.tokenExpiresAt = new Date(data.tokenExpiresAt);
+  }
+  if (data.tokenExpiryCheckedAt) {
+    data.tokenExpiryCheckedAt = new Date(data.tokenExpiryCheckedAt);
+  }
   if (data.updatedAt) {
     data.updatedAt = new Date(data.updatedAt);
   }

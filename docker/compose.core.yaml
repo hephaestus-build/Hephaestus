@@ -15,8 +15,10 @@ services:
     cpus: ${WEBHOOK_SERVER_CPUS:-2.0}
     pids_limit: ${WEBHOOK_SERVER_PIDS_LIMIT:-256}
     expose:
+      - "9090"
       - "8080"
     environment:
+      MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       HEPHAESTUS_RELEASE_COMMIT: ${HEPHAESTUS_RELEASE_COMMIT:-}
       HEPHAESTUS_IMAGE_APPLICATION_SERVER: ${HEPHAESTUS_IMAGE_APPLICATION_SERVER}
       TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-0.0}
@@ -104,7 +106,7 @@ services:
       HEPHAESTUS_AGENT_IMAGE_REFERENCE: ${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
       # thc healthcheck target: readiness (reports unhealthy while NATS/JetStream is unavailable).
       THC_PORT: "8080"
-      THC_PATH: /actuator/health/readiness
+      THC_PATH: /readyz
     # nats-server only: `postgres` belongs to compose.app.yaml, and depends_on is project-scoped, so
     # naming it here orders nothing and makes this file refuse to render. Cross-project ordering is
     # the deployment workflow's; docker/self-host/compose.single-host.yaml merges all three projects
@@ -148,7 +150,7 @@ services:
       - "traefik.http.routers.https-webhook-server.priority=100"
       - "traefik.http.services.https-webhook-server.loadbalancer.server.port=8080"
       # Routing-layer probe: drops a bad backend from the LB pool.
-      - "traefik.http.services.https-webhook-server.loadbalancer.healthcheck.path=/actuator/health/readiness"
+      - "traefik.http.services.https-webhook-server.loadbalancer.healthcheck.path=/readyz"
       - "traefik.http.services.https-webhook-server.loadbalancer.healthcheck.interval=15s"
       - "traefik.http.services.https-webhook-server.loadbalancer.healthcheck.timeout=5s"
     # thc healthcheck (see docker/compose.app.yaml).

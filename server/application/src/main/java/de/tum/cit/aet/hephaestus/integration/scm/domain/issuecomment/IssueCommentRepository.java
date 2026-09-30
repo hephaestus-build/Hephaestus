@@ -1,12 +1,14 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NoteIdProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.RepositoryItemCountProjection;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -14,6 +16,13 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Comments scoped through issue_id -> repository.workspace_id")
 public interface IssueCommentRepository extends JpaRepository<IssueComment, Long> {
+    @Query("SELECT c.id AS id, c.nativeId AS nativeId FROM IssueComment c WHERE c.issue.id = :parentId")
+    List<NoteIdProjection> findNoteIdsByParentId(@Param("parentId") long parentId);
+
+    @Modifying
+    @Query("DELETE FROM IssueComment c WHERE c.issue.id = :parentId AND c.id IN :ids")
+    int deleteReconciled(@Param("parentId") long parentId, @Param("ids") Collection<Long> ids);
+
     Optional<IssueComment> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
     /**

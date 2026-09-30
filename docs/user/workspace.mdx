@@ -136,3 +136,14 @@ originally opened, including its filters and selected section.
 
 The sign-in notice and the research question are separate from workspace setup. Linking an account
 or choosing an answer does not change research participation.
+
+## GitLab token alerts
+
+Hephaestus checks GitLab tokens each day and rotates a token before it expires when GitLab permits it.
+The connection page shows its expiry date, or **no expiry**. If a token cannot be rotated or GitLab
+refuses it, replace it in workspace integration settings. Your repositories and synced work stay.
+
+Owners and administrators can enable the **Workspace alerts** email in notification settings.
+It reports a token that needs replacement and reports recovery after rotation or replacement.
+Repeated checks of the same problem do not send duplicate alerts. GitHub App tokens renew
+automatically; GitHub personal access token expiry is not tracked.
