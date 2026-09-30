@@ -1,14 +1,16 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
 
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import java.time.Duration;
-import java.time.Instant;
+import java.util.UUID;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import reactor.core.Disposable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Live handle to one attached sandbox session: bidirectional JSONL channel plus fan-out and idle
- * bookkeeping. {@link #subscribe} delivers a snapshot of the ring buffer followed by live frames,
+ * Live handle to one attached sandbox session: bidirectional JSONL channel plus fan-out.
+ * {@link #subscribe} delivers a snapshot of the ring buffer followed by live frames,
  * each subscriber on its own bounded queue + virtual-thread dispatcher. Delivery never skips a
  * frame: a full queue holds up the stream for a bounded time, and a subscriber that would miss a
  * frame — it stalled, its listener threw, or the runner wrote a line that could not be read — is cut
@@ -22,6 +24,12 @@ public interface AttachedSandbox extends AutoCloseable {
      */
     SandboxIdentity identity();
 
+    /** Bind proxy billing on the owner before a prompt can reach the runner. */
+    default void bindTurn(UUID turnId, @Nullable LlmPriceSnapshot price) {}
+
+    /** Fence late proxy calls after the turn ends. */
+    default void unbindTurn(UUID turnId) {}
+
     /**
      * Send a JSON frame to the runner's stdin. Blocks until the write completes or the configured
      * stdin timeout elapses. The bounded writer queue rejects with {@link InteractiveSandboxException}
@@ -34,9 +42,10 @@ public interface AttachedSandbox extends AutoCloseable {
 
     /**
      * @param listener invoked on a dedicated virtual thread per subscriber; may block
+     * @param onLost runs once when the subscriber loses the session; must not block
      * @return a {@link Disposable} whose {@code dispose()} is idempotent
      */
-    Disposable subscribe(Consumer<JsonNode> listener);
+    Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost);
 
     /**
      * Like {@link #subscribe}, but skips the ring-buffer replay and only delivers frames that
@@ -47,11 +56,6 @@ public interface AttachedSandbox extends AutoCloseable {
      *     Disposing the returned handle never triggers it. Must not block.
      */
     Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost);
-
-    /** Wall-clock of the last frame in either direction. */
-    Instant lastActivityAt();
-
-    Duration idleFor();
 
     /**
      * Stops the underlying container with {@code docker stop --time=graceTimeout} (SIGTERM →

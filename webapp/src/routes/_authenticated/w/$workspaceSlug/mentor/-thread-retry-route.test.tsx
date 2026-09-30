@@ -102,3 +102,68 @@ it("tries a reply saved as interrupted again after the conversation is reopened"
 	});
 	await waitFor(() => expect(screen.queryByRole("button", { name: "Try again" })).toBeNull());
 });
+
+it("shows a streamed capacity refusal as Heph is busy and lets the developer retry", async () => {
+	const stored = detail({
+		id: interruptedId,
+		role: "assistant",
+		parts: [],
+		metadata: { status: "interrupted" },
+		createdAt: "2026-09-30T00:06:21.644Z",
+	});
+	let attempts = 0;
+	server.use(
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
+		http.get("*/user/features", () => HttpResponse.json({})),
+		http.get("*/workspaces/acme/members/me", () =>
+			HttpResponse.json({ role: "MEMBER", userId: 20, userLogin: "ada" }),
+		),
+		http.get("*/workspaces/acme/onboarding/me", () =>
+			HttpResponse.json({
+				...workspaceOnboarding(),
+				aiChoice: "IN_HOUSE_ONLY",
+				aiOptions: [
+					{ choice: "IN_HOUSE_ONLY", mentorReady: true, practiceReviewsReady: true, models: [] },
+				],
+			}),
+		),
+		http.get("*/workspaces/acme/mentor/threads", () =>
+			HttpResponse.json([{ id: threadId, title: "Plan issue 12" }]),
+		),
+		http.get("*/workspaces/acme/mentor/threads/:threadId", () => HttpResponse.json(stored)),
+		http.post("*/workspaces/acme/mentor/chat", () => {
+			attempts += 1;
+			const responses = [
+				[
+					{ type: "start", messageId: answerId },
+					{ type: "error", errorText: "Heph is busy. Please try again." },
+				],
+				[
+					{ type: "start", messageId: answerId },
+					{ type: "text-start", id: "t" },
+					{ type: "text-delta", id: "t", delta: "The worker is available again." },
+					{ type: "text-end", id: "t" },
+					{ type: "finish" },
+				],
+			];
+			const chunks = responses.slice(attempts - 1, attempts).flat();
+			return new HttpResponse(
+				[...chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`), "data: [DONE]\n\n"].join(
+					"",
+				),
+				{
+					headers: { "Content-Type": "text/event-stream", "x-vercel-ai-ui-message-stream": "v1" },
+				},
+			);
+		}),
+	);
+	renderRouteAt(`/w/acme/mentor/${threadId}`);
+	await userEvent.click(
+		await screen.findByRole("button", { name: "Try again" }, ROUTE_RENDER_WAIT),
+	);
+	await screen.findByText("Heph is busy", { exact: true });
+	screen.getByText("Please try again in a moment.");
+	await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+	await screen.findByText("The worker is available again.");
+	expect(attempts).toBe(2);
+});

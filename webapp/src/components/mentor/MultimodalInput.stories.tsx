@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { type ComponentProps, useState } from "react";
-import { expect, fn, userEvent, waitFor } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { MultimodalInput } from "./MultimodalInput";
 
@@ -146,35 +145,5 @@ export const WithoutAttachments: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button", { name: "Attach a file" })).toBeNull();
-	},
-};
-
-function ScrollPositionHarness(args: ComponentProps<typeof MultimodalInput>) {
-	const [isAtBottom, setIsAtBottom] = useState(true);
-	return (
-		<>
-			<button type="button" onClick={() => setIsAtBottom(false)}>
-				Read earlier messages
-			</button>
-			<MultimodalInput
-				{...args}
-				isAtBottom={isAtBottom}
-				scrollToBottom={() => setIsAtBottom(true)}
-			/>
-		</>
-	);
-}
-
-export const ScrollToLatest: Story = {
-	render: (args) => <ScrollPositionHarness {...args} />,
-	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button", { name: "Scroll to latest message" })).toBeNull();
-		await userEvent.click(canvas.getByRole("button", { name: "Read earlier messages" }));
-		const latest = await canvas.findByRole("button", { name: "Scroll to latest message" });
-		await waitFor(async () => expect(latest).toBeVisible());
-		await userEvent.click(latest);
-		await waitFor(async () =>
-			expect(canvas.queryByRole("button", { name: "Scroll to latest message" })).toBeNull(),
-		);
 	},
 };

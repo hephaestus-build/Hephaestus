@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.GatewayInteractiveChannel;
+import de.tum.cit.aet.hephaestus.agent.sandbox.FrameRingBuffer;
+import de.tum.cit.aet.hephaestus.agent.sandbox.FrameSubscription;
+import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxRuntimeKey;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandboxState;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.EvictionReason;
@@ -162,12 +165,6 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         return Objects.requireNonNull(state.get());
     }
 
-    @Override
-    public Instant lastActivityAt() {
-        return lastActivityAt;
-    }
-
-    @Override
     public Duration idleFor() {
         return Duration.between(lastActivityAt, Instant.now());
     }
@@ -183,8 +180,8 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
     }
 
     @Override
-    public Disposable subscribe(Consumer<JsonNode> listener) {
-        return subscribeInternal(listener, -1L, () -> {});
+    public Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost) {
+        return subscribeInternal(listener, -1L, onLost);
     }
 
     @Override

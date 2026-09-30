@@ -322,6 +322,13 @@ Three instance-wide LLM knobs *are* env vars, because they are deploy-time facts
 | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` | `false` | Whether `http://localhost` provider base URLs may be saved and dialled. **Never set this in production** — it is an SSRF hole that lets a workspace admin aim a "provider" at host-local services. The private/link-local/CGNAT check is unconditional and this flag does not relax it. |
 | `HEPHAESTUS_LLM_FX_DAILY_URL` | ECB daily reference feed | Override only on an air-gapped instance mirroring the ECB file internally. |
 
+Heph turns run on connected workers, for web chat and Slack DMs. The application server keeps
+admission, budget checks, thread persistence and context; with its worker role disabled it creates
+no Docker client. Configure the worker hub URL and registration token before serving conversations.
+There is no local fallback: without spare mentor capacity, Heph reports “Heph is busy” and the user
+can retry. [Runtime roles](./runtime-roles.mdx#interactive-mentor-turns) owns session placement, drain
+and runtime-readiness details.
+
 The proxy resolves the upstream base URL, auth header, and key per model from whichever connection it is bound to, so nothing needs to be pinned at the process level. On a split-pod deployment the worker pod resolves providers from the same catalog as the app pod — no LLM credential passthrough between pods. Warm mentor sandboxes are reused only while their complete non-secret runtime identity still matches; changing the bound model/route, image, prompt/runtime files, or limits replaces the sandbox before the next prompt. Per-turn context is refreshed inside a compatible warm sandbox rather than forcing a restart.
 
 #### Workspace budgets and alerting

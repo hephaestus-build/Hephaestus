@@ -1,5 +1,4 @@
-import { ArrowDown, ArrowUp, Paperclip, Square } from "lucide-react";
-import { AnimatePresence, motion } from "motion/react";
+import { ArrowUp, Paperclip, Square } from "lucide-react";
 import { type ChangeEvent, type RefObject, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useWindowSize } from "usehooks-ts";
@@ -26,9 +25,7 @@ export interface MultimodalInputProps {
 	placeholder?: string;
 	initialInput?: string;
 	readonly?: boolean;
-	isAtBottom?: boolean;
 	scrollToBottom?: () => void;
-	isCurrentVersion?: boolean;
 }
 
 export function MultimodalInput({
@@ -41,9 +38,7 @@ export function MultimodalInput({
 	placeholder = "Send a message...",
 	initialInput = "",
 	readonly = false,
-	isAtBottom = true,
 	scrollToBottom,
-	isCurrentVersion = true,
 }: MultimodalInputProps) {
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -119,32 +114,6 @@ export function MultimodalInput({
 
 	return (
 		<div className="relative flex w-full flex-col gap-4">
-			<AnimatePresence>
-				{!isAtBottom && isCurrentVersion && (
-					<motion.div
-						initial={{ opacity: 0, y: 10 }}
-						animate={{ opacity: 1, y: 0 }}
-						exit={{ opacity: 0, y: 10 }}
-						transition={{ type: "spring", stiffness: 300, damping: 20 }}
-						className="absolute -top-12 left-1/2 z-[95] -translate-x-1/2 rounded-full backdrop-blur-sm"
-					>
-						<Button
-							aria-label="Scroll to latest message"
-							shape="pill"
-							className="border-border/50 bg-background/80 shadow-lg hover:bg-background/90 dark:bg-background/80 dark:hover:bg-background/90"
-							size="icon"
-							variant="outline"
-							onClick={(event) => {
-								event.preventDefault();
-								scrollToBottom?.();
-							}}
-						>
-							<ArrowDown />
-						</Button>
-					</motion.div>
-				)}
-			</AnimatePresence>
-
 			{attachmentUpload !== undefined && (
 				<input
 					type="file"

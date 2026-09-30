@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 import de.tum.cit.aet.hephaestus.agent.gateway.GatewayInteractiveChannel;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
+import de.tum.cit.aet.hephaestus.agent.sandbox.FrameRingBuffer;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxRuntimeKey;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
@@ -20,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.EvictionReason;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Timer;
@@ -138,7 +141,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             // Advisory: registration stays the authority, but a sandbox that cannot register is not worth building.
             if (!registry.hasCapacity(spec.userId())) {
                 metrics.attachFailureMaxSessions.increment();
-                throw new InteractiveSandboxException("Mentor session cap reached");
+                throw new MentorBusyException();
             }
             boolean allowInternet =
                     spec.networkPolicy() != null && spec.networkPolicy().internetAccess();
@@ -227,10 +230,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 }
                 case MAX_SESSIONS_PER_USER, MAX_SESSIONS_TOTAL -> {
                     metrics.attachFailureMaxSessions.increment();
-                    throw new InteractiveSandboxException(
-                            outcome == InteractiveSandboxRegistry.RegistrationOutcome.MAX_SESSIONS_PER_USER
-                                    ? "Per-user session cap exceeded"
-                                    : "Per-replica session cap exceeded");
+                    throw new MentorBusyException();
                 }
                 case REGISTERED -> registered = true;
             }

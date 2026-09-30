@@ -23,6 +23,6 @@ public interface InteractiveSandboxService {
      */
     boolean isWarm(InteractiveSandboxSpec spec);
 
-    /** @return {@code true} if the Docker daemon is reachable. */
+    /** Whether an execution owner is reachable. Capacity is decided atomically during attach. */
     boolean isHealthy();
 }

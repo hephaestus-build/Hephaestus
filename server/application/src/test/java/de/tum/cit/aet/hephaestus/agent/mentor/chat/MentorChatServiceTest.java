@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlight
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
+import de.tum.cit.aet.hephaestus.agent.proxy.MentorTurnMeter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyTokenUsage;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
@@ -173,6 +174,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         sandbox = new FakeSandbox();
         sandbox.onClose = () -> closedUnderSandboxLock.add(turnLock.activeSandboxKeys() > 0);
         proxyCredentialRegistry = new MentorProxyCredentialRegistry();
+        sandbox.credentials = proxyCredentialRegistry;
         sessionToken = proxyCredentialRegistry.mint(
                 sandbox.identity().sessionId(),
                 new MentorProxyCredentialRegistry.Route(
@@ -308,6 +310,16 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void capacityRefusalIsBusyAndDoesNotRetryAnAttach() {
+        when(interactiveSandboxService.attach(any()))
+                .thenThrow(new de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException());
+        runTurnSync();
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        assertThat(emitter.rawData).anySatisfy(raw -> assertThat(raw).contains("Heph is busy"));
+        verify(interactiveSandboxService, times(1)).attach(any());
+    }
+
+    @Test
     void runTurn_happyPath_emitsStartThenChunksThenFinish() throws Exception {
         scheduleHappyPathResponses(sandbox).run();
 
@@ -408,6 +420,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         // Prepare starts no thread and sends the runner nothing.
         verify(persistence, times(1)).ensureThread(anyLong(), any(), any(), any(), any());
         assertThat(sandbox.methodsSent()).containsOnlyOnce("hello", "open_thread", "prompt");
+        assertThat(meterRegistry.timer("mentor.turn.runtime_ready").count()).isEqualTo(1L);
     }
 
     @Test
@@ -569,6 +582,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
         assertThat(sandbox.promptTexts()).isEmpty();
         assertThat(closedUnderSandboxLock).containsExactly(true);
+        assertThat(meterRegistry.timer("mentor.turn.runtime_ready").count()).isZero();
 
         emitter = new RecordingEmitter();
         scheduleHappyPathResponses(fresh).run();
@@ -1871,6 +1885,25 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     static final class FakeSandbox implements AttachedSandbox {
 
+        @Nullable
+        MentorProxyCredentialRegistry credentials;
+
+        @Nullable
+        MentorTurnMeter meter;
+
+        @Override
+        public void bindTurn(UUID turnId, @Nullable LlmPriceSnapshot price) {
+            if (credentials != null) {
+                meter = new MentorTurnMeter(turnId, price);
+                credentials.bindTurn(sessionId, meter);
+            }
+        }
+
+        @Override
+        public void unbindTurn(UUID turnId) {
+            if (credentials != null && meter != null) credentials.unbindTurn(sessionId, meter);
+        }
+
         private final UUID sessionId = UUID.randomUUID();
         private final LinkedBlockingDeque<JsonNode> sent = new LinkedBlockingDeque<>();
         private final CopyOnWriteArrayList<Consumer<JsonNode>> listeners = new CopyOnWriteArrayList<>();
@@ -1895,7 +1928,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         }
 
         @Override
-        public Disposable subscribe(Consumer<JsonNode> listener) {
+        public Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost) {
             listeners.add(listener);
             onSubscribe.run();
             return () -> listeners.remove(listener);
@@ -1904,17 +1937,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         @Override
         public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
             this.onLost = onLost;
-            return subscribe(listener);
-        }
-
-        @Override
-        public Instant lastActivityAt() {
-            return Instant.now();
-        }
-
-        @Override
-        public Duration idleFor() {
-            return Duration.ZERO;
+            return subscribe(listener, onLost);
         }
 
         volatile Runnable onClose = () -> {};

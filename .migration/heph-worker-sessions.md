@@ -1,0 +1,5 @@
+#### 🔴 Connect a worker before serving Heph conversations
+
+Heph no longer starts a sandbox directly on the application server. Before upgrading, configure at least one worker with `HEPHAESTUS_HUB_URL` pointing to the server's `/api/workers/connect` endpoint and `HEPHAESTUS_WORKER_REGISTRATION_TOKEN` matching the server registration configuration. Give the worker spare mentor capacity. Keep `hephaestus.mentor.max-frame-chars` at or below 1 MiB; the worker advertises this byte budget to the relay. You must run a connected worker for Heph. Upgrade the server and workers together; mixed versions are not supported. The server retains chat admission, context and thread persistence; the worker owns the sandbox and LLM proxy.
+
+Without a connected worker, new conversations report “Heph is busy” and can be retried after capacity becomes available. Saved thread history remains in PostgreSQL. Existing live sessions end during the upgrade and are restored on the next turn. The application server can disable its worker role with `hephaestus.runtime.worker.enabled=false`; changes to the reference Compose socket mounts are separate.
