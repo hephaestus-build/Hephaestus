@@ -62,6 +62,10 @@ area*, `PracticeArea`, `areaSlug`, and `/practice-areas` are retired names, not 
 Use provider-specific names such as **pull request** or **merge request** when the provider is known;
 otherwise write **pull or merge request**.
 
+*Habit* is retired for what a practice describes or what recurs across someone's work: say *practice*,
+*way of working* or *repeated pattern*. A card that still shows retired words is wrong wording, and is
+[withdrawn](./practice-review-glossary.mdx#withdrawn-feedback).
+
 *Leaderboard*, *league*, *league points*, *XP*, *level*, *score*, *rank* and *streak* are retired for
 activity and do not describe anything in the product
 ([ADR 0045](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0045-activity-counts-work-and-never-ranks-people.md)).

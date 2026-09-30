@@ -121,6 +121,25 @@ class AgentVocabularySyncTest extends BaseUnitTest {
                 .doesNotContain("BEHAVIOR_PRESENT_", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE", "INCONCLUSIVE");
     }
 
+    @Test
+    void shouldKeepRetiredPracticeWordsOutOfGenerationInstructions() throws IOException {
+        // docs/contributor/practice-feedback-language.md retires this word for practices and what recurs.
+        Pattern retired = Pattern.compile("\\bhabits?\\b", Pattern.CASE_INSENSITIVE);
+        List<Path> instructions;
+        try (Stream<Path> agent = Files.walk(resolveResource("agent"))) {
+            instructions = Stream.concat(
+                            agent.filter(Files::isRegularFile),
+                            Stream.of(resolveResource("practices/default-catalog.json")))
+                    .toList();
+        }
+        assertThat(instructions)
+                .isNotEmpty()
+                .allSatisfy(file -> assertThat(retired.matcher(Files.readString(file, StandardCharsets.UTF_8))
+                                .find())
+                        .as("%s uses a retired practice word", file)
+                        .isFalse());
+    }
+
     private static List<String> names(Enum<?>[] values) {
         return Stream.of(values).map(Enum::name).toList();
     }
