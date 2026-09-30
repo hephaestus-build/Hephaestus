@@ -571,11 +571,13 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
      * Poll-loop candidates, id-only because {@link #findByIdQueuedForUpdateSkipLocked} re-checks and
      * locks each one; a stale read here costs at most a skipped candidate.
      *
-     * <p>Candidates whose {@code (workspace, purpose)} binding is already at its
-     * {@code max_concurrent_jobs} cap are excluded. Without that, one saturated workspace-purpose with
-     * a deep backlog fills every LIMIT window with jobs nobody can claim, and a younger runnable job
-     * elsewhere never reaches the batch. A candidate with no binding row is still fetched — the claim's
-     * admission re-check is the authoritative gate.
+     * <p>Candidates whose slot is already at its {@code max_concurrent_jobs} cap are excluded. A slot is a
+     * {@code (workspace, purpose, AI tier)} binding, the tier being the one the job's snapshot froze and
+     * {@code UNDECLARED} where it names none, as {@link #countRunningByWorkspaceIdAndPurposeAndDataHandlingTier}
+     * and the claim count it. Without the exclusion, one saturated slot with a deep backlog fills every LIMIT
+     * window with jobs nobody can claim, and a younger runnable job elsewhere never reaches the batch. A
+     * candidate whose slot has no binding row is still fetched — the claim's admission re-check is the
+     * authoritative gate.
      */
     @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the @WorkspaceAgnostic job poller")
     @Query(
@@ -585,9 +587,13 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
                     + "AND j.available_at <= now() "
                     + "AND ("
                     + "  (SELECT count(*) FROM agent_job r "
-                    + "     WHERE r.workspace_id = j.workspace_id AND r.purpose = j.purpose AND r.status = 'RUNNING') "
+                    + "     WHERE r.workspace_id = j.workspace_id AND r.purpose = j.purpose AND r.status = 'RUNNING' "
+                    + "       AND COALESCE(r.config_snapshot ->> 'dataHandlingTier', 'UNDECLARED') "
+                    + "         = COALESCE(j.config_snapshot ->> 'dataHandlingTier', 'UNDECLARED')) "
                     + "  < COALESCE((SELECT b.max_concurrent_jobs FROM workspace_agent_binding b "
-                    + "     WHERE b.workspace_id = j.workspace_id AND b.purpose = j.purpose), 2147483647)"
+                    + "     WHERE b.workspace_id = j.workspace_id AND b.purpose = j.purpose "
+                    + "       AND b.data_handling_tier = COALESCE(j.config_snapshot ->> 'dataHandlingTier', 'UNDECLARED')), "
+                    + "     2147483647)"
                     + ") "
                     + "ORDER BY j.available_at ASC, j.id ASC LIMIT :limit",
             nativeQuery = true)
