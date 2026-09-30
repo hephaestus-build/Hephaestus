@@ -7,9 +7,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -107,7 +109,7 @@ public class GitLabIssueDependencySyncService {
         // Filter to issues updated since cutoff (incremental) or all (full sync)
         List<Issue> issuesToProcess;
         if (updatedAfter != null) {
-            java.time.Instant cutoff = updatedAfter.toInstant();
+            Instant cutoff = updatedAfter.toInstant();
             issuesToProcess = allIssues.stream()
                     .filter(i -> i.getNumber() > 0)
                     .filter(i -> i.getUpdatedAt() != null && i.getUpdatedAt().isAfter(cutoff))
@@ -145,7 +147,7 @@ public class GitLabIssueDependencySyncService {
             }
 
             try {
-                int deps = processIssueDependencies(serverUrl, token, nativeId, issue, repository);
+                int deps = processIssueDependencies(scopeId, serverUrl, token, nativeId, issue, repository);
                 totalDeps += deps;
             } catch (Exception e) {
                 log.debug(
@@ -177,11 +179,12 @@ public class GitLabIssueDependencySyncService {
 
     @SuppressWarnings("unchecked")
     private int processIssueDependencies(
-            String serverUrl, String token, long projectId, Issue issue, Repository repository) {
+            long scopeId, String serverUrl, String token, long projectId, Issue issue, Repository repository) {
         List<Map<String, Object>> links = webClient
                 .get()
                 .uri(serverUrl + "/api/v4/projects/{projectId}/issues/{iid}/links", projectId, issue.getNumber())
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
                 .block(REQUEST_TIMEOUT);

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import java.time.Clock;
@@ -53,6 +54,20 @@ public class IntegrationAttentionService {
                 .ifPresent(connection -> {
                     var problem = connection.getAttentionProblem();
                     if (problem != null) {
+                        recordChange(event.connectionId(), event.workspaceId(), problem, true);
+                    }
+                });
+    }
+
+    @EventListener
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void onCredentialsReplaced(ConnectionCredentialsReplacedEvent event) {
+        connections
+                .findByIdAndWorkspaceId(event.connectionId(), event.workspaceId())
+                .ifPresent(connection -> {
+                    var problem = connection.getAttentionProblem();
+                    if (problem == IntegrationAttentionChangedEvent.Problem.CREDENTIAL_REVOKED
+                            || problem == IntegrationAttentionChangedEvent.Problem.CREDENTIAL_EXPIRING) {
                         recordChange(event.connectionId(), event.workspaceId(), problem, true);
                     }
                 });

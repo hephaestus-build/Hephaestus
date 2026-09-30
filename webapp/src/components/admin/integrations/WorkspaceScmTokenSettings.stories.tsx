@@ -71,3 +71,42 @@ export const SuccessfulReplacement: Story = {
 		await waitFor(async () => expect(input).toHaveValue(""));
 	},
 };
+
+export const ExpiringGitLabToken: Story = {
+	args: {
+		providerLabel: "GitLab",
+		tokenExpiresAt: new Date("2026-07-05T00:00:00Z"),
+		tokenExpiryCheckedAt: new Date(STORY_NOW),
+		attentionProblem: "CREDENTIAL_EXPIRING",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Token expires on 5 July 2026")).toBeVisible();
+		await expect(
+			canvas.getByText("The token could not be rotated. Replace it below to keep sync available."),
+		).toBeVisible();
+	},
+};
+
+export const RefusedGitLabToken: Story = {
+	args: { providerLabel: "GitLab", attentionProblem: "CREDENTIAL_REVOKED" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("GitLab refuses this token")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Replace token" })).toBeDisabled();
+		await userEvent.type(canvas.getByLabelText("New personal access token"), "replacement");
+		await expect(canvas.getByRole("button", { name: "Replace token" })).toBeEnabled();
+	},
+};
+
+export const GitLabNoExpiry: Story = {
+	args: { providerLabel: "GitLab", tokenExpiryCheckedAt: new Date(STORY_NOW) },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Token has no expiry")).toBeVisible();
+	},
+};
+
+export const LoadingGitLabExpiry: Story = {
+	args: { providerLabel: "GitLab", isLoadingTokenMetadata: true },
+};
+export const GitLabExpiryError: Story = {
+	args: { providerLabel: "GitLab", tokenMetadataError: new Error("Unavailable") },
+};

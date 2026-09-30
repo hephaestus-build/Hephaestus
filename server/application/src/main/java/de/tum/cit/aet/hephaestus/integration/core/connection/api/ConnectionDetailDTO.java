@@ -1,12 +1,15 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationFamily;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -46,10 +49,16 @@ public record ConnectionDetailDTO(
         Instant updatedAt,
         Set<Capability> capabilities,
         @Nullable Map<String, Object> config,
-        @Nullable Instant credentialsUnreadableSince) {
+        @Nullable Instant credentialsUnreadableSince,
+        @Nullable LocalDate tokenExpiresAt,
+        @Nullable Instant tokenExpiryCheckedAt,
+        @Nullable Problem attentionProblem) {
     /**
-     * Config keys whose values are secrets and must never cross the API boundary — matched
+     * Private config keys which must never cross the free-form API boundary — matched
      * case-insensitively against the serialized config map.
+     *
+     * <p>GitLab token metadata is also omitted here: its safe dates have typed DTO fields, not a
+     * second free-form wire representation. It contains no token value.
      *
      * <p>Currently {@code webhookSecret} on {@code OutlineConfig}: the AES-GCM ciphertext of the
      * live HMAC signing secret of the workspace's Outline change-notification subscription. Leaking
@@ -60,12 +69,14 @@ public record ConnectionDetailDTO(
      * reflects over every {@code ConnectionConfig} subtype and fails if a
      * new secret-shaped component is added without being listed here.
      */
-    public static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of("webhooksecret");
+    public static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of("webhooksecret", "tokenmetadata");
 
     @SuppressWarnings("unchecked")
     public static ConnectionDetailDTO from(Connection c, IntegrationManifestRegistry manifests, ObjectMapper mapper) {
         Map<String, Object> configMap =
                 c.getConfig() == null ? null : redactSensitive(mapper.convertValue(c.getConfig(), Map.class));
+        var tokenMetadata =
+                c.getConfig() instanceof ConnectionConfig.GitLabConfig gitlab ? gitlab.tokenMetadata() : null;
         return new ConnectionDetailDTO(
                 c.getId(),
                 c.getKind(),
@@ -78,7 +89,10 @@ public record ConnectionDetailDTO(
                 c.getUpdatedAt(),
                 manifests.capabilitiesFor(c.getKind()),
                 configMap,
-                c.credentialsUnreadableSince());
+                c.credentialsUnreadableSince(),
+                tokenMetadata == null ? null : tokenMetadata.expiresAt(),
+                tokenMetadata == null ? null : tokenMetadata.checkedAt(),
+                c.getAttentionProblem());
     }
 
     /**

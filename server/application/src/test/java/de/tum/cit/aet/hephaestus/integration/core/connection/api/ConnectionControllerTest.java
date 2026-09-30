@@ -429,7 +429,8 @@ class ConnectionControllerTest extends BaseUnitTest {
                                 200L,
                                 null,
                                 ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                                Set.of());
+                                Set.of(),
+                                null);
                     case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
                     case OUTLINE ->
                         new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());

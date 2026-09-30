@@ -45,7 +45,12 @@ class GitLabGraphQlClientProviderTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         provider = new GitLabGraphQlClientProvider(
-                baseClient, tokenService, circuitBreaker, rateLimitTracker, clientFactory);
+                baseClient,
+                tokenService,
+                circuitBreaker,
+                rateLimitTracker,
+                clientFactory,
+                mock(de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabCredentialHealthFilter.class));
     }
 
     @Nested
@@ -57,6 +62,9 @@ class GitLabGraphQlClientProviderTest extends BaseUnitTest {
             when(tokenService.resolveServerUrl(1L)).thenReturn("https://gitlab.example.com");
 
             HttpGraphQlClient builtClient = mock(HttpGraphQlClient.class);
+            var builder = mock(HttpGraphQlClient.Builder.class, org.mockito.Answers.RETURNS_SELF);
+            org.mockito.Mockito.doReturn(builder).when(builtClient).mutate();
+            when(builder.build()).thenReturn(builtClient);
             when(clientFactory.withBearerTokenAndAttribute(
                             baseClient,
                             "https://gitlab.example.com/api/graphql",

@@ -17,32 +17,24 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
-import de.tum.cit.aet.hephaestus.integration.core.connection.BearerTokenReplacement;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient.RotatedToken;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient.TokenInfo;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.GroupInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
-import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
@@ -75,25 +67,16 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private ObjectProvider<GitLabWebhookClient> webhookClientProvider;
 
     @Mock
-    private ObjectProvider<GitLabTokenRotationClient> rotationClientProvider;
-
-    @Mock
-    private ObjectProvider<GitLabTokenService> tokenServiceProvider;
-
-    @Mock
     private GitLabWebhookClient webhookClient;
-
-    @Mock
-    private GitLabTokenRotationClient rotationClient;
-
-    @Mock
-    private GitLabTokenService tokenService;
 
     @Mock
     private WorkspaceRepository workspaceRepository;
 
     @Mock
     private ConnectionService connectionService;
+
+    @Mock
+    private de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabTokenLifecycleService tokenLifecycle;
 
     private GitLabWebhookService webhookService;
     private Workspace workspace;
@@ -124,8 +107,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private GitLabWebhookService service(GitLabRouteCredential credential) {
         return new GitLabWebhookService(
                 webhookClientProvider,
-                rotationClientProvider,
-                tokenServiceProvider,
                 WebhookPropertiesFixture.configured(
                         EXTERNAL_URL,
                         SECRET,
@@ -133,7 +114,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                         new WebhookProperties.Routing(KEY, null)),
                 credential,
                 workspaceRepository,
-                connectionService);
+                connectionService,
+                tokenLifecycle);
     }
 
     /** The hook URL {@code credential} issues for {@code route}. */
@@ -183,7 +165,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                         42L,
                         hook.id(),
                         ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of()));
+                        Set.of(),
+                        null));
     }
 
     private void storeHook(long webhookId, String url) {
@@ -219,7 +202,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                         null,
                         null,
                         ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of()));
+                        Set.of(),
+                        null));
         gitLabBearerTokens.put(1L, new BearerToken("glpat-test-token", null));
 
         // lenient() — each Nested test exercises a different code path, so a shared setUp stub may go
@@ -245,21 +229,6 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
         Mockito.lenient()
                 .when(connectionService.updateConfig(anyLong(), eq(IntegrationKind.GITLAB), any()))
                 .thenAnswer(this::applyUpdateConfig);
-        Mockito.lenient()
-                .when(connectionService.rotateBearerToken(
-                        anyLong(), eq(IntegrationKind.GITLAB), any(BearerToken.class)))
-                .thenAnswer(inv -> {
-                    long id = inv.getArgument(0);
-                    BearerToken token = inv.getArgument(2);
-                    gitLabBearerTokens.put(id, token);
-                    // The write reports the row it stored the token on; these tests only need one to exist.
-                    Connection stored = new Connection(
-                            TestEntities.workspace(id),
-                            IntegrationKind.GITLAB,
-                            "gitlab",
-                            Objects.requireNonNull(gitLabConfigs.get(id)));
-                    return Optional.of(new BearerTokenReplacement(stored, true));
-                });
     }
 
     private void bindGitLabConfig(long workspaceId, ConnectionConfig.GitLabConfig cfg) {
@@ -549,85 +518,16 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                     "", "", WebhookPropertiesFixture.stream(), new WebhookProperties.Routing(KEY, null));
             var service = new GitLabWebhookService(
                     webhookClientProvider,
-                    rotationClientProvider,
-                    tokenServiceProvider,
                     unconfigured,
                     new GitLabRouteCredential(unconfigured),
                     workspaceRepository,
-                    connectionService);
+                    connectionService,
+                    tokenLifecycle);
 
             WebhookSetupResult result = service.registerWebhook(workspace);
 
             assertThat(result.registered()).isFalse();
             assertThat(result.failureReason()).contains("not configured");
-        }
-    }
-
-    @Nested
-    class RotateTokenIfNeeded {
-
-        @Test
-        void shouldSkipForNonGitLab() {
-            gitLabConfigs.remove(1L);
-
-            webhookService.rotateTokenIfNeeded(workspace);
-
-            verify(rotationClientProvider, never()).getIfAvailable();
-        }
-
-        @Test
-        void shouldSkipWhenUnavailable() {
-            when(rotationClientProvider.getIfAvailable()).thenReturn(null);
-
-            webhookService.rotateTokenIfNeeded(workspace);
-        }
-
-        @Test
-        void shouldSkipNoExpiry() {
-            when(rotationClientProvider.getIfAvailable()).thenReturn(rotationClient);
-            when(rotationClient.getTokenInfo(1L)).thenReturn(new TokenInfo(1L, "test", null));
-
-            webhookService.rotateTokenIfNeeded(workspace);
-
-            verify(rotationClient, never()).rotateToken(anyLong(), any());
-        }
-
-        @Test
-        void shouldSkipNotExpiringSoon() {
-            when(rotationClientProvider.getIfAvailable()).thenReturn(rotationClient);
-            when(rotationClient.getTokenInfo(1L))
-                    .thenReturn(new TokenInfo(1L, "test", LocalDate.now().plusDays(30)));
-
-            webhookService.rotateTokenIfNeeded(workspace);
-
-            verify(rotationClient, never()).rotateToken(anyLong(), any());
-        }
-
-        @Test
-        void shouldRotateWhenExpiringSoon() {
-            when(rotationClientProvider.getIfAvailable()).thenReturn(rotationClient);
-            when(tokenServiceProvider.getIfAvailable()).thenReturn(tokenService);
-            when(rotationClient.getTokenInfo(1L))
-                    .thenReturn(new TokenInfo(1L, "test", LocalDate.now().plusDays(3)));
-            when(rotationClient.rotateToken(eq(1L), any(LocalDate.class)))
-                    .thenReturn(
-                            new RotatedToken("glpat-new-token", LocalDate.now().plusDays(90)));
-
-            webhookService.rotateTokenIfNeeded(workspace);
-
-            BearerToken token = gitLabBearerTokens.get(1L);
-            assertNotNull(token);
-            assertThat(token.token()).isEqualTo("glpat-new-token");
-            verify(connectionService).rotateBearerToken(eq(1L), eq(IntegrationKind.GITLAB), any(BearerToken.class));
-            verify(tokenService).invalidateCache(1L);
-        }
-
-        @Test
-        void shouldContinueOnError() {
-            when(rotationClientProvider.getIfAvailable()).thenReturn(rotationClient);
-            when(rotationClient.getTokenInfo(1L)).thenThrow(new IllegalStateException("Connection refused"));
-
-            webhookService.rotateTokenIfNeeded(workspace);
         }
     }
 
@@ -650,7 +550,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                             42L,
                             99L,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
+                            Set.of(),
+                            null));
 
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
 
@@ -670,7 +571,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                             42L,
                             99L,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
+                            Set.of(),
+                            null));
 
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
 
@@ -694,7 +596,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                             42L,
                             99L,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
+                            Set.of(),
+                            null));
 
             when(webhookClientProvider.getIfAvailable()).thenReturn(null);
 
@@ -717,7 +620,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                             42L,
                             99L,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
+                            Set.of(),
+                            null));
 
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
             when(webhookClientProvider.getIfAvailable()).thenReturn(webhookClient);
@@ -751,7 +655,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                             42L,
                             99L,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
+                            Set.of(),
+                            null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
             when(connectionService.findBearerToken(1L, 7L))
                     .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
@@ -771,7 +676,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                             42L,
                             99L,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
+                            Set.of(),
+                            null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
             when(connectionService.findBearerToken(1L, 7L))
                     .thenReturn(Optional.of(new BearerToken("glpat-token", null)));
@@ -795,7 +701,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
                             42L,
                             99L,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()));
+                            Set.of(),
+                            null));
             when(connectionService.findInWorkspace(1L, 7L)).thenReturn(Optional.of(connection));
             when(connectionService.findBearerToken(1L, 7L))
                     .thenReturn(Optional.of(new BearerToken("glpat-token", null)));

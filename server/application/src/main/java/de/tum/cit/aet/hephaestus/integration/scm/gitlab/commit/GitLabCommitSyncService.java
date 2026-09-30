@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributor
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import java.net.URLEncoder;
@@ -116,7 +117,8 @@ public class GitLabCommitSyncService {
 
         try {
             while (hasMore && page <= MAX_PAGES) {
-                List<Map<String, Object>> commits = fetchCommitPage(serverUrl, token, nativeId, branch, since, page);
+                List<Map<String, Object>> commits =
+                        fetchCommitPage(scopeId, serverUrl, token, nativeId, branch, since, page);
 
                 if (commits == null || commits.isEmpty()) break;
 
@@ -151,7 +153,13 @@ public class GitLabCommitSyncService {
     @Nullable
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> fetchCommitPage(
-            String serverUrl, String token, long projectId, String branch, @Nullable OffsetDateTime since, int page) {
+            long scopeId,
+            String serverUrl,
+            String token,
+            long projectId,
+            String branch,
+            @Nullable OffsetDateTime since,
+            int page) {
         String base = serverUrl.endsWith("/") ? serverUrl.substring(0, serverUrl.length() - 1) : serverUrl;
         String commitUrl = base + "/api/v4/projects/"
                 + projectId
@@ -164,7 +172,11 @@ public class GitLabCommitSyncService {
                 + page
                 + (since != null ? "&since=" + URLEncoder.encode(since.toString(), StandardCharsets.UTF_8) : "");
 
-        var request = webClient.get().uri(commitUrl).header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        var request = webClient
+                .get()
+                .uri(commitUrl)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId);
 
         return (List<Map<String, Object>>) (List<?>) request.retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
