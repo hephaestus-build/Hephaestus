@@ -199,7 +199,8 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
                     "ga84xah",
                     "Felix Dietrich",
                     "https://avatar.url",
-                    "https://gitlab.lrz.de/ga84xah");
+                    "https://gitlab.lrz.de/ga84xah",
+                    null);
             when(gitLabUserService.findOrCreateUser(expectedLookup, 1L)).thenReturn(user);
 
             User result = processor.callFindOrCreateUser(
@@ -372,7 +373,7 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
                 String name,
                 @Nullable String avatarUrl,
                 @Nullable String webUrl) {
-            return findOrCreateUser(GitLabUserLookup.of(globalId, username, name, avatarUrl, webUrl), 1L);
+            return findOrCreateUser(GitLabUserLookup.of(globalId, username, name, avatarUrl, webUrl, null), 1L);
         }
 
         @Nullable

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabNoteSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.BackfillBatchResult;
@@ -416,6 +417,7 @@ public class GitLabIssueSyncService {
                 authorName = null,
                 authorAvatarUrl = null,
                 authorWebUrl = null;
+        Boolean authorBot = null;
         Map<String, Object> authorMap = (Map<String, Object>) node.get("author");
         if (authorMap != null) {
             authorGlobalId = (String) authorMap.get("id");
@@ -423,6 +425,7 @@ public class GitLabIssueSyncService {
             authorName = (String) authorMap.get("name");
             authorAvatarUrl = (String) authorMap.get("avatarUrl");
             authorWebUrl = (String) authorMap.get("webUrl");
+            authorBot = GitLabUserLookup.botOf(authorMap);
         }
 
         // Extract labels (with overflow detection and follow-up pagination)
@@ -461,7 +464,8 @@ public class GitLabIssueSyncService {
                             (String) a.get("username"),
                             (String) a.get("name"),
                             (String) a.get("avatarUrl"),
-                            (String) a.get("webUrl")));
+                            (String) a.get("webUrl"),
+                            GitLabUserLookup.botOf(a)));
                 }
                 // Detect nested pagination overflow for assignees and fetch remaining if needed
                 NestedOverflow overflow =
@@ -492,6 +496,7 @@ public class GitLabIssueSyncService {
                 authorName,
                 authorAvatarUrl,
                 authorWebUrl,
+                authorBot,
                 userNotesCount,
                 syncLabels,
                 syncAssignees,
@@ -761,7 +766,8 @@ public class GitLabIssueSyncService {
                             (String) a.get("username"),
                             (String) a.get("name"),
                             (String) a.get("avatarUrl"),
-                            (String) a.get("webUrl")));
+                            (String) a.get("webUrl"),
+                            GitLabUserLookup.botOf(a)));
                 }
 
                 // Check for more pages

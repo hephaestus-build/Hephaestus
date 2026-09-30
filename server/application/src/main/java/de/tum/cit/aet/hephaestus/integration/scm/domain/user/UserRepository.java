@@ -158,17 +158,51 @@ public interface UserRepository extends JpaRepository<User, Long> {
     /**
      * Upserts by immutable provider/native id. Acquire the login lock first and either reject a
      * conflicting login or release it using current provider evidence; never infer reassignment from saved metadata.
+     * {@code type} is the account type the caller knows; {@code null} leaves a stored row's type as it is, and a new
+     * row is a {@code USER}.
+     */
+    default void upsertUser(
+            Long nativeId,
+            Long providerId,
+            String login,
+            @Nullable String name,
+            @Nullable String avatarUrl,
+            @Nullable String htmlUrl,
+            @Nullable String type,
+            @Nullable String email,
+            @Nullable Instant createdAt,
+            @Nullable Instant updatedAt) {
+        upsertUser(
+                nativeId,
+                providerId,
+                login,
+                name,
+                avatarUrl,
+                htmlUrl,
+                type,
+                type != null ? type : User.Type.USER.name(),
+                email,
+                createdAt,
+                updatedAt);
+    }
+
+    /**
+     * {@link #upsertUser(Long, Long, String, String, String, String, String, String, Instant, Instant)} for a caller
+     * that has a better guess than {@code USER} for an account it does not know the type of: {@code insertType} applies
+     * only to a row this statement creates, so a guess never overwrites a stored type. A {@code null} {@code type}
+     * keeps a stored row's type in the same statement.
      */
     @Modifying
     @Query(value = """
         INSERT INTO "user" (native_id, provider_id, login, name, avatar_url, html_url, type, email, created_at, updated_at)
-        VALUES (:nativeId, :providerId, :login, :name, :avatarUrl, :htmlUrl, :type, :email, :createdAt, :updatedAt)
+        VALUES (:nativeId, :providerId, :login, :name, :avatarUrl, :htmlUrl, COALESCE(CAST(:type AS VARCHAR), :insertType),
+                :email, :createdAt, :updatedAt)
         ON CONFLICT (provider_id, native_id) DO UPDATE SET
             login = EXCLUDED.login,
             name = COALESCE(EXCLUDED.name, "user".name),
             avatar_url = EXCLUDED.avatar_url,
             html_url = EXCLUDED.html_url,
-            type = EXCLUDED.type,
+            type = COALESCE(CAST(:type AS VARCHAR), "user".type),
             email = COALESCE(EXCLUDED.email, "user".email),
             created_at = COALESCE(EXCLUDED.created_at, "user".created_at),
             updated_at = COALESCE(EXCLUDED.updated_at, "user".updated_at)
@@ -180,7 +214,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
             @Param("name") @Nullable String name,
             @Param("avatarUrl") @Nullable String avatarUrl,
             @Param("htmlUrl") @Nullable String htmlUrl,
-            @Param("type") String type,
+            @Param("type") @Nullable String type,
+            @Param("insertType") String insertType,
             @Param("email") @Nullable String email,
             @Param("createdAt") @Nullable Instant createdAt,
             @Param("updatedAt") @Nullable Instant updatedAt);

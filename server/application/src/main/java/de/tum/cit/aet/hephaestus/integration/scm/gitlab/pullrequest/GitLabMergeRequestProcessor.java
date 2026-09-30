@@ -279,7 +279,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             merger.name(),
                             merger.avatarUrl(),
                             merger.webUrl(),
-                            merger.publicEmail()),
+                            merger.publicEmail(),
+                            merger.bot()),
                     providerId);
             if (user != null) {
                 pr.setMergedBy(user);
@@ -363,7 +364,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable String name,
             @Nullable String avatarUrl,
             @Nullable String webUrl,
-            @Nullable String publicEmail) {}
+            @Nullable String publicEmail,
+            @Nullable Boolean bot) {}
 
     /** A reviewer in sync data, with GitLab's {@code MergeRequestReviewState} for them when it gave one. */
     public record SyncReviewerData(
@@ -402,12 +404,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable String authorAvatarUrl,
             @Nullable String authorWebUrl,
             @Nullable String authorPublicEmail,
+            @Nullable Boolean authorBot,
             @Nullable String mergeUserGlobalId,
             @Nullable String mergeUserUsername,
             @Nullable String mergeUserName,
             @Nullable String mergeUserAvatarUrl,
             @Nullable String mergeUserWebUrl,
             @Nullable String mergeUserPublicEmail,
+            @Nullable Boolean mergeUserBot,
             @Nullable List<SyncLabelData> syncLabels,
             @Nullable List<SyncUserData> syncAssignees,
             @Nullable List<SyncReviewerData> syncReviewers,
@@ -963,7 +967,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                                         data.mergeUserName(),
                                         data.mergeUserAvatarUrl(),
                                         data.mergeUserWebUrl(),
-                                        data.mergeUserPublicEmail()),
+                                        data.mergeUserPublicEmail(),
+                                        data.mergeUserBot()),
                         parseGitLabTimestamp(data.mergedAt()),
                         data.mergeCommitSha(),
                         providerId);
@@ -989,7 +994,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                         data.authorName(),
                         data.authorAvatarUrl(),
                         data.authorWebUrl(),
-                        data.authorPublicEmail()),
+                        data.authorPublicEmail(),
+                        data.authorBot()),
                 providerId);
 
         User mergeUser = findOrCreateUser(
@@ -999,7 +1005,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                         data.mergeUserName(),
                         data.mergeUserAvatarUrl(),
                         data.mergeUserWebUrl(),
-                        data.mergeUserPublicEmail()),
+                        data.mergeUserPublicEmail(),
+                        data.mergeUserBot()),
                 providerId);
 
         // Identity harvest: seed User rows for anyone who has interacted with the MR so later
@@ -1014,7 +1021,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                                 participant.name(),
                                 participant.avatarUrl(),
                                 participant.webUrl(),
-                                participant.publicEmail()),
+                                participant.publicEmail(),
+                                participant.bot()),
                         providerId);
             }
         }
@@ -1517,7 +1525,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             approver.name(),
                             approver.avatarUrl(),
                             approver.webUrl(),
-                            approver.publicEmail()),
+                            approver.publicEmail(),
+                            approver.bot()),
                     providerId);
             if (user == null) continue;
 
@@ -1644,7 +1653,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             data.name(),
                             data.avatarUrl(),
                             data.webUrl(),
-                            data.publicEmail()),
+                            data.publicEmail(),
+                            data.bot()),
                     providerId);
             if (user != null) newAssignees.add(user);
         }
@@ -1674,7 +1684,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             data.name(),
                             data.avatarUrl(),
                             data.webUrl(),
-                            data.publicEmail()),
+                            data.publicEmail(),
+                            data.bot()),
                     providerId);
             if (user != null) reviewers.put(user, reviewState(reviewer.reviewState(), pr, user));
         }

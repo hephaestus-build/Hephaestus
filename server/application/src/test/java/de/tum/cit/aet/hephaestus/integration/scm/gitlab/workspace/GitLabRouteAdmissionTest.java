@@ -348,7 +348,7 @@ class GitLabRouteAdmissionTest {
         @Test
         void shouldStoreTheUserGitLabReportsWhateverThePayloadClaims() {
             GitLabUserLookup canonical = new GitLabUserLookup(
-                    "gid://gitlab/User/9", "alice", "Alice", null, "https://gitlab.lrz.de/alice", null);
+                    "gid://gitlab/User/9", "alice", "Alice", null, "https://gitlab.lrz.de/alice", null, null);
             when(userService.fetchCanonicalUsers(WORKSPACE_ID, List.of(9L))).thenReturn(Map.of(9L, canonical));
             UserRepository users = mock(UserRepository.class);
             when(users.tryAcquireLoginLock("alice", PROVIDER_ID)).thenReturn(true);
@@ -374,10 +374,12 @@ class GitLabRouteAdmissionTest {
                             any(),
                             eq("https://gitlab.lrz.de/alice"),
                             any(),
+                            any(),
                             isNull(),
                             isNull(),
                             isNull());
-            verify(users, never()).upsertUser(any(), any(), eq("bob"), any(), any(), any(), any(), any(), any(), any());
+            verify(users, never())
+                    .upsertUser(any(), any(), eq("bob"), any(), any(), any(), any(), any(), any(), any(), any());
         }
 
         @Test
@@ -385,7 +387,8 @@ class GitLabRouteAdmissionTest {
             String member = """
                     {"event_name":"user_remove_from_group","group_id":%d,"user_id":9}""";
             GitLabGroupMemberResponse maintainer = new GitLabGroupMemberResponse(
-                    new GitLabGroupMemberResponse.GitLabMemberUser("gid://gitlab/User/9", "alice", null, null, null),
+                    new GitLabGroupMemberResponse.GitLabMemberUser(
+                            "gid://gitlab/User/9", "alice", null, null, null, null),
                     new GitLabGroupMemberResponse.GitLabAccessLevel("MAINTAINER", 40));
             when(teamSync.fetchMembership(WORKSPACE_ID, GROUP, GROUP_ID, 9L, true))
                     .thenReturn(Optional.of(List.of(maintainer)));

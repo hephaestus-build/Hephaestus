@@ -54,7 +54,8 @@ public class GitLabUserService {
             @Nullable String name,
             @Nullable String avatarUrl,
             @Nullable String webUrl,
-            @Nullable String publicEmail) {}
+            @Nullable String publicEmail,
+            @Nullable Boolean bot) {}
 
     private final UserRepository userRepository;
     private final GitLabProperties gitLabProperties;
@@ -122,7 +123,8 @@ public class GitLabUserService {
                                     node.name(),
                                     node.avatarUrl(),
                                     node.webUrl(),
-                                    node.publicEmail()));
+                                    node.publicEmail(),
+                                    node.bot()));
                 }
             }
         }
@@ -173,7 +175,9 @@ public class GitLabUserService {
                 name,
                 avatarUrl,
                 htmlUrl,
-                GitLabUserClassifier.classify(login).name(),
+                // A hook's user carries no bot flag: a stored type stays, and only a new user's is guessed.
+                null,
+                GitLabUserClassifier.insertionType(login, null),
                 dto.email(),
                 null, // createdAt — not in webhook
                 null // updatedAt — not in webhook
@@ -249,7 +253,8 @@ public class GitLabUserService {
                 resolvedName,
                 resolvedAvatarUrl,
                 resolvedHtmlUrl,
-                GitLabUserClassifier.classify(username).name(),
+                GitLabUserClassifier.nativeType(lookup.bot()),
+                GitLabUserClassifier.insertionType(username, lookup.bot()),
                 resolvedEmail,
                 null, // createdAt — not in GraphQL user data
                 null // updatedAt — not in GraphQL user data

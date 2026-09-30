@@ -343,7 +343,8 @@ public class GitLabGroupMemberSyncService {
                     name,
                     avatarUrl,
                     htmlUrl,
-                    GitLabUserClassifier.classify(login).name(),
+                    GitLabUserClassifier.nativeType(memberUser.bot()),
+                    GitLabUserClassifier.insertionType(login, memberUser.bot()),
                     null,
                     null,
                     null);

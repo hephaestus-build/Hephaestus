@@ -345,6 +345,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                                 "Felix Dietrich",
                                 null,
                                 SERVER_URL + "/ga84xah",
+                                null,
                                 null)))
                 .when(gitLabUserService)
                 .fetchCanonicalUsers(anyLong(), anyCollection());
@@ -1309,6 +1310,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                                             "Felix Dietrich",
                                             null,
                                             SERVER_URL + "/ga84xah",
+                                            null,
                                             null),
                                     MERGED_AT,
                                     HOOK_MERGE_COMMIT));
@@ -1479,7 +1481,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private static GitLabGroupMemberResponse member(String access, int level) {
         return new GitLabGroupMemberResponse(
                 new GitLabGroupMemberResponse.GitLabMemberUser(
-                        "gid://gitlab/User/" + MEMBER_USER_ID, "ga84xah", "Felix Dietrich", null, null),
+                        "gid://gitlab/User/" + MEMBER_USER_ID, "ga84xah", "Felix Dietrich", null, null, null),
                 new GitLabGroupMemberResponse.GitLabAccessLevel(access, level));
     }
 

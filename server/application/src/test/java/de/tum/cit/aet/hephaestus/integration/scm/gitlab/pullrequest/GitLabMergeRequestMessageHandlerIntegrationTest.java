@@ -2441,7 +2441,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     private GitLabMergeRequestProcessor.SyncUserData syncedUser(long id, String username) {
         return new GitLabMergeRequestProcessor.SyncUserData(
-                "gid://gitlab/User/" + id, username, username, null, null, null);
+                "gid://gitlab/User/" + id, username, username, null, null, null, null);
     }
 
     /** MR !2 as a sync reads it, with only what these tests need; a list the sync did not read whole is null. */
@@ -2493,12 +2493,14 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 FIXTURE_AUTHOR_LOGIN,
                 null, // authorAvatarUrl
                 null, // authorWebUrl
+                null,
                 null, // authorPublicEmail
                 null, // mergeUserGlobalId
                 null, // mergeUserUsername
                 null, // mergeUserName
                 null, // mergeUserAvatarUrl
                 null, // mergeUserWebUrl
+                null,
                 null, // mergeUserPublicEmail
                 null, // syncLabels
                 null, // syncAssignees

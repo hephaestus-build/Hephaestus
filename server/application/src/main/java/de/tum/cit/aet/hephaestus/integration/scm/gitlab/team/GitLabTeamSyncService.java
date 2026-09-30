@@ -580,7 +580,8 @@ public class GitLabTeamSyncService {
                                 userRef.username(),
                                 userRef.name(),
                                 userRef.avatarUrl(),
-                                userRef.webUrl()),
+                                userRef.webUrl(),
+                                userRef.bot()),
                         providerId);
                 if (user == null) {
                     status.setRollbackOnly();

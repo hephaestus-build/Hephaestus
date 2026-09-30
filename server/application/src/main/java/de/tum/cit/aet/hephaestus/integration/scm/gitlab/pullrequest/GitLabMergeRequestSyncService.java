@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.backfill.BackfillBatchResult;
@@ -284,8 +285,9 @@ public class GitLabMergeRequestSyncService {
             @Nullable String name,
             @Nullable String avatarUrl,
             @Nullable String webUrl,
-            @Nullable String publicEmail) {
-        static final UserFields EMPTY = new UserFields(null, null, null, null, null, null);
+            @Nullable String publicEmail,
+            @Nullable Boolean bot) {
+        static final UserFields EMPTY = new UserFields(null, null, null, null, null, null, null);
     }
 
     // Historical backfill
@@ -495,12 +497,14 @@ public class GitLabMergeRequestSyncService {
                 author.avatarUrl(),
                 author.webUrl(),
                 author.publicEmail(),
+                author.bot(),
                 mergeUser.globalId(),
                 mergeUser.username(),
                 mergeUser.name(),
                 mergeUser.avatarUrl(),
                 mergeUser.webUrl(),
                 mergeUser.publicEmail(),
+                mergeUser.bot(),
                 syncLabels,
                 syncAssignees,
                 syncReviewers,
@@ -664,7 +668,8 @@ public class GitLabMergeRequestSyncService {
                 (String) userMap.get("name"),
                 (String) userMap.get("avatarUrl"),
                 (String) userMap.get("webUrl"),
-                (String) userMap.get("publicEmail"));
+                (String) userMap.get("publicEmail"),
+                GitLabUserLookup.botOf(userMap));
     }
 
     // Labels extraction with overflow detection
