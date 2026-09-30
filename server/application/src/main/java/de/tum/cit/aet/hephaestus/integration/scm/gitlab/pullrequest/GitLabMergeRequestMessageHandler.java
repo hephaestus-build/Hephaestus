@@ -87,8 +87,10 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
     /**
      * The event is stored in the short transaction. GitLab's webhook carries none of the merge request's readiness —
      * its merge status, head pipeline and approvals — so after an event that can move them GitLab is read for this
-     * one merge request, outside the transaction, and what it said is recorded in a second short one where it still
-     * describes the stored head ({@link GitLabMergeRequestProcessor#applyReadiness}). A failed read records nothing:
+     * one merge request, outside the transaction, and what it said is recorded in a second short one where the
+     * delivery may still write to the project as stored now ({@link GitLabWebhookContextResolver#mayStillWrite}) and
+     * the answer still describes the stored head ({@link GitLabMergeRequestProcessor#applyReadiness}). A failed read
+     * records nothing:
      * the facts stay as the event left them, unknown where it moved the head, until the next event or sync. An opened
      * or updated merge request also has the issues it closes read from GitLab — the webhook stores the
      * {@code updated_at} the sync later compares against, so the sync would not read them for this change.
@@ -129,7 +131,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             return;
         }
         transactionTemplate.executeWithoutResult(status -> {
-            if (!contextResolver.mayStillWrite()) {
+            if (!contextResolver.mayStillWrite(stored.context())) {
                 return;
             }
             if (closing != null) {

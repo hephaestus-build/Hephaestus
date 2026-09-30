@@ -214,8 +214,11 @@ A webhook names one person's act, not the whole decision:
 A merge request hook carries none of what merge advice depends on: merge status, head pipeline, approvals. After an
 opened, updated, reopened or approval hook is stored, `GitLabMergeRequestMessageHandler` reads that one merge request
 (`GetMergeRequestReadiness`, `GitLabMergeRequestReadinessReader`) outside the hook's transaction, and
-`GitLabMergeRequestProcessor#applyReadiness` records it in a second short one, where the connection may still write,
-with the row locked. It records nothing unless GitLab's answer names this project and merge request, both open, at the
+`GitLabMergeRequestProcessor#applyReadiness` records it in a second short one, with the row locked, only where the
+delivery may still write to the project as stored now (`GitLabWebhookContextResolver#mayStillWrite`): on a connection
+route the connection is held active and the project admitted again — same GitLab instance, inside the group, still
+monitored — so a project removed from monitoring or moved out while GitLab was read takes nothing from the read; off a
+route it must still pass the scope filter for the same workspace. It records nothing unless GitLab's answer names this project and merge request, both open, at the
 stored head and not an older version; it never moves the head. Reviewers, decision and approvals — and the
 mergeability and merge status GitLab derives from the approvals — follow the dated snapshot, dated by when the read was
 asked for, as they do for a sync page: a read or page begun before a newer one was stored changes none of them. While GitLab reports `checking` or `approvals_syncing`, mergeability and

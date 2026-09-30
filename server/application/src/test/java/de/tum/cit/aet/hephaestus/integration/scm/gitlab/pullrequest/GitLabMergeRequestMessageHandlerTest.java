@@ -87,7 +87,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                 deserializer,
                 transactionTemplate);
 
-        lenient().when(contextResolver.mayStillWrite()).thenReturn(true);
+        lenient().when(contextResolver.mayStillWrite(any())).thenReturn(true);
         lenient()
                 .when(mergeRequestProcessor.storedVersion(any(), anyInt()))
                 .thenReturn(Optional.of(new GitLabMergeRequestProcessor.StoredVersion("abc123", null)));
@@ -215,7 +215,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             setupRepository();
             when(readinessReader.read(eq(1L), anyString(), eq(5))).thenReturn(facts());
             when(closingIssueClient.closesIssues(1L, 278964L, 5)).thenReturn(List.of(41));
-            when(contextResolver.mayStillWrite()).thenReturn(false);
+            when(contextResolver.mayStillWrite(any())).thenReturn(false);
 
             handler.onMessage(mockMessage(event));
 
