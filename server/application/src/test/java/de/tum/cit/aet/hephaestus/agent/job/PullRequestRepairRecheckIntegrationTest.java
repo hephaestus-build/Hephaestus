@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
@@ -76,6 +77,9 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private IntegrationManifestRegistry manifests;
 
     @Autowired
     private WorkspaceLlmConnectionRepository connectionRepository;
@@ -151,9 +155,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         repository.setDefaultBranch("main");
         repository = repositoryRepository.save(repository);
 
-        listener = new AgentJobEventListener(agentJobService, pullRequestRepository, gate, workspaceResolver, recorder);
+        listener = new AgentJobEventListener(
+                agentJobService, pullRequestRepository, gate, workspaceResolver, recorder, manifests);
         resubmitter = new PullRequestSignalResubmitter(
-                agentJobService, pullRequestRepository, gate, recorder, reviewRepository);
+                agentJobService, pullRequestRepository, gate, recorder, reviewRepository, manifests);
         coalescer = new PullRequestPushCoalescer(
                 signals,
                 pullRequestRepository,

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
@@ -41,18 +42,21 @@ public class PullRequestSignalResubmitter {
     private final PracticeReviewDetectionGate practiceReviewDetectionGate;
     private final SignalRecorder signalRecorder;
     private final PullRequestReviewRepository reviewRepository;
+    private final IntegrationManifestRegistry manifests;
 
     public PullRequestSignalResubmitter(
             AgentJobService agentJobService,
             PullRequestRepository pullRequestRepository,
             PracticeReviewDetectionGate practiceReviewDetectionGate,
             SignalRecorder signalRecorder,
-            PullRequestReviewRepository reviewRepository) {
+            PullRequestReviewRepository reviewRepository,
+            IntegrationManifestRegistry manifests) {
         this.agentJobService = agentJobService;
         this.pullRequestRepository = pullRequestRepository;
         this.practiceReviewDetectionGate = practiceReviewDetectionGate;
         this.signalRecorder = signalRecorder;
         this.reviewRepository = reviewRepository;
+        this.manifests = manifests;
     }
 
     /**
@@ -109,6 +113,11 @@ public class PullRequestSignalResubmitter {
                 signalRecorder.markRefused(key, skip.resolvedSignalReason());
             }
             case GateDecision.Detect detect -> {
+                if (MergeActorAdmission.awaitsMerger(manifests, pr, key.signalName(), detect.matchedPractices())) {
+                    log.debug("Pending merge review still waits for its merger: prId={}", pr.getId());
+                    signalRecorder.markRefused(key, SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
+                    return;
+                }
                 ScmEventPayload.PullRequestData prData = ScmEventPayload.PullRequestData.from(pr);
                 PullRequestReviewSubmissionRequest request = new PullRequestReviewSubmissionRequest(
                         prData,

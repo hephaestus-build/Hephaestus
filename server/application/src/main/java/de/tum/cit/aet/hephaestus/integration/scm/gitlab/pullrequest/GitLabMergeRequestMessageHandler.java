@@ -45,11 +45,15 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
 
     private static final Logger log = LoggerFactory.getLogger(GitLabMergeRequestMessageHandler.class);
 
-    /** The events after which the merge request's readiness is read: its head, status or approvals can have moved. */
+    /**
+     * The events after which the merge request is read: its head, status or approvals can have moved, or, on a merge,
+     * the hook left who merged it and when unsaid.
+     */
     private static final Set<GitLabEventAction> READS_READINESS = EnumSet.of(
             GitLabEventAction.OPEN,
             GitLabEventAction.UPDATE,
             GitLabEventAction.REOPEN,
+            GitLabEventAction.MERGE,
             GitLabEventAction.APPROVED,
             GitLabEventAction.APPROVAL,
             GitLabEventAction.UNAPPROVED,
@@ -90,9 +94,12 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
      * one merge request, outside the transaction, and what it said is recorded in a second short one where the
      * delivery may still write to the project as stored now ({@link GitLabWebhookContextResolver#mayStillWrite}) and
      * the answer still describes the stored head ({@link GitLabMergeRequestProcessor#applyReadiness}). A failed read
-     * records nothing:
-     * the facts stay as the event left them, unknown where it moved the head, until the next event or sync. An opened
-     * or updated merge request also has the issues it closes read from GitLab — the webhook stores the
+     * records nothing: the facts stay as the event left them, unknown where it moved the head, until the next event or
+     * sync. After a merge the same read records who merged it, when and the merge commit where the hook named none of
+     * them ({@link GitLabMergeRequestProcessor#applyTerminalFacts}), and only then, in the same second transaction and
+     * under the same project check, is the merge offered for review ({@link GitLabMergeRequestProcessor#offerMerge}) —
+     * also when the read failed, so that a merger it could not name holds the review pending instead of dropping it.
+     * An opened or updated merge request also has the issues it closes read from GitLab — the webhook stores the
      * {@code updated_at} the sync later compares against, so the sync would not read them for this change.
      */
     @Override
@@ -115,19 +122,21 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
         }
         Repository repository = Objects.requireNonNull(stored.context().repository());
         Long scopeId = stored.context().scopeId();
-        if (scopeId == null) {
+        boolean merge = action == GitLabEventAction.MERGE;
+        if (scopeId == null && !merge) {
             return;
         }
         int iid = attributes.iid();
         Instant requestedAt = Instant.now();
         GitLabMergeRequestReadinessReader.Facts facts =
-                readinessReader.read(scopeId, repository.getNameWithOwner(), iid);
-        List<Integer> closing = (action == GitLabEventAction.OPEN || action == GitLabEventAction.UPDATE)
+                scopeId == null ? null : readinessReader.read(scopeId, repository.getNameWithOwner(), iid);
+        List<Integer> closing = scopeId != null
+                        && (action == GitLabEventAction.OPEN || action == GitLabEventAction.UPDATE)
                         && project != null
                         && project.id() != null
                 ? closingIssueClient.closesIssues(scopeId, project.id(), iid)
                 : null;
-        if (facts == null && closing == null) {
+        if (facts == null && closing == null && !merge) {
             return;
         }
         transactionTemplate.executeWithoutResult(status -> {
@@ -137,7 +146,13 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             if (closing != null) {
                 mergeRequestProcessor.replaceClosingIssues(repository, iid, closing, stored.version());
             }
-            if (facts != null) {
+            if (merge) {
+                if (facts != null) {
+                    mergeRequestProcessor.applyTerminalFacts(repository, iid, facts);
+                }
+                // Offered whether or not the read succeeded: a merger it could not name holds the review pending.
+                mergeRequestProcessor.offerMerge(repository, iid, stored.context());
+            } else if (facts != null) {
                 mergeRequestProcessor.applyReadiness(repository, iid, facts, requestedAt, stored.context());
             }
         });
@@ -145,7 +160,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
 
     @Override
     protected void handleEvent(GitLabMergeRequestEventDTO event) {
-        handle(event, Instant.now());
+        dispatchEvent(event, Instant.now());
     }
 
     /** Stores the event Hephaestus received at {@code arrivedAt}. */

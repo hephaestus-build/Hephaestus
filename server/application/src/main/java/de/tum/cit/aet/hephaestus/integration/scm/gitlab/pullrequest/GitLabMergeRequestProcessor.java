@@ -178,7 +178,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         if (pr == null) {
             return false;
         }
-        String reason = readinessMismatch(repository, pr, facts);
+        String reason = readinessMismatch(repository, pr, facts, Issue.State.OPEN);
         if (reason != null) {
             log.debug("Skipped merge request readiness: prId={}, reason={}", pr.getId(), reason);
             return false;
@@ -207,15 +207,18 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
     /** Why GitLab's answer does not describe the stored merge request, or {@code null} when it does. */
     private static @Nullable String readinessMismatch(
-            Repository repository, PullRequest pr, GitLabMergeRequestReadinessReader.Facts facts) {
+            Repository repository,
+            PullRequest pr,
+            GitLabMergeRequestReadinessReader.Facts facts,
+            Issue.State expected) {
         if (facts.projectNativeId() != repository.getNativeId()) {
             return "otherProject";
         }
         if (facts.mergeRequestNativeId() != pr.getNativeId()) {
             return "otherMergeRequest";
         }
-        if (pr.getState() != Issue.State.OPEN || convertState(facts.state()) != Issue.State.OPEN) {
-            return "notOpen";
+        if (pr.getState() != expected || convertState(facts.state()) != expected) {
+            return "not" + expected;
         }
         if (!facts.headSha().equals(pr.getHeadRefOid())) {
             return "otherHead";
@@ -224,6 +227,67 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             return "olderVersion";
         }
         return null;
+    }
+
+    /**
+     * Records who merged merge request {@code iid}, when, and the merge commit, read from GitLab after its merge hook
+     * where the hook named none of them. Runs after the read, in its own transaction, with the merge request's row
+     * locked; the caller checks first that the delivery may still write.
+     *
+     * <p>Nothing is recorded unless GitLab's answer is about this repository's project and this merge request, both
+     * merged, at the stored head and not at a version older than the stored one. Only what is unknown is filled in, and
+     * only with what GitLab named: a merger or commit already stored stays, and one GitLab does not name stays
+     * unknown.
+     *
+     * @return whether anything was recorded
+     */
+    @Transactional
+    public boolean applyTerminalFacts(Repository repository, int iid, GitLabMergeRequestReadinessReader.Facts facts) {
+        PullRequest pr = pullRequestRepository
+                .findForUpdateByRepositoryIdAndNumber(repository.getId(), iid)
+                .orElse(null);
+        if (pr == null) {
+            return false;
+        }
+        String reason = readinessMismatch(repository, pr, facts, Issue.State.MERGED);
+        if (reason != null) {
+            log.debug("Skipped merge facts: prId={}, reason={}", pr.getId(), reason);
+            return false;
+        }
+        GitLabMergeRequestReadinessReader.Merge merge = facts.merge();
+        boolean changed = false;
+        if (pr.getMergedBy() == null && merge.user() != null) {
+            SyncUserData user = merge.user();
+            User merger = findOrCreateUser(
+                    new GitLabUserLookup(
+                            user.globalId(),
+                            user.username(),
+                            user.name(),
+                            user.avatarUrl(),
+                            user.webUrl(),
+                            user.publicEmail()),
+                    Objects.requireNonNull(repository.getProvider().getId()));
+            if (merger != null) {
+                pr.setMergedBy(merger);
+                changed = true;
+            }
+        }
+        if (pr.getMergeCommitSha() == null && merge.commitSha() != null) {
+            pr.setMergeCommitSha(merge.commitSha());
+            changed = true;
+        }
+        if (pr.getMergedAt() == null && merge.mergedAt() != null) {
+            pr.setMergedAt(merge.mergedAt());
+            if (pr.getClosedAt() == null) {
+                pr.setClosedAt(merge.mergedAt());
+            }
+            changed = true;
+        }
+        if (changed) {
+            pullRequestRepository.save(pr);
+            log.debug("Recorded merge facts from GitLab: prId={}", pr.getId());
+        }
+        return changed;
     }
 
     private Set<Issue> resolveLocalIssues(Repository repository, List<Integer> numbers) {
@@ -406,6 +470,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 attrs.updatedAt(),
                 attrs.closedAt(),
                 attrs.mergedAt(),
+                attrs.mergeCommitSha(),
                 author,
                 mergedBy,
                 milestoneId,
@@ -487,23 +552,48 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Process a merged event.
+     * Process a merged event: stores the merge and announces the close. The merge is offered for review by
+     * {@link #offerMerge}, after the read that follows the hook.
      */
     @Transactional
     @Nullable
     public PullRequest processMerged(GitLabMergeRequestEventDTO event, ProcessingContext context) {
         Issue.State before = getExistingState(event, context);
         PullRequest pr = processInternal(event, context);
-        if (pr != null && before != Issue.State.MERGED) {
-            var prData = ScmEventPayload.PullRequestData.from(pr);
-            if (before != Issue.State.CLOSED) {
-                eventPublisher.publishEvent(
-                        new ScmDomainEvent.PullRequestClosed(prData, true, EventContext.from(context)));
-            }
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestMerged(prData, EventContext.from(context)));
+        // Only the close is announced here. The merge itself, the occasion a review is judged on, is offered by
+        // offerMerge once the read after this hook has had its chance to record who merged.
+        if (pr != null
+                && pr.getState() == Issue.State.MERGED
+                && before != Issue.State.CLOSED
+                && before != Issue.State.MERGED) {
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(
+                    ScmEventPayload.PullRequestData.from(pr), true, EventContext.from(context)));
             log.debug("Merged merge request: prId={}", pr.getId());
         }
         return pr;
+    }
+
+    /**
+     * Offers the merge of merge request {@code iid} for review, as a merge hook received in {@code context} reported
+     * it: after the hook was stored and the read after it recorded what it could, successful or not, in the caller's
+     * transaction under the delivery's still-active route. The merge request is read with its row locked and offered
+     * only while it is stored as merged, also when a sync stored it so first — that sync only recorded the merge, and
+     * this delivery is what may review it; the signal ledger settles a redelivery. A merger still unknown then holds
+     * the review pending rather than running it without them.
+     *
+     * @return whether the merge was offered
+     */
+    @Transactional
+    public boolean offerMerge(Repository repository, int iid, ProcessingContext context) {
+        PullRequest pr = pullRequestRepository
+                .findForUpdateByRepositoryIdAndNumber(repository.getId(), iid)
+                .orElse(null);
+        if (pr == null || pr.getState() != Issue.State.MERGED) {
+            return false;
+        }
+        eventPublisher.publishEvent(new ScmDomainEvent.PullRequestMerged(
+                ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
+        return true;
     }
 
     /**
@@ -811,6 +901,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         }
         // Read before the upsert below overwrites the row; it's the only place the prior draft state survives.
         Boolean wasDraft = existingOpt.map(PullRequest::isDraft).orElse(null);
+        Issue.State previousState = existingOpt.map(PullRequest::getState).orElse(null);
         String previousTitle = existingOpt.map(PullRequest::getTitle).orElse(null);
         String previousBody = existingOpt.map(PullRequest::getBody).orElse(null);
         String previousHead = existingOpt.map(PullRequest::getHeadRefOid).orElse(null);
@@ -972,6 +1063,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         } else {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(
                     prData, authoredChanges(previousTitle, previousBody, pr), eventCtx));
+            // A merge the webhook missed is recorded as the sync found it, so a later delivery of it can still
+            // claim it; a sync records it without starting a review.
+            if (isMerged && previousState != Issue.State.MERGED) {
+                if (previousState != Issue.State.CLOSED) {
+                    eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(prData, true, eventCtx));
+                }
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestMerged(prData, eventCtx));
+            }
             log.debug("Updated merge request from sync: nativeId={}, iid={}", nativeId, data.iid());
         }
 
@@ -1058,6 +1157,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable String updatedAt,
             @Nullable String closedAt,
             @Nullable String mergedAt,
+            @Nullable String mergeCommitSha,
             @Nullable User author,
             @Nullable User mergedBy,
             @Nullable Long milestoneId,
@@ -1118,7 +1218,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 headRefOid,
                 null, // baseRefOid — not in webhook, null preserves existing
                 mergedBy != null ? mergedBy.getId() : null,
-                null // mergeCommitSha — not in webhook, null preserves existing
+                mergeCommitSha // the hook's merge_commit_sha; null, as before a merge, keeps the stored one
                 );
 
         PullRequest pr = pullRequestRepository

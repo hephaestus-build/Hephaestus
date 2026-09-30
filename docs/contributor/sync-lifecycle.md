@@ -223,7 +223,11 @@ stored head and not an older version; it never moves the head. Reviewers, decisi
 mergeability and merge status GitLab derives from the approvals — follow the dated snapshot, dated by when the read was
 asked for, as they do for a sync page: a read or page begun before a newer one was stored changes none of them. While GitLab reports `checking` or `approvals_syncing`, mergeability and
 approvals are not settled and stay unknown. A read that fails records nothing; the next hook or sync reads again. No
-workspace sync runs for a hook.
+workspace sync runs for a hook. A merge hook stores the merge commit it names but often no merger and no merge
+time; the same read after it fills them in where GitLab names them (`applyTerminalFacts`), under the same
+identity, head and version fence, and never replaces a recorded merger. The merge occasion is offered only
+after that read, in the same short transaction, and is offered even when the read failed. A merge the hook missed and a sync finds
+is recorded as a sync-discovered occasion, which a later delivery of the hook can still claim.
 
 GitLab answers a field it could not resolve with `null` and an error at that path. Every GitLab merge request read —
 this one, the sync and the historical backfill — asks Spring for the errors at, above or below the exact field
