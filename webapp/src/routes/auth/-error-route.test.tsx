@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { linkedIdentities } from "@/mocks/fixtures/auth";
+import { currentUser } from "@/mocks/fixtures/auth";
 import { unauthenticatedUser } from "@/mocks/handlers";
 import { server } from "@/mocks/server";
 import { authClient } from "@/runtime/auth/auth-client";
@@ -25,14 +25,39 @@ beforeEach(() => {
 	server.use(
 		http.get("*/identity-providers", () =>
 			HttpResponse.json([
-				{ registrationId: "github", displayName: "GitHub", providerType: "GITHUB" },
-				{ registrationId: "gitlab", displayName: "GitLab", providerType: "GITLAB" },
-				{ registrationId: "slack", displayName: "Slack", providerType: "SLACK" },
+				{
+					registrationId: "github",
+					displayName: "GitHub",
+					providerType: "GITHUB",
+					baseUrl: "https://github.com",
+				},
+				{
+					registrationId: "gitlab-lrz",
+					displayName: "LRZ GitLab",
+					providerType: "GITLAB",
+					baseUrl: "https://gitlab.lrz.de",
+				},
+				{
+					registrationId: "gitlab-com",
+					displayName: "GitLab.com",
+					providerType: "GITLAB",
+					baseUrl: "https://gitlab.com",
+				},
+				{
+					registrationId: "slack",
+					displayName: "Slack",
+					providerType: "SLACK",
+					baseUrl: "https://slack.com",
+				},
 			]),
 		),
-		// Only GitHub is linked: an unlinked sign-in would resolve a different account.
-		http.get("*/user/identities", () =>
-			HttpResponse.json(linkedIdentities.filter((identity) => identity.providerType === "GITHUB")),
+		// Only the LRZ GitLab origin is linked: any other sign-in, GitLab.com included, would resolve
+		// a different account.
+		http.get("*/user", () =>
+			HttpResponse.json({
+				...currentUser,
+				linkedProviders: [{ type: "GITLAB", serverUrl: "https://gitlab.lrz.de" }],
+			}),
 		),
 	);
 });
@@ -61,16 +86,17 @@ describe("recent sign-in before linking", () => {
 		await userEvent.click(
 			await screen.findByRole("button", { name: "Confirm access" }, ROUTE_RENDER_WAIT),
 		);
-		const github = await screen.findByRole("button", { name: "Continue with GitHub" });
-		expect(screen.queryByRole("button", { name: "Continue with GitLab" })).toBeNull();
+		const lrz = await screen.findByRole("button", { name: "Continue with LRZ GitLab" });
+		expect(screen.queryByRole("button", { name: "Continue with GitLab.com" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Continue with GitHub" })).toBeNull();
 		expect(screen.queryByRole("button", { name: "Continue with Slack" })).toBeNull();
 		const assigned = captureNavigation();
-		await userEvent.click(github);
+		await userEvent.click(lrz);
 
 		expect(assigned).toHaveLength(1);
 		const kickoff = new URL(String(assigned[0]));
 		expect(kickoff.pathname).toBe("/auth/login");
-		expect(kickoff.searchParams.get("provider")).toBe("github");
+		expect(kickoff.searchParams.get("provider")).toBe("gitlab-lrz");
 		expect(kickoff.searchParams.get("returnTo")).toBe(ONBOARDING);
 		expect(kickoff.searchParams.has("mode")).toBe(false);
 	});
@@ -82,9 +108,9 @@ describe("recent sign-in before linking", () => {
 		await userEvent.click(
 			await screen.findByRole("button", { name: "Confirm access" }, ROUTE_RENDER_WAIT),
 		);
-		await userEvent.click(await screen.findByRole("button", { name: "Continue with GitHub" }));
+		await userEvent.click(await screen.findByRole("button", { name: "Continue with LRZ GitLab" }));
 
-		expect(login).toHaveBeenCalledExactlyOnceWith("github", "/settings");
+		expect(login).toHaveBeenCalledExactlyOnceWith("gitlab-lrz", "/settings");
 	});
 
 	it("offers an ordinary sign-in carrying the destination once the session is gone", async () => {
