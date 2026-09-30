@@ -368,6 +368,10 @@ public class AgentJobService {
                 objectMetadata.put(
                         AgentJob.SIGNAL_REVISION_METADATA_KEY,
                         signalKey.revision().value());
+                if (admission != null && !admission.recheckedPractices().isEmpty()) {
+                    var rechecked = objectMetadata.putArray(AgentJob.RECHECKED_PRACTICES_METADATA_KEY);
+                    admission.recheckedPractices().stream().sorted().forEach(rechecked::add);
+                }
             }
             job.setMetadata(metadata);
             job.setIdempotencyKey(detectionKey);

@@ -72,6 +72,9 @@ public class AgentJob {
 
     public static final String SIGNAL_REVISION_METADATA_KEY = "signal_revision";
 
+    /** Slugs of the practices this review rechecks beside those its signal occasions, sorted. */
+    public static final String RECHECKED_PRACTICES_METADATA_KEY = "rechecked_practices";
+
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private static final int TOKEN_BYTES = 32;

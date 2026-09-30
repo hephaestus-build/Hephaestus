@@ -271,6 +271,10 @@ public class Issue extends BaseGitServiceEntity {
         UNKNOWN,
     }
 
+    public boolean isOpen() {
+        return state == State.OPEN;
+    }
+
     public boolean isPullRequest() {
         return false;
     }

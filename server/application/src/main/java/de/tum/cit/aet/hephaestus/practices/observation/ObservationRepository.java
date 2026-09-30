@@ -1267,6 +1267,28 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             Pageable pageable);
 
     /**
+     * Every standing live or requested measurement about one person on one piece of work, for the caller to
+     * narrow to each claim's latest run through {@link LatestRun#perClaim}: superseded and invalidated rows are
+     * excluded before that choice, as {@link #LATEST_RUN_OF_CLAIM} excludes them.
+     */
+    @EntityGraph(attributePaths = {"practice.currentRevision", "practiceRevision"})
+    @Query("""
+        SELECT o FROM Observation o
+        WHERE o.workspaceId = :workspaceId
+          AND o.artifactKind = :artifactKind
+          AND o.artifactId = :artifactId
+          AND o.aboutUserId = :aboutUserId
+          AND o.origin <> de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin.BACKFILL
+          AND o.supersededAt IS NULL
+          AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = o.id AND oi.restoredAt IS NULL)
+        """)
+    List<Observation> findStandingForWork(
+            @Param("workspaceId") Long workspaceId,
+            @Param("artifactKind") ArtifactKind artifactKind,
+            @Param("artifactId") Long artifactId,
+            @Param("aboutUserId") Long aboutUserId);
+
+    /**
      * The distinct people this job filed measurements against — the recipients a cycle can compose for.
      *
      * <p>Ordered, because callers hand each recipient a slice of a fixed ordinal band and a re-run has to

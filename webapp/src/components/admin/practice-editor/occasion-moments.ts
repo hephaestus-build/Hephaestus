@@ -58,6 +58,7 @@ const MOMENTS: Record<string, MomentDef> = {
 		phase: "during",
 		repeats: true,
 	},
+	"scm.pull_request.edited": { icon: FilePenLineIcon, phase: "during", repeats: true },
 	"scm.pull_request.reviewed": { icon: MessageSquareTextIcon, phase: "during", repeats: true },
 	"scm.pull_request.merged": { icon: GitMergeIcon, phase: "end", repeats: false },
 	"scm.pull_request.closed": { icon: GitPullRequestClosedIcon, phase: "end", repeats: false },

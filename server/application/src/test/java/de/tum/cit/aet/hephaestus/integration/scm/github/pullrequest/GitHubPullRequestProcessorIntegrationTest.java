@@ -46,6 +46,7 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -191,17 +192,22 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
     }
 
     private GitHubPullRequestDTO createBasicPullRequestDto(Long id, int number) {
+        return createBasicPullRequestDto(
+                id, number, "This is the body of test PR #" + number, Instant.parse("2025-11-01T21:42:45Z"));
+    }
+
+    private GitHubPullRequestDTO createBasicPullRequestDto(Long id, int number, String body, Instant updatedAt) {
         return new GitHubPullRequestDTO(
                 id, // id (webhook style - no databaseId)
                 null, // databaseId (null for webhook payloads)
                 "PR_node_" + id,
                 number,
                 "Test PR #" + number,
-                "This is the body of test PR #" + number,
+                body,
                 "open",
                 "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/pull/" + number,
                 Instant.parse("2025-11-01T21:42:45Z"),
-                Instant.parse("2025-11-01T21:42:45Z"),
+                updatedAt,
                 null, // closedAt
                 null, // mergedAt
                 null, // mergedBy
@@ -1207,6 +1213,28 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getCommits()).isEqualTo(3);
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestSynchronized.class))
                     .hasSize(1);
+        }
+    }
+
+    @Nested
+    class ProcessEdited {
+
+        @Test
+        void shouldReportAnEditedBodyButNotAnUpdateThatLeftTheTextAlone() {
+            processor.process(createBasicPullRequestDto(FIXTURE_PR_ID, 27), createContext());
+            eventListener.clear();
+            String repaired = "Adds the thing so reviewers can tell why. Closes #5";
+
+            processor.process(
+                    createBasicPullRequestDto(FIXTURE_PR_ID, 27, repaired, Instant.parse("2025-11-01T21:50:00Z")),
+                    createContext());
+            processor.process(
+                    createBasicPullRequestDto(FIXTURE_PR_ID, 27, repaired, Instant.parse("2025-11-01T21:55:00Z")),
+                    createContext());
+
+            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
+                    .extracting(ScmDomainEvent.PullRequestUpdated::changedFields)
+                    .containsExactly(Set.of("body"));
         }
     }
 

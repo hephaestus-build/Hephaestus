@@ -468,8 +468,8 @@ public class PracticeDetectionDeliveryService {
     }
 
     private void enforceAttribution(ValidatedObservation observation, PracticeRevision revision, AgentJob job) {
-        ActorRole subject =
-                PracticeBinding.subjectRoleOf(revision.getBindings(), PracticeCatalogInjector.signalOf(job));
+        ActorRole subject = PracticeBinding.subjectRoleOf(
+                revision.getBindings(), PracticeCatalogInjector.occasionOf(job, revision.getSlug()));
         if (PracticeCatalogInjector.subjectNameable(subject, job.getMetadata())) {
             return;
         }
@@ -604,7 +604,7 @@ public class PracticeDetectionDeliveryService {
         // bytes that were really there — the fabrication check is the byte-exact quote below, not binding
         // membership. Only EXHAUSTIVE stance (an ABSENCE claim) is the practice's own to make.
         Set<SourceKind> exhaustive = new HashSet<>();
-        PracticeBinding.needsFor(revision.getBindings(), PracticeCatalogInjector.signalOf(job))
+        PracticeBinding.needsFor(revision.getBindings(), PracticeCatalogInjector.occasionOf(job, revision.getSlug()))
                 .forEach(need -> {
                     if (need.stance() == EvidenceStance.EXHAUSTIVE) {
                         exhaustive.add(need.sourceKind());

@@ -120,6 +120,31 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("a recheck materialises the practices admission rechecked beside those its signal occasions")
+    void shouldAddTheRecheckedPracticesToThoseTheSignalOccasions() {
+        when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
+                .thenReturn(List.of(
+                        practice("describe", ScmSignals.PULL_REQUEST_OPENED),
+                        practice("sized", ScmSignals.PULL_REQUEST_OPENED),
+                        practice("tests", ScmSignals.PULL_REQUEST_SYNCHRONIZED)));
+        AgentJob job = job(ScmSignals.PULL_REQUEST_SYNCHRONIZED);
+        var metadata = org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, job.getMetadata());
+        metadata.putArray(AgentJob.RECHECKED_PRACTICES_METADATA_KEY).add("describe");
+
+        assertThat(injector.resolveEligiblePractices(job, ArtifactKinds.PULL_REQUEST))
+                .extracting(Practice::getSlug)
+                .containsExactly("describe", "tests");
+        Map<String, byte[]> files = new HashMap<>();
+        injector.inject(files, job, ArtifactKinds.PULL_REQUEST);
+        // Read under its own binding, not the push's, so its evidence is still required of the capture.
+        var describe = objectMapper
+                .readTree(java.util.Objects.requireNonNull(files.get(SandboxLayout.PRACTICES_PREFIX + "index.json")))
+                .get(0);
+        assertThat(describe.path("slug").asString()).isEqualTo("describe");
+        assertThat(describe.path("readsSources").isEmpty()).isFalse();
+    }
+
+    @Test
     @DisplayName("a review of a draft materialises only the practices that review drafts, as the gate admitted")
     void shouldSelectOnlyDraftPracticesWhenTheWorkWasADraft() {
         Practice onDrafts = practice("handoff", ScmSignals.PULL_REQUEST_OPENED);
