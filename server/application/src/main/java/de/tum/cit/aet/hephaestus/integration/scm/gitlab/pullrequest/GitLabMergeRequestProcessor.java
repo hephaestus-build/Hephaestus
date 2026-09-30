@@ -230,14 +230,88 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
+     * Why GitLab's report of a merge is not about the merge of {@code pr}, or {@code null} when it is: this merge
+     * request, merged in GitLab and as stored, at the stored head, with the stored merge commit where both know one.
+     * No version is compared. A merged merge request's title or description can still change, but who merged it, when
+     * and into which commit are facts of the completed merge that do not; so they hold whatever version GitLab dated
+     * its report with. GitLab's GraphQL dates to the second what its webhooks date to the millisecond, so the report
+     * of a merge is dated before the merge hook it follows.
+     */
+    private static @Nullable String mergeMismatch(
+            PullRequest pr,
+            long mergeRequestNativeId,
+            @Nullable String state,
+            @Nullable String head,
+            @Nullable String commit) {
+        if (mergeRequestNativeId != pr.getNativeId()) {
+            return "otherMergeRequest";
+        }
+        if (pr.getState() != Issue.State.MERGED || convertState(state) != Issue.State.MERGED) {
+            return "notMerged";
+        }
+        if (head == null || !head.equals(pr.getHeadRefOid())) {
+            return "otherHead";
+        }
+        if (commit != null && pr.getMergeCommitSha() != null && !commit.equals(pr.getMergeCommitSha())) {
+            return "otherMergeCommit";
+        }
+        return null;
+    }
+
+    /**
+     * Records what is unknown about the merge of {@code pr} from GitLab's report of it, which {@link #mergeMismatch}
+     * accepted: a merger, merge commit or merge time already stored stays, and one GitLab does not name stays unknown.
+     *
+     * @return whether anything was recorded
+     */
+    private boolean fillUnknownMerge(
+            PullRequest pr,
+            @Nullable SyncUserData merger,
+            @Nullable Instant mergedAt,
+            @Nullable String commit,
+            Long providerId) {
+        boolean changed = false;
+        if (pr.getMergedBy() == null && merger != null) {
+            User user = findOrCreateUser(
+                    new GitLabUserLookup(
+                            merger.globalId(),
+                            merger.username(),
+                            merger.name(),
+                            merger.avatarUrl(),
+                            merger.webUrl(),
+                            merger.publicEmail()),
+                    providerId);
+            if (user != null) {
+                pr.setMergedBy(user);
+                changed = true;
+            }
+        }
+        if (pr.getMergeCommitSha() == null && commit != null) {
+            pr.setMergeCommitSha(commit);
+            changed = true;
+        }
+        if (pr.getMergedAt() == null && mergedAt != null) {
+            pr.setMergedAt(mergedAt);
+            if (pr.getClosedAt() == null) {
+                pr.setClosedAt(mergedAt);
+            }
+            changed = true;
+        }
+        if (changed) {
+            pullRequestRepository.save(pr);
+            log.debug("Recorded merge facts from GitLab: prId={}", pr.getId());
+        }
+        return changed;
+    }
+
+    /**
      * Records who merged merge request {@code iid}, when, and the merge commit, read from GitLab after its merge hook
      * where the hook named none of them. Runs after the read, in its own transaction, with the merge request's row
      * locked; the caller checks first that the delivery may still write.
      *
-     * <p>Nothing is recorded unless GitLab's answer is about this repository's project and this merge request, both
-     * merged, at the stored head and not at a version older than the stored one. Only what is unknown is filled in, and
-     * only with what GitLab named: a merger or commit already stored stays, and one GitLab does not name stays
-     * unknown.
+     * <p>Nothing is recorded unless GitLab's answer is about this repository's project and the stored merge
+     * ({@link #mergeMismatch}); its version is not compared. Only what is unknown is filled in, and only with what
+     * GitLab named: a merger or commit already stored stays, and one GitLab does not name stays unknown.
      *
      * @return whether anything was recorded
      */
@@ -249,45 +323,20 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         if (pr == null) {
             return false;
         }
-        String reason = readinessMismatch(repository, pr, facts, Issue.State.MERGED);
+        GitLabMergeRequestReadinessReader.Merge merge = facts.merge();
+        String reason = facts.projectNativeId() != repository.getNativeId()
+                ? "otherProject"
+                : mergeMismatch(pr, facts.mergeRequestNativeId(), facts.state(), facts.headSha(), merge.commitSha());
         if (reason != null) {
             log.debug("Skipped merge facts: prId={}, reason={}", pr.getId(), reason);
             return false;
         }
-        GitLabMergeRequestReadinessReader.Merge merge = facts.merge();
-        boolean changed = false;
-        if (pr.getMergedBy() == null && merge.user() != null) {
-            SyncUserData user = merge.user();
-            User merger = findOrCreateUser(
-                    new GitLabUserLookup(
-                            user.globalId(),
-                            user.username(),
-                            user.name(),
-                            user.avatarUrl(),
-                            user.webUrl(),
-                            user.publicEmail()),
-                    Objects.requireNonNull(repository.getProvider().getId()));
-            if (merger != null) {
-                pr.setMergedBy(merger);
-                changed = true;
-            }
-        }
-        if (pr.getMergeCommitSha() == null && merge.commitSha() != null) {
-            pr.setMergeCommitSha(merge.commitSha());
-            changed = true;
-        }
-        if (pr.getMergedAt() == null && merge.mergedAt() != null) {
-            pr.setMergedAt(merge.mergedAt());
-            if (pr.getClosedAt() == null) {
-                pr.setClosedAt(merge.mergedAt());
-            }
-            changed = true;
-        }
-        if (changed) {
-            pullRequestRepository.save(pr);
-            log.debug("Recorded merge facts from GitLab: prId={}", pr.getId());
-        }
-        return changed;
+        return fillUnknownMerge(
+                pr,
+                merge.user(),
+                merge.mergedAt(),
+                merge.commitSha(),
+                Objects.requireNonNull(repository.getProvider().getId()));
     }
 
     private Set<Issue> resolveLocalIssues(Repository repository, List<Integer> numbers) {
@@ -616,6 +665,12 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             log.debug("Skipped approval of another head than the stored one: prId={}", pr.getId());
             return pr;
         }
+        // An approval is recorded for the head the hook names, never for one assumed from the stored merge request.
+        String approvedCommit = namedHead(event);
+        if (approvedCommit == null) {
+            log.debug("Skipped approval that names no head: prId={}", pr.getId());
+            return pr;
+        }
         if (!pr.takesReviewSnapshotAt(context.observedAt())) {
             log.debug("Skipped approval older than the stored reviews: prId={}", pr.getId());
             return pr;
@@ -628,12 +683,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         var existingReview = reviewRepository.findByNativeIdAndProviderId(
                 approvalNativeId, Objects.requireNonNull(context.providerId()));
         Instant approvedAt = context.observedAt();
-        String approvedCommit = approvedCommit(event, pr);
 
         if (existingReview.isPresent()) {
-            // Re-approval: the approval row was dismissed by an unapproval or a reset
+            // Re-approval: the approval row was dismissed by an unapproval, or it approves another head. GitLab's reset
+            // on a push dismisses no one, so an approval of the new head finds the earlier head's approval standing.
             PullRequestReview review = existingReview.get();
-            if (review.getState() != PullRequestReview.State.APPROVED || review.isDismissed()) {
+            if (review.getState() != PullRequestReview.State.APPROVED
+                    || review.isDismissed()
+                    || !approvedCommit.equals(review.getCommitId())) {
                 review.setState(PullRequestReview.State.APPROVED);
                 review.setDismissed(false);
                 review.setSubmittedAt(approvedAt);
@@ -693,15 +750,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 || lastCommit.id().equals(pr.getHeadRefOid());
     }
 
-    /** The commit an approval hook approved: the head it names, or the stored head where it names none. */
-    private static @Nullable String approvedCommit(GitLabMergeRequestEventDTO event, PullRequest pr) {
+    /** The head {@code event} names, or {@code null} when it names none. */
+    private static @Nullable String namedHead(GitLabMergeRequestEventDTO event) {
         var attrs = event.objectAttributes();
-        if (attrs != null
-                && attrs.lastCommit() != null
-                && !attrs.lastCommit().id().isBlank()) {
-            return attrs.lastCommit().id();
-        }
-        return resolveApprovalCommit(pr);
+        return attrs != null
+                        && attrs.lastCommit() != null
+                        && !attrs.lastCommit().id().isBlank()
+                ? attrs.lastCommit().id()
+                : null;
     }
 
     /**
@@ -892,12 +948,32 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 && existingOpt.get().getUpdatedAt() != null
                 && fetchedUpdatedAt != null
                 && fetchedUpdatedAt.isBefore(existingOpt.get().getUpdatedAt())) {
+            PullRequest stored = existingOpt.get();
+            // Nothing that can still change, such as the title or description, is taken from an older page; only the
+            // facts of the completed merge it reports, when it is the stored merge, fill what is unknown (see
+            // mergeMismatch).
+            if (mergeMismatch(stored, nativeId, data.state(), data.diffHeadSha(), data.mergeCommitSha()) == null) {
+                fillUnknownMerge(
+                        stored,
+                        data.mergeUserGlobalId() == null
+                                ? null
+                                : new SyncUserData(
+                                        data.mergeUserGlobalId(),
+                                        data.mergeUserUsername(),
+                                        data.mergeUserName(),
+                                        data.mergeUserAvatarUrl(),
+                                        data.mergeUserWebUrl(),
+                                        data.mergeUserPublicEmail()),
+                        parseGitLabTimestamp(data.mergedAt()),
+                        data.mergeCommitSha(),
+                        providerId);
+            }
             log.debug(
                     "Skipped merge request older than the stored one: iid={}, storedUpdatedAt={}, readUpdatedAt={}",
                     data.iid(),
-                    existingOpt.get().getUpdatedAt(),
+                    stored.getUpdatedAt(),
                     fetchedUpdatedAt);
-            return existingOpt.get();
+            return stored;
         }
         // Read before the upsert below overwrites the row; it's the only place the prior draft state survives.
         Boolean wasDraft = existingOpt.map(PullRequest::isDraft).orElse(null);
