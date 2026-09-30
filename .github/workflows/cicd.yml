@@ -606,7 +606,7 @@ jobs:
       application-artifact: server-build-${{ github.run_id }}
       project-descriptor: "server/application/project.toml"
       # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
-      run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:c32333227b6dfbc2a4a93b03ee6d3475cfe152468c7d396bf22f06099bb0ecc9"
+      run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
       registry: "ghcr.io"
       publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
       single-arch: ${{ needs.detect-changes.outputs.single-arch == 'true' }}
