@@ -111,6 +111,7 @@ mock.module("node:child_process", { exports: {
 // Liquibase behavior itself is covered against PostgreSQL by LiquibaseBaselineIntegrationTest.
 for (const [scenario, expectedError] of [
 	["refused", undefined],
+	["modern-previous", undefined],
 	["sync-accepted", "Expected cut-point refusal from changeLogSyncToTag"],
 	["sync-unrelated-error", "Expected cut-point refusal from changeLogSyncToTag"],
 	["startup-accepted", "Expected cut-point refusal at startup"],
@@ -129,6 +130,7 @@ for (const [scenario, expectedError] of [
 				preload,
 				`globalThis.fetch = async (input, init) => {
   const url = String(input);
+  appendFileSync(commands, JSON.stringify(["fetch", url]) + "\\n");
   if (url.endsWith("/auth/dev-login")) {
     return new Response(null, { status: 204, headers: { "set-cookie": "HEPHAESTUS_AT=fixture; Path=/" } });
   }
@@ -139,7 +141,10 @@ for (const [scenario, expectedError] of [
   if (url.endsWith("/workspaces") && init?.method === "POST") return new Response(null, { status: 201 });
   if (url.endsWith("/workspaces")) return Response.json([{ workspaceSlug: "upgrade-fixture" }]);
   if (url.endsWith("/user")) return Response.json({ displayName: "Upgrade alice" });
-  if (url.endsWith("/actuator/health/readiness")) return Response.json({ status: "UP" });
+  if (url.endsWith("/readyz")) {
+    return scenario === "modern-previous" ? Response.json({ status: "UP" }) : new Response(null, { status: 401 });
+  }
+  if (url.endsWith("/actuator/health/readiness") && scenario !== "modern-previous") return Response.json({ status: "UP" });
   throw new Error("Unexpected HTTP request: " + url);
 };
 `,
@@ -216,6 +221,12 @@ mock.module("node:child_process", { exports: {
 				assert.ok(result.stderr.includes(expectedError), result.stderr);
 			}
 			const invocations = readFileSync(commands, "utf8");
+			assert.match(invocations, /http:\/\/127\.0\.0\.1:18080\/readyz/u);
+			if (scenario === "modern-previous") {
+				assert.ok(!invocations.includes("/actuator/health/readiness"));
+			} else {
+				assert.match(invocations, /http:\/\/127\.0\.0\.1:18080\/actuator\/health\/readiness/u);
+			}
 			assert.match(invocations, /"rm","--force".*-sync".*-postgres"/u);
 			assert.match(invocations, /"network","rm"/u);
 		} finally {

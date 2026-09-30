@@ -90,22 +90,28 @@ function startApplication(name: string, image: string): number {
 	return port;
 }
 
-async function waitUntilReady(name: string, port: number): Promise<void> {
+async function waitUntilReady(
+	name: string,
+	port: number,
+	readinessPaths: readonly string[] = ["/readyz"],
+): Promise<void> {
 	const deadline = Date.now() + 180_000;
 	while (Date.now() < deadline) {
 		const state = docker("inspect", "--format", "{{.State.Status}}", name);
 		if (state !== "running") {
 			throw new Error(`${name} stopped during startup`);
 		}
-		try {
-			const response = await fetch(`http://127.0.0.1:${port}/readyz`, {
-				signal: AbortSignal.timeout(READINESS_TIMEOUT_MS),
-			});
-			if (response.ok) {
-				return;
+		for (const readinessPath of readinessPaths) {
+			try {
+				const response = await fetch(`http://127.0.0.1:${port}${readinessPath}`, {
+					signal: AbortSignal.timeout(READINESS_TIMEOUT_MS),
+				});
+				if (response.ok) {
+					return;
+				}
+			} catch {
+				// The endpoint is unavailable while the container starts.
 			}
-		} catch {
-			// The endpoint is unavailable while the container starts.
 		}
 		await sleep(2000);
 	}
@@ -598,7 +604,8 @@ try {
 	}
 
 	let port = startApplication(application, previousImage);
-	await waitUntilReady(application, port);
+	// Released images before the management-port split expose only the legacy application-port probe.
+	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
 	const previousSession = await login(port, "alice");
 	await completeTransparencyNotice(port, previousSession);
 	await login(port, "root");
