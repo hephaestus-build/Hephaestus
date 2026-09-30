@@ -385,7 +385,8 @@ function dataFingerprint(): string {
 		          concat_ws('|', id, display_name, app_role, status) AS value
 		   FROM account
 		   UNION ALL
-		   SELECT 'identity', concat_ws('|', id, account_id, subject, username_at_signup, linked_via)
+		   SELECT 'identity', concat_ws('|', id, account_id, provider_id, external_actor_id,
+		          subject, username_at_signup, linked_via)
 		   FROM identity_link
 		   UNION ALL
 		   SELECT 'user', concat_ws('|', id, provider_id, native_id, login, type)
