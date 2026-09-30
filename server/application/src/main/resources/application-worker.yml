@@ -23,11 +23,8 @@ spring:
         timeout-per-shutdown-phase: 6m
 
 server:
-    # A real port, never -1: the actuator probe and the management endpoints answer on this one
-    # connector, and disabling it leaves every bean wired while nothing can reach them. Loopback-bound,
-    # so only in-container callers (thc) get there; sandboxes use the gateway connector instead.
-    # No management.server.address belongs here: Spring Boot refuses a management-specific address
-    # while the management endpoints share the server's port, which is the shipped topology.
+    # No user-facing API: keep the application connector on loopback. Metrics and probes
+    # use the separate management listener, reachable on the private container network.
     port: ${SERVER_PORT:8080}
     address: 127.0.0.1
 

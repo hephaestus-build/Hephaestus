@@ -431,10 +431,7 @@ await test("a setting named in PER_CONTAINER may differ", () => {
 	// THC_PATH is in the list: the receiver reports NATS through readiness and the others do not.
 	const { failures } = analyse(
 		APPLICATION,
-		applicationPair(
-			[...SERVER, "THC_PATH: /actuator/health/liveness"],
-			[AGENT_DIGEST, "THC_PATH: /actuator/health/readiness"],
-		),
+		applicationPair([...SERVER, "THC_PATH: /livez"], [AGENT_DIGEST, "THC_PATH: /readyz"]),
 	);
 
 	assert.deepEqual(failures, []);

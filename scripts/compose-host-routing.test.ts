@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { isMap, isScalar, isSeq, parseDocument } from "yaml";
 import { isSet } from "./lib/env.ts";
 
 const STACKS = ["app", "core", "proxy"] as const;
+const MANAGEMENT_BIND = `$\${HOSTNAME}.shared-network`;
 
 /** Every `traefik.http.routers.<name>.<key>=` value in a stack's Compose file. */
 function labels(stack: (typeof STACKS)[number], key: string): { router: string; value: string }[] {
@@ -166,5 +168,79 @@ await test("capability-link pages suppress referrers before scripts or assets lo
 			readFileSync(new URL(file, import.meta.url), "utf8"),
 			/traefik\.http\.middlewares\.security-headers\.headers\.referrerPolicy=no-referrer/u,
 		);
+	}
+});
+
+/** Both short and long Compose port syntax can publish a range containing management. */
+function assertManagementNotPublished(port: unknown, service: string): void {
+	let target: unknown;
+	if (isMap(port)) {
+		target = port.get("target");
+	} else if (isScalar(port)) {
+		target = port.value;
+	}
+	assert.ok(
+		typeof target === "string" || typeof target === "number",
+		`${service} has an unrecognized published port`,
+	);
+	const targetRange =
+		String(target)
+			.split(":")
+			.at(-1)
+			?.replace(/\/(?:tcp|udp)$/u, "") ?? "";
+	const [first, last = first] = targetRange.split("-").map(Number);
+	assert.ok(
+		first !== undefined && last !== undefined && Number.isFinite(first) && Number.isFinite(last),
+	);
+	assert.ok(!(first <= 9090 && last >= 9090), `${service} publishes management port 9090`);
+}
+
+await test("application metrics stay on the private network in both Compose deployments", () => {
+	for (const [file, roles] of [
+		["../docker/compose.app.yaml", ["application-server", "application-worker"]],
+		["../docker/compose.core.yaml", ["webhook-server"]],
+		[
+			"../docker/self-host/compose.single-host.yaml",
+			["application-server", "application-worker", "webhook-server"],
+		],
+	] as const) {
+		const document = parseDocument(readFileSync(new URL(file, import.meta.url), "utf8"));
+		assert.equal(document.errors.length, 0, `${file} must be valid YAML`);
+		for (const role of roles) {
+			const service = document.getIn(["services", role]);
+			assert.ok(isMap(service), `${file}/${role} is missing`);
+			const expose = service.get("expose");
+			// The disabled single-host worker inherits the reference listener, not another topology.
+			if (!(file.includes("single-host") && role === "application-worker")) {
+				assert.ok(isSeq(expose), `${file}/${role} must expose management internally`);
+				assert.ok(expose.items.some((port) => isScalar(port) && String(port.value) === "9090"));
+			}
+			const managementAddress = service.getIn(["environment", "MANAGEMENT_SERVER_ADDRESS"]);
+			if (file.includes("single-host")) {
+				assert.ok(managementAddress === undefined || managementAddress === MANAGEMENT_BIND);
+			}
+			if (!file.includes("single-host")) {
+				assert.equal(service.getIn(["environment", "MANAGEMENT_SERVER_ADDRESS"]), MANAGEMENT_BIND);
+				assert.equal(service.getIn(["environment", "THC_PORT"]), "8080");
+				assert.ok(
+					["/livez", "/readyz"].includes(String(service.getIn(["environment", "THC_PATH"]))),
+				);
+			}
+			const ports = service.get("ports");
+			if (ports !== undefined) {
+				assert.ok(isSeq(ports), `${file}/${role} ports must be a sequence`);
+				for (const port of ports.items) {
+					assertManagementNotPublished(port, `${file}/${role}`);
+				}
+			}
+		}
+		assert.doesNotMatch(
+			readFileSync(new URL(file, import.meta.url), "utf8"),
+			/loadbalancer\.server\.port=9090/u,
+		);
+	}
+	for (const stack of STACKS) {
+		const file = readFileSync(new URL(`../docker/compose.${stack}.yaml`, import.meta.url), "utf8");
+		assert.doesNotMatch(file, /traefik\.[^\n]*(?:prometheus|9090)/u);
 	}
 });

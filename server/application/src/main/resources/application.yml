@@ -197,7 +197,8 @@ management:
             otlp:
                 enabled: false
     server:
-        port: ${MANAGEMENT_PORT:8080}
+        port: ${MANAGEMENT_PORT:9090}
+        address: 127.0.0.1
     endpoints:
         web:
             exposure:
@@ -208,6 +209,7 @@ management:
             show-details: when_authorized
             probes:
                 enabled: true
+                add-additional-paths: true
             # Operational dependencies affect readiness, not process liveness. This group replaces the
             # auto-configured readiness probe, which contains readinessState alone — on the
             # webhook-only container that reduces the probe to "the Spring context started", and both
