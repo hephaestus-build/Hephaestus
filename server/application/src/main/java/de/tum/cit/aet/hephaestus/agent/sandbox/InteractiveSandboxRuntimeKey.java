@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
+package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 
 /** Non-secret identity of everything frozen into a reusable interactive sandbox. */
-record InteractiveSandboxRuntimeKey(
+public record InteractiveSandboxRuntimeKey(
         String image,
         List<String> command,
         Map<String, String> environment,
@@ -22,7 +22,7 @@ record InteractiveSandboxRuntimeKey(
         SecurityProfile securityProfile,
         Map<String, String> inputDigests,
         @Nullable RoutingKey routing) {
-    static InteractiveSandboxRuntimeKey of(InteractiveSandboxSpec spec, @Nullable ProxyRouting routing) {
+    public static InteractiveSandboxRuntimeKey of(InteractiveSandboxSpec spec, @Nullable ProxyRouting routing) {
         Map<String, String> inputDigests = spec.inputFiles().entrySet().stream()
                 .collect(Collectors.toUnmodifiableMap(
                         Map.Entry::getKey, entry -> ProvenanceDigest.sha256Hex(entry.getValue())));

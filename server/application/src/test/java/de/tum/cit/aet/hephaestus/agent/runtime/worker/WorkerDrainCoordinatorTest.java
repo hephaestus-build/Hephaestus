@@ -45,7 +45,7 @@ class WorkerDrainCoordinatorTest extends BaseUnitTest {
         ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
 
         WorkerDrainCoordinator coordinator = new WorkerDrainCoordinator(
-                client, state, props, Optional.of(executor), events, new SimpleMeterRegistry());
+                client, state, props, Optional.of(executor), Optional.empty(), events, new SimpleMeterRegistry());
         coordinator.start();
         coordinator.stop();
 
@@ -74,6 +74,7 @@ class WorkerDrainCoordinatorTest extends BaseUnitTest {
                 new WorkerCapacityState(props),
                 props,
                 Optional.of(executor),
+                Optional.empty(),
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry());
         coordinator.start();
@@ -92,6 +93,7 @@ class WorkerDrainCoordinatorTest extends BaseUnitTest {
                 new WorkerCapacityState(props),
                 props,
                 Optional.of(executor),
+                Optional.empty(),
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry());
         coordinator.start();
@@ -113,6 +115,7 @@ class WorkerDrainCoordinatorTest extends BaseUnitTest {
                 new WorkerCapacityState(props),
                 props,
                 Optional.of(executor),
+                Optional.empty(),
                 mock(ApplicationEventPublisher.class),
                 new SimpleMeterRegistry());
         coordinator.start();
@@ -135,6 +138,7 @@ class WorkerDrainCoordinatorTest extends BaseUnitTest {
                 new WorkerCapacityState(props),
                 props,
                 Optional.of(executor),
+                Optional.empty(),
                 events,
                 new SimpleMeterRegistry());
         coordinator.start();

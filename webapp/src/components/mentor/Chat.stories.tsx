@@ -342,6 +342,18 @@ export const ErrorState: Story = {
 	},
 };
 
+export const Busy: Story = {
+	args: {
+		...ErrorState.args,
+		errorMessage: "Heph is busy. Please try again.",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Heph is busy", { exact: true })).toBeVisible();
+		await expect(canvas.getByText("Please try again in a moment.")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Try again" })).toBeEnabled();
+	},
+};
+
 const INTERRUPTED_REPLY: ChatMessage = {
 	id: "msg-interrupted",
 	role: "assistant",

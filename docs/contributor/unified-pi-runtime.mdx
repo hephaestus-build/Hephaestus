@@ -5,9 +5,27 @@ title: Unified Pi Runtime
 description: Mentor replica affinity and how to disable it for debugging.
 ---
 
+## Heph session ownership
+
+Web chat and Slack DMs retain their front ends, admission, budget checks, persistence and
+`fetch_context` on the server. `WorkerInteractiveSandboxService` places a session on a connected
+worker with spare mentor capacity. The worker hub carries bounded session commands, acknowledgements,
+runner frames and terminal session events; the runner itself opens an outbound WebSocket to the
+worker's Sandbox Gateway. The worker owns attachment, idle eviction, Docker resources and session
+metrics. No server-side Docker fallback exists.
+
+Each live developer/workspace session stays on its worker. The server transfers only a scoped proxy
+credential and its non-secret route; the worker resolves provider keys and binds each turn before
+sending the prompt. Proxy usage is committed to PostgreSQL, not reconstructed from runner claims.
+Drain and control-connection loss retire sessions. The next turn restores `session_jsonl` on an
+available worker; absence of spare capacity is a retryable “Heph is busy” result.
+
+A prepare acknowledgement or `runner_ready` does not prove SDK readiness. The server records
+`mentor.turn.runtime_ready` only after `open_thread` completes, at the real runtime boundary.
+
 ## Why mentor traffic is sticky
 
-A Heph sandbox's runtime container runs `gateway-mentor.ts`, which starts `pi-mentor-runner.ts` and relays its stdin and stdout over a WebSocket it opens back to the replica that started it (`/internal/llm/runtime/{id}/frames`, `GatewayInteractiveChannel`). That connection and the sandbox registry (`InteractiveSandboxRegistry`, keyed by developer and workspace) live in that replica's memory. The conversation itself is persisted to Postgres (`chat_thread.session_jsonl`) and handed to the runner with `open_thread`, so any replica can serve any turn — but a replica without the sandbox must start one first, a cold start timed by `mentor.attach.duration` and visible to operators as `mentor.turn.first_token{sandbox="cold"}`. Opening Heph prepares the sandbox on the replica the request lands on (`POST /api/workspaces/{slug}/mentor/sandbox`), which is why the prepare call goes through the same affinity as the turn that follows.
+A Heph runtime container opens its gateway frames WebSocket to the **owning worker**, not to the application server. The worker owns the sandbox registry and idle eviction; the server relays JSON-RPC frames through the authenticated hub and retains `chat_thread.session_jsonl` in PostgreSQL. A saved session travels with `open_thread`, so the next turn can restore it after worker eviction, drain or restart. Preparation and a following web turn keep the same server affinity and worker placement; Slack preparation and a DM handled by different server replicas may still open separate placements. The reference single-server deployment avoids that case.
 
 Traefik pins workspace traffic to the originating replica via a cookie scoped to `/api/workspaces` — narrower than the full `/api` router (auth and public endpoints stay round-robin), broad enough to cover the actual mentor URL `/api/workspaces/{slug}/mentor/chat`. Labels live on the `https-application-server` service in `docker/compose.app.yaml`. Inspect with `curl -i`:
 
@@ -20,7 +38,7 @@ Labels are HTTPS-only; the HTTP router redirects to HTTPS, so pinning it would j
 
 - **Two browsers, same user.** Two browsers can pin to two replicas, each spawning its own `(userId, workspaceId)` sandbox — `InteractiveSandboxRegistry` is per-JVM.
 - **Slack has no affinity.** Slack events reach the server through shared durable NATS consumers, so with more than one application-server replica the `app_home_opened` that prepares a sandbox and the DM that follows can land on different replicas; the DM then starts its own. A single replica, the reference topology, always reuses it.
-- **Rolling deploys.** A restart removes every Heph sandbox on that replica; a pinned user pays one cold start unless they reopen Heph first. The `SseEmitter` timeout is 10 minutes (`MentorChatController.EMITTER_TIMEOUT_MS`); drain by refusing new turns and letting in-flight emitters complete.
+- **Rolling deploys.** A worker drain ends its Heph sessions with a terminal stream result. The next turn restores the saved thread on an available worker. The `SseEmitter` timeout remains 10 minutes (`MentorChatController.EMITTER_TIMEOUT_MS`); it is not the worker-drain deadline.
 
 ## Disabling affinity for debugging
 

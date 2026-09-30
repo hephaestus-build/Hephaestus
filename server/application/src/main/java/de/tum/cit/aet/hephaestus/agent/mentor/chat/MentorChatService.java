@@ -367,6 +367,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                                 startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, fetchContext);
                         client.openThread(request.threadId(), null).get(10, TimeUnit.SECONDS);
                     }
+                    metrics.recordRuntimeReady(Duration.ofNanos(System.nanoTime() - turn.acceptedAt));
                     // Bind and unbind INSIDE the sandbox lock: that exclusivity is what stops a call being
                     // attributed to the wrong turn. A late call outside the window has no row to bill and
                     // the proxy refuses it.
@@ -378,6 +379,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                                 sandboxSessionId);
                     }
                     try {
+                        sandbox.bindTurn(proxyMeter.turnId(), llmConfig.priceSnapshot());
                         var prompt = client.prompt(
                                 request.threadId(), MentorTurnPromptFactory.forRunner(request, contextInputs));
                         state.markLlmCallStarted();
@@ -390,7 +392,11 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         turn.done.get(
                                 MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis() + 30_000, TimeUnit.MILLISECONDS);
                     } finally {
-                        proxyCredentialRegistry.unbindTurn(sandboxSessionId, proxyMeter);
+                        try {
+                            sandbox.unbindTurn(proxyMeter.turnId());
+                        } finally {
+                            proxyCredentialRegistry.unbindTurn(sandboxSessionId, proxyMeter);
+                        }
                     }
                 } catch (Exception failure) {
                     poisoning = isPoisoning(failure);
@@ -800,6 +806,10 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
      * internal ids or upstream errors. The server log retains those details.
      */
     private static String userFacingError(Throwable e) {
+        if (e instanceof de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException
+                || e.getCause() instanceof de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException) {
+            return "Heph is busy. Please try again.";
+        }
         if (e.getCause() instanceof MentorStreamLostException || e instanceof MentorStreamLostException) {
             return PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT;
         }

@@ -15,6 +15,7 @@ export interface ChatProps {
 	messages: ChatMessage[];
 	votes?: ChatMessageVote[];
 	status: UseChatHelpers<ChatMessage>["status"];
+	errorMessage?: string;
 	readonly?: boolean;
 	isAtBottom?: boolean;
 	scrollToBottom?: () => void;
@@ -34,6 +35,7 @@ export function Chat({
 	messages,
 	votes,
 	status,
+	errorMessage,
 	readonly = false,
 	isAtBottom: parentIsAtBottom = true,
 	scrollToBottom: parentScrollToBottom,
@@ -55,6 +57,7 @@ export function Chat({
 
 	// The live error is gone once the conversation is reopened, but a reply saved as interrupted can still
 	// be tried again.
+	const isBusy = status === "error" && errorMessage === "Heph is busy. Please try again.";
 	const lastMessage = messages.at(-1);
 	const canRetry =
 		status === "error" ||
@@ -86,9 +89,13 @@ export function Chat({
 						<div className="mb-2 w-full max-w-3xl">
 							<Alert variant="destructive">
 								<AlertCircle className="size-4" />
-								<AlertTitle>Something went wrong</AlertTitle>
+								<AlertTitle>{isBusy ? "Heph is busy" : "Something went wrong"}</AlertTitle>
 								<AlertDescription className="flex items-center justify-between gap-4">
-									<span>An error occurred while generating the response. Please try again.</span>
+									<span>
+										{isBusy
+											? "Please try again in a moment."
+											: "An error occurred while generating the response. Please try again."}
+									</span>
 									{onReload && (
 										<Button variant="outline" size="sm" onClick={onReload} className="shrink-0">
 											<RotateCcw className="size-4" />

@@ -32,4 +32,30 @@ class FrameCodecRoundTripTest extends BaseUnitTest {
                 .isInstanceOf(FrameCodec.FrameCodecException.class)
                 .hasMessageContaining("exceeds " + FrameCodec.MAX_FRAME_BYTES);
     }
+
+    @Test
+    void mentorCommandsAndEventsRoundTripWithUnicodeAndBinaryInputs() {
+        var mapper = new ObjectMapper();
+        var body = mapper.createObjectNode().put("text", "Heph 🌍");
+        var session = java.util.UUID.randomUUID();
+        var request = java.util.UUID.randomUUID();
+        for (var operation : MentorSessionCommand.Operation.values()) {
+            var input = FrameEnvelope.of(new MentorSessionCommand(session, request, operation, body));
+            assertThat(codec.decode(codec.encode(input))).isEqualTo(input);
+        }
+        for (var kind : MentorSessionEvent.Kind.values()) {
+            var input = FrameEnvelope.of(new MentorSessionEvent(session, request, kind, body));
+            assertThat(codec.decode(codec.encode(input))).isEqualTo(input);
+        }
+    }
+
+    @Test
+    void checksUtf8BytesRatherThanJavaCharacterCount() {
+        String oversized = "🌍".repeat(FrameCodec.MAX_FRAME_BYTES / 4 + 1);
+        assertThatThrownBy(() -> codec.decode(oversized)).isInstanceOf(FrameCodec.FrameCodecException.class);
+        var body = new ObjectMapper().createObjectNode().put("text", oversized);
+        assertThatThrownBy(() -> codec.encode(FrameEnvelope.of(new MentorSessionEvent(
+                        java.util.UUID.randomUUID(), null, MentorSessionEvent.Kind.FRAME, body))))
+                .isInstanceOf(FrameCodec.FrameCodecException.class);
+    }
 }

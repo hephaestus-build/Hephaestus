@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.GatewayInteractiveChannel;
+import de.tum.cit.aet.hephaestus.agent.sandbox.FrameRingBuffer;
+import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxRuntimeKey;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;

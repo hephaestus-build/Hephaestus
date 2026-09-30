@@ -304,6 +304,16 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void capacityRefusalIsBusyAndDoesNotRetryAnAttach() {
+        when(interactiveSandboxService.attach(any()))
+                .thenThrow(new de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException());
+        runTurnSync();
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        assertThat(emitter.rawData).anySatisfy(raw -> assertThat(raw).contains("Heph is busy"));
+        verify(interactiveSandboxService, times(1)).attach(any());
+    }
+
+    @Test
     void runTurn_happyPath_emitsStartThenChunksThenFinish() throws Exception {
         scheduleHappyPathResponses(sandbox).run();
 
@@ -404,6 +414,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         // Prepare starts no thread and sends the runner nothing.
         verify(persistence, times(1)).ensureThread(anyLong(), any(), any(), any(), any());
         assertThat(sandbox.methodsSent()).containsOnlyOnce("hello", "open_thread", "prompt");
+        assertThat(meterRegistry.timer("mentor.turn.runtime_ready").count()).isEqualTo(1L);
     }
 
     @Test
@@ -528,6 +539,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
         assertThat(sandbox.promptTexts()).isEmpty();
         assertThat(closedUnderSandboxLock).containsExactly(true);
+        assertThat(meterRegistry.timer("mentor.turn.runtime_ready").count()).isZero();
 
         emitter = new RecordingEmitter();
         scheduleHappyPathResponses(fresh).run();

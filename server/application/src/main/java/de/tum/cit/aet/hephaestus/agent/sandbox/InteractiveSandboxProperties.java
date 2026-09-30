@@ -23,10 +23,10 @@ import org.springframework.validation.annotation.Validated;
  *     overshoot the phase and leak containers on shutdown.
  * @param sendQueueCapacity bounded writer queue. {@code send()} rejects when full — the only
  *     honest backpressure signal to upstream callers (a timeout alone allows unbounded queueing).
- * @param maxFrameChars upper bound on a single stdout-line length (chars, not bytes — a UTF-8
- *     encoded character can be up to 4 bytes, so the on-wire memory ceiling is roughly 4× this).
- *     A longer line is treated as a stream-level fault and the session terminates {@code ERROR}.
- *     Without this bound a hostile runner could OOM the app-server.
+ * @param maxFrameChars gateway runner-frame budget in UTF-8 bytes. The legacy property name is
+ *     retained, but the gateway and worker relay enforce bytes. Capped at 1 MiB so a runner frame
+ *     and its hub envelope fit the control transport's 2 MiB limit. An oversized frame terminates
+ *     the session instead of consuming unbounded memory.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.mentor")
@@ -41,4 +41,8 @@ public record InteractiveSandboxProperties(
         @DefaultValue("30") @Min(1) int attachFirstFrameTimeoutSeconds,
         @DefaultValue("3") @Min(1) int maxSessionsPerUser,
         @DefaultValue("50") @Min(1) int maxSessionsTotal,
-        @DefaultValue("1048576") @Min(1024) int maxFrameChars) {}
+
+        @DefaultValue("1048576") @Min(1024) @Max(MAX_FRAME_BYTES)
+        int maxFrameChars) {
+    public static final int MAX_FRAME_BYTES = 1024 * 1024;
+}

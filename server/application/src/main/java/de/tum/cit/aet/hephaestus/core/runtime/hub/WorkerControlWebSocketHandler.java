@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.ForceReconnect;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameEnvelope;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionCommand;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerHello;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerWelcome;
@@ -24,6 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.socket.BinaryMessage;
@@ -41,12 +44,18 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
     private final WorkerSessionRegistry registry;
     private final FrameCodec codec;
     private final MeterRegistry meterRegistry;
+    private Consumer<WorkerMentorSessionEvent> mentorHandler = ignored -> {};
+
+    public void setMentorHandler(Consumer<WorkerMentorSessionEvent> handler) {
+        this.mentorHandler = handler;
+    }
+
     private final ScheduledExecutorService helloTimeoutScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "worker-hub-hello-timeout");
         t.setDaemon(true);
         return t;
     });
-    /** Wired by the application server's Git executor, which is the only consumer of worker Git output. */
+
     public WorkerControlWebSocketHandler(
             WorkerSessionRegistry registry, FrameCodec codec, MeterRegistry meterRegistry) {
         this.registry = registry;
@@ -114,6 +123,11 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
             close(transport, CloseStatus.SERVER_ERROR);
             return;
         }
+        if (message.getPayload().getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                > FrameCodec.MAX_FRAME_BYTES) {
+            close(transport, CloseStatus.TOO_BIG_TO_PROCESS);
+            return;
+        }
         FrameEnvelope envelope;
         try {
             envelope = codec.decode(message.getPayload());
@@ -152,12 +166,19 @@ public class WorkerControlWebSocketHandler extends TextWebSocketHandler {
             }
             case Heartbeat heartbeat -> {
                 if (heartbeat.draining()) {
+                    session.markDraining();
                     log.info("Worker {} signalled draining", session.workerId());
                     meterRegistry
                             .counter(CoreMetrics.WORKER_HUB_DRAINING_SIGNALLED)
                             .increment();
                 }
             }
+            case MentorSessionEvent event -> {
+                if (registry.findByWorkerId(session.workerId()).orElse(null) == session) {
+                    mentorHandler.accept(new WorkerMentorSessionEvent(session, event));
+                }
+            }
+            case MentorSessionCommand command -> warnUnexpectedFrame(session, command);
             case WorkerWelcome w -> warnUnexpectedFrame(session, w);
             case ForceReconnect f -> warnUnexpectedFrame(session, f);
             case CancelJob c -> warnUnexpectedFrame(session, c); // hub originates this; never inbound

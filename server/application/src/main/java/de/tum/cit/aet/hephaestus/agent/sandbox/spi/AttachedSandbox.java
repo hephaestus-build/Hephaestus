@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
 
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import reactor.core.Disposable;
 import tools.jackson.databind.JsonNode;
 
@@ -22,6 +24,12 @@ public interface AttachedSandbox extends AutoCloseable {
      */
     SandboxIdentity identity();
 
+    /** Bind proxy billing on the owner before a prompt can reach the runner. */
+    default void bindTurn(java.util.UUID turnId, @Nullable LlmPriceSnapshot price) {}
+
+    /** Fence late proxy calls after the turn ends. */
+    default void unbindTurn(java.util.UUID turnId) {}
+
     /**
      * Send a JSON frame to the runner's stdin. Blocks until the write completes or the configured
      * stdin timeout elapses. The bounded writer queue rejects with {@link InteractiveSandboxException}
@@ -37,6 +45,11 @@ public interface AttachedSandbox extends AutoCloseable {
      * @return a {@link Disposable} whose {@code dispose()} is idempotent
      */
     Disposable subscribe(Consumer<JsonNode> listener);
+
+    /** Replay the initial transport handshake and report session loss. */
+    default Disposable subscribeWithReplay(Consumer<JsonNode> listener, Runnable onLost) {
+        return subscribe(listener);
+    }
 
     /**
      * Like {@link #subscribe}, but skips the ring-buffer replay and only delivers frames that
