@@ -354,6 +354,11 @@ export const Busy: Story = {
 	},
 };
 
+export const BusyDark: Story = {
+	...Busy,
+	globals: { theme: "dark" },
+};
+
 const INTERRUPTED_REPLY: ChatMessage = {
 	id: "msg-interrupted",
 	role: "assistant",

@@ -120,6 +120,10 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
             }
             lastActivity = Instant.now();
             return await(result, timeout);
+        } catch (RuntimeException failure) {
+            // A missing acknowledgement leaves command execution unknown. Do not reuse that runtime.
+            if (operation != MentorSessionCommand.Operation.OPEN) close(Duration.ZERO);
+            throw failure;
         } finally {
             pending.remove(requestId);
         }

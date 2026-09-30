@@ -43,7 +43,8 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
                 registry,
                 credentials,
                 mapper,
-                Binder.get(new MockEnvironment()).bindOrCreate("hephaestus.mentor", InteractiveSandboxProperties.class),
+                Binder.get(new MockEnvironment().withProperty("hephaestus.mentor.stdin-write-timeout-ms", "100"))
+                        .bindOrCreate("hephaestus.mentor", InteractiveSandboxProperties.class),
                 mock(WorkerControlWebSocketHandler.class),
                 new SimpleMeterRegistry());
         doAnswer(invocation -> {
@@ -199,6 +200,36 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
             release.countDown();
             subscription.dispose();
         }
+    }
+
+    @Test
+    void aMissingCommandAcknowledgementRetiresTheSession() {
+        var handle = service.attach(spec("1"));
+        var lost = new AtomicBoolean();
+        handle.subscribeFromNow(frame -> {}, () -> lost.set(true));
+        doAnswer(invocation -> {
+                    var command = (MentorSessionCommand) invocation.getArgument(0);
+                    sent.add(command);
+                    if (command.operation() != MentorSessionCommand.Operation.SEND) {
+                        service.receive(new WorkerMentorSessionEvent(
+                                worker,
+                                new MentorSessionEvent(
+                                        command.sessionId(),
+                                        command.requestId(),
+                                        MentorSessionEvent.Kind.ACK,
+                                        mapper.createObjectNode().put("frameByteBudget", 1024 * 1024))));
+                    }
+                    return true;
+                })
+                .when(worker)
+                .send(any());
+        assertThatThrownBy(() -> handle.send(mapper.createObjectNode().put("id", 1)))
+                .isInstanceOf(InteractiveSandboxException.class)
+                .hasMessageContaining("timed out");
+        assertThat(lost).isTrue();
+        assertThat(credentials.route(handle.identity().sessionId())).isEmpty();
+        assertThat(service.attach(spec("1")).identity().sessionId())
+                .isNotEqualTo(handle.identity().sessionId());
     }
 
     @Test
