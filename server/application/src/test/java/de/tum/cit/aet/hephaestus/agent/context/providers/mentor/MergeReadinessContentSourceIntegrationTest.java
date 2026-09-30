@@ -12,6 +12,9 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
@@ -28,6 +31,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPipeline;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -120,6 +126,12 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private IssueRepository issueRepository;
+
+    @Autowired
+    private GitLabMergeRequestProcessor mergeRequestProcessor;
 
     private final AtomicLong nativeIds = new AtomicLong(90_000);
 
@@ -508,6 +520,185 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                         + payload.path("notLoaded").size())
                 .isEqualTo(5);
         assertThat(payload.path("notLoaded")).isNotEmpty();
+    }
+
+    @Test
+    void shouldGiveTheDescriptionAndTheOpenConditionOfTheIssueItCloses() {
+        PullRequest mr = mergeRequest(course, 12, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        mr.setBody("Adds the setup guide.\n\nCloses #1");
+        closes(mr, issue(course, 1, "- [ ] The tutor confirmed the setup guide builds"));
+
+        JsonNode entry = inspect(mr);
+
+        assertThat(entry.path("description").asString()).isEqualTo("Adds the setup guide.\n\nCloses #1");
+        assertThat(entry.path("closingIssuesStatus").asString()).isEqualTo("COMPLETE");
+        JsonNode closing = entry.path("closingIssues").get(0);
+        assertThat(closing.path("number").asInt()).isEqualTo(1);
+        assertThat(closing.path("state").asString()).isEqualTo("OPEN");
+        assertThat(closing.path("relation").asString()).isEqualTo("PROVIDER_RECORDED_CLOSING_CANDIDATE");
+        assertThat(closing.path("body").asString()).contains("- [ ] The tutor confirmed");
+    }
+
+    @Test
+    void shouldGiveAGitHubPullRequestsDescriptionAndClosingIssueInTheSameShape() {
+        IdentityProvider github = gitProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseGet(() -> gitProviderRepository.save(
+                        new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+        User author = userRepository.save(TestUserFactory.createUser(nativeIds.incrementAndGet(), "gh-dev", github));
+        Workspace team = createWorkspace("gh-course", "GH course", "gh-course", AccountType.ORG, author);
+        Connection connection = new Connection(
+                team, IntegrationKind.GITHUB, "pat", new ConnectionConfig.GitHubPatConfig("gh-course", null, Set.of()));
+        connection.setState(IntegrationState.ACTIVE);
+        connectionRepository.saveAndFlush(connection);
+        Repository app = repository(github, "gh-course/app");
+        monitor(team, "gh-course/app");
+        PullRequest pr = mergeRequest(app, 3, true, MergeStateStatus.CLEAN, CheckState.NONE, HEAD);
+        pr.setAuthor(author);
+        pr.setBody("Fixes #2");
+        closes(pr, issue(app, 2, "Acceptance: the login page shows an error message."));
+
+        JsonNode entry = source.inspect(team.getId(), author.getId(), pr.getId())
+                .path("pullRequests")
+                .get(0);
+
+        assertThat(entry.path("description").asString()).isEqualTo("Fixes #2");
+        assertThat(entry.path("closingIssues").get(0).path("body").asString())
+                .isEqualTo("Acceptance: the login page shows an error message.");
+        assertThat(entry.path("checks").asString()).isEqualTo("NONE");
+        assertThat(entry.path("checksObserved").asString()).isEqualTo("NONE_REPORTED");
+    }
+
+    @Test
+    void shouldCutTheClosingIssuesAtFiveAndEachBodyWithoutSplittingACharacter() {
+        PullRequest mr = mergeRequest(course, 13, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        mr.setBody("d".repeat(999) + "\uD83D\uDE00 Condition past the cut.");
+        List<Issue> closing = new ArrayList<>();
+        closing.add(issue(course, 1, "a".repeat(999) + "\uD83D\uDE00 Condition past the cut."));
+        for (int number = 2; number <= 6; number++) {
+            closing.add(issue(course, number, "Issue " + number));
+        }
+        closes(mr, closing.toArray(Issue[]::new));
+
+        JsonNode entry = inspect(mr);
+
+        assertThat(entry.path("description").asString()).hasSize(999);
+        assertThat(entry.path("descriptionTruncated").asBoolean()).isTrue();
+        assertThat(entry.path("closingIssuesStatus").asString()).isEqualTo("TRUNCATED");
+        assertThat(entry.path("closingIssues")
+                        .valueStream()
+                        .map(issue -> issue.path("number").asInt()))
+                .containsExactly(1, 2, 3, 4, 5);
+        JsonNode clipped = entry.path("closingIssues").get(0);
+        assertThat(clipped.path("body").asString()).hasSize(999).doesNotContain("Condition");
+        assertThat(clipped.path("bodyTruncated").asBoolean()).isTrue();
+    }
+
+    @Test
+    void shouldGiveOnlyTheLiveIssuesOfTheSameRepositoryAsClosingIssues() {
+        PullRequest mr = mergeRequest(course, 14, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        Issue tombstoned = issue(course, 3, "Deleted upstream.");
+        tombstoned.setDeletedAt(Instant.now());
+        issueRepository.save(tombstoned);
+        closes(
+                mr,
+                issue(course, 1, "This one."),
+                issue(repository(instance, "course/other"), 2, "Another repository's issue."),
+                tombstoned,
+                mergeRequest(course, 4, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD));
+
+        JsonNode entry = inspect(mr);
+
+        assertThat(entry.path("closingIssues")
+                        .valueStream()
+                        .map(issue -> issue.path("number").asInt()))
+                .containsExactly(1);
+        assertThat(entry.path("closingIssuesStatus").asString()).isEqualTo("COMPLETE");
+    }
+
+    @Test
+    void shouldSayWhatWasObservedForTheCurrentHeadAndWhichCommitEachReviewWasFor() {
+        PullRequest noPipeline = mergeRequest(course, 15, true, MergeStateStatus.CLEAN, CheckState.NO_PIPELINE, HEAD);
+        PullRequestReview earlier = review(noPipeline, tutor, PullRequestReview.State.APPROVED, "", at("10:00"));
+        earlier.setCommitId("b".repeat(40));
+        reviewRepository.save(earlier);
+        PullRequest skipped = mergeRequest(course, 16, true, MergeStateStatus.CLEAN, CheckState.SKIPPED, HEAD);
+        PullRequest otherCommit =
+                mergeRequest(course, 17, true, MergeStateStatus.CLEAN, CheckState.FAILURE, "c".repeat(40));
+
+        JsonNode none = inspect(noPipeline);
+        assertThat(none.path("checksObserved").asString()).isEqualTo("NO_PIPELINE_REPORTED");
+        assertThat(none.path("headSha").asString()).isEqualTo(HEAD);
+        JsonNode approval = none.path("latestReviews").get(0);
+        assertThat(approval.path("state").asString()).isEqualTo("APPROVED");
+        assertThat(approval.path("commit").asString()).isEqualTo("b".repeat(40));
+        assertThat(approval.path("commitFor").asString()).isEqualTo("OTHER_COMMIT");
+        assertThat(inspect(skipped).path("checksObserved").asString()).isEqualTo("SKIPPED_PIPELINE_REPORTED");
+        JsonNode stale = inspect(otherCommit);
+        assertThat(stale.path("checks").asString()).isEqualTo("FAILURE");
+        assertThat(stale.path("checksSha").asString()).isEqualTo("c".repeat(40));
+        assertThat(stale.path("checksObserved").asString()).isEqualTo("NOT_CAPTURED");
+    }
+
+    @Test
+    void shouldReportTheNoPipelineAGitLabReadRecordedAfterTheWebhook() {
+        // The webhook stored the head; the checks on record are an earlier commit's.
+        PullRequest mr = mergeRequest(course, 18, null, null, CheckState.SUCCESS, "e".repeat(40));
+        assertThat(inspect(mr).path("checksObserved").asString()).isEqualTo("NOT_CAPTURED");
+        Instant readAt = Instant.now();
+
+        boolean recorded = mergeRequestProcessor.applyReadiness(
+                course,
+                18,
+                new GitLabMergeRequestReadinessReader.Facts(
+                        course.getNativeId(),
+                        mr.getNativeId(),
+                        "opened",
+                        readAt,
+                        HEAD,
+                        true,
+                        "MERGEABLE",
+                        true,
+                        GitLabHeadPipeline.NO_PIPELINE,
+                        List.of(),
+                        List.of()),
+                readAt,
+                ProcessingContext.forSync(null, course));
+
+        assertThat(recorded).isTrue();
+        JsonNode entry = inspect(mr);
+        assertThat(entry.path("checks").asString()).isEqualTo("NO_PIPELINE");
+        assertThat(entry.path("checksFor").asString()).isEqualTo("CURRENT_HEAD");
+        assertThat(entry.path("checksObserved").asString()).isEqualTo("NO_PIPELINE_REPORTED");
+        assertThat(entry.path("mergeable").asString()).isEqualTo("YES");
+    }
+
+    private JsonNode inspect(PullRequest pr) {
+        return source.inspect(workspace.getId(), student.getId(), pr.getId())
+                .path("pullRequests")
+                .get(0);
+    }
+
+    private Issue issue(Repository repository, int number, String body) {
+        Issue issue = new Issue();
+        issue.setNativeId(nativeIds.incrementAndGet());
+        issue.setProvider(repository.getProvider());
+        issue.setRepository(repository);
+        issue.setNumber(number);
+        issue.setTitle("Issue " + number);
+        issue.setBody(body);
+        issue.setState(Issue.State.OPEN);
+        issue.setHtmlUrl(repository.getHtmlUrl() + "/-/issues/" + number);
+        issue.setAuthor(tutor);
+        issue.setCreatedAt(Instant.now());
+        issue.setUpdatedAt(Instant.now());
+        return issueRepository.save(issue);
+    }
+
+    /** Records, as the provider's closing references do, that {@code pr} closes {@code issues}. */
+    private void closes(PullRequest pr, Issue... issues) {
+        pr.getClosingIssues().addAll(List.of(issues));
+        pullRequestRepository.save(pr);
     }
 
     private IdentityProvider gitLabInstance(String serverUrl) {

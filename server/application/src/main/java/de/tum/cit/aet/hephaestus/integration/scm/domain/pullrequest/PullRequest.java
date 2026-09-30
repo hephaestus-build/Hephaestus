@@ -156,8 +156,9 @@ public class PullRequest extends Issue {
     private Set<RequestedReviewer> requestedReviewers = new HashSet<>();
 
     /**
-     * When Hephaestus received the stored {@link #requestedReviewers} and {@link #requestedTeams}
-     * ({@link #replaceRequestedReviewers}); null until one was stored.
+     * When Hephaestus received what is stored about the reviews: the {@link #requestedReviewers} and
+     * {@link #requestedTeams}, and on GitLab the approvals and review decision ({@link #takesReviewSnapshotAt}); null
+     * until one was stored.
      */
     @Nullable
     @Column(name = "reviewers_observed_at")
@@ -205,6 +206,15 @@ public class PullRequest extends Issue {
     @Nullable
     @Column(name = "head_check_sha", length = 40)
     private String headCheckSha;
+
+    /**
+     * When the provider was asked for, or sent, the stored {@link #headCheckState}: a sync or read by when it asked,
+     * a check webhook by when Hephaestus received it. Null where the observation was not dated, as on GitHub and in
+     * records stored before, so its age is unknown.
+     */
+    @Nullable
+    @Column(name = "head_check_observed_at")
+    private Instant headCheckObservedAt;
 
     @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.REMOVE, orphanRemoval = true)
     @BatchSize(size = 50)
@@ -326,7 +336,7 @@ public class PullRequest extends Issue {
      */
     public boolean replaceRequestedReviewers(
             Map<User, RequestedReviewer.@Nullable ReviewState> reviewers, Instant observedAt) {
-        if (!takesListObservedAt(observedAt)) {
+        if (!takesReviewSnapshotAt(observedAt)) {
             return false;
         }
         Map<Long, RequestedReviewer.@Nullable ReviewState> wanted = new HashMap<>();
@@ -355,7 +365,7 @@ public class PullRequest extends Issue {
      * @return whether the set changed
      */
     public boolean replaceRequestedTeams(Set<Team> teams, Instant observedAt) {
-        if (!takesListObservedAt(observedAt)) {
+        if (!takesReviewSnapshotAt(observedAt)) {
             return false;
         }
         Set<Long> wanted = teams.stream().map(Team::getId).collect(Collectors.toSet());
@@ -373,8 +383,13 @@ public class PullRequest extends Issue {
         return changed;
     }
 
-    /** Whether review requests received at {@code observedAt} are not older than the stored ones; if so, dates them. */
-    private boolean takesListObservedAt(Instant observedAt) {
+    /**
+     * Whether what Hephaestus received at {@code observedAt} about the reviews — the review requests, one person's
+     * approval act, or a read of the approvers and the review decision — is not older than what is stored; if so,
+     * dates the stored reviews by it. An approval hook processed after a later read of the same reviews then changes
+     * nothing, and neither does a read begun before a later hook.
+     */
+    public boolean takesReviewSnapshotAt(Instant observedAt) {
         Instant stored = observedAt.truncatedTo(ChronoUnit.MICROS);
         if (reviewersObservedAt != null && stored.isBefore(reviewersObservedAt)) {
             return false;
@@ -402,11 +417,40 @@ public class PullRequest extends Issue {
      * state as given; a further observation of the same head only worsens it — one failed suite or
      * cancelled pipeline fails the head whatever the others report, and a success arriving after a
      * failure is another suite's, not the rollup's — until a sync reads the provider's own rollup,
-     * which replaces the state outright.
+     * which replaces the state outright. The observation is not dated, so the stored one's age becomes unknown.
      *
      * @return whether the observation changed anything
      */
     public boolean observeHeadChecks(String sha, CheckState state, boolean rollup) {
+        boolean changed = recordHeadChecks(sha, state, rollup);
+        if (changed) {
+            this.headCheckObservedAt = null;
+        }
+        return changed;
+    }
+
+    /**
+     * Records what the checks said about {@code sha}, as {@link #observeHeadChecks(String, CheckState, boolean)}
+     * does, when the provider was asked or sent it at {@code observedAt}. An observation older than the stored one
+     * changes nothing, whichever commit either is about: a read begun before a pipeline finished, or a delayed
+     * pipeline hook, would otherwise put back a state the provider has since replaced. One at the same instant, to the
+     * microsecond PostgreSQL stores, applies, so a redelivery restates it. A stored observation of unknown age takes
+     * any dated one. A writer reads the pull request through
+     * {@link PullRequestRepository#findForUpdateByRepositoryIdAndNumber} first, so two writers compare in turn.
+     *
+     * @return whether the observation changed anything
+     */
+    public boolean observeHeadChecks(String sha, CheckState state, boolean rollup, Instant observedAt) {
+        Instant stored = observedAt.truncatedTo(ChronoUnit.MICROS);
+        if (headCheckObservedAt != null && stored.isBefore(headCheckObservedAt)) {
+            return false;
+        }
+        boolean changed = recordHeadChecks(sha, state, rollup) || !stored.equals(headCheckObservedAt);
+        this.headCheckObservedAt = stored;
+        return changed;
+    }
+
+    private boolean recordHeadChecks(String sha, CheckState state, boolean rollup) {
         CheckState next = state;
         if (!rollup && sha.equals(this.headCheckSha) && this.headCheckState != null) {
             next = worse(this.headCheckState, state);
@@ -423,10 +467,10 @@ public class PullRequest extends Issue {
         return rank(observed) > rank(recorded) ? observed : recorded;
     }
 
-    /** FAILURE outranks CANCELLED outranks PENDING outranks SUCCESS outranks NONE. */
+    /** FAILURE outranks CANCELLED outranks PENDING outranks SUCCESS outranks an absent or skipped check. */
     private static int rank(CheckState state) {
         return switch (state) {
-            case NONE -> 0;
+            case NONE, NO_PIPELINE, SKIPPED -> 0;
             case SUCCESS -> 1;
             case PENDING -> 2;
             case CANCELLED -> 3;

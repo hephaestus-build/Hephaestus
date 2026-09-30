@@ -187,9 +187,60 @@ A webhook names one person's act, not the whole decision:
 - `approved`/`approval` and `unapproved`/`unapproval` differ only in whether the rules were met afterwards
   ([`execute_approval_hooks_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/execute_approval_hooks_service.rb),
   [`remove_approval_service.rb`](https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/remove_approval_service.rb)).
-- A hook or live system note that changes where someone's review stands leaves the stored decision unknown, until the
-  sync reads the merge request again. The note touches the merge request, so the incremental sync does read it.
+- A hook or live system note that is accepted (the gate below) and changes where someone's review stands leaves the
+  stored decision unknown, with the mergeability and merge status GitLab derives from the approvals, until the readiness
+  read after the hook (below) or the sync reads the merge request again; a read that fails leaves them unknown. A hook
+  the gate rejects changes none of them. The note touches the merge request,
+  so the incremental sync does read it.
 - A redelivery changes no one's review, so it leaves a decision the sync has since read in place.
+- An approval act, or GitLab's reset, applies only when both hold: the version the hook describes (`updated_at`) is not
+  older than the stored one, and the head it names is the stored head. However late it arrives, a hook describing an
+  older version or another head changes none of the stored review facts; an equal version applies. This also turns
+  away a legitimate approval hook that GitLab built before its note advanced `updated_at` (above) once the newer version
+  is stored: that approval is recorded by the readiness read after the newer event, or by the next sync, which read the
+  approver list; until one succeeds, the decision it would change stays as that newer event left it. An act received
+  before a stored read of the approvals is part of that read (the dated snapshot above). Two people's acts received at
+  the same instant both apply.
+- GitLab resetting approvals after a push sends `unapproved`/`unapproval` marked `system`, with `system_action`
+  `approvals_reset_on_push` (all of them) or `code_owner_approvals_reset_on_push` (Code Owners' only)
+  ([system-initiated events](https://docs.gitlab.com/user/project/integrations/webhook_events/#system-initiated-merge-request-events)).
+  Its user is whoever pushed, and it does not say whose approvals went, so it leaves the decision unknown and dismisses
+  no one; the readiness read reconciles the approvals with GitLab's whole approver list.
+- A push leaves the decision, mergeability and merge status unknown for the new head; the recorded approvals stay, since
+  a project can keep them across a push, each with the commit it was given on.
+
+### A GitLab merge request's readiness is read after its webhook
+
+A merge request hook carries none of what merge advice depends on: merge status, head pipeline, approvals. After an
+opened, updated, reopened or approval hook is stored, `GitLabMergeRequestMessageHandler` reads that one merge request
+(`GetMergeRequestReadiness`, `GitLabMergeRequestReadinessReader`) outside the hook's transaction, and
+`GitLabMergeRequestProcessor#applyReadiness` records it in a second short one, where the connection may still write,
+with the row locked. It records nothing unless GitLab's answer names this project and merge request, both open, at the
+stored head and not an older version; it never moves the head. Reviewers, decision and approvals — and the
+mergeability and merge status GitLab derives from the approvals — follow the dated snapshot, dated by when the read was
+asked for, as they do for a sync page: a read or page begun before a newer one was stored changes none of them. While GitLab reports `checking` or `approvals_syncing`, mergeability and
+approvals are not settled and stay unknown. A read that fails records nothing; the next hook or sync reads again. No
+workspace sync runs for a hook.
+
+GitLab answers a field it could not resolve with `null` and an error at that path. Every GitLab merge request read —
+this one, the sync and the historical backfill — asks Spring for the errors at, above or below the exact field
+(`ClientResponseField#getErrors`, with `nodes[i]` on a page), so a failed field is unknown, never a value: a failed
+`approved` is not a refusal, a failed approver list is not an empty one, and a failed `headPipeline` — or its status or
+SHA — records no check state. Only `headPipeline: null` with no error means GitLab reports no pipeline. A page that did
+not capture a merge request's `updatedAt` changes nothing stored about it, and one that did not capture its
+`diffHeadSha` records nothing that holds for a head — decision, mergeability, approvals, a missing pipeline — since the
+stored head is kept and is not the one the page read; a pipeline the page names with its SHA is still recorded for it.
+
+### Head checks are dated observations
+
+`CheckState` tells apart `NO_PIPELINE` (GitLab reports no pipeline for the head, which says nothing about whether CI
+is configured) and `SKIPPED` (a skipped pipeline) from `NONE`, GitHub's empty rollup and, on GitLab records stored
+before, either of the two. A GitLab check observation is stored with when the provider was asked or sent it
+(`head_check_observed_at`): the sync and the readiness read by when they asked, the pipeline hook by when JetStream
+stored it. An observation older than the stored one changes nothing, whichever commit either is about, so a read begun
+before a pipeline finished, or a delayed hook, cannot put back a state GitLab has since replaced; a later one replaces it
+outright, including a pipeline that passes on a retry. A record of unknown age takes any dated observation. GitHub's
+check paths are undated and unchanged.
 
 ## Documented asymmetries and residuals
 

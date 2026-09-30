@@ -6361,7 +6361,7 @@ export type WorkItem = {
   /**
    * What the checks said about the pull request's current head, when known
    */
-  checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'CANCELLED' | 'NONE';
+  checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'CANCELLED' | 'NONE' | 'NO_PIPELINE' | 'SKIPPED';
   /**
    * When it was created
    */
