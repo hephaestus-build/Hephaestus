@@ -9,7 +9,8 @@ import org.jspecify.annotations.Nullable;
  * Shared value types for Docker sandbox operations.
  *
  * <p>These records are used by the focused operation interfaces ({@link DockerContainerOperations},
- * {@link DockerNetworkOperations}, {@link DockerVolumeOperations}) and their implementations.
+ * {@link DockerInspectOperations}, {@link DockerNetworkOperations}, {@link DockerVolumeOperations}) and
+ * their implementations.
  */
 public final class DockerOperations {
 
@@ -61,5 +62,13 @@ public final class DockerOperations {
             String state,
             @Nullable Instant createdAt) {}
 
-    public record NetworkInfo(String id, String name) {}
+    /** {@code createdAt} is null when the daemon reported none — an unknown age counts as young. */
+    public record NetworkInfo(
+            String id, String name, @Nullable Instant createdAt, Map<String, String> labels) {}
+
+    /** A container attached to a network: its full id and its name. */
+    public record NetworkEndpoint(String containerId, String name) {}
+
+    /** {@code startedAt} changes on every start, so it tells one run of a container from the next. */
+    public record ContainerIdentity(String id, boolean running, String startedAt, String hostname) {}
 }

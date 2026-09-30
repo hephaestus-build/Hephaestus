@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxMaintenanceConfiguration;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandboxState;
@@ -35,7 +36,8 @@ class SandboxIdleMaintenanceTest extends BaseUnitTest {
                 mock(SandboxContainerManager.class),
                 new InteractiveSandboxMetrics(meters),
                 watchdog,
-                meters);
+                meters,
+                mock(SandboxCreator.class));
         var idle = session("idle-user", Duration.ofMinutes(6));
         var active = session("active-user", Duration.ZERO);
 

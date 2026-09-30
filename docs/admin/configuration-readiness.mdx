@@ -196,6 +196,43 @@ job and interactive-session networks use `hephaestus-sandbox-<owner>--<UUID>`.
 This prevents accidental cross-installation cleanup; it is not an authorization boundary against
 a process with Docker daemon access.
 
+Interactive-session networks, attempt volumes and containers also record the application container
+that started them, found by its own `HOSTNAME`, and when it started. Cleanup removes them only
+after that container has stopped or restarted, and keeps any whose owner it cannot establish. So
+keep the default container hostname: with a customised `hostname:` or an application running
+outside Docker, the application logs that it cannot identify its container, and interactive
+resources a crash leaves behind must be removed by hand; until then that session cannot start a
+new sandbox, and the error names the network. Networks created before this record
+existed are kept for the same reason.
+
+#### Removing leftover sandbox networks
+
+A sandbox network's name only identifies its session. It does not show that nothing uses the network:
+while a conversation's sandbox starts, which can take minutes, the application container can be the
+only thing attached. So establish its owner first.
+
+1. Read the recorded creator:
+   `docker network inspect --format '{{index .Labels "hephaestus.creator-container"}} {{index .Labels "hephaestus.creator-started-at"}}' <network>`.
+2. If a creator is recorded, check it with
+   `docker container inspect --format '{{.State.Running}} {{.State.StartedAt}}' <creator>`.
+   If it is running with the recorded start time, it still owns the network: leave it. If it no
+   longer exists, has stopped, or has started again since, automatic cleanup removes the network on
+   its next pass; nothing needs doing by hand.
+3. If no creator is recorded, or the check cannot be read, nothing but a pause proves the network
+   unused. Stop every application process of this installation (this `owner`) that uses this Docker
+   daemon, application server and workers alike, so none can start or attach a sandbox. Other
+   installations on the daemon are unaffected.
+4. Only then inspect the network afresh:
+   `docker network inspect --format '{{range $id, $c := .Containers}}{{$id}} {{$c.Name}}{{println}}{{end}}' <network>`.
+   Resolve the configured app-server container to its full id with
+   `docker container inspect --format '{{.Id}}' <app-server-container>`. If any attached container
+   has another id, a sandbox still uses the network: leave it.
+5. Disconnect the app-server container, if it is still attached, by that full id, then remove the
+   network: `docker network disconnect <network> <app-server-id>` and `docker network rm <network>`.
+6. The network name ends in the session id. Remove that session's attempt volumes with
+   `docker volume ls -q --filter label=hephaestus.session-id=<session-id>` and `docker volume rm`,
+   which refuses a volume a container still uses.
+
 Before upgrading from unscoped sandbox ownership or changing `owner`, drain reviews and interactive
 sessions and stop that installation's workers. Remove its remaining containers and networks only
 after verifying ownership. The new cleanup does not adopt legacy `hephaestus.managed=true`

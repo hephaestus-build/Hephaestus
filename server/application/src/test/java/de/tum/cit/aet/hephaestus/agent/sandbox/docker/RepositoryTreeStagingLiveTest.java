@@ -88,7 +88,7 @@ class RepositoryTreeStagingLiveTest {
         dockerWaitExecutor = Executors.newCachedThreadPool();
         containerManager =
                 new SandboxContainerManager(dockerOps, image -> {}, properties, "default", dockerWaitExecutor);
-        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
+        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties, new SandboxCreator(dockerOps));
         sandboxAdapter = new DockerSandboxAdapter(
                 networkManager,
                 new SandboxWorkspaceManager(),
