@@ -34,6 +34,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -104,14 +105,8 @@ public class PracticeProfileReviewRunService {
     public ProfileReviewRunDetailDTO getRun(WorkspaceContext workspaceContext, UUID reviewId) {
         long workspaceId = workspaceContext.id();
         long developer = currentDeveloperLookup.currentDeveloperId().orElseThrow(() -> gone(reviewId));
-        List<Observation> found =
-                observationRepository.findDeveloperReviewRunObservations(List.of(reviewId), developer, workspaceId);
-        List<Observation> observations = visibleByRun(workspaceId, found).getOrDefault(reviewId, List.of());
-        if (observations.isEmpty()) {
-            throw gone(reviewId);
-        }
-        // Dated by the newest of the rows the list's date aggregates, so the run carries one date on both.
-        VisibleRun visible = new VisibleRun(reviewId, found.getFirst().getObservedAt(), observations);
+        VisibleRun visible = visibleRun(workspaceId, developer, reviewId).orElseThrow(() -> gone(reviewId));
+        List<Observation> observations = visible.observations();
         Map<UUID, ReviewRunFacts> facts = reviewRunLookup.findFacts(workspaceId, List.of(reviewId));
         ProfileReviewRunDTO run =
                 toRuns(workspaceId, developer, List.of(visible), facts).getFirst();
@@ -125,6 +120,34 @@ public class PracticeProfileReviewRunService {
                                 Map.Entry::getKey, entry -> entry.getValue().target())),
                 reviewRunNarrativeLookup.findByJobIds(workspaceId, List.of(reviewId)));
         return new ProfileReviewRunDetailDTO(run, details);
+    }
+
+    /**
+     * The calling developer, when this review is one {@link #getRun} would open for them and it observed them on
+     * this work; empty otherwise.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> ownRunDeveloperOn(
+            long workspaceId, UUID reviewId, ArtifactKind artifactKind, long artifactId) {
+        return currentDeveloperLookup
+                .currentDeveloperId()
+                .filter(developer -> visibleRun(workspaceId, developer, reviewId)
+                        .filter(run -> run.observations().stream()
+                                .anyMatch(observation -> artifactKind.equals(observation.getArtifactKind())
+                                        && observation.getArtifactId() == artifactId))
+                        .isPresent());
+    }
+
+    /** The run as the developer may see it, or empty when nothing it recorded about them is theirs to read. */
+    private Optional<VisibleRun> visibleRun(long workspaceId, long developer, UUID reviewId) {
+        List<Observation> found =
+                observationRepository.findDeveloperReviewRunObservations(List.of(reviewId), developer, workspaceId);
+        List<Observation> observations = visibleByRun(workspaceId, found).getOrDefault(reviewId, List.of());
+        if (observations.isEmpty()) {
+            return Optional.empty();
+        }
+        // Dated by the newest of the rows the list's date aggregates, so the run carries one date on both.
+        return Optional.of(new VisibleRun(reviewId, found.getFirst().getObservedAt(), observations));
     }
 
     private static EntityNotFoundException gone(UUID reviewId) {

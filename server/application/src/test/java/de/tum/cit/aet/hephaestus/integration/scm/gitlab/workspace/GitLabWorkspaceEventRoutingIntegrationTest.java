@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderTyp
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.NatsConnectionProperties;
+import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -39,6 +40,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublishers;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookIngestPipeline;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
@@ -65,6 +67,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroup
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabClosingIssueClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPipeline;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDeletionSweepService;
@@ -77,6 +80,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKey
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
+import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -166,6 +170,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private static final long MEMBER_USER_ID = 18024L;
     private static final long REPOSITORY_NATIVE_ID = 246765L;
     private static final int MERGE_REQUEST_IID = 2;
+    private static final String HOOK_MERGE_COMMIT = "b186370e62e2ae348df64fb187c13aff4008457b";
+    private static final Instant MERGED_AT = Instant.parse("2026-01-31T18:04:07Z");
     private static final int CLOSED_ISSUE_IID = 5;
 
     @DynamicPropertySource
@@ -262,6 +268,9 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PullRequestRepository pullRequestRepository;
+
+    @Autowired
+    private RecordingScmEventListener scmEvents;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -1201,7 +1210,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                             null,
                             GitLabHeadPipeline.NO_PIPELINE,
                             null,
-                            null);
+                            null,
+                            GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
                 });
         when(closingIssueClient.closesIssues(eq(connected.getId()), anyLong(), eq(MERGE_REQUEST_IID)))
                 .thenReturn(List.of(CLOSED_ISSUE_IID));
@@ -1217,6 +1227,116 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                         .getState())
                 .isEqualTo(IntegrationState.ACTIVE);
         return storedMergeRequest();
+    }
+
+    @Test
+    void shouldRecordWhoMergedAndOfferTheMergeForReviewOnAProjectStillMonitored() throws Exception {
+        PullRequest merged = deliverMergeWhileGitLabIsRead(connected -> {});
+
+        assertThat(merged.getState()).isEqualTo(Issue.State.MERGED);
+        assertThat(Objects.requireNonNull(merged.getMergedBy()).getId()).isEqualTo(userId(MEMBER_USER_ID));
+        assertThat(merged.getMergedAt()).isEqualTo(MERGED_AT);
+        assertThat(mergesOffered(merged)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldKeepTheMergeButRecordNoMergerAndOfferNoReviewWhenTheProjectStopsBeingMonitoredWhileGitLabIsRead()
+            throws Exception {
+        PullRequest merged = deliverMergeWhileGitLabIsRead(connected -> repositoryToMonitorRepository
+                .findByWorkspaceIdAndNameWithOwner(connected.getId(), REPOSITORY)
+                .ifPresent(repositoryToMonitorRepository::delete));
+
+        assertKeptOnlyWhatTheHookSaid(merged);
+    }
+
+    @Test
+    void shouldKeepTheMergeButRecordNoMergerAndOfferNoReviewWhenTheProjectMovesOutOfTheGroupWhileGitLabIsRead()
+            throws Exception {
+        // Another workspace's connection records the move; this connection and its monitor are left as they were.
+        PullRequest merged = deliverMergeWhileGitLabIsRead(
+                connected -> transactionTemplate.executeWithoutResult(status -> repositoryRepository
+                        .findByNameWithOwner(REPOSITORY)
+                        .orElseThrow()
+                        .setNameWithOwner("elsewhere/demo-repository")));
+
+        assertKeptOnlyWhatTheHookSaid(merged);
+    }
+
+    /** The merge the hook stored before GitLab was read stays; nothing the read named is recorded or offered. */
+    private void assertKeptOnlyWhatTheHookSaid(PullRequest merged) {
+        assertThat(merged.getState()).isEqualTo(Issue.State.MERGED);
+        assertThat(merged.getMergeCommitSha()).isEqualTo(HOOK_MERGE_COMMIT);
+        assertThat(merged.getMergedBy()).isNull();
+        assertThat(merged.getMergedAt()).isNull();
+        assertThat(scmEvents.ofType(ScmDomainEvent.PullRequestClosed.class))
+                .anyMatch(closed -> closed.wasMerged()
+                        && Objects.equals(closed.pullRequest().id(), merged.getId()));
+        assertThat(mergesOffered(merged)).isZero();
+    }
+
+    /**
+     * Delivers merge request !2 opened and then merged through the connection's hook, whose merge names no merger or
+     * merge time, with GitLab then reporting that its author merged it, and runs {@code duringRead} while GitLab is read
+     * after the merge is stored. Returns the merge request as stored once the merge is acknowledged.
+     */
+    private PullRequest deliverMergeWhileGitLabIsRead(Consumer<Workspace> duringRead) throws Exception {
+        createStream();
+        Workspace connected = connectGroup();
+        awaitMonitoringIdle();
+        deliver(connected, fixture("gitlab/merge_request.update.json"), "merge-request-opened");
+        awaitAcknowledged();
+        scmEvents.clear();
+        when(readinessReader.read(eq(connected.getId()), eq(REPOSITORY), eq(MERGE_REQUEST_IID)))
+                .thenAnswer(invocation -> {
+                    PullRequest stored = storedMergeRequest();
+                    duringRead.accept(connected);
+                    return new GitLabMergeRequestReadinessReader.Facts(
+                            REPOSITORY_NATIVE_ID,
+                            Objects.requireNonNull(stored.getNativeId()),
+                            "merged",
+                            Objects.requireNonNull(stored.getUpdatedAt()),
+                            Objects.requireNonNull(stored.getHeadRefOid()),
+                            null,
+                            null,
+                            null,
+                            GitLabHeadPipeline.NO_PIPELINE,
+                            null,
+                            null,
+                            new GitLabMergeRequestReadinessReader.Merge(
+                                    new GitLabMergeRequestProcessor.SyncUserData(
+                                            "gid://gitlab/User/" + MEMBER_USER_ID,
+                                            "ga84xah",
+                                            "Felix Dietrich",
+                                            null,
+                                            SERVER_URL + "/ga84xah",
+                                            null),
+                                    MERGED_AT,
+                                    HOOK_MERGE_COMMIT));
+                });
+
+        deliver(connected, fixture("gitlab/merge_request.merge.json"), "merge-request-merged");
+
+        awaitAcknowledged();
+        verify(readinessReader, times(2)).read(eq(connected.getId()), eq(REPOSITORY), eq(MERGE_REQUEST_IID));
+        assertThat(connectionRepository
+                        .findById(connectionId(connected))
+                        .orElseThrow()
+                        .getState())
+                .isEqualTo(IntegrationState.ACTIVE);
+        return storedMergeRequest();
+    }
+
+    private long mergesOffered(PullRequest mergeRequest) {
+        return scmEvents.ofType(ScmDomainEvent.PullRequestMerged.class).stream()
+                .filter(offered -> Objects.equals(offered.pullRequest().id(), mergeRequest.getId()))
+                .count();
+    }
+
+    private Long userId(long nativeId) {
+        return userRepository
+                .findByNativeIdAndProviderId(nativeId, gitLabProviderId())
+                .orElseThrow()
+                .getId();
     }
 
     private PullRequest storedMergeRequest() {

@@ -7,7 +7,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 import { PracticeReviewsLayout } from "./PracticeReviewsLayout";
 
 /**
- * The page's header and its four sections, drawn as line tabs but made of links, since each changes
+ * The page's header and its five sections, drawn as line tabs but made of links, since each changes
  * the URL. Which scope a section link carries is read from the URL, so it is proved by the route's
  * tests.
  */
@@ -35,6 +35,7 @@ export const Default: Story = {
 		const sections = within(canvas.getByRole("navigation", { name: "Practice review sections" }));
 		await expect(sections.getAllByRole("link").map((link) => link.textContent)).toEqual([
 			"Overview",
+			"Work",
 			"Reviews",
 			"Observations",
 			"Feedback",
@@ -43,11 +44,15 @@ export const Default: Story = {
 			"href",
 			"/w/demo/admin/practices/reviews/runs",
 		);
+		await expect(sections.getByRole("link", { name: "Work" })).toHaveAttribute(
+			"href",
+			"/w/demo/admin/practices/reviews/work",
+		);
 		canvas.getByText("The section renders here.");
 	},
 };
 
-/** Four sections share the track at 320px rather than pushing the page sideways. */
+/** Five sections share the track at 320px rather than pushing the page sideways. */
 export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {
@@ -70,7 +75,7 @@ export const CurrentSection: Story = {
 		);
 		// Overview's address is a prefix of every other section's, so it is the one a fuzzy match would
 		// also mark.
-		for (const name of ["Overview", "Reviews", "Observations"]) {
+		for (const name of ["Overview", "Work", "Reviews", "Observations"]) {
 			await expect(sections.getByRole("link", { name })).not.toHaveAttribute("aria-current");
 		}
 		await expect(sections.queryByRole("tab")).not.toBeInTheDocument();

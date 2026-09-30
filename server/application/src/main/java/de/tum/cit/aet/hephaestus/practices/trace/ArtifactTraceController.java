@@ -1,9 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.trace;
 
-import de.tum.cit.aet.hephaestus.core.exception.AccessForbiddenException;
+import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.profile.PracticeProfileReviewRunService;
 import de.tum.cit.aet.hephaestus.practices.trace.dto.ArtifactTraceDTO;
 import de.tum.cit.aet.hephaestus.practices.trace.dto.TracedArtifactDTO;
+import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
+import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,6 +25,7 @@ import org.springframework.data.web.PagedModel;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,12 +35,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 /**
  * "Why didn't Hephaestus say anything about my merge request?" — answerable without a SQL console.
  *
- * <p>Open to any workspace <em>member</em>, not just an admin: the question is a developer's before it
- * is an operator's. Membership is the bar {@code ObservationController} already sets for reading every
- * developer's observations on a pull request, and this surface carries counts rather than content.
- *
- * <p>A GET under {@code /workspaces/**} is {@code permitAll} at the filter chain and a public-read
- * workspace admits anonymous callers, so the membership check has to be made here or it is not made.
+ * <p>The list of recorded work is the workspace's, so it is an admin's. One work's trace is also a member's
+ * when they name a review that observed them on it, which is how their practice profile opens it; any other
+ * review, or none, answers 404, the same answer a review that does not exist gets, so a member cannot learn
+ * which work or reviews exist from it. A member's trace counts only the observations about them and the
+ * feedback addressed to them, since a review may have observed several people on the same work. In a user view
+ * the viewed member's rule applies.
  */
 @WorkspaceScopedController
 @RequestMapping("/practices/trace")
@@ -46,17 +50,28 @@ import org.springframework.web.bind.annotation.RequestParam;
 public class ArtifactTraceController {
 
     private final ArtifactTraceQueryService queryService;
+    private final PracticeProfileReviewRunService reviewRuns;
+    private final WorkspaceAccessService access;
 
     @GetMapping
+    @RequireAtLeastWorkspaceAdmin
     @Operation(
             summary = "List work this workspace recorded something about",
-            description = "Built from the signal ledger, so it includes work that was never reviewed — which is "
-                    + "exactly what a listing derived from review runs cannot show. Most recently signalled first.",
+            description = "Workspace admins only. Built from the signal ledger, so it includes work that was never "
+                    + "reviewed — which is exactly what a listing derived from review runs cannot show. Most "
+                    + "recently signalled first.",
             operationId = "listTracedArtifacts")
     @ApiResponse(responseCode = "200", description = "Paginated artifacts returned")
     @ApiResponse(
             responseCode = "400",
             description = "Unknown artifact kind or invalid pagination",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "403",
+            description = "Workspace administrator access is required",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
@@ -69,18 +84,20 @@ public class ArtifactTraceController {
                     @RequestParam(required = false)
                     @Nullable
                     String artifactKind) {
-        requireMembership(workspaceContext);
         return ResponseEntity.ok(new PagedModel<>(
                 queryService.list(workspaceContext.id(), parseKind(artifactKind), PageRequest.of(page, size))));
     }
 
     @GetMapping("/{artifactKind}/{artifactId}")
+    @PreAuthorize("@workspaceSecure.isMember()")
     @Operation(
             summary = "Explain what every practice did about one piece of work",
             description = "Every practice the workspace runs against this kind of work appears, including the ones "
                     + "that did nothing, each with the recorded reason. Name a review and every answer is that "
-                    + "review's own. 404 means nothing about this artifact was ever recorded here, or the named "
-                    + "review never ran on it — not that the trace is unavailable.",
+                    + "review's own. A workspace admin may read any work, with or without a review; anyone else "
+                    + "must name a review that observed them on this work, and reads only the observations about "
+                    + "them and the feedback addressed to them. 404 means nothing about this artifact "
+                    + "was ever recorded here, the named review never ran on it, or the caller may not read it.",
             operationId = "getArtifactTrace")
     @ApiResponse(
             responseCode = "200",
@@ -88,7 +105,8 @@ public class ArtifactTraceController {
             content = @Content(schema = @Schema(implementation = ArtifactTraceDTO.class)))
     @ApiResponse(
             responseCode = "404",
-            description = "Nothing recorded about this artifact in this workspace, or the named review never ran on it",
+            description = "Nothing recorded about this artifact in this workspace, the named review never ran on it, "
+                    + "or the caller may not read it",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
@@ -99,22 +117,26 @@ public class ArtifactTraceController {
             @Parameter(description = "The artifact's identifier as the ledger stores it") @PathVariable Long artifactId,
             @Parameter(
                             description = "Answer for this review alone: every state, explanation and count is what "
-                                    + "this review made of the work. Omit it for every review of the work at once.")
+                                    + "this review made of the work. Omit it for every review of the work at once, "
+                                    + "which only a workspace admin may.")
                     @RequestParam(required = false)
                     @Nullable
                     UUID reviewId) {
-        requireMembership(workspaceContext);
         ArtifactKind kind = parseKind(artifactKind);
         if (kind == null) {
-            throw new IllegalArgumentException("An artifact kind is required");
+            throw new IllegalArgumentException("Name the kind of work to trace.");
         }
-        return ResponseEntity.ok(queryService.trace(workspaceContext.id(), kind, artifactId, reviewId));
-    }
-
-    private static void requireMembership(WorkspaceContext workspaceContext) {
-        if (!workspaceContext.hasMembership()) {
-            throw new AccessForbiddenException("Workspace membership is required to read a practice review trace");
+        Long developerId = null;
+        if (!access.isAdmin()) {
+            if (reviewId == null) {
+                throw new EntityNotFoundException("Reviewed work", artifactId);
+            }
+            String review = reviewId.toString();
+            developerId = reviewRuns
+                    .ownRunDeveloperOn(workspaceContext.id(), reviewId, kind, artifactId)
+                    .orElseThrow(() -> new EntityNotFoundException("Review", review));
         }
+        return ResponseEntity.ok(queryService.trace(workspaceContext.id(), kind, artifactId, reviewId, developerId));
     }
 
     /** A malformed kind is a bad request, not a 500: the grammar is enforced by {@link ArtifactKind}. */

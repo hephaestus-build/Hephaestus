@@ -27,10 +27,10 @@ class PracticeBindingTest extends BaseUnitTest {
     void shouldRejectASourceNamedTwiceWhateverTheStance() {
         assertThatThrownBy(() -> binding(List.of(required(CORE), required(CORE))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("duplicate source");
+                .hasMessage("An evidence source is listed twice. List each source once.");
         assertThatThrownBy(() -> binding(List.of(required(CORE), contextual(CORE))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("duplicate source");
+                .hasMessage("An evidence source is listed twice. List each source once.");
     }
 
     @Test
@@ -59,7 +59,8 @@ class PracticeBindingTest extends BaseUnitTest {
                         List.of(required(CORE)),
                         false))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("cannot mix artifact kinds");
+                .hasMessage(
+                        "The moments that start a review must all belong to one kind of work. Choose them from one.");
     }
 
     @Test
@@ -68,7 +69,7 @@ class PracticeBindingTest extends BaseUnitTest {
                         PracticeBinding.on(ScmSignals.PULL_REQUEST_OPENED, List.of(required(CORE))),
                         PracticeBinding.on(ScmSignals.ISSUE_OPENED, List.of(required(CORE))))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("reviews one kind of artifact");
+                .hasMessage("A practice reviews one kind of work. Choose its moments from one kind of work only.");
     }
 
     /**

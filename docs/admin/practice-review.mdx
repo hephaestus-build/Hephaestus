@@ -12,13 +12,15 @@ developer's private practice pages, or a later mentor conversation. This page is
 switch it on, keep it from costing more than intended, and find out why it went quiet.
 
 Many review gates refuse work without raising a user-facing error, so a workspace can simply go quiet.
-Every refusal is recorded; **Review activity**, available to every member, is the first place to inspect it.
+Every refusal is recorded; **Practices → Practice reviews → Work**, which lists every piece of work
+Hephaestus recorded, is the first place to inspect it.
 
 ## First successful review
 
 Use this short path before tuning coverage, campaigns, or per-practice overrides:
 
-1. Connect GitHub or GitLab and confirm a recent pull or merge request appears under **Review activity**.
+1. Connect GitHub or GitLab and confirm a recent pull or merge request appears under **Practices → Practice
+   reviews → Work**.
    If it does not, fix ingestion first; practice-review settings cannot make missing work appear.
 2. Under **AI models**, assign a ready model to practice reviews.
 3. On **Practices → Review settings → When and where**, turn on **Start practice reviews**, then turn on at least
@@ -27,9 +29,9 @@ Use this short path before tuning coverage, campaigns, or per-practice overrides
 4. On **Practices → Review settings → How much**, set the **Workspace default** to **Review before sending** for the
    first test. Back on **When and where**, keep coverage at **All monitored repositories** and **All
    eligible linked members**, and leave **Send feedback** on.
-5. Open a small pull or merge request whose author is an eligible linked member, then follow it in **Review
-   activity**. The trace distinguishes ingestion, admission, observation, composition, withholding, and
-   delivery; do not use the presence of a provider comment as the success test.
+5. Open a small pull or merge request whose author is an eligible linked member, then open it under
+   **Practices → Practice reviews → Work**. The work distinguishes ingestion, admission, observation,
+   composition, withholding, and delivery; do not use the presence of a provider comment as the success test.
 
 Once that works, narrow coverage, add practice overrides, or configure past-work reviews. The rest of
 this page is reference and troubleshooting for those decisions.
@@ -38,7 +40,8 @@ this page is reference and troubleshooting for those decisions.
 
 Suppose a developer opens **Update dependencies** with no explanation in its description:
 
-1. The provider event creates an occurrence visible under **Review activity**.
+1. The provider event creates an occurrence, listed under **What we noticed** when you open the work under
+   **Practices → Practice reviews → Work**.
 2. Coverage decides whether to look at all: the repository, the base branch and the author must all be
    admitted. Then the review gate selects practices whose occasions match that pull request, and capture must
    satisfy each selected practice's evidence requirements before that practice can run.
@@ -59,7 +62,7 @@ delivery. Stop at the first missing stage rather than changing downstream settin
 
 | Question                                                          | Open                                                          |
 | ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| Did this piece of work enter the system, and why was it quiet?    | **Review activity**, then open the work                       |
+| Did this piece of work enter the system, and why was it quiet?    | **Practices → Practice reviews → Work**, then open the work   |
 | What needs me, and are the reviews working?                       | **Practices → Practice reviews** (the overview)               |
 | Did a job run, fail, or produce observations and feedback?        | **Practices → Practice reviews → Reviews**, then open a row   |
 | Is in-context feedback waiting for approval?                      | **Practices → Practice reviews**, under **Needs you**         |
@@ -201,8 +204,8 @@ flowchart LR
     Sync --> Stop[Recorded only. No review starts.]
 ```
 
-The labels on the right are the ones **Review activity** prints, so you can read a trace back against this
-diagram directly. Two things in it will bite you if you assume otherwise:
+The labels on the right are the ones **What we noticed** prints when you open a piece of work under
+**Practices → Practice reviews → Work**, so you can read it back against this diagram directly. Two things in it will bite you if you assume otherwise:
 
 - **The comment command and the button are indistinguishable afterwards.** Both record
   `Requested by hand`. If you need to know which was used, the answer is not in the data.
@@ -217,7 +220,7 @@ All five spend from the workspace's AI budget.
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | Live event                                                 | Nobody — it is automatic, per the practices' occasions                                    | The per-workspace cooldown between reviews of the same work     |
 | `/hephaestus review` in a **GitLab merge request** comment | The work's author or assignees, or a workspace admin                                      | Per-person hourly allowance, **and** the same per-work cooldown |
-| **Review this now** on Review activity                     | The same people. Every member sees the button; unauthorized requests are refused            | Per-person hourly allowance, **and** the same per-work cooldown |
+| **Review this now** in the app                             | The same people. It is offered only where the reader may ask; the server refuses anyone else | Per-person hourly allowance, **and** the same per-work cooldown |
 | **Past work** campaign                                     | A workspace admin, and only after confirming a priced estimate                            | Bounded by the campaign's own scope                             |
 | **Keep checking new work** schedule                        | A workspace admin                                                                         | One campaign at a time per workspace                            |
 
@@ -226,9 +229,12 @@ Two switches sit in front of the whole table. **Start from work activity** gover
 the comment command, campaigns and schedules at once.
 
 Every door goes through coverage. Asking by hand does not widen it: a review requested on work whose author
-is not a covered person is refused just as a live event would be. The button appears only on pull request
-and issue traces — documents and Slack threads are reviewed on the occasion their source produces, with
-nothing to point at and ask about — and there is no comment command on GitHub pull requests at all.
+is not a covered person is refused just as a live event would be. The button appears only on pull requests
+and issues: on a developer's **Activity**, beside their own open pull requests and assigned issues; on
+their **Reviews of your work**, beside work a review recorded something about; and for workspace admins,
+on any pull or merge request or issue opened under **Practices → Practice reviews → Work**. Documents and
+Slack threads are reviewed on the occasion their source produces, with nothing to point at and ask about,
+and there is no comment command on GitHub pull requests at all.
 
 ## Deployment
 
@@ -390,7 +396,7 @@ twice.
 
 **A campaign, by contrast, is measured and never delivered.** Backfilled runs do not enter the composition
 stage at all, and the in-app lane separately refuses a pattern supported only by backfilled observations.
-They land in the read models and on **Review activity**, never as comments, practice-page cards, or mentor
+They land in the read models and under **Practices → Practice reviews**, never as comments, practice-page cards, or mentor
 briefs. That is by construction, not a setting you can change: a campaign changes what you can read about
 past work and does not contact the people whose work it measured.
 
@@ -399,14 +405,17 @@ past work and does not contact the people whose work it measured.
 Work down this list. Step 0 usually ends the investigation; steps 1 to 7 are per workspace and
 8 to 10 are instance-wide, so if several workspaces went quiet at once, start at the bottom.
 
-**0. Open Review activity and read the trace.** **Review activity** in the workspace sidebar lists every
-piece of work Hephaestus recorded. Open one and you get two things: what was recorded about it and how it
-was discovered, and what every practice made of it, each with a sentence saying what would change the
-answer. A quiet workspace with rows here is configured differently from a quiet workspace with none. The
-sentences the trace prints are the same reasons the rest of this list enumerates — reading them first tells
-you which step to jump to.
+**0. Open the work and read what was recorded.** **Practices → Practice reviews → Work** lists every piece
+of work Hephaestus recorded, reviewed or not, named the way its provider writes it — *Pull request #1423*
+on GitHub, *Merge request !1423* on GitLab — with how many of the moments recorded on it started a
+review. Open one and you get three things: its observations and
+feedback; under **What we noticed**, what was recorded about it, how it was discovered and whether a
+review started, with the reason one did not; and under **Every practice**, what every practice made of it,
+each with a sentence saying what would change the answer. A quiet workspace with rows here is configured
+differently from a quiet workspace with none. The sentences the work prints are the same reasons the rest
+of this list enumerates — reading them first tells you which step to jump to.
 
-If the trace says the review model is not set up, or the practices that watch this are set to off, or the
+If the work says the review model is not set up, or the practices that watch this are set to off, or the
 budget was used up, you are done; go fix that. If it says nothing was recorded at all, the problem is
 upstream of practice review — check the integration's sync. If it says the work is not showing on the
 provider, nothing is misconfigured: a sync marked that work as gone and the reviews are being held. They
@@ -427,8 +436,8 @@ run themselves once a sync finds the work again, and are dropped if it does not 
    activity** and **Start requested reviews** off, the workspace is on and nothing reaches it; the screen
    says *"Nothing can start a review"*.
 6. **Is the work covered?** Same screen, **What gets reviewed**. Both counts have to be non-zero, and the
-   author of the quiet work has to be one of the covered people. The trace tells a missing author from
-   excluded work:
+   author of the quiet work has to be one of the covered people. **What we noticed** on the work tells a
+   missing author from excluded work:
    - *"The author is unknown or not a workspace member yet"* — the repository and base branch are covered,
      but the author is not a member on the connected instance, or has no known account at all. Check the
      author on the **Members** screen and, for GitLab, in the group's member list with inherited members

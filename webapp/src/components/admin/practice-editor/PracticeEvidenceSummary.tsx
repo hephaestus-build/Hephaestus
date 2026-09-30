@@ -8,7 +8,11 @@ import type {
 	PracticeEvidenceSourceOption,
 	PracticeSignalOption,
 } from "@/api/types.gen";
-import { momentDef } from "@/components/admin/practice-editor/occasion-moments";
+import {
+	momentDef,
+	WITHDRAWN_MOMENT_LABEL,
+} from "@/components/admin/practice-editor/occasion-moments";
+import { ACTOR_ROLE_LABELS } from "@/components/practice-vocabulary/actor-role-labels";
 import { Badge } from "@/components/ui/badge";
 
 import { evidenceSourceLabel, mentoringSupportLabel } from "./evidence-presentation";
@@ -32,7 +36,7 @@ const VALIDATION_DEFS: Record<
 };
 
 function signalLabel(signal: string, signals: readonly PracticeSignalOption[]) {
-	return signals.find((option) => option.signal === signal)?.displayName ?? signal;
+	return signals.find((option) => option.signal === signal)?.displayName ?? WITHDRAWN_MOMENT_LABEL;
 }
 
 interface OccasionSummaryProps {
@@ -64,7 +68,7 @@ function OccasionSummary({ binding, sources, signals }: OccasionSummaryProps) {
 			</div>
 			<dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[6.5rem_1fr]">
 				<dt className="text-muted-foreground">Person judged</dt>
-				<dd className="capitalize">{binding.subject?.toLowerCase() ?? "author"}</dd>
+				<dd>{ACTOR_ROLE_LABELS[binding.subject ?? "AUTHOR"]}</dd>
 				<dt className="text-muted-foreground">Only review when</dt>
 				<dd className="space-y-1">
 					{binding.appliesWhen ? (
@@ -76,7 +80,9 @@ function OccasionSummary({ binding, sources, signals }: OccasionSummaryProps) {
 											<>Changed path matches {clause.changedPathMatches.join(", ")}</>
 										)}
 										{clause.diffContains && <>Diff contains {clause.diffContains.join(", ")}</>}
-										{clause.evidenceHasItems && <>Evidence has items: {clause.evidenceHasItems}</>}
+										{clause.evidenceHasItems && (
+											<>Evidence present: {evidenceSourceLabel(clause.evidenceHasItems, sources)}</>
+										)}
 									</li>
 								))}
 							</ul>

@@ -4,14 +4,13 @@ import { expect } from "storybook/test";
 import { minutesBefore } from "@/stories/story-clock";
 
 import { tracedSignals } from "./fixtures";
-import { SIGNAL_STATE_REASON_LABELS } from "./trace-format";
 import { TraceSignalTimeline } from "./TraceSignalTimeline";
 
 /**
  * Everything recorded about one piece of work, oldest first.
  *
- * Each entry says how we came to know, and — when nothing followed — why. The reasons are written
- * in the third person: any member can open this page, and the occurrence is usually somebody else's.
+ * Each entry says how we came to know, and — when nothing followed — why, in the server's own
+ * sentence for the reason.
  */
 const meta = {
 	component: TraceSignalTimeline,
@@ -32,9 +31,9 @@ export const SignalsExplainThemselves: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Marked ready for review")).toBeVisible();
 		await expect(
-			canvas.getByText("This work was reviewed too recently; a later change gets its own review."),
+			canvas.getByText("This work was already reviewed within the workspace's cooldown period."),
 		).toBeVisible();
-		await expect(canvas.getByText("It waited too long to be picked up.")).toBeVisible();
+		await expect(canvas.getByText("It waited too long to be picked up for review.")).toBeVisible();
 	},
 };
 
@@ -122,11 +121,16 @@ export const CoalescedIssueUpdate: Story = {
 				discoveredVia: "EVENT",
 				state: "SUPPRESSED",
 				stateReason: "COALESCED",
+				stateReasonDescription:
+					"A later change to this work replaced this update before a review started.",
 			},
 		],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(`${SIGNAL_STATE_REASON_LABELS.COALESCED}.`)).toBeVisible();
+		// The server's sentence, printed as it came: the webapp keeps no copy of it.
+		await expect(
+			canvas.getByText("A later change to this work replaced this update before a review started."),
+		).toBeVisible();
 		await expect(canvas.getByText("No review started")).toBeVisible();
 		await expect(canvas.queryByRole("link")).toBeNull();
 	},

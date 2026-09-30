@@ -138,7 +138,7 @@ describe("workspace practice scope", () => {
 		);
 		expect(
 			screen.getByRole("combobox", { name: "Person this practice judges" }).textContent,
-		).toContain("reviewer");
+		).toContain("Reviewer");
 	});
 
 	it("does not collapse an older two-occasion practice on a name-only save", async () => {
@@ -162,11 +162,11 @@ describe("workspace practice scope", () => {
 		await renderPractice({ ...mockPullRequestBinding, subject: "REVIEWER" }, onSubmit);
 		const user = userEvent.setup();
 		await user.click(screen.getByRole("combobox", { name: "Person this practice judges" }));
-		await user.click(await screen.findByRole("option", { name: "author" }));
+		await user.click(await screen.findByRole("option", { name: "Author" }));
 		await waitFor(() =>
 			expect(
 				screen.getByRole("combobox", { name: "Person this practice judges" }).textContent,
-			).toContain("author"),
+			).toContain("Author"),
 		);
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onSubmit).toHaveBeenCalledWith(

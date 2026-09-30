@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.spi;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
@@ -10,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  * How a piece of reviewed work is named to a reader, on every surface: the way its provider names it. A
  * GitHub pull request or any issue is {@code #22}, a GitLab merge request {@code !425}, a conversation its
  * channel, a document its title. The title is carried beside the label only where it adds a name the label
- * does not already say. With no run to read the name off, or a run that names other work, the kind alone is
+ * does not already say, and where the work sits — a repository, a collection — beside both. With no run to read the name off, or a run that names other work, the kind alone is
  * said, never a number that was not there.
  */
 public final class ReviewedWorkLabels {
@@ -34,7 +35,32 @@ public final class ReviewedWorkLabels {
                 label(kind, target),
                 title(kind, target),
                 target.url(),
-                target.repositoryName());
+                target.container());
+    }
+
+    /**
+     * The work as the mirror names it, for a surface that has no run to read the name off. An identity no
+     * resolver could name carries no provider, and is said by its kind alone.
+     */
+    public static ReviewedWorkRefDTO ref(ArtifactIdentity identity) {
+        ArtifactKind kind = identity.kind();
+        long id = identity.id();
+        if (identity.provider() == null) {
+            return ref(kind, id, null);
+        }
+        boolean conversation = kind.equals(ArtifactKinds.CONVERSATION_THREAD);
+        return ref(
+                kind,
+                id,
+                new Target(
+                        kind,
+                        id,
+                        identity.provider(),
+                        identity.number(),
+                        identity.title(),
+                        conversation ? null : identity.container(),
+                        conversation ? identity.container() : null,
+                        identity.url()));
     }
 
     /**
@@ -67,6 +93,9 @@ public final class ReviewedWorkLabels {
     /** The kind's noun at the provider: the same kind of work is a merge request on GitLab. */
     private static String fallbackLabel(ArtifactKind kind, @Nullable IntegrationKind provider) {
         if (kind.equals(ArtifactKinds.PULL_REQUEST)) {
+            if (provider == null) {
+                return "Pull or merge request";
+            }
             return provider == IntegrationKind.GITLAB ? "Merge request" : "Pull request";
         }
         if (kind.equals(ArtifactKinds.ISSUE)) {
@@ -78,6 +107,6 @@ public final class ReviewedWorkLabels {
         if (kind.equals(ArtifactKinds.DOCUMENT)) {
             return "Document";
         }
-        return "Reviewed work";
+        return "Other work";
     }
 }

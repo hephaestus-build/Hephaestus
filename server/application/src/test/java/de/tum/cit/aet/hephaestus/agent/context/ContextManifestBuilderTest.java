@@ -567,7 +567,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         ArtifactSourceManifest manifest = coreManifest(builder, "job-refused", NOW);
 
         var prepared = builder.prepareAutomatedReviewReadiness(
-                manifest, List.of(practiceRequiringComments()), NOW, null, Map.of(), null);
+                manifest, List.of(practiceRequiringComments()), NOW, practice -> null, Map.of(), null);
         assertThat(prepared.readyPractices()).isEmpty();
         JsonNode report = mapper.valueToTree(prepared.report());
         JsonNode decision = report.path("decisions").get(0);
@@ -648,7 +648,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
         Practice practice = practiceRequiring(CORE, "pr-core");
         assertThat(laterBuilder
-                        .prepareAutomatedReviewReadiness(manifest, List.of(practice), NOW, null, Map.of(), null)
+                        .prepareAutomatedReviewReadiness(manifest, List.of(practice), NOW, p -> null, Map.of(), null)
                         .readyPractices())
                 .containsExactly(practice);
     }
@@ -673,8 +673,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 files, Map.of("inputs/context/metadata.json", CORE), "job-delayed", plan(), metadata(CORE, NOW));
         Practice practice = practiceRequiring(CORE, "pr-core");
 
-        var prepared =
-                delayedBuilder.prepareAutomatedReviewReadiness(manifest, List.of(practice), NOW, null, Map.of(), null);
+        var prepared = delayedBuilder.prepareAutomatedReviewReadiness(
+                manifest, List.of(practice), NOW, p -> null, Map.of(), null);
         assertThat(prepared.readyPractices()).containsExactly(practice);
         JsonNode sourceCheck = mapper.valueToTree(prepared.report())
                 .path("decisions")
@@ -906,7 +906,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                     java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
-                    null,
+                    practice -> null,
                     prepared.files(),
                     change(Set.of("src/App.java")));
 
@@ -929,7 +929,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                     java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
-                    null,
+                    practice -> null,
                     prepared.files(),
                     change(Set.of("src/App.java", "pom.xml")));
 
@@ -953,7 +953,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                     java.util.Objects.requireNonNull(prepared.manifest()),
                     practices,
                     NOW,
-                    null,
+                    practice -> null,
                     prepared.files(),
                     null);
 
@@ -980,7 +980,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                     manifest,
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
-                    null,
+                    practice -> null,
                     Map.of(),
                     change(Set.of("pom.xml")));
 

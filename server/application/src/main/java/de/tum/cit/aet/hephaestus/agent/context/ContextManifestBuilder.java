@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -234,11 +235,11 @@ public class ContextManifestBuilder {
             ArtifactSourceManifest manifest,
             List<Practice> practices,
             Instant temporalAnchor,
-            @Nullable SignalName signal,
+            Function<Practice, @Nullable SignalName> occasion,
             Map<String, byte[]> staged,
             @Nullable ReviewChange change) {
         AutomatedReviewReadinessResult result =
-                checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, signal, staged, change);
+                checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, occasion, staged, change);
         if (result.decisions().isEmpty()) {
             throw new IllegalArgumentException("Cannot persist an empty automated-review readiness report");
         }
@@ -260,7 +261,7 @@ public class ContextManifestBuilder {
      */
     public AutomatedReviewReadinessResult checkAutomatedReviewReadinessAsOfNow(
             ArtifactSourceManifest manifest, List<Practice> practices) {
-        return checkAutomatedReviewReadiness(manifest, practices, clock.instant(), null, Map.of(), null);
+        return checkAutomatedReviewReadiness(manifest, practices, clock.instant(), practice -> null, Map.of(), null);
     }
 
     /**
@@ -273,11 +274,11 @@ public class ContextManifestBuilder {
             List<Practice> practices,
             Instant temporalAnchor,
             @Nullable SignalName signal) {
-        return checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, signal, Map.of(), null);
+        return checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, practice -> signal, Map.of(), null);
     }
 
     /**
-     * @param signal what occasioned the review, which decides which of each practice's bindings speaks
+     * @param occasion what occasioned each practice's review, which decides which of its bindings speaks
      *               for it; {@code null} means nobody named an occasion and every binding does
      * @param staged the capture's own bytes, from which a practice's declared subject is decided. Empty
      *               means "not supplied", which leaves every subject undecided and every practice asked
@@ -288,7 +289,7 @@ public class ContextManifestBuilder {
             ArtifactSourceManifest manifest,
             List<Practice> practices,
             Instant temporalAnchor,
-            @Nullable SignalName signal,
+            Function<Practice, @Nullable SignalName> occasion,
             Map<String, byte[]> staged,
             @Nullable ReviewChange change) {
         Objects.requireNonNull(temporalAnchor, "temporalAnchor");
@@ -339,6 +340,7 @@ public class ContextManifestBuilder {
             List<SourceReadinessCheck> sourceChecks = new ArrayList<>();
             // Only the bindings this occasion matched speak here, and within them only the sources the
             // practice takes a refusing stance on.
+            @Nullable SignalName signal = occasion.apply(practice);
             for (var need : PracticeBinding.needsFor(practice.getBindings(), signal)) {
                 if (!need.refuses()) {
                     // A contextual source is read when it is there and noted when it is not, which is a

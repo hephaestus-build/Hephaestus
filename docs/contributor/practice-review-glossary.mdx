@@ -26,7 +26,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Automated-review policy**         | The frame a review runs in for one practice: the source-contract version, the review mode, the refusal behaviour, and the known limits. Sources belong to the bindings, not here.                                                          | evidence requirements                                             |
 | **Practice binding**                | The one occasion a practice is reviewed on, and the evidence a review occasioned that way reads. A practice declares exactly one.                                                                                                          | trigger, review event, schedule, bare "binding"                   |
 | **Model binding**                   | Which AI model, with which execution limits, a workspace runs a given purpose on. Lives in Administration &rarr; AI models, not in the practice catalogue.                                                                                 | bare "binding", practice binding, agent config                    |
-| **Signal**                          | The name of an ingested event a binding can be occasioned by, such as `scm.pull_request.merged`. Its prefix is the artifact kind, which is why a practice never states its artifact kind separately.                                       | trigger event, webhook, hook                                      |
+| **Signal**                          | The name of an ingested event a binding can be occasioned by, such as `scm.pull_request.merged`. Its prefix is the artifact kind, which is why a practice never states its artifact kind separately. On screen it is a **moment**, in the editor and in the filters alike. | trigger event, webhook, hook                                      |
 | **Evidence requirement**            | One source a binding reads, and the stance the practice takes towards it.                                                                                                                                                                  | required evidence, evidence declaration, detector configuration   |
 | **Evidence stance**                 | How a practice relates to one source: `REQUIRED`, `EXHAUSTIVE`, or `CONTEXTUAL`.                                                                                                                                                           | required/optional lists, source role                              |
 | **Required capture quality**        | How well a source must be captured before a practice that reads it can be reviewed. It is a property of the source in the contract, not of the practice naming it.                                                                         | completeness requirement, per-practice completeness               |
@@ -36,7 +36,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Materialization**                 | A file, database projection, cache entry, or tool result representing a source for one use.                                                                                                                                                | source kind                                                       |
 | **Job folder**                      | The directory the owning worker renders for one review attempt: permitted context areas as files plus a working copy of each permitted repository. [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion) owns its lifetime.                                                 | workspace mount, evidence store, content-addressed store          |
 | **Source kind**                     | A stable identifier for one logical source, such as pull request details.                                                                                                                                                                  | file type                                                         |
-| **Artifact kind**                   | The family of reviewed work a practice is about, such as `scm.pull_request`. Derived from a binding's signals, never stated separately.                                                                                                    | work type, artifact type                                          |
+| **Artifact kind**                   | The family of reviewed work a practice is about, such as `scm.pull_request`. Derived from a binding's signals, never stated separately. On screen it is a **kind of work**, and the unfiltered choice is **All work**. | work type, artifact type                                          |
 | **Known limitation**                | A claim the evidence cannot support even when every requirement passes.                                                                                                                                                                    | blind spot, caveat                                                |
 | **When evidence is insufficient**   | The required behavior when evidence requirements are not met. Skip automated review when the required source conditions are not met.                                                                                                                              | fallback, error handling                                          |
 | **Skip automated review**           | Make no practice claim because the requirements are not met or the mode is unsupported.                                                                                                                                                    | not applicable, decline judgment, failure                         |
@@ -60,6 +60,20 @@ independently, so no surface may suggest something did.
 “Mentoring” describes the product goal, not an anthropomorphic claim. Hephaestus does not know a developer's
 intent, private conversations, runtime conditions, or learning needs unless an authorized source explicitly
 provides that context. An observation is a bounded record of observed work, not a grade, diagnosis, or ground truth.
+
+### A value with no words
+
+A stored value can outlive the module that declared it, and a browser can hold an older webapp than
+the server it talks to. Whichever side meets a value it has no words for shows these, never the
+identifier:
+
+| Value                                     | Words shown                              |
+| ----------------------------------------- | ---------------------------------------- |
+| An artifact kind nothing declares         | **Other work** (mid-sentence, *piece of work*) |
+| No artifact kind sent at all              | **Reviewed work**                        |
+| A signal its artifact kind no longer declares | **A moment this version no longer offers** |
+| A source kind the webapp has no name for  | **Another source**                       |
+| A provider the webapp has no name for     | **Another provider**                     |
 
 ## Who may review
 
@@ -103,7 +117,7 @@ signal. `ObservationOrigin` is the population any resulting observation belongs 
   the row `RECORDED`. The exception is the Slack thread sweep, which records `SYNC` and does submit. Never
   write "reconciliation never starts a review" without saying which artifact kind you mean.
 - **Asking by hand is a door, never an occasion.** A hand-requested review reviews every practice on that
-  work type whatever state the work is in, so there is nothing for a practice to opt into;
+  kind of work whatever state the work is in, so there is nothing for a practice to opt into;
   `PracticeDefinitionValidator` refuses a binding that names a manual-request signal. Do not present it as
   a moment an author can tick.
 - **A recurring sweep is `LIVE`, not `BACKFILL`.** `SWEEP` records how the work was *found*, and the work
@@ -129,6 +143,12 @@ it was tombstoned. `ARTIFACT_NOT_VISIBLE` holds automatic occasions for a revers
 including live events and pending retries. Ordinary sync can restore the row
 ([ADR 0024](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0024-integration-sync-lifecycle-and-two-deletion-semantics.md)).
 A manual request is not retried after restoration; the person can request another review.
+
+`MERGE_ACTOR_UNAVAILABLE` holds a merge occasion whose matched practices judge the merger while the mirror
+does not know who merged. It is not `SUBJECT_UNLINKED`: the author may be a known member, and the missing
+fact is the merger. Reviewing without it would pass over the merger practice silently, and naming the author
+or the hook's sender instead would judge someone who may not have merged. A provider read or an ordinary
+sync that records the merger clears it.
 
 `COALESCED` means an issue-update snapshot was displaced before admission. It is suppressed, not pending:
 the reaper does not retry it, but a later live transition back to that content can offer it again.

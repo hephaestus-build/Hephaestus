@@ -445,6 +445,17 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .expectBody(Void.class);
     }
 
+    /** The viewed user owns the workspace, so the refusal is the view's, not their role's. */
+    @Test
+    void shouldRefuseTheWorkspaceTraceListAndRecordNothingWhenViewingItsOwner() {
+        sessionRequest("/workspaces/acme/practices/trace")
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        assertThat(userViewRowsFor(viewed)).isZero();
+    }
+
     @Test
     void shouldRecordTheReasonAndTheReadWithItsQueryWhenANormalAppReadIsViewed() {
         sessionRequest("/workspaces/acme/mentor/threads?page=0")

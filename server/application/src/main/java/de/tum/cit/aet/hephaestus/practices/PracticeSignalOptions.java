@@ -75,6 +75,11 @@ public class PracticeSignalOptions {
                 .isPresent();
     }
 
+    /** The signal's words for an author, as its kind's descriptor declares them. */
+    public String displayNameOf(SignalName signal) {
+        return artifacts.signalDisplayName(signal);
+    }
+
     public Set<SignalName> eligibleFor(ArtifactKind kind) {
         return bindableOptionsFor(kind).stream().map(SignalOption::signal).collect(Collectors.toUnmodifiableSet());
     }

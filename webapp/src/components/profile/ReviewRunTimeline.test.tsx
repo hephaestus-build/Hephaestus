@@ -36,7 +36,7 @@ const run = {
 		kind: "scm.pull_request",
 		id: "902",
 		label: "#902",
-		repositoryName: "HephaestusTest/practice-validation",
+		container: "HephaestusTest/practice-validation",
 		url: "https://github.com/HephaestusTest/practice-validation/pull/902",
 	},
 	observations: [baseObservation],

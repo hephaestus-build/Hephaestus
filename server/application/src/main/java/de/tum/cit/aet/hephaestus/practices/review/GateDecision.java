@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -24,13 +25,26 @@ public sealed interface GateDecision permits GateDecision.Detect, GateDecision.S
      * The gate passed: the practice review agent should run.
      *
      * @param workspace         the resolved workspace for this PR's repository
-     * @param matchedPractices practices bound to the observed signal and above {@code OFF}
+     * @param matchedPractices practices bound to the observed signal and above {@code OFF}, and those rechecked
+     * @param recheckedPractices slugs of the matched practices the signal does not occasion, admitted because
+     *     their current word on this work is a problem the work may since have answered
      */
-    record Detect(Workspace workspace, List<Practice> matchedPractices, long rolloutRevision, TriggerMode triggerMode)
+    record Detect(
+            Workspace workspace,
+            List<Practice> matchedPractices,
+            long rolloutRevision,
+            TriggerMode triggerMode,
+            Set<String> recheckedPractices)
             implements GateDecision {
         public Detect {
             Objects.requireNonNull(workspace, "workspace must not be null");
             matchedPractices = List.copyOf(matchedPractices);
+            recheckedPractices = Set.copyOf(recheckedPractices);
+        }
+
+        public Detect(
+                Workspace workspace, List<Practice> matchedPractices, long rolloutRevision, TriggerMode triggerMode) {
+            this(workspace, matchedPractices, rolloutRevision, triggerMode, Set.of());
         }
     }
 

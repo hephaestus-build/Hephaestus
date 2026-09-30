@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Stable names for countable collections used by mechanical practice preconditions.
@@ -39,7 +40,11 @@ public enum SubjectEvidenceCollection {
         return Arrays.stream(values())
                 .filter(collection -> collection.id.equals(id))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("Unknown evidence collection: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("“Evidence present” (evidenceHasItems) counts one of "
+                        + Arrays.stream(values())
+                                .map(SubjectEvidenceCollection::id)
+                                .collect(Collectors.joining(", "))
+                        + "; " + id + " is not one of them."));
     }
 
     @Override

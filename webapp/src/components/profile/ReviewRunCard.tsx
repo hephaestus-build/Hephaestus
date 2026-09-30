@@ -155,8 +155,8 @@ function ReviewedWork({ work, tone }: { work: ReviewedWorkRef; tone: "head" | "l
 				<Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
 				<div className="flex min-w-0 flex-col gap-0.5">
 					{name}
-					{hasText(work.repositoryName) && (
-						<span className="truncate text-xs text-muted-foreground">{work.repositoryName}</span>
+					{hasText(work.container) && (
+						<span className="truncate text-xs text-muted-foreground">{work.container}</span>
 					)}
 				</div>
 			</div>
@@ -167,10 +167,10 @@ function ReviewedWork({ work, tone }: { work: ReviewedWorkRef; tone: "head" | "l
 		<span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
 			<Icon className="size-3.5 shrink-0" aria-hidden />
 			{name}
-			{hasText(work.repositoryName) && (
+			{hasText(work.container) && (
 				<>
 					<span aria-hidden>·</span>
-					<span className="truncate">{work.repositoryName}</span>
+					<span className="truncate">{work.container}</span>
 				</>
 			)}
 		</span>

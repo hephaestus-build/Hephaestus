@@ -58,6 +58,7 @@ const MOMENTS: Record<string, MomentDef> = {
 		phase: "during",
 		repeats: true,
 	},
+	"scm.pull_request.edited": { icon: FilePenLineIcon, phase: "during", repeats: true },
 	"scm.pull_request.reviewed": { icon: MessageSquareTextIcon, phase: "during", repeats: true },
 	"scm.pull_request.merged": { icon: GitMergeIcon, phase: "end", repeats: false },
 	"scm.pull_request.closed": { icon: GitPullRequestClosedIcon, phase: "end", repeats: false },
@@ -79,6 +80,9 @@ export function momentDef(signal: string): MomentDef {
 	return MOMENTS[signal] ?? UNKNOWN_MOMENT;
 }
 
+/** The name of a moment the practice still names and this version can no longer offer or describe. */
+export const WITHDRAWN_MOMENT_LABEL = "A moment this version no longer offers";
+
 /**
  * Moments a practice is already bound to that its work type no longer offers: a review asked for by
  * hand, saved while that still counted as an occasion, or a signal a later build withdrew. Drawn
@@ -86,7 +90,7 @@ export function momentDef(signal: string): MomentDef {
  * a moment nobody can untick.
  *
  * A withdrawn moment has no `displayName` on the wire, so it is named by the hand-asked review where
- * it is that, and by its bare id otherwise, which is at least something to search for.
+ * it is that, and by {@link WITHDRAWN_MOMENT_LABEL} otherwise — never by its wire id.
  */
 export function withdrawnMoments(
 	workType: PracticeWorkTypeDefinitionOptions,
@@ -98,7 +102,7 @@ export function withdrawnMoments(
 		.filter((signal) => !offered.has(signal))
 		.map((signal) => ({
 			signal,
-			displayName: manual?.signal === signal ? manual.displayName : signal,
+			displayName: manual?.signal === signal ? manual.displayName : WITHDRAWN_MOMENT_LABEL,
 			recommended: false,
 		}));
 }

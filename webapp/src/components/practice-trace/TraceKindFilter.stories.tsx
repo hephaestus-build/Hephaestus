@@ -67,13 +67,15 @@ export const FilteredToIssues: Story = {
 };
 
 /**
- * A kind this build has never heard of arrives from the page it filters, and is shown by its id
- * rather than dropped — a filter that cannot be seen cannot be cleared.
+ * A kind this build has never heard of arrives from the page it filters, and is shown as "Other
+ * work" rather than dropped — a filter that cannot be seen cannot be cleared — and never by its id.
  */
 export const AKindThisBuildDoesNotKnow: Story = {
 	args: { seen: ["wiki.page"], value: "wiki.page" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("combobox", { name: "Show" })).toHaveTextContent("wiki.page");
+		const select = canvas.getByRole("combobox", { name: "Show" });
+		await expect(select).toHaveTextContent("Other work");
+		await expect(select).not.toHaveTextContent("wiki.page");
 	},
 };
 

@@ -17,6 +17,10 @@ import org.jspecify.annotations.Nullable;
  * <p>Exactly one field is set. Literal substring matching avoids executing administrator-supplied regular
  * expressions on untrusted diffs.
  *
+ * <p>An author writes a clause as JSON, so a refusal names each field by the editor's label and the key they
+ * typed together — “Diff contains” (diffContains) — which is the one convention for every message about
+ * the gate.
+ *
  * @param changedPathMatches glob patterns; the clause holds when the change touches a matching path.
  *                           {@code *} does not cross a {@code /} and {@code **} does
  * @param diffContains       literal strings; the clause holds when the diff contains one of them
@@ -41,20 +45,26 @@ public record PracticeSubjectClause(
 
     static final int MAX_TERMS = 100;
 
+    private static final String CHANGED_PATH_MATCHES = "“Changed path matches” (changedPathMatches)";
+
+    private static final String DIFF_CONTAINS = "“Diff contains” (diffContains)";
+
+    private static final String EVIDENCE_HAS_ITEMS = "“Evidence present” (evidenceHasItems)";
+
     @JsonCreator
     public PracticeSubjectClause(
             @JsonProperty("changedPathMatches") @Nullable List<String> changedPathMatches,
             @JsonProperty("diffContains") @Nullable List<String> diffContains,
             @JsonProperty("evidenceHasItems") @Nullable SubjectEvidenceCollection evidenceHasItems) {
-        this.changedPathMatches = copyTerms(changedPathMatches, "changedPathMatches");
-        this.diffContains = copyTerms(diffContains, "diffContains");
+        this.changedPathMatches = copyTerms(changedPathMatches, CHANGED_PATH_MATCHES);
+        this.diffContains = copyTerms(diffContains, DIFF_CONTAINS);
         this.evidenceHasItems = evidenceHasItems;
         long declared = java.util.stream.Stream.of(this.changedPathMatches, this.diffContains, this.evidenceHasItems)
                 .filter(Objects::nonNull)
                 .count();
         if (declared != 1) {
-            throw new IllegalArgumentException(
-                    "A subject clause states exactly one of changedPathMatches, diffContains or evidenceHasItems");
+            throw new IllegalArgumentException("Each gate clause states exactly one of " + CHANGED_PATH_MATCHES + ", "
+                    + DIFF_CONTAINS + " or " + EVIDENCE_HAS_ITEMS + ".");
         }
     }
 
@@ -91,19 +101,18 @@ public record PracticeSubjectClause(
             return null;
         }
         if (terms.isEmpty()) {
-            throw new IllegalArgumentException(field + " needs at least one entry, or should be omitted");
+            throw new IllegalArgumentException(field + " needs at least one entry. Add one, or leave it out.");
         }
         if (terms.size() > MAX_TERMS) {
-            throw new IllegalArgumentException(field + " may not list more than " + MAX_TERMS + " entries");
+            throw new IllegalArgumentException(field + " may list at most " + MAX_TERMS + " entries.");
         }
         for (String term : terms) {
-            Objects.requireNonNull(term, field);
-            if (term.isBlank()) {
-                throw new IllegalArgumentException(field + " may not contain a blank entry");
+            if (term == null || term.isBlank()) {
+                throw new IllegalArgumentException(field + " has an empty entry. Remove it.");
             }
             if (term.length() > MAX_TERM_LENGTH) {
                 throw new IllegalArgumentException(
-                        field + " entries may not exceed " + MAX_TERM_LENGTH + " characters");
+                        field + " entries may be at most " + MAX_TERM_LENGTH + " characters long.");
             }
         }
         return List.copyOf(terms);

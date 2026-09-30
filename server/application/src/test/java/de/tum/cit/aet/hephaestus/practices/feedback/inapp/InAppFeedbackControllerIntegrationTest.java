@@ -102,7 +102,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 .isEqualTo("Pull request 101")
                 .jsonPath("$[0].evidence[0].reviewedWork.url")
                 .isEqualTo("https://github.com/acme/api/pull/101")
-                .jsonPath("$[0].evidence[0].reviewedWork.repositoryName")
+                .jsonPath("$[0].evidence[0].reviewedWork.container")
                 .isEqualTo("acme/api")
                 .jsonPath("$[0].evidence[0].outcome")
                 .isEqualTo("OMISSION_GAP")

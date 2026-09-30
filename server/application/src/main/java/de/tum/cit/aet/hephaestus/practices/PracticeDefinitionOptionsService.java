@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDefinitionOptionsDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeEvidenceSourceOptionDTO;
-import de.tum.cit.aet.hephaestus.practices.dto.PracticeManualReviewSignalDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalOptionDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeWorkTypeDefinitionOptionsDTO;
 import java.util.List;
@@ -48,7 +48,7 @@ public class PracticeDefinitionOptionsService {
                         .toList(),
                 signalOptions
                         .manualRequestOptionFor(artifact)
-                        .map(option -> new PracticeManualReviewSignalDTO(option.signal(), option.displayName()))
+                        .map(option -> new PracticeSignalDTO(option.signal(), option.displayName()))
                         .orElse(null),
                 defaults.policyFor(artifact),
                 defaults.needsFor(artifact),

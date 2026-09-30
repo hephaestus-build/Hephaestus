@@ -661,7 +661,8 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                         true,
                         GitLabHeadPipeline.NO_PIPELINE,
                         List.of(),
-                        List.of()),
+                        List.of(),
+                        GitLabMergeRequestReadinessReader.Merge.UNKNOWN),
                 readAt,
                 ProcessingContext.forSync(null, course));
 

@@ -4751,7 +4751,7 @@ export const listTracedArtifactsQueryKey = (options: Options<ListTracedArtifacts
 /**
  * List work this workspace recorded something about
  *
- * Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
+ * Workspace admins only. Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
  */
 export const listTracedArtifactsOptions = (options: Options<ListTracedArtifactsData>) => queryOptions<ListTracedArtifactsResponse, ListTracedArtifactsError, ListTracedArtifactsResponse, ReturnType<typeof listTracedArtifactsQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {
@@ -4771,7 +4771,7 @@ export const listTracedArtifactsInfiniteQueryKey = (options: Options<ListTracedA
 /**
  * List work this workspace recorded something about
  *
- * Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
+ * Workspace admins only. Built from the signal ledger, so it includes work that was never reviewed — which is exactly what a listing derived from review runs cannot show. Most recently signalled first.
  */
 export const listTracedArtifactsInfiniteOptions = (options: Options<ListTracedArtifactsData>) => {
   const opts = infiniteQueryOptions<ListTracedArtifactsResponse, ListTracedArtifactsError, InfiniteData<ListTracedArtifactsResponse>, QueryKey<Options<ListTracedArtifactsData>>, number | Pick<QueryKey<Options<ListTracedArtifactsData>>[0], 'body' | 'headers' | 'path' | 'query'>>(
@@ -4803,7 +4803,7 @@ export const getArtifactTraceQueryKey = (options: Options<GetArtifactTraceData>)
 /**
  * Explain what every practice did about one piece of work
  *
- * Every practice the workspace runs against this kind of work appears, including the ones that did nothing, each with the recorded reason. Name a review and every answer is that review's own. 404 means nothing about this artifact was ever recorded here, or the named review never ran on it — not that the trace is unavailable.
+ * Every practice the workspace runs against this kind of work appears, including the ones that did nothing, each with the recorded reason. Name a review and every answer is that review's own. A workspace admin may read any work, with or without a review; anyone else must name a review that observed them on this work, and reads only the observations about them and the feedback addressed to them. 404 means nothing about this artifact was ever recorded here, the named review never ran on it, or the caller may not read it.
  */
 export const getArtifactTraceOptions = (options: Options<GetArtifactTraceData>) => queryOptions<GetArtifactTraceResponse, GetArtifactTraceError, GetArtifactTraceResponse, ReturnType<typeof getArtifactTraceQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {

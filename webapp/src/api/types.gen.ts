@@ -164,11 +164,11 @@ export type ActivityWorkPage = {
 };
 
 export type AdminAccountView = {
-  appRole?: string;
+  appRole: 'USER' | 'APP_ADMIN';
   displayName?: string;
   id?: number;
   primaryEmail?: string;
-  status?: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'DELETING' | 'DELETED';
 };
 
 /**
@@ -247,7 +247,7 @@ export type AdminWorkspaceView = {
   memberCount: number;
   ownerLogin?: string;
   providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
-  status: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'PURGED';
   workspaceSlug: string;
 };
 
@@ -430,29 +430,17 @@ export type ArtifactTrace = {
   artifactId: number;
   artifactKind: string;
   /**
-   * Repository, collection or channel it sits in
-   */
-  container?: string;
-  /**
-   * The number the provider shows, for kinds that have one
-   */
-  number?: number;
-  /**
    * Every practice this workspace runs against this kind of work, the ones with something to report first, then the rest; ties broken by practice name
    */
   practices: Array<PracticeTraceEntry>;
   /**
+   * The work as every surface names it: its provider, the label the provider writes ("#1423", "!1423"), its title, where it sits and where to open it; the link is absent for deleted work
+   */
+  reviewedWork: ReviewedWorkRef;
+  /**
    * Everything recorded about this artifact, oldest first
    */
   signals: Array<TracedSignal>;
-  /**
-   * The label a person recognises; the kind's display name when the mirror cannot name it
-   */
-  title: string;
-  /**
-   * Where to open it upstream; absent for a deleted or unlinkable artifact
-   */
-  url?: string;
 };
 
 /**
@@ -3590,14 +3578,6 @@ export type PracticeGroupTrend = {
 };
 
 /**
- * The signal a person raises by asking for a review of this work type by hand
- */
-export type PracticeManualReviewSignal = {
-  displayName: string;
-  signal: string;
-};
-
-/**
  * What held, what changed and which work was reviewed over a window of the developer's reviews
  */
 export type PracticeProfileOverview = {
@@ -3822,6 +3802,20 @@ export type PracticeReviewSettings = {
 };
 
 /**
+ * A signal and the words a reader sees for it
+ */
+export type PracticeSignal = {
+  /**
+   * What to print for the signal
+   */
+  displayName: string;
+  /**
+   * Signal name, for matching and linking; never printed
+   */
+  signal: string;
+};
+
+/**
  * A signal a practice can start an automated review on
  */
 export type PracticeSignalOption = {
@@ -3991,9 +3985,9 @@ export type PracticeTraceEntry = {
    */
   observationCount: number;
   /**
-   * The occurrence this answer is about; null when nothing it watches happened
+   * The signal of the occurrence this answer is about, with its display name; null when nothing it watches happened
    */
-  occasionedBy?: string;
+  occasionedBy?: PracticeSignal;
   /**
    * That occurrence's id in this trace's signals list. The name alone cannot identify it — the same signal recurs on every revision — so this is what a link should follow.
    */
@@ -4006,9 +4000,9 @@ export type PracticeTraceEntry = {
    */
   reviewId?: string;
   /**
-   * The signals this practice watches
+   * The signals this practice watches, each with its display name
    */
-  watches: Array<string>;
+  watches: Array<PracticeSignal>;
   /**
    * Why prepared feedback was withheld. Non-empty with observations present means we measured and deliberately said nothing.
    */
@@ -4034,7 +4028,7 @@ export type PracticeWorkTypeDefinitionOptions = {
   /**
    * How a person asks for a review of this work type by hand, or absent where the work type admits no such request. Not an occasion to bind to: such a request reviews every practice on the work type whatever state the work is in.
    */
-  manualReviewSignal?: PracticeManualReviewSignal;
+  manualReviewSignal?: PracticeSignal;
   /**
    * Evidence a new binding on this work type starts with when the author says nothing
    */
@@ -4928,7 +4922,7 @@ export type ReviewRequestOutcome = {
   /**
    * The controlled-vocabulary reason nothing was started; absent when a review was started
    */
-  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * The reason as one sentence for the person who asked. Render it verbatim: it is written next to the reason it explains so that every surface says the same thing, and a re-worded copy is how a screen and a support answer come to disagree.
    */
@@ -5072,6 +5066,10 @@ export type ReviewedPractice = {
  */
 export type ReviewedWorkRef = {
   /**
+   * Where the work sits, by name: a pull request's or an issue's repository, a document's collection; a conversation's channel is its label
+   */
+  container?: string;
+  /**
    * Identifier of the work within its kind
    */
   id: string;
@@ -5087,10 +5085,6 @@ export type ReviewedWorkRef = {
    * The provider the work lives at, which decides its noun: a GitLab scm.pull_request is a merge request; absent when the run that named the work is gone
    */
   provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
-  /**
-   * Repository the work belongs to, for pull requests and issues
-   */
-  repositoryName?: string;
   /**
    * The work's own title where the label does not already say it: a pull request's or an issue's; a conversation thread has none and a document's is its label
    */
@@ -5613,28 +5607,19 @@ export type TimeBucketSize = 'DAY' | 'WEEK' | 'MONTH';
 export type TracedArtifact = {
   artifactId: number;
   artifactKind: string;
-  /**
-   * Repository, collection or channel it sits in
-   */
-  container?: string;
   lastSignalAt: Date;
-  /**
-   * The number the provider shows, for kinds that have one
-   */
-  number?: number;
   /**
    * How many of them started a review
    */
   reviewedSignalCount: number;
   /**
+   * The work as every surface names it: its provider, the label the provider writes ("#1423", "!1423"), its title, where it sits and where to open it; the link is absent for deleted work
+   */
+  reviewedWork: ReviewedWorkRef;
+  /**
    * Occurrences recorded on this artifact
    */
   signalCount: number;
-  title: string;
-  /**
-   * Where to open it upstream; absent for a deleted or unlinkable artifact
-   */
-  url?: string;
 };
 
 /**
@@ -5646,7 +5631,7 @@ export type TracedSignal = {
    */
   discoveredVia: 'EVENT' | 'SYNC' | 'MANUAL' | 'BACKFILL' | 'SWEEP';
   /**
-   * Human label for the signal, from the artifact kind's descriptor
+   * What to print for the signal, from the artifact kind's descriptor
    */
   displayName: string;
   /**
@@ -5666,14 +5651,18 @@ export type TracedSignal = {
    */
   revision: string;
   /**
-   * Signal name, e.g. scm.pull_request.ready
+   * Signal name, for matching and linking; never printed
    */
   signal: string;
   state: 'RECORDED' | 'DEFERRED' | 'TRIGGERED' | 'SUPPRESSED' | 'PENDING' | 'LAPSED';
   /**
    * Why it ended in that state; null once it triggered a review
    */
-  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  /**
+   * That reason as one sentence for a reader. Render it verbatim: it is written next to the reason it explains, so every surface that explains a silence says the same thing
+   */
+  stateReasonDescription?: string;
 };
 
 export type TrendOpportunity = {
@@ -13455,6 +13444,10 @@ export type ListTracedArtifactsErrors = {
    * Unknown artifact kind or invalid pagination
    */
   400: ProblemDetail;
+  /**
+   * Workspace administrator access is required
+   */
+  403: ProblemDetail;
 };
 
 export type ListTracedArtifactsError = ListTracedArtifactsErrors[keyof ListTracedArtifactsErrors];
@@ -13486,7 +13479,7 @@ export type GetArtifactTraceData = {
   };
   query?: {
     /**
-     * Answer for this review alone: every state, explanation and count is what this review made of the work. Omit it for every review of the work at once.
+     * Answer for this review alone: every state, explanation and count is what this review made of the work. Omit it for every review of the work at once, which only a workspace admin may.
      */
     reviewId?: string;
   };
@@ -13495,7 +13488,7 @@ export type GetArtifactTraceData = {
 
 export type GetArtifactTraceErrors = {
   /**
-   * Nothing recorded about this artifact in this workspace, or the named review never ran on it
+   * Nothing recorded about this artifact in this workspace, the named review never ran on it, or the caller may not read it
    */
   404: ProblemDetail;
 };

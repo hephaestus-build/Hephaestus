@@ -1,8 +1,8 @@
 import type { FilterOption } from "@/components/common/FilterToggle";
 import {
 	ARTIFACT_KIND,
+	artifactKindLabel,
 	type ArtifactKindId,
-	artifactKindPluralLabel,
 	type KnownArtifactKind,
 } from "@/lib/artifact-kinds";
 
@@ -21,13 +21,13 @@ export function workArtifactHint(kind: string): string | undefined {
 }
 
 export const WORK_ARTIFACT_FILTER_OPTIONS = [
-	{ value: ARTIFACT_KIND.pullRequest, label: artifactKindPluralLabel(ARTIFACT_KIND.pullRequest) },
-	{ value: ARTIFACT_KIND.issue, label: artifactKindPluralLabel(ARTIFACT_KIND.issue) },
+	{ value: ARTIFACT_KIND.pullRequest, label: artifactKindLabel(ARTIFACT_KIND.pullRequest, 2) },
+	{ value: ARTIFACT_KIND.issue, label: artifactKindLabel(ARTIFACT_KIND.issue, 2) },
 	{
 		value: ARTIFACT_KIND.conversationThread,
-		label: artifactKindPluralLabel(ARTIFACT_KIND.conversationThread),
+		label: artifactKindLabel(ARTIFACT_KIND.conversationThread, 2),
 	},
-	{ value: ARTIFACT_KIND.document, label: artifactKindPluralLabel(ARTIFACT_KIND.document) },
+	{ value: ARTIFACT_KIND.document, label: artifactKindLabel(ARTIFACT_KIND.document, 2) },
 ] as const;
 
 /**
@@ -37,14 +37,14 @@ export const WORK_ARTIFACT_FILTER_OPTIONS = [
 export const WORK_ARTIFACT_FILTER_ITEMS: {
 	value: ArtifactKindId;
 	label: string;
-}[] = [{ value: "ALL", label: "All work types" }, ...WORK_ARTIFACT_FILTER_OPTIONS];
+}[] = [{ value: "ALL", label: "All work" }, ...WORK_ARTIFACT_FILTER_OPTIONS];
 
 /**
  * The same list for {@link FilterToggle}. "All" is shortened on screen to fit the row, so the full
  * name is restored for a screen reader (WCAG 2.2 SC 2.5.3).
  */
 export const WORK_TYPE_FILTER_OPTIONS: FilterOption<"ALL" | KnownArtifactKind>[] = [
-	{ value: "ALL", label: "All work types", shortLabel: "All", srSuffix: "work types" },
+	{ value: "ALL", label: "All work", shortLabel: "All", srSuffix: "work" },
 	...WORK_ARTIFACT_FILTER_OPTIONS,
 ];
 

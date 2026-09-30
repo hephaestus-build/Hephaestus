@@ -815,7 +815,9 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
             assertThat(problem).isNotNull();
             assertThat(problem.getTitle()).isEqualTo("Invalid workspace request");
-            assertThat(problem.getDetail()).isEqualTo("Choose signals declared for the selected work type");
+            assertThat(problem.getDetail())
+                    .isEqualTo("One of the chosen moments is not one this kind of work offers. Choose from the moments "
+                            + "listed for it.");
         }
 
         /**

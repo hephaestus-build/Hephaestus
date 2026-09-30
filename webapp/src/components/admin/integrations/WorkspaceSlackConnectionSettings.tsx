@@ -38,6 +38,12 @@ export type WorkspaceSlackConnectionSettingsProps =
 			state: "connected";
 			credentialsUnreadableSince?: Date;
 			/**
+			 * Starts Slack's OAuth again for the same Slack workspace, which replaces the stored token and
+			 * keeps the connection, its channels and their data; the page leaves for Slack when it succeeds.
+			 */
+			onReconnect: () => void;
+			isReconnecting: boolean;
+			/**
 			 * Present when the server names the active connection, which is what a disconnect acts on.
 			 * The confirm dialog closes when it resolves and stays open when it rejects.
 			 */
@@ -85,6 +91,8 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 
 function SlackConnected({
 	credentialsUnreadableSince,
+	onReconnect,
+	isReconnecting,
 	onDisconnect,
 	isDisconnecting,
 }: Extract<WorkspaceSlackConnectionSettingsProps, { state: "connected" }>) {
@@ -114,7 +122,7 @@ function SlackConnected({
 						<ItemTitle>Slack workspace</ItemTitle>
 						<ItemDescription className={credentialUnreadable ? "line-clamp-none" : undefined}>
 							{credentialUnreadable
-								? "Can't post with this token. Restore the original server key or reconnect Slack."
+								? "Can't post with this token. Reconnect Slack to replace it, or restore the original server key."
 								: "Hephaestus is installed and can post as the app."}
 						</ItemDescription>
 					</ItemContent>
@@ -128,17 +136,34 @@ function SlackConnected({
 				</Item>
 			</CardContent>
 
-			{onDisconnect && (
-				<CardFooter className="justify-end">
+			<CardFooter className="justify-end gap-2">
+				<Button
+					variant={credentialUnreadable ? "default" : "outline"}
+					onClick={onReconnect}
+					disabled={isReconnecting || isDisconnecting}
+				>
+					{isReconnecting ? (
+						<>
+							<Spinner />
+							Redirecting to Slack…
+						</>
+					) : (
+						<>
+							Reconnect Slack
+							<ExternalLinkIcon className="size-3.5" />
+						</>
+					)}
+				</Button>
+				{onDisconnect && (
 					<Button
 						variant="destructive-outline"
 						onClick={() => setDisconnectOpen(true)}
-						disabled={isDisconnecting}
+						disabled={isDisconnecting || isReconnecting}
 					>
 						{isDisconnecting ? "Disconnecting…" : "Disconnect Slack…"}
 					</Button>
-				</CardFooter>
-			)}
+				)}
+			</CardFooter>
 
 			<AlertDialog open={disconnectOpen} onOpenChange={setDisconnectOpen}>
 				<AlertDialogContent>
@@ -148,7 +173,8 @@ function SlackConnected({
 							The Slack connection for this workspace is removed, and every ingested Slack message,
 							thread, and per-channel consent record for this workspace is erased. Messages already
 							sent in Slack remain there. To use Slack with this workspace again, re-authorize via
-							OAuth and re-activate channels.
+							OAuth and re-activate channels. To replace only the stored token, use Reconnect Slack
+							instead: it keeps the channels and their data.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

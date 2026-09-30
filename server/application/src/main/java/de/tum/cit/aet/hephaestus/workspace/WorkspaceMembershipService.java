@@ -514,7 +514,14 @@ public class WorkspaceMembershipService {
         var context = WorkspaceContextHolder.getContext();
         if (context == null || !workspace.getId().equals(context.id()) || !accessService.canManageRole(role)) {
             throw new InsufficientWorkspacePermissionsException(
-                    workspace.getWorkspaceSlug(), "You cannot manage the " + role + " role");
+                    workspace.getWorkspaceSlug(),
+                    "You cannot manage "
+                            + switch (role) {
+                                case OWNER -> "owners";
+                                case ADMIN -> "admins";
+                                case MEMBER -> "members";
+                            }
+                            + " in this workspace.");
         }
     }
 

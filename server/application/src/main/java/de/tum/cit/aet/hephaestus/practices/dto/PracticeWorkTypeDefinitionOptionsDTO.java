@@ -28,7 +28,7 @@ public record PracticeWorkTypeDefinitionOptionsDTO(
                 description = "How a person asks for a review of this work type by hand, or absent where the work "
                         + "type admits no such request. Not an occasion to bind to: such a request reviews every "
                         + "practice on the work type whatever state the work is in.")
-        PracticeManualReviewSignalDTO manualReviewSignal,
+        PracticeSignalDTO manualReviewSignal,
 
         @NonNull PracticeAutomatedReviewPolicy recommendedPolicy,
 

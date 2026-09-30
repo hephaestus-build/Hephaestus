@@ -316,14 +316,14 @@ describe("toEvidenceCheck", () => {
 		]);
 	});
 
-	it("names an unknown source kind verbatim and drops the pair when nothing was consulted", () => {
+	it("names an unknown source kind generically and drops the pair when nothing was consulted", () => {
 		const search = {
 			lookedFor: "a changelog entry",
 			boundary: "the files this change touches",
 		};
 		expect(
 			toEvidenceCheck({ citations: [], search: { ...search, consulted: ["future.source"] } })[1],
-		).toStrictEqual({ term: "Read", detail: "future.source" });
+		).toStrictEqual({ term: "Read", detail: "Another source" });
 		expect(
 			toEvidenceCheck({ citations: [], search: { ...search, consulted: [] } }).map(
 				({ term }) => term,

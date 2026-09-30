@@ -56,6 +56,13 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("Ada Admin");
+		// Roles and statuses in words, never the constants the wire carries.
+		canvas.getByText("Instance admin");
+		await expect(canvas.getAllByText("User")).toHaveLength(2);
+		canvas.getByText("Suspended");
+		await expect(
+			canvas.queryByText(/^(?:APP_ADMIN|USER|ACTIVE|SUSPENDED)$/u),
+		).not.toBeInTheDocument();
 		await userEvent.click(canvas.getByRole("button", { name: "Actions for Ada Admin" }));
 		// A disabled Base UI item has pointer-events:none, so the guard is asserted rather than clicked.
 		const revokeSelf = await screen.findByRole("menuitem", {

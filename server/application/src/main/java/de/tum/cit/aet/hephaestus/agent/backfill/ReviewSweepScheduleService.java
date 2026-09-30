@@ -61,8 +61,9 @@ public class ReviewSweepScheduleService {
         ReviewBackfillService.jobTypeFor(kind);
         validateLookback(request.cadence(), request.lookbackDays());
         if (scheduleRepository.existsByWorkspaceIdAndArtifactKind(context.id(), kind.value())) {
-            throw new ReviewSweepScheduleConflictException("This workspace already sweeps " + kind.value()
-                    + ". Change that schedule instead of adding a second.");
+            throw new ReviewSweepScheduleConflictException(
+                    "This workspace already has a recurring check for this kind of work. "
+                            + "Change that one instead of adding a second.");
         }
         Workspace workspace = workspaceRepository
                 .findById(context.id())
@@ -146,17 +147,22 @@ public class ReviewSweepScheduleService {
      */
     private static void validateLookback(ReviewSweepCadence cadence, int lookbackDays) {
         if (lookbackDays < 1) {
-            throw new IllegalArgumentException("A sweep must look back at least one day.");
+            throw new IllegalArgumentException("A recurring check must look back at least one day.");
         }
         Duration lookback = Duration.ofDays(lookbackDays);
         Duration max = cadence.maxLookback();
         if (lookback.compareTo(max) > 0) {
-            throw new IllegalArgumentException("A " + cadence.name()
-                    + " sweep may look back at most "
+            throw new IllegalArgumentException("A "
+                    + switch (cadence) {
+                        case DAILY -> "daily";
+                        case WEEKLY -> "weekly";
+                    }
+                    + " recurring check may look back at most "
                     + max.toDays()
                     + " days, not "
                     + lookbackDays
-                    + ". Reviewing further back is a backfill campaign, which is measured apart from live work.");
+                    + ". To review older work, start a backfill under “Review past work”, which is counted apart "
+                    + "from live work.");
         }
     }
 }

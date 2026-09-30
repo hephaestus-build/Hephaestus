@@ -21,7 +21,7 @@ const adminUser: AdminAccountView = {
 };
 
 /**
- * Confirms toggling a single account between USER and APP_ADMIN. Granting is an elevation, so it is
+ * Confirms toggling a single account between User and Instance admin. Granting is an elevation, so it is
  * surfaced as a destructive-styled confirmation; revoking is neutral.
  */
 const meta = {
@@ -34,18 +34,21 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Granting APP_ADMIN — destructive-styled "Grant admin" action; confirming reports the next role. */
+/** Granting Instance admin — destructive-styled "Grant admin" action; confirming reports the next role. */
 export const GrantAdmin: Story = {
 	args: { user: regularUser, icon: ShieldCheck },
 	play: async ({ args }) => {
 		await screen.findByRole("alertdialog");
-		screen.getByText(/Grant application admin\?/iu);
+		screen.getByText("Grant instance admin?");
+		await expect(screen.getByRole("alertdialog")).toHaveTextContent(
+			/gets the Instance admin role/u,
+		);
 		await userEvent.click(screen.getByRole("button", { name: "Grant admin" }));
 		await expect(args.onConfirm).toHaveBeenCalledWith(regularUser, "APP_ADMIN");
 	},
 };
 
-/** Revoking APP_ADMIN — neutral confirmation; confirming downgrades to USER. */
+/** Revoking Instance admin — neutral confirmation; confirming downgrades to USER. */
 export const RevokeAdmin: Story = {
 	args: { user: adminUser, icon: ShieldOff },
 	play: async ({ args }) => {

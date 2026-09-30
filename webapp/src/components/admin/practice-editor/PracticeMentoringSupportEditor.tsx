@@ -199,7 +199,7 @@ export function PracticeMentoringSupportEditor({
 								An automated review reads the connected work and offers practice-focused guidance.
 								It skips the practice when required evidence is unavailable.
 								{!supportsAiReview && (
-									<> This work type has no AI review available on this instance.</>
+									<> This kind of work has no AI review available on this instance.</>
 								)}
 							</FieldDescription>
 						</FieldContent>

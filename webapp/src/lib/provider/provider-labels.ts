@@ -18,14 +18,11 @@ const PROVIDER_LABELS: Record<string, string> = {
 };
 
 /**
- * Human label for a provider type. Unknown types fall back to the raw value (better a wire name than
- * nothing); a missing type falls back to `fallback`, which prose can set to e.g. "that provider".
+ * Human label for a provider type. A missing type, and one this build has no name for, read as
+ * `fallback` — "that provider" in prose; a badge passes its own — and never as the wire value.
  */
 export function getProviderLabel(providerType?: string | null, fallback = "that provider"): string {
-	if (!hasText(providerType)) {
-		return fallback;
-	}
-	return PROVIDER_LABELS[providerType.toUpperCase()] ?? providerType;
+	return (
+		(hasText(providerType) ? PROVIDER_LABELS[providerType.toUpperCase()] : undefined) ?? fallback
+	);
 }
-
-export { PROVIDER_LABELS };

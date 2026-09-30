@@ -103,7 +103,7 @@ export function toFeedbackCard(
 		group: hasText(feedback.groupSlug)
 			? {
 					slug: feedback.groupSlug,
-					name: feedback.groupName ?? feedback.groupSlug,
+					name: feedback.groupName ?? group?.name ?? "Practice group",
 					color: group?.color,
 					icon: group ? getGroupVisual(group.icon, group.color).Icon : undefined,
 				}

@@ -65,12 +65,12 @@ The practice editor follows the decisions an author can make confidently:
 3. **How Hephaestus can help** — choose AI-supported mentoring, human review, or guidance only.
 
 The generated identifier, the occasion a review runs on, and the optional static-analysis script are
-under **Technical settings**. A new practice starts with a binding that fits the selected work type.
+under **Technical settings**. A new practice starts with a binding that fits the selected kind of work.
 Authors only change that default when the practice genuinely needs a different occasion. This keeps
 runtime plumbing out of the common path without hiding it from expert authors. A practice has exactly one
 occasion: reading different evidence at a different moment is a second practice, which is what the shipped
 catalogue does, and asking for a review by hand is not an occasion to choose at all.
-The definition-options API supplies the signals a practice on that work type may bind to, the evidence
+The definition-options API supplies the signals a practice on that kind of work may bind to, the evidence
 a new binding starts with, and the sources it may read, so the editor and runtime cannot silently
 disagree about what is bindable. The practice never states its artifact kind: it is read off the
 signals' shared prefix, which is what stops a declared kind and its triggers from drifting apart.
@@ -93,7 +93,7 @@ settings:
   a static-analysis script and its autonomy is forced to `OFF`.
 - **Guidance only** keeps the criteria and guidance without configuring Hephaestus to review it.
 
-The binding starts with the recommended evidence for its work type. Most authors should keep it.
+The binding starts with the recommended evidence for its kind of work. Most authors should keep it.
 **Customize evidence** reveals each source's display name, privacy class, the capture quality its
 contract demands, and whether it can be captured whole — so an author knows whether an `EXHAUSTIVE`
 stance is available — along with the practice's known limitations. How strictly a source must be
@@ -300,7 +300,7 @@ standard as an experiment or a convention as a proven outcome.
    the developer keeps doing when the practice holds, such as *Every reviewer comment gets a visible
    answer*. It is read from the bundled catalog by slug and is not part of the definition a workspace
    copies, customizes or compares, so a better sentence reaches every workspace with the next release.
-   Every bundled practice takes its work type's default review frame. The one exception is
+   Every bundled practice takes the default review frame for its kind of work. The one exception is
    `insufficiencyReason`: when no source Hephaestus collects can answer the practice's question, it
    ships as **Human review needed** with that reason and no precompute script. The shipped reason is a
    withdrawal, not a default, so no instance customization or recorded workspace copy can override it. The
@@ -369,7 +369,7 @@ and `CatalogCriteriaShapeTest` checks that shape (the sections, their order, the
 test checks structure, not semantic quality. Schema and fixture tests prove loading and faithful presentation; evidence-based case review
 and model evaluation are separate checks. The shared preambles are one artifact-framing paragraph
 each; the grounding rules live once, in the shared review instructions. Changing a preamble affects
-every entry that uses it, so inspect all affected work types and preserve the existing
+every entry that uses it, so inspect every affected kind of work and preserve the existing
 workspace-adoption boundary.
 
 Create workspace-specific practices through the admin UI or API so validation, ordering, revisions,

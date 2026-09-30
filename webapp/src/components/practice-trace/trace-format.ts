@@ -2,15 +2,19 @@ import type { PracticeTraceEntry, ReviewRequestOutcome, TracedSignal } from "@/a
 import type { ReviewSectionId } from "@/components/admin/practices/review/review-sections";
 import { statusValues } from "@/components/common/status-def";
 import { TRACE_OUTCOME_DEFS } from "@/components/practice-vocabulary/trace-outcome-defs";
-import { WITHHOLDING_REASON_DEFS } from "@/components/practice-vocabulary/withholding-defs";
 
 export type { TraceOutcome } from "@/components/practice-vocabulary/trace-outcome-defs";
-export type WithheldReason = PracticeTraceEntry["withheldReasons"][number];
 export type SignalState = TracedSignal["state"];
 export type SignalStateReason = NonNullable<TracedSignal["stateReason"]>;
 export type DiscoveredVia = TracedSignal["discoveredVia"];
 
 export const OUTCOMES = statusValues(TRACE_OUTCOME_DEFS);
+
+/**
+ * The longest free-text filter a URL keeps for the trace: a kind of work, or the practice table's
+ * filters. The table's input stops there, so only a hand-edited address reaches a schema's fallback.
+ */
+export const REVIEW_FILTER_MAX_LENGTH = 120;
 
 export const SIGNAL_STATE_LABELS: Record<SignalState, string> = {
 	RECORDED: "Recorded",
@@ -19,37 +23,6 @@ export const SIGNAL_STATE_LABELS: Record<SignalState, string> = {
 	SUPPRESSED: "No review started",
 	PENDING: "Queued for review",
 	LAPSED: "Expired before it was reviewed",
-};
-
-/**
- * Third person throughout: any member of the workspace can open this page, so the occurrence being
- * explained is usually somebody else's.
- */
-export const SIGNAL_STATE_REASON_LABELS: Record<SignalStateReason, string> = {
-	GATE_SKIPPED: "This workspace's review settings turned it away",
-	COOLDOWN_ACTIVE: "This work was reviewed too recently; a later change gets its own review",
-	REQUEST_COOLDOWN_ACTIVE: "A review of this was already asked for a moment ago",
-	REQUESTER_QUOTA_EXHAUSTED: "Whoever asked had used up their hour's allowance, which refills",
-	CONCURRENT_DUPLICATE: "The same review was already running",
-	COALESCED: "Later issue changes replaced this update before a review started",
-	OUT_OF_REVIEW_SCOPE:
-		"The author, repository, or base branch is outside the workspace's review coverage",
-	WORKSPACE_INACTIVE: "The workspace was not active",
-	PRACTICES_DISABLED: "Practice reviews are switched off for this workspace",
-	MEMBER_AI_DECLINED: "The developer has not enabled AI practice reviews in this workspace",
-	NO_ACTIVE_PRACTICE: "No practice was watching for this when it happened",
-	// States the fact and stops: the instruction to act on it travels with the link in
-	// REFUSAL_FIXES, which only readers who can act on it are shown.
-	REVIEW_MODEL_UNBOUND: "No AI model is set up to run reviews",
-	PRACTICE_AUTONOMY_OFF: "Every practice watching this is turned off; raising one lets it run",
-	BUDGET_EXHAUSTED: "The workspace's AI budget was used up; it refills",
-	SUBJECT_UNLINKED: "The author is unknown or not a workspace member yet",
-	MODEL_UNAVAILABLE: "The AI model set for reviews is no longer available",
-	ARTIFACT_NOT_VISIBLE:
-		"This work is not showing on the provider right now; it will be checked again",
-	PENDING_DEADLINE_EXCEEDED: "It waited too long to be picked up",
-	ARTIFACT_GONE: "The work no longer exists",
-	STALE_ROLLOUT_REVISION: "Review settings changed after this review started",
 };
 
 /**
@@ -127,9 +100,6 @@ export const DISCOVERED_VIA_DESCRIPTIONS: Record<DiscoveredVia, string> = {
 		"Found by the recurring check over recent work, not announced by the provider — so the time is only as precise as the check.",
 };
 
-/** One vocabulary with the delivery surface: two sentences for one enum value is a drift. */
-export const WITHHELD_REASON_LABELS: Record<WithheldReason, string> = WITHHOLDING_REASON_DEFS;
-
 export function occurrenceDomId(signalId: string): string {
 	return `occurrence-${signalId}`;
 }
@@ -151,11 +121,11 @@ export function deliveryLabel(entry: PracticeTraceEntry): string {
 			: `${entry.deliveredCount} pieces of feedback reached the developer`;
 	}
 	if (entry.observationCount === 0) {
-		return "Nothing was measured, so nothing was sent";
+		return "No observations, so nothing was sent";
 	}
-	const measured =
-		entry.observationCount === 1 ? "1 measurement" : `${entry.observationCount} measurements`;
+	const observed =
+		entry.observationCount === 1 ? "1 observation" : `${entry.observationCount} observations`;
 	return entry.withheldReasons.length > 0
-		? `${measured}, none sent`
-		: `${measured}, nothing needed saying`;
+		? `${observed}, none sent`
+		: `${observed}, nothing needed saying`;
 }

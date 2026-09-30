@@ -67,7 +67,7 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		label: "Turned off",
 		icon: BellOffIcon,
 		badgeVariant: "outline",
-		description: "The practice is switched off for this workspace, so nothing was measured.",
+		description: "The practice is switched off for this workspace, so nothing was reviewed.",
 	},
 	NOT_OCCASIONED: {
 		label: "Not triggered",
@@ -92,6 +92,6 @@ export const TRACE_OUTCOME_DEFS: StatusDefs<TraceOutcome> = {
 		label: "Failed",
 		icon: CircleAlertIcon,
 		badgeVariant: "destructive",
-		description: "A review started and could not finish. Nothing was measured.",
+		description: "A review started and could not finish, so nothing was recorded.",
 	},
 };

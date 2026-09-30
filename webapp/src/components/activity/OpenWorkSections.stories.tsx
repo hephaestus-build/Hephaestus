@@ -69,6 +69,26 @@ export const Default: Story = {
 	},
 };
 
+const onReviewNow = fn();
+
+/**
+ * In a workspace that reviews practices, Ada can ask for a review of her own pull requests and
+ * the issues assigned to her; a request to review someone else's work offers none.
+ */
+export const ReviewNow: Story = {
+	args: { reviewNow: { onReviewNow, requesting: 104 } },
+	play: async ({ canvas, userEvent }) => {
+		// Her three own pull requests returned or approved and her other assigned issue; the two
+		// review requests shown above them offer none, and the issue being asked about waits.
+		await expect(canvas.getAllByRole("button", { name: /^Review this now/u })).toHaveLength(4);
+		await expect(canvas.getByRole("button", { name: "Asking…: Hephaestus #1374" })).toBeDisabled();
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Review this now: Hephaestus #2301" }),
+		);
+		await expect(onReviewNow).toHaveBeenCalledWith(expect.objectContaining({ id: 102 }));
+	},
+};
+
 /** The server lists the most recently updated team requests and says there are more. */
 export const MoreTeamRequestsThanListed: Story = {
 	args: {

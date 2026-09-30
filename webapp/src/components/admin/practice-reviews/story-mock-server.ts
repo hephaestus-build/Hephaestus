@@ -1,6 +1,7 @@
 import { HttpResponse, http } from "msw";
 
 import type { ReviewFeedback, ReviewObservation } from "@/api/types.gen";
+import { artifactTrace, tracedArtifacts } from "@/components/practice-trace/fixtures";
 import { hasText } from "@/lib/text";
 
 import {
@@ -217,6 +218,24 @@ export function reviewHandlers({
 				url,
 			);
 		}),
+		http.get("*/workspaces/:workspaceSlug/practices/trace", ({ request }) => {
+			const url = new URL(request.url);
+			const kind = single(url, "artifactKind");
+			return page(
+				tracedArtifacts.filter((work) => !hasText(kind) || work.artifactKind === kind),
+				url,
+			);
+		}),
+		// Whichever work is asked for is named as asked, so a level reads as that work's own trace.
+		http.get(
+			"*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId",
+			({ params }) =>
+				HttpResponse.json({
+					...artifactTrace,
+					artifactKind: String(params.artifactKind),
+					artifactId: Number(params.artifactId),
+				}),
+		),
 		http.get("*/workspaces/:workspaceSlug/agents/jobs/:jobId", ({ params }) =>
 			HttpResponse.json(reviewJob(String(params.jobId))),
 		),

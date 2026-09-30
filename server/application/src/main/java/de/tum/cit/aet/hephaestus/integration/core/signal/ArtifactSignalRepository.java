@@ -143,6 +143,22 @@ public interface ArtifactSignalRepository extends JpaRepository<ArtifactSignal, 
             @Param("artifactId") Long artifactId,
             @Param("signalName") String signalName);
 
+    /**
+     * {@link #lockDeferred} together with the occasions admission held back ({@code PENDING}), for a consumer
+     * that settles both through one decision.
+     */
+    @Query(value = """
+        SELECT * FROM artifact_signal
+        WHERE workspace_id = :workspaceId AND artifact_id = :artifactId AND signal_name = :signalName
+          AND state IN ('DEFERRED', 'PENDING')
+        ORDER BY revision
+        FOR UPDATE
+        """, nativeQuery = true)
+    List<ArtifactSignal> lockUnsettled(
+            @Param("workspaceId") Long workspaceId,
+            @Param("artifactId") Long artifactId,
+            @Param("signalName") String signalName);
+
     @Query(value = """
         SELECT EXISTS (
             SELECT 1 FROM artifact_signal

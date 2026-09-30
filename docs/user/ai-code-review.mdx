@@ -72,8 +72,11 @@ In this guide, **change request** means a GitHub pull request or a GitLab merge 
    feedback can become a summary or inline comment; a review can also stay private or deliberately stay
    quiet.
 
-Review time depends on the size of the work, available evidence, and instance limits. Follow the review in
-**Review activity** rather than waiting for a provider comment.
+Review time depends on the size of the work, available evidence, and instance limits. Rather than
+waiting for a provider comment, follow the review from your Practice profile. Once the review records
+something about your work, it appears under
+[Reviews of your work](./practice-profile#reviews-of-your-work), which the chip beside the title opens.
+A review that records nothing about your work is not listed there.
 
 ### Read a summary
 
@@ -105,12 +108,15 @@ Some comments include a suggested code change. Check it before applying it.
 There are two ways to ask, and both are limited to the work's author or assignees and to workspace
 admins. Each person also has an hourly allowance, so a burst of requests is refused rather than queued.
 
-**From the app.** Open **Review activity**, select the piece of work, and use
-**Review this now**. If the request is not accepted you stay on the page and it tells you why, in a
-sentence — the work was reviewed too recently, no AI model is set up within the author's
-[AI choice](./workspace#your-ai-choice), the practices that watch it are turned off, and so on. For
-your own work that a review recorded something about, **Review this now** is also under
-[Reviews of your work](./practice-profile#reviews-of-your-work) on your Practice profile.
+**From the app.** On [Activity](./activity#review-this-now), each of your open pull requests and each issue
+assigned to you has **Review this now**, in a workspace that reviews practices. For your own work that a
+review recorded something about, **Review this now** is also beside each row of
+[Reviews of your work](./practice-profile#reviews-of-your-work) on your Practice profile, and on the
+review you open there. Workspace admins also find it on any pull request or issue under
+**Administration → Practices → Practice reviews → Work**. If the request is not accepted, you stay where
+you are and Hephaestus tells you why, in a sentence — the work was already reviewed within the workspace's
+cooldown period, no AI model is set up within the author's [AI choice](./workspace#your-ai-choice), the
+practices that watch it are turned off, and so on.
 
 **From a GitLab merge request.** Start a comment with:
 
@@ -126,9 +132,12 @@ There is no equivalent command on GitHub pull requests. Use **Review this now** 
 
 ### See what was reviewed, and what was not
 
-**Review activity** lists every piece of work Hephaestus recorded, not only work
-that received a comment. Opening one shows what each practice made of it — including the practices that
-stayed quiet, and why. This is the place to look when you expected feedback and got none.
+[Reviews of your work](./practice-profile#reviews-of-your-work) on your Practice profile lists every
+review that recorded something about your work, not only the reviews that left a comment. Open one, and
+**Every practice** shows what each practice behind that review made of your work — including the
+practices that stayed quiet, and why. This is the place to look when you expected feedback and got none.
+A piece of work no review recorded anything about is not listed there; workspace admins can see every
+piece of work Hephaestus recorded, reviewed or not.
 
 These states have different meanings:
 
@@ -138,10 +147,10 @@ These states have different meanings:
   what it found without posting one. Feedback on your practice pages and in Heph does not need that
   comment approval; each channel still has its own delivery rules. Your workspace admins can see
   review results even when no comment was posted on the work.
-- **Insufficient evidence** means the work gave the practice a real subject, but the available evidence
-  could not support a conclusion. **No review occasion** means the work had no subject for that practice.
+- **Couldn't assess** means a review ran, but the evidence it could reach did not settle the practice
+  either way. **Not triggered** means nothing happened to the work that this practice watches for.
   If required evidence was unavailable, stale, partial, redacted, or failed to collect, the practice is
-  skipped before an observation is created; it is not treated as either answer.
+  skipped before an observation is created; that is never read as a claim about your work.
 
 A review of past work is quieter still: those never produce comments at all, by design.
 

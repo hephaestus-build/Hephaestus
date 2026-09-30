@@ -22,11 +22,11 @@ class BindingChangeTest extends BaseUnitTest {
     void shouldRejectSilentRemovalOfGateAndSubject() {
         assertThatThrownBy(() -> BindingChange.requireExplicit(List.of(scoped), List.of(unscoped), null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("APPLIES_WHEN");
+                .hasMessageContaining("change when this practice applies");
         assertThatThrownBy(() -> BindingChange.requireExplicit(
                         List.of(scoped), List.of(unscoped), Set.of(BindingChange.APPLIES_WHEN)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("SUBJECT");
+                .hasMessageContaining("change whose work this practice reviews");
     }
 
     @Test
@@ -40,6 +40,6 @@ class BindingChangeTest extends BaseUnitTest {
     void shouldProtectAStoredLegacyBindingWhenItsOccasionsAreCollapsed() {
         assertThatThrownBy(() -> BindingChange.requireExplicit(List.of(scoped, unscoped), List.of(unscoped), null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("APPLIES_WHEN");
+                .hasMessageContaining("change when this practice applies");
     }
 }

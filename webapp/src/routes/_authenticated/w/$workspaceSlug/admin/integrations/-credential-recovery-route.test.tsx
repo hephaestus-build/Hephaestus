@@ -226,10 +226,86 @@ describe("Slack credential recovery", () => {
 		await screen.findByText("Token unreadable", undefined, ROUTE_RENDER_WAIT);
 		expect(screen.queryByText("Connected")).toBeNull();
 		expect(screen.queryByText(/can post as the app/u)).toBeNull();
-		screen.getByText(/restore the original server key or reconnect slack/iu);
+		screen.getByText(/reconnect slack to replace it/iu);
 		expect(
 			screen.getByRole<HTMLButtonElement>("button", { name: /disconnect slack/iu }).disabled,
 		).toBe(false);
+	});
+
+	it("reconnects through Slack OAuth for this workspace without disconnecting", async () => {
+		mockSlackConnection("2026-09-20T08:00:00Z");
+		const vendorUrl = new URL("#slack-authorize", window.location.href).href;
+		const response = deferred();
+		const initiations: unknown[] = [];
+		const requests: Request[] = [];
+		const record = ({ request }: { request: Request }) => {
+			requests.push(request);
+		};
+		server.use(
+			http.post("*/workspaces/:workspaceSlug/connections", async ({ request, params }) => {
+				initiations.push({ workspaceSlug: params.workspaceSlug, body: await request.json() });
+				await response.promise;
+				return HttpResponse.json({ type: "REDIRECT", vendorUrl });
+			}),
+		);
+		server.events.on("request:start", record);
+		try {
+			renderRouteAt("/w/acme/admin/integrations/slack");
+			const user = userEvent.setup();
+			await user.click(
+				await screen.findByRole("button", { name: "Reconnect Slack" }, ROUTE_RENDER_WAIT),
+			);
+
+			const pending = await screen.findByRole<HTMLButtonElement>("button", {
+				name: "Redirecting to Slack…",
+			});
+			expect(pending.disabled).toBe(true);
+			expect(window.sessionStorage.getItem("slack-connect-return-slug")).toBe("acme");
+			response.resolve();
+
+			await waitFor(() => expect(window.location.href).toBe(vendorUrl));
+			expect(initiations).toStrictEqual([
+				{ workspaceSlug: "acme", body: { kind: "SLACK", userInput: {} } },
+			]);
+			expect(
+				requests
+					.filter((request) => request.method !== "GET")
+					.map((request) => `${request.method} ${new URL(request.url).pathname}`),
+			).toStrictEqual(["POST /workspaces/acme/connections"]);
+		} finally {
+			server.events.removeListener("request:start", record);
+			window.sessionStorage.removeItem("slack-connect-return-slug");
+			window.location.hash = "";
+		}
+	});
+
+	it("keeps the unreadable connection and says why when Slack OAuth cannot start", async () => {
+		mockSlackConnection("2026-09-20T08:00:00Z");
+		server.use(
+			http.post("*/workspaces/:workspaceSlug/connections", () =>
+				HttpResponse.json(
+					{ status: 503, title: "Service Unavailable", detail: "Slack is not configured." },
+					{ status: 503 },
+				),
+			),
+		);
+		try {
+			renderRouteAt("/w/acme/admin/integrations/slack");
+			const user = userEvent.setup();
+			await user.click(
+				await screen.findByRole("button", { name: "Reconnect Slack" }, ROUTE_RENDER_WAIT),
+			);
+
+			await screen.findByText("Slack is not configured.");
+			await waitFor(() =>
+				expect(
+					screen.getByRole<HTMLButtonElement>("button", { name: "Reconnect Slack" }).disabled,
+				).toBe(false),
+			);
+			screen.getByText("Token unreadable");
+		} finally {
+			window.sessionStorage.removeItem("slack-connect-return-slug");
+		}
 	});
 
 	it("shows the bot token as connected again once it reads", async () => {

@@ -26,7 +26,7 @@ const run: PracticeGroupReviewRun = {
 		provider: "GITHUB",
 		id: "902",
 		label: "#902",
-		repositoryName: "HephaestusTest/practice-validation",
+		container: "HephaestusTest/practice-validation",
 		url: "https://github.com/HephaestusTest/practice-validation/pull/902",
 	},
 	observations: [
@@ -133,7 +133,7 @@ export const GitLabMergeRequest: Story = {
 				provider: "GITLAB",
 				id: "128",
 				label: "!128",
-				repositoryName: "aet/hephaestus",
+				container: "aet/hephaestus",
 				url: "https://gitlab.example.com/aet/hephaestus/-/merge_requests/128",
 			},
 		},
@@ -149,7 +149,7 @@ export const WithoutALink: Story = {
 		run: {
 			...run,
 			reviewId: "00000000-0000-0000-0000-000000000204",
-			reviewedWork: { ...run.reviewedWork, url: undefined, repositoryName: undefined },
+			reviewedWork: { ...run.reviewedWork, url: undefined, container: undefined },
 		},
 	},
 	play: async ({ canvas }) => {
@@ -256,7 +256,7 @@ export const MobileReflow: Story = {
 				...run.reviewedWork,
 				kind: "docs.document",
 				label: "Split the practice catalog loader per workspace and move the seeding behind a flag",
-				repositoryName: "ls1intum/hephaestus-practice-validation-fixtures",
+				container: "ls1intum/hephaestus-practice-validation-fixtures",
 			},
 		},
 	},

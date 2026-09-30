@@ -130,6 +130,21 @@ export const FilteredPractices: Story = {
 	},
 };
 
+/**
+ * A link naming a moment no practice here watches filters nothing, rather than showing the moment
+ * by its wire name in the select.
+ */
+export const FilterOnAMomentNobodyWatches: Story = {
+	args: { filters: { watches: "scm.pull_request.labeled" } },
+	parameters: { chromatic: { disableSnapshot: true } },
+	play: async () => {
+		const panel = await settledDrawerPanel();
+		await expect(screen.getByLabelText("Reviews when")).toHaveTextContent("Any moment");
+		await expect(within(practiceTable()).getByText("Clear ownership")).toBeVisible();
+		await expect(panel).not.toHaveTextContent(/scm\./u);
+	},
+};
+
 /** An observation with no words of its own falls back to the practice's recorded reason. */
 export const ObservationWithoutASummary: Story = {
 	args: {
@@ -154,7 +169,9 @@ export const WhatWeNoticed: Story = {
 	play: async () => {
 		await settledDrawerPanel();
 		await expect(screen.getByRole("heading", { name: "What we noticed" })).toBeVisible();
-		await expect(screen.getByText(/reviewed too recently/u)).toBeVisible();
+		await expect(
+			screen.getByText(/already reviewed within the workspace.s cooldown/u),
+		).toBeVisible();
 	},
 };
 

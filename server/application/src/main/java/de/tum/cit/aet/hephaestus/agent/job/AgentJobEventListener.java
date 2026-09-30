@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
@@ -23,6 +24,8 @@ import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
+import java.util.Collections;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,18 +62,21 @@ public class AgentJobEventListener {
     private final PracticeReviewDetectionGate practiceReviewDetectionGate;
     private final WorkspaceResolver workspaceResolver;
     private final SignalRecorder signalRecorder;
+    private final IntegrationManifestRegistry manifests;
 
     public AgentJobEventListener(
             AgentJobService agentJobService,
             PullRequestRepository pullRequestRepository,
             PracticeReviewDetectionGate practiceReviewDetectionGate,
             WorkspaceResolver workspaceResolver,
-            SignalRecorder signalRecorder) {
+            SignalRecorder signalRecorder,
+            IntegrationManifestRegistry manifests) {
         this.agentJobService = agentJobService;
         this.pullRequestRepository = pullRequestRepository;
         this.practiceReviewDetectionGate = practiceReviewDetectionGate;
         this.workspaceResolver = workspaceResolver;
         this.signalRecorder = signalRecorder;
+        this.manifests = manifests;
     }
 
     @Async
@@ -87,19 +93,57 @@ public class AgentJobEventListener {
         handlePullRequestEvent(event.pullRequest(), event.context(), TriggerEventNames.PULL_REQUEST_READY);
     }
 
-    @Async
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    /**
+     * A push arrives in bursts; {@link PullRequestPushCoalescer} reviews the work the burst settles on.
+     *
+     * <p>BEFORE_COMMIT and on the caller's thread, like {@link IssueAgentJobEventListener#onIssueUpdated}: the
+     * queued occasion commits with the mirror row it describes, so the coalescer, which reads the mirror under
+     * the lock its writers take, never sees a head whose occasion is not queued yet. The price is that a ledger
+     * failure NAKs the delivery; {@code insertDeferred} declines a conflict rather than raising it.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onPullRequestSynchronized(ScmDomainEvent.PullRequestSynchronized event) {
         ScmEventPayload.PullRequestData prData = event.pullRequest();
         if (event.context().isSync() || isClosedOrMerged(prData.state(), prData.isMerged())) {
-            handlePullRequestEvent(prData, event.context(), TriggerEventNames.PULL_REQUEST_SYNCHRONIZED);
             return;
         }
-        // A push arrives in bursts; PullRequestPushCoalescer reviews the head the burst settles on.
         SignalKey key = signalKeyFor(prData, TriggerEventNames.PULL_REQUEST_SYNCHRONIZED, null);
         if (key != null) {
             signalRecorder.defer(key, event.context().occurredAt());
+        }
+    }
+
+    @Async
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onPullRequestSynchronizedBySync(ScmDomainEvent.PullRequestSynchronized event) {
+        if (event.context().isSync()) {
+            handlePullRequestEvent(event.pullRequest(), event.context(), TriggerEventNames.PULL_REQUEST_SYNCHRONIZED);
+        }
+    }
+
+    /**
+     * Only an authored change is an occasion: a label, assignee or state update, or a redelivery, carries the
+     * same head, title and body and therefore the same ledger key. A live edit settles with pushes in
+     * {@link PullRequestPushCoalescer}, committed with the mirror for the reason
+     * {@link #onPullRequestSynchronized} gives; a reconciled one is recorded, not reviewed.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void onPullRequestUpdated(ScmDomainEvent.PullRequestUpdated event) {
+        ScmEventPayload.PullRequestData prData = event.pullRequest();
+        if (Collections.disjoint(event.changedFields(), Set.of("title", "body"))
+                || isClosedOrMerged(prData.state(), prData.isMerged())) {
+            return;
+        }
+        SignalKey key = signalKeyFor(prData, TriggerEventNames.PULL_REQUEST_UPDATED, null);
+        if (key == null) {
+            return;
+        }
+        if (event.context().isSync()) {
+            signalRecorder.record(key, event.context().occurredAt(), DiscoveredVia.SYNC);
+        } else {
+            signalRecorder.defer(
+                    key, event.context().occurredAt(), event.context().actorUserId());
         }
     }
 
@@ -215,7 +259,19 @@ public class AgentJobEventListener {
                             skip.reason());
                     signalRecorder.markRefused(key, skip.resolvedSignalReason());
                 }
-                case GateDecision.Detect detect -> submitJob(prData, pr, detect, key, reviewData);
+                case GateDecision.Detect detect -> {
+                    if (MergeActorAdmission.awaitsMerger(manifests, pr, key.signalName(), detect.matchedPractices())) {
+                        log.debug(
+                                "Merge review waits for its merger: prNumber={}, repoName={}",
+                                prData.number(),
+                                repositoryNameOf(prData));
+                        signalRecorder.markRefused(key, SignalStateReason.MERGE_ACTOR_UNAVAILABLE);
+                        return;
+                    }
+                    // The job carries the merge request as stored now, not as the event saw it: a merger or merge
+                    // commit recorded since the event is what the review judges.
+                    submitJob(ScmEventPayload.PullRequestData.from(pr), pr, detect, key, reviewData);
+                }
             }
         } catch (Exception e) {
             log.error(

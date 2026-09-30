@@ -1,8 +1,11 @@
 import { cn } from "cn";
+import { PlayIcon } from "lucide-react";
+
 import type { WorkItem } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { MetaRow } from "@/components/common/MetaRow";
 import { RelativeTime } from "@/components/common/RelativeTime";
+import { Button } from "@/components/ui/button";
 import {
 	Item,
 	ItemActions,
@@ -24,15 +27,20 @@ export interface WorkItemRowProps {
 	providerType: ProviderType;
 	/** Whose list the row is in; the author is named only when it is someone else. */
 	login: string;
+	/**
+	 * "Review this now" at the row's end, on work the reader may ask a review of; `asking` while the
+	 * ask is on its way. Absent where no review can be asked for from here.
+	 */
+	reviewNow?: { onReviewNow: () => void; asking: boolean };
 }
 
 /**
  * One open pull request or issue as the provider's own lists draw it. It shows the state icon, the
  * title that opens it there, where it lives and when it last moved. A request to the person's teams
  * names those teams. At the end it shows who reviews it, where each review stands, and whether its
- * checks fail.
+ * checks fail, and, where the reader may ask for one, a review of it now.
  */
-export function WorkItemRow({ work, providerType, login }: WorkItemRowProps) {
+export function WorkItemRow({ work, providerType, login, reviewNow }: WorkItemRowProps) {
 	const state = workStateVisual(work, providerType);
 	const reviewers = work.reviewers ?? [];
 	const failing = work.checks === "FAILURE";
@@ -70,7 +78,7 @@ export function WorkItemRow({ work, providerType, login }: WorkItemRowProps) {
 					/>
 				</ItemDescription>
 			</ItemContent>
-			{(failing || reviewers.length > 0) && (
+			{(failing || reviewers.length > 0 || reviewNow) && (
 				<ItemActions className="gap-3">
 					{failing && (
 						<span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -83,6 +91,19 @@ export function WorkItemRow({ work, providerType, login }: WorkItemRowProps) {
 					)}
 					{reviewers.length > 0 && (
 						<PeopleStack people={reviewers} providerType={providerType} aria-label="Reviewers" />
+					)}
+					{reviewNow && (
+						<Button
+							type="button"
+							variant="outline"
+							size="xs"
+							disabled={reviewNow.asking}
+							onClick={reviewNow.onReviewNow}
+							aria-label={`${reviewNow.asking ? "Asking…" : "Review this now"}: ${workReference(providerType, work)}`}
+						>
+							<PlayIcon aria-hidden data-icon="inline-start" />
+							{reviewNow.asking ? "Asking…" : "Review this now"}
+						</Button>
 					)}
 				</ItemActions>
 			)}

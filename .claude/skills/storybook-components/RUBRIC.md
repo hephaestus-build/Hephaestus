@@ -51,9 +51,10 @@ discriminated union over the states a section can be in rather than parallel fla
   which are the main component's — so a part needing its own controls stayed a prop deliberately.
 
 Detection: `grep -rn "createContext" webapp/src/components` — for each, name the common ancestor. If one
-exists and renders both consumers, it is D. The live example of the opposite failure is the review
-route's `canAdminister`, drilled through `webapp/src/components/practice-trace/TracePage.tsx` →
-`TraceRefusalAlert.tsx` / `TraceSignalTimeline.tsx` → `RefusalFixLink.tsx` for one leaf.
+exists and renders both consumers, it is D. The live example of the opposite failure is the practice
+profile route's `canAdminister`, drilled through
+`webapp/src/components/practice-profile/PracticeGroupDetailDrawer.tsx` → `ProfileReviewLevel.tsx` →
+`webapp/src/components/practice-trace/TraceSignalTimeline.tsx` → `RefusalFixLink.tsx` for one leaf.
 
 ## Dimension 3 — Slot obligations, when `render=` is used
 

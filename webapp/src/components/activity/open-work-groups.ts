@@ -149,6 +149,14 @@ function isReturned(work: Pick<WorkItem, "reviewDecision" | "reviewers" | "check
 	);
 }
 
+/** The groups `authoredGroup` sorts the person's own pull requests into. */
+export const AUTHORED_GROUPS: ReadonlySet<OpenWorkGroup> = new Set([
+	"drafts",
+	"returned",
+	"approved",
+	"waiting",
+]);
+
 function authoredGroup(work: WorkItem): OpenWorkGroup {
 	if (work.isDraft) {
 		return "drafts";

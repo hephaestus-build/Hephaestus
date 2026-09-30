@@ -103,8 +103,8 @@ export const SomeCouldNotBeRead: Story = {
 		],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText(/3 could not be read, and stay unmeasured/iu)).toBeVisible();
-		await expect(canvas.getByText(/12 already measured/iu)).toBeVisible();
+		await expect(canvas.getByText(/3 could not be read, so were not reviewed/iu)).toBeVisible();
+		await expect(canvas.getByText(/12 already reviewed/iu)).toBeVisible();
 	},
 };
 
