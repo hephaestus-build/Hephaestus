@@ -16,11 +16,27 @@ metadata under `inputs/`, then validates returned results. The container derives
 statistics and precompute hints under `work/`. Mount isolation is defined under
 [Path conventions](#path-conventions).
 
-The initializer reads the gateway's advertised archive size and downloads the tar to a temporary file
+The initializer reads the gateway's advertised archive budget and downloads the tar to a temporary file
 under `/workspace`. It checks the byte count before extraction. A dropped or short transfer is retried
-from byte zero; an archive above the advertised size is refused. The gateway serves the same staged
+from byte zero; an archive above the advertised budget is refused. The gateway serves the same staged
 tar file for each retry while the attempt is active.
-No optional area or repository is advertised yet, so the gateway refuses a workspace query.
+The gateway accepts one `area` or `repo` selector on the same authenticated `/workspace` endpoint.
+Areas are `scm`, `chat`, `docs`, `people`, and `practices`, selected under `context/<area>/`.
+Repositories are selected under `repos/<repo>/`. A selector returns only files already present in
+the frozen, permission-checked archive. Unknown, refused, duplicate, and combined selectors receive
+`404`; a selector cannot trigger a new database read or extend the attempt's permissions.
+
+The workspace archive budget is 512 MiB. Registration refuses an initial archive above the budget
+before attempt volumes or containers are created, with `WORKSPACE_BUDGET_EXCEEDED`. Each first
+successful selection spends its archive bytes from the same cumulative budget. A retry serves the
+cached, identical selection and spends nothing more. Failed selections leave no staged archive.
+This limit includes tar headers and padding; it is not a limit on the number of source records.
+
+The worker deletes its verified evidence folder after the admission transaction commits, even if
+the runtime is still composing feedback. An attempt without an admitted result retains its folder
+for one hour after it ends. On worker startup, unknown and finished attempt folders are deleted
+without the grace period; matching running attempts are preserved. The scheduled cleaner retries
+local removal failures without changing a committed admission.
 
 For result upload, the runner sends `Content-Digest: sha-256=:<base64>:` over the complete tar.
 The gateway checks it against the received bytes before it keeps the first complete result. Both

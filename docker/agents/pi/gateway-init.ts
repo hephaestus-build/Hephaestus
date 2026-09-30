@@ -28,6 +28,17 @@ export async function downloadWorkspace(
 				await response.body?.cancel();
 				throw new Error(`Workspace download refused: ${response.status}`);
 			}
+			const length = response.headers.get("content-length");
+			const expected = length !== null && /^[0-9]+$/u.test(length) ? Number(length) : Number.NaN;
+			if (!Number.isSafeInteger(expected) || expected <= 0 || expected > budget) {
+				retryable = false;
+				await response.body.cancel();
+				throw new Error(
+					expected > budget
+						? "Workspace exceeded its advertised byte budget"
+						: "Workspace requires a valid Content-Length",
+				);
+			}
 			let bytes = 0;
 			const bound = new Transform({
 				// oxlint-disable-next-line promise/prefer-await-to-callbacks -- Node's Transform API takes a callback.
@@ -49,7 +60,7 @@ export async function downloadWorkspace(
 				}
 				throw error;
 			}
-			if (bytes !== budget) {
+			if (bytes !== expected) {
 				throw new Error("Incomplete workspace download");
 			}
 			return;

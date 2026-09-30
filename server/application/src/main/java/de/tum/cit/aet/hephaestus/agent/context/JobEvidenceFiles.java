@@ -277,7 +277,31 @@ public class JobEvidenceFiles {
         }
     }
 
+    /** Admission has committed; recheck ownership before removing the verified bytes. */
+    public void discardAdmittedAttempt(ObservationAdmissionService.AdmissionIdentity identity) {
+        try {
+            var recorded = jobs.findByIdAndWorkspaceId(identity.jobId(), identity.workspaceId());
+            if (recorded.isEmpty()) return;
+            AgentJob job = recorded.get();
+            if (!ObservationAdmissionService.isAdmitted(job)
+                    || job.getRetryCount() != identity.attempt()
+                    || !identity.workerId().equals(job.getWorkerId())) return;
+            deleteAttempt(directory(job));
+        } catch (IOException | RuntimeException exception) {
+            // Admission is durable. The scheduled cleaner retries a failed local removal.
+            log.warn("Could not remove admitted attempt {}", identity.jobId(), exception);
+        }
+    }
+
+    public void cleanAfterRestart() {
+        cleanAttempts(true);
+    }
+
     public void cleanEndedAttempts() {
+        cleanAttempts(false);
+    }
+
+    private void cleanAttempts(boolean restarting) {
         cleanStaleGitSpool();
         if (!Files.isDirectory(layout.jobsRoot())) return;
         try (var paths = Files.walk(layout.jobsRoot(), 3)) {
@@ -298,11 +322,15 @@ public class JobEvidenceFiles {
                 try {
                     var job = recordedJob(root);
                     if (job.isPresent() && matches(root, job.get())) {
-                        if (job.get().getStatus() == AgentJobStatus.RUNNING) continue;
                         if (admitted(job.get())) {
                             deleteAttempt(root);
                             continue;
                         }
+                        if (job.get().getStatus() == AgentJobStatus.RUNNING) continue;
+                    }
+                    if (restarting) {
+                        deleteAttempt(root);
+                        continue;
                     }
                     Path ended = markEnded(root);
                     if (!Files.getLastModifiedTime(ended)
@@ -362,9 +390,8 @@ public class JobEvidenceFiles {
         return job.getWorkerId() != null && directory(job).equals(root);
     }
 
-    /** Evidence outlives admission only while the attempt that admitted it can still fail. */
     private static boolean admitted(AgentJob job) {
-        return job.getStatus() == AgentJobStatus.COMPLETED && ObservationAdmissionService.isAdmitted(job);
+        return ObservationAdmissionService.isAdmitted(job);
     }
 
     private Path markEnded(Path root) throws IOException {

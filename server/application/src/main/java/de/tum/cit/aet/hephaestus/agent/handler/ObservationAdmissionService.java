@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
@@ -63,6 +64,7 @@ public class ObservationAdmissionService {
     private final JobTypeHandlerRegistry handlers;
     private final JsonMapper mapper;
     private final TransactionTemplate transactions;
+    private final JobEvidenceFiles evidenceFiles;
 
     /** Retries join in-flight verification rather than launching duplicate Git operations. */
     private final ConcurrentHashMap<AdmissionIdentity, Flight> flights = new ConcurrentHashMap<>();
@@ -74,12 +76,14 @@ public class ObservationAdmissionService {
             ObservationRepository observations,
             JobTypeHandlerRegistry handlers,
             JsonMapper mapper,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            JobEvidenceFiles evidenceFiles) {
         this.jobs = jobs;
         this.observations = observations;
         this.handlers = handlers;
         this.mapper = mapper;
         this.transactions = new TransactionTemplate(transactionManager);
+        this.evidenceFiles = evidenceFiles;
     }
 
     /** Records refusals on the job before rethrowing them. */
@@ -94,6 +98,7 @@ public class ObservationAdmissionService {
         }
         try {
             ObjectNode admitted = admitOnce(identity, submitted, digest);
+            evidenceFiles.discardAdmittedAttempt(identity);
             mine.outcome().complete(admitted);
             return admitted;
         } catch (RuntimeException exception) {

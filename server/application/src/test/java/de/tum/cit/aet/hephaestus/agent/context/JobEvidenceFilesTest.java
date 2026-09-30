@@ -49,6 +49,59 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldDeleteCommittedAdmissionWhileTheRuntimeIsStillRunning() {
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock);
+        var job = job();
+        job.setStatus(AgentJobStatus.RUNNING);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
+        byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var identity = new de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.AdmissionIdentity(
+                job.getId(), 1L, 0, "worker");
+        try (var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("context/quote", bytes)))) {
+            assertThat(prepared.files()).containsKey("context/quote");
+            files.discardAdmittedAttempt(identity);
+            assertThat(read(files, job, "context/quote", sha)).contains(bytes);
+            job.setMetadata(new tools.jackson.databind.json.JsonMapper()
+                    .createObjectNode()
+                    .put(
+                            de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.DIGEST_METADATA_KEY,
+                            "verified"));
+            files.discardAdmittedAttempt(
+                    new de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.AdmissionIdentity(
+                            job.getId(), 1L, 1, "worker"));
+            assertThat(read(files, job, "context/quote", sha)).contains(bytes);
+            files.discardAdmittedAttempt(identity);
+            assertThat(read(files, job, "context/quote", sha)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldCleanUnknownAndFinishedFoldersImmediatelyAfterRestartButKeepRunningJobs() {
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock);
+        byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var running = job();
+        running.setStatus(AgentJobStatus.RUNNING);
+        var finished = job();
+        finished.setStatus(AgentJobStatus.FAILED);
+        var unknown = job();
+        when(jobs.findByIdAndWorkspaceId(running.getId(), 1L)).thenReturn(Optional.of(running));
+        when(jobs.findByIdAndWorkspaceId(finished.getId(), 1L)).thenReturn(Optional.of(finished));
+        try (var active = files.prepare(running, PreparedJobInputs.filesOnly(Map.of("context/quote", bytes)));
+                var ended = files.prepare(finished, PreparedJobInputs.filesOnly(Map.of("context/quote", bytes)));
+                var orphan = files.prepare(unknown, PreparedJobInputs.filesOnly(Map.of("context/quote", bytes)))) {
+            files.cleanAfterRestart();
+            assertThat(read(files, running, "context/quote", sha)).contains(bytes);
+            assertThat(read(files, finished, "context/quote", sha)).isEmpty();
+            assertThat(read(files, unknown, "context/quote", sha)).isEmpty();
+            assertThat(active.files()).containsKey("context/quote");
+            assertThat(ended.files()).containsKey("context/quote");
+            assertThat(orphan.files()).containsKey("context/quote");
+        }
+    }
+
+    @Test
     void shouldCopyDirectoryInputsWithoutExpandingTheirFileMap() throws Exception {
         Path checkout = Files.createDirectories(root.resolve("checkout"));
         Path git = Files.createDirectories(checkout.resolve(".git"));
