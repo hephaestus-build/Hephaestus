@@ -70,6 +70,12 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
     private static final Instant OLDEST_RUN_AT = NOW.minus(Duration.ofDays(9));
     private static final Instant MIDDLE_RUN_AT = NOW.minus(Duration.ofDays(4));
     private static final Instant LATEST_RUN_AT = NOW.minus(Duration.ofDays(1));
+
+    /** An id no mirrored pull request takes, so the work stays unmirrored whatever ids the sequence hands out. */
+    private static long unmirrored(int number) {
+        return 1_000_000_000L + number;
+    }
+
     private static final String BODY =
             InAppFeedbackBody.render("A way of working", "What recurs.", "One thing to try.");
     /** Evidence that cites nothing, which the evidence authorization withholds from every reader. */
@@ -137,20 +143,20 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
         reviewableDiffSize =
                 persistPractice(workspace, group, "reviewable-diff-size", "Keep the diff reviewable", null);
 
-        oldestRun = persistPullRequestReview(workspace, 30, OLDEST_RUN_AT);
-        middleRun = persistPullRequestReview(workspace, 31, MIDDLE_RUN_AT);
-        latestRun = persistPullRequestReview(workspace, 32, LATEST_RUN_AT);
+        oldestRun = persistPullRequestReview(workspace, 30, unmirrored(30), OLDEST_RUN_AT);
+        middleRun = persistPullRequestReview(workspace, 31, unmirrored(31), MIDDLE_RUN_AT);
+        latestRun = persistPullRequestReview(workspace, 32, unmirrored(32), LATEST_RUN_AT);
         latestRun.setStatus(AgentJobStatus.COMPLETED);
         latestRun.setStartedAt(LATEST_RUN_AT.minusSeconds(41));
         latestRun = agentJobRepository.save(latestRun);
         // A run over a pull request the two of them wrote together: it observed both of them.
         colleaguesRun = persistPullRequestReview(workspace, 33, MIDDLE_RUN_AT.plusSeconds(60));
 
-        observe(explainChanges, oldestRun, 30L, developer, DEMONSTRATED_STRENGTH, null, OLDEST_RUN_AT);
-        observe(reviewableDiffSize, middleRun, 31L, developer, NOT_APPLICABLE, null, MIDDLE_RUN_AT);
-        observe(explainChanges, latestRun, 32L, developer, DEMONSTRATED_STRENGTH, null, LATEST_RUN_AT);
-        UUID latestProblem =
-                observe(reviewableDiffSize, latestRun, 32L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT);
+        observe(explainChanges, oldestRun, unmirrored(30), developer, DEMONSTRATED_STRENGTH, null, OLDEST_RUN_AT);
+        observe(reviewableDiffSize, middleRun, unmirrored(31), developer, NOT_APPLICABLE, null, MIDDLE_RUN_AT);
+        observe(explainChanges, latestRun, unmirrored(32), developer, DEMONSTRATED_STRENGTH, null, LATEST_RUN_AT);
+        UUID latestProblem = observe(
+                reviewableDiffSize, latestRun, unmirrored(32), developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT);
 
         observe(
                 explainChanges,
@@ -237,7 +243,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(LATEST_RUN_AT.toString())
                 .jsonPath("$.content[0].reviewedWork.label")
                 .isEqualTo("#32")
-                .jsonPath("$.content[0].reviewedWork.repositoryName")
+                .jsonPath("$.content[0].reviewedWork.container")
                 .isEqualTo("acme/api")
                 .jsonPath("$.content[0].status")
                 .isEqualTo("COMPLETED")
@@ -450,7 +456,13 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
     @DisplayName("an invalidated observation is listed in its run but neither counted nor named as slipped")
     void shouldLeaveAnInvalidatedObservationOutOfTheCountsWhenAnAdminInvalidatedIt() {
         UUID wrong = observe(
-                explainChanges, latestRun, 32L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT.minusSeconds(1));
+                explainChanges,
+                latestRun,
+                unmirrored(32),
+                developer,
+                OMISSION_GAP,
+                Severity.MAJOR,
+                LATEST_RUN_AT.minusSeconds(1));
         invalidationRepository.save(new ObservationInvalidation(
                 observationRepository
                         .findByIdAndWorkspaceId(wrong, workspace.getId())
