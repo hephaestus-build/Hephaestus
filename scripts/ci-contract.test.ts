@@ -3035,4 +3035,6 @@ void test("supported-release failures use the shared tracking issue reporter", a
 	);
 	assert.equal(notification.getIn(["env", "GH_TOKEN"]), `\${{ secrets.GITHUB_TOKEN }}`);
 	assert.equal(workflow.getIn(["permissions", "issues"]), "write");
+	assert.equal(workflow.getIn(["concurrency", "group"]), "rescan-supported-release");
+	assert.equal(workflow.getIn(["concurrency", "cancel-in-progress"]), false);
 });
