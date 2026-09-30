@@ -187,9 +187,9 @@ export const NothingReviewed: Story = {
 		await expect(panel.getByRole("heading", { name: "What we noticed" })).toBeVisible();
 		await userEvent.click(panel.getByRole("tab", { name: "Observations and feedback" }));
 		await expect(panel.getByText("Nothing has been reviewed on this work")).toBeVisible();
-		await expect(panel.getByRole("heading", { level: 2 })).toHaveTextContent(
-			"Bump the webhook signature library",
-		);
+		await expect(
+			panel.getByRole("heading", { name: "Bump the webhook signature library", level: 2 }),
+		).toBeVisible();
 		await expect(
 			panel.getByRole("link", { name: /Pull or merge request · ls1intum\/Hephaestus/u }),
 		).toHaveAttribute("href", "https://github.com/ls1intum/Hephaestus/pull/45");
