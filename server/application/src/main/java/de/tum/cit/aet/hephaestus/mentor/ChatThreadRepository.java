@@ -34,6 +34,16 @@ public interface ChatThreadRepository extends JpaRepository<ChatThread, UUID> {
 
     Optional<ChatThread> findByIdAndWorkspaceIdAndUserIdIn(UUID id, Long workspaceId, Collection<Long> userIds);
 
+    /**
+     * Holds the thread's row until the caller's transaction ends, so turn admissions in one thread run one at a time
+     * on every replica; foreign-key checks on new messages only share the row and are not held up. Selects the id
+     * alone, because the row carries the session blob.
+     */
+    @Query(
+            value = "SELECT id FROM chat_thread WHERE id = :id AND workspace_id = :workspaceId FOR NO KEY UPDATE",
+            nativeQuery = true)
+    Optional<UUID> lockForTurnAdmission(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
+
     /** Projection: avoids materialising the full entity to fetch the JSONL blob. Empty when missing or NULL. */
     @WorkspaceAgnostic("Caller has already resolved thread ownership via findByIdAndWorkspaceId")
     @Query("SELECT t.sessionJsonl FROM ChatThread t WHERE t.id = :threadId")

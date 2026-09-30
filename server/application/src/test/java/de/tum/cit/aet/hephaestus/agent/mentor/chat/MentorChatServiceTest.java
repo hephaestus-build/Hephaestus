@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
@@ -596,6 +597,45 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAnswerTheStoredPromptWhenAFailedReplyIsTriedAgain() {
+        UUID prompt = UUID.randomUUID();
+        UUID failedReply = UUID.randomUUID();
+        when(chatThreadRepository.findByIdAndWorkspaceId(THREAD_ID, WORKSPACE_ID))
+                .thenReturn(Optional.of(new ChatThread()));
+        when(persistence.persistRetry(any(), eq(prompt), eq(failedReply), any(), any()))
+                .thenAnswer(inv -> {
+                    MentorLlmConfig admitted = inv.getArgument(4, MentorLlmConfig.class);
+                    return new MentorTurnPersistence.RetryAdmission(
+                            new MentorTurnPersistence.TurnPersistenceCookie(
+                                    THREAD_ID,
+                                    prompt,
+                                    inv.getArgument(3, UUID.class),
+                                    Instant.now(),
+                                    admitted.upstreamModelId(),
+                                    Objects.requireNonNull(admitted.priceSnapshot())),
+                            "Plan issue 12");
+                });
+        scheduleHappyPathResponses(sandbox).run();
+
+        service.start(MentorTurnRequest.web(WORKSPACE_ID, THREAD_ID, "a different copy", prompt, failedReply), emitter);
+
+        assertThat(sandbox.promptTexts()).containsExactly("Plan issue 12");
+        verify(persistence, never()).persistInFlight(any(), any(), any(), any(), any());
+        assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
+    }
+
+    @Test
+    void shouldOpenNoThreadForARetryThisWorkspaceHasNoThreadFor() {
+        service.start(
+                MentorTurnRequest.web(WORKSPACE_ID, THREAD_ID, "hello mentor", UUID.randomUUID(), UUID.randomUUID()),
+                emitter);
+
+        assertThat(String.join("", emitter.rawData)).contains(MentorRetryRejectedException.NOT_RETRYABLE);
+        verify(persistence, never()).ensureThread(anyLong(), any(), any(), any(), any());
+        verify(persistence, never()).persistRetry(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void shouldInterruptTheTurnWhenItsInStreamErrorCannotBeWritten() {
         User developer = userRepository.getCurrentUserElseThrow();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
@@ -611,7 +651,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         });
 
         service.run(
-                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB, null),
                 channel,
                 USER_ID);
 
@@ -697,7 +737,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         });
 
         service.run(
-                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB, null),
                 channel,
                 USER_ID);
         dispatcher.get().join(5_000);
@@ -821,7 +861,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         scheduleHappyPathResponses(sandbox).run();
 
         service.run(
-                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB, null),
                 channel,
                 USER_ID);
 
@@ -1488,7 +1528,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     private void runTurnSync(String message, ThreadSurface surface) {
-        service.start(new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, message, null, surface), emitter);
+        service.start(new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, message, null, surface, null), emitter);
     }
 
     private static ObjectProvider<InteractiveSandboxService> sandboxServiceProvider(InteractiveSandboxService svc) {

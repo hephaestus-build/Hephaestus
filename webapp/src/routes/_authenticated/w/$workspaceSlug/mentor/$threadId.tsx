@@ -143,7 +143,7 @@ function ThreadContainer() {
 						? undefined
 						: () => {
 								mentorChat.clearError();
-								void mentorChat.regenerate();
+								mentorChat.retry();
 							}
 				}
 				onCopy={copyToClipboard}

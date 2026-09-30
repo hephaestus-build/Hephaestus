@@ -53,6 +53,16 @@ export function Chat({
 	const actualIsAtBottom = parentScrollToBottom ? parentIsAtBottom : isAtBottom;
 	const actualScrollToBottom = parentScrollToBottom ?? scrollToBottom;
 
+	// The live error is gone once the conversation is reopened, but a reply saved as interrupted can still
+	// be tried again.
+	const lastMessage = messages.at(-1);
+	const canRetry =
+		status === "error" ||
+		(onReload !== undefined &&
+			status === "ready" &&
+			lastMessage?.role === "assistant" &&
+			lastMessage.metadata?.status === "interrupted");
+
 	return (
 		<div className={cn("relative h-full", className)}>
 			<div className="flex h-full flex-col">
@@ -72,7 +82,7 @@ export function Chat({
 				/>
 
 				<div className="relative z-10 -mt-20 flex w-full flex-col items-center gap-2 bg-gradient-to-t from-muted from-60% to-transparent px-4 pt-8 pb-2 dark:from-background/30">
-					{status === "error" && (
+					{canRetry && (
 						<div className="mb-2 w-full max-w-3xl">
 							<Alert variant="destructive">
 								<AlertCircle className="size-4" />

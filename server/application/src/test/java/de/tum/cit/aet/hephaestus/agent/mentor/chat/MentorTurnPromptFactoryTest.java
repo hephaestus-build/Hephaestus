@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class MentorTurnPromptFactoryTest extends BaseUnitTest {
 
     private MentorTurnRequest request(String message, ThreadSurface surface) {
-        return new MentorTurnRequest(1L, UUID.randomUUID(), message, null, surface);
+        return new MentorTurnRequest(1L, UUID.randomUUID(), message, null, surface, null);
     }
 
     @Test

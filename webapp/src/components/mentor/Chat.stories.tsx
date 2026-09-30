@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import type { ChatMessageVote } from "@/api/types.gen";
 import type { ChatMessage } from "@/lib/types";
@@ -339,5 +339,25 @@ export const ErrorState: Story = {
 		messages: CONVERSATION_MESSAGES.slice(0, 3),
 		status: "error",
 		onReload: fn(),
+	},
+};
+
+const INTERRUPTED_REPLY: ChatMessage = {
+	id: "msg-interrupted",
+	role: "assistant",
+	parts: [],
+	metadata: { status: "interrupted" },
+};
+
+/** A reply saved as interrupted can be tried again when the conversation is reopened. */
+export const InterruptedReplyReopened: Story = {
+	args: {
+		messages: [...CONVERSATION_MESSAGES.slice(0, 1), INTERRUPTED_REPLY],
+		status: "ready",
+		onReload: fn(),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Try again" })).toBeVisible();
+		await expect(canvas.getByText(/interrupted before it finished/u)).toBeVisible();
 	},
 };
