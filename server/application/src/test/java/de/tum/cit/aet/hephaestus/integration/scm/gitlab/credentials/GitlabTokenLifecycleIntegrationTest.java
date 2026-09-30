@@ -267,6 +267,7 @@ class GitlabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldNotRevokeAValidTokenWhenGitLabRefusesSelfApproval() {
         var connection = connection("author");
+        health.observe(connection.getWorkspace().getId(), "author", true);
         var bodyConsumed = new AtomicBoolean();
         var probeAfterConsumption = new AtomicBoolean();
         String refusal = "{\"message\":\"An author cannot approve their own merge request\"}";
@@ -295,7 +296,8 @@ class GitlabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
         assertThat(returnedBody).isEqualTo(refusal);
         assertThat(probeAfterConsumption).isTrue();
         assertThat(current(connection).getAttentionProblem()).isNull();
-        assertThat(changes(connection)).isEmpty();
+        assertThat(changes(connection)).hasSize(2);
+        assertThat(changes(connection).getLast().recovered()).isTrue();
     }
 
     private WebClient client(HttpStatus status) {

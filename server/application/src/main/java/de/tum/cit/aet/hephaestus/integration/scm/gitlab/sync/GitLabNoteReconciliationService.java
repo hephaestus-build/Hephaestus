@@ -8,11 +8,11 @@ import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NoteIdProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -113,10 +113,10 @@ public class GitLabNoteReconciliationService {
                 || !parent.getRepository().getId().equals(repository.getId())
                 || !workspaceLinks.mayWriteRepository(workspaceId, repository)) return new Outcome(0, true);
         // Capture candidates BEFORE the first network call. Never remove a concurrently inserted note.
-        var localComments = comments.findByIssueId(parent.getId());
+        var localComments = comments.findNoteIdsByParentId(parent.getId());
         var localDiff = parent instanceof PullRequest
-                ? diffComments.findByPullRequestIdWithAuthorOrderByCreatedAt(parent.getId())
-                : List.<PullRequestReviewComment>of();
+                ? diffComments.findNoteIdsByParentId(parent.getId())
+                : List.<NoteIdProjection>of();
         var localThreads = parent instanceof PullRequest
                 ? threads.findRecentIdsByPullRequestId(parent.getId(), Pageable.unpaged())
                 : List.<Long>of();

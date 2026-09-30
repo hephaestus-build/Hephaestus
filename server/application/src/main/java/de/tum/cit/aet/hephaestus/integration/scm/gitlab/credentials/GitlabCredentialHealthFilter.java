@@ -58,11 +58,12 @@ public class GitlabCredentialHealthFilter implements WebClientCustomizer {
                         .flatMap(body -> next.exchange(probe)
                                 .flatMap(identity -> {
                                     int identityStatus = identity.statusCode().value();
-                                    return identity.releaseBody()
-                                            .then(
-                                                    identityStatus == 401
-                                                            ? observe(workspaceId, token, true)
-                                                            : Mono.empty());
+                                    Mono<Void> observation = Mono.empty();
+                                    if (identityStatus == 401
+                                            || identity.statusCode().is2xxSuccessful()) {
+                                        observation = observe(workspaceId, token, identityStatus == 401);
+                                    }
+                                    return identity.releaseBody().then(observation);
                                 })
                                 .onErrorResume(error -> Mono.empty())
                                 .thenReturn(response.mutate()

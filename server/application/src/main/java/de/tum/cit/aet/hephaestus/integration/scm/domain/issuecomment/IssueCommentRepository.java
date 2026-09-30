@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NoteIdProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.RepositoryItemCountProjection;
 import java.util.Collection;
 import java.util.List;
@@ -15,7 +16,8 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Comments scoped through issue_id -> repository.workspace_id")
 public interface IssueCommentRepository extends JpaRepository<IssueComment, Long> {
-    List<IssueComment> findByIssueId(long issueId);
+    @Query("SELECT c.id AS id, c.nativeId AS nativeId FROM IssueComment c WHERE c.issue.id = :parentId")
+    List<NoteIdProjection> findNoteIdsByParentId(@Param("parentId") long parentId);
 
     @Modifying
     @Query("DELETE FROM IssueComment c WHERE c.issue.id = :parentId AND c.id IN :ids")

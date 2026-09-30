@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NoteIdProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.RepositoryItemCountProjection;
 import java.util.Collection;
 import java.util.List;
@@ -13,6 +14,10 @@ import org.springframework.data.repository.query.Param;
 
 @WorkspaceAgnostic("Comments scoped through review_id -> repository.workspace_id")
 public interface PullRequestReviewCommentRepository extends JpaRepository<PullRequestReviewComment, Long> {
+    @Query(
+            "SELECT c.id AS id, c.nativeId AS nativeId FROM PullRequestReviewComment c WHERE c.pullRequest.id = :parentId")
+    List<NoteIdProjection> findNoteIdsByParentId(@Param("parentId") long parentId);
+
     @Modifying
     @Query(
             "UPDATE PullRequestReviewComment c SET c.inReplyTo = NULL WHERE c.pullRequest.id = :parentId AND c.inReplyTo.id IN :ids")
