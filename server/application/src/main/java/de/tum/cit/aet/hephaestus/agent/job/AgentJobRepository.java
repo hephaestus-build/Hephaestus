@@ -244,6 +244,22 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
             @Param("descriptionPath") String descriptionPath,
             @Param("changePath") String changePath);
 
+    /** Only the staged identity, without legacy capture fallbacks, for material repair admission. */
+    @Query(value = """
+        SELECT j.id AS "id", CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork"
+        FROM agent_job j
+        WHERE j.id IN :ids AND j.workspace_id = :workspaceId
+        """, nativeQuery = true)
+    List<CapturedReviewedWorkRow> findCapturedReviewedWork(
+            @Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    interface CapturedReviewedWorkRow {
+        UUID getId();
+
+        @Nullable
+        String getReviewedWork();
+    }
+
     interface ReviewedWorkRow {
         UUID getId();
 
