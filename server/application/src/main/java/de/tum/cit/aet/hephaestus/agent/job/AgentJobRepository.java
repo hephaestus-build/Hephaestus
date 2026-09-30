@@ -217,6 +217,58 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     List<EvidenceContractVersionRow> findEvidenceContractVersions(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
+    /**
+     * What each run captured of the work it reviewed: the artifact it was about, its source contract, its
+     * {@code reviewedWork}, and for a run from before that was recorded, the archived description digest and pinned
+     * change range the jsonpaths select.
+     * Extracted in SQL for the reason {@link #findEvidenceContractVersion} gives; a run outside this workspace yields
+     * no row.
+     */
+    @Query(value = """
+        SELECT j.id AS "id",
+               j.job_type AS "jobType",
+               COALESCE(j.metadata ->> 'pull_request_id', j.metadata ->> 'issue_id') AS "reviewedArtifactId",
+               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion",
+               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'capturedAt') AS "capturedAt",
+               CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork",
+               jsonb_path_query_first(j.evidence_snapshot, CAST(:descriptionPath AS jsonpath)) #>> '{}'
+                   AS "descriptionSha256",
+               jsonb_path_query_first(j.evidence_snapshot, CAST(:changePath AS jsonpath)) #>> '{}' AS "changeRange"
+        FROM agent_job j
+        WHERE j.id IN :ids
+          AND j.workspace_id = :workspaceId
+        """, nativeQuery = true)
+    List<ReviewedWorkRow> findReviewedWork(
+            @Param("workspaceId") Long workspaceId,
+            @Param("ids") Collection<UUID> ids,
+            @Param("descriptionPath") String descriptionPath,
+            @Param("changePath") String changePath);
+
+    interface ReviewedWorkRow {
+        UUID getId();
+
+        @Nullable
+        String getJobType();
+
+        @Nullable
+        String getReviewedArtifactId();
+
+        @Nullable
+        String getContractVersion();
+
+        @Nullable
+        String getCapturedAt();
+
+        @Nullable
+        String getReviewedWork();
+
+        @Nullable
+        String getDescriptionSha256();
+
+        @Nullable
+        String getChangeRange();
+    }
+
     interface EvidenceContractVersionRow {
         UUID getId();
 

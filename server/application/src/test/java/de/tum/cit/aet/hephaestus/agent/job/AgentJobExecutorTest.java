@@ -24,6 +24,8 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -59,6 +61,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -722,6 +725,42 @@ class AgentJobExecutorTest extends BaseUnitTest {
             verify(sandboxManager, never()).execute(any());
             verify(usageRecorder, never()).recordUnverifiable(any(), any());
             verify(usageRecorder, never()).record(any(), any());
+        }
+
+        @Test
+        void stampTheTitleDescriptionAndHeadThePullRequestCaptureStaged() {
+            stubClaimableJob();
+            job.setMetadata(objectMapper.createObjectNode().put("pull_request_id", 42L));
+            stubCapture(HEAD_SHA);
+            when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            ArgumentCaptor<AgentJobRepository.ProvenanceStamp> stamp =
+                    ArgumentCaptor.forClass(AgentJobRepository.ProvenanceStamp.class);
+            verify(jobRepository).updateProvenanceDigests(eq(jobId), isNull(), eq(0), stamp.capture());
+            var snapshot = stamp.getValue().evidenceSnapshot();
+            org.junit.jupiter.api.Assertions.assertNotNull(snapshot);
+            JsonNode reviewed = snapshot.path(ReviewedWork.SNAPSHOT_KEY);
+            assertThat(reviewed.path("artifactId").asLong()).isEqualTo(42L);
+            assertThat(reviewed.path("head").asString()).isEqualTo(HEAD_SHA);
+            assertThat(reviewed.path("titleAndDescriptionRevision").asString())
+                    .isEqualTo(ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, "MR !2", "No issue link"));
+        }
+
+        @Test
+        void failsTheRunBeforeTheSandboxWhenStagedMetadataNamesAnotherCommitThanThePinnedChange() {
+            stubClaimableJob();
+            job.setMetadata(objectMapper.createObjectNode().put("pull_request_id", 42L));
+            stubCapture("c".repeat(40));
+            when(jobRepository.transitionStatus(any(), eq(AgentJobStatus.FAILED), any(), any(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            verify(jobRepository, never()).updateProvenanceDigests(any(), any(), anyInt(), any());
+            verify(sandboxManager, never()).execute(any());
         }
 
         @Test
@@ -2488,6 +2527,36 @@ class AgentJobExecutorTest extends BaseUnitTest {
             verify(usageRecorder, never()).record(any(), any());
             verify(usageRecorder, never()).recordUnverifiable(any(), any());
         }
+    }
+
+    private static final String HEAD_SHA = "b".repeat(40);
+
+    /** A pull request capture of {@code "MR !2"} pinned at {@link #HEAD_SHA}, whose metadata names {@code stagedCommit}. */
+    private void stubCapture(String stagedCommit) {
+        Instant capturedAt = Instant.parse("2026-09-30T00:05:00Z");
+        ArtifactSourceManifest manifest =
+                ReviewedWorkFixtures.pullRequestManifest(capturedAt, "No issue link", HEAD_SHA);
+        SourceKind core = new SourceKind("scm.pull-request.core");
+        SourceReadinessCheck check =
+                new SourceReadinessCheck(core, manifest.contractVersion(), capturedAt, capturedAt, true, List.of());
+        AutomatedReviewReadinessReport readiness = new AutomatedReviewReadinessReport(
+                manifest.contractVersion(),
+                manifest.catalogDigest(),
+                manifest.artifactKind(),
+                capturedAt,
+                capturedAt,
+                List.of(new AutomatedReviewReadinessDecision("example", capturedAt, true, List.of(), List.of(check))));
+        Map<String, byte[]> files = Map.of(
+                SandboxLayout.MANIFEST_PATH,
+                objectMapper.writeValueAsBytes(manifest),
+                SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+                ReviewedWorkFixtures.metadata(objectMapper, "MR !2", "No issue link", stagedCommit));
+        JobTypeHandler handler = mock(JobTypeHandler.class);
+        when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
+        when(handler.prepareInputs(any()))
+                .thenReturn(new PreparedJobInputs(
+                        new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(files, manifest), readiness));
+        when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
     }
 
     private void stubClaimableJob() {

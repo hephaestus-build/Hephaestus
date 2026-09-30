@@ -421,8 +421,22 @@ Historical records keep their original contract and practice revision. Currentne
 
 Semantic currentness, automated-review-validation status, governance eligibility, and replayability remain separate.
 Observation and review APIs expose `claimCurrentness` as `CURRENT`, `STALE`, or `UNVERIFIABLE` by comparing the
-evaluated practice revision's review-rule fingerprint with the current revision's fingerprint. Presentation-only
-edits retain semantic currentness; rows without comparable versioned fingerprints are `UNVERIFIABLE`.
+evaluated practice revision's review-rule fingerprint with the current revision's fingerprint, and as `STALE` once the
+observation carries a superseded marker. `IssueObservationSuperseder` sets that marker on an issue's observations in
+the transaction that records a change to its reviewable content, before and independently of any new review.
+Presentation-only edits retain semantic currentness; rows without comparable versioned fingerprints are
+`UNVERIFIABLE`. Neither value says whether a later review ran, and pull request work is never compared.
+
+Whether what a review read differs from the stored work is a separate fact. A pull request or issue review records
+`reviewedWork` in `agent_job.evidence_snapshot` beside the manifest: the artifact it is bound to, a content digest of
+the staged title and description, the pinned head of a pull request, and the manifest's capture time — all taken from
+the staged bytes, never from the work read again. The mentor compares it with the stored work on the workspace's
+connected instance, only where the core source may be used in conversation and the capture is bound to the same
+artifact, and reports the fields it could check. A difference says the fields differ, not when the work changed: a
+queued review can pin a head the mirror has already moved past.
+A match is with the synchronized mirror over those fields alone, not with the provider, and not with comments,
+checks, approvals, linked work or behaviour. Reviews captured before `reviewedWork` existed can show only that the
+archived description or pinned head differs; they never establish that a title is unchanged.
 
 ## Adding or changing a source
 
