@@ -4,8 +4,10 @@ import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewThreadContentSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
@@ -46,8 +48,10 @@ import tools.jackson.databind.node.ObjectNode;
  * Materialises {@code inputs/context/merge_readiness.json}: for the developer's open authored pull requests, what
  * the provider says about merging and what reviewers wrote. An approval with an empty body is not the whole
  * review — a condition often sits in a general note or an inline thread beside it, and resolving that thread does
- * not show the condition was met. One that is only listed in {@code notLoaded} is read on demand as
- * {@code inputs/context/merge_readiness/<artifactId>.json}.
+ * not show the condition was met. Its description and the issues the provider records it closing, with their bodies,
+ * carry conditions too: a closing link says the provider will close the issue on merge, not that the issue's
+ * conditions are met, and a stored list can miss a link whose read failed. One that is only listed in
+ * {@code notLoaded} is read on demand as {@code inputs/context/merge_readiness/<artifactId>.json}.
  *
  * <p>Each read is one snapshot: the pages of a scan are ordered by thread state a sync may change between them, so
  * under read-committed a row could slip past the offset unread.
@@ -75,6 +79,10 @@ public class MergeReadinessContentSource implements ContentSource {
     private static final int MAX_BODY_CHARS = 1_000;
     private static final int MAX_THREADS = 5;
     private static final int MAX_THREAD_COMMENTS = 3;
+    private static final int MAX_CLOSING_ISSUES = 5;
+
+    /** What a closing issue is to the pull request: the provider records it as closed by a merge, nothing more. */
+    private static final String CLOSING_RELATION = "PROVIDER_RECORDED_CLOSING_CANDIDATE";
 
     /** Stored comments read per channel per pull request, however many are Hephaestus's own. */
     private static final int SCAN_BUDGET = 200;
@@ -137,7 +145,7 @@ public class MergeReadinessContentSource implements ContentSource {
                 root.put("reason", "No open pull request by this developer has that artifactId in this workspace.");
                 return;
             }
-            root.putArray("pullRequests").add(describe(workspaceId, pr.get()));
+            root.putArray("pullRequests").add(describe(workspaceId, developerId, providerId, pr.get()));
             root.putArray("notLoaded");
         });
     }
@@ -150,7 +158,7 @@ public class MergeReadinessContentSource implements ContentSource {
             ArrayNode notLoaded = root.putArray("notLoaded");
             for (int i = 0; i < Math.min(open.size(), MAX_DETAILED + MAX_LISTED); i++) {
                 if (i < MAX_DETAILED) {
-                    detailed.add(describe(workspaceId, open.get(i)));
+                    detailed.add(describe(workspaceId, developerId, providerId, open.get(i)));
                 } else {
                     notLoaded.add(indexEntry(open.get(i)));
                 }
@@ -214,13 +222,16 @@ public class MergeReadinessContentSource implements ContentSource {
                 .put("title", detail.path("title").asString());
     }
 
-    private ObjectNode describe(long workspaceId, PullRequest pr) {
+    private ObjectNode describe(long workspaceId, long developerId, long providerId, PullRequest pr) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("artifactId", pr.getId());
         node.put("number", pr.getNumber());
         node.put("title", pr.getTitle());
         node.put("url", pr.getHtmlUrl());
         node.put("isDraft", pr.isDraft());
+        if (pr.getBody() != null && !pr.getBody().isBlank()) {
+            putText(node, "description", pr.getBody());
+        }
         // Webhooks advance it without re-reading merge state, so the fields below can be older.
         Instant written = pr.getLastSyncAt();
         node.put("recordUpdatedAt", written == null ? "UNKNOWN" : written.toString());
@@ -228,8 +239,13 @@ public class MergeReadinessContentSource implements ContentSource {
         node.put("mergeable", mergeable == null ? "UNKNOWN" : mergeable ? "YES" : "NO");
         node.put("mergeStateStatus", nameOrUnknown(pr.getMergeStateStatus()));
         node.put("reviewDecision", nameOrUnknown(pr.getReviewDecision()));
+        node.put("headSha", pr.getHeadRefOid());
         node.put("checks", nameOrUnknown(pr.getHeadCheckState()));
         node.put("checksFor", checksFor(pr));
+        node.put("checksSha", pr.getHeadCheckSha());
+        node.put("checksObserved", checksObserved(pr));
+        Instant checkedAt = pr.getHeadCheckObservedAt();
+        node.put("checksObservedAt", checkedAt == null ? "UNKNOWN" : checkedAt.toString());
 
         List<PullRequestReview> recent = reviewRepository.findRecentByPullRequestIdWithAuthor(
                 pr.getId(), Set.of(PullRequestReview.State.PENDING), PageRequest.of(0, MAX_REVIEWS_READ));
@@ -256,6 +272,9 @@ public class MergeReadinessContentSource implements ContentSource {
                 entry.put("state", review.getState().name());
             }
             entry.put("submittedAt", review.getSubmittedAt().toString());
+            // A review stands for the commit it was given on; one given on an earlier head says nothing of this one.
+            entry.put("commit", review.getCommitId());
+            entry.put("commitFor", commitFor(review.getCommitId(), pr.getHeadRefOid()));
             if (review.getBody() != null && !review.getBody().isBlank()) {
                 reviewsCut |= putBody(entry, review.getBody());
             }
@@ -333,6 +352,24 @@ public class MergeReadinessContentSource implements ContentSource {
             }
         }
         node.put("threadsStatus", threadsCut ? "TRUNCATED" : "COMPLETE");
+
+        List<Issue> closing = queryRepository.findClosingIssuesOfOpenAuthoredPullRequest(
+                workspaceId, developerId, providerId, pr.getId(), PageRequest.of(0, MAX_CLOSING_ISSUES + 1));
+        boolean closingCut = closing.size() > MAX_CLOSING_ISSUES;
+        ArrayNode closes = node.putArray("closingIssues");
+        for (Issue issue : closing.subList(0, Math.min(closing.size(), MAX_CLOSING_ISSUES))) {
+            ObjectNode entry = closes.addObject();
+            entry.put("artifactId", issue.getId());
+            entry.put("number", issue.getNumber());
+            entry.put("title", issue.getTitle());
+            entry.put("url", issue.getHtmlUrl());
+            entry.put("state", issue.getState().name());
+            entry.put("relation", CLOSING_RELATION);
+            if (issue.getBody() != null && !issue.getBody().isBlank()) {
+                closingCut |= putBody(entry, issue.getBody());
+            }
+        }
+        node.put("closingIssuesStatus", closingCut ? "TRUNCATED" : "COMPLETE");
         return node;
     }
 
@@ -392,24 +429,56 @@ public class MergeReadinessContentSource implements ContentSource {
 
     /** @return whether the body was clipped — a condition past the cut is then unseen */
     private static boolean putBody(ObjectNode entry, String body) {
-        if (body.length() <= MAX_BODY_CHARS) {
-            entry.put("body", body);
+        return putText(entry, "body", body);
+    }
+
+    /**
+     * Puts {@code text} under {@code key}, clipped at {@link #MAX_BODY_CHARS} without splitting a surrogate pair, and
+     * marks a clipped one with {@code <key>Truncated}.
+     *
+     * @return whether the text was clipped — a condition past the cut is then unseen
+     */
+    private static boolean putText(ObjectNode entry, String key, String text) {
+        if (text.length() <= MAX_BODY_CHARS) {
+            entry.put(key, text);
             return false;
         }
-        int end = Character.isHighSurrogate(body.charAt(MAX_BODY_CHARS - 1)) ? MAX_BODY_CHARS - 1 : MAX_BODY_CHARS;
-        entry.put("body", body.substring(0, end));
-        entry.put("bodyTruncated", true);
+        int end = Character.isHighSurrogate(text.charAt(MAX_BODY_CHARS - 1)) ? MAX_BODY_CHARS - 1 : MAX_BODY_CHARS;
+        entry.put(key, text.substring(0, end));
+        entry.put(key + "Truncated", true);
         return true;
     }
 
     /** Whether the recorded check state belongs to the commit the pull request now points at. */
     private static String checksFor(PullRequest pr) {
-        String checked = pr.getHeadCheckSha();
-        String head = pr.getHeadRefOid();
-        if (checked == null || head == null) {
+        return commitFor(pr.getHeadCheckSha(), pr.getHeadRefOid());
+    }
+
+    /** Whether {@code commit} is the head the pull request now points at; unknown where either is not recorded. */
+    private static String commitFor(@Nullable String commit, @Nullable String head) {
+        if (commit == null || head == null) {
             return "UNKNOWN";
         }
-        return checked.equals(head) ? "CURRENT_HEAD" : "OTHER_COMMIT";
+        return commit.equals(head) ? "CURRENT_HEAD" : "OTHER_COMMIT";
+    }
+
+    /**
+     * What the provider was recorded saying about the current head's checks. GitLab reporting no pipeline or a skipped
+     * one is not a failure, and says nothing about whether CI is configured. {@code NONE} is GitHub's empty rollup, and
+     * on GitLab a record stored before the two were told apart. An observation of another commit, or none, leaves the
+     * current head's checks not captured.
+     */
+    private static String checksObserved(PullRequest pr) {
+        CheckState state = pr.getHeadCheckState();
+        if (state == null || !"CURRENT_HEAD".equals(checksFor(pr))) {
+            return "NOT_CAPTURED";
+        }
+        return switch (state) {
+            case NO_PIPELINE -> "NO_PIPELINE_REPORTED";
+            case SKIPPED -> "SKIPPED_PIPELINE_REPORTED";
+            case NONE -> "NONE_REPORTED";
+            case SUCCESS, FAILURE, PENDING, CANCELLED -> "STATUS_REPORTED";
+        };
     }
 
     private static String nameOrUnknown(@Nullable Enum<?> value) {

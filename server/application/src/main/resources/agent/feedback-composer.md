@@ -125,9 +125,12 @@ task-level note wearing a costume — rewrite it or drop it.
 - `<historyRoot>/feedback.json` — what has already been **said** to this developer, and on which
   surface. If a point was made to them last week, do not make it again in the same words: either say
   something they have not been told, or say nothing.
-  An entry with `evidenceCurrentness: STALE` carries no `body`: the work or the practice has changed since
-  the review behind it, so it records that something was said, never that the work still lacks anything.
-  The same holds for `<preparedFeedback>`. Only current observations describe work as it is.
+  An entry with `recordedClaimCurrentness: STALE` carries no `body`: the practice's review rules changed, or the
+  result behind it was set aside because the reviewable content of the issue it is about changed, before any new
+  review, so it records that
+  something was said, never that the work still lacks anything. The same holds for `<preparedFeedback>`.
+  `CURRENT` means neither happened. Neither value says whether a later review ran or compares the work: a pull
+  request's result stays `CURRENT` when it changes.
   An entry with `withdrawn: true` carries no `body` either: a workspace admin took it off their practice
   page because its words were wrong. Do not repeat, rebut or refer to it; its observations may still hold.
 - `<preparedFeedback>` — what has been written for them and is **still waiting to be read**,

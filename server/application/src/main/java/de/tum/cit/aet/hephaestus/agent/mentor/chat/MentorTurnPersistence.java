@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
@@ -118,10 +119,10 @@ public class MentorTurnPersistence {
     }
 
     /**
-     * Persist the user message + assistant placeholder in a single transaction. The DB unique
-     * partial index on {@code (thread_id) WHERE status='in_flight'} converts a racy second
-     * insert from a non-affinity replica into a {@link DataIntegrityViolationException}, which
-     * we surface as {@link TurnAlreadyInFlightException}.
+     * Persist the user message + assistant placeholder in a single transaction, admitted under the
+     * thread's lock. The DB unique partial index on {@code (thread_id) WHERE status='in_flight'}
+     * turns a second turn into a {@link DataIntegrityViolationException}, which we surface as
+     * {@link TurnAlreadyInFlightException}.
      *
      * <p>{@code userMessageId} is the client-supplied UUID, or {@code null} to generate one.
      * Persisting the client's id is what makes a duplicate inbound delivery collapse onto the
@@ -134,6 +135,7 @@ public class MentorTurnPersistence {
             UUID assistantMessageId,
             @Nullable UUID userMessageId,
             MentorLlmConfig llmConfig) {
+        lockForAdmission(thread);
         try {
             if (userMessageId != null && chatMessageRepository.existsById(userMessageId)) {
                 throw new TurnAlreadyInFlightException(
@@ -148,27 +150,7 @@ public class MentorTurnPersistence {
             // Materialize the parent before its dependent row. Both writes remain in this transaction,
             // including rollback when a concurrent turn wins the unique in-flight constraint.
             ChatMessage savedUser = chatMessageRepository.saveAndFlush(userMessage);
-
-            ChatMessage assistant = new ChatMessage();
-            assistant.setId(assistantMessageId);
-            assistant.setThread(thread);
-            assistant.setRole(ChatMessage.Role.ASSISTANT);
-            assistant.setParentMessage(savedUser);
-            assistant.setParts(NODES.arrayNode());
-            assistant.setStatus(ChatMessage.Status.in_flight);
-            assistant.setMetadata(admissionMetadata(llmConfig));
-            chatMessageRepository.save(assistant);
-            chatMessageRepository.flush();
-            if (llmConfig.priceSnapshot() == null) {
-                throw new IllegalStateException("Mentor turn has no admitted LLM price snapshot");
-            }
-            return new TurnPersistenceCookie(
-                    thread.getId(),
-                    savedUser.getId(),
-                    assistantMessageId,
-                    Instant.now(),
-                    llmConfig.upstreamModelId(),
-                    llmConfig.priceSnapshot());
+            return persistAssistant(thread, savedUser, assistantMessageId, llmConfig);
         } catch (DataIntegrityViolationException ex) {
             // Spring maps every integrity violation to this one class, so narrow by constraint name:
             // an unrelated CHECK regression must not masquerade as a 409.
@@ -177,6 +159,90 @@ public class MentorTurnPersistence {
             }
             throw ex;
         }
+    }
+
+    /**
+     * Admits a new attempt at the reply {@code failedAssistantId}, answering its stored prompt again. Only the latest
+     * attempt at the thread's latest prompt, sent as {@code userMessageId}, and only once it was interrupted, may be
+     * retried. No USER row is written, and the earlier attempt keeps its outcome and usage.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public RetryAdmission persistRetry(
+            ChatThread thread,
+            @Nullable UUID userMessageId,
+            UUID failedAssistantId,
+            UUID assistantMessageId,
+            MentorLlmConfig llmConfig) {
+        lockForAdmission(thread);
+        ChatMessage prompt = userMessageId == null
+                ? null
+                : chatMessageRepository
+                        .findByIdAndThread_Id(userMessageId, thread.getId())
+                        .orElse(null);
+        ChatMessage failed = chatMessageRepository
+                .findByIdAndThread_Id(failedAssistantId, thread.getId())
+                .orElse(null);
+        if (prompt == null
+                || prompt.getRole() != ChatMessage.Role.USER
+                || failed == null
+                || failed.getRole() != ChatMessage.Role.ASSISTANT
+                || !prompt.getId().equals(failed.getParentMessageId())
+                || chatMessageRepository.existsByThread_IdAndRoleAndCreatedAtAfter(
+                        thread.getId(), ChatMessage.Role.USER, prompt.getCreatedAt())) {
+            throw new MentorRetryRejectedException(MentorRetryRejectedException.NOT_RETRYABLE);
+        }
+        if (chatMessageRepository.existsByThread_IdAndStatus(thread.getId(), ChatMessage.Status.in_flight)) {
+            throw new TurnAlreadyInFlightException(
+                    thread.getId(), new IllegalStateException("a reply in this thread is still in flight"));
+        }
+        if (failed.getStatus() != ChatMessage.Status.interrupted
+                || chatMessageRepository.existsByParentMessageIdAndRoleAndCreatedAtAfter(
+                        prompt.getId(), ChatMessage.Role.ASSISTANT, failed.getCreatedAt())) {
+            throw new MentorRetryRejectedException(MentorRetryRejectedException.SUPERSEDED);
+        }
+        String storedPrompt = storedText(prompt.getParts());
+        if (storedPrompt == null) {
+            throw new MentorRetryRejectedException(MentorRetryRejectedException.NOT_RETRYABLE);
+        }
+        try {
+            return new RetryAdmission(persistAssistant(thread, prompt, assistantMessageId, llmConfig), storedPrompt);
+        } catch (DataIntegrityViolationException ex) {
+            if (isInFlightUniqueViolation(ex)) {
+                throw new TurnAlreadyInFlightException(thread.getId(), ex);
+            }
+            throw ex;
+        }
+    }
+
+    private void lockForAdmission(ChatThread thread) {
+        chatThreadRepository
+                .lockForTurnAdmission(thread.getId(), thread.getWorkspace().getId())
+                .orElseThrow(() ->
+                        new EntityNotFoundException("ChatThread", thread.getId().toString()));
+    }
+
+    private TurnPersistenceCookie persistAssistant(
+            ChatThread thread, ChatMessage prompt, UUID assistantMessageId, MentorLlmConfig llmConfig) {
+        ChatMessage assistant = new ChatMessage();
+        assistant.setId(assistantMessageId);
+        assistant.setThread(thread);
+        assistant.setRole(ChatMessage.Role.ASSISTANT);
+        assistant.setParentMessage(prompt);
+        assistant.setParts(NODES.arrayNode());
+        assistant.setStatus(ChatMessage.Status.in_flight);
+        assistant.setMetadata(admissionMetadata(llmConfig));
+        chatMessageRepository.save(assistant);
+        chatMessageRepository.flush();
+        if (llmConfig.priceSnapshot() == null) {
+            throw new IllegalStateException("Mentor turn has no admitted LLM price snapshot");
+        }
+        return new TurnPersistenceCookie(
+                thread.getId(),
+                prompt.getId(),
+                assistantMessageId,
+                Instant.now(),
+                llmConfig.upstreamModelId(),
+                llmConfig.priceSnapshot());
     }
 
     private static ObjectNode admissionMetadata(MentorLlmConfig config) {
@@ -455,6 +521,18 @@ public class MentorTurnPersistence {
         return NODES.objectNode();
     }
 
+    private static @Nullable String storedText(@Nullable JsonNode parts) {
+        if (parts == null || !parts.isArray()) return null;
+        for (JsonNode part : parts) {
+            if ("text".equals(part.path("type").asString(""))
+                    && part.path("text").isString()) {
+                String text = part.path("text").asString();
+                if (!text.isBlank()) return text;
+            }
+        }
+        return null;
+    }
+
     private static JsonNode toTextParts(String userText) {
         ObjectNode part = NODES.objectNode();
         part.put("type", "text");
@@ -479,6 +557,8 @@ public class MentorTurnPersistence {
         JsonNode v = node.path(field);
         return v.isIntegralNumber() || v.isFloatingPointNumber() ? v.asLong() : 0L;
     }
+
+    public record RetryAdmission(TurnPersistenceCookie cookie, String prompt) {}
 
     /** Tracking record carried through the turn pipeline. */
     public record TurnPersistenceCookie(

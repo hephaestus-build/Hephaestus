@@ -291,7 +291,7 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
         JsonNode before = objectMapper.readTree(contribute());
         assertThat(before.path("feedbackStates")
                         .path(0)
-                        .path("evidenceCurrentness")
+                        .path("recordedClaimCurrentness")
                         .asString())
                 .isEqualTo("CURRENT");
 
@@ -305,7 +305,7 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
                         e -> e.get("feedbackId").asString(),
                         e -> e.get("artifactKind").asString(),
                         e -> e.get("status").asString(),
-                        e -> e.get("evidenceCurrentness").asString())
+                        e -> e.get("recordedClaimCurrentness").asString())
                 .containsExactly(tuple(note.getId().toString(), "scm.issue", "DELIVERED", "STALE"));
     }
 

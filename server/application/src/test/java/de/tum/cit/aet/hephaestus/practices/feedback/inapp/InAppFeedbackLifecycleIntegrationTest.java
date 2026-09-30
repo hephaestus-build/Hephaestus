@@ -340,7 +340,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
         JsonNode state = mentor.path("feedbackStates").get(0);
         assertThat(state.path("feedbackId").asString()).isEqualTo(first.getId().toString());
         assertThat(state.path("withdrawn").asBoolean()).isTrue();
-        assertThat(state.path("evidenceCurrentness").asString()).isEqualTo("CURRENT");
+        assertThat(state.path("recordedClaimCurrentness").asString()).isEqualTo("CURRENT");
         assertThat(cited(first)).isNotEmpty();
         assertThat(state(first)).isEqualTo(FeedbackDeliveryState.DELIVERED);
 

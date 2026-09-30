@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentProperties;
@@ -81,6 +82,25 @@ class MentorChatControllerTest extends BaseUnitTest {
     }
 
     @Test
+    void namesTheRetriedReplyOnlyForARegenerate() {
+        UUID failedReply = UUID.randomUUID();
+        MentorChatRequestBody base = body(UUID.randomUUID(), UUID.randomUUID().toString(), "hello");
+        controller.chat(
+                stubContext(),
+                new MentorChatRequestBody(base.id(), base.message(), "regenerate-message", failedReply),
+                response);
+        controller.chat(
+                stubContext(),
+                new MentorChatRequestBody(base.id(), base.message(), "submit-message", failedReply),
+                response);
+        ArgumentCaptor<MentorTurnRequest> req = ArgumentCaptor.forClass(MentorTurnRequest.class);
+        verify(mentorChatService, times(2)).start(req.capture(), any());
+        assertThat(req.getAllValues())
+                .extracting(MentorTurnRequest::retryOfAssistantMessageId)
+                .containsExactly(failedReply, null);
+    }
+
+    @Test
     void blankUserMessage_shortCircuits() {
         SseEmitter emitter = controller.chat(stubContext(), body(UUID.randomUUID(), null, "   "), response);
         verify(mentorChatService, never()).start(any(), any());
@@ -128,6 +148,6 @@ class MentorChatControllerTest extends BaseUnitTest {
         var part = partsArray.addObject();
         part.put("type", "text");
         part.put("text", text);
-        return new MentorChatRequestBody(threadId, root);
+        return new MentorChatRequestBody(threadId, root, null, null);
     }
 }

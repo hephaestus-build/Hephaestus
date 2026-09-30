@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -255,6 +256,52 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
     List<PullRequest> findRecentAuthoredPullRequests(
             @Param("workspaceId") Long workspaceId, @Param("userId") Long userId, Pageable page);
 
+    /** The stored copies of {@code ids} on the workspace's connected instance, for comparing with what was reviewed. */
+    @Query("""
+        SELECT p.id AS id, p.title AS title, p.body AS body, p.headRefOid AS head
+        FROM PullRequest p
+        JOIN p.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        WHERE p.id IN :ids
+          AND p.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+        """)
+    List<StoredWork> findStoredPullRequests(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("ids") Collection<Long> ids);
+
+    /** {@link #findStoredPullRequests} for issues; an issue has no head. */
+    @Query("""
+        SELECT i.id AS id, i.title AS title, i.body AS body, CAST(NULL AS String) AS head
+        FROM Issue i
+        JOIN i.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        WHERE TYPE(i) = Issue
+          AND i.id IN :ids
+          AND i.deletedAt IS NULL
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+        """)
+    List<StoredWork> findStoredIssues(
+            @Param("workspaceId") Long workspaceId,
+            @Param("providerId") Long providerId,
+            @Param("ids") Collection<Long> ids);
+
+    interface StoredWork {
+        Long getId();
+
+        @Nullable
+        String getTitle();
+
+        @Nullable
+        String getBody();
+
+        @Nullable
+        String getHead();
+    }
+
     /**
      * The developer's open authored pull requests on the workspace's connected instance, most recently
      * updated first. The provider predicate keeps a same-path project on another instance out: the
@@ -296,6 +343,37 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
             @Param("userId") Long userId,
             @Param("providerId") Long providerId,
             @Param("pullRequestId") Long pullRequestId);
+
+    /**
+     * The issues the provider records {@code pullRequestId} as closing — GitHub's closing references, GitLab's
+     * closes-issues — under the same scope as {@link #findOpenAuthoredPullRequestOnInstance}: an open pull request
+     * the developer authored, monitored by the workspace, on its connected instance. Only issues of the pull
+     * request's own repository that are not tombstoned, lowest number first; a caller passes its cap plus one to
+     * learn whether more exist.
+     */
+    @Query("""
+        SELECT DISTINCT i
+        FROM PullRequest p
+        JOIN p.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        JOIN p.closingIssues i
+        WHERE p.id = :pullRequestId
+          AND p.author.id = :userId
+          AND p.deletedAt IS NULL
+          AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+          AND TYPE(i) = Issue
+          AND i.repository = p.repository
+          AND i.deletedAt IS NULL
+        ORDER BY i.number ASC, i.id ASC
+        """)
+    List<Issue> findClosingIssuesOfOpenAuthoredPullRequest(
+            @Param("workspaceId") Long workspaceId,
+            @Param("userId") Long userId,
+            @Param("providerId") Long providerId,
+            @Param("pullRequestId") Long pullRequestId,
+            Pageable page);
 
     /** Which of {@code refs} the delivery ledger records Hephaestus posting as feedback on this pull request. */
     @Query("""

@@ -549,11 +549,11 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                     .get("prepared")
                     .get(0);
 
-            assertThat(said.get("evidenceCurrentness").asString()).isEqualTo("STALE");
+            assertThat(said.get("recordedClaimCurrentness").asString()).isEqualTo("STALE");
             assertThat(said.has("body")).isFalse();
             assertThat(said.get("channel").asString()).isEqualTo("IN_CONTEXT");
             assertThat(said.get("deliveredAt").asString()).isNotBlank();
-            assertThat(waiting.get("evidenceCurrentness").asString()).isEqualTo("STALE");
+            assertThat(waiting.get("recordedClaimCurrentness").asString()).isEqualTo("STALE");
             assertThat(waiting.get("threadKey").asString()).isEqualTo("in-chat:7:subtasks");
             assertThat(waiting.has("body")).isFalse();
             assertThat(captured.contentStates())
@@ -571,7 +571,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                     .get("prepared")
                     .get(0);
 
-            assertThat(entry.get("evidenceCurrentness").asString()).isEqualTo("STALE");
+            assertThat(entry.get("recordedClaimCurrentness").asString()).isEqualTo("STALE");
             assertThat(entry.has("body")).isFalse();
         }
 
@@ -586,7 +586,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                     .get("prepared")
                     .get(0);
 
-            assertThat(entry.get("evidenceCurrentness").asString()).isEqualTo("CURRENT");
+            assertThat(entry.get("recordedClaimCurrentness").asString()).isEqualTo("CURRENT");
             assertThat(entry.get("body").asString()).isEqualTo("#9 and #10 open as one block.");
         }
 
@@ -602,7 +602,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                     .get("prepared")
                     .get(0);
 
-            assertThat(entry.get("evidenceCurrentness").asString()).isEqualTo("CURRENT");
+            assertThat(entry.get("recordedClaimCurrentness").asString()).isEqualTo("CURRENT");
             assertThat(entry.get("withdrawn").asBoolean()).isTrue();
             assertThat(entry.has("body")).isFalse();
         }

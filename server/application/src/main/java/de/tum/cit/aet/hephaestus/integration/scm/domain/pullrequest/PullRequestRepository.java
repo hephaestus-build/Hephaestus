@@ -164,6 +164,17 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     List<PullRequest> findAllByRepository_IdAndHeadRefOid(Long repositoryId, String headRefOid);
 
     /**
+     * {@link #findAllByRepository_IdAndHeadRefOid} with each row locked, in id order, as
+     * {@link #findForUpdateByRepositoryIdAndNumber} locks one: for a writer that compares a dated check observation
+     * with the stored one.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+            "SELECT p FROM PullRequest p WHERE p.repository.id = :repositoryId AND p.headRefOid = :headRefOid ORDER BY p.id")
+    List<PullRequest> findAllForUpdateByRepositoryIdAndHeadRefOid(
+            @Param("repositoryId") long repositoryId, @Param("headRefOid") String headRefOid);
+
+    /**
      * Repository-wide pull-request inventory ordered newest-first by number, for the cross-artifact
      * project-context telescope. The author is fetched up front to avoid a per-row lazy load; review
      * threads/diffs/bodies are intentionally NOT fetched — the inventory is a compact "what else exists

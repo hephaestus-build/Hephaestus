@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.MergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -581,7 +582,9 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                     new GitLabMergeRequestEventDTO.LastCommit(head, "Fix", "Fix"),
                     null,
-                    oldrev);
+                    oldrev,
+                    null,
+                    null);
             return new GitLabMergeRequestEventDTO(
                     "merge_request", "merge_request", createUser(), createProject(), attrs, List.of(), null, null);
         }
@@ -924,6 +927,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                     null,
                     null,
+                    null,
+                    null,
                     null);
             GitLabMergeRequestEventDTO event = new GitLabMergeRequestEventDTO(
                     "merge_request",
@@ -1010,6 +1015,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    null,
+                    null,
                     null,
                     null,
                     null);
@@ -1143,6 +1150,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    null,
+                    null,
                     null,
                     null,
                     null);
@@ -1400,7 +1409,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             when(pullRequestRepository.save(pr)).thenReturn(pr);
 
             processor.processFromSync(
-                    syncDataWith("FAILED", "d".repeat(40), List.of(41, 42)), ProcessingContext.forSync(1L, testRepo));
+                    syncDataWith(GitLabHeadPipeline.reported("FAILED", "d".repeat(40)), List.of(41, 42)),
+                    ProcessingContext.forSync(1L, testRepo));
 
             assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
             assertThat(pr.getHeadCheckSha()).isEqualTo("d".repeat(40));
@@ -1420,17 +1430,37 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(Optional.of(pr));
             when(gitLabUserService.findOrCreateUser(any(GitLabUserLookup.class), eq(PROVIDER_ID)))
                     .thenReturn(createUserEntity());
-            when(pullRequestRepository.save(pr)).thenReturn(pr);
 
-            processor.processFromSync(syncDataWith(null, null, null), ProcessingContext.forSync(1L, testRepo));
+            processor.processFromSync(
+                    syncDataWith(GitLabHeadPipeline.NOT_CAPTURED, null), ProcessingContext.forSync(1L, testRepo));
 
             assertThat(pr.getClosingIssues()).containsExactly(earlier);
-            assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.NONE);
+            // A head pipeline the read did not capture is not an observation of no pipeline.
+            assertThat(pr.getHeadCheckState()).isNull();
+            assertThat(pr.getHeadCheckSha()).isNull();
+        }
+
+        @Test
+        void shouldRecordThatTheHeadHasNoPipelineWhereGitLabSaidSo() {
+            PullRequest pr = createPullRequestEntity();
+            pr.setHeadRefOid("abc123");
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.empty());
+            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+            when(gitLabUserService.findOrCreateUser(any(GitLabUserLookup.class), eq(PROVIDER_ID)))
+                    .thenReturn(createUserEntity());
+            when(pullRequestRepository.save(pr)).thenReturn(pr);
+
+            processor.processFromSync(
+                    syncDataWith(GitLabHeadPipeline.NO_PIPELINE, null), ProcessingContext.forSync(1L, testRepo));
+
+            assertThat(pr.getHeadCheckState()).isEqualTo(CheckState.NO_PIPELINE);
             assertThat(pr.getHeadCheckSha()).isEqualTo("abc123");
         }
 
         private GitLabMergeRequestProcessor.SyncMergeRequestData syncDataWith(
-                @Nullable String pipelineStatus, @Nullable String pipelineSha, @Nullable List<Integer> closing) {
+                GitLabHeadPipeline pipeline, @Nullable List<Integer> closing) {
             return new GitLabMergeRequestProcessor.SyncMergeRequestData(
                     "gid://gitlab/MergeRequest/999555",
                     "5",
@@ -1443,7 +1473,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     false,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                     null,
-                    null,
+                    "2024-01-15T10:00:00Z",
                     null,
                     null,
                     0,
@@ -1475,8 +1505,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    pipelineStatus,
-                    pipelineSha,
+                    pipeline,
                     closing);
         }
 
@@ -1541,8 +1570,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     3,
-                    null, // headPipelineStatus
-                    null, // headPipelineSha
+                    GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
                     );
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
@@ -1642,8 +1670,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     99,
-                    null, // headPipelineStatus
-                    null, // headPipelineSha
+                    GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
                     );
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
@@ -1745,8 +1772,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    null, // headPipelineStatus
-                    null, // headPipelineSha
+                    GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
                     );
             PullRequest result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
@@ -1800,8 +1826,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    null, // headPipelineStatus
-                    null, // headPipelineSha
+                    GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
                     );
             PullRequest result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
@@ -1876,7 +1901,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     3,
                     "feature/awesome-feature",
                     "main",
-                    null,
+                    "abc123",
                     null,
                     null,
                     false,
@@ -1905,8 +1930,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                             null)),
                     null,
                     null,
-                    null, // headPipelineStatus
-                    null, // headPipelineSha
+                    GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
                     );
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
@@ -2024,6 +2048,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     .thenReturn(Optional.empty());
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr));
+            lenient().when(pullRequestRepository.save(pr)).thenReturn(pr);
 
             var syncData = new GitLabMergeRequestProcessor.SyncMergeRequestData(
                     "gid://gitlab/MergeRequest/999555",
@@ -2046,7 +2071,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     3,
                     "feature/branch",
                     "main",
-                    null,
+                    "abc123",
                     null,
                     null,
                     false,
@@ -2069,47 +2094,14 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     null,
-                    null, // headPipelineStatus
-                    null, // headPipelineSha
+                    GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
                     );
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
-            verify(pullRequestRepository)
-                    .upsertCore(
-                            eq(RAW_MR_ID),
-                            eq(PROVIDER_ID),
-                            eq(MR_IID),
-                            any(),
-                            any(),
-                            eq("OPEN"),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            eq(REPO_ID),
-                            any(),
-                            any(),
-                            anyBoolean(),
-                            anyBoolean(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            eq(expectedMapping),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
+            // Recorded with the review snapshot the page was read at, not through the upsert.
+            MergeStateStatus recorded = pr.getMergeStateStatus();
+            assertThat(recorded == null ? null : recorded.name()).isEqualTo(expectedMapping);
         }
     }
 
@@ -2167,7 +2159,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         "FAILED, FAILURE",
         "CANCELED, CANCELLED",
         "CANCELING, CANCELLED",
-        "SKIPPED, NONE",
+        "SKIPPED, SKIPPED",
         "CREATED, PENDING",
         "WAITING_FOR_RESOURCE, PENDING",
         "PREPARING, PENDING",
@@ -2179,11 +2171,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
     })
     void shouldMapAPipelineStatusToOneCheckState(String status, CheckState expected) {
         assertThat(GitLabMergeRequestProcessor.mapPipelineStatus(status)).isEqualTo(expected);
-    }
-
-    @Test
-    void shouldCallNoPipelineNoChecks() {
-        assertThat(GitLabMergeRequestProcessor.mapPipelineStatus(null)).isEqualTo(CheckState.NONE);
     }
 
     private PullRequest createPullRequestEntity() {
@@ -2240,6 +2227,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                 null,
                 null,
+                null,
+                null,
                 null);
         return new GitLabMergeRequestEventDTO(
                 "merge_request",
@@ -2271,6 +2260,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                null,
+                null,
                 null,
                 null,
                 null);
@@ -2306,6 +2297,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
                 null,
                 null,
+                null,
+                null,
                 null);
         return new GitLabMergeRequestEventDTO(
                 "merge_request", "confidential_merge_request", createUser(), createProject(), attrs, null, null, null);
@@ -2330,6 +2323,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                null,
+                null,
                 null,
                 null,
                 null);
@@ -2415,8 +2410,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                null, // headPipelineStatus
-                null, // headPipelineSha
+                GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                 null // closingIssueNumbers
                 );
     }

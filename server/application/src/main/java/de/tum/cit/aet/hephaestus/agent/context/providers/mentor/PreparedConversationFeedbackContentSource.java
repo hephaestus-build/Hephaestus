@@ -49,6 +49,7 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
     private final AgentJobRepository agentJobRepository;
     private final PracticeFeedbackDeliveryPolicy deliveryPolicy;
     private final FeedbackRepository feedbackRepository;
+    private final ReviewedWorkCoverage reviewedWorkCoverage;
 
     public PreparedConversationFeedbackContentSource(
             FeedbackObservationRepository feedbackObservationRepository,
@@ -58,7 +59,8 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
             ObservationVisibilityPolicy visibilityPolicy,
             AgentJobRepository agentJobRepository,
             PracticeFeedbackDeliveryPolicy deliveryPolicy,
-            FeedbackRepository feedbackRepository) {
+            FeedbackRepository feedbackRepository,
+            ReviewedWorkCoverage reviewedWorkCoverage) {
         this.feedbackObservationRepository = feedbackObservationRepository;
         this.consentGate = consentGate;
         this.objectMapper = objectMapper;
@@ -67,6 +69,7 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
         this.agentJobRepository = agentJobRepository;
         this.deliveryPolicy = deliveryPolicy;
         this.feedbackRepository = feedbackRepository;
+        this.reviewedWorkCoverage = reviewedWorkCoverage;
     }
 
     @Override
@@ -92,6 +95,11 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
         Map<UUID, Observation> observations = observationsById(workspaceId, prepared);
         Set<UUID> visible = visibilityPolicy.permitsForNewDelivery(
                 workspaceId, observations.values(), SourceUsePurpose.CONVERSATIONAL_MENTORING);
+        Map<UUID, ObjectNode> reviewedWork = reviewedWorkCoverage.of(
+                workspaceId,
+                observations.values().stream()
+                        .filter(o -> visible.contains(o.getId()))
+                        .toList());
 
         ObjectNode root = objectMapper.createObjectNode();
 
@@ -148,8 +156,22 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
                 node.put("preparedAt", fact.getPreparedAt().toString());
             }
             Observation observation = observations.get(fact.getObservationId());
-            if (observation != null && observation.getEvidence() != null) {
-                node.set("evidence", observation.getEvidence());
+            if (observation != null) {
+                // The review behind the observation, not the job that composed this feedback.
+                node.put("reviewId", observation.getAgentJobId().toString());
+                node.put("assessmentStatus", observation.getAssessmentStatus().name());
+                node.put(
+                        "outcome",
+                        observation.getOutcome() == null
+                                ? null
+                                : observation.getOutcome().name());
+                if (observation.getEvidence() != null) {
+                    node.set("evidence", observation.getEvidence());
+                }
+                ObjectNode work = reviewedWork.get(observation.getId());
+                if (work != null) {
+                    node.set("reviewedWork", work);
+                }
             }
             writeNotes(node, fact.getBody());
         }

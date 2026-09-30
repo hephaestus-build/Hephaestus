@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -788,7 +789,8 @@ public class AgentJobExecutor {
                     agentSpec.promptDigest(),
                     sandboxSpec.inputFiles(),
                     job.getRetryCount(),
-                    preparedInputs.automatedReviewReadinessReport());
+                    preparedInputs.automatedReviewReadinessReport(),
+                    reviewedArtifactId(job));
             return new PreparedSandbox(sandboxSpec, preparedInputs);
         } catch (RuntimeException exception) {
             preparedInputs.close();
@@ -804,7 +806,8 @@ public class AgentJobExecutor {
                 null,
                 preparedInputs.files(),
                 retryCount,
-                preparedInputs.automatedReviewReadinessReport());
+                preparedInputs.automatedReviewReadinessReport(),
+                null);
     }
 
     /**
@@ -817,9 +820,10 @@ public class AgentJobExecutor {
             @Nullable String promptDigest,
             Map<String, byte[]> inputFiles,
             int retryCount,
-            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport) {
+            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
+            @Nullable Long reviewedArtifactId) {
         String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, jobId);
-        JsonNode evidenceSnapshot = evidenceSnapshot(inputFiles, automatedReviewReadinessReport);
+        JsonNode evidenceSnapshot = evidenceSnapshot(inputFiles, automatedReviewReadinessReport, reviewedArtifactId);
         Integer updated = transactionTemplate.execute(status -> jobRepository.updateProvenanceDigests(
                 jobId,
                 workerId,
@@ -837,9 +841,11 @@ public class AgentJobExecutor {
         log.debug("Provenance digests: jobId={}, prompt={}, inputs={}", jobId, promptDigest, inputsDigest);
     }
 
-    /** The manifest and admitted practices as the sandbox sees them. */
+    /** The manifest and admitted practices as the sandbox sees them, and the core of the work it staged. */
     private @Nullable JsonNode evidenceSnapshot(
-            Map<String, byte[]> inputFiles, @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport) {
+            Map<String, byte[]> inputFiles,
+            @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
+            @Nullable Long reviewedArtifactId) {
         byte[] manifest = inputFiles.get(SandboxLayout.MANIFEST_PATH);
         byte[] practices = inputFiles.get(SandboxLayout.PRACTICES_PREFIX + "index.json");
         // Java null, not NullNode: NullNode serializes to the JSON value null, which is a non-SQL-NULL
@@ -853,7 +859,24 @@ public class AgentJobExecutor {
         if (practices != null) {
             snapshot.set("practices", objectMapper.readTree(practices));
         }
+        if (reviewedArtifactId != null) {
+            ReviewedWork.captured(manifest, inputFiles, reviewedArtifactId, objectMapper)
+                    .ifPresent(work -> snapshot.set(ReviewedWork.SNAPSHOT_KEY, objectMapper.valueToTree(work)));
+        }
         return snapshot;
+    }
+
+    /** The pull request or issue a review job is about, the id its observations are recorded against. */
+    private static @Nullable Long reviewedArtifactId(AgentJob job) {
+        String key =
+                switch (job.getJobType()) {
+                    case PULL_REQUEST_REVIEW -> "pull_request_id";
+                    case ISSUE_REVIEW -> "issue_id";
+                    case CONVERSATION_REVIEW, DOCUMENT_REVIEW -> null;
+                };
+        JsonNode metadata = job.getMetadata();
+        JsonNode id = key == null || metadata == null ? null : metadata.get(key);
+        return id != null && id.isIntegralNumber() ? id.asLong() : null;
     }
 
     private static SandboxSpec buildSandboxSpec(

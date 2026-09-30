@@ -190,6 +190,26 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
     }
 
     @Test
+    void namesTheReviewBehindAPreparedItemRatherThanTheJobThatComposedIt() {
+        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
+        practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
+        practice = practiceRepository.saveAndFlush(practice);
+        AgentJob review = pullRequestJob();
+        Observation observation = savePullRequestObservation(review, "occ-reviewed", pullRequest.getId());
+        AgentJob composer = pullRequestJob();
+        List<Observation> admitted = router.admit(List.of(observation), workspace.getId(), RoutingContext.author());
+        preparer.prepare(composer.getId(), workspace.getId(), admitted, List.of(conversationUnit(admitted)));
+
+        JsonNode item = contribute().get("preparedConversationFeedback").get(0);
+
+        assertThat(item.get("reviewId").asString()).isEqualTo(review.getId().toString());
+        assertThat(item.get("assessmentStatus").asString()).isEqualTo("ASSESSED");
+        assertThat(item.get("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(item.path("reviewedWork").path("coreCoverage").asString()).isEqualTo("UNKNOWN");
+    }
+
+    @Test
     void aPreparedFactIsWithheldWhenWorkspaceDeliveryPauses() {
         long threadId = seedThread("C-active", "100.0", ConsentState.ACTIVE);
         AgentJob job = conversationJob(threadId);
