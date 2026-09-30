@@ -42,7 +42,8 @@ import tools.jackson.databind.node.ObjectNode;
  * has already authorized. It compares with the mirror, never the provider, and only the fields it names — a match
  * says nothing about comments, checks, approvals, linked work or behaviour. The source the comparison reads must be
  * usable in conversation under the review's contract; anything it cannot establish is {@code UNKNOWN}, and neither
- * text nor digests leave it.
+ * text nor digests leave it. Title and description are compared as one, so a difference there does not say which of
+ * them changed, and a head comparison says nothing about which commit, if any, changed them.
  */
 @Component
 @RequiredArgsConstructor
@@ -125,7 +126,8 @@ class ReviewedWorkCoverage {
         ArrayNode checked = objectMapper.createArrayNode();
         ArtifactKind kind = observation.getArtifactKind();
         Long artifactId = observation.getArtifactId();
-        boolean differs = false;
+        CoreCoverage text = CoreCoverage.UNKNOWN;
+        CoreCoverage head = CoreCoverage.UNKNOWN;
         if ((pullRequest || ArtifactKinds.ISSUE.equals(kind))
                 && kind != null
                 && artifactId != null
@@ -140,9 +142,11 @@ class ReviewedWorkCoverage {
                         && captured.artifactId() == artifactId) {
                     node.put("capturedAt", captured.capturedAt().toString());
                     checked.add("title").add("description");
-                    differs = !captured.titleAndDescriptionRevision()
-                            .equals(ReviewedWork.revision(kind, stored.getTitle(), stored.getBody()));
-                    differs |= compareHead(captured.head(), stored.getHead(), headPermitted, checked);
+                    text = captured.titleAndDescriptionRevision()
+                                    .equals(ReviewedWork.revision(kind, stored.getTitle(), stored.getBody()))
+                            ? CoreCoverage.MATCHES_STORED_WORK
+                            : CoreCoverage.DIFFERS_FROM_STORED_WORK;
+                    head = compareHead(captured.head(), stored.getHead(), headPermitted, checked);
                 }
             } else if (reviewed(capture, pullRequest, artifactId)) {
                 if (capture.getCapturedAt() != null) {
@@ -151,19 +155,25 @@ class ReviewedWorkCoverage {
                 String description = capture.getDescriptionSha256();
                 if (description != null) {
                     checked.add("description");
-                    differs = !description.equals(ReviewedWork.descriptionDigest(stored.getBody()));
+                    // Such a run recorded no title, so a matching description leaves the text unknown.
+                    if (!description.equals(ReviewedWork.descriptionDigest(stored.getBody()))) {
+                        text = CoreCoverage.DIFFERS_FROM_STORED_WORK;
+                    }
                 }
-                differs |= compareHead(
+                head = compareHead(
                         ReviewedWork.headOf(capture.getChangeRange()), stored.getHead(), headPermitted, checked);
             }
         }
         List<String> required = pullRequest ? PULL_REQUEST_FIELDS : ISSUE_FIELDS;
-        CoreCoverage coverage = differs
-                ? CoreCoverage.DIFFERS_FROM_STORED_WORK
-                : checked.valueStream().map(JsonNode::asString).toList().containsAll(required)
-                        ? CoreCoverage.MATCHES_STORED_WORK
-                        : CoreCoverage.UNKNOWN;
+        CoreCoverage coverage =
+                text == CoreCoverage.DIFFERS_FROM_STORED_WORK || head == CoreCoverage.DIFFERS_FROM_STORED_WORK
+                        ? CoreCoverage.DIFFERS_FROM_STORED_WORK
+                        : checked.valueStream().map(JsonNode::asString).toList().containsAll(required)
+                                ? CoreCoverage.MATCHES_STORED_WORK
+                                : CoreCoverage.UNKNOWN;
         node.put("coreCoverage", coverage.name());
+        node.put("titleAndDescriptionCoverage", text.name());
+        node.put("headCoverage", head.name());
         node.set("checkedFields", checked);
         node.put("providerFreshness", "UNKNOWN");
         return node;
@@ -176,13 +186,15 @@ class ReviewedWorkCoverage {
                 && Long.toString(artifactId).equals(capture.getReviewedArtifactId());
     }
 
-    private static boolean compareHead(
+    private static CoreCoverage compareHead(
             @Nullable String capturedHead, @Nullable String storedHead, boolean permitted, ArrayNode checked) {
         if (!permitted || capturedHead == null || storedHead == null) {
-            return false;
+            return CoreCoverage.UNKNOWN;
         }
         checked.add("head");
-        return !capturedHead.equals(storedHead);
+        return capturedHead.equals(storedHead)
+                ? CoreCoverage.MATCHES_STORED_WORK
+                : CoreCoverage.DIFFERS_FROM_STORED_WORK;
     }
 
     private boolean permitted(ReviewedWorkRow capture, SourceKind kind) {

@@ -46,9 +46,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Materialises {@code inputs/context/merge_readiness.json}: for the developer's open authored pull requests, what
- * the provider says about merging and what reviewers wrote. An approval with an empty body is not the whole
- * review — a condition often sits in a general note or an inline thread beside it, and resolving that thread does
- * not show the condition was met. Its description and the issues the provider records it closing, with their bodies,
+ * the provider says about merging and what participants wrote, the work's author included. Each comment carries its
+ * author's relation to the work, from stored identities; a comment is never a review, and only a recorded review
+ * approves or requests changes. An approval with an empty body is not the whole review — a condition often sits in a
+ * general note or an inline thread beside it, and resolving that thread does not show the condition was met. Its description and the issues the provider records it closing, with their bodies,
  * carry conditions too: a closing link says the provider will close the issue on merge, not that the issue's
  * conditions are met, and a stored list can miss a link whose read failed. One that is only listed in
  * {@code notLoaded} is read on demand as {@code inputs/context/merge_readiness/<artifactId>.json}.
@@ -264,6 +265,9 @@ public class MergeReadinessContentSource implements ContentSource {
             }
             ObjectNode entry = reviews.addObject();
             entry.put("reviewer", reviewer.getLogin());
+            if (reviewer.getType() == User.Type.BOT) {
+                entry.put("bot", true);
+            }
             // GitHub keeps a dismissed review's original state beside the flag; a dismissed approval approves nothing.
             if (review.isDismissed() && review.getState() != PullRequestReview.State.DISMISSED) {
                 entry.put("state", PullRequestReview.State.DISMISSED.name());
@@ -298,7 +302,7 @@ public class MergeReadinessContentSource implements ContentSource {
         // Newest first from the query; listed oldest first.
         for (IssueComment note :
                 notes.subList(0, Math.min(notes.size(), MAX_NOTES)).reversed()) {
-            notesCut |= putComment(noteArray, note.getAuthor(), note.getBody(), note.getCreatedAt());
+            notesCut |= putComment(noteArray, pr.getAuthor(), note.getAuthor(), note.getBody(), note.getCreatedAt());
         }
         node.put("generalNotesStatus", notesCut ? "TRUNCATED" : "COMPLETE");
 
@@ -348,7 +352,8 @@ public class MergeReadinessContentSource implements ContentSource {
             ArrayNode shown = entry.putArray("comments");
             for (PullRequestReviewComment comment :
                     comments.subList(0, Math.min(comments.size(), MAX_THREAD_COMMENTS))) {
-                threadsCut |= putComment(shown, comment.getAuthor(), comment.getBody(), comment.getCreatedAt());
+                threadsCut |= putComment(
+                        shown, pr.getAuthor(), comment.getAuthor(), comment.getBody(), comment.getCreatedAt());
             }
         }
         node.put("threadsStatus", threadsCut ? "TRUNCATED" : "COMPLETE");
@@ -413,9 +418,15 @@ public class MergeReadinessContentSource implements ContentSource {
     }
 
     /** @return whether the body was clipped */
-    private static boolean putComment(ArrayNode into, @Nullable User author, String body, @Nullable Instant createdAt) {
+    private static boolean putComment(
+            ArrayNode into,
+            @Nullable User workAuthor,
+            @Nullable User author,
+            String body,
+            @Nullable Instant createdAt) {
         ObjectNode c = into.addObject();
         c.put("author", author == null ? null : author.getLogin());
+        c.put("authorRelation", authorRelation(workAuthor, author));
         if (author != null && author.getType() == User.Type.BOT) {
             c.put("bot", true);
         }
@@ -425,6 +436,16 @@ public class MergeReadinessContentSource implements ContentSource {
             c.put("quotesHephaestusMarker", true);
         }
         return putBody(c, body);
+    }
+
+    /** Whether {@code author} wrote the work itself, by stored identity; unknown when either identity is missing. */
+    private static String authorRelation(@Nullable User workAuthor, @Nullable User author) {
+        Long workAuthorId = workAuthor == null ? null : workAuthor.getId();
+        Long authorId = author == null ? null : author.getId();
+        if (workAuthorId == null || authorId == null) {
+            return "UNKNOWN";
+        }
+        return workAuthorId.equals(authorId) ? "WORK_AUTHOR" : "OTHER_PARTICIPANT";
     }
 
     /** @return whether the body was clipped — a condition past the cut is then unseen */

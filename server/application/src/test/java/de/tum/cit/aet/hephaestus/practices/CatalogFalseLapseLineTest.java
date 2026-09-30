@@ -11,12 +11,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 /**
- * Pins, for each false-lapse pattern the criteria decide, the sentence that places ordinary work on
- * the right side of the line. Patterns a precompute script caused are pinned by its spec instead.
+ * Pins, for each false-lapse or false-credit pattern the criteria decide, the sentence that places the
+ * work on the right side of the line. Patterns a precompute script caused are pinned by its spec instead.
  */
 class CatalogFalseLapseLineTest extends BaseUnitTest {
 
@@ -67,8 +68,18 @@ class CatalogFalseLapseLineTest extends BaseUnitTest {
             engaging-with-inline-review-comments | advice posted with the approval asks nothing | nor when it is advice the reviewer attached to their own approval
             engaging-with-inline-review-comments | the reviewer's settling note closes the loop | the reviewer's own later note saying the point was taken up
             engaging-with-inline-review-comments | a note after the hand-off is uncertain | the only substantive notes were posted after the work merged or closed
+            merges-only-after-approval | a bot's approval is no person's | An approval marked `bot` never makes this cell.
+            merges-only-after-approval | bot-only approvals are the negative | a complete record whose only approvals are marked `bot` is this case
+            merges-only-after-approval | a bot's request for changes does not stand | its request for changes does not stand against another person's approval
+            merges-only-after-approval | a bot's decision still makes the occasion | a decision marked `bot` is still a review decision for this gate
+            merges-only-after-approval | automation comes from the marker, not the login | Whether an account is automated is the captured `bot` marker, never the login's shape
             """)
     void theCriteriaDrawTheLineWhereACarefulReviewerWould(String slug, String pattern, String sentence) {
         assertThat(CRITERIA.get(slug)).as(pattern).contains(sentence);
+    }
+
+    @Test
+    void aDifferentLoginIsNotTakenForAnotherPerson() {
+        assertThat(CRITERIA.get("merges-only-after-approval")).doesNotContain("different logins are different people");
     }
 }

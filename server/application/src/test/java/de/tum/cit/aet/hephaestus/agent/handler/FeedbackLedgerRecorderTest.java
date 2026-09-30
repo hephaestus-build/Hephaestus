@@ -582,10 +582,21 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
     }
 
-    /** Silence stops the note on the work; a gate decision on the work applies to every channel. */
+    /**
+     * A reason that withholds only the note on the work wakes the lanes at once; closed, gone or opted-out work
+     * wakes none. Either way the withheld review is on the ledger.
+     */
     @ParameterizedTest
-    @CsvSource({"INSTANCE_SILENCED,true", "ARTIFACT_CLOSED,false"})
-    void shouldWakeTheLanesOnlyWhenSilentModeSuppressedTheFeedback(FeedbackSuppressionReason reason, boolean wakes) {
+    @CsvSource({
+        "INSTANCE_SILENCED,true",
+        "REPEATS_DELIVERED_NOTE,true",
+        "ARTIFACT_MERGED,true",
+        "ARTIFACT_CLOSED,false",
+        "ARTIFACT_GONE,false",
+        "RECIPIENT_OPTED_OUT,false"
+    })
+    void shouldWakeTheLanesOnlyWhenTheReasonWithholdsJustTheNoteOnTheWork(
+            FeedbackSuppressionReason reason, boolean wakes) {
         Observation bad = problem();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(bad));
@@ -593,6 +604,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         rec.recordSuppressedUnit(job(), new DeliveryContent("body", List.of(), List.of(), null), reason);
 
+        var saved = ArgumentCaptor.forClass(Feedback.class);
+        verify(feedbackRepository).save(saved.capture());
+        assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+        assertThat(saved.getValue().getSuppressionReason()).isEqualTo(reason);
         verify(eventPublisher, wakes ? org.mockito.Mockito.times(1) : org.mockito.Mockito.never())
                 .publishEvent(any(
                         de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
@@ -682,8 +697,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     @Test
     void recordSuppressedUnit_persistsGateReasonAndBody_bindsFindings_noConversationSignal() {
-        // A gate decision applies to every channel, so the whole review collapses to ONE suppressed unit
-        // and the loci must not be re-raised as a conversational signal in a mentor turn.
+        // A closed PR withholds more than the note on the work, so the whole review collapses to ONE suppressed
+        // unit and no lane is woken to re-raise its loci.
         Observation bad = problem();
         Observation good = strength();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
