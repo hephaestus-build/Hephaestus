@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
@@ -224,13 +225,15 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
     @TestConfiguration
     static class Configuration {
         @Bean
-        AgentJobEventListener deferredPullRequestListener(Fixture fixture, SignalRecorder recorder) {
+        AgentJobEventListener deferredPullRequestListener(
+                Fixture fixture, SignalRecorder recorder, IntegrationManifestRegistry manifests) {
             return new AgentJobEventListener(
                     mock(AgentJobService.class),
                     fixture.pullRequests(),
                     mock(PracticeReviewDetectionGate.class),
                     fixture.resolver(),
-                    recorder);
+                    recorder,
+                    manifests);
         }
 
         @Bean

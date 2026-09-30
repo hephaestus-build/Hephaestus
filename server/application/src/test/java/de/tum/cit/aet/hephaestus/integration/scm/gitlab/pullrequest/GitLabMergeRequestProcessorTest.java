@@ -694,15 +694,18 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
 
         @Test
         @DisplayName(
-                "processMerged() sets state to MERGED, isMerged=true, publishes PullRequestClosed(wasMerged=true) and PullRequestMerged")
+                "processMerged() stores the merge and publishes PullRequestClosed(wasMerged=true), leaving the merge to offerMerge")
         void processMergedPublishesEvents() {
             PullRequest pr = createPullRequestEntity();
             // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
+            // The row as the upsert leaves it: merged.
+            PullRequest merged = createPullRequestEntity();
+            merged.setState(Issue.State.MERGED);
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
+                    .thenReturn(Optional.of(merged));
 
             User author = createUserEntity();
             when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
@@ -724,7 +727,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     publishedEvents.stream().anyMatch(e -> e instanceof ScmDomainEvent.PullRequestMerged);
 
             assertThat(hasPullRequestClosed).isTrue();
-            assertThat(hasPullRequestMerged).isTrue();
+            assertThat(hasPullRequestMerged).isFalse();
         }
 
         @Test

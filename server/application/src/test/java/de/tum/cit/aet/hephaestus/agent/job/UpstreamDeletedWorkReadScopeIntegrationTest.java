@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
@@ -111,6 +112,9 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
 
     @Autowired
     private SignalRecorder signalRecorder;
+
+    @Autowired
+    private IntegrationManifestRegistry manifests;
 
     @Autowired
     private AgentJobService agentJobService;
@@ -299,7 +303,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         var jobs = mock(AgentJobService.class);
         var detectionGate = mock(PracticeReviewDetectionGate.class);
         var listener = new AgentJobEventListener(
-                jobs, pullRequestRepository, detectionGate, workspaceResolver, signalRecorder);
+                jobs, pullRequestRepository, detectionGate, workspaceResolver, signalRecorder, manifests);
         tombstonePullRequest();
 
         transactionTemplate.executeWithoutResult(status -> listener.onPullRequestCreated(event));
@@ -318,7 +322,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
                 .thenReturn(decision);
         resubmit(
                 new PullRequestSignalResubmitter(
-                        jobs, pullRequestRepository, detectionGate, signalRecorder, reviewRepository),
+                        jobs, pullRequestRepository, detectionGate, signalRecorder, reviewRepository, manifests),
                 held);
 
         var request = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
@@ -411,7 +415,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
      */
     private PullRequestSignalResubmitter pullRequestResubmitter() {
         return new PullRequestSignalResubmitter(
-                agentJobService, pullRequestRepository, gate, signalRecorder, reviewRepository);
+                agentJobService, pullRequestRepository, gate, signalRecorder, reviewRepository, manifests);
     }
 
     private IssueSignalResubmitter issueResubmitter() {

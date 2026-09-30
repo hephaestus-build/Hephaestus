@@ -47,6 +47,8 @@ export const SIGNAL_STATE_REASON_LABELS: Record<SignalStateReason, string> = {
 	PRACTICE_AUTONOMY_OFF: "Every practice watching this is turned off; raising one lets it run",
 	BUDGET_EXHAUSTED: "The workspace's AI budget was used up; it refills",
 	SUBJECT_UNLINKED: "The author is unknown or not a workspace member yet",
+	MERGE_ACTOR_UNAVAILABLE:
+		"Who merged this is not known yet; the review waits until Hephaestus learns who merged it",
 	MODEL_UNAVAILABLE: "The AI model set for reviews is no longer available",
 	ARTIFACT_NOT_VISIBLE:
 		"This work is not showing on the provider right now; it will be checked again",
