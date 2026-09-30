@@ -109,11 +109,13 @@ public class GitLabGraphQlClientProvider {
         String token = tokenService.getAccessToken(scopeId);
         String serverUrl = tokenService.resolveServerUrl(scopeId);
 
-        return clientFactory
-                .withBearerTokenAndAttribute(
-                        baseClient, serverUrl + GITLAB_GRAPHQL_PATH, token, SCOPE_ID_ATTRIBUTE, scopeId)
-                .mutate()
-                .interceptor(new GraphQlClientInterceptor() {
+        return clientFactory.withBearerTokenAndAttribute(
+                baseClient,
+                serverUrl + GITLAB_GRAPHQL_PATH,
+                token,
+                SCOPE_ID_ATTRIBUTE,
+                scopeId,
+                new GraphQlClientInterceptor() {
                     @Override
                     public Mono<ClientGraphQlResponse> intercept(ClientGraphQlRequest request, Chain chain) {
                         return chain.next(request).flatMap(response -> {
@@ -130,8 +132,7 @@ public class GitLabGraphQlClientProvider {
                                     .thenReturn(response);
                         });
                     }
-                })
-                .build();
+                });
     }
 
     /**

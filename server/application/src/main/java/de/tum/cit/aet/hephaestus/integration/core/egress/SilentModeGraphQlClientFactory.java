@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.egress;
 
+import org.springframework.graphql.client.GraphQlClientInterceptor;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.graphql.support.DocumentSource;
 import org.springframework.http.HttpHeaders;
@@ -41,12 +42,24 @@ public class SilentModeGraphQlClientFactory {
 
     public HttpGraphQlClient withBearerTokenAndAttribute(
             HttpGraphQlClient baseClient, String url, String token, String attributeName, Object attributeValue) {
+        return withBearerTokenAndAttribute(
+                baseClient, url, token, attributeName, attributeValue, new GraphQlClientInterceptor[0]);
+    }
+
+    public HttpGraphQlClient withBearerTokenAndAttribute(
+            HttpGraphQlClient baseClient,
+            String url,
+            String token,
+            String attributeName,
+            Object attributeValue,
+            GraphQlClientInterceptor... responseInterceptors) {
         return baseClient
                 .mutate()
                 .url(url)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .webClient(
                         builder -> builder.defaultRequest(request -> request.attribute(attributeName, attributeValue)))
+                .interceptor(responseInterceptors)
                 .build();
     }
 }

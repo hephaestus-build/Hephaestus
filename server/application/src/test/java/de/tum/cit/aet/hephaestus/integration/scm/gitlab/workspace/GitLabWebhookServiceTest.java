@@ -76,7 +76,8 @@ class GitLabWebhookServiceTest extends BaseUnitTest {
     private ConnectionService connectionService;
 
     @Mock
-    private de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabTokenLifecycleService tokenLifecycle;
+    private ObjectProvider<de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabTokenLifecycleService>
+            tokenLifecycle;
 
     private GitLabWebhookService webhookService;
     private Workspace workspace;

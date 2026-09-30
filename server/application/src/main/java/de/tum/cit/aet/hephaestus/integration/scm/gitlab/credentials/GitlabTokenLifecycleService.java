@@ -20,7 +20,7 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -28,13 +28,14 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 
 /** Inspection and irreversible rotation share the connection lifecycle lock with replacement. */
 @Service
+@ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true")
 @RequiredArgsConstructor
 @Slf4j
 public class GitlabTokenLifecycleService {
     private final ConnectionService connections;
     private final ConnectionRepository repository;
-    private final ObjectProvider<GitLabTokenRotationClient> rotationClients;
-    private final ObjectProvider<GitLabTokenService> tokenServices;
+    private final GitLabTokenRotationClient rotationClient;
+    private final GitLabTokenService tokenService;
     private final GitlabCredentialHealth health;
     private final WebhookProperties properties;
     private final Clock clock;
@@ -44,8 +45,7 @@ public class GitlabTokenLifecycleService {
 
     @Transactional
     public void check(long workspaceId) {
-        var client = rotationClients.getIfAvailable();
-        if (client == null) return;
+        var client = rotationClient;
         var candidate = connections.findActive(workspaceId, IntegrationKind.GITLAB);
         if (candidate.isEmpty()) return;
         var connection = candidate.get();
@@ -115,8 +115,7 @@ public class GitlabTokenLifecycleService {
     @TransactionalEventListener
     public void onReplaced(ConnectionCredentialsReplacedEvent event) {
         if (event.kind() == IntegrationKind.GITLAB) {
-            var service = tokenServices.getIfAvailable();
-            if (service != null) service.invalidateCache(event.workspaceId());
+            tokenService.invalidateCache(event.workspaceId());
         }
     }
 }

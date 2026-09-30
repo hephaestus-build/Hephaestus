@@ -224,17 +224,8 @@ class GitlabTokenLifecycleIntegrationTest extends AbstractWorkspaceIntegrationTe
         var tokens = mock(GitLabTokenService.class);
         when(tokens.getAccessToken(workspace)).thenReturn("graphql");
         when(tokens.resolveServerUrl(workspace)).thenReturn("https://gitlab.com");
-        var factory = mock(SilentModeGraphQlClientFactory.class);
-        when(factory.withBearerTokenAndAttribute(
-                        base,
-                        "https://gitlab.com/api/graphql",
-                        "graphql",
-                        GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE,
-                        workspace))
-                .thenReturn(base.mutate()
-                        .url("https://gitlab.com/api/graphql")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer graphql")
-                        .build());
+        var factory = new SilentModeGraphQlClientFactory(
+                mock(de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlInterceptor.class));
         var provider = new GitLabGraphQlClientProvider(
                 base,
                 tokens,

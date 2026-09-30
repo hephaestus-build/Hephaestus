@@ -26,6 +26,8 @@ import org.springframework.test.context.bean.override.mockito.MockitoBeans;
 class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
+            assignment(
+                    "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
             assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
@@ -56,6 +58,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"));
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
+            Map.entry(
+                    "gitlab-token-lifecycle",
+                    "real credential storage, lifecycle locks and attention with only irreversible upstream token rotation mocked"),
             Map.entry("base", "shared PostgreSQL, HTTP, security, and application acceptance context"),
             Map.entry(
                     "email-capture",
@@ -121,6 +126,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> DIRTY_CONTEXT_TESTS = Set.of();
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
             "integration.slack.SlackConsentLifecycleE2EIntegrationTest");
 
@@ -170,7 +176,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
         Set<String> mergedKeys =
                 fullContextTests.stream().map(this::mergedContextKey).collect(Collectors.toCollection(TreeSet::new));
-        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(15);
+        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(16);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.keySet()).isEqualTo(mergedKeys);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.values())
                 .allSatisfy(reason -> assertThat(reason).isNotBlank());

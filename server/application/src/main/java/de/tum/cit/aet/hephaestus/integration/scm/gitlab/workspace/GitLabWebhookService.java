@@ -59,7 +59,7 @@ public class GitLabWebhookService {
     private final GitLabRouteCredential routeCredential;
     private final WorkspaceRepository workspaceRepository;
     private final ConnectionService connectionService;
-    private final GitlabTokenLifecycleService tokenLifecycle;
+    private final ObjectProvider<GitlabTokenLifecycleService> tokenLifecycle;
 
     public GitLabWebhookService(
             ObjectProvider<GitLabWebhookClient> webhookClientProvider,
@@ -67,7 +67,7 @@ public class GitLabWebhookService {
             GitLabRouteCredential routeCredential,
             WorkspaceRepository workspaceRepository,
             ConnectionService connectionService,
-            GitlabTokenLifecycleService tokenLifecycle) {
+            ObjectProvider<GitlabTokenLifecycleService> tokenLifecycle) {
         this.webhookClientProvider = webhookClientProvider;
         this.webhookProperties = webhookProperties;
         this.routeCredential = routeCredential;
@@ -86,7 +86,8 @@ public class GitLabWebhookService {
      * @param workspace the workspace to check
      */
     public void rotateTokenIfNeeded(Workspace workspace) {
-        tokenLifecycle.check(workspace.getId());
+        var lifecycle = tokenLifecycle.getIfAvailable();
+        if (lifecycle != null) lifecycle.check(workspace.getId());
     }
 
     /** Whether this deployment registers group webhooks: GitLab is enabled and a webhook URL and secret are set. */

@@ -253,13 +253,14 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         @Test
         void tokenServicesInSecurityPackages() {
             ArchCondition<JavaClass> beInTokenAppropriatePackage =
-                    new ArchCondition<>("be in security, auth, app, common, or github package") {
+                    new ArchCondition<>("be in security, credentials, auth, app, common, or github package") {
                         @Override
                         public void check(JavaClass javaClass, ConditionEvents events) {
                             String packageName = javaClass.getPackageName();
                             boolean isInAppropriatePackage = packageName.contains(".app")
                                     || packageName.contains(".auth")
                                     || packageName.contains(".security")
+                                    || packageName.contains(".credentials")
                                     || packageName.contains(".common")
                                     || packageName.contains(".github");
 
@@ -267,7 +268,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                                 events.add(SimpleConditionEvent.violated(
                                         javaClass,
                                         String.format(
-                                                "%s handles tokens but is not in app/auth/security/common/github package",
+                                                "%s handles tokens but is not in app/auth/security/credentials/common/github package",
                                                 javaClass.getSimpleName())));
                             }
                         }
@@ -407,6 +408,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // reconcileSyncTargetIdentity refreshes the scope consumer after a
                     // rename re-key
                     "GitLabWorkspaceInitializationService", // Optional GitLab beans gated by @ConditionalOnProperty
+                    "GitlabCredentialHealthFilter", // Breaks WebClient builder -> health -> connection strategies ->
+                    // GitLab clients -> builder
                     "GitLabWebhookService", // Optional GitLab beans gated by @ConditionalOnProperty
                     "GitLabUserService", // Always present for the GitLab processors; its GraphQL client beans exist
                     // only
