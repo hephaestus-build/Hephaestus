@@ -104,7 +104,8 @@ export const Default: Story = {
 		await expect(
 			within(table).getByText("The review ended before reaching this practice."),
 		).toBeVisible();
-		await expect(screen.getByText("4 practices.")).toBeVisible();
+		// The unfiltered table states no count: the tab already carries it.
+		await expect(screen.queryByText(/^\d+ practices?\.$/u)).toBeNull();
 		await expect(screen.getByText("3 of 4 practices reached")).toBeVisible();
 		// The operating facts are the admin's.
 		await expect(screen.queryByText(/^Rests on/u)).toBeNull();
