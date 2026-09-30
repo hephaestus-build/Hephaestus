@@ -1,15 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
-import de.tum.cit.aet.hephaestus.agent.AgentJobType;
-import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
-import de.tum.cit.aet.hephaestus.agent.context.providers.IssueContentSource;
-import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MentorContextQueryRepository.StoredWork;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewedWorkRow;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewedWorkComparison;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
-import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -31,8 +26,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.core.JacksonException;
-import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -55,11 +48,6 @@ class ReviewedWorkCoverage {
         UNKNOWN,
     }
 
-    private static final String DESCRIPTION_PATH = "$.manifest.sources[*] ? (@.state.availability == \"AVAILABLE\""
-            + " && (@.kind == \"" + PullRequestContentSource.CORE + "\" || @.kind == \"" + IssueContentSource.CORE
-            + "\")).artifacts[*] ? (@.path == \"" + PullRequestContentSource.DESCRIPTION_FILE + "\").sha256";
-    private static final String CHANGE_PATH = "$.manifest.sources[*] ? (@.kind == \"" + PullRequestContentSource.DIFF
-            + "\" && @.state.availability == \"AVAILABLE\").state.facts.immutableIdentity";
     private static final List<String> PULL_REQUEST_FIELDS = List.of("title", "description", "head");
     private static final List<String> ISSUE_FIELDS = List.of("title", "description");
 
@@ -92,7 +80,13 @@ class ReviewedWorkCoverage {
         }
         Map<UUID, ReviewedWorkRow> captures = jobIds.isEmpty()
                 ? Map.of()
-                : jobRepository.findReviewedWork(workspaceId, jobIds, DESCRIPTION_PATH, CHANGE_PATH).stream()
+                : jobRepository
+                        .findReviewedWork(
+                                workspaceId,
+                                jobIds,
+                                ReviewedWorkComparison.DESCRIPTION_PATH,
+                                ReviewedWorkComparison.CHANGE_PATH)
+                        .stream()
                         .collect(Collectors.toMap(ReviewedWorkRow::getId, Function.identity()));
         Optional<Long> providerId =
                 jobIds.isEmpty() ? Optional.empty() : actorSelector.connectedProviderId(workspaceId);
@@ -123,102 +117,47 @@ class ReviewedWorkCoverage {
             @Nullable StoredWork stored,
             boolean pullRequest) {
         ObjectNode node = objectMapper.createObjectNode();
-        ArrayNode checked = objectMapper.createArrayNode();
         ArtifactKind kind = observation.getArtifactKind();
         Long artifactId = observation.getArtifactId();
-        CoreCoverage text = CoreCoverage.UNKNOWN;
-        CoreCoverage head = CoreCoverage.UNKNOWN;
-        if ((pullRequest || ArtifactKinds.ISSUE.equals(kind))
-                && kind != null
-                && artifactId != null
-                && capture != null
-                && stored != null
-                && permitted(capture, pullRequest ? PullRequestContentSource.CORE : IssueContentSource.CORE)) {
-            boolean headPermitted = pullRequest && permitted(capture, PullRequestContentSource.DIFF);
-            if (capture.getReviewedWork() != null) {
-                ReviewedWork captured = parse(capture.getReviewedWork());
-                if (captured != null
-                        && kind.value().equals(captured.artifactKind())
-                        && captured.artifactId() == artifactId) {
-                    node.put("capturedAt", captured.capturedAt().toString());
-                    checked.add("title").add("description");
-                    text = captured.titleAndDescriptionRevision()
-                                    .equals(ReviewedWork.revision(kind, stored.getTitle(), stored.getBody()))
-                            ? CoreCoverage.MATCHES_STORED_WORK
-                            : CoreCoverage.DIFFERS_FROM_STORED_WORK;
-                    head = compareHead(captured.head(), stored.getHead(), headPermitted, checked);
-                }
-            } else if (reviewed(capture, pullRequest, artifactId)) {
-                if (capture.getCapturedAt() != null) {
-                    node.put("capturedAt", capture.getCapturedAt());
-                }
-                String description = capture.getDescriptionSha256();
-                if (description != null) {
-                    checked.add("description");
-                    // Such a run recorded no title, so a matching description leaves the text unknown.
-                    if (!description.equals(ReviewedWork.descriptionDigest(stored.getBody()))) {
-                        text = CoreCoverage.DIFFERS_FROM_STORED_WORK;
-                    }
-                }
-                head = compareHead(
-                        ReviewedWork.headOf(capture.getChangeRange()), stored.getHead(), headPermitted, checked);
-            }
+        ReviewedWorkComparison comparison = kind == null || artifactId == null || stored == null
+                ? ReviewedWorkComparison.NOTHING_COMPARED
+                : ReviewedWorkComparison.of(
+                        capture,
+                        kind,
+                        artifactId,
+                        stored.getTitle(),
+                        stored.getBody(),
+                        stored.getHead(),
+                        SourceUsePurpose.CONVERSATIONAL_MENTORING,
+                        sourceCatalogs,
+                        objectMapper);
+        if (comparison.capturedAt() != null) {
+            node.put("capturedAt", comparison.capturedAt());
         }
         List<String> required = pullRequest ? PULL_REQUEST_FIELDS : ISSUE_FIELDS;
-        CoreCoverage coverage =
-                text == CoreCoverage.DIFFERS_FROM_STORED_WORK || head == CoreCoverage.DIFFERS_FROM_STORED_WORK
-                        ? CoreCoverage.DIFFERS_FROM_STORED_WORK
-                        : checked.valueStream().map(JsonNode::asString).toList().containsAll(required)
-                                ? CoreCoverage.MATCHES_STORED_WORK
-                                : CoreCoverage.UNKNOWN;
+        CoreCoverage coverage = comparison.differs()
+                ? CoreCoverage.DIFFERS_FROM_STORED_WORK
+                : comparison.checkedFields().containsAll(required)
+                        ? CoreCoverage.MATCHES_STORED_WORK
+                        : CoreCoverage.UNKNOWN;
         node.put("coreCoverage", coverage.name());
-        node.put("titleAndDescriptionCoverage", text.name());
-        node.put("headCoverage", head.name());
+        node.put(
+                "titleAndDescriptionCoverage",
+                coverage(comparison.titleAndDescription()).name());
+        node.put("headCoverage", coverage(comparison.head()).name());
+        ArrayNode checked = objectMapper.createArrayNode();
+        comparison.checkedFields().forEach(checked::add);
         node.set("checkedFields", checked);
         node.put("providerFreshness", "UNKNOWN");
         return node;
     }
 
-    /** Whether a run from before {@code reviewedWork} was recorded reviewed this very pull request or issue. */
-    private static boolean reviewed(ReviewedWorkRow capture, boolean pullRequest, long artifactId) {
-        AgentJobType expected = pullRequest ? AgentJobType.PULL_REQUEST_REVIEW : AgentJobType.ISSUE_REVIEW;
-        return expected.name().equals(capture.getJobType())
-                && Long.toString(artifactId).equals(capture.getReviewedArtifactId());
-    }
-
-    private static CoreCoverage compareHead(
-            @Nullable String capturedHead, @Nullable String storedHead, boolean permitted, ArrayNode checked) {
-        if (!permitted || capturedHead == null || storedHead == null) {
-            return CoreCoverage.UNKNOWN;
-        }
-        checked.add("head");
-        return capturedHead.equals(storedHead)
-                ? CoreCoverage.MATCHES_STORED_WORK
-                : CoreCoverage.DIFFERS_FROM_STORED_WORK;
-    }
-
-    private boolean permitted(ReviewedWorkRow capture, SourceKind kind) {
-        String version = capture.getContractVersion();
-        if (version == null) {
-            return false;
-        }
-        try {
-            return sourceCatalogs.isSourceUsePermitted(
-                    new SourceContractVersion(version), kind, SourceUsePurpose.CONVERSATIONAL_MENTORING);
-        } catch (IllegalArgumentException unknownContract) {
-            return false;
-        }
-    }
-
-    private @Nullable ReviewedWork parse(@Nullable String json) {
-        if (json == null) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(json, ReviewedWork.class);
-        } catch (JacksonException | IllegalArgumentException malformed) {
-            return null;
-        }
+    private static CoreCoverage coverage(ReviewedWorkComparison.Field field) {
+        return switch (field) {
+            case MATCHES -> CoreCoverage.MATCHES_STORED_WORK;
+            case DIFFERS -> CoreCoverage.DIFFERS_FROM_STORED_WORK;
+            case UNKNOWN -> CoreCoverage.UNKNOWN;
+        };
     }
 
     private static Map<Long, StoredWork> byId(List<StoredWork> rows) {

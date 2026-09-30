@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
+import de.tum.cit.aet.hephaestus.practices.spi.RevisedWorkLookup;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.util.List;
@@ -45,6 +46,7 @@ public class PracticeReviewDetectionGate {
     private final AutomatedReviewFence fence;
     private final ObservationRepository observations;
     private final ObservationVisibilityPolicy observationVisibility;
+    private final RevisedWorkLookup revisedWork;
 
     public PracticeReviewDetectionGate(
             PracticeReviewReadiness practiceDetectionReadiness,
@@ -54,7 +56,8 @@ public class PracticeReviewDetectionGate {
             PracticeReviewCoverageService coverageService,
             AutomatedReviewFence fence,
             ObservationRepository observations,
-            ObservationVisibilityPolicy observationVisibility) {
+            ObservationVisibilityPolicy observationVisibility,
+            RevisedWorkLookup revisedWork) {
         this.practiceDetectionReadiness = practiceDetectionReadiness;
         this.practiceRepository = practiceRepository;
         this.workspaceResolver = workspaceResolver;
@@ -63,6 +66,7 @@ public class PracticeReviewDetectionGate {
         this.fence = fence;
         this.observations = observations;
         this.observationVisibility = observationVisibility;
+        this.revisedWork = revisedWork;
     }
 
     public GateDecision evaluate(
@@ -223,9 +227,12 @@ public class PracticeReviewDetectionGate {
 
     /**
      * The practices whose current word on this pull request is a problem of its author's, whatever occasion
-     * they are bound to. The claim is read the way every current read
+     * they are bound to, once the work has changed since that word. The claim is read the way every current read
      * reads it — each claim's latest run, then currentness, invalidation and evidence authorization — so a
-     * later positive or abstention stands and a withdrawn verdict starts nothing.
+     * later positive or abstention stands and a withdrawn verdict starts nothing. The work has changed only where
+     * the run that recorded it captured a different title, description or head than the pull request holds now: an
+     * occasion that settles after a review already read this very work, or a capture that cannot be compared, admits
+     * no repair.
      */
     private Set<Long> practicesToRecheck(
             Issue reviewable,
@@ -235,7 +242,7 @@ public class PracticeReviewDetectionGate {
             TriggerMode triggerMode,
             ReviewSubject subject) {
         Long authorId = subject.actorId();
-        if (!(reviewable instanceof PullRequest)
+        if (!(reviewable instanceof PullRequest pullRequest)
                 || !reviewable.isOpen()
                 || draft
                 || triggerMode != TriggerMode.AUTO
@@ -252,8 +259,21 @@ public class PracticeReviewDetectionGate {
         }
         Set<UUID> current = observationVisibility.permitsAll(
                 workspace.getId(), negative, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
-        return negative.stream()
+        List<Observation> standing = negative.stream()
                 .filter(observation -> current.contains(observation.getId()))
+                .toList();
+        if (standing.isEmpty()) {
+            return Set.of();
+        }
+        Set<UUID> revised = revisedWork.recordedOnOtherWork(
+                workspace.getId(),
+                pullRequest.getId(),
+                pullRequest.getTitle(),
+                pullRequest.getBody(),
+                pullRequest.getHeadRefOid(),
+                standing);
+        return standing.stream()
+                .filter(observation -> revised.contains(observation.getId()))
                 .map(observation -> observation.getPractice().getId())
                 .collect(Collectors.toSet());
     }

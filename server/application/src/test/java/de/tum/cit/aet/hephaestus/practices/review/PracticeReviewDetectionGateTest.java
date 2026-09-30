@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
+import de.tum.cit.aet.hephaestus.practices.spi.RevisedWorkLookup;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceFeatures;
@@ -79,7 +80,8 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                 coverageService,
                 new AutomatedReviewFence(java.util.Map.of()),
                 mock(ObservationRepository.class),
-                mock(ObservationVisibilityPolicy.class));
+                mock(ObservationVisibilityPolicy.class),
+                mock(RevisedWorkLookup.class));
         when(coverageService.assess(
                         any(Workspace.class),
                         nullable(String.class),
@@ -931,7 +933,8 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                                     null,
                                     null))),
                     mock(ObservationRepository.class),
-                    mock(ObservationVisibilityPolicy.class));
+                    mock(ObservationVisibilityPolicy.class),
+                    mock(RevisedWorkLookup.class));
             PullRequest pr = createPullRequest();
             Practice adopted = createPractice(SIGNAL);
             adopted.setSlug("withdrawn");

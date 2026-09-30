@@ -9,6 +9,9 @@ import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
@@ -34,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -60,12 +64,15 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * A merge request whose author answered a problem — by editing the description or pushing — is reviewed again
@@ -74,6 +81,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
     private static final String REPO = "org/repair-repo";
+    private static final String HEAD_1 = "1".repeat(40);
+    private static final String HEAD_2 = "2".repeat(40);
+    private static final String EXPLAINED = "Adds the thing because reviewers could not tell why";
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -129,6 +139,9 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     @Autowired
     private SignalLedgerProperties ledgerProperties;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     private Workspace workspace;
     private User developer;
     private Repository repository;
@@ -173,8 +186,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     void shouldRecheckOnlyTheOpenProblemOnceWhenTheDescriptionIsRepairedAtTheSameHead() {
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         Practice sized = practice("scope-one-reviewable-change", ScmSignals.PULL_REQUEST_OPENED);
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing");
-        AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         observe(sized, opened, pr.getId(), developer, ObservationKind.DEMONSTRATED_STRENGTH, null, NOW);
 
@@ -212,11 +225,11 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     void shouldReviewAPushTogetherWithAnEditAsOnePushReviewThatAlsoRechecks() {
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing");
-        AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
 
-        push("head-2");
+        push(HEAD_2);
         edit("Adds the thing because reviewers could not tell why", Set.of("body"));
         settle(pr);
 
@@ -235,13 +248,13 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     @Test
     void shouldReviewADescriptionWrittenAgainAfterAPushChangedTheWork() {
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing");
-        AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         String explained = "Adds the thing because reviewers could not tell why";
         edit(explained, Set.of("body"));
         settle(pr);
-        push("head-2");
+        push(HEAD_2);
         settle(pr);
         edit("Adds the thing", Set.of("body"));
         settle(pr);
@@ -263,8 +276,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     @Test
     void shouldHoldAnOlderPushForAnEditThatCommitsWhileTheGroupIsDrained() throws Exception {
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing");
-        AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         SignalKey olderPush = currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
         Instant quietSince =
@@ -280,7 +293,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 pullRequestRepository
                         .findForUpdateByRepositoryIdAndNumber(repository.getId(), pr.getNumber())
                         .orElseThrow();
-                upsert(false, "head-1", "Adds the thing because reviewers could not tell why");
+                upsert(false, HEAD_1, "Adds the thing because reviewers could not tell why");
                 listener.onPullRequestUpdated(new ScmDomainEvent.PullRequestUpdated(
                         ScmEventPayload.PullRequestData.from(reload()), Set.of("body"), liveContext()));
                 editWritten.countDown();
@@ -316,7 +329,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     void shouldRefuseAReofferedOccasionWhoseRepositoryAnotherWorkspaceNowMonitors() {
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing");
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
         SignalKey queued = pending(pr, ScmSignals.PULL_REQUEST_OPENED);
         workspace.setAccountLogin("elsewhere");
         workspace = workspaceRepository.save(workspace);
@@ -341,8 +354,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     void shouldHoldAReofferedPushForANewerEditAndThenReviewThemOnce() {
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing");
-        AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         SignalKey heldPush = pending(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
         edit("Adds the thing because reviewers could not tell why", Set.of("body"));
@@ -367,8 +380,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     @Test
     void shouldSettleAReofferedEditBehindAMergeThatCommitsWhileItWaits() throws Exception {
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing because reviewers could not tell why");
-        AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing because reviewers could not tell why");
+        AgentJob opened = capturedReview(NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         SignalKey queued = pending(pr, ScmSignals.PULL_REQUEST_EDITED);
         CountDownLatch mergeWritten = new CountDownLatch(1);
@@ -408,13 +421,13 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice answered = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         Practice withdrawn = practice("links-the-change-to-its-issue", ScmSignals.PULL_REQUEST_OPENED);
         Practice unanswered = practice("states-how-to-verify-the-change", ScmSignals.PULL_REQUEST_OPENED);
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing");
-        AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
         observe(answered, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         UUID invalid =
                 observe(withdrawn, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         observe(unanswered, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
-        AgentJob ready = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW.plusSeconds(60));
+        AgentJob ready = capturedReview(NOW.plusSeconds(60));
         observe(
                 answered,
                 ready,
@@ -425,6 +438,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 NOW.plusSeconds(60));
         invalidationRepository.save(new ObservationInvalidation(
                 observationRepository.findById(invalid).orElseThrow(), 1L, "Wrong when made", NOW.plusSeconds(90)));
+        upsert(false, HEAD_1, EXPLAINED);
+        pr = reload();
 
         assertThat(rechecked(revision(pr))).containsExactly("states-how-to-verify-the-change");
         assertThat(gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO))
@@ -437,10 +452,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     void shouldStillRecheckAProblemThatALaterRunRecordedNothingForButNotOnDraftOrMergedWork() {
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         Practice sized = practice("scope-one-reviewable-change", ScmSignals.PULL_REQUEST_OPENED);
-        PullRequest pr = pullRequest(false, "head-1", "Adds the thing");
-        AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
-        AgentJob recheck = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW.plusSeconds(60));
+        AgentJob recheck = capturedReview(NOW.plusSeconds(60));
         observe(
                 sized,
                 recheck,
@@ -449,6 +464,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 ObservationKind.DEMONSTRATED_STRENGTH,
                 null,
                 NOW.plusSeconds(60));
+        upsert(false, HEAD_1, EXPLAINED);
+        pr = reload();
 
         assertThat(rechecked(revision(pr))).containsExactly("describe-what-and-why");
         pr.setDraft(true);
@@ -456,6 +473,127 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         pr.setDraft(false);
         pr.setState(Issue.State.MERGED);
         assertThat(revision(pr)).isInstanceOf(GateDecision.Skip.class);
+    }
+
+    /**
+     * An edit that waited out its quiet period while a review read the edited work: that review's problem was
+     * recorded on this very work, so the edit rechecks nothing, while a practice the edit is an occasion for runs.
+     */
+    @Test
+    void shouldRecheckNothingWhenADeferredEditSettlesAfterAReviewAlreadyReadThatWork() {
+        Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
+        practice("states-how-to-verify-the-change", ScmSignals.PULL_REQUEST_EDITED);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        edit(EXPLAINED, Set.of("body"));
+        AgentJob ready = capturedReview(NOW);
+        observe(describe, ready, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+
+        settle(pr);
+
+        AgentJob review = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_EDITED)));
+        assertThat(signalOf(review)).isEqualTo(ScmSignals.PULL_REQUEST_EDITED.value());
+        assertThat(Objects.requireNonNull(review.getMetadata()).has(AgentJob.RECHECKED_PRACTICES_METADATA_KEY))
+                .isFalse();
+        assertThat(jobsOf(workspace)).containsExactlyInAnyOrder(ready.getId(), review.getId());
+    }
+
+    @Test
+    void shouldAdmitNoRepairJobWhenTheOnlyProblemWasRecordedOnTheWorkAsItStands() {
+        Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        edit(EXPLAINED, Set.of("body"));
+        AgentJob ready = capturedReview(NOW);
+        observe(describe, ready, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+
+        settle(pr);
+
+        assertThat(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_EDITED)).getJobId())
+                .isNull();
+        assertThat(jobsOf(workspace)).containsExactly(ready.getId());
+    }
+
+    @Test
+    void shouldRecheckAProblemWhenOnlyTheHeadMovedSinceItWasRecorded() {
+        Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
+        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+
+        push(HEAD_2);
+        settle(pr);
+
+        AgentJob review =
+                jobOf(signalsOf(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED).getFirst());
+        assertThat(recheckedOf(review)).isEqualTo("[\"describe-what-and-why\"]");
+    }
+
+    @Test
+    void shouldRecheckOnlyTheProblemsRecordedOnWorkThatHasSinceChanged() {
+        Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
+        Practice verify = practice("states-how-to-verify-the-change", ScmSignals.PULL_REQUEST_OPENED);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
+        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        upsert(false, HEAD_1, EXPLAINED);
+        AgentJob ready = capturedReview(NOW.plusSeconds(60));
+        observe(
+                verify,
+                ready,
+                pr.getId(),
+                developer,
+                ObservationKind.OMISSION_GAP,
+                Severity.MINOR,
+                NOW.plusSeconds(60));
+
+        assertThat(rechecked(revision(reload()))).containsExactly("describe-what-and-why");
+    }
+
+    /** A held-back occasion re-offered once the work has moved past what the problem's review read. */
+    @Test
+    void shouldRecheckFromAReofferedOccasionWhenTheWorkHasSinceChanged() {
+        Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob opened = capturedReview(NOW);
+        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        upsert(false, HEAD_1, EXPLAINED);
+        SignalKey held = pending(pr, ScmSignals.PULL_REQUEST_EDITED);
+
+        reoffer();
+
+        AgentJob review = jobOf(rowOf(held));
+        assertThat(recheckedOf(review)).isEqualTo("[\"describe-what-and-why\"]");
+    }
+
+    @Test
+    void shouldRecheckNoProblemWhoseReviewCaptureCannotBeCompared() {
+        Practice absent = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
+        Practice malformed = practice("states-how-to-verify-the-change", ScmSignals.PULL_REQUEST_OPENED);
+        Practice foreign = practice("links-the-change-to-its-issue", ScmSignals.PULL_REQUEST_OPENED);
+        PullRequest pr = pullRequest(false, HEAD_1, "Adds the thing");
+        AgentJob uncaptured = reviewWith(NOW, null);
+        observe(absent, uncaptured, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        // The manifest alone would show the description changed; a malformed identity must not fall back to it.
+        ObjectNode broken = snapshot(ReviewedWorkFixtures.pullRequestManifest(NOW, "Adds the thing", HEAD_1), null);
+        broken.putObject(ReviewedWork.SNAPSHOT_KEY)
+                .put("artifactKind", ArtifactKinds.PULL_REQUEST.value())
+                .put("artifactId", pr.getId())
+                .put("titleAndDescriptionRevision", "not-a-digest")
+                .put("head", "not-a-commit")
+                .put("capturedAt", NOW.toString());
+        AgentJob garbled = reviewWith(NOW, broken);
+        observe(malformed, garbled, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        Workspace other = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("repair-recheck-other"));
+        AgentJob elsewhere = capturedReview(NOW);
+        elsewhere.setWorkspace(other);
+        elsewhere = agentJobRepository.save(elsewhere);
+        observe(foreign, elsewhere, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        upsert(false, HEAD_1, EXPLAINED);
+
+        // Nothing is rechecked, and nothing is bound to the edit itself, so no review starts at all.
+        assertThat(revision(reload()))
+                .isInstanceOfSatisfying(
+                        GateDecision.Skip.class,
+                        skip -> assertThat(skip.reason()).isEqualTo("no matching practices"));
     }
 
     private void bindModel(Workspace workspace) {
@@ -482,6 +620,41 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         binding.setWorkspaceModel(model);
         binding.setTimeoutSeconds(300);
         bindingRepository.save(binding);
+    }
+
+    /** A review of the pull request as it stands now, recording the title, description and head it read. */
+    private AgentJob capturedReview(Instant completedAt) {
+        PullRequest read = reload();
+        return reviewWith(
+                completedAt,
+                snapshot(
+                        ReviewedWorkFixtures.pullRequestManifest(completedAt, read.getBody(), read.getHeadRefOid()),
+                        new ReviewedWork(
+                                ArtifactKinds.PULL_REQUEST.value(),
+                                read.getId(),
+                                ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, read.getTitle(), read.getBody()),
+                                read.getHeadRefOid(),
+                                completedAt)));
+    }
+
+    /** A review whose snapshot is {@code snapshot}, or the seed's own when null: a contract and no capture. */
+    private AgentJob reviewWith(Instant completedAt, @Nullable ObjectNode snapshot) {
+        PullRequest read = reload();
+        AgentJob job = persistPullRequestReview(workspace, read.getNumber(), read.getId(), completedAt);
+        if (snapshot == null) {
+            return job;
+        }
+        job.setEvidenceSnapshot(snapshot);
+        return agentJobRepository.save(job);
+    }
+
+    private ObjectNode snapshot(ArtifactSourceManifest manifest, @Nullable ReviewedWork work) {
+        ObjectNode snapshot = objectMapper.createObjectNode();
+        snapshot.set("manifest", objectMapper.valueToTree(manifest));
+        if (work != null) {
+            snapshot.set(ReviewedWork.SNAPSHOT_KEY, objectMapper.valueToTree(work));
+        }
+        return snapshot;
     }
 
     private Practice practice(String slug, SignalName occasion) {

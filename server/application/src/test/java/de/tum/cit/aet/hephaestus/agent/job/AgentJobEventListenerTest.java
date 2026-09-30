@@ -46,6 +46,7 @@ import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
+import de.tum.cit.aet.hephaestus.practices.spi.RevisedWorkLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.UserRoleChecker;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -902,7 +903,8 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                         coverageService,
                         new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
                         mock(ObservationRepository.class),
-                        mock(ObservationVisibilityPolicy.class));
+                        mock(ObservationVisibilityPolicy.class),
+                        mock(RevisedWorkLookup.class));
                 // One resolver for both, as in production: the ledger key and the gate must agree on which
                 // workspace owns the repository.
                 var listener = new AgentJobEventListener(
