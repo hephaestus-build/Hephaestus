@@ -465,18 +465,20 @@ public class FeedbackLedgerRecorder {
      * kept for audit. Without it, a gate-withheld review reads exactly like one that was delivered and ignored.
      *
      * <p>Publishes the lane trigger when the reason concerns only the note on the work:
-     * {@link FeedbackSuppressionReason#INSTANCE_SILENCED}, which stops what leaves the instance, and
-     * {@link FeedbackSuppressionReason#REPEATS_DELIVERED_NOTE}, whose words are already there. The developer's
-     * own pages and conversations are then prepared now rather than when the hourly sweeper next passes, each
-     * under its own policy. Every other gate decision (closed PR, opted-out author) applies to every channel, so
-     * those loci must not resurface anywhere. No-ops when a DELIVERED feedback already exists for the job or on
-     * retry. REQUIRES_NEW, best-effort: callers wrap in try/catch.
+     * {@link FeedbackSuppressionReason#INSTANCE_SILENCED}, which stops what leaves the instance,
+     * {@link FeedbackSuppressionReason#REPEATS_DELIVERED_NOTE}, whose words are already there, and
+     * {@link FeedbackSuppressionReason#ARTIFACT_MERGED}, which the delivery policy gives only for a note on the
+     * merged work. The developer's own pages and conversations are then prepared now rather than when the hourly
+     * sweeper next passes, each under its own policy. Any other reason wakes nothing; the lanes' own policies
+     * decide their channels. No-ops when a DELIVERED feedback already exists for the job or on retry.
+     * REQUIRES_NEW, best-effort: callers wrap in try/catch.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuppressedUnit(AgentJob job, DeliveryContent delivery, FeedbackSuppressionReason reason) {
         recordSuppressedUnitInCurrentTransaction(job, delivery, reason);
         if (reason == FeedbackSuppressionReason.INSTANCE_SILENCED
-                || reason == FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE) {
+                || reason == FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE
+                || reason == FeedbackSuppressionReason.ARTIFACT_MERGED) {
             publishFeedbackLaneTrigger(job);
         }
     }
