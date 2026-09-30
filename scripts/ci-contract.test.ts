@@ -792,7 +792,7 @@ void describe("CI contract", () => {
 		assert.equal((e2e.match(/actions\/download-artifact@/gu) ?? []).length, 1);
 		assert.match(e2e, /name: Upload diagnostics\s+if: always\(\)/u);
 		assert.match(e2e, /e2e-server\.log/u);
-		assert.match(e2e, /http:\/\/localhost:8080\/actuator\/health\/readiness/u);
+		assert.match(e2e, /http:\/\/localhost:8080\/readyz/u);
 		assert.doesNotMatch(e2e, /actuator\/health\/liveness/u);
 		const image = job(orchestrator, "application-server-image");
 		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/u);
@@ -2994,4 +2994,47 @@ void test("CI does not run CodeQL analysis or retain extraction-only compiler ex
 	const build = await readFile("server/application/build.gradle.kts", "utf8");
 	assert.match(build, /error\("NullAway", "RequireExplicitNullMarking"\)/u);
 	assert.match(build, /"-Werror"/u);
+});
+
+void test("workflows do not comment on hard-coded issue numbers", async () => {
+	const hardCodedComment =
+		/\bgh(?:\s+(?:--repo|-R)\s+\S+)?\s+issue\s+comment(?:\s+(?:--repo|-R|--body|-b|--body-file|-F)\s+(?:"[^"]*"|'[^']*'|\S+))*\s+["']?#?\d+\b/u;
+	for (const command of [
+		"gh issue comment 1369 --body text",
+		'gh issue comment "1369"',
+		"gh issue comment '#1369'",
+		"gh issue comment --repo owner/repo 1369",
+		'gh issue comment --body "failure needs triage" 1369',
+		"gh --repo owner/repo issue comment 1369",
+	]) {
+		assert.match(command, hardCodedComment);
+	}
+	assert.doesNotMatch('gh issue comment "$issue" --body text', hardCodedComment);
+	for (const [file, source] of await workflowSources()) {
+		assert.doesNotMatch(
+			source.replaceAll(/\\\r?\n/gu, " "),
+			hardCodedComment,
+			`${file} must resolve its tracking issue dynamically`,
+		);
+	}
+});
+
+void test("supported-release failures use the shared tracking issue reporter", async () => {
+	const workflow = parseDocument(
+		await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
+	);
+	const notification = namedStep(
+		workflow,
+		["jobs", "rescan"],
+		"Notify vulnerability response tracking",
+	);
+	assert.equal(notification.get("if"), "failure()");
+	assert.equal(
+		notification.get("run"),
+		"node scripts/report-vulnerability-drift.ts reports --release-failure",
+	);
+	assert.equal(notification.getIn(["env", "GH_TOKEN"]), `\${{ secrets.GITHUB_TOKEN }}`);
+	assert.equal(workflow.getIn(["permissions", "issues"]), "write");
+	assert.equal(workflow.getIn(["concurrency", "group"]), "rescan-supported-release");
+	assert.equal(workflow.getIn(["concurrency", "cancel-in-progress"]), false);
 });

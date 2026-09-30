@@ -98,7 +98,7 @@ async function waitUntilReady(name: string, port: number): Promise<void> {
 			throw new Error(`${name} stopped during startup`);
 		}
 		try {
-			const response = await fetch(`http://127.0.0.1:${port}/actuator/health/readiness`, {
+			const response = await fetch(`http://127.0.0.1:${port}/readyz`, {
 				signal: AbortSignal.timeout(READINESS_TIMEOUT_MS),
 			});
 			if (response.ok) {

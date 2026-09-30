@@ -153,6 +153,9 @@ services:
         max-file: "5"
 
   application-server:
+    # Management is reachable only inside the Compose network; never publish or proxy it.
+    expose:
+      - "9090"
     image: "${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
     # Bounds heap sizing to this container; without it the JVM targets host RAM and co-located
     # services oversubscribe and swap. Hosts the NATS sync consumers, so it takes the largest limit.
@@ -162,6 +165,8 @@ services:
     ports:
       - "8080"
     environment:
+      # Compose preserves the placeholder; Spring resolves it on shared-network, not sandbox interfaces.
+      MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       # The buildpack's 10M MaxDirectMemorySize sits below this role's steady NIO
       # footprint (NATS + HTTP); give it headroom.
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"
@@ -319,9 +324,9 @@ services:
       # the proxy reads each connection's base URL/auth from the catalog per request.
       # Worker control channel: same env var feeds the worker pod's registration-token claim.
       HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:-}
-      # thc healthcheck target: actuator liveness on the management port.
+      # thc probes liveness on the application listener, independently of management.
       THC_PORT: "8080"
-      THC_PATH: /actuator/health/liveness
+      THC_PATH: /livez
     depends_on:
       postgres:
         condition: service_healthy
@@ -372,7 +377,7 @@ services:
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.sameSite=lax"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.path=/api/workspaces"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.maxAge=900"
-      - "traefik.http.services.https-application-server.loadbalancer.healthcheck.path=/actuator/health/readiness"
+      - "traefik.http.services.https-application-server.loadbalancer.healthcheck.path=/readyz"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.timeout=3s"
     # The distroless image has no shell for a wget probe; the probe is the static thc binary the
@@ -400,7 +405,11 @@ services:
     mem_limit: ${APPLICATION_WORKER_MEM_LIMIT:-3g}
     cpus: ${APPLICATION_WORKER_CPUS:-4.0}
     pids_limit: ${APPLICATION_WORKER_PIDS_LIMIT:-512}
+    # Management is reachable only inside the Compose network; never publish or proxy it.
+    expose:
+      - "9090"
     environment:
+      MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       # See application-server: the buildpack's 10M direct-memory default is too small.
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"
       APP_VERSION: ${IMAGE_TAG}
@@ -471,9 +480,9 @@ services:
       # application-prod.yml binds host-url=${APPLICATION_HOST_URL} with no YAML default; compose always
       # supplies it so the agent context builds links from a real origin (an unset var fails the boot).
       APPLICATION_HOST_URL: https://${APP_HOSTNAME}
-      # thc runs inside the container, so it reaches the loopback-bound management endpoint.
+      # thc probes the loopback-bound application listener inside the container.
       THC_PORT: "8080"
-      THC_PATH: /actuator/health/liveness
+      THC_PATH: /livez
     depends_on:
       application-server:
         condition: service_healthy
