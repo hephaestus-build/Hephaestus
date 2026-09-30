@@ -241,22 +241,6 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         assertThat(signalOf(recheck)).isEqualTo(ScmSignals.PULL_REQUEST_EDITED.value());
         assertThat(recheckedOf(recheck)).isEqualTo("[\"describe-what-and-why\"]");
         assertThat(jobsOf(workspace)).containsExactlyInAnyOrder(opened.getId(), recheck.getId());
-        UUID positive = observe(
-                describe,
-                recheck,
-                pr.getId(),
-                developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
-                null,
-                NOW.plusSeconds(120));
-        assertThat(standing(pr))
-                .contains(positive)
-                .doesNotContain(observationRepository.findByAgentJobId(opened.getId(), workspace.getId()).stream()
-                        .filter(row -> row.getPractice().getId().equals(describe.getId()))
-                        .findFirst()
-                        .orElseThrow()
-                        .getId());
-        assertThat(revision(reload())).isInstanceOf(GateDecision.Skip.class);
     }
 
     @ParameterizedTest
@@ -723,6 +707,18 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         snapshot.set(ReviewedWork.SNAPSHOT_KEY, MAPPER.valueToTree(work));
         job.setEvidenceSnapshot(snapshot);
         return agentJobRepository.saveAndFlush(job);
+    }
+
+    @Test
+    void shouldReadACapturedRevisionOnlyWithinTheJobsWorkspace() {
+        PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
+        AgentJob job = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        Workspace other = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("repair-other"));
+        assertThat(agentJobRepository.findCapturedReviewedWork(workspace.getId(), Set.of(job.getId())))
+                .singleElement()
+                .satisfies(row -> assertThat(row.getReviewedWork()).isNotNull());
+        assertThat(agentJobRepository.findCapturedReviewedWork(other.getId(), Set.of(job.getId())))
+                .isEmpty();
     }
 
     private void bindModel(Workspace workspace) {

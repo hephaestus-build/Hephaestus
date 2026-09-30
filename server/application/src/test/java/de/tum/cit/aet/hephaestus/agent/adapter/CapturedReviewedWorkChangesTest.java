@@ -1,12 +1,18 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
+import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
+import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.PullRequestRevision;
@@ -16,6 +22,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
@@ -27,7 +34,13 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     private static final String HEAD = "1".repeat(40);
     private final AgentJobRepository jobs = mock(AgentJobRepository.class);
     private final ObjectMapper mapper = new ObjectMapper();
-    private final CapturedReviewedWorkChanges changes = new CapturedReviewedWorkChanges(jobs, mapper);
+    private final ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
+    private final CapturedReviewedWorkChanges changes = new CapturedReviewedWorkChanges(jobs, mapper, catalogs);
+
+    @BeforeEach
+    void permitCapturedSources() {
+        lenient().when(catalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
+    }
 
     @ParameterizedTest
     @ValueSource(strings = {"title", "body", "head"})
@@ -103,6 +116,37 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
                 .isEmpty();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"text", "head"})
+    void shouldNotUseACapturedSourceWhenItsContractDeniesAutomatedReview(String source) {
+        stored(capture(42, HEAD));
+        PullRequest current = current();
+        var denied = source.equals("text") ? PullRequestContentSource.CORE : PullRequestContentSource.DIFF;
+        when(catalogs.isSourceUsePermitted(
+                        new SourceContractVersion("1.2.0"), denied, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                .thenReturn(false);
+        if (source.equals("text")) current.setBody("Repaired description");
+        else current.setHeadRefOid("2".repeat(40));
+        assertThat(changes.materiallyChanged(7, Set.of(RUN), revision(current))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"invalid", "99.0.0"})
+    void shouldRefuseUnknownSourceContractsWhenTheWorkChanged(@Nullable String version) {
+        var row = mock(AgentJobRepository.CapturedReviewedWorkRow.class);
+        when(row.getReviewedWork()).thenReturn(capture(42, HEAD));
+        when(row.getContractVersion()).thenReturn(version);
+        when(jobs.findCapturedReviewedWork(7, Set.of(RUN))).thenReturn(List.of(row));
+        if ("99.0.0".equals(version)) {
+            when(catalogs.isSourceUsePermitted(any(), any(), any()))
+                    .thenThrow(new IllegalArgumentException("Unknown contract"));
+        }
+        PullRequest current = current();
+        current.setBody("Repaired description");
+        assertThat(changes.materiallyChanged(7, Set.of(RUN), revision(current))).isEmpty();
+    }
+
     private String capture(long id, @Nullable String head) {
         return mapper.writeValueAsString(new ReviewedWork(
                 ArtifactKinds.PULL_REQUEST.value(),
@@ -115,6 +159,7 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     private void stored(@Nullable String json) {
         var row = mock(AgentJobRepository.CapturedReviewedWorkRow.class);
         when(row.getReviewedWork()).thenReturn(json);
+        lenient().when(row.getContractVersion()).thenReturn("1.2.0");
         org.mockito.Mockito.lenient().when(row.getId()).thenReturn(RUN);
         when(jobs.findCapturedReviewedWork(7, Set.of(RUN))).thenReturn(List.of(row));
     }

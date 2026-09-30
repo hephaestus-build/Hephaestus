@@ -859,10 +859,12 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         void shouldReplaceTheCurrentNegativeWithAPositiveFromAnAdmittedRepairReview() {
             AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
             List<Observation> earlier = observationRepository.findByAgentJobId(first.getId(), workspace.getId());
-            String repaired = SWALLOWED_ERROR
-                    .replace("ABSENT", "PRESENT")
-                    .replace("\"MAJOR\"", "null")
-                    .replace("Export errors stop at the log", "Export errors reach the caller");
+            String repaired = """
+                    {"observations": [
+                      {"practiceSlug": "error-handling", "summary": "Export errors reach the caller",
+                       "assessmentStatus": "ASSESSED", "presence": "PRESENT", "assessment": "GOOD", "severity": null,
+                       "evidenceRationale": "The caller receives the export failure instead of an empty file."}
+                    ]}""";
             AgentJob second = reviewOf(
                     prId,
                     50,
