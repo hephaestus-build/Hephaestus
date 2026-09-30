@@ -553,7 +553,7 @@ export const WEEK_OVERVIEW = overviewOf(
 
 export const QUIET_OVERVIEW = overviewOf(QUIET_SUMMARY, "30d");
 
-/** Twelve months of the same habits, one bar per month. */
+/** A year of activity, one bucket per calendar month touched by the range. */
 export const YEAR_OVERVIEW = overviewOf(
 	summaryOf({
 		pullRequestsOpened: 48,

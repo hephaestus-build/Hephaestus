@@ -31,9 +31,12 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -192,6 +195,63 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
                 .isPresent();
     }
 
+    /**
+     * The same team reauthorized in its own workspace replaces the token on the row that holds it — reached directly
+     * while active, and through a fresh pending placeholder and the team's natural key while suspended.
+     */
+    @ParameterizedTest
+    @EnumSource(
+            value = IntegrationState.class,
+            names = {"ACTIVE", "SUSPENDED"})
+    void shouldKeepTheWorkspaceSlackSettingsWhenItsTeamIsReauthorized(IntegrationState state) {
+        User admin = accountHolder("admin");
+        Workspace workspace = workspaceOwnedBy(admin, "Intro Course");
+        Connection existing = connectSlack(workspace, state, 90, Set.of("messages"));
+
+        Connection refreshed = reauthorize(workspace, admin, existing);
+
+        assertThat(refreshed.getConfig())
+                .isEqualTo(new ConnectionConfig.SlackConfig(team, "Intro Course", 90, Set.of("messages")));
+    }
+
+    @Test
+    void shouldStartFromTheProviderDefaultsWhenAnUninstalledTeamIsReauthorized() {
+        User admin = accountHolder("admin");
+        Workspace workspace = workspaceOwnedBy(admin, "Intro Course");
+        Connection existing = connectSlack(workspace, IntegrationState.UNINSTALLED, 90, Set.of("messages"));
+
+        Connection revived = reauthorize(workspace, admin, existing);
+
+        assertThat(revived.getConfig())
+                .isEqualTo(new ConnectionConfig.SlackConfig(team, "Intro Course", null, Set.of()));
+    }
+
+    /** Completes a real callback and returns the workspace's one Slack row, which must be {@code existing}. */
+    private Connection reauthorize(Workspace workspace, User admin, Connection existing) {
+        webTestClient
+                .get()
+                .uri(uri -> uri.path("/oauth/callback/slack")
+                        .queryParam("state", state(workspace, admin))
+                        .queryParam("code", "code")
+                        .build())
+                .accept(MediaType.TEXT_HTML)
+                .exchange()
+                .expectStatus()
+                .isFound()
+                .expectBody(Void.class);
+        assertThat(jdbcTemplate.queryForList(
+                        "SELECT id FROM connection WHERE workspace_id = ? AND kind = 'SLACK'",
+                        Long.class,
+                        workspace.getId()))
+                .containsExactly(existing.getId());
+        Connection connection = connectionRepository
+                .findById(Objects.requireNonNull(existing.getId()))
+                .orElseThrow();
+        assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
+        assertThat(connection.hasCredentials()).isTrue();
+        return connection;
+    }
+
     private void awaitBlockedOn(String xid, CompletableFuture<?> waiter) throws InterruptedException {
         Instant deadline = Instant.now().plus(Duration.ofSeconds(30));
         while (Objects.requireNonNull(jdbcTemplate.queryForObject(
@@ -251,8 +311,16 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private Connection connectSlack(Workspace workspace, IntegrationState state) {
+        return connectSlack(workspace, state, null, Set.of());
+    }
+
+    private Connection connectSlack(
+            Workspace workspace, IntegrationState state, @Nullable Integer retentionDays, Set<String> streams) {
         Connection connection = new Connection(
-                workspace, IntegrationKind.SLACK, team, new ConnectionConfig.SlackConfig(team, null, null, Set.of()));
+                workspace,
+                IntegrationKind.SLACK,
+                team,
+                new ConnectionConfig.SlackConfig(team, null, retentionDays, streams));
         connection.setState(state);
         return connectionRepository.save(connection);
     }
