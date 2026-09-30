@@ -173,10 +173,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         observe(sized, opened, pr.getId(), developer, ObservationKind.DEMONSTRATED_STRENGTH, null, NOW);
 
-        edit(pr, "Adds the thing. Why: first try", Set.of("body"));
-        edit(pr, "Adds the thing. Why: first try", Set.of("body")); // the same delivery again
-        edit(pr, "Adds the thing. Why: first try", Set.of("relationships")); // a label moved
-        edit(pr, "Adds the thing because reviewers could not tell why", Set.of("body"));
+        edit("Adds the thing. Why: first try", Set.of("body"));
+        edit("Adds the thing. Why: first try", Set.of("body")); // the same delivery again
+        edit("Adds the thing. Why: first try", Set.of("relationships")); // a label moved
+        edit("Adds the thing because reviewers could not tell why", Set.of("body"));
 
         List<ArtifactSignal> edits = signalsOf(pr, ScmSignals.PULL_REQUEST_EDITED);
         assertThat(edits)
@@ -211,8 +211,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
 
-        push(pr, "head-2");
-        edit(pr, "Adds the thing because reviewers could not tell why", Set.of("body"));
+        push("head-2");
+        edit("Adds the thing because reviewers could not tell why", Set.of("body"));
         settle(pr);
 
         ArtifactSignal pushed =
@@ -234,14 +234,14 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         String explained = "Adds the thing because reviewers could not tell why";
-        edit(pr, explained, Set.of("body"));
+        edit(explained, Set.of("body"));
         settle(pr);
-        push(pr, "head-2");
+        push("head-2");
         settle(pr);
-        edit(pr, "Adds the thing", Set.of("body"));
+        edit("Adds the thing", Set.of("body"));
         settle(pr);
 
-        edit(pr, explained, Set.of("body"));
+        edit(explained, Set.of("body"));
 
         ArtifactSignal again = rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_EDITED));
         assertThat(again.getState()).isEqualTo(SignalState.DEFERRED);
@@ -340,7 +340,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         AgentJob opened = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
         observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
         SignalKey heldPush = pending(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
-        edit(pr, "Adds the thing because reviewers could not tell why", Set.of("body"));
+        edit("Adds the thing because reviewers could not tell why", Set.of("body"));
         SignalKey newerEdit = currentKey(pr, ScmSignals.PULL_REQUEST_EDITED);
 
         reoffer();
@@ -540,14 +540,14 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         return pullRequestRepository.findByIdWithAllForGate(pr.getId()).orElseThrow();
     }
 
-    private void edit(PullRequest pr, String body, Set<String> changedFields) {
+    private void edit(String body, Set<String> changedFields) {
         upsert(false, Objects.requireNonNull(reload().getHeadRefOid()), body);
         var event = new ScmDomainEvent.PullRequestUpdated(
                 ScmEventPayload.PullRequestData.from(reload()), changedFields, liveContext());
         transactions.executeWithoutResult(status -> listener.onPullRequestUpdated(event));
     }
 
-    private void push(PullRequest pr, String head) {
+    private void push(String head) {
         upsert(false, head, Objects.requireNonNull(reload().getBody()));
         var event = new ScmDomainEvent.PullRequestSynchronized(
                 ScmEventPayload.PullRequestData.from(reload()), liveContext());
