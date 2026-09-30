@@ -267,8 +267,9 @@ services:
       # to resolve. Agents are off (AGENT_ENABLED below), but the pin guard is built regardless.
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: "false"
       # Read by the static thc binary the health-checker buildpack installs at /workspace/health-check.
+      MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       THC_PORT: "8080"
-      THC_PATH: /actuator/health/liveness
+      THC_PATH: /livez
       HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"
       HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false"
       # prod runs forward-headers=native, so ProxyTrustGuard aborts the boot unless this is set.

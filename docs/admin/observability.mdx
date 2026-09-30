@@ -7,6 +7,145 @@ title: Observability
 Production logs are newline-delimited JSON records. `job.id` and `workspace.id` are fields, not
 metric labels. The console uses a Logstash-compatible application schema, not an OTLP log export.
 
+## Scrape metrics
+
+Each runtime role serves `GET /actuator/prometheus` without a user token on a separate management
+listener, port **9090** by default (`MANAGEMENT_PORT` outside the supported Compose stacks). The
+application listener refuses this metrics path, including requests with a user token. Port 8081 is
+the sandbox gateway, not a metrics endpoint. Liveness and readiness also remain available on the
+application listener at `/livez` and `/readyz`; container probes use these application-listener paths.
+
+The reference and single-host Compose stacks bind management to the container's own
+`shared-network` address through its network-qualified hostname, and expose 9090 **only on that
+network**. This excludes sandbox interfaces, including after a restart with other networks attached.
+Docker's [network-scoped DNS resolution](https://github.com/moby/moby/blob/v28.2.2/libnetwork/sandbox.go#L401-L425)
+selects the management network without a fixed container IP.
+They do not
+publish it to a host port or configure a proxy route. Attach your own Prometheus to that network;
+do not add a `ports` mapping, a Traefik router, or internet ingress for management. Docker `expose`
+is not a firewall: any container on that network can read metrics. Restrict network membership to
+trusted services. For a non-Compose deployment, restrict the management listener with private
+networking and firewall policy before starting it. Its default address is `0.0.0.0`; use
+`MANAGEMENT_SERVER_ADDRESS` to bind a specific private interface. Do not set its port equal to the application or
+sandbox gateway port. See [Spring Boot management listeners](https://docs.spring.io/spring-boot/reference/actuator/monitoring.html)
+and [Prometheus security](https://prometheus.io/docs/operating/security/).
+
+No monitoring service or outbound metric exporter is enabled by this configuration. Operators who
+do not run Prometheus need no monitoring setup. Traces remain opt-in and separate from scraping.
+
+Example `prometheus.yml` for the reference deployment:
+
+```yaml
+scrape_configs:
+  - job_name: hephaestus
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: [application-server:9090]
+        labels:
+          runtime_role: server
+      - targets: [application-worker:9090]
+        labels:
+          runtime_role: worker
+      - targets: [webhook-server:9090]
+        labels:
+          runtime_role: webhook
+rule_files:
+  - hephaestus-alerts.yml
+```
+
+For single-host Compose, omit `application-worker`: that service is disabled there and its role runs
+inside `application-server`. For multiple replicas, discover and scrape **every container**, not a
+load-balanced service address that can switch replicas between scrapes. Keep each target's `instance`
+label distinct. Apply `increase` or `rate` to each counter before summing so resets are handled per
+process. `runtime_role` above is an operator-supplied target label, not an application meter label.
+`workspace.id` and `job.id` stay log fields; never add them as metric labels.
+
+### Example alert rules
+
+These rules use the **exported Prometheus names**, not the dotted Micrometer names. The receiver
+exports stream poll age; server consumers export poison counts. Budget admission and committed
+agent-job outcomes can occur in different roles, so their rules aggregate all scraped roles.
+
+Use this as `hephaestus-alerts.yml`. Tune windows, thresholds and routing to your traffic and recovery
+objectives. The poll-age threshold is three times the default 60-second monitor interval; increase
+it if you change that interval. A failed scrape and a missing poll-age series are separate alerts:
+`NaN` means a stream has never been polled successfully, not that its age is zero.
+
+```yaml
+groups:
+  - name: hephaestus
+    rules:
+      - alert: HephaestusMetricsUnavailable
+        expr: up{job="hephaestus"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: A Hephaestus metrics target cannot be scraped
+      - alert: HephaestusConsumerPoison
+        expr: sum by (kind) (increase(integration_consumer_poison_total{job="hephaestus"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: An integration event reached the poison retry limit
+      - alert: HephaestusStreamPollStale
+        expr: >-
+          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"} > 180
+          or webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
+          != webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook stream gauges are stale or have never been refreshed
+      - alert: HephaestusStreamPollMissing
+        expr: >-
+          up{job="hephaestus",runtime_role="webhook"} == 1
+          unless on (job, instance)
+          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A scraped webhook receiver exports no stream poll age
+      - alert: HephaestusBudgetExhausted
+        expr: sum(increase(llm_budget_exhausted_total{job="hephaestus"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A workspace crossed the instance-funded monthly budget cap
+      - alert: HephaestusBudgetBlocked
+        expr: sum by (surface, cap) (increase(llm_budget_blocked_total{job="hephaestus"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: LLM budget admission refused work
+      - alert: HephaestusAgentJobsFailing
+        expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[15m])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: At least three agent jobs failed or timed out in fifteen minutes
+```
+
+Only enable the stream rules where the webhook stream monitor is expected. To detect an individually
+missing stream, add an `absent_over_time` rule for each expected `stream` and receiver target; the
+example missing-series rule detects loss of the whole monitor. Counters created on their first event
+can be absent before that event. An `increase` rule needs at least two samples and cannot recover
+an event that occurred before its first sample. Scraping does not replace the warning logs or Sentry.
+Poison counts mean the application stopped retrying a delivery; they are not a durable dead-letter
+queue. Failed outcomes exclude deliberate cancellation. See
+[Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on) and
+[Alert response](./production-operations-runbook.mdx#alert-response) for response steps.
+
+Validate both files with `promtool check config prometheus.yml` and
+`promtool check rules hephaestus-alerts.yml`. Test rule evaluation and the notification route in your
+monitoring stack before relying on it. Prometheus evaluates rules; your Alertmanager or equivalent
+owns notification delivery, grouping and silences. See the
+[Prometheus alerting guidance](https://prometheus.io/docs/practices/alerting/).
+
 ## Reading log records
 
 | Field                        | Meaning                                                                                            |
@@ -165,7 +304,7 @@ For authenticated collectors, configure Spring Boot's
 `management.opentelemetry.tracing.export.otlp.headers` through protected deployment configuration.
 Do not put collector credentials in a URL. OTLP log and metric export stay disabled: enabling traces does not
 start exporting application logs, private transcripts or a second metrics stream. Prometheus metrics
-remain available through the existing endpoint.
+are available through the private listener described in [Scrape metrics](#scrape-metrics).
 
 Each practice-review attempt starts a `practice_review.execute` span. Its trace ID can differ from
 the job's submission correlation ID, which is carried as the `hephaestus.job.submission_trace_id`
