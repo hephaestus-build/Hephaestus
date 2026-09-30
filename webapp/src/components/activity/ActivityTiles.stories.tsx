@@ -103,10 +103,7 @@ export const Empty: Story = {
 	},
 };
 
-/**
- * A year, one column per month bucket the server sends. A rolling 365 days touches 13 calendar months
- * on most days and 12 when it starts on the first of a month, so the count comes from the fixture.
- */
+/** Twelve months, one column per month. */
 export const TwelveMonths: Story = {
 	args: { state: readyOverview(YEAR_OVERVIEW, "1y") },
 	play: async ({ canvas }) => {
@@ -114,6 +111,7 @@ export const TwelveMonths: Story = {
 		await expect(comments).toHaveAccessibleDescription(
 			/^1692 comments; busiest month \w+ \d{4}, \d+$/u,
 		);
+		// A year of days spans 12 or 13 calendar months, depending on the day the range ends.
 		await expect(columns(comments)).toBe(YEAR_OVERVIEW.buckets.length);
 		// The frame starts with its year and, like every range, ends now.
 		await expect(within(comments).getByText(/^\w{3} \d{4}$/u)).toBeVisible();

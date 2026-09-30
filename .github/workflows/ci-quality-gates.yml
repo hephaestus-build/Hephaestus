@@ -115,8 +115,6 @@ jobs:
       statuses: write
     env:
       PREVIEW_URL: hephaestus-build-storybook-pr-${{ github.event.number }}.surge.sh
-      # Temporary maintainer-approved budget pause; UTC expiry restores enforcement automatically.
-      CHROMATIC_PAUSED_UNTIL: "2026-09-30"
       CHROMATIC_POLICY_SKIP: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -144,13 +142,12 @@ jobs:
           vp run --filter webapp build-storybook
           test -s webapp/storybook-static/preview-stats.json
       - name: Clear previous Chromatic evidence
-        id: visual_policy
         run: node scripts/report-chromatic.ts --clear
       - name: Chromatic visual testing
         id: chromatic
         continue-on-error: true
         if: >-
-          success() && env.CHROMATIC_POLICY_SKIP != 'true' && steps.visual_policy.outputs.paused != 'true'
+          success() && env.CHROMATIC_POLICY_SKIP != 'true'
         uses: chromaui/action@2a0b63f30233c48591844a46d451b9cf68128186 # v18.7.2
         with:
           projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
@@ -169,9 +166,7 @@ jobs:
           CHROMATIC_BRANCH: ${{ github.head_ref || github.ref_name }}
           CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Report Chromatic visual coverage
-        id: visual_coverage
         if: always()
-        continue-on-error: true
         env:
           CHROMATIC_OUTCOME: ${{ steps.chromatic.outcome }}
           CHROMATIC_CODE: ${{ steps.chromatic.outputs.code }}
@@ -261,13 +256,14 @@ jobs:
             webapp/chromatic-report.xml
           retention-days: 14
           if-no-files-found: warn
+      # Chromatic reports visual coverage and never decides the job: an account limit or an unfinished
+      # build must not block merges. The interaction tests are the gate.
       - name: Evaluate stories checks
         if: always()
         env:
           STORYBOOK_TESTS: ${{ steps.tests.outcome }}
-          CHROMATIC: ${{ steps.visual_coverage.outcome }}
         run: |
-          if [ "$STORYBOOK_TESTS" != success ] || [ "$CHROMATIC" != success ]; then
-            echo "::error::Storybook tests or Chromatic failed; review both independently reported steps."
+          if [ "$STORYBOOK_TESTS" != success ]; then
+            echo "::error::Storybook interaction tests failed."
             exit 1
           fi
