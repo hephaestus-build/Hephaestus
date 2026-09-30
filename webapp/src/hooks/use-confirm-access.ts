@@ -8,7 +8,8 @@ import { isSignInProvider } from "@/lib/sign-in-providers";
 import { hasText } from "@/lib/text";
 import { authClient } from "@/runtime/auth/auth-client";
 
-export function useConfirmAccess(enabled: boolean) {
+/** `returnTo` is where signing in again lands; by default the page that asked. */
+export function useConfirmAccess(enabled: boolean, returnTo?: string) {
 	const [instanceProviders, linkedIdentities] = useQueries({
 		queries: [
 			{ ...listIdentityProvidersOptions(), enabled },
@@ -34,7 +35,10 @@ export function useConfirmAccess(enabled: boolean) {
 			void linkedIdentities.refetch();
 		},
 		signIn: (registrationId: string) => {
-			authClient.login(registrationId, `${window.location.pathname}${window.location.search}`);
+			authClient.login(
+				registrationId,
+				returnTo ?? `${window.location.pathname}${window.location.search}`,
+			);
 		},
 	};
 }
