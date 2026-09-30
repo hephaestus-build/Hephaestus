@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -95,7 +96,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         pullRequestResubmitter().resubmit(signal);
 
         verify(signalRecorder).markRefused(signal.key(), SignalStateReason.ARTIFACT_NOT_VISIBLE);
-        verify(gate, never()).evaluate(any(), any(), any());
+        verify(gate, never()).evaluateQueued(any(), anyLong(), any(), any(), anyBoolean());
         verify(agentJobService, never()).submit(any(), any(), any(), any(), any());
     }
 
@@ -119,7 +120,8 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         PullRequest pullRequest = pullRequest();
         GateDecision.Detect detection = detection();
         when(pullRequestRepository.findByIdWithAllForGate(ARTIFACT_ID)).thenReturn(Optional.of(pullRequest));
-        when(gate.evaluate(pullRequest, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO))
+        when(gate.evaluateQueued(
+                        pullRequest, WORKSPACE_ID, ScmSignals.PULL_REQUEST_OPENED, pullRequest.reviewSubject(), false))
                 .thenReturn(detection);
 
         pullRequestResubmitter().resubmit(signal);
@@ -206,11 +208,12 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(ARTIFACT_ID)).thenReturn(Optional.of(pullRequest));
         when(reviewRepository.findByIdAndPullRequestId(REVIEW_ID, ARTIFACT_ID)).thenReturn(Optional.of(review()));
         GateDecision.Detect detection = detection();
-        when(gate.evaluate(
+        when(gate.evaluateQueued(
                         pullRequest,
+                        WORKSPACE_ID,
                         ScmSignals.PULL_REQUEST_REVIEWED,
-                        TriggerMode.AUTO,
-                        new ReviewSubject(REVIEWER_ID, true)))
+                        new ReviewSubject(REVIEWER_ID, true),
+                        false))
                 .thenReturn(detection);
 
         pullRequestResubmitter().resubmit(signal);

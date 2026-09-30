@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -24,6 +25,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -74,7 +77,9 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                 workspaceResolver,
                 signalOptions,
                 coverageService,
-                new AutomatedReviewFence(java.util.Map.of()));
+                new AutomatedReviewFence(java.util.Map.of()),
+                mock(ObservationRepository.class),
+                mock(ObservationVisibilityPolicy.class));
         when(coverageService.assess(
                         any(Workspace.class),
                         nullable(String.class),
@@ -924,7 +929,9 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                                             .withdrawnFor(reason),
                                     null,
                                     null,
-                                    null))));
+                                    null))),
+                    mock(ObservationRepository.class),
+                    mock(ObservationVisibilityPolicy.class));
             PullRequest pr = createPullRequest();
             Practice adopted = createPractice(SIGNAL);
             adopted.setSlug("withdrawn");

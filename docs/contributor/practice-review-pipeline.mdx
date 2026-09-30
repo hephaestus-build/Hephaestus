@@ -230,15 +230,40 @@ reports the source unavailable (`SourceAbsenceReason.NOT_FOUND`) on a missing or
 than making an observation about the developer. This check does not fence edits after capture or invalidate
 earlier observations and feedback.
 
-#### Push coalescing
+#### Push and edit coalescing
 
-`scm.pull_request.synchronized` is coalesced the same way. GitHub names a push; GitLab raises it when a
-merge-request update carries `oldrev` or moves the stored head, since GitLab omits `oldrev` on some
-pushes. `AgentJobEventListener` defers a live push, and `PullRequestPushCoalescer` reviews the head a burst
-settles on. A group becomes due after ten quiet minutes or one hour from its first push. The workspace
-cooldown can delay settlement beyond that hour; it does not discard the push. Scheduler timing, admission
-and queue capacity also affect when a review starts. Superseded heads become `SUPPRESSED / COALESCED`.
-A push overtaken by a merge or a close is left to that occasion.
+`scm.pull_request.synchronized` and `scm.pull_request.edited` are coalesced together, as one group per pull
+request. GitHub names a push; GitLab raises it when a merge-request update carries `oldrev` or moves the
+stored head, since GitLab omits `oldrev` on some pushes. An edit is a title or description change, read
+from the stored row before and after the write on both providers, because GitLab's `changes` may be empty
+and a sync carries none; its revision digests the head with the title and body, so the same text written
+again after a push is new work while a redelivery or a label change is not.
+
+`AgentJobEventListener` defers a live push or edit before the mirror write commits, in the same
+transaction, and `PullRequestPushCoalescer` takes the pull request's row lock before it locks the group, so
+every occasion the mirror reflects is in the group it drains. A group becomes due after ten quiet minutes or
+one hour from its first member. The workspace cooldown, after the last review under either occasion, can
+delay settlement beyond that hour; it does not discard the group. Scheduler timing, admission and queue
+capacity also affect when a review starts. A group with a push is reviewed under `synchronized`, otherwise
+under `edited`; every other member becomes `SUPPRESSED / COALESCED`. A group overtaken by a merge or a close
+is left to that occasion.
+
+Either review also rechecks the practices whose current claim about the author on that work is negative,
+whatever occasion they are bound to: each claim's latest live or requested run, not superseded or
+invalidated, measured against the practice's current revision and with evidence authorized for automated
+review. A later positive or abstention stands. The job records these as `rechecked_practices` and reads
+each under its own binding. Draft, coverage, consent, withdrawal and autonomy gates apply as usual, and only
+open work is rechecked. A recheck that records nothing for a practice leaves the earlier claim current.
+
+`PullRequestPushCoalescer` is also the pending-signal reaper's resubmitter for pull requests. A push or edit
+whose admission was held back (`PENDING`, for example for budget or an unavailable model) is re-offered
+through the same locked settlement: the group includes held-back as well as queued members, queued members'
+quiet period and maximum wait still decide when it settles, and a group of held-back members only is
+re-offered at once. A merge or close committed before the settlement takes the pull request's lock settles
+the group as above. Other pull-request occasions go straight to `PullRequestSignalResubmitter`. Every
+re-offer is evaluated for the workspace that queued it and for the subject it named: a repository monitored
+elsewhere since settles it as `SUPPRESSED / OUT_OF_REVIEW_SCOPE` instead of reviewing it there. Merge, close
+and submitted-review occasions, and reviews asked for by hand, keep their own rules.
 
 ## Capture
 

@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -146,15 +147,25 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         String phase = submissionRequest.triggerSignal() != null
                 ? submissionRequest.triggerSignal().value()
                 : "manual";
+        // An edit is keyed on what was written as well as the head, so two edits at one head are two reviews.
+        String freshness = submissionRequest.reviewId() != null
+                ? "review-" + submissionRequest.reviewId()
+                : ScmSignals.PULL_REQUEST_EDITED.equals(submissionRequest.triggerSignal())
+                        ? ScmSignals.pullRequestRevision(
+                                        ScmSignals.PULL_REQUEST_EDITED,
+                                        submissionRequest.headRefOid(),
+                                        pullRequestData.title(),
+                                        pullRequestData.body())
+                                .orElseThrow()
+                                .value()
+                        : submissionRequest.headRefOid();
         String idempotencyKey = "pr_review:" + pullRequestData.repository().nameWithOwner()
                 + ":"
                 + pullRequestData.number()
                 + ":"
                 + phase
                 + ":"
-                + (submissionRequest.reviewId() != null
-                        ? "review-" + submissionRequest.reviewId()
-                        : submissionRequest.headRefOid());
+                + freshness;
 
         return new JobSubmission(metadata, idempotencyKey);
     }

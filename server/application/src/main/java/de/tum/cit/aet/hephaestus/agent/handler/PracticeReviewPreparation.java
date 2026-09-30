@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.LinkedHashMap;
@@ -58,7 +57,6 @@ final class PracticeReviewPreparation {
             ContextRequest request,
             Supplier<TaskEnvelope> envelope,
             Consumer<Map<String, byte[]>> staging) {
-        SignalName signal = PracticeCatalogInjector.signalOf(job);
         List<Practice> eligible = practiceCatalogInjector.resolveEligiblePractices(job, artifactKind);
         PreparedEvidence prepared = workspaceContextBuilder.prepare(request, EvidencePlan.compile(eligible));
         try {
@@ -67,7 +65,7 @@ final class PracticeReviewPreparation {
                     manifest,
                     eligible,
                     job.getCreatedAt(),
-                    signal,
+                    practice -> PracticeCatalogInjector.occasionOf(job, practice.getSlug()),
                     prepared.files(),
                     ReviewChange.of(gitRepositoryManager, request));
             List<Practice> ready = readiness.readyPractices();

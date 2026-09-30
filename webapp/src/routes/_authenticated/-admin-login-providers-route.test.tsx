@@ -104,7 +104,12 @@ describe("instance login providers route", () => {
 		server.use(
 			http.get("*/identity-providers", () =>
 				HttpResponse.json([
-					{ registrationId: "gitlab", providerType: "GITLAB", displayName: "Team GitLab" },
+					{
+						registrationId: "gitlab",
+						providerType: "GITLAB",
+						displayName: "Team GitLab",
+						baseUrl: "https://gitlab.lrz.de",
+					},
 				]),
 			),
 		);

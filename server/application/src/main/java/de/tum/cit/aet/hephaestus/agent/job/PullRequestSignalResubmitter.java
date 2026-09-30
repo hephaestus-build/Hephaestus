@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
-import de.tum.cit.aet.hephaestus.integration.core.signal.PendingSignalResubmitter;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
@@ -17,7 +16,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
-import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +24,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Offers a pending pull-request signal back to the gate and the submission path.
+ * Offers a pull-request signal back to the gate and the submission path, for {@link PullRequestPushCoalescer},
+ * which is how the pending-signal reaper re-offers one.
  *
  * <p>Deliberately replays the whole decision rather than the refusal that blocked it: the workspace
  * may have changed its mind about drafts, or retired the practice, in the time the signal waited. If
@@ -35,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Component
 @ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
-public class PullRequestSignalResubmitter implements PendingSignalResubmitter {
+public class PullRequestSignalResubmitter {
 
     private static final Logger log = LoggerFactory.getLogger(PullRequestSignalResubmitter.class);
 
@@ -61,16 +60,10 @@ public class PullRequestSignalResubmitter implements PendingSignalResubmitter {
         this.manifests = manifests;
     }
 
-    @Override
-    public ArtifactKind artifactKind() {
-        return ScmSignals.PULL_REQUEST;
-    }
-
     /**
      * Joins the coalescer transaction, which already locks the signal rows. A separate transaction
      * would wait on those locks while the transaction that holds them waits for this call.
      */
-    @Override
     @Transactional
     public void resubmit(ArtifactSignal signal) {
         SignalKey key = signal.key();
@@ -109,10 +102,12 @@ public class PullRequestSignalResubmitter implements PendingSignalResubmitter {
             }
         }
 
-        GateDecision decision = reviewData == null
-                ? practiceReviewDetectionGate.evaluate(pr, key.signalName(), TriggerMode.AUTO)
-                : practiceReviewDetectionGate.evaluate(
-                        pr, key.signalName(), TriggerMode.AUTO, new ReviewSubject(reviewData.authorId(), true));
+        GateDecision decision = practiceReviewDetectionGate.evaluateQueued(
+                pr,
+                key.workspaceId(),
+                key.signalName(),
+                reviewData != null ? new ReviewSubject(reviewData.authorId(), true) : pr.reviewSubject(),
+                PullRequestPushCoalescer.SIGNALS.contains(key.signalName()));
         switch (decision) {
             case GateDecision.Skip skip -> {
                 log.debug("Pending signal now skipped by practice gate: prId={}, reason={}", pr.getId(), skip.reason());

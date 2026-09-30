@@ -287,8 +287,25 @@ public class OAuthCallbackService {
         // hand back a config blob; null leaves the placeholder seeded by
         // findOrCreatePendingConnection in place.
         if (completed.config() != null) {
-            connection.setConfig(completed.config());
+            connection.setConfig(refreshedConfig(connection, completed.config()));
         }
+    }
+
+    /**
+     * Reauthorizing the Slack team an active or suspended connection already holds refreshes its credential and team
+     * name only: the provider knows nothing of the workspace's retention or streams, so its defaults must not replace
+     * them. An uninstalled row starts over, because disconnecting erased what those settings governed.
+     */
+    private static ConnectionConfig refreshedConfig(Connection connection, ConnectionConfig vendor) {
+        if ((connection.getState() == IntegrationState.ACTIVE || connection.getState() == IntegrationState.SUSPENDED)
+                && vendor instanceof ConnectionConfig.SlackConfig refreshed
+                && connection.getConfig() instanceof ConnectionConfig.SlackConfig current
+                && refreshed.teamId() != null
+                && refreshed.teamId().equals(current.teamId())) {
+            return new ConnectionConfig.SlackConfig(
+                    refreshed.teamId(), refreshed.teamName(), current.retentionDays(), current.enabledStreams());
+        }
+        return vendor;
     }
 
     /** A Slack team or GitHub App installation that another workspace holds; the message is safe to show the caller. */

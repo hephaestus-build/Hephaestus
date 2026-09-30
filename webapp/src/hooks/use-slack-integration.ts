@@ -155,6 +155,14 @@ export function useSlackIntegration(workspaceSlug: string) {
 	});
 	const slackConnectionId = workspaceData?.slackConnectionId;
 
+	// Connecting and reconnecting are one OAuth start: the server refreshes this workspace's active
+	// connection when Slack returns the team it already holds.
+	const startSlackOAuth = () => {
+		// The OAuth landing route reads the slug to route back here.
+		window.sessionStorage.setItem("slack-connect-return-slug", workspaceSlug);
+		connect.mutate({ path: { workspaceSlug }, body: { kind: "SLACK", userInput: {} } });
+	};
+
 	const handleRegisterChannel = async ({
 		slackChannelId,
 		channelName,
@@ -214,6 +222,8 @@ export function useSlackIntegration(workspaceSlug: string) {
 			? {
 					state: "connected",
 					credentialsUnreadableSince: entry.credentialsUnreadableSince,
+					onReconnect: startSlackOAuth,
+					isReconnecting: connect.isPending,
 					onDisconnect:
 						slackConnectionId == null
 							? undefined
@@ -227,11 +237,7 @@ export function useSlackIntegration(workspaceSlug: string) {
 				}
 			: {
 					state: "disconnected",
-					onConnect: () => {
-						// The OAuth landing route reads the slug to route back here.
-						window.sessionStorage.setItem("slack-connect-return-slug", workspaceSlug);
-						connect.mutate({ path: { workspaceSlug }, body: { kind: "SLACK", userInput: {} } });
-					},
+					onConnect: startSlackOAuth,
 					isConnecting: connect.isPending,
 				}) satisfies WorkspaceSlackConnectionSettingsProps,
 		channelsSettingsProps: {

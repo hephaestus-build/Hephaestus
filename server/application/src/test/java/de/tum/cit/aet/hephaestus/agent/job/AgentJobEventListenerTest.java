@@ -39,6 +39,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
@@ -568,6 +570,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             var event = new ScmDomainEvent.PullRequestSynchronized(prData, syncContext());
 
             listener.onPullRequestSynchronized(event);
+            listener.onPullRequestSynchronizedBySync(event);
 
             verify(signalRecorder).record(any(), any(), eq(DiscoveredVia.SYNC));
             verify(pullRequestRepository, never()).findByIdWithAllForGate(any());
@@ -897,7 +900,9 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                         workspaceResolver,
                         mock(PracticeSignalOptions.class),
                         coverageService,
-                        new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()));
+                        new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
+                        mock(ObservationRepository.class),
+                        mock(ObservationVisibilityPolicy.class));
                 // One resolver for both, as in production: the ledger key and the gate must agree on which
                 // workspace owns the repository.
                 var listener = new AgentJobEventListener(

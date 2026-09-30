@@ -412,6 +412,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         boolean isNew = true;
         Boolean wasDraft = null;
         String previousHead = null;
+        String previousTitle = null;
+        String previousBody = null;
         if (attrs.iid() != null) {
             Optional<PullRequest> existingOpt = pullRequestRepository.findForUpdateByRepositoryIdAndNumber(
                     Objects.requireNonNull(context.repository()).getId(), attrs.iid());
@@ -420,6 +422,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 PullRequest existing = existingOpt.get();
                 wasDraft = existing.isDraft();
                 previousHead = existing.getHeadRefOid();
+                previousTitle = existing.getTitle();
+                previousBody = existing.getBody();
                 Instant eventUpdatedAt = parseGitLabTimestamp(attrs.updatedAt());
                 if (existing.getUpdatedAt() != null
                         && eventUpdatedAt != null
@@ -472,7 +476,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 milestoneId,
                 Objects.requireNonNull(context.repository()),
                 context,
-                isNew);
+                isNew,
+                previousTitle,
+                previousBody);
 
         if (pr == null) return null;
 
@@ -896,6 +902,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         // Read before the upsert below overwrites the row; it's the only place the prior draft state survives.
         Boolean wasDraft = existingOpt.map(PullRequest::isDraft).orElse(null);
         Issue.State previousState = existingOpt.map(PullRequest::getState).orElse(null);
+        String previousTitle = existingOpt.map(PullRequest::getTitle).orElse(null);
+        String previousBody = existingOpt.map(PullRequest::getBody).orElse(null);
         String previousHead = existingOpt.map(PullRequest::getHeadRefOid).orElse(null);
 
         User author = findOrCreateUser(
@@ -1053,7 +1061,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
             log.debug("Created merge request from sync: nativeId={}, iid={}", nativeId, data.iid());
         } else {
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(prData, Set.of(), eventCtx));
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(
+                    prData, authoredChanges(previousTitle, previousBody, pr), eventCtx));
             // A merge the webhook missed is recorded as the sync found it, so a later delivery of it can still
             // claim it; a sync records it without starting a review.
             if (isMerged && previousState != Issue.State.MERGED) {
@@ -1154,7 +1163,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable Long milestoneId,
             Repository repository,
             ProcessingContext context,
-            boolean isNew) {
+            boolean isNew,
+            @Nullable String previousTitle,
+            @Nullable String previousBody) {
         if (rawId == null || iid == null) {
             log.warn("Skipped MR processing: reason=missingIdOrIid");
             return null;
@@ -1223,11 +1234,29 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             log.debug("Created merge request: nativeId={}, iid={}", nativeId, mrNumber);
         } else {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(
-                    ScmEventPayload.PullRequestData.from(pr), Set.of(), EventContext.from(context)));
+                    ScmEventPayload.PullRequestData.from(pr),
+                    authoredChanges(previousTitle, previousBody, pr),
+                    EventContext.from(context)));
             log.debug("Updated merge request: nativeId={}, iid={}", nativeId, mrNumber);
         }
 
         return pr;
+    }
+
+    /**
+     * The authored fields this write changed, read off the stored row before and after it. GitLab's own
+     * {@code changes} object is not used: it may be empty, and a sync carries none at all.
+     */
+    private static Set<String> authoredChanges(
+            @Nullable String previousTitle, @Nullable String previousBody, PullRequest pr) {
+        Set<String> changed = new HashSet<>();
+        if (!Objects.equals(previousTitle, pr.getTitle())) {
+            changed.add("title");
+        }
+        if (!Objects.equals(previousBody, pr.getBody())) {
+            changed.add("body");
+        }
+        return changed;
     }
 
     private static Issue.State convertState(@Nullable String state) {
