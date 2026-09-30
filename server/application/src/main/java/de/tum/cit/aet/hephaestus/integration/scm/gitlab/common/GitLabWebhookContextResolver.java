@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -93,11 +94,32 @@ public class GitLabWebhookContextResolver {
     }
 
     /**
-     * For a write transaction after the one {@link #resolve} ran in: whether the delivery may still write, which on a
-     * connection route means the connection is still active, held so until the transaction ends.
+     * For a write transaction after the one {@link #resolve} ran in, with GitLab read in between: whether the delivery
+     * may still write to the repository {@code context} was resolved for, judged on that repository as stored now. On
+     * a connection route the connection is held active until the transaction ends, and only then is the repository
+     * loaded and admitted again ({@link GitLabRouteAdmission#admitRepository}), so a project the workspace stopped
+     * monitoring, or that moved out of the group, meanwhile takes nothing from the read. Off a route it must still pass
+     * the scope filter and belong to the same workspace.
      */
-    public boolean mayStillWrite() {
-        return GitLabRouteAdmission.current().map(routeAdmission::holdActive).orElse(true);
+    public boolean mayStillWrite(ProcessingContext context) {
+        Repository resolved = context.repository();
+        if (resolved == null) {
+            return false;
+        }
+        Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
+        if (route.isPresent()) {
+            return Objects.equals(context.scopeId(), route.get().workspaceId())
+                    && routeAdmission.holdActive(route.get())
+                    && repositoryRepository
+                            .findById(resolved.getId())
+                            .filter(current -> routeAdmission.admitRepository(route.get(), current))
+                            .isPresent();
+        }
+        return repositoryRepository
+                .findById(resolved.getId())
+                .filter(current -> repositoryScopeFilter.isRepositoryAllowed(current.getNameWithOwner()))
+                .filter(current -> Objects.equals(resolveScopeId(current), context.scopeId()))
+                .isPresent();
     }
 
     private @Nullable Long resolveScopeId(Repository repository) {

@@ -344,6 +344,37 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
             @Param("providerId") Long providerId,
             @Param("pullRequestId") Long pullRequestId);
 
+    /**
+     * The issues the provider records {@code pullRequestId} as closing — GitHub's closing references, GitLab's
+     * closes-issues — under the same scope as {@link #findOpenAuthoredPullRequestOnInstance}: an open pull request
+     * the developer authored, monitored by the workspace, on its connected instance. Only issues of the pull
+     * request's own repository that are not tombstoned, lowest number first; a caller passes its cap plus one to
+     * learn whether more exist.
+     */
+    @Query("""
+        SELECT DISTINCT i
+        FROM PullRequest p
+        JOIN p.repository r
+        JOIN RepositoryToMonitor rtm ON rtm.nameWithOwner = r.nameWithOwner
+        JOIN p.closingIssues i
+        WHERE p.id = :pullRequestId
+          AND p.author.id = :userId
+          AND p.deletedAt IS NULL
+          AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
+          AND rtm.workspace.id = :workspaceId
+          AND r.provider.id = :providerId
+          AND TYPE(i) = Issue
+          AND i.repository = p.repository
+          AND i.deletedAt IS NULL
+        ORDER BY i.number ASC, i.id ASC
+        """)
+    List<Issue> findClosingIssuesOfOpenAuthoredPullRequest(
+            @Param("workspaceId") Long workspaceId,
+            @Param("userId") Long userId,
+            @Param("providerId") Long providerId,
+            @Param("pullRequestId") Long pullRequestId,
+            Pageable page);
+
     /** Which of {@code refs} the delivery ledger records Hephaestus posting as feedback on this pull request. */
     @Query("""
         SELECT fp.postedCommentRef

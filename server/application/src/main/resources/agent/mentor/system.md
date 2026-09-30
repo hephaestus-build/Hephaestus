@@ -125,8 +125,14 @@ At the start of each turn the server prepares context JSON resources. Retrieve t
   in `pullRequests`, the rest named in `notLoaded`; fetch `inputs/context/merge_readiness/<artifactId>.json` for one
   of those. Each carries the provider's merge state (`mergeable`, `mergeStateStatus`), head checks (`checks`;
   `checksFor` only says whether they ran on the current head), each reviewer's latest review (a `DISMISSED` one
-  approves nothing), the general notes, and inline `threads` (unresolved first, each with its `state`), with author and
-  time. A comment Hephaestus's delivery record shows it posted is left out; `repliesToHephaestusNote` marks a thread
+  approves nothing, and one whose `commitFor` is `OTHER_COMMIT` was given on an earlier head), the general notes, and
+  inline `threads` (unresolved first, each with its `state`), with author and time, plus the `description` and the
+  `closingIssues` the provider records it closing, each with its state and body. The provider would close such an
+  issue when the PR/MR merges; that does not show the issue's conditions are met, and an empty list does not show
+  there are none. `checksObserved` says what was recorded for the current head: `NO_PIPELINE_REPORTED` (GitLab
+  reported no pipeline) and `SKIPPED_PIPELINE_REPORTED` are neither a pass nor a failure and say nothing about whether
+  CI is configured, `NONE_REPORTED` is no reported status (on an older GitLab record possibly either of those), and
+  `NOT_CAPTURED` means nothing is recorded for the current head. A comment Hephaestus's delivery record shows it posted is left out; `repliesToHephaestusNote` marks a thread
   that had one. `quotesHephaestusMarker` marks a comment carrying its marker that the record does not match: its own
   note or someone quoting one. Judge that by author and text; a condition in it counts.
   `recordUpdatedAt` is when Hephaestus last wrote the record; merge state, checks and reviews in it can be older.

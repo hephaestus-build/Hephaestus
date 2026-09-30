@@ -69,7 +69,22 @@ public record GitLabMergeRequestEventDTO(
             @JsonProperty("last_commit") @Nullable LastCommit lastCommit,
             @JsonProperty("merge_commit_sha") @Nullable String mergeCommitSha,
             // The head before this update; GitLab sends it only when the update pushed commits.
-            @Nullable String oldrev) {}
+            @Nullable String oldrev,
+            // True when GitLab itself acted, such as resetting approvals after a push; the hook's user did not.
+            @Nullable Boolean system,
+            // What GitLab did, sent only with system: approvals_reset_on_push or code_owner_approvals_reset_on_push.
+            @JsonProperty("system_action") @Nullable String systemAction) {
+
+        /**
+         * Whether GitLab sent this hook for its own act rather than its user's.
+         *
+         * @see <a href="https://docs.gitlab.com/user/project/integrations/webhook_events/#system-initiated-merge-request-events">GitLab
+         *     system-initiated merge request events</a>
+         */
+        public boolean isSystemInitiated() {
+            return Boolean.TRUE.equals(system);
+        }
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record LastCommit(

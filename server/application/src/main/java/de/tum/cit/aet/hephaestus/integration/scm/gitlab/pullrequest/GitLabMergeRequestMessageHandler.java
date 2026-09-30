@@ -12,8 +12,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +36,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>{@code unapproved} / {@code unapproval} → {@link GitLabMergeRequestProcessor#processUnapproved}</li>
  * </ul>
  * Each pair is one person's act; the two names only say whether the merge request's approval rules were met
- * afterwards.
+ * afterwards. An {@code unapproved} or {@code unapproval} marked {@code system} is GitLab resetting approvals after a
+ * push instead.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -42,15 +45,27 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
 
     private static final Logger log = LoggerFactory.getLogger(GitLabMergeRequestMessageHandler.class);
 
+    /** The events after which the merge request's readiness is read: its head, status or approvals can have moved. */
+    private static final Set<GitLabEventAction> READS_READINESS = EnumSet.of(
+            GitLabEventAction.OPEN,
+            GitLabEventAction.UPDATE,
+            GitLabEventAction.REOPEN,
+            GitLabEventAction.APPROVED,
+            GitLabEventAction.APPROVAL,
+            GitLabEventAction.UNAPPROVED,
+            GitLabEventAction.UNAPPROVAL);
+
     private final GitLabMergeRequestProcessor mergeRequestProcessor;
     private final GitLabWebhookContextResolver contextResolver;
     private final GitLabClosingIssueClient closingIssueClient;
+    private final GitLabMergeRequestReadinessReader readinessReader;
     private final TransactionTemplate transactionTemplate;
 
     GitLabMergeRequestMessageHandler(
             GitLabMergeRequestProcessor mergeRequestProcessor,
             GitLabWebhookContextResolver contextResolver,
             GitLabClosingIssueClient closingIssueClient,
+            GitLabMergeRequestReadinessReader readinessReader,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -62,41 +77,70 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
         this.mergeRequestProcessor = mergeRequestProcessor;
         this.contextResolver = contextResolver;
         this.closingIssueClient = closingIssueClient;
+        this.readinessReader = readinessReader;
         this.transactionTemplate = transactionTemplate;
     }
 
+    /** An event stored in its transaction, with the version of the merge request it left stored. */
+    private record Stored(ProcessingContext context, GitLabMergeRequestProcessor.StoredVersion version) {}
+
     /**
-     * The event is stored in the short transaction; an opened or updated merge request then has the
-     * issues it closes read from GitLab outside it — the webhook stores the {@code updated_at} the sync
-     * later compares against, so the sync would not read them for this change.
+     * The event is stored in the short transaction. GitLab's webhook carries none of the merge request's readiness —
+     * its merge status, head pipeline and approvals — so after an event that can move them GitLab is read for this
+     * one merge request, outside the transaction, and what it said is recorded in a second short one where the
+     * delivery may still write to the project as stored now ({@link GitLabWebhookContextResolver#mayStillWrite}) and
+     * the answer still describes the stored head ({@link GitLabMergeRequestProcessor#applyReadiness}). A failed read
+     * records nothing:
+     * the facts stay as the event left them, unknown where it moved the head, until the next event or sync. An opened
+     * or updated merge request also has the issues it closes read from GitLab — the webhook stores the
+     * {@code updated_at} the sync later compares against, so the sync would not read them for this change.
      */
     @Override
     protected void dispatchEvent(GitLabMergeRequestEventDTO event, Instant arrivedAt) {
-        ProcessingContext context = transactionTemplate.execute(status -> handle(event, arrivedAt));
-        Repository repository = context == null ? null : context.repository();
-        Long scopeId = context == null ? null : context.scopeId();
         var attributes = event.objectAttributes();
         var project = event.project();
-        if (repository == null
-                || scopeId == null
-                || attributes == null
-                || attributes.iid() == null
-                || project == null
-                || project.id() == null) {
+        Stored stored = transactionTemplate.execute(status -> {
+            ProcessingContext context = handle(event, arrivedAt);
+            if (context == null || context.repository() == null || attributes == null || attributes.iid() == null) {
+                return null;
+            }
+            return mergeRequestProcessor
+                    .storedVersion(context.repository(), attributes.iid())
+                    .map(version -> new Stored(context, version))
+                    .orElse(null);
+        });
+        GitLabEventAction action = event.actionType();
+        if (stored == null || !READS_READINESS.contains(action) || attributes == null || attributes.iid() == null) {
             return;
         }
-        if (event.actionType() != GitLabEventAction.OPEN && event.actionType() != GitLabEventAction.UPDATE) {
+        Repository repository = Objects.requireNonNull(stored.context().repository());
+        Long scopeId = stored.context().scopeId();
+        if (scopeId == null) {
             return;
         }
         int iid = attributes.iid();
-        List<Integer> closing = closingIssueClient.closesIssues(scopeId, project.id(), iid);
-        if (closing != null) {
-            transactionTemplate.executeWithoutResult(status -> {
-                if (contextResolver.mayStillWrite()) {
-                    mergeRequestProcessor.replaceClosingIssues(repository, iid, closing);
-                }
-            });
+        Instant requestedAt = Instant.now();
+        GitLabMergeRequestReadinessReader.Facts facts =
+                readinessReader.read(scopeId, repository.getNameWithOwner(), iid);
+        List<Integer> closing = (action == GitLabEventAction.OPEN || action == GitLabEventAction.UPDATE)
+                        && project != null
+                        && project.id() != null
+                ? closingIssueClient.closesIssues(scopeId, project.id(), iid)
+                : null;
+        if (facts == null && closing == null) {
+            return;
         }
+        transactionTemplate.executeWithoutResult(status -> {
+            if (!contextResolver.mayStillWrite(stored.context())) {
+                return;
+            }
+            if (closing != null) {
+                mergeRequestProcessor.replaceClosingIssues(repository, iid, closing, stored.version());
+            }
+            if (facts != null) {
+                mergeRequestProcessor.applyReadiness(repository, iid, facts, requestedAt, stored.context());
+            }
+        });
     }
 
     @Override

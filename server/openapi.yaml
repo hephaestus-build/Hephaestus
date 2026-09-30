@@ -18731,6 +18731,8 @@ components:
           - PENDING
           - CANCELLED
           - NONE
+          - NO_PIPELINE
+          - SKIPPED
         createdAt:
           type: string
           format: date-time
