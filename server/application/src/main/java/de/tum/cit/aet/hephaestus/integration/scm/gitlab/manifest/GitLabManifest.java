@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.manifest;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -45,6 +46,12 @@ public class GitLabManifest implements IntegrationManifest {
     @Override
     public String displayName() {
         return "GitLab";
+    }
+
+    /** A merge hook often names no merger; the read after it, or a sync, does. */
+    @Override
+    public Set<ActorRole> rolesNamedAfterTheOccasion() {
+        return Set.of(ActorRole.MERGER);
     }
 
     @Override

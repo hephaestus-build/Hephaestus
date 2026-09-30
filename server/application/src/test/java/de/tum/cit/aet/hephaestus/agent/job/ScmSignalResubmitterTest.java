@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
@@ -28,6 +29,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.scm.github.manifest.GitHubManifest;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.manifest.GitLabManifest;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
@@ -255,7 +258,12 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
 
     private PullRequestSignalResubmitter pullRequestResubmitter() {
         return new PullRequestSignalResubmitter(
-                agentJobService, pullRequestRepository, gate, signalRecorder, reviewRepository);
+                agentJobService,
+                pullRequestRepository,
+                gate,
+                signalRecorder,
+                reviewRepository,
+                new IntegrationManifestRegistry(List.of(new GitHubManifest(true), new GitLabManifest(true))));
     }
 
     private GateDecision.Detect detection() {

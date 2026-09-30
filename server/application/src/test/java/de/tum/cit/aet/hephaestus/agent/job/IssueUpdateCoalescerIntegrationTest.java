@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
@@ -433,7 +434,8 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                     mock(PullRequestRepository.class),
                     mock(PracticeReviewDetectionGate.class),
                     recorder,
-                    mock(PullRequestReviewRepository.class));
+                    mock(PullRequestReviewRepository.class),
+                    mock(IntegrationManifestRegistry.class));
         }
 
         @Bean

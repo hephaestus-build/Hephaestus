@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
@@ -59,18 +60,21 @@ public class AgentJobEventListener {
     private final PracticeReviewDetectionGate practiceReviewDetectionGate;
     private final WorkspaceResolver workspaceResolver;
     private final SignalRecorder signalRecorder;
+    private final IntegrationManifestRegistry manifests;
 
     public AgentJobEventListener(
             AgentJobService agentJobService,
             PullRequestRepository pullRequestRepository,
             PracticeReviewDetectionGate practiceReviewDetectionGate,
             WorkspaceResolver workspaceResolver,
-            SignalRecorder signalRecorder) {
+            SignalRecorder signalRecorder,
+            IntegrationManifestRegistry manifests) {
         this.agentJobService = agentJobService;
         this.pullRequestRepository = pullRequestRepository;
         this.practiceReviewDetectionGate = practiceReviewDetectionGate;
         this.workspaceResolver = workspaceResolver;
         this.signalRecorder = signalRecorder;
+        this.manifests = manifests;
     }
 
     @Async
@@ -216,7 +220,7 @@ public class AgentJobEventListener {
                     signalRecorder.markRefused(key, skip.resolvedSignalReason());
                 }
                 case GateDecision.Detect detect -> {
-                    if (MergeActorAdmission.awaitsMerger(pr, key.signalName(), detect.matchedPractices())) {
+                    if (MergeActorAdmission.awaitsMerger(manifests, pr, key.signalName(), detect.matchedPractices())) {
                         log.debug(
                                 "Merge review waits for its merger: prNumber={}, repoName={}",
                                 prData.number(),

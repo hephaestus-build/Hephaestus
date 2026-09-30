@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
@@ -31,6 +32,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.github.manifest.GitHubManifest;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.manifest.GitLabManifest;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -67,6 +70,8 @@ class AgentJobEventListenerTest extends BaseUnitTest {
     private static final Long PR_ID = 456L;
     private static final int PR_NUMBER = 42;
     private static final Long WORKSPACE_ID = 1L;
+    private static final IntegrationManifestRegistry MANIFESTS =
+            new IntegrationManifestRegistry(List.of(new GitHubManifest(true), new GitLabManifest(true)));
 
     @Mock
     private AgentJobService agentJobService;
@@ -88,7 +93,12 @@ class AgentJobEventListenerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         listener = new AgentJobEventListener(
-                agentJobService, pullRequestRepository, practiceReviewDetectionGate, workspaceResolver, signalRecorder);
+                agentJobService,
+                pullRequestRepository,
+                practiceReviewDetectionGate,
+                workspaceResolver,
+                signalRecorder,
+                MANIFESTS);
 
         Workspace owningWorkspace = new Workspace();
         owningWorkspace.setId(WORKSPACE_ID);
@@ -891,7 +901,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                 // One resolver for both, as in production: the ledger key and the gate must agree on which
                 // workspace owns the repository.
                 var listener = new AgentJobEventListener(
-                        agentJobService, pullRequestRepository, realGate, workspaceResolver, signalRecorder);
+                        agentJobService, pullRequestRepository, realGate, workspaceResolver, signalRecorder, MANIFESTS);
                 return new CollaborationFixture(
                         listener, userRoleChecker, practiceDetectionReadiness, practiceRepository, workspaceResolver);
             }

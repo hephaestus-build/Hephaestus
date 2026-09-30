@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
@@ -203,6 +204,9 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     @Autowired
     private SignalRecorder signalRecorder;
+
+    @Autowired
+    private IntegrationManifestRegistry manifests;
 
     @Autowired
     private WorkspaceResolver workspaceResolver;
@@ -2078,12 +2082,13 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         private AgentJobEventListener listener() {
-            return new AgentJobEventListener(jobs, pullRequestRepository, gate, workspaceResolver, signalRecorder);
+            return new AgentJobEventListener(
+                    jobs, pullRequestRepository, gate, workspaceResolver, signalRecorder, manifests);
         }
 
         private PullRequestSignalResubmitter resubmitter() {
             return new PullRequestSignalResubmitter(
-                    jobs, pullRequestRepository, gate, signalRecorder, reviewRepository);
+                    jobs, pullRequestRepository, gate, signalRecorder, reviewRepository, manifests);
         }
 
         private ArtifactSignal mergeSignal() {
@@ -2145,8 +2150,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
             var jobs = mock(AgentJobService.class);
             var gate = mock(PracticeReviewDetectionGate.class);
-            var listener =
-                    new AgentJobEventListener(jobs, pullRequestRepository, gate, workspaceResolver, signalRecorder);
+            var listener = new AgentJobEventListener(
+                    jobs, pullRequestRepository, gate, workspaceResolver, signalRecorder, manifests);
             transactionTemplate.executeWithoutResult(status -> listener.onPullRequestCreated(created));
 
             ArtifactSignal held = artifactSignalRepository
@@ -2167,7 +2172,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             when(gate.evaluate(any(), eq(ScmSignals.PULL_REQUEST_OPENED), eq(TriggerMode.AUTO)))
                     .thenReturn(decision);
             transactionTemplate.executeWithoutResult(status -> new PullRequestSignalResubmitter(
-                            jobs, pullRequestRepository, gate, signalRecorder, reviewRepository)
+                            jobs, pullRequestRepository, gate, signalRecorder, reviewRepository, manifests)
                     .resubmit(held));
 
             var request = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
