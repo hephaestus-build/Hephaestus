@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -147,7 +148,8 @@ class GitLabUserTypeIntegrationTest extends BaseIntegrationTest {
         return service.fetchCanonicalUsers(
                 1L,
                 nodes.stream()
-                        .map(node -> Long.parseLong(((String) Objects.requireNonNull(node.get("id"))).substring(18)))
+                        .map(node ->
+                                GitLabSyncConstants.extractNumericId((String) Objects.requireNonNull(node.get("id"))))
                         .toList());
     }
 
