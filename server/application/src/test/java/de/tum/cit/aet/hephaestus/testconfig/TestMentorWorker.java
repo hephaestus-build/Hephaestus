@@ -214,21 +214,16 @@ public final class TestMentorWorker implements AutoCloseable {
             listeners.forEach(listener -> listener.accept(frame));
         }
 
-        public Disposable subscribe(Consumer<JsonNode> listener) {
+        @Override
+        public Disposable subscribe(Consumer<JsonNode> listener, Runnable lost) {
+            onLost = lost;
             listeners.add(listener);
             return () -> listeners.remove(listener);
         }
 
         @Override
-        public Disposable subscribe(Consumer<JsonNode> listener, Runnable lost) {
-            onLost = lost;
-            return subscribe(listener);
-        }
-
-        @Override
         public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable lost) {
-            onLost = lost;
-            return subscribe(listener);
+            return subscribe(listener, lost);
         }
 
         @Override
