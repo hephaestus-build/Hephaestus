@@ -76,6 +76,4 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue comment 1369 --repo "${{ github.repository }}" --body \
-            "The supported-release rescan is **unknown or failing policy**. Treat this as actionable until triaged: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: node scripts/report-vulnerability-drift.ts reports --release-failure

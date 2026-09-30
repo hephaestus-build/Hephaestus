@@ -532,6 +532,16 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
 
     private AgentJob reviewOf(
             Long pullRequestId, int number, String headSha, @Nullable String signal, String rawOutput) {
+        return reviewOf(pullRequestId, number, headSha, signal, rawOutput, List.of());
+    }
+
+    private AgentJob reviewOf(
+            Long pullRequestId,
+            int number,
+            String headSha,
+            @Nullable String signal,
+            String rawOutput,
+            List<String> rechecked) {
         AgentJob next = new AgentJob();
         next.setWorkspace(workspace);
         next.setWorkerId("test-worker");
@@ -545,6 +555,10 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         metadata.put("pr_number", number);
         metadata.put("commit_sha", headSha);
         if (signal != null) metadata.put(PracticeCatalogInjector.SIGNAL_METADATA_KEY, signal);
+        if (!rechecked.isEmpty()) {
+            var admitted = metadata.putArray(AgentJob.RECHECKED_PRACTICES_METADATA_KEY);
+            rechecked.forEach(admitted::add);
+        }
         next.setMetadata(metadata);
         next.setEvidenceSnapshot(agentJob.getEvidenceSnapshot().deepCopy());
         next = agentJobRepository.save(next);
@@ -800,13 +814,19 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                 ]}""";
 
         @Test
-        void aRepeatedNoteIsWithheldFromTheWorkWhileTheReviewsConversationBriefIsStillPrepared() {
+        void shouldSuppressRepeatedGuidanceWhenARepairRecheckStillRecordsTheSameNegative() {
             AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
             compose(first, LEAD, lapseNote(), lapseBrief());
             when(commentPoster.post(any())).thenReturn("comment-first");
             handler.deliver(first);
 
-            AgentJob second = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
+            AgentJob second = reviewOf(
+                    prId,
+                    50,
+                    "pipelinesha",
+                    ScmSignals.PULL_REQUEST_EDITED.value(),
+                    SWALLOWED_ERROR,
+                    List.of("error-handling"));
             compose(second, LEAD, lapseNote(), lapseBrief());
             handler.deliver(second);
 
@@ -833,6 +853,38 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                         assertThat(brief.getDeliveryState()).isEqualTo(FeedbackDeliveryState.PREPARED);
                         assertThat(boundTo(brief)).containsExactlyElementsOf(current);
                     });
+        }
+
+        @Test
+        void shouldReplaceTheCurrentNegativeWithAPositiveFromAnAdmittedRepairReview() {
+            AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
+            List<Observation> earlier = observationRepository.findByAgentJobId(first.getId(), workspace.getId());
+            String repaired = """
+                    {"observations": [
+                      {"practiceSlug": "error-handling", "summary": "Export errors reach the caller",
+                       "assessmentStatus": "ASSESSED", "presence": "PRESENT", "assessment": "GOOD", "severity": null,
+                       "evidenceRationale": "The caller receives the export failure instead of an empty file."}
+                    ]}""";
+            AgentJob second = reviewOf(
+                    prId,
+                    50,
+                    "pipelinesha",
+                    ScmSignals.PULL_REQUEST_EDITED.value(),
+                    repaired,
+                    List.of("error-handling"));
+            List<Observation> later = observationRepository.findByAgentJobId(second.getId(), workspace.getId());
+            assertThat(later).singleElement().satisfies(row -> {
+                assertThat(row.getAgentJobId()).isEqualTo(second.getId());
+                assertThat(row.getPresence()).isEqualTo(Presence.PRESENT);
+                assertThat(row.getAssessment()).isEqualTo(de.tum.cit.aet.hephaestus.practices.model.Assessment.GOOD);
+            });
+            assertThat(de.tum.cit.aet.hephaestus.practices.observation.LatestRun.perClaim(
+                            observationRepository.findStandingForWork(
+                                    workspace.getId(), ArtifactKinds.PULL_REQUEST, prId, developer.getId())))
+                    .extracting(Observation::getId)
+                    .containsExactly(later.getFirst().getId());
+            assertThat(observationRepository.findById(earlier.getFirst().getId()))
+                    .isPresent();
         }
 
         private String lapseNote() {
