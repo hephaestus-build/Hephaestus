@@ -66,46 +66,52 @@ public final class WorkerInteractiveSandboxService implements InteractiveSandbox
         boolean created;
         var key = new Key(spec.userId(), spec.workspaceId());
         var runtime = runtimeKey(spec);
-        synchronized (sessions) {
-            var current = sessions.get(key);
-            if (current != null && current.isLive() && current.runtime().equals(runtime)) {
-                if (!current.identity().sessionId().equals(spec.sessionId())) credentials.revoke(spec.sessionId());
-                handle = current;
-                created = false;
-            } else {
-                if (current != null) current.close(Duration.ZERO);
-                WorkerSession selected = workers.sessions().stream()
-                        .filter(w -> w.isOpen() && !w.isDraining() && w.lastCapacity() != null)
-                        .filter(w -> {
-                            var capacity = w.lastCapacity();
-                            if (capacity == null) return false;
-                            long reserved = sessions.values().stream()
-                                    .filter(s -> s.worker() == w && s.isLive())
-                                    .count();
-                            // Counting all local placements is conservative between capacity reports; the worker
-                            // performs the authoritative atomic admission across server replicas.
-                            return reserved < capacity.mentorMax() && capacity.spareMentor() > 0;
-                        })
-                        .findFirst()
-                        .orElse(null);
-                if (selected == null) {
-                    credentials.revoke(spec.sessionId());
-                    throw new MentorBusyException();
+        RemoteAttachedSandbox retired = null;
+        try {
+            synchronized (sessions) {
+                var current = sessions.get(key);
+                if (current != null && current.isLive() && current.runtime().equals(runtime)) {
+                    if (!current.identity().sessionId().equals(spec.sessionId())) credentials.revoke(spec.sessionId());
+                    handle = current;
+                    created = false;
+                } else {
+                    retired = current;
+                    if (current != null) sessions.remove(key, current);
+                    WorkerSession selected = workers.sessions().stream()
+                            .filter(w -> w.isOpen() && !w.isDraining() && w.lastCapacity() != null)
+                            .filter(w -> {
+                                var capacity = w.lastCapacity();
+                                if (capacity == null) return false;
+                                long reserved = sessions.values().stream()
+                                        .filter(s -> s.worker() == w && s.isLive())
+                                        .count();
+                                // Counting all local placements is conservative between capacity reports; the worker
+                                // performs the authoritative atomic admission across server replicas.
+                                return reserved < capacity.mentorMax() && capacity.spareMentor() > 0;
+                            })
+                            .findFirst()
+                            .orElse(null);
+                    if (selected == null) {
+                        credentials.revoke(spec.sessionId());
+                        throw new MentorBusyException();
+                    }
+                    handle = new RemoteAttachedSandbox(
+                            new SandboxIdentity(spec.sessionId(), spec.userId(), spec.workspaceId()),
+                            selected,
+                            runtime,
+                            mapper,
+                            properties,
+                            closed -> {
+                                sessions.remove(key, closed);
+                                credentials.revoke(spec.sessionId());
+                            },
+                            meters);
+                    sessions.put(key, handle);
+                    created = true;
                 }
-                handle = new RemoteAttachedSandbox(
-                        new SandboxIdentity(spec.sessionId(), spec.userId(), spec.workspaceId()),
-                        selected,
-                        runtime,
-                        mapper,
-                        properties,
-                        closed -> {
-                            sessions.remove(key, closed);
-                            credentials.revoke(spec.sessionId());
-                        },
-                        meters);
-                sessions.put(key, handle);
-                created = true;
             }
+        } finally {
+            if (retired != null) retired.close(Duration.ZERO);
         }
         if (created) {
             try {

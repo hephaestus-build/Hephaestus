@@ -185,8 +185,7 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
                     return;
                 }
                 frames.offer(event.body());
-                long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-                subscriptions.forEach(sub -> sub.offer(event.body(), deadline));
+                subscriptions.forEach(sub -> sub.offer(event.body()));
             }
             case ACK -> {
                 if (event.requestId() != null) {
@@ -219,10 +218,11 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
 
     private synchronized Disposable subscribeAfter(long after, Consumer<JsonNode> listener, Runnable onLost) {
         var holder = new FrameSubscription[1];
+        // The hub carries all sessions: a full subscriber queue must not delay another session's ACK.
         var sub = new FrameSubscription(
                 listener,
                 properties.subscriberQueueCapacity(),
-                Duration.ofSeconds(5),
+                Duration.ZERO,
                 meters.counter(AgentMetrics.MENTOR_RELAY_SUBSCRIBER_CUTOFF),
                 meters.counter(AgentMetrics.MENTOR_RELAY_SUBSCRIBER_ERROR),
                 onLost,
@@ -234,8 +234,7 @@ final class RemoteAttachedSandbox implements AttachedSandbox {
         }
         subscriptions.add(sub);
         sub.start();
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        frames.snapshotSince(after).forEach(frame -> sub.offer(frame, deadline));
+        frames.snapshotSince(after).forEach(sub::offer);
         return sub;
     }
 

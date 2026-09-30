@@ -249,4 +249,125 @@ class WorkerInteractiveSandboxServiceTest extends BaseUnitTest {
                 .send(any());
         assertThatThrownBy(() -> service.attach(spec("1"))).isInstanceOf(MentorBusyException.class);
     }
+
+    @Test
+    void aFullSubscriberQueueDoesNotBlockAnotherSessionAcknowledgement() throws Exception {
+        when(worker.lastCapacity()).thenReturn(new CapacityReport(1, 2, 0, 0, 1, 2));
+        service = new WorkerInteractiveSandboxService(
+                registry,
+                credentials,
+                mapper,
+                Binder.get(new MockEnvironment().withProperty("hephaestus.mentor.subscriber-queue-capacity", "1"))
+                        .bindOrCreate("hephaestus.mentor", InteractiveSandboxProperties.class),
+                mock(WorkerControlWebSocketHandler.class),
+                new SimpleMeterRegistry());
+        var stalled = service.attach(spec("1"));
+        var healthy = service.attach(spec("2"));
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CompletableFuture<Void>();
+        var lost = new AtomicBoolean();
+        var subscription = stalled.subscribeFromNow(
+                frame -> {
+                    entered.countDown();
+                    release.join();
+                },
+                () -> lost.set(true));
+        var frame = new WorkerMentorSessionEvent(
+                worker,
+                new MentorSessionEvent(
+                        stalled.identity().sessionId(),
+                        null,
+                        MentorSessionEvent.Kind.FRAME,
+                        mapper.createObjectNode().put("text", "delta")));
+        try {
+            service.receive(frame);
+            assertThat(entered.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            service.receive(frame);
+            var dispatched = java.util.concurrent.CompletableFuture.runAsync(() -> {
+                service.receive(frame);
+                healthy.send(mapper.createObjectNode().put("method", "hello"));
+            });
+            dispatched.get(2, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(lost).isTrue();
+            assertThat(sent).anySatisfy(command -> {
+                assertThat(command.sessionId()).isEqualTo(healthy.identity().sessionId());
+                assertThat(command.operation()).isEqualTo(MentorSessionCommand.Operation.SEND);
+            });
+        } finally {
+            release.complete(null);
+            subscription.dispose();
+            stalled.close(Duration.ZERO);
+            healthy.close(Duration.ZERO);
+        }
+    }
+
+    @Test
+    void retiringOneWorkerDoesNotHoldThePlacementLockForAnotherWorker() throws Exception {
+        var original = service.attach(spec("1"));
+        var replacementWorker = mock(WorkerSession.class);
+        when(replacementWorker.isOpen()).thenReturn(true);
+        when(replacementWorker.lastCapacity()).thenReturn(new CapacityReport(1, 1, 0, 0, 1, 1));
+        when(registry.sessions()).thenReturn(List.of(worker, replacementWorker));
+        var entered = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CompletableFuture<Void>();
+        doAnswer(invocation -> {
+                    var command = (MentorSessionCommand) invocation.getArgument(0);
+                    if (command.operation() == MentorSessionCommand.Operation.CLOSE
+                            && command.sessionId().equals(original.identity().sessionId())) {
+                        entered.countDown();
+                        release.join();
+                    }
+                    service.receive(new WorkerMentorSessionEvent(
+                            worker,
+                            new MentorSessionEvent(
+                                    command.sessionId(),
+                                    command.requestId(),
+                                    MentorSessionEvent.Kind.ACK,
+                                    mapper.createObjectNode().put("frameByteBudget", 1024 * 1024))));
+                    return true;
+                })
+                .when(worker)
+                .send(any());
+        doAnswer(invocation -> {
+                    var command = (MentorSessionCommand) invocation.getArgument(0);
+                    service.receive(new WorkerMentorSessionEvent(
+                            replacementWorker,
+                            new MentorSessionEvent(
+                                    command.sessionId(),
+                                    command.requestId(),
+                                    MentorSessionEvent.Kind.ACK,
+                                    mapper.createObjectNode().put("frameByteBudget", 1024 * 1024))));
+                    return true;
+                })
+                .when(replacementWorker)
+                .send(any());
+        var requested = spec("1");
+        var changed = new InteractiveSandboxSpec(
+                requested.sessionId(),
+                requested.userId(),
+                requested.workspaceId(),
+                "image@sha256:changed",
+                requested.command(),
+                requested.environment(),
+                requested.networkPolicy(),
+                requested.resourceLimits(),
+                requested.securityProfile(),
+                requested.inputFiles());
+        var replacing = java.util.concurrent.CompletableFuture.supplyAsync(() -> service.attach(changed));
+        java.util.concurrent.CompletableFuture<AttachedSandbox> other = null;
+        try {
+            assertThat(entered.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            other = java.util.concurrent.CompletableFuture.supplyAsync(() -> service.attach(spec("2")));
+            assertThat(other.get(2, java.util.concurrent.TimeUnit.SECONDS)
+                            .identity()
+                            .userId())
+                    .isEqualTo("2");
+        } finally {
+            release.complete(null);
+            replacing.get(5, java.util.concurrent.TimeUnit.SECONDS).close(Duration.ZERO);
+            if (other != null)
+                other.get(5, java.util.concurrent.TimeUnit.SECONDS).close(Duration.ZERO);
+            original.close(Duration.ZERO);
+        }
+    }
 }
