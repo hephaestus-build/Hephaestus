@@ -1003,3 +1003,63 @@ void test("the merge practices read the threads and decisions as rows against th
 		}
 	}
 });
+
+void test("an approval by an account marked bot is kept as a row but counted as no person's approval", async () => {
+	const merged = { ...metadata, is_merged: true };
+	const tutorBot = { author: "heph_introcourse_tutor_e2e", bot: true };
+	const cases = [
+		{
+			name: "bot only",
+			decisions: [{ ...tutorBot, state: "APPROVED", submittedAt: "2026-04-13T15:00:00Z" }],
+			approvals: 0,
+		},
+		{
+			name: "a person's request for changes, then a bot's approval",
+			decisions: [
+				{ state: "CHANGES_REQUESTED", author: "jennifer", submittedAt: "2026-04-13T14:20:00Z" },
+				{ ...tutorBot, state: "APPROVED", submittedAt: "2026-04-13T15:00:00Z" },
+			],
+			approvals: 0,
+		},
+		{
+			name: "a person's approval, then a bot's request for changes",
+			decisions: [
+				{ state: "APPROVED", author: "jennifer", submittedAt: "2026-04-13T14:30:00Z" },
+				{ ...tutorBot, state: "CHANGES_REQUESTED", submittedAt: "2026-04-13T15:00:00Z" },
+			],
+			approvals: 1,
+		},
+	];
+	for (const { name, decisions, approvals } of cases) {
+		const staged = await stage("merges-only-after-approval", {
+			"review_threads.json": { threads: [], reviewDecisions: decisions },
+		});
+		try {
+			const result = await staged.script(
+				nodePath.join(staged.root, "repo"),
+				new Map(),
+				merged,
+				staged.contextDir,
+				staged.changeDir,
+			);
+			assert.equal(result.metrics.approvalsBeforeMergeByOthers, approvals, name);
+			assert.equal(result.metrics.decisionsByBots, 1, name);
+			const botRows = result.hints.filter((h) => h.flags.bot === true);
+			assert.deepEqual(
+				botRows.map((h) => h.pattern),
+				["review decision", "last decision by reviewer"],
+				name,
+			);
+			assert.match(
+				result.directions[0] ?? "",
+				new RegExp(
+					`, ${approvals} of them an undismissed APPROVED before the merge by an account other than the author's that is not marked bot;`,
+					"u",
+				),
+				name,
+			);
+		} finally {
+			rmSync(staged.root, { recursive: true, force: true });
+		}
+	}
+});
