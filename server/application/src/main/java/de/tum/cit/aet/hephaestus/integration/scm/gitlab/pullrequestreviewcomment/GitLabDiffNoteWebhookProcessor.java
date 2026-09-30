@@ -159,16 +159,17 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
         // This correctly groups reply notes into the same thread and matches the
         // GraphQL sync's discussion-based threads. Falls back to note ID if absent.
         long threadNativeId;
+        String discussionGid = null;
         if (attrs.discussionId() != null) {
             // Build the same GID format as the GraphQL sync uses, then hash with the same algorithm
-            String discussionGid = "gid://gitlab/Discussion/" + attrs.discussionId();
+            discussionGid = "gid://gitlab/Discussion/" + attrs.discussionId();
             threadNativeId = GitLabPullRequestReviewThreadProcessor.deterministicNativeId(discussionGid);
         } else {
             log.warn("Diff note webhook missing discussion_id, falling back to note ID: noteId={}", attrs.id());
             threadNativeId = attrs.id();
         }
         var webhookThreadData = new GitLabPullRequestReviewThreadProcessor.WebhookThreadData(
-                threadNativeId, threadPath, threadLine, createdAt, updatedAt);
+                threadNativeId, threadPath, threadLine, createdAt, updatedAt, discussionGid);
         PullRequestReviewThread thread = threadProcessor.findOrCreateWebhookThread(webhookThreadData, pr, provider);
         if (thread == null) {
             return null;
@@ -207,8 +208,7 @@ public class GitLabDiffNoteWebhookProcessor extends BaseGitLabProcessor {
         // Reconcile a synthetic COMMENTED review per (author, discussion) so the note links
         // to a review row, as on GitHub, and activity counts the review.
         PullRequestReview review = null;
-        if (author != null && attrs.discussionId() != null) {
-            String discussionGid = "gid://gitlab/Discussion/" + attrs.discussionId();
+        if (author != null && discussionGid != null) {
             review = reviewReconciler.findOrCreateCommentedReview(
                     pr, author, discussionGid, createdAt, provider, context);
         }

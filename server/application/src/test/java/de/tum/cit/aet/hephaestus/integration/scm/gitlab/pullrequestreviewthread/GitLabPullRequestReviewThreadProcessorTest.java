@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -9,6 +11,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
@@ -16,7 +19,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -38,6 +44,9 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
     private PullRequestReviewThreadRepository threadRepository;
 
     @Mock
+    private PullRequestRepository pullRequestRepository;
+
+    @Mock
     private ApplicationEventPublisher eventPublisher;
 
     private GitLabPullRequestReviewThreadProcessor processor;
@@ -46,7 +55,7 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        processor = new GitLabPullRequestReviewThreadProcessor(threadRepository, eventPublisher);
+        processor = new GitLabPullRequestReviewThreadProcessor(threadRepository, pullRequestRepository, eventPublisher);
 
         provider = new IdentityProvider();
         provider.setId(PROVIDER_ID);
@@ -114,7 +123,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     "base-sha",
                     CREATED_AT);
 
-            PullRequestReviewThread saved = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread saved =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(saved).isNotNull();
             assertThat(saved.getPath()).isEqualTo("src/Foo.ts");
@@ -128,57 +138,68 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldMarkThreadResolvedWhenDiscussionIsResolved() {
+        void shouldCreateTheThreadForItsCommentsUnresolvedWhateverTheDiscussionSays() {
             when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
                     .thenReturn(Optional.empty());
             when(threadRepository.save(any(PullRequestReviewThread.class)))
                     .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewThread.class));
 
-            User resolver = new User();
-            resolver.setLogin("resolver");
+            PullRequestReviewThread saved = Objects.requireNonNull(processor.findOrCreateThread(
+                    resolved(Instant.parse("2024-01-16T09:30:00Z")), pr, provider, SCOPE_ID));
 
-            var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
-                    DISCUSSION_GID,
-                    true,
-                    resolver,
-                    "src/Foo.ts",
-                    42,
-                    null,
-                    PullRequestReviewComment.Side.RIGHT,
-                    "head-sha",
-                    "base-sha",
-                    CREATED_AT);
-
-            PullRequestReviewThread saved = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
-
-            assertThat(saved).isNotNull();
-            assertThat(saved.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
-            assertThat(saved.getResolvedBy()).isSameAs(resolver);
+            assertThat(saved.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(saved.getResolvedBy()).isNull();
+            assertThat(saved.getResolvedAt()).isNull();
+            verify(eventPublisher, never()).publishEvent(any());
         }
 
         @Test
-        void shouldDateTheResolutionFromTheDiscussionAndClearItWhenUnresolved() {
+        void shouldCreateAResolvedThreadFromAWholeReadAndReopenItFromALaterOne() {
             when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
                     .thenReturn(Optional.empty());
-            when(threadRepository.save(any(PullRequestReviewThread.class)))
-                    .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewThread.class));
+            var saved = new AtomicReference<PullRequestReviewThread>();
+            when(threadRepository.save(any(PullRequestReviewThread.class))).thenAnswer(inv -> {
+                saved.set(inv.getArgument(0, PullRequestReviewThread.class));
+                return saved.get();
+            });
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(anyLong(), anyInt()))
+                    .thenReturn(Optional.of(pr));
             Instant resolvedAt = Instant.parse("2024-01-16T09:30:00Z");
-            var resolved = new GitLabPullRequestReviewThreadProcessor.ThreadData(
-                    DISCUSSION_GID, true, null, "src/Foo.ts", 42, null, null, null, null, null, CREATED_AT, resolvedAt);
+            Instant firstRead = Instant.parse("2024-01-16T10:00:00Z");
 
-            PullRequestReviewThread saved = processor.findOrCreateThread(resolved, pr, provider, SCOPE_ID);
+            processor.applyDiscussionRead(
+                    Objects.requireNonNull(pr.getRepository()),
+                    7,
+                    firstRead,
+                    List.of(resolved(resolvedAt)),
+                    provider,
+                    SCOPE_ID);
 
-            assertThat(saved.getResolvedAt()).isEqualTo(resolvedAt);
+            PullRequestReviewThread created = Objects.requireNonNull(saved.get());
+            assertThat(created.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
+            assertThat(created.getResolvedAt()).isEqualTo(resolvedAt);
+            assertThat(created.getNodeId()).isEqualTo(DISCUSSION_GID);
 
             when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
-                    .thenReturn(Optional.of(saved));
+                    .thenReturn(Optional.of(created));
             var reopened = new GitLabPullRequestReviewThreadProcessor.ThreadData(
                     DISCUSSION_GID, false, null, "src/Foo.ts", 42, null, null, null, null, null, CREATED_AT, null);
 
-            PullRequestReviewThread updated = processor.findOrCreateThread(reopened, pr, provider, SCOPE_ID);
+            processor.applyDiscussionRead(
+                    Objects.requireNonNull(pr.getRepository()),
+                    7,
+                    firstRead.plusSeconds(60),
+                    List.of(reopened),
+                    provider,
+                    SCOPE_ID);
 
-            assertThat(updated.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
-            assertThat(updated.getResolvedAt()).isNull();
+            assertThat(created.getState()).isEqualTo(PullRequestReviewThread.State.UNRESOLVED);
+            assertThat(created.getResolvedAt()).isNull();
+        }
+
+        private GitLabPullRequestReviewThreadProcessor.ThreadData resolved(Instant resolvedAt) {
+            return new GitLabPullRequestReviewThreadProcessor.ThreadData(
+                    DISCUSSION_GID, true, null, "src/Foo.ts", 42, null, null, null, null, null, CREATED_AT, resolvedAt);
         }
 
         @Test
@@ -200,7 +221,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     "base-sha",
                     CREATED_AT);
 
-            PullRequestReviewThread saved = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread saved =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(saved.getLine()).isEqualTo(17);
             assertThat(saved.getSide()).isEqualTo(PullRequestReviewComment.Side.LEFT);
@@ -216,7 +238,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
             var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
                     DISCUSSION_GID, false, null, null, null, CREATED_AT);
 
-            PullRequestReviewThread saved = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread saved =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(saved).isNotNull();
             assertThat(saved.getPath()).isNull();
@@ -247,7 +270,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     true,
                     CREATED_AT);
 
-            PullRequestReviewThread saved = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread saved =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(saved).isNotNull();
             assertThat(saved.getOutdated()).isTrue();
@@ -273,7 +297,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     false,
                     CREATED_AT);
 
-            PullRequestReviewThread saved = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread saved =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(saved).isNotNull();
             assertThat(saved.getOutdated()).isFalse();
@@ -312,7 +337,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     "base-sha",
                     CREATED_AT);
 
-            PullRequestReviewThread result = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread result =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(result.getPath()).isEqualTo("src/Foo.ts");
             assertThat(result.getLine()).isEqualTo(42);
@@ -352,7 +378,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     "incoming-base",
                     CREATED_AT);
 
-            PullRequestReviewThread result = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread result =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(result.getPath()).isEqualTo("existing/path.ts");
             assertThat(result.getLine()).isEqualTo(99);
@@ -394,7 +421,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     true,
                     CREATED_AT);
 
-            PullRequestReviewThread result = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread result =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(result.getOutdated()).isTrue();
         }
@@ -431,7 +459,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     true,
                     CREATED_AT);
 
-            PullRequestReviewThread result = processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            PullRequestReviewThread result =
+                    Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
             assertThat(result.getOutdated()).isFalse();
             // Nothing changed so no save should happen
@@ -457,8 +486,11 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
 
             var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
                     DISCUSSION_GID, true, resolver, null, null, null, null, null, null, CREATED_AT);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(anyLong(), anyInt()))
+                    .thenReturn(Optional.of(pr));
 
-            processor.findOrCreateThread(data, pr, provider, SCOPE_ID);
+            processor.applyDiscussionRead(
+                    Objects.requireNonNull(pr.getRepository()), 7, Instant.now(), List.of(data), provider, SCOPE_ID);
 
             assertThat(existing.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
             assertThat(existing.getResolvedBy()).isSameAs(resolver);
