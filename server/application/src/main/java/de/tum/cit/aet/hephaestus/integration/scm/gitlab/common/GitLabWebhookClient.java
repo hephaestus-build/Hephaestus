@@ -114,6 +114,7 @@ public class GitLabWebhookClient {
                 .post()
                 .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks", groupId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
+                .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                 .bodyValue(config.toPayload())
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
@@ -158,6 +159,9 @@ public class GitLabWebhookClient {
                     .delete()
                     .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
+                    .attributes(attributes -> {
+                        if (scopeId != null) attributes.put(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId);
+                    })
                     .retrieve()
                     .toBodilessEntity()
                     .block(REQUEST_TIMEOUT);
@@ -196,6 +200,7 @@ public class GitLabWebhookClient {
                     .get()
                     .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks/{hookId}", groupId, webhookId)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
+                    .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                     .retrieve()
                     .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
                     .block(REQUEST_TIMEOUT);
@@ -235,6 +240,7 @@ public class GitLabWebhookClient {
                 .get()
                 .uri(credentials.serverUrl() + "/api/v4/groups/{groupId}/hooks?per_page=100", groupId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + credentials.token())
+                .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                 .retrieve()
                 .bodyToMono(new ParameterizedTypeReference<List<Map<String, Object>>>() {})
                 .block(REQUEST_TIMEOUT);

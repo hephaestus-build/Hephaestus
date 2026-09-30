@@ -10179,6 +10179,12 @@ components:
          the JSON shape flat — the API consumer sees one record, not a nested <code>summary</code>
          object.
       properties:
+        attentionProblem:
+          type: string
+          enum:
+          - CREDENTIAL_EXPIRING
+          - CREDENTIAL_REVOKED
+          - PROVIDER_SUSPENDED
         capabilities:
           type: array
           items:
@@ -10229,6 +10235,12 @@ components:
           - UNINSTALLED
         stateReason:
           type: string
+        tokenExpiresAt:
+          type: string
+          format: date
+        tokenExpiryCheckedAt:
+          type: string
+          format: date-time
         updatedAt:
           type: string
           format: date-time

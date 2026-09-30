@@ -75,6 +75,7 @@ public class GitlabApprovalChannel implements ApprovalChannel {
                     .post()
                     .uri(approvalUri(tokenService.resolveServerUrl(scopeId), mr))
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenService.getAccessToken(scopeId))
+                    .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                     .retrieve()
                     .toBodilessEntity()
                     .block(REQUEST_TIMEOUT);

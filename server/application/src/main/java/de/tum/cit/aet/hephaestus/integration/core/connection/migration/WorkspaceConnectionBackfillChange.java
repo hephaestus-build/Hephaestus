@@ -202,7 +202,8 @@ public class WorkspaceConnectionBackfillChange implements CustomTaskChange {
                         gitlabGroupId,
                         gitlabWebhookId,
                         GitLabConfig.SigningMode.PLAINTEXT,
-                        Collections.emptySet());
+                        Collections.emptySet(),
+                        null);
                 credentialBlob = rewrapPat(encryptedPat, workspaceId, kind, instanceKey, crypto);
             }
             default -> {

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.lang.reflect.Field;
 import java.lang.reflect.RecordComponent;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -72,6 +73,31 @@ class ConnectionDetailDTOTest {
 
         assertThat(dto.config()).containsEntry("orgLogin", "acme").containsKey("installationId");
         assertThat(dto.config()).containsKey("serverUrl"); // null-valued keys survive redaction
+    }
+
+    @Test
+    void shouldExposeGitlabExpiryOnlyThroughTypedSafeFields() {
+        Workspace workspace = new Workspace();
+        workspace.setId(7L);
+        LocalDate expiry = LocalDate.of(2026, 12, 5);
+        Instant checked = Instant.parse("2026-09-30T03:00:00Z");
+        Connection connection = new Connection(
+                workspace,
+                IntegrationKind.GITLAB,
+                "group",
+                new ConnectionConfig.GitLabConfig(
+                        "https://gitlab.com",
+                        null,
+                        null,
+                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                        Set.of(),
+                        new ConnectionConfig.GitLabTokenMetadata(expiry, checked)));
+        stampPersistenceFields(connection);
+        ConnectionDetailDTO dto = ConnectionDetailDTO.from(connection, manifests(), mapper);
+        assertThat(dto.tokenExpiresAt()).isEqualTo(expiry);
+        assertThat(dto.tokenExpiryCheckedAt()).isEqualTo(checked);
+        assertThat(dto.config()).doesNotContainKey("tokenMetadata");
+        assertThat(mapper.writeValueAsString(dto)).contains("2026-12-05").doesNotContain("tokenMetadata");
     }
 
     /**

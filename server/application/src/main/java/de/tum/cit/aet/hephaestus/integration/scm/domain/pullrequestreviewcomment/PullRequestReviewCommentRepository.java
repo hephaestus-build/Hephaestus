@@ -1,17 +1,32 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NoteIdProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.RepositoryItemCountProjection;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 @WorkspaceAgnostic("Comments scoped through review_id -> repository.workspace_id")
 public interface PullRequestReviewCommentRepository extends JpaRepository<PullRequestReviewComment, Long> {
+    @Query(
+            "SELECT c.id AS id, c.nativeId AS nativeId FROM PullRequestReviewComment c WHERE c.pullRequest.id = :parentId")
+    List<NoteIdProjection> findNoteIdsByParentId(@Param("parentId") long parentId);
+
+    @Modifying
+    @Query(
+            "UPDATE PullRequestReviewComment c SET c.inReplyTo = NULL WHERE c.pullRequest.id = :parentId AND c.inReplyTo.id IN :ids")
+    int clearDeletedReplies(@Param("parentId") long parentId, @Param("ids") Collection<Long> ids);
+
+    @Modifying
+    @Query("DELETE FROM PullRequestReviewComment c WHERE c.pullRequest.id = :parentId AND c.id IN :ids")
+    int deleteReconciled(@Param("parentId") long parentId, @Param("ids") Collection<Long> ids);
+
     Optional<PullRequestReviewComment> findByNativeIdAndProviderId(Long nativeId, Long providerId);
 
     boolean existsByNativeIdAndProviderId(Long nativeId, Long providerId);

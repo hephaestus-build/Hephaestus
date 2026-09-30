@@ -509,6 +509,8 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "ApprovedFeedbackReadyEvent", // carries workspaceId directly
                                         "BotCommand", // BotCommandReceivedEvent carries repositoryId → workspace
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
+                                        "ConnectionCredentialsReplacedEvent", // Carries workspaceId and connectionId
+                                        // explicitly
                                         "IntegrationAttentionChangedEvent", // Carries an explicit workspaceId and
                                         // connectionId
                                         "ProductFeedbackSubmittedEvent", // Instance-admin fan-out; submission UUID

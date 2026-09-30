@@ -97,4 +97,30 @@ class WorkspaceAlertEmailListenerTest extends BaseUnitTest {
         assertThat(message.html())
                 .contains("Slack", ">Owned</span>", "href=\"https://hephaestus.example/w/owned/admin/settings\"");
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "CREDENTIAL_EXPIRING,false,expires soon",
+        "CREDENTIAL_REVOKED,false,credentials",
+        "CREDENTIAL_EXPIRING,true,connected again"
+    })
+    void shouldSendGitLabCredentialAlertsToSubscribedWorkspaceAdministrators(
+            IntegrationAttentionChangedEvent.Problem problem, boolean recovered, String description) {
+        var event = new IntegrationAttentionChangedEvent(3L, 7L, IntegrationKind.GITLAB, problem, recovered, 1L, NOW);
+        when(attention.isCurrent(event)).thenReturn(true);
+        when(subscriptions.unsubscribeToken(42L, NotificationSubscriptionKind.WORKSPACE_ALERTS, NOW))
+                .thenReturn(Optional.of("token"));
+        when(contacts.activeVerifiedPrimaryEmail(42L)).thenReturn(Optional.of("admin@example.org"));
+        when(memberships.membershipsForAccount(42L))
+                .thenReturn(List.of(new AccountWorkspaceMembershipQuery.WorkspaceMembershipView(
+                        7L, "owned", "Owned", "ADMIN", 501L)));
+        when(links.url("token")).thenReturn("https://example.org/unsubscribe/token");
+        when(links.confirmationUrl("token")).thenReturn("https://example.org/unsubscribe/token/confirm");
+        when(gateway.configured()).thenReturn(true);
+        when(gateway.send(any())).thenReturn(EmailDeliveryResult.sent("id"));
+        listener.on(new WorkspaceAlertEmailRequested(event, 42L));
+        var sent = ArgumentCaptor.forClass(EmailMessage.class);
+        verify(gateway).send(sent.capture());
+        assertThat(sent.getValue().text()).contains("GitLab", description).doesNotContain("glpat-");
+    }
 }

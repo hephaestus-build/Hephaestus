@@ -152,6 +152,10 @@ class GitLabTokenServiceTest extends BaseUnitTest {
             when(mockWebClient.get()).thenReturn((RequestHeadersUriSpec) uriSpec);
             when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
             when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(eq(GitLabTokenService.GitLabUserResponse.class)))
                     .thenReturn(Mono.just(new GitLabTokenService.GitLabUserResponse(42L, "testuser")));

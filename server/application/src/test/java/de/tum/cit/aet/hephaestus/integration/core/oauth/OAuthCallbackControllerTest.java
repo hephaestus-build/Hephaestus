@@ -522,7 +522,8 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
                                 null,
                                 null,
                                 ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                                Set.of());
+                                Set.of(),
+                                null);
                     case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
                     case OUTLINE ->
                         new ConnectionConfig.OutlineConfig(

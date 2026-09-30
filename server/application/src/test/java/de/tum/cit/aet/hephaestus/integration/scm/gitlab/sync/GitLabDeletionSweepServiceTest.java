@@ -118,6 +118,10 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
                 Duration.ZERO,
                 Duration.ofMinutes(5));
 
+        var noteReconciliation = mock(GitLabNoteReconciliationService.class);
+        lenient()
+                .when(noteReconciliation.reconcileRepository(anyLong(), any(), any()))
+                .thenReturn(new GitLabNoteReconciliationService.Outcome(0, false));
         PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
         lenient().when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         service = new GitLabDeletionSweepService(
@@ -128,7 +132,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
                 properties,
                 actorSelector,
                 workspaceLinkService,
-                new TransactionTemplate(transactionManager));
+                new TransactionTemplate(transactionManager),
+                noteReconciliation);
         // Default: the scope is connected to the repository's instance and may still write it.
         lenient().when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.of(PROVIDER_ID));
         lenient()

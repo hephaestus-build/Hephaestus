@@ -373,7 +373,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 routeCredential,
                 subjectKeyDeriver);
         when(deletionSweepService.sweepScope(anyLong(), any()))
-                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, false));
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false));
     }
 
     @AfterEach
@@ -1520,7 +1520,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 IntegrationKind.GITLAB,
                 SERVER_URL,
                 new ConnectionConfig.GitLabConfig(
-                        SERVER_URL, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of()),
+                        SERVER_URL, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null),
                 "glpat-test",
                 "event-routing-" + saved.getId());
         return saved;

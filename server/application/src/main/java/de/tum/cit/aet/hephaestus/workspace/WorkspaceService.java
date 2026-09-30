@@ -222,7 +222,8 @@ public class WorkspaceService {
                             /* gitlabGroupId */ null,
                             /* gitlabWebhookId */ null,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of()),
+                            Set.of(),
+                            null),
                     personalAccessToken,
                     "create-workspace-" + workspace.getId());
         } else {

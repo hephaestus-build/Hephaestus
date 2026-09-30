@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { getIntegrationCatalogQueryKey } from "@/api/@tanstack/react-query.gen";
 import type {
 	ConnectionSyncStatus,
+	ConnectionDetail,
 	IntegrationCatalogEntry,
 	SyncJob,
 	Workspace,
@@ -43,7 +44,8 @@ function mockConnection(kind: "GITHUB" | "GITLAB", installationId?: number) {
 		connectionState: "ACTIVE",
 		credentialsUnreadableSince: installationId == null ? listed.createdAt : undefined,
 	} satisfies IntegrationCatalogEntry;
-	const status = {
+	const detail: Wire<ConnectionDetail> = { id: 7, kind, state: "ACTIVE" };
+	const status: ConnectionSyncStatus = {
 		connectionId: 7,
 		connectionState: "ACTIVE",
 		kind,
@@ -58,6 +60,7 @@ function mockConnection(kind: "GITHUB" | "GITLAB", installationId?: number) {
 			HttpResponse.json({ role: "ADMIN", userId: 1, userLogin: "ada", userName: "Ada" }),
 		),
 		http.get("*/workspaces/:workspaceSlug/connections/catalog", () => HttpResponse.json([entry])),
+		http.get("*/workspaces/:workspaceSlug/connections/7", () => HttpResponse.json(detail)),
 		http.get("*/workspaces/:workspaceSlug/connections/7/sync", () => HttpResponse.json(status)),
 		http.get("*/workspaces/:workspaceSlug/connections/7/sync/resources", () =>
 			HttpResponse.json([]),
@@ -67,7 +70,7 @@ function mockConnection(kind: "GITHUB" | "GITLAB", installationId?: number) {
 		),
 		http.get("*/workspaces/:workspaceSlug/repositories", () => HttpResponse.json([])),
 	);
-	return { entry, workspace };
+	return { entry, workspace, detail, status };
 }
 
 describe("source-control credential recovery", () => {
@@ -101,6 +104,33 @@ describe("source-control credential recovery", () => {
 			await waitFor(() => expect(input).toHaveProperty("value", ""));
 		},
 	);
+
+	it("shows a refused GitLab token and its calendar expiry, then clears the problem after replacement", async () => {
+		const { entry, workspace, detail, status } = mockConnection("GITLAB");
+		entry.credentialsUnreadableSince = undefined;
+		detail.attentionProblem = "CREDENTIAL_REVOKED";
+		detail.tokenExpiresAt = "2026-12-05";
+		detail.tokenExpiryCheckedAt = "2026-09-30T03:00:00Z";
+		status.health = "DEGRADED";
+		server.use(
+			http.patch("*/workspaces/acme/token", () => {
+				detail.attentionProblem = undefined;
+				detail.tokenExpiresAt = undefined;
+				detail.tokenExpiryCheckedAt = undefined;
+				status.health = "HEALTHY";
+				return HttpResponse.json(workspace);
+			}),
+		);
+		renderRouteAt("/w/acme/admin/integrations/scm");
+		await screen.findByText("GitLab refuses this token", undefined, ROUTE_RENDER_WAIT);
+		screen.getByText("Token expires on 5 December 2026");
+		const user = userEvent.setup();
+		await user.type(screen.getByLabelText("New personal access token"), "replacement-token");
+		await user.click(screen.getByRole("button", { name: "Replace token" }));
+		await waitFor(() => expect(screen.queryByText("GitLab refuses this token")).toBeNull());
+		expect(screen.queryByText("Token expires on 5 December 2026")).toBeNull();
+		await screen.findByText("Token expiry is not available yet");
+	});
 
 	it("keeps the draft and the unreadable state when replacement fails", async () => {
 		mockConnection("GITLAB");

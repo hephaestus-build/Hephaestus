@@ -32,7 +32,7 @@ No integration hand-rolls a vendor DTO.
 | **Live updates** | `POST /webhooks/github` → `github.<owner>.<repo>.<event>`; repository-lifecycle events ride `github.<owner>.?.repository`. | `POST /webhooks/gitlab/connections/{connectionId}/{keyId}/{routeId}` for group hooks Hephaestus registers on connect. `X-Gitlab-Token` carries a `GitLabRouteCredential` signed with `WEBHOOK_ROUTING_SECRET` and bound to that connection, key and route. The receiver rejects a supplied `X-Gitlab-Instance` that differs from the signed origin; it does not use that header to select a workspace. `GitlabSubjectKeyDeriver.deriveConnectionSubject` publishes `gitlab.?connection.<connectionId>.<event>`, independent of payload paths. Admission checks the active connection, workspace, configured GitLab instance and group before handling. Operator-created hooks still use the shared `POST /webhooks/gitlab` endpoint and its namespace subjects. | Events API → `slack.<team>.<scope>.<event>`; consent re-checked per message. | Vendor webhook subscription → `outline.<subscriptionId>.<event>`. |
 | **Periodic reconcile** | `hephaestus.sync.cron`, default daily 03:00; per-repository cooldown. | Same cron and scheduler shape. | `hephaestus.sync.slack.cron`, default daily 04:00 — replays `conversations.history` for ACTIVE channels. | `…outline.sync.cron`, default every 6 h, plus a 5-minute catch-up tick for collections still awaiting a clean pass. |
 | **Backfill** | Supported. Scheduled cycle gated by `hephaestus.sync.backfill.enabled` (off by default); manual backfill always offered and loops until complete or cancelled. | Supported. One batch per pending repository per click; the scheduled cycle drains the rest at its 5-minute cooldown. | **Not supported**, deliberately: pre-consent and paused-gap history must never be fetched. | **Not supported.** The reconcile is a full enumeration; there is no older horizon to walk. |
-| **Upstream deletion** | `RECONCILIATION` sweep tombstones issues/PRs (fail-closed). `repository.deleted` webhook removes repo + monitors. | `RECONCILIATION` sweep tombstones issues/MRs (fail-closed). GitLab emits **no** issue/MR deletion webhook at all. | **No inference from absence.** `message_deleted` → tombstone; `channel_deleted` → erase our copy; `channel_archive` / `channel_left` → PAUSED. | `RECONCILIATION` only: a **clean** full enumeration tombstones that collection's vanished documents (fail-closed). `documents.delete` / `documents.permanent_delete` tombstone immediately. |
+| **Upstream deletion** | `RECONCILIATION` sweep tombstones issues/PRs (fail-closed). `repository.deleted` webhook removes repo + monitors. | `RECONCILIATION` sweep tombstones issues/MRs and removes deleted issue/MR notes, including diff notes. Each parent requires a complete REST note listing with consistent pagination counts; incomplete parents remove nothing. GitLab sends no issue/MR or note-deletion webhook. | **No inference from absence.** `message_deleted` → tombstone; `channel_deleted` → erase our copy; `channel_archive` / `channel_left` → PAUSED. | `RECONCILIATION` only: a **clean** full enumeration tombstones that collection's vanished documents (fail-closed). `documents.delete` / `documents.permanent_delete` tombstone immediately. |
 | **Erasure on disconnect / purge** | `ScmWorkspaceContentEraser` — hard delete, orphan-guarded. | Same eraser. Disconnect is GitLab's **only** erase trigger (no vendor uninstall signal). | `SlackWorkspaceContentEraser` — hard delete of messages, threads, monitored channels, consent, mentor threads. | Hard delete of `outline_document`, `outline_collection`, `outline_document_event` + webhook deregistration. |
 | **Rename / transfer healing** | Real time within the same owner: the mirrored row and **every** monitor are re-keyed by the stable `repository.id`. Cross-owner transfer heals on the next reconcile. | Project rename/move rides the root-group tier and re-keys by native id; a move across root groups heals on the next reconcile. | Channel rename handled on the consent/monitored-channel record. | Documents are keyed by `documentId`; a title or collection rename is ordinary metadata. |
 
@@ -47,6 +47,18 @@ truncation, no cancellation, and a node count that agrees exactly with the serve
 `totalCount`. Any doubt skips the entity class entirely. A partial listing is never merged with a
 previous one. Outline's equivalent: a truncated enumeration throws rather than returning a short
 list, and a budget-exhausted pass tombstones nothing.
+
+GitLab note reconciliation uses the flat REST notes endpoint for both issues and merge requests,
+including diff notes. It walks every live mirrored parent, not only recently updated work. It requires
+explicit `X-Page`, `X-Next-Page`, and an unchanged `X-Total`, and the unique note count must equal that
+total. Missing headers, duplicate IDs, a changed count, failed pages, cancellation, or the page cap
+leave that parent's notes untouched. GitLab can omit count headers for large listings; those parents
+are not reconciled. Candidates are captured before listing, so notes inserted during the pass survive.
+Every missing candidate must also return 404 on a direct note read: offset pages can shift without changing their
+total. A successful read or any failed confirmation keeps that parent unchanged.
+Deleted review notes are removed with their reply references; empty mirrored threads are removed too.
+Future evidence capture and Heph reads no longer include them. Previously captured review snapshots
+remain immutable under their existing retention policy.
 
 ### Reconciliation-only: an `INITIAL` job never infers a deletion
 
@@ -67,9 +79,9 @@ truncated Outline pass therefore deletes nothing even on a reconcile.
 
 ### Tombstone ≠ erasure
 
-Two operations, two triggers, deliberately sharing no code.
+For issues and merge requests, two operations have distinct triggers and deliberately share no code.
 
-| | Drift tombstone | Mirror erasure |
+| | Issue and merge request drift tombstone | Mirror erasure |
 | --- | --- | --- |
 | Trigger | A reconcile pass observes an artifact missing upstream | Admin disconnect, or workspace purge |
 | Effect | `deleted_at` marker; content-bearing fields cleared | Hard `DELETE`, including of tombstoned rows |
@@ -78,7 +90,8 @@ Two operations, two triggers, deliberately sharing no code.
 
 A tombstoned row is still queryable retained personal data, so a tombstone can never implement the
 disconnect trigger. A hard delete destroys data the drift sweep expects to be able to resurrect, so
-erasure can never implement the drift path.
+erasure can never implement the issue or merge request drift path. Notes have no tombstone model:
+the per-parent reconciliation described above removes their mirror rows instead.
 
 There is no entity-level soft-delete filter: which reads honour a tombstone, and which keep returning
 the row because they record something that happened, is decided surface by surface in

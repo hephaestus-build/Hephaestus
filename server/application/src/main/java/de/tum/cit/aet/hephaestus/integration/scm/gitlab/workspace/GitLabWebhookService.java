@@ -7,16 +7,14 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.Gi
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenRotationClient;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookConfig;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookClient.WebhookInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabTokenLifecycleService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -57,28 +55,25 @@ public class GitLabWebhookService {
     private static final Logger log = LoggerFactory.getLogger(GitLabWebhookService.class);
 
     private final ObjectProvider<GitLabWebhookClient> webhookClientProvider;
-    private final ObjectProvider<GitLabTokenRotationClient> rotationClientProvider;
-    private final ObjectProvider<GitLabTokenService> tokenServiceProvider;
     private final WebhookProperties webhookProperties;
     private final GitLabRouteCredential routeCredential;
     private final WorkspaceRepository workspaceRepository;
     private final ConnectionService connectionService;
+    private final ObjectProvider<GitlabTokenLifecycleService> tokenLifecycle;
 
     public GitLabWebhookService(
             ObjectProvider<GitLabWebhookClient> webhookClientProvider,
-            ObjectProvider<GitLabTokenRotationClient> rotationClientProvider,
-            ObjectProvider<GitLabTokenService> tokenServiceProvider,
             WebhookProperties webhookProperties,
             GitLabRouteCredential routeCredential,
             WorkspaceRepository workspaceRepository,
-            ConnectionService connectionService) {
+            ConnectionService connectionService,
+            ObjectProvider<GitlabTokenLifecycleService> tokenLifecycle) {
         this.webhookClientProvider = webhookClientProvider;
-        this.rotationClientProvider = rotationClientProvider;
-        this.tokenServiceProvider = tokenServiceProvider;
         this.webhookProperties = webhookProperties;
         this.routeCredential = routeCredential;
         this.workspaceRepository = workspaceRepository;
         this.connectionService = connectionService;
+        this.tokenLifecycle = tokenLifecycle;
     }
 
     /**
@@ -90,81 +85,14 @@ public class GitLabWebhookService {
      *
      * @param workspace the workspace to check
      */
-    @Transactional
     public void rotateTokenIfNeeded(Workspace workspace) {
-        if (!isGitLabWorkspace(workspace)) {
-            return;
-        }
-
-        var rotationClient = rotationClientProvider.getIfAvailable();
-        if (rotationClient == null) {
-            log.debug("Token rotation skipped: rotation client unavailable, workspaceId={}", workspace.getId());
-            return;
-        }
-
-        int thresholdDays = webhookProperties.tokenRotation().thresholdDays();
-        if (thresholdDays <= 0) {
-            return;
-        }
-
-        try {
-            var tokenInfo = rotationClient.getTokenInfo(workspace.getId());
-            if (tokenInfo.expiresAt() == null) {
-                log.debug("Token has no expiry, rotation not needed: workspaceId={}", workspace.getId());
-                return;
-            }
-
-            LocalDate threshold = LocalDate.now().plusDays(thresholdDays);
-            if (tokenInfo.expiresAt().isAfter(threshold)) {
-                log.debug(
-                        "Token not expiring soon: workspaceId={}, expiresAt={}, threshold={}",
-                        workspace.getId(),
-                        tokenInfo.expiresAt(),
-                        threshold);
-                return;
-            }
-
-            LocalDate newExpiry =
-                    LocalDate.now().plusDays(webhookProperties.tokenRotation().validityDays());
-            var rotatedToken = rotationClient.rotateToken(workspace.getId(), newExpiry);
-
-            // Persist new token immediately — old token is already revoked. The token lives on the
-            // GitLab Connection's credential blob; rotateBearerToken re-encrypts with the per-row AAD
-            // so cross-row substitution is prevented.
-            connectionService
-                    .rotateBearerToken(
-                            workspace.getId(), IntegrationKind.GITLAB, new BearerToken(rotatedToken.token(), null))
-                    .orElseThrow(() -> new IllegalStateException("The GitLab token of workspace " + workspace.getId()
-                            + " was rotated at the provider but no active GitLab connection was there to store it"));
-
-            // Invalidate token cache so subsequent calls use the new token
-            var tokenService = tokenServiceProvider.getIfAvailable();
-            if (tokenService != null) {
-                tokenService.invalidateCache(workspace.getId());
-            }
-
-            log.info(
-                    "Rotated GitLab PAT: workspaceId={}, oldExpiry={}, newExpiry={}",
-                    workspace.getId(),
-                    tokenInfo.expiresAt(),
-                    rotatedToken.expiresAt());
-        } catch (WebClientResponseException | IllegalStateException e) {
-            // Non-fatal for the scheduler: a failure before the provider rotated leaves the old token
-            // valid until it expires; a failure after it is what the warning below is for.
-            log.warn("Token rotation failed: workspaceId={}", workspace.getId(), e);
-        }
+        var lifecycle = tokenLifecycle.getIfAvailable();
+        if (lifecycle != null) lifecycle.check(workspace.getId());
     }
 
     /** Whether this deployment registers group webhooks: GitLab is enabled and a webhook URL and secret are set. */
     public boolean isRegistrationEnabled() {
         return webhookProperties.isConfigured() && webhookClientProvider.getIfAvailable() != null;
-    }
-
-    private boolean isGitLabWorkspace(Workspace workspace) {
-        return connectionService
-                .findActiveProviderKind(workspace.getId())
-                .map(k -> k == IntegrationKind.GITLAB)
-                .orElse(false);
     }
 
     private Optional<GitLabConfig> gitLabConfig(Workspace workspace) {

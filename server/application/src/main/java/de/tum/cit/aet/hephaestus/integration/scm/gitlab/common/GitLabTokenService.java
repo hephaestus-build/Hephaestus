@@ -122,6 +122,7 @@ public class GitLabTokenService {
                     .get()
                     .uri(serverUrl + USER_ENDPOINT)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .attribute(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE, scopeId)
                     .retrieve()
                     .bodyToMono(GitLabUserResponse.class)
                     .block(Duration.ofSeconds(10));
