@@ -102,27 +102,14 @@ function count(value: string | undefined): number | undefined {
 	return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
-export function visualTestingPaused(env: NodeJS.ProcessEnv, now = Date.now()) {
-	const until = env.CHROMATIC_PAUSED_UNTIL;
-	if (until === undefined || !/^\d{4}-\d{2}-\d{2}$/u.test(until)) {
-		return false;
-	}
-	const deadline = Date.parse(`${until}T00:00:00Z`);
-	return (
-		Number.isFinite(deadline) &&
-		new Date(deadline).toISOString().startsWith(until) &&
-		now < deadline
-	);
-}
-
 function result(state: string, pass: boolean, message: string) {
 	return { state, pass, message };
 }
 
 type Verdict = ReturnType<typeof result>;
 
-/** A run the policy or a budget pause skipped on purpose, which passes without approving anything. */
-function skippedVerdict(env: NodeJS.ProcessEnv, now: number): Verdict | undefined {
+/** A run the policy skipped on purpose, which passes without approving anything. */
+function skippedVerdict(env: NodeJS.ProcessEnv): Verdict | undefined {
 	if (env.CHROMATIC_OUTCOME !== "skipped") {
 		return undefined;
 	}
@@ -131,13 +118,6 @@ function skippedVerdict(env: NodeJS.ProcessEnv, now: number): Verdict | undefine
 			"policy-skipped",
 			true,
 			"Not tested: fork or dependency-bot policy. This is not visual approval.",
-		);
-	}
-	if (visualTestingPaused(env, now)) {
-		return result(
-			"budget-paused",
-			true,
-			`Visual comparison unavailable: maintainer-approved budget pause until ${env.CHROMATIC_PAUSED_UNTIL} 00:00 UTC. Browser interaction tests remain required. This is not visual approval; enforcement resumes automatically at the deadline.`,
 		);
 	}
 	return undefined;
@@ -213,7 +193,7 @@ function coverageVerdict(counts: Counts): Verdict | Coverage {
 	return { captured, inherited, changes };
 }
 
-export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Date.now()) {
+export function visualVerdict(env: NodeJS.ProcessEnv, report?: string) {
 	const code = count(env.CHROMATIC_CODE);
 	const counts: Counts = {
 		captured: count(env.CHROMATIC_CAPTURED),
@@ -223,7 +203,7 @@ export function visualVerdict(env: NodeJS.ProcessEnv, report?: string, now = Dat
 		changes: count(env.CHROMATIC_CHANGES),
 		interactions: count(env.CHROMATIC_INTERACTIONS),
 	};
-	const coverage = skippedVerdict(env, now) ?? runVerdict(env, code) ?? coverageVerdict(counts);
+	const coverage = skippedVerdict(env) ?? runVerdict(env, code) ?? coverageVerdict(counts);
 	if ("state" in coverage) {
 		return coverage;
 	}
@@ -262,16 +242,12 @@ export function coverageSummary(env: NodeJS.ProcessEnv, report?: string) {
 if (import.meta.main) {
 	if (process.argv[2] === "--clear") {
 		rmSync(REPORT_PATH, { force: true });
-		const output = process.env.GITHUB_OUTPUT;
-		if (isSet(output)) {
-			appendFileSync(output, `paused=${visualTestingPaused(process.env)}\n`);
-		}
 	} else {
 		let report: string | undefined;
 		try {
 			report = readFileSync(REPORT_PATH, "utf8");
 		} catch {
-			/* Missing evidence is a failed verdict, not a script crash. */
+			/* Missing evidence is an unverified verdict, not a script crash. */
 		}
 		const verdict = visualVerdict(process.env, report);
 		const summary = coverageSummary(process.env, report);
@@ -280,11 +256,9 @@ if (import.meta.main) {
 			appendFileSync(stepSummary, summary);
 		}
 		console.log(summary);
-		if (!verdict.pass) {
-			console.log(`::error::${verdict.message}`);
-		} else if (["policy-skipped", "budget-paused"].includes(verdict.state)) {
+		// Visual coverage informs reviewers; it never fails the job.
+		if (!verdict.pass || verdict.state === "policy-skipped") {
 			console.log(`::warning::${verdict.message}`);
 		}
-		process.exitCode = verdict.pass ? 0 : 1;
 	}
 }

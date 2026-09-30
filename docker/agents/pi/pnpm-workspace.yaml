@@ -1,3 +1,7 @@
 # pnpm resolves against the nearest `pnpm-workspace.yaml` at or above the install directory. This
 # file puts that here rather than at the repository root, so no root setting reaches this image.
 minimumReleaseAge: 4320
+
+# @earendil-works/pi-coding-agent pins undici exactly; take the TLS and WebSocket fixes without a new agent.
+overrides:
+  "undici@>=8.0.0 <8.10.2": 8.11.2
