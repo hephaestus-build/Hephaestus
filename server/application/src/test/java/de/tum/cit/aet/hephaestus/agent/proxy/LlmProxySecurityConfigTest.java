@@ -100,6 +100,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @Test
     void hidesTheActuatorFromTheGatewayConnector() throws Exception {
         assertThat(answerTo("GET", "/actuator/health", GATEWAY_PORT)).isEqualTo(404);
+        assertThat(answerTo("GET", "/actuator/prometheus", GATEWAY_PORT)).isEqualTo(404);
     }
 
     @Test

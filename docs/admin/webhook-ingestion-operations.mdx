@@ -36,7 +36,9 @@ keep `always` to protect acknowledgements from a correlated, unclean shutdown of
 
 ## What to alert on
 
-Metrics are Micrometer, exposed on the receiver's actuator endpoint, all tagged `stream` with one of
+The receiver exports these Micrometer meters on its private management listener. See
+[Scrape metrics](./observability.mdx#scrape-metrics) for the port, scrape configuration, poison-counter
+and poll-age alert rules. The meters below are tagged `stream` with one of
 `github`, `gitlab`, `slack`, `outline`.
 
 | Metric | Type | What it means |

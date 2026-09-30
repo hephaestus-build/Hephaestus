@@ -241,12 +241,12 @@ jobs:
           mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
           SERVER_JAR=${SERVER_JARS[0]}
-          SERVER_PORT=8080 MANAGEMENT_PORT=8080 POSTGRES_PORT=5432 \
+          SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
             SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
             setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright > e2e-server.log 2>&1 &
           SERVER_PID=$!
           # Liveness precedes ApplicationRunner completion; readiness includes signing-key initialization.
-          timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/actuator/health/readiness >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
+          timeout 5m bash -c 'until curl --fail --silent http://localhost:8080/readyz >/dev/null; do kill -0 '"${SERVER_PID}"' || exit 1; sleep 2; done'
           curl --fail --silent --show-error -X POST http://localhost:8080/auth/dev-login \
             -H 'content-type: application/json' -d '{"username":"e2e","admin":true}' >/dev/null
           docker compose -f server/compose.yaml exec -T postgres \

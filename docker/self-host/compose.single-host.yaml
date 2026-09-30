@@ -81,6 +81,9 @@ services:
         ipv4_address: 172.29.47.2
 
   application-server:
+    # Inherited management listener: internal network only, no host publish or proxy route.
+    expose:
+      - "9090"
     environment:
       # The reference hardcodes root/root for its managed database; require a
       # real password here. DATABASE_USERNAME stays `root` to match the value
@@ -102,6 +105,9 @@ services:
     stop_grace_period: 6m
 
   webhook-server:
+    # Inherited management listener: internal network only, no host publish or proxy route.
+    expose:
+      - "9090"
     environment:
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       APPLICATION_HOST_URL: https://${APP_HOSTNAME:?Set APP_HOSTNAME in .env}
