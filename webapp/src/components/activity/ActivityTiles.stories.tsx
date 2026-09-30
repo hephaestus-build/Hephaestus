@@ -111,7 +111,8 @@ export const TwelveMonths: Story = {
 		await expect(comments).toHaveAccessibleDescription(
 			/^1692 comments; busiest month \w+ \d{4}, \d+$/u,
 		);
-		await expect(columns(comments)).toBe(13);
+		// A year of days spans 12 or 13 calendar months, depending on the day the range ends.
+		await expect(columns(comments)).toBe(YEAR_OVERVIEW.buckets.length);
 		// The frame starts with its year and, like every range, ends now.
 		await expect(within(comments).getByText(/^\w{3} \d{4}$/u)).toBeVisible();
 		await expect(within(comments).getByText("Today")).toBeVisible();
