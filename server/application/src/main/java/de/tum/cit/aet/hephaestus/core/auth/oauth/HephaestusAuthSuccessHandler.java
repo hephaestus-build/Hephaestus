@@ -111,7 +111,8 @@ public class HephaestusAuthSuccessHandler extends SimpleUrlAuthenticationSuccess
             try {
                 linkingAccountId = identityLinkAuthentication.resolveAuthenticatedAccountId(request);
             } catch (StepUpRequiredException e) {
-                redirectToApp(request, response, "/auth/error?code=step_up_required");
+                // The intent is already cleared: recovery signs in again and starts a new, explicit link.
+                redirectToApp(request, response, AuthBeginController.stepUpRequiredPath(intent.returnTo()));
                 return;
             }
             if (linkingAccountId == null || !linkingAccountId.equals(intent.linkingAccountId())) {
