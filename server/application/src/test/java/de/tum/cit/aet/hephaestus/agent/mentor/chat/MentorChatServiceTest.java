@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
@@ -151,6 +152,9 @@ class MentorChatServiceTest extends BaseUnitTest {
     @Mock
     ObservationHistoryContentSource observationHistory;
 
+    @Mock
+    ConversationalDeliveryReconciler conversationalDeliveryReconciler;
+
     private MentorTurnLock turnLock;
     private PiEventToUiChunkTranslator translator;
     private ScheduledExecutorService scheduler;
@@ -274,7 +278,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                 memberAiRouting,
                 (workspaceId, developerId) -> aiDecision,
                 mergeReadiness,
-                observationHistory);
+                observationHistory,
+                conversationalDeliveryReconciler);
     }
 
     @Test
@@ -494,10 +499,13 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     @Test
     void shouldInterruptInsteadOfFinalisingWhenAStreamedDeltaWasLost() {
+        when(conversationalDeliveryReconciler.admits(WORKSPACE_ID, USER_ID, OBSERVATION_ID))
+                .thenReturn(true);
         scheduleResponses(sandbox, prompt -> {
             sandbox.push(assistantStart());
             // ". The C" never arrived; Pi's final message still carries it.
             sandbox.push(textDelta("it"));
+            sandbox.push(linkObservationCallback("lo-1", OBSERVATION_ID));
             sandbox.push(event(
                     "link_observation",
                     n -> n.put("observationId", OBSERVATION_ID.toString()).put("text", "Name the trade-off.")));
@@ -1123,6 +1131,47 @@ class MentorChatServiceTest extends BaseUnitTest {
                         .path("message")
                         .asString())
                 .contains("fetch_context path not allowed");
+    }
+
+    @Test
+    void shouldRefuseALinkBeforeAnythingIsShownAndShowAndStoreOnlyTheOneTheServerAdmits() {
+        UUID invented = UUID.fromString("3ec24178-667e-4735-b818-681684324c6f");
+        when(conversationalDeliveryReconciler.admits(WORKSPACE_ID, USER_ID, OBSERVATION_ID))
+                .thenReturn(true);
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(linkObservationCallback("lo-invented", invented));
+            sandbox.push(linkObservationCallback("lo-owned", OBSERVATION_ID));
+            sandbox.push(event(
+                    "link_observation",
+                    n -> n.put("observationId", OBSERVATION_ID.toString()).put("text", "Name the trade-off.")));
+            sandbox.push(textDelta("What made you choose it?"));
+            sandbox.push(assistantEnd("What made you choose it?"));
+            sandbox.push(event("turn_end", n -> {}));
+            sandbox.push(event("agent_end", n -> n.putArray("messages")));
+            sandbox.push(jsonRpcResult(prompt.path("id").asLong(), mapper.createObjectNode()));
+        });
+
+        runTurnSync();
+
+        assertThat(sandbox.sentFrameWithId("lo-invented")
+                        .path("error")
+                        .path("message")
+                        .asString())
+                .isEqualTo(MentorRunnerClient.LINK_REFUSED);
+        assertThat(sandbox.sentFrameWithId("lo-owned")
+                        .path("result")
+                        .path("observationId")
+                        .asString())
+                .isEqualTo(OBSERVATION_ID.toString());
+        assertThat(String.join("", emitter.rawData))
+                .contains(OBSERVATION_ID.toString())
+                .doesNotContain(invented.toString());
+        var completed = ArgumentCaptor.forClass(de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState.class);
+        verify(persistence).complete(any(), completed.capture(), any(UIMessageChunk.Finish.class));
+        assertThat(UIMessageChunk.DataObservation.shownObservationIds(
+                        completed.getValue().partsSnapshot()))
+                .containsExactly(OBSERVATION_ID);
     }
 
     @Test
@@ -1806,6 +1855,15 @@ class MentorChatServiceTest extends BaseUnitTest {
         ObjectNode evt = params.putObject("event");
         evt.put("type", type);
         filler.accept(evt);
+        return frame;
+    }
+
+    private ObjectNode linkObservationCallback(String id, UUID observationId) {
+        ObjectNode frame = mapper.createObjectNode();
+        frame.put("jsonrpc", "2.0");
+        frame.put("id", id);
+        frame.put("method", "link_observation");
+        frame.putObject("params").put("threadId", THREAD_ID.toString()).put("observationId", observationId.toString());
         return frame;
     }
 

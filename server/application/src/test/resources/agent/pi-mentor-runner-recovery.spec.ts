@@ -35,6 +35,7 @@ function isRecord(value: unknown): value is Json {
 type Reply =
 	| { text: string; promptTokens: number }
 	| { toolCall: string; promptTokens: number }
+	| { tool: string; arguments: Json; promptTokens: number }
 	| { status: number }
 	| "hang";
 
@@ -91,9 +92,15 @@ async function fakeModel(
 				res.write(
 					`data: ${JSON.stringify({ id: "c", object: "chat.completion.chunk", created: 0, model: "fake", ...payload })}\n\n`,
 				);
+			let call: { name: string; arguments: string } | undefined;
+			if ("tool" in reply) {
+				call = { name: reply.tool, arguments: JSON.stringify(reply.arguments) };
+			} else if ("toolCall" in reply) {
+				call = { name: "fetch_context", arguments: JSON.stringify({ path: reply.toolCall }) };
+			}
 			const delta =
-				"text" in reply
-					? { role: "assistant", content: reply.text }
+				call === undefined
+					? { role: "assistant", content: "text" in reply ? reply.text : "" }
 					: {
 							role: "assistant",
 							tool_calls: [
@@ -101,10 +108,7 @@ async function fakeModel(
 									index: 0,
 									id: `call_${model.calls.length}`,
 									type: "function",
-									function: {
-										name: "fetch_context",
-										arguments: JSON.stringify({ path: reply.toolCall }),
-									},
+									function: call,
 								},
 							],
 						};
@@ -258,6 +262,13 @@ function eventOf(frame: Json): WireEvent | undefined {
 
 const isResult = (id: string) => (frame: Json) => frame.id === id && "result" in frame;
 const isEvent = (type: string) => (frame: Json) => eventOf(frame)?.type === type;
+
+/** A model reply that calls `link_observation` for `observationId`. */
+const linkReply = (observationId: string): Reply => ({
+	tool: "link_observation",
+	arguments: { observationId, text: "Who approved !9 before it merged?" },
+	promptTokens: 3000,
+});
 
 async function openAndPrompt(runner: Runner, text: string, session = ""): Promise<void> {
 	runner.send({
@@ -656,6 +667,83 @@ void test("a path built from a pull request number is refused before the server,
 			.map((message) => (isRecord(message) ? message.content : undefined)),
 		[refusal],
 	);
+});
+
+void test("link_observation shows nothing until the server admits that observation", async (t) => {
+	const invented = "3ec24178-667e-4735-b818-681684324c6f";
+	const owned = "3ec24178-2219-4af4-bebf-077c73a0435e";
+	const model = await fakeModel(t, (_kind, index) =>
+		index < 3 ? linkReply(index === 0 ? invented : owned) : { text: "answer", promptTokens: 3000 },
+	);
+	const runner = spawnRealRunner(t, runnerRoot(), model);
+	await openAndPrompt(runner, "what did the review of !9 say?");
+
+	const refused = await runner.next((frame) => frame.method === "link_observation");
+	assert.deepEqual(refused.params, { threadId: THREAD, observationId: invented });
+	runner.send({
+		jsonrpc: "2.0",
+		id: refused.id,
+		error: { code: -32_602, message: "Nothing was shown: that is not an observation of theirs." },
+	});
+	// An answer that does not admit this very observation admits nothing.
+	const unanswered = await runner.next((frame) => frame.method === "link_observation");
+	runner.send({ jsonrpc: "2.0", id: unanswered.id, result: null });
+	const admitted = await runner.next((frame) => frame.method === "link_observation");
+	assert.deepEqual(admitted.params, { threadId: THREAD, observationId: owned });
+	runner.send({ jsonrpc: "2.0", id: admitted.id, result: { observationId: owned } });
+	await runner.next(isEvent("agent_end"));
+
+	assert.deepEqual(
+		runner.events.filter((e) => e.type === "link_observation").map((e) => e.event.observationId),
+		[owned],
+	);
+	const ended = runner.events.filter((e) => e.type === "tool_execution_end");
+	assert.deepEqual(
+		ended.map((e) => e.event.isError),
+		[true, true, false],
+	);
+	assert.match(JSON.stringify(ended[0]?.event.result), /Nothing was shown/u);
+	assert.match(JSON.stringify(ended[1]?.event.result), /nothing was shown/u);
+	for (const failed of ended.slice(0, 2)) {
+		assert.doesNotMatch(JSON.stringify(failed.event.result), /Shown to the developer/u);
+	}
+	assert.match(JSON.stringify(ended[2]?.event.result), /Shown to the developer/u);
+});
+
+void test("a link the server admits only after Stop is neither shown nor reported as shown", async (t) => {
+	const owned = "3ec24178-2219-4af4-bebf-077c73a0435e";
+	const model = await fakeModel(t, (_kind, index) =>
+		index === 0 ? linkReply(owned) : { text: "answer", promptTokens: 3000 },
+	);
+	const runner = spawnRealRunner(t, runnerRoot(), model);
+	await openAndPrompt(runner, "what did the review of !9 say?");
+	const pending = await runner.next((frame) => frame.method === "link_observation");
+
+	runner.send({ jsonrpc: "2.0", id: "abort", method: "abort", params: { threadId: THREAD } });
+	// Pi's abort waits for the running tool, so Stop is answered only once the pending callback is failed, well
+	// before its 10 s timeout, and Pi has settled the stopped turn by then.
+	await runner.next(isResult("abort"), 5000);
+	assert.deepEqual(typesOf(runner).slice(-1), ["agent_end"]);
+	runner.send({ jsonrpc: "2.0", id: pending.id, result: { observationId: owned } });
+
+	assert.ok(!typesOf(runner).includes("link_observation"), typesOf(runner).join(", "));
+	const ended = runner.events.filter((e) => e.type === "tool_execution_end");
+	assert.deepEqual(
+		ended.map((e) => e.event.isError),
+		[true],
+	);
+	assert.doesNotMatch(JSON.stringify(ended[0]?.event.result), /Shown to the developer/u);
+
+	runner.send({
+		jsonrpc: "2.0",
+		id: "again",
+		method: "prompt",
+		params: { threadId: THREAD, text: "and now?" },
+	});
+	await runner.next(isResult("again"));
+	await runner.next(isEvent("agent_end"));
+	assert.deepEqual(model.calls, ["turn", "turn"]);
+	assert.ok(!typesOf(runner).includes("link_observation"));
 });
 
 void test("a small restored session is not compacted", async (t) => {
