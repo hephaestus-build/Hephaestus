@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueType;
@@ -522,7 +523,11 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             practice.setSlug("trackable-subtasks");
             practice.setName("Trackable subtasks");
             practice.setCriteria("Break the work into trackable subtasks");
-            practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.ISSUE_UPDATED));
+            practice.setSignals(PracticeTestEvidence.signals(ScmSignals.ISSUE_UPDATED));
+            practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.ISSUE_UPDATED.artifactKind()));
+            practice.setOnDrafts(false);
+            practice.setSubject(ActorRole.AUTHOR);
+            practice.setPrecondition(null);
             practice = practiceRepository.save(practice);
             AgentJob job = new AgentJob();
             job.setWorkspace(savedWorkspace);
@@ -542,9 +547,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             issue.getId(),
                             Objects.requireNonNull(issue.getAuthor()).getId(),
                             "The work is not broken into trackable subtasks",
-                            "ASSESSED",
-                            "ABSENT",
-                            "GOOD",
+                            "NOT_MET",
                             "MAJOR",
                             null,
                             null,

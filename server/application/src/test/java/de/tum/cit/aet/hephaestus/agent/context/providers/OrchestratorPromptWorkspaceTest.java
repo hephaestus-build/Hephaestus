@@ -53,16 +53,11 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
     void promptStatesTheObservationContract() throws IOException {
         String prompt = resolvedDocumentedPrompt();
         assertThat(prompt)
-                .contains("| ASSESSED | PRESENT | GOOD | POSITIVE | null |")
-                .contains("| ASSESSED | ABSENT | GOOD | NEGATIVE | required |")
-                .contains("| ASSESSED | PRESENT | BAD | NEGATIVE | required |")
-                .contains("| ASSESSED | ABSENT | BAD | POSITIVE | null |")
-                .contains("| NOT_APPLICABLE | null | null | none | null |")
-                .contains("| UNDETERMINED | null | null | none | null |")
+                .contains("| MET |", "| NOT_MET |", "| NOT_APPLICABLE |", "| UNDETERMINED |")
                 .contains("`evidence.inapplicability`", "`evidence.search`", "`evidence.undecidability`")
                 .contains("a mention alone does not establish guidance supplied or adopted by the author");
         assertThat(prompt)
-                .contains("a positive outcome is as ordinary as a negative one")
+                .contains("MET is as ordinary as NOT_MET")
                 .doesNotContain("Report all justified negative observations", "genuinely exemplary");
     }
 

@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.inapp;
 
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.OMISSION_GAP;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -607,7 +607,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     private Feedback card(Instant preparedAt, int number, FeedbackDeliveryState state) {
         Instant reviewedAt = preparedAt.minus(Duration.ofHours(1));
         AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-        UUID problem = observe(practice, run, number, developer, OMISSION_GAP, Severity.MAJOR, reviewedAt);
+        UUID problem = observe(practice, run, number, developer, NOT_MET, Severity.MAJOR, reviewedAt);
         Feedback feedback = persistInAppFeedback(
                 run,
                 developer,
@@ -634,7 +634,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
                 run,
                 12,
                 developer,
-                OMISSION_GAP,
+                NOT_MET,
                 Severity.MAJOR,
                 NOW.minus(Duration.ofHours(1)),
                 admittedEvidence(run));
@@ -660,7 +660,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     /** The lapse again on {@code #number}, reviewed at {@code at}, as evidence a new card may cite. */
     private UUID slip(int number, Instant at) {
         AgentJob run = persistPullRequestReview(workspace, number, at);
-        return observe(practice, run, number, developer, OMISSION_GAP, Severity.MAJOR, at, admittedEvidence(run));
+        return observe(practice, run, number, developer, NOT_MET, Severity.MAJOR, at, admittedEvidence(run));
     }
 
     /** The observations the card was written from, as its rows bind them. */

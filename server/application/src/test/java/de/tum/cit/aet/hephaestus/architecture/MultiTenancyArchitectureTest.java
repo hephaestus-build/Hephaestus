@@ -500,9 +500,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "Comment", // Through PR -> repository.organization.workspaceId
                                         "Commit", // Through repository.organization.workspaceId
                                         "Project", // Through organization.workspaceId
-                                        "PracticeDetectionCompletedEvent", // carries workspaceId directly (mentor cache
-                                        // eviction)
-                                        "PracticeDetectionDeliveredEvent", // carries workspaceId directly
+                                        "PracticeFeedbackPreparationRequestedEvent", // carries workspaceId directly
                                         // (conversational routing)
                                         "ConversationFeedbackPreparedEvent", // carries workspaceId directly (Slack
                                         // nudge)

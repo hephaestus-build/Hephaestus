@@ -73,13 +73,11 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
         Map<String, Set<SourceKind>> exhaustive = new LinkedHashMap<>();
         loader.catalog()
                 .practices()
-                .forEach(practice -> practice.definition()
-                        .bindings()
-                        .forEach(binding -> binding.needs().stream()
-                                .filter(need -> need.stance() == EvidenceStance.EXHAUSTIVE)
-                                .forEach(need -> exhaustive
-                                        .computeIfAbsent(practice.slug(), slug -> new LinkedHashSet<>())
-                                        .add(need.sourceKind()))));
+                .forEach(practice -> practice.definition().evidenceRequirements().stream()
+                        .filter(need -> need.stance() == EvidenceStance.EXHAUSTIVE)
+                        .forEach(need -> exhaustive
+                                .computeIfAbsent(practice.slug(), slug -> new LinkedHashSet<>())
+                                .add(need.sourceKind())));
 
         assertThat(exhaustive)
                 .containsOnlyKeys(

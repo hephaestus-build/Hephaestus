@@ -50,7 +50,7 @@ export const Default: Story = {
 		).toEqual([
 			"Practice",
 			"Observations",
-			"Negative outcomes",
+			"Not met observations",
 			"Marked incorrect",
 			"Feedback delivered",
 		]);
@@ -132,7 +132,7 @@ export const Reflow: Story = {
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {
 		// Hidden, and so out of the accessibility tree: the practice level carries these.
-		await expect(canvas.queryByRole("columnheader", { name: "Negative outcomes" })).toBeNull();
+		await expect(canvas.queryByRole("columnheader", { name: "Not met observations" })).toBeNull();
 		canvas.getByRole("columnheader", { name: "Observations" });
 		// The sentence is wider than the viewport, so it wraps: its link starts on a later line.
 		const quiet = canvas.getByText(/^1 practice recorded nothing in this range\./u);

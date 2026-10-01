@@ -21,12 +21,12 @@ export function deliveryBehaviorSentences(
 	}
 	if (hasText(behavior.overlapGroup)) {
 		sentences.push(
-			`On an issue, only the first negative practice in the overlap group “${behavior.overlapGroup}” is shown.`,
+			`On an issue, only the first practice that is not met in the overlap group “${behavior.overlapGroup}” is shown.`,
 		);
 	}
 	if (hasText(behavior.redundantToSlug)) {
 		sentences.push(
-			`When this practice and “${behavior.redundantToSlug}” are both negative, feedback from “${behavior.redundantToSlug}” is shown instead.`,
+			`When this practice and “${behavior.redundantToSlug}” are both not met, feedback from “${behavior.redundantToSlug}” is shown instead.`,
 		);
 	}
 	return sentences;

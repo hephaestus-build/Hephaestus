@@ -63,8 +63,8 @@ export interface OutcomeMixProps {
 	total: number;
 	slots: readonly OutcomeSlot[];
 	/**
-	 * Counts that overlap the parts — a positive outcome marked incorrect is still a positive
-	 * outcome — listed apart, under their own name, and never added to the total.
+	 * Counts that overlap the parts — a met observation marked incorrect is still a met
+	 * observation — listed apart, under their own name, and never added to the total.
 	 */
 	flags?: { label: string; slots: readonly OutcomeSlot[] };
 	/** The total's noun for its count: "observations", "pieces of feedback". */

@@ -96,7 +96,7 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
      */
     @Query(value = """
         SELECT o.id AS "observationId", o.agent_job_id AS "agentJobId", o.recurrence_key AS "recurrenceKey",
-               o.presence AS "presence", o.assessment AS "assessment",
+               o.outcome AS "outcome", o.summary AS "summary",
                r.action AS "resolution", r.created_at AS "respondedAt"
         FROM observation o
         JOIN feedback_observation fo ON fo.observation_id = o.id
@@ -123,11 +123,9 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
         @Nullable
         String getRecurrenceKey();
 
-        @Nullable
-        String getPresence();
+        String getOutcome();
 
-        @Nullable
-        String getAssessment();
+        String getSummary();
 
         String getResolution();
 

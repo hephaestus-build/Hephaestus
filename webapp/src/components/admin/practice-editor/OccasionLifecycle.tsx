@@ -1,16 +1,16 @@
 import { cn } from "cn";
 import type { PracticeSignalOption, PracticeWorkTypeDefinitionOptions } from "@/api/types.gen";
 import {
-	hasDrafts,
-	OCCASION_ID_PREFIX,
-	occasionFieldId,
-} from "@/components/admin/practice-editor/bindings";
-import {
 	momentBands,
 	momentDef,
 	PHASE_LABEL,
 	withdrawnMoments,
 } from "@/components/admin/practice-editor/occasion-moments";
+import {
+	hasDrafts,
+	OCCASION_ID_PREFIX,
+	occasionFieldId,
+} from "@/components/admin/practice-editor/review-settings";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
 	Field,
@@ -28,7 +28,7 @@ export interface OccasionLifecycleProps {
 	selected: readonly string[];
 	onToggle: (signal: string, chosen: boolean) => void;
 	/**
-	 * Named for what it is rather than for the wire field it ends up in (`PracticeBinding.onDrafts`):
+	 * Named for what it is rather than for the wire field it ends up in (`PracticeReviewFields.onDrafts`):
 	 * `on*` is a callback everywhere else in this kit, so `onDrafts` beside `onDraftsChange` read as
 	 * two handlers at the only call site.
 	 */

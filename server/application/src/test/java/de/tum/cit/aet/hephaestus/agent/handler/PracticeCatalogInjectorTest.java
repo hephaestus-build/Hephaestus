@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -65,7 +64,7 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         var revision = new PracticeRevision();
         ReflectionTestUtils.setField(revision, "id", Math.abs((long) slug.hashCode()) + 1);
         p.setCurrentRevision(revision);
-        p.setBindings(PracticeTestEvidence.bindings(signals));
+        PracticeTestEvidence.configure(p, signals);
         return p;
     }
 
@@ -148,11 +147,11 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     @DisplayName("a review of a draft materialises only the practices that review drafts, as the gate admitted")
     void shouldSelectOnlyDraftPracticesWhenTheWorkWasADraft() {
         Practice onDrafts = practice("handoff", ScmSignals.PULL_REQUEST_OPENED);
-        onDrafts.setBindings(List.of(new PracticeBinding(
-                List.of(ScmSignals.PULL_REQUEST_OPENED),
-                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                true,
-                ActorRole.AUTHOR)));
+        onDrafts.setSignals(List.of(ScmSignals.PULL_REQUEST_OPENED));
+        onDrafts.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
+        onDrafts.setOnDrafts(true);
+        onDrafts.setSubject(ActorRole.AUTHOR);
+        onDrafts.setPrecondition(null);
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
                 .thenReturn(List.of(onDrafts, practice("describe", ScmSignals.PULL_REQUEST_OPENED)));
         AgentJob job = job(ScmSignals.PULL_REQUEST_OPENED);
@@ -170,11 +169,11 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     void shouldSelectOnlyReviewerPracticesWhenSubmittedReviewNamesReviewer() {
         Practice author = practice("author-engagement", ScmSignals.PULL_REQUEST_REVIEWED);
         Practice reviewer = practice("review-comment-quality", ScmSignals.PULL_REQUEST_REVIEWED);
-        reviewer.setBindings(List.of(new PracticeBinding(
-                List.of(ScmSignals.PULL_REQUEST_REVIEWED),
-                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
-                ActorRole.REVIEWER)));
+        reviewer.setSignals(List.of(ScmSignals.PULL_REQUEST_REVIEWED));
+        reviewer.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
+        reviewer.setOnDrafts(false);
+        reviewer.setSubject(ActorRole.REVIEWER);
+        reviewer.setPrecondition(null);
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
                 .thenReturn(List.of(author, reviewer));
         Map<String, byte[]> files = new HashMap<>();

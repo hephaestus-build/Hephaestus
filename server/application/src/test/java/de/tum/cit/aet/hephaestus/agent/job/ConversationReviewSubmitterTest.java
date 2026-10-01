@@ -22,7 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -61,19 +61,14 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
     private WorkspaceRepository workspaceRepository;
 
     @Mock
-    private PracticeReviewDetectionGate detectionGate;
+    private ReviewGate reviewGate;
 
     private ConversationReviewSubmitter submitter;
 
     @BeforeEach
     void setUp() {
         submitter = new ConversationReviewSubmitter(
-                candidateSource,
-                agentJobService,
-                signalRecorder,
-                transactionTemplate,
-                workspaceRepository,
-                detectionGate);
+                candidateSource, agentJobService, signalRecorder, transactionTemplate, workspaceRepository, reviewGate);
         lenient()
                 .doAnswer(invocation -> {
                     Consumer<TransactionStatus> callback = invocation.getArgument(0);
@@ -86,8 +81,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
         workspace.setId(WORKSPACE_ID);
         lenient().when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
         lenient()
-                .when(detectionGate.evaluateSignal(
-                        eq(workspace), any(), eq(TriggerMode.AUTO), any(ReviewSubject.class)))
+                .when(reviewGate.evaluateSignal(eq(workspace), any(), eq(TriggerMode.AUTO), any(ReviewSubject.class)))
                 .thenReturn(new GateDecision.Detect(workspace, java.util.List.of(), 0, TriggerMode.AUTO));
     }
 
@@ -142,7 +136,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
 
     @Test
     void aParticipantOutsideReviewCoverageDoesNotStartCompute() {
-        when(detectionGate.evaluateSignal(any(), any(), any(), any()))
+        when(reviewGate.evaluateSignal(any(), any(), any(), any()))
                 .thenReturn(new GateDecision.Skip("outside review coverage", SignalStateReason.OUT_OF_REVIEW_SCOPE));
 
         assertThat(submitter.submitAndSettle(candidate(11L), key())).isZero();

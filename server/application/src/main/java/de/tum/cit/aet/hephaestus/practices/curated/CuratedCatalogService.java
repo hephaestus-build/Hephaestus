@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.practices.BindingChange;
+import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
@@ -65,14 +65,14 @@ public class CuratedCatalogService {
             String slug,
             @Nullable EntityTagPrecondition precondition,
             PracticeDefinition definition,
-            @Nullable Set<BindingChange> bindingChanges) {
+            @Nullable Set<DefinitionChange> definitionChanges) {
         lockCatalog();
         EffectiveCatalog before = loadCatalog();
         CuratedCatalogModel.validatePracticeGroup(before, definition);
         definitionValidator.validate(definition);
         CatalogEntry<PracticeDefinition> entry =
                 CuratedCatalogModel.requireEntry(before.practice(slug), CATALOG_PRACTICE, slug, precondition);
-        BindingChange.requireExplicit(entry.effective().bindings(), definition.bindings(), bindingChanges);
+        DefinitionChange.requireExplicit(entry.effective(), definition, definitionChanges);
         if (entry.overridden() != null && definition.equals(entry.shipped())) {
             clearPracticeDefinition(slug);
             return recordPractice(slug, entry);
@@ -361,7 +361,11 @@ public class CuratedCatalogService {
         PracticeDefinition definition = entry.effective();
         PracticeDefinition moved = new PracticeDefinition(
                 definition.name(),
-                definition.bindings(),
+                definition.signals(),
+                definition.evidenceRequirements(),
+                definition.onDrafts(),
+                definition.subject(),
+                definition.precondition(),
                 definition.criteria(),
                 definition.precomputeScript(),
                 definition.automatedReviewPolicy(),

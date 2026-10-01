@@ -103,7 +103,7 @@ class AgentJobSubmissionIntegrationTest extends BaseIntegrationTest {
         practice.setSlug("submit-test");
         practice.setName("Submit test");
         practice.setCriteria("Review the pull request");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practiceRepository.save(practice);
 
         LlmConnection connection = llmConnectionRepository.save(LlmCatalogTestFixtures.connection("submit-test"));

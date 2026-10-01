@@ -6,7 +6,7 @@ import { LevelCancel } from "@/components/layout/detail-drawer/LevelCancel";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
@@ -27,7 +27,7 @@ const initialData: CuratedPracticeFormInitialValue = {
 	slug: "clear-pr-description",
 	name: "Write a clear pull request description",
 	groupSlug: "communication",
-	bindings: [mockPullRequestBinding],
+	...mockPullRequestReviewFields,
 	criteria: "Review whether the description explains the purpose, approach, and testing.",
 	whyItMatters: "Reviewers should not need to reconstruct the author's intent.",
 	whatGoodLooksLike: "The description states why, what changed, and how it was verified.",
@@ -111,7 +111,7 @@ export const Edit: Story = {
 };
 
 const scopedGate = {
-	absentSays: "the change has no Swift code",
+	skipReason: "the change has no Swift code",
 	anyOf: [{ changedPathMatches: ["**/*.swift"] }],
 };
 
@@ -120,7 +120,9 @@ export const ScopedReviewerEdit: Story = {
 		mode: "edit",
 		initialData: {
 			...initialData,
-			bindings: [{ ...mockPullRequestBinding, subject: "REVIEWER", appliesWhen: scopedGate }],
+			...mockPullRequestReviewFields,
+			subject: "REVIEWER",
+			precondition: scopedGate,
 		},
 		groups,
 		isPending: false,
@@ -167,7 +169,7 @@ export const HephaestusUpdateAvailable: Story = {
 			shipped: {
 				name: "Say what changed and why",
 				artifactKind: "scm.pull_request",
-				bindings: [mockPullRequestBinding],
+				...mockPullRequestReviewFields,
 				criteria: "The updated default criteria",
 				deliveryBehavior: { summaryOnly: false },
 				automatedReviewPolicy: mockPullRequestPolicy,

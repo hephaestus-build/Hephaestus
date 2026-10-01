@@ -39,7 +39,7 @@ import java.util.Set;
  * <ul>
  *   <li>It borrows an existing {@link IntegrationKind} rather than adding a fixture-only constant, since
  *       that enum is persisted on connections and jobs.
- *   <li>It cannot be driven through {@code PracticeReviewDetectionGate} (which takes a
+ *   <li>It cannot be driven through {@code ReviewGate} (which takes a
  *       {@code PullRequest}/{@code Issue}), so the practices-side proof runs through the kind-agnostic
  *       {@code PracticeSignalCoverage} instead.
  * </ul>

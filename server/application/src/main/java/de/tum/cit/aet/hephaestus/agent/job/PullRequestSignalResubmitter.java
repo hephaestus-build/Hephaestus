@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +39,7 @@ public class PullRequestSignalResubmitter {
 
     private final AgentJobService agentJobService;
     private final PullRequestRepository pullRequestRepository;
-    private final PracticeReviewDetectionGate practiceReviewDetectionGate;
+    private final ReviewGate reviewGate;
     private final SignalRecorder signalRecorder;
     private final PullRequestReviewRepository reviewRepository;
     private final IntegrationManifestRegistry manifests;
@@ -47,13 +47,13 @@ public class PullRequestSignalResubmitter {
     public PullRequestSignalResubmitter(
             AgentJobService agentJobService,
             PullRequestRepository pullRequestRepository,
-            PracticeReviewDetectionGate practiceReviewDetectionGate,
+            ReviewGate reviewGate,
             SignalRecorder signalRecorder,
             PullRequestReviewRepository reviewRepository,
             IntegrationManifestRegistry manifests) {
         this.agentJobService = agentJobService;
         this.pullRequestRepository = pullRequestRepository;
-        this.practiceReviewDetectionGate = practiceReviewDetectionGate;
+        this.reviewGate = reviewGate;
         this.signalRecorder = signalRecorder;
         this.reviewRepository = reviewRepository;
         this.manifests = manifests;
@@ -101,7 +101,7 @@ public class PullRequestSignalResubmitter {
             }
         }
 
-        GateDecision decision = practiceReviewDetectionGate.evaluateQueued(
+        GateDecision decision = reviewGate.evaluateQueued(
                 pr,
                 key.workspaceId(),
                 key.signalName(),

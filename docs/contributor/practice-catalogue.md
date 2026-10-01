@@ -110,7 +110,7 @@ workspace integrations remain separate gates.
 | What to look for         | Look for a description that explains the behavior change and why. Stay silent for automated dependency updates. |
 | Why it matters           | Reviewers can judge a change faster when they understand its purpose.                                           |
 | What good looks like     | “This changes retry behavior so temporary network failures no longer end the sync.”                             |
-| Hephaestus support       | AI-supported mentoring with the recommended bindings and evidence                                               |
+| Hephaestus support       | AI-supported mentoring with the recommended review configuration and evidence                                               |
 
 The author does not choose source-contract identifiers or runtime states in this common path. If the
 required pull-request details or diff are missing, or captured less completely than their contract
@@ -201,14 +201,14 @@ definition nor its revision and suppresses that exact offered digest until the o
 
 A release comparison covers every definition field, including guidance and delivery behavior.
 The artifact kind is not compared separately — every signal name carries it, so it is derived from
-bindings. The review-rule fingerprint has a narrower role: it tracks review-judgment inputs, not
+review configuration. The review-rule fingerprint has a narrower role: it tracks review-judgment inputs, not
 guidance or delivery presentation. A group comparison covers name, description, icon, and color;
 position is excluded.
 
 ## Adopted definition bases
 
 Each new workspace adoption stores the complete instance definition it copied, including guidance,
-review policy and bindings, beside the source slug and review-rule fingerprint. Workspace edits and
+review policy and review configuration, beside the source slug and review-rule fingerprint. Workspace edits and
 new revisions do not change that base. An instance customization likewise stores the complete
 bundled definition on which it was based. An uncustomized instance entry has no saved base: it still
 follows the bundle. Acknowledging a newer bundle updates the instance base; editing the customization

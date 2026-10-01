@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
@@ -42,7 +41,7 @@ public class LinkedIssueRepairAdmissionService {
     public Map<Long, List<Observation>> currentNegatives(
             long workspaceId, ArtifactKind kind, long artifactId, long developerId) {
         return LatestRun.perClaim(observations.findStandingForWork(workspaceId, kind, artifactId, developerId)).stream()
-                .filter(observation -> ObservationKind.of(observation).isNegative())
+                .filter(observation -> observation.getOutcome().isNotMet())
                 .collect(Collectors.groupingBy(
                         observation -> observation.getPractice().getId()));
     }

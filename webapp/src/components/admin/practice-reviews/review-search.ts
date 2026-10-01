@@ -2,13 +2,10 @@ import { z } from "zod";
 
 import { statusValues } from "@/components/common/status-def";
 import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-format";
-import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
-import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { FILTERABLE_PLACES } from "@/components/practice-vocabulary/delivery-place-defs";
 import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
-import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import {
 	RESULT_PROCESSING_DEFS,
 	REVIEW_STATUS_DEFS,
@@ -55,8 +52,8 @@ export const PRACTICE_REVIEW_READS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Ordering names the server understands. `ACTIONABILITY` puts negative outcomes first, worst
- * severity down to informational, then positive outcomes, then the observations that judged nothing.
+ * Ordering names the server understands. `ACTIONABILITY` puts not met observations first, worst
+ * severity down to informational, then met observations, then the observations that judged nothing.
  */
 export const OBSERVATION_SORTS = ["NEWEST", "ACTIONABILITY"] as const;
 
@@ -123,12 +120,11 @@ export const observationsSearchSchema = z
 		page,
 		groupSlug: multiValue,
 		practiceSlug: multiValue,
-		assessmentStatus: enumValues(statusValues(ASSESSMENT_STATUS_DEFS)).optional(),
+
 		outcome: enumValues(statusValues(OUTCOME_DEFS)),
 		invalidated: z.boolean().optional().catch(undefined),
 		disputed: z.boolean().optional().catch(undefined),
-		presence: enumValues(statusValues(PRESENCE_DEFS)),
-		assessment: enumValues(statusValues(ASSESSMENT_DEFS)),
+
 		severity: enumValues(statusValues(SEVERITY_DEFS)),
 		subjectUserId: positiveId,
 		origin: enumValues(statusValues(OBSERVATION_ORIGIN_DEFS)),
@@ -252,12 +248,11 @@ export function observationsQuery(search: Partial<ObservationsSearch>, size: num
 			search.practiceSlug !== undefined && search.practiceSlug.length > 0
 				? search.practiceSlug
 				: undefined,
-		assessmentStatus: search.assessmentStatus,
+
 		outcome: search.outcome,
 		invalidated: search.invalidated,
 		disputed: search.disputed,
-		presence: search.presence,
-		assessment: search.assessment,
+
 		severity: search.severity,
 		subjectUserId: search.subjectUserId,
 		origin: search.origin,

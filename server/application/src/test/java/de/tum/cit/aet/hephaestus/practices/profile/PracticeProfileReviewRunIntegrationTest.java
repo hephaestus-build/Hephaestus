@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.profile;
 
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.DEMONSTRATED_STRENGTH;
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.NOT_APPLICABLE;
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.OMISSION_GAP;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.MET;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_APPLICABLE;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -152,37 +152,17 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
         // A run over a pull request the two of them wrote together: it observed both of them.
         colleaguesRun = persistPullRequestReview(workspace, 33, MIDDLE_RUN_AT.plusSeconds(60));
 
-        observe(explainChanges, oldestRun, unmirrored(30), developer, DEMONSTRATED_STRENGTH, null, OLDEST_RUN_AT);
+        observe(explainChanges, oldestRun, unmirrored(30), developer, MET, null, OLDEST_RUN_AT);
         observe(reviewableDiffSize, middleRun, unmirrored(31), developer, NOT_APPLICABLE, null, MIDDLE_RUN_AT);
-        observe(explainChanges, latestRun, unmirrored(32), developer, DEMONSTRATED_STRENGTH, null, LATEST_RUN_AT);
+        observe(explainChanges, latestRun, unmirrored(32), developer, MET, null, LATEST_RUN_AT);
         UUID latestProblem = observe(
-                reviewableDiffSize, latestRun, unmirrored(32), developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT);
+                reviewableDiffSize, latestRun, unmirrored(32), developer, NOT_MET, Severity.MAJOR, LATEST_RUN_AT);
 
-        observe(
-                explainChanges,
-                colleaguesRun,
-                33L,
-                developer,
-                DEMONSTRATED_STRENGTH,
-                null,
-                MIDDLE_RUN_AT.plusSeconds(60));
+        observe(explainChanges, colleaguesRun, 33L, developer, MET, null, MIDDLE_RUN_AT.plusSeconds(60));
         // The colleague's two strengths on the same run must not be counted on this developer's page.
-        colleaguesStrength = observe(
-                explainChanges,
-                colleaguesRun,
-                33L,
-                colleague,
-                DEMONSTRATED_STRENGTH,
-                null,
-                MIDDLE_RUN_AT.plusSeconds(60));
-        observe(
-                reviewableDiffSize,
-                colleaguesRun,
-                33L,
-                colleague,
-                DEMONSTRATED_STRENGTH,
-                null,
-                MIDDLE_RUN_AT.plusSeconds(60));
+        colleaguesStrength =
+                observe(explainChanges, colleaguesRun, 33L, colleague, MET, null, MIDDLE_RUN_AT.plusSeconds(60));
+        observe(reviewableDiffSize, colleaguesRun, 33L, colleague, MET, null, MIDDLE_RUN_AT.plusSeconds(60));
 
         Feedback delivered = persistInAppFeedback(
                 latestRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, LATEST_RUN_AT.plusSeconds(30));
@@ -203,7 +183,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
         finished.setStatus(AgentJobStatus.COMPLETED);
         finished.setStartedAt(LATEST_RUN_AT.plusSeconds(300));
         agentJobRepository.save(finished);
-        observe(explainChanges, finished, 50L, developer, DEMONSTRATED_STRENGTH, null, finishedObservedAt);
+        observe(explainChanges, finished, 50L, developer, MET, null, finishedObservedAt);
 
         // Started before the other run finished and observed after it: newer by the date the rows show.
         Instant runningObservedAt = LATEST_RUN_AT.plusSeconds(700);
@@ -211,7 +191,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
         running.setStatus(AgentJobStatus.RUNNING);
         running.setStartedAt(LATEST_RUN_AT.plusSeconds(400));
         agentJobRepository.save(running);
-        observe(explainChanges, running, 51L, developer, DEMONSTRATED_STRENGTH, null, runningObservedAt);
+        observe(explainChanges, running, 51L, developer, MET, null, runningObservedAt);
 
         readRuns()
                 .jsonPath("$.content[0].reviewId")
@@ -249,9 +229,9 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo("COMPLETED")
                 .jsonPath("$.content[0].triggerMode")
                 .isEqualTo("MANUAL")
-                .jsonPath("$.content[0].practices.held")
+                .jsonPath("$.content[0].practices.met")
                 .isEqualTo(1)
-                .jsonPath("$.content[0].practices.toImprove")
+                .jsonPath("$.content[0].practices.notMet")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].feedbackDelivered")
                 .isEqualTo(1)
@@ -261,9 +241,9 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 // of theirs counted here.
                 .jsonPath("$.content[1].reviewId")
                 .isEqualTo(colleaguesRun.getId().toString())
-                .jsonPath("$.content[1].practices.held")
+                .jsonPath("$.content[1].practices.met")
                 .isEqualTo(1)
-                .jsonPath("$.content[1].practices.toImprove")
+                .jsonPath("$.content[1].practices.notMet")
                 .isEqualTo(0)
                 .jsonPath("$.content[1].feedbackDelivered")
                 .isEqualTo(0)
@@ -363,15 +343,15 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 colleaguesRun,
                 33L,
                 developer,
-                OMISSION_GAP,
+                NOT_MET,
                 Severity.MAJOR,
                 MIDDLE_RUN_AT.plusSeconds(60),
                 WITHHELD_EVIDENCE_JSON);
 
         readRun(colleaguesRun.getId())
-                .jsonPath("$.run.practices.held")
+                .jsonPath("$.run.practices.met")
                 .isEqualTo(1)
-                .jsonPath("$.run.practices.toImprove")
+                .jsonPath("$.run.practices.notMet")
                 .isEqualTo(0)
                 .jsonPath("$.observations.length()")
                 .isEqualTo(1)
@@ -380,7 +360,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
         readRuns()
                 .jsonPath("$.content[1].reviewId")
                 .isEqualTo(colleaguesRun.getId().toString())
-                .jsonPath("$.content[1].practices.toImprove")
+                .jsonPath("$.content[1].practices.notMet")
                 .isEqualTo(0);
     }
 
@@ -394,7 +374,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 withheld,
                 35L,
                 developer,
-                OMISSION_GAP,
+                NOT_MET,
                 Severity.MAJOR,
                 LATEST_RUN_AT.plusSeconds(600),
                 WITHHELD_EVIDENCE_JSON);
@@ -412,7 +392,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
     @DisplayName("a run that observed nothing about this developer is not theirs to read")
     void shouldAnswerNotFoundWhenTheRunObservedNothingAboutTheReader() {
         AgentJob somebodyElses = persistPullRequestReview(workspace, 34, MIDDLE_RUN_AT);
-        observe(explainChanges, somebodyElses, 34L, colleague, DEMONSTRATED_STRENGTH, null, MIDDLE_RUN_AT);
+        observe(explainChanges, somebodyElses, 34L, colleague, MET, null, MIDDLE_RUN_AT);
 
         expectRunNotFound(somebodyElses.getId());
     }
@@ -427,7 +407,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
         ensureWorkspaceMembership(other, developer, WorkspaceMembership.WorkspaceRole.MEMBER);
         Practice elsewhere = persistPractice(other, null, "explain-changes", "Explain each change", null);
         AgentJob otherRun = persistPullRequestReview(other, 60, LATEST_RUN_AT);
-        observe(elsewhere, otherRun, 60L, developer, DEMONSTRATED_STRENGTH, null, LATEST_RUN_AT);
+        observe(elsewhere, otherRun, 60L, developer, MET, null, LATEST_RUN_AT);
 
         expectRunNotFound(otherRun.getId());
     }
@@ -438,14 +418,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
     void shouldAnswerNotFoundWhenTheRunOnlyObservedWorkInAHiddenRepository() {
         long pullRequestId = persistPullRequest(persistHiddenRepository(), developer, 81);
         AgentJob hiddenRun = persistPullRequestReview(workspace, 81, pullRequestId, LATEST_RUN_AT.plusSeconds(700));
-        observe(
-                explainChanges,
-                hiddenRun,
-                pullRequestId,
-                developer,
-                DEMONSTRATED_STRENGTH,
-                null,
-                LATEST_RUN_AT.plusSeconds(700));
+        observe(explainChanges, hiddenRun, pullRequestId, developer, MET, null, LATEST_RUN_AT.plusSeconds(700));
 
         readRuns().jsonPath("$.content[0].reviewId").isEqualTo(latestRun.getId().toString());
         expectRunNotFound(hiddenRun.getId());
@@ -460,7 +433,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 latestRun,
                 unmirrored(32),
                 developer,
-                OMISSION_GAP,
+                NOT_MET,
                 Severity.MAJOR,
                 LATEST_RUN_AT.minusSeconds(1));
         invalidationRepository.save(new ObservationInvalidation(
@@ -472,9 +445,9 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 NOW));
 
         readRun(latestRun.getId())
-                .jsonPath("$.run.practices.toImprove")
+                .jsonPath("$.run.practices.notMet")
                 .isEqualTo(1)
-                .jsonPath("$.run.practices.held")
+                .jsonPath("$.run.practices.met")
                 .isEqualTo(1)
                 .jsonPath("$.run.slippedPractices.length()")
                 .isEqualTo(1)
@@ -490,19 +463,19 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
     void shouldCountEachPracticeOnceWhenARunObservedItSeveralTimes() {
         AgentJob run = persistPullRequestReview(workspace, 37, LATEST_RUN_AT.plusSeconds(60));
         Instant at = LATEST_RUN_AT.plusSeconds(60);
-        observe(explainChanges, run, 37L, developer, DEMONSTRATED_STRENGTH, null, at);
-        observe(explainChanges, run, 37L, developer, DEMONSTRATED_STRENGTH, null, at);
-        observe(reviewableDiffSize, run, 37L, developer, DEMONSTRATED_STRENGTH, null, at);
-        observe(reviewableDiffSize, run, 37L, developer, OMISSION_GAP, Severity.MAJOR, at);
+        observe(explainChanges, run, 37L, developer, MET, null, at);
+        observe(explainChanges, run, 37L, developer, MET, null, at);
+        observe(reviewableDiffSize, run, 37L, developer, MET, null, at);
+        observe(reviewableDiffSize, run, 37L, developer, NOT_MET, Severity.MAJOR, at);
 
         readRun(run.getId())
-                .jsonPath("$.run.practices.held")
+                .jsonPath("$.run.practices.met")
                 .isEqualTo(1)
-                .jsonPath("$.run.practices.toImprove")
+                .jsonPath("$.run.practices.notMet")
                 .isEqualTo(1)
                 .jsonPath("$.run.practices.notApplicable")
                 .isEqualTo(0)
-                .jsonPath("$.run.practices.undecided")
+                .jsonPath("$.run.practices.undetermined")
                 .isEqualTo(0)
                 .jsonPath("$.run.slippedPractices[*].practiceSlug")
                 .isEqualTo(List.of("reviewable-diff-size"));
@@ -529,11 +502,11 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
             "a run names every practice it recorded a problem about, however many, in name order whatever the case")
     void shouldNameEverySlippedPracticeInNameOrderWhenARunRecordedSeveral() {
         AgentJob run = persistPullRequestReview(workspace, 36, LATEST_RUN_AT.plusSeconds(60));
-        observe(explainChanges, run, 36L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT.plusSeconds(60));
-        observe(reviewableDiffSize, run, 36L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT.plusSeconds(60));
+        observe(explainChanges, run, 36L, developer, NOT_MET, Severity.MAJOR, LATEST_RUN_AT.plusSeconds(60));
+        observe(reviewableDiffSize, run, 36L, developer, NOT_MET, Severity.MAJOR, LATEST_RUN_AT.plusSeconds(60));
         for (String slug : List.of("third-practice", "fourth-practice")) {
             Practice practice = persistPractice(workspace, null, slug, slug, null);
-            observe(practice, run, 36L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT.plusSeconds(60));
+            observe(practice, run, 36L, developer, NOT_MET, Severity.MAJOR, LATEST_RUN_AT.plusSeconds(60));
         }
 
         readRun(run.getId())
@@ -553,7 +526,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 40L,
                 developer,
                 null,
-                DEMONSTRATED_STRENGTH,
+                MET,
                 null,
                 LATEST_RUN_AT.plusSeconds(120),
                 DIFF_EVIDENCE_JSON,
@@ -617,7 +590,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                     runOnMirroredWork,
                     pullRequestId,
                     developer,
-                    DEMONSTRATED_STRENGTH,
+                    MET,
                     null,
                     LATEST_RUN_AT.plusSeconds(600));
         }
@@ -674,7 +647,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                     sharedRun,
                     sharedPullRequestId,
                     developer,
-                    DEMONSTRATED_STRENGTH,
+                    MET,
                     null,
                     LATEST_RUN_AT.plusSeconds(300));
             observe(
@@ -682,7 +655,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                     sharedRun,
                     sharedPullRequestId,
                     colleague,
-                    DEMONSTRATED_STRENGTH,
+                    MET,
                     null,
                     LATEST_RUN_AT.plusSeconds(300));
         }
@@ -717,14 +690,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
             makeColleagueAnAdmin();
             long unmirroredId = 790_079L;
             AgentJob unmirrored = persistPullRequestReview(workspace, 79, unmirroredId, LATEST_RUN_AT.plusSeconds(400));
-            observe(
-                    explainChanges,
-                    unmirrored,
-                    unmirroredId,
-                    colleague,
-                    DEMONSTRATED_STRENGTH,
-                    null,
-                    LATEST_RUN_AT.plusSeconds(400));
+            observe(explainChanges, unmirrored, unmirroredId, colleague, MET, null, LATEST_RUN_AT.plusSeconds(400));
 
             assertMayRequest(unmirrored.getId(), 0, false);
         }
@@ -755,7 +721,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
             long pullRequestId = persistPullRequest(elsewhere, colleague, 82);
             Instant at = LATEST_RUN_AT.plusSeconds(800);
             AgentJob run = persistPullRequestReview(workspace, 82, pullRequestId, at);
-            observe(explainChanges, run, pullRequestId, colleague, DEMONSTRATED_STRENGTH, null, at);
+            observe(explainChanges, run, pullRequestId, colleague, MET, null, at);
 
             String listed = "$.content[?(@.reviewId=='" + run.getId() + "')]";
             readRuns()

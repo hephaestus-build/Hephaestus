@@ -21,7 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -141,7 +141,7 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
                 mock(AgentJobService.class),
                 fixture.issueRepository(),
                 fixture.pullRequests(),
-                mock(PracticeReviewDetectionGate.class),
+                mock(ReviewGate.class),
                 fixture.resolver(),
                 recorder,
                 transactionManager);
@@ -231,7 +231,7 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
             return new AgentJobEventListener(
                     mock(AgentJobService.class),
                     fixture.pullRequests(),
-                    mock(PracticeReviewDetectionGate.class),
+                    mock(ReviewGate.class),
                     fixture.resolver(),
                     recorder,
                     manifests);
@@ -252,7 +252,7 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
                     mock(AgentJobService.class),
                     fixture.issueRepository(),
                     fixture.pullRequests(),
-                    mock(PracticeReviewDetectionGate.class),
+                    mock(ReviewGate.class),
                     fixture.resolver(),
                     recorder,
                     transactionManager);

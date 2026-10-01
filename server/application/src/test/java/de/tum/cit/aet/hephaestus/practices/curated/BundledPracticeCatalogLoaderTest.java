@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
@@ -29,11 +28,18 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
             new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog()));
 
     @Test
-    void shouldDescribeBehaviorsWithoutFixingAssessmentPerPractice() {
+    void shouldDefinePracticeStandardsWithoutLegacyAxes() {
         assertThat(loader.catalog().practices()).allSatisfy(practice -> {
             assertThat(practice.definition().criteria())
-                    .contains("BEHAVIOR FOCUS:")
-                    .doesNotContain("TARGET ASSESSMENT:", "fixed target", "DEFECT-DETECTOR DISCIPLINE");
+                    .contains("REVIEW FOCUS:", "MET", "NOT_MET")
+                    .doesNotContain(
+                            "TARGET ASSESSMENT:",
+                            "fixed target",
+                            "DEFECT-DETECTOR DISCIPLINE",
+                            "PRESENT/GOOD",
+                            "PRESENT/BAD",
+                            "ABSENT/GOOD",
+                            "ABSENT/BAD");
         });
     }
 
@@ -55,13 +61,13 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotCallApplicableGoodWorkNotApplicable() {
+    void shouldDistinguishConformanceFromInapplicability() {
         assertThat(loader.catalog().practices())
                 .filteredOn(practice -> practice.slug().equals("asks-answerable-questions")
                         || practice.slug().equals("posts-clear-status-and-blocker-updates"))
                 .hasSize(2)
-                .allSatisfy(practice ->
-                        assertThat(practice.definition().criteria()).contains("PRESENT/GOOD", "not NOT_APPLICABLE"));
+                .allSatisfy(
+                        practice -> assertThat(practice.definition().criteria()).contains("MET", "not NOT_APPLICABLE"));
     }
 
     /** Pinned by slug so that shipping another practice without automated review is a decision. */
@@ -106,8 +112,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
         BundledPracticeCatalog catalog = loader.catalog();
 
         assertThat(catalog.practices().stream()
-                        .filter(practice ->
-                                practice.definition().bindings().getFirst().appliesWhen() != null)
+                        .filter(practice -> practice.definition().precondition() != null)
                         .map(practice -> practice.slug()))
                 .containsExactlyInAnyOrder(
                         "changes-dependencies-deliberately",
@@ -127,8 +132,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     @Test
     void shouldJudgeReviewersForReviewerPractices() {
         assertThat(loader.catalog().practices().stream()
-                        .filter(practice ->
-                                practice.definition().bindings().getFirst().subject() == ActorRole.REVIEWER)
+                        .filter(practice -> practice.definition().subject() == ActorRole.REVIEWER)
                         .map(practice -> practice.slug()))
                 .containsExactlyInAnyOrder(
                         "leaves-useful-specific-review-comments",
@@ -143,11 +147,11 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     @Test
     void shouldGiveEverySubjectDeclarationASentenceForTheReader() {
         assertThat(loader.catalog().practices()).allSatisfy(practice -> {
-            var subject = practice.definition().bindings().getFirst().appliesWhen();
+            var subject = practice.definition().precondition();
             if (subject == null) {
                 return;
             }
-            assertThat(subject.absentSays())
+            assertThat(subject.skipReason())
                     .as("%s must explain its own silence", practice.slug())
                     .isNotBlank()
                     .doesNotContain("NOT_APPLICABLE");
@@ -156,26 +160,17 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldShipOneOccasionPerPractice() {
-        assertThat(loader.catalog().practices())
-                .allSatisfy(practice -> assertThat(practice.definition().bindings())
-                        .as("occasions of '%s'", practice.slug())
-                        .hasSize(1));
-    }
-
-    @Test
     void shouldPreserveDraftEligibilityAndTheMergeSubjectFromFlatFields() {
         assertThat(loader.catalog().practices())
                 .filteredOn(practice -> practice.slug().equals("ready-and-traceable-handoff"))
                 .singleElement()
-                .satisfies(practice -> assertThat(
-                                practice.definition().bindings().getFirst().onDrafts())
-                        .isTrue());
+                .satisfies(
+                        practice -> assertThat(practice.definition().onDrafts()).isTrue());
         assertThat(loader.catalog().practices())
                 .filteredOn(practice -> practice.slug().equals("merges-only-after-approval"))
                 .singleElement()
                 .satisfies(practice -> {
-                    var occasion = practice.definition().bindings().getFirst();
+                    var occasion = practice.definition();
                     assertThat(occasion.subject()).isEqualTo(ActorRole.MERGER);
                     assertThat(occasion.onDrafts()).isFalse();
                 });
@@ -183,26 +178,23 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
 
     @Test
     void shouldPreserveTheOccasionWhenEvidenceRequirementsAreOmitted() {
-        var defaults = new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog());
         var occasion = objectMapper.readValue("""
                 {
                   "signals": ["scm.pull_request.merged"],
                   "subject": "MERGER",
                   "onDrafts": true,
                   "precondition": {
-                    "absentSays": "the change has no Swift code",
+                    "skipReason": "the change has no Swift code",
                     "anyOf": [{"changedPathMatches": ["**/*.swift"]}]
                   }
                 }
                 """, BundledPracticeCatalogLoader.CatalogOccasion.class);
 
-        var binding = occasion.toBinding(defaults);
-        assertThat(binding.needs())
-                .containsExactlyInAnyOrderElementsOf(defaults.needsFor(ArtifactKind.of("scm.pull_request")));
-        assertThat(binding.subject()).isEqualTo(ActorRole.MERGER);
-        assertThat(binding.onDrafts()).isTrue();
-        assertThat(binding.appliesWhen()).isNotNull().satisfies(precondition -> {
-            assertThat(precondition.absentSays()).isEqualTo("the change has no Swift code");
+        assertThat(occasion.evidenceRequirements()).isNull();
+        assertThat(occasion.subject()).isEqualTo(ActorRole.MERGER);
+        assertThat(occasion.onDrafts()).isTrue();
+        assertThat(occasion.precondition()).isNotNull().satisfies(precondition -> {
+            assertThat(precondition.skipReason()).isEqualTo("the change has no Swift code");
             assertThat(precondition.anyOf())
                     .singleElement()
                     .satisfies(clause -> assertThat(clause.changedPathMatches()).containsExactly("**/*.swift"));
@@ -215,7 +207,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 .filteredOn(practice -> practice.slug().equals("keeps-views-free-of-networking-and-persistence"))
                 .singleElement()
                 .satisfies(practice -> {
-                    assertThat(practice.definition().bindings().getFirst().needs())
+                    assertThat(practice.definition().evidenceRequirements())
                             .extracting(
                                     requirement -> requirement.sourceKind().value(),
                                     PracticeEvidenceRequirement::stance)

@@ -1,6 +1,6 @@
-import { assert, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type { Practice, PracticeBinding } from "@/api/types.gen";
+import type { Practice } from "@/api/types.gen";
 import {
 	chosenAutonomy,
 	inheritedAutonomy,
@@ -149,11 +149,12 @@ describe("practice catalog cache updates", () => {
 		});
 		// Replacing the occasion can move the practice to a different kind of work, and with it to that
 		// kind's recommended review settings — so the optimistic patch carries those too.
-		const [replacement] = updated.bindings;
-		assert(replacement);
-		const occasion: [PracticeBinding] = [replacement];
-		expect(selectPracticePatch(updated, { bindings: occasion })).toStrictEqual({
-			bindings: occasion,
+		expect(selectPracticePatch(updated, { signals: updated.signals })).toStrictEqual({
+			signals: updated.signals,
+			evidenceRequirements: updated.evidenceRequirements,
+			onDrafts: updated.onDrafts,
+			subject: updated.subject,
+			precondition: updated.precondition,
 			artifactKind: updated.artifactKind,
 			automatedReviewPolicy: updated.automatedReviewPolicy,
 			automatedReviewValidation: updated.automatedReviewValidation,

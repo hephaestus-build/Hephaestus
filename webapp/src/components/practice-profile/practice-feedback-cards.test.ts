@@ -39,11 +39,11 @@ const feedback: InAppFeedback = {
 	groupSlug: "review-ready-work",
 	groupName: "Packaging work for review",
 	evidence: [
-		{ reviewedWork: pullRequest(6), observedAt: new Date("2026-08-19"), outcome: "OMISSION_GAP" },
+		{ reviewedWork: pullRequest(6), observedAt: new Date("2026-08-19"), outcome: "NOT_MET" },
 		{
 			reviewedWork: pullRequest(7),
 			observedAt: new Date("2026-08-13"),
-			outcome: "COMMISSION_PROBLEM",
+			outcome: "NOT_MET",
 		},
 	],
 	preparedAt: new Date("2026-08-20T10:05:00Z"),
@@ -82,8 +82,8 @@ describe("toFeedbackCard", () => {
 			{ type: "text", text: "Ticks itself once three pieces of work in a row come back clean" },
 		]);
 		expect(card.reviewedWork).toStrictEqual([
-			{ ref: pullRequest(6), date: new Date("2026-08-19"), outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(7), date: new Date("2026-08-13"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(6), date: new Date("2026-08-19"), outcome: "NOT_MET" },
+			{ ref: pullRequest(7), date: new Date("2026-08-13"), outcome: "NOT_MET" },
 		]);
 	});
 

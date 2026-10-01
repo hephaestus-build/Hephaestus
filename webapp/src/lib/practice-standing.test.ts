@@ -13,7 +13,7 @@ import { contributingPractices, nextStepOf } from "./practice-standing";
 function observation(overrides: Partial<PracticeStandingObservation>): PracticeStandingObservation {
 	return {
 		observationId: "obs-1",
-		kind: "OMISSION_GAP",
+		outcome: "NOT_MET",
 		origin: "LIVE",
 		reviewedWorkId: 1,
 		workKind: "scm.pull_request",

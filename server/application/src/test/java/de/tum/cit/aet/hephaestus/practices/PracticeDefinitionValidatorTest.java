@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SubjectEvidenceCollection;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -63,12 +64,11 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     void rejectsAPersonTheWorkTypeDoesNotRecordInTheEditorsOwnLabel() {
         assertThatThrownBy(() -> validator.validate(new PracticeDefinition(
                         "Focused review",
-                        List.of(new PracticeBinding(
-                                List.of(ScmSignals.ISSUE_OPENED),
-                                List.of(need(new SourceKind("scm.issue.core"))),
-                                false,
-                                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.MERGER,
-                                null)),
+                        List.of(ScmSignals.ISSUE_OPENED),
+                        List.of(need(new SourceKind("scm.issue.core"))),
+                        false,
+                        de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.MERGER,
+                        null,
                         "Assess the review",
                         null,
                         languageModel(),
@@ -91,40 +91,16 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
-    /**
-     * A second occasion is refused rather than merged, and the refusal names the alternative — the one
-     * the shipped catalogue already takes, where a way of working judged differently at a different moment is a
-     * separate practice with its own tier, history and copy.
-     */
-    @Test
-    void rejectsASecondOccasion() {
-        PracticeDefinition definition = new PracticeDefinition(
-                "Focused review",
-                List.of(
-                        PracticeBinding.on(ScmSignals.PULL_REQUEST_OPENED, List.of(need(DIFF))),
-                        PracticeBinding.on(ScmSignals.PULL_REQUEST_MERGED, List.of(need(DIFF)))),
-                "Assess the review",
-                null,
-                languageModel(),
-                null,
-                null,
-                null);
-
-        assertThatThrownBy(() -> validator.validate(definition))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("A practice is reviewed on one occasion. To read different evidence at a different moment, "
-                        + "split this into two practices.");
-    }
-
     /** Several signals on the one occasion stay legal: that is how a practice judged all along is written. */
     @Test
     void acceptsSeveralSignalsOnTheOneOccasion() {
         PracticeDefinition definition = new PracticeDefinition(
                 "Focused review",
-                List.of(new PracticeBinding(
-                        List.of(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_MERGED),
-                        List.of(need(DIFF)),
-                        false)),
+                List.of(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_MERGED),
+                List.of(need(DIFF)),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 "Assess the review",
                 null,
                 languageModel(),
@@ -203,11 +179,15 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"PRESENT", "ABSENT", "GOOD", "BAD", "ASSESSED", "NOT_APPLICABLE", "UNDETERMINED"})
+    @ValueSource(strings = {"PRESENT", "NOT_MET", "BAD", "ASSESSED", "NOT_APPLICABLE", "UNDETERMINED"})
     void rejectsDetectorVocabularyInDeveloperFacingGuidance(String label) {
         PracticeDefinition definition = new PracticeDefinition(
                 "Focused review",
-                List.of(PracticeBinding.on(ScmSignals.PULL_REQUEST_OPENED, List.of(need(DIFF)))),
+                List.of(ScmSignals.PULL_REQUEST_OPENED),
+                List.of(need(DIFF)),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 "Assess the review",
                 null,
                 languageModel(),
@@ -250,14 +230,13 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     void rejectsASubjectReadFromASourceThisWorkTypeDoesNotHave() {
         assertThatThrownBy(() -> validator.validate(new PracticeDefinition(
                         "Focused review",
-                        List.of(new PracticeBinding(
-                                List.of(ScmSignals.ISSUE_OPENED),
-                                List.of(need(new SourceKind("scm.issue.core"))),
-                                false,
-                                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
-                                new PracticeSubject(
-                                        "the change touches no dependency manifest",
-                                        List.of(PracticeSubjectClause.changedPathMatches(List.of("**/pom.xml")))))),
+                        List.of(ScmSignals.ISSUE_OPENED),
+                        List.of(need(new SourceKind("scm.issue.core"))),
+                        false,
+                        de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
+                        new PracticePrecondition(
+                                "the change touches no dependency manifest",
+                                List.of(PracticePreconditionClause.changedPathMatches(List.of("**/pom.xml")))),
                         "Assess the review",
                         null,
                         languageModel(),
@@ -273,23 +252,22 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     @Test
     void acceptsASubjectDecidableFromASourceTheWorkTypeCapturesWhole() {
         assertThatCode(() -> validator.validate(withSubject(
-                        new PracticeSubject(
+                        new PracticePrecondition(
                                 "the change touches no dependency manifest or lockfile",
-                                List.of(PracticeSubjectClause.changedPathMatches(
+                                List.of(PracticePreconditionClause.changedPathMatches(
                                         List.of("**/pom.xml", "**/package.json")))),
                         DIFF)))
                 .doesNotThrowAnyException();
     }
 
-    private static PracticeDefinition withSubject(PracticeSubject subject, SourceKind reads) {
+    private static PracticeDefinition withSubject(PracticePrecondition subject, SourceKind reads) {
         return new PracticeDefinition(
                 "Focused review",
-                List.of(new PracticeBinding(
-                        List.of(ScmSignals.PULL_REQUEST_OPENED),
-                        List.of(need(reads)),
-                        false,
-                        de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
-                        subject)),
+                List.of(ScmSignals.PULL_REQUEST_OPENED),
+                List.of(need(reads)),
+                false,
+                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
+                subject,
                 "Assess the review",
                 null,
                 languageModel(),
@@ -305,7 +283,11 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
             PracticeAutomatedReviewPolicy policy) {
         return new PracticeDefinition(
                 "Focused review",
-                List.of(PracticeBinding.on(signal, needs)),
+                List.of(signal),
+                needs,
+                false,
+                ActorRole.AUTHOR,
+                null,
                 "Assess the review",
                 precomputeScript,
                 policy,

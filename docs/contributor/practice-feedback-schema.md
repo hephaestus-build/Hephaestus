@@ -18,7 +18,7 @@ Use the executable sources for exact details:
 - [`openapi.yaml`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml) for HTTP projections;
 - [ADR 0021](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0021-observations-feedback-synthesis-seam.md)
   and
-  [ADR 0022](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0022-observation-presence-assessment-and-schema-cleanup.md)
+  [ADR 0048](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0050-one-practice-standard-one-outcome.md)
   for design history;
 - [practice feedback language](./practice-feedback-language.md) for user-facing terms.
 
@@ -58,35 +58,37 @@ groups the same evidence location across review jobs, including observations abo
 A new review creates a new observation. Location grouping proves neither recurrence nor resolution;
 responses and exact-observation delivery decisions use the observations bound to the feedback.
 
-### One contract from generation to storage
+### Historical measurement is not current conformance
 
-`report_observation`, normalized runtime output, server admission, persistence and read DTOs use the
-same `assessmentStatus`, `presence`, `assessment` and `severity` axes. The
-[product vocabulary](./practice-feedback-language.md#observation-assessment-axes) defines their valid
-combinations and meaning. `outcome` is a read-only POSITIVE/NEGATIVE projection of the matrix, not another stored or model-authored axis. The descriptive standing `kind` is separate from this outcome. There is no fused input enum or translation to different presence labels.
-The runtime requires every axis explicitly, including nulls. Contradictory axes are rejected by the
-normalizer and server and constrained by the database. Practice criteria define severity; admission
-preserves the submitted band rather than capping it by practice slug. Approval, autonomy and channel
-eligibility govern delivery separately.
+A result from the earlier behavior-level scheme does not establish conformance under the current
+whole-standard contract. Historical revision fingerprints are preserved. A missing or incompatible
+fingerprint makes a claim `UNVERIFIABLE`; it cannot support current standings or new delivery.
+New reviews append a current-scheme snapshot without rewriting the revision of a past observation.
+
+### One contract across boundaries
+
+An observation carries one required `outcome`: `MET`, `NOT_MET`, `NOT_APPLICABLE`, or `UNDETERMINED`.
+The [product vocabulary](./practice-feedback-language.md#observation-outcomes) owns their meaning.
+The runtime, persistence, and HTTP projections use the same values. Severity is required exactly for
+`NOT_MET`; it is absent otherwise. Admission rejects contradictory submissions rather than deleting
+fields or manufacturing a judgment. Delivery policy remains independent of the observation outcome.
 
 ### Evidence warrants
 
-Every observation cites exact staged text. Exactly one additional warrant is required where specified:
+Every observation cites exact staged text. Additional warrants express the basis for the claim:
 
-| Claim | Required branch | What it records |
+| Claim | Evidence branch | Meaning |
 | --- | --- | --- |
-| ASSESSED / ABSENT | `evidence.search` | sources searched, specified behavior and search boundary |
-| NOT_APPLICABLE | `evidence.inapplicability` | sources read, prerequisite subject and the fact ruling it out |
-| UNDETERMINED | `evidence.undecidability` | open question and what would settle it |
-| ASSESSED / PRESENT | none beyond citations | the cited target itself |
+| An absence-based decided claim | `evidence.search` | Sources searched, target, and bounded scope |
+| `NOT_APPLICABLE` | `evidence.inapplicability` | Sources read, prerequisite, and fact excluding it |
+| `UNDETERMINED` | `evidence.undecidability` | Open question and evidence that would settle it |
+| Directly evidenced conformance or shortfall | Citations | The actual work supporting the claim |
 
-A missing, errored, redacted or inadequate required source is a readiness failure, not UNDETERMINED.
-No observation is created for that practice. Read available evidence before claiming ambiguity.
-
-Every source declared `EXHAUSTIVE` must appear in `search.consulted`. ABSENT / BAD additionally
-requires at least one exhaustive source: avoiding a harmful target is provable only over an applicable,
-bounded corpus searched completely. It does not prove correctness beyond the recorded boundary.
-Both the sandbox and server admission enforce evidence requirements.
+A missing, errored, redacted, or inadequate required source is a readiness failure, not an outcome.
+Every source declared exhaustive must appear in `search.consulted`. A `MET` claim based on absence
+requires at least one exhaustive source. This proves conformance only within the recorded boundary.
+Admission validates submitted search coverage; neither structural validation nor a schema proves the
+truth or completeness of a model's claim. Empirical evaluation must test those properties separately.
 
 ### Ordering uses observable properties
 

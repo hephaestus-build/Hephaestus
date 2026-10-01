@@ -17,8 +17,8 @@ flowchart TB
     Occasion -->|yes| Capture{Capture: can we look?}
     Capture -->|no| Unready[agent_job.review_readiness]
     Capture -->|yes| Observe{Observation: what do we see?}
-    Observe -->|no practice subject| NotApplicable[observation.assessment_status NOT_APPLICABLE]
-    Observe -->|cannot tell| Undetermined[observation.assessment_status UNDETERMINED]
+    Observe -->|no practice subject| NotApplicable[observation.outcome NOT_APPLICABLE]
+    Observe -->|cannot tell| Undetermined[observation.outcome UNDETERMINED]
     Observe -->|behaviour claim| Deliver{Delivery: do we say it?}
     Deliver -->|no| Quiet[feedback.suppression_reason]
     Deliver -->|yes| Said[Feedback recorded and routed to an eligible surface]
@@ -52,10 +52,10 @@ choices must not erase observations.
 | ----------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------- |
 | Occasion    | `SignalStateReason`                                                          | `artifact_signal.state_reason`                                             | We chose not to look, or not yet |
 | Capture     | `SourceAbsenceReason` per source, `SourceReadinessReason` per practice check | `agent_job.evidence_snapshot` (the manifest), `agent_job.review_readiness` | We could not look                |
-| Observation | `AssessmentStatus.UNDETERMINED`                                                      | `observation.assessment_status`                                                     | We looked and could not tell     |
+| Observation | `Outcome.UNDETERMINED`                                                      | `observation.outcome`                                                     | We looked and could not tell     |
 | Delivery    | `FeedbackSuppressionReason`                                                  | `feedback.suppression_reason`                                              | We know, and chose to stay quiet |
 
-A missing source is not a claim about behavior and must not become a `Presence` value. A delivery refusal
+A missing source is not a claim about behavior and must not become an `Outcome` value. A delivery refusal
 or pending approval does not erase the observation. Add each reason to the stage that owns the decision;
 use separate reasons when more than one stage stops.
 
@@ -199,7 +199,7 @@ occasion as sync-discovered. This retires stale observations without coaching on
 GitLab synchronization includes native type, but its webhook contract does not provide a reliable
 type transition; the GitLab adapter therefore does not advertise live type-change reviews.
 
-Every practice bound to `scm.issue.updated` is reevaluated. Practice bindings declare occasions and evidence
+Every practice bound to `scm.issue.updated` is reevaluated. Practice definitions declare occasions and evidence
 sources, not dependencies on individual issue fields, so there is no second, per-field dependency model
 to keep in step with the snapshot.
 
@@ -248,15 +248,15 @@ capacity also affect when a review starts. A group with a push is reviewed under
 under `edited`; every other member becomes `SUPPRESSED / COALESCED`. A group overtaken by a merge or a close
 is left to that occasion.
 
-Either review also rechecks the practices whose current claim about the author on that work is negative,
+Either review also rechecks the practices whose current claim about the author on that work is `NOT_MET`,
 whatever occasion they are bound to: each claim's latest live or requested run, not superseded or
 invalidated, measured against the practice's current revision and with evidence authorized for automated
-review. The negative run's staged `reviewedWork` must establish a different head, title or description
+review. The `NOT_MET` run's staged `reviewedWork` must establish a different head, title or description
 from the current mirror, using only comparisons that the captured source contract permits for automated
 review. A deferred initial edit cannot recheck a Ready review of the same capture;
 missing, malformed or differently bound capture identities establish nothing. Admission and completion
 timestamps are not revision evidence. This extra comparison does not restrict practices explicitly bound
-to the occasion or manual requests. A later positive or abstention stands. The job records these as
+to the occasion or manual requests. A later `MET` result or abstention stands. The job records these as
 `rechecked_practices` and reads
 each under its own binding. Draft, coverage, consent, withdrawal and autonomy gates apply as usual, and only
 open work is rechecked. A recheck that records nothing for a practice leaves the earlier claim current.
@@ -274,7 +274,7 @@ and submitted-review occasions, and reviews asked for by hand, keep their own ru
 ## Capture
 
 Capture stages **every source the contract says applies to the artifact kind under review** — all of them,
-every time. Practice bindings decide which practices may run, never which files reach the sandbox; there is
+every time. Practice definitions decide which practices may run, never which files reach the sandbox; there is
 no per-run source selection. What a capture then reports about each source (available, not collected,
 unavailable, redacted, errored — with a typed reason) and how a practice's stances turn those reports into
 a readiness decision is the whole subject of the
@@ -293,16 +293,28 @@ need not load the full artifact manifest.
 ## Observation
 
 An observation is one practice's answer about one piece of work, written once and immutable. Its
-[assessment axes](./practice-feedback-language.md#observation-assessment-axes) remain unchanged from
-the sandbox tool through server admission, persistence and read projections. Contradictory fields
-are rejected, never silently removed or converted to a different judgment.
+[outcome](./practice-feedback-language.md#observation-outcomes) remains unchanged from
+the sandbox tool through server admission, persistence and read projections. Severity is required
+exactly for `NOT_MET`; contradictory fields are rejected, never silently removed.
 
-Admission validates the observation’s axes and evidence warrants. Practice criteria supply the contextual
-expectation; each observation identifies the behavior whose presence and desirability it assesses.
+A final review records at most one observation per practice. Duplicate practice results are refused
+as a whole, before quote verification can remove one side of a contradiction. The runtime may revise
+its provisional result before submission; persisted observations do not change.
 
-Status-specific warrants and citations are enforced both inside the sandbox and by the server.
-Capture failure remains a readiness decision and creates no observation. Unassessed statuses do not
-create positive or negative feedback and do not move the assessed-result trend denominator.
+Earlier behavior-level observations remain authorized history, but their fingerprint scheme does
+not establish conformance under the current whole-practice standard. They are `UNVERIFIABLE`, not
+current evidence. A new review appends a current-standard practice revision without rewriting the
+revision cited by historical observations.
+
+Admission validates the outcome and its evidence warrants against the practice's criteria.
+`MET` and `NOT_MET` are decided results. `NOT_APPLICABLE` requires an evidence-backed
+applicability reason; `UNDETERMINED` requires an unresolved question and what would settle it.
+A submitted absence claim includes a recorded search checked against captured sources. A `MET`
+absence claim also requires an exhaustive corpus declared by the practice.
+
+Warrants and citations are enforced both inside the sandbox and by the server. Capture failure
+remains a readiness decision and creates no observation. Abstentions create no feedback and do not
+move the decided-result trend denominator; their counts remain visible separately.
 
 Admission is single-flight per attempt. Verifying a historical citation reads the attempt's repository
 snapshot, so a runner that repeats a submission whose answer did not arrive joins the admission already
@@ -417,7 +429,7 @@ both placements. Per-lane limits are supplied in composition configuration, not 
 Recording-tool validation and server admission enforce these constraints independently. An invalid
 feedback unit is dropped and logged without invalidating admitted observations.
 
-- **No verdict fields.** `report_feedback` takes no presence, assessment, severity or confidence.
+- **No verdict fields.** `report_feedback` takes no outcome or severity.
 - **No model-authored path or line number.** `placement.kind: "DIFF"` names an admitted
   `{ observationId, citationIndex }`, and the server resolves the file, side, and line from that
   observation's citation. `placement.kind: "ARTIFACT"` carries no coordinates and stays in the summary.

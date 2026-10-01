@@ -1,10 +1,10 @@
 import type { ComponentProps } from "react";
+import type { PracticeReviewFields } from "@/components/admin/practice-editor/review-settings";
 
 import { cn } from "cn";
 import type {
 	PracticeAutomatedReviewPolicy,
 	PracticeAutomatedReviewValidation,
-	PracticeBinding,
 	PracticeEvidenceSourceOption,
 	PracticeSignalOption,
 } from "@/api/types.gen";
@@ -40,22 +40,20 @@ function signalLabel(signal: string, signals: readonly PracticeSignalOption[]) {
 }
 
 interface OccasionSummaryProps {
-	binding: PracticeBinding;
+	reviewFields: PracticeReviewFields;
 	sources: readonly PracticeEvidenceSourceOption[];
 	signals: readonly PracticeSignalOption[];
 }
 
-/**
- * Listed per occasion rather than merged into one set: a merged list would claim every review reads
- * everything any one of them does.
- */
-function OccasionSummary({ binding, sources, signals }: OccasionSummaryProps) {
-	const required = binding.needs.filter((need) => need.stance !== "CONTEXTUAL");
-	const contextual = binding.needs.filter((need) => need.stance === "CONTEXTUAL");
+function OccasionSummary({ reviewFields, sources, signals }: OccasionSummaryProps) {
+	const required = reviewFields.evidenceRequirements.filter((need) => need.stance !== "CONTEXTUAL");
+	const contextual = reviewFields.evidenceRequirements.filter(
+		(need) => need.stance === "CONTEXTUAL",
+	);
 	return (
 		<div className="space-y-2 rounded-md border p-3">
 			<div className="flex flex-wrap items-center gap-1.5">
-				{binding.signals.map((signal) => {
+				{reviewFields.signals.map((signal) => {
 					const Icon = momentDef(signal).icon;
 					return (
 						<Badge key={signal} variant="secondary">
@@ -64,17 +62,17 @@ function OccasionSummary({ binding, sources, signals }: OccasionSummaryProps) {
 						</Badge>
 					);
 				})}
-				{binding.onDrafts === true && <Badge variant="outline">Drafts included</Badge>}
+				{reviewFields.onDrafts && <Badge variant="outline">Drafts included</Badge>}
 			</div>
 			<dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[6.5rem_1fr]">
 				<dt className="text-muted-foreground">Person judged</dt>
-				<dd>{ACTOR_ROLE_LABELS[binding.subject ?? "AUTHOR"]}</dd>
+				<dd>{ACTOR_ROLE_LABELS[reviewFields.subject]}</dd>
 				<dt className="text-muted-foreground">Only review when</dt>
 				<dd className="space-y-1">
-					{binding.appliesWhen ? (
+					{reviewFields.precondition ? (
 						<>
 							<ul className="list-inside list-disc">
-								{binding.appliesWhen.anyOf?.map((clause, index) => (
+								{reviewFields.precondition.anyOf?.map((clause, index) => (
 									<li key={index} className="break-words">
 										{clause.changedPathMatches && (
 											<>Changed path matches {clause.changedPathMatches.join(", ")}</>
@@ -87,7 +85,7 @@ function OccasionSummary({ binding, sources, signals }: OccasionSummaryProps) {
 								))}
 							</ul>
 							<p className="text-muted-foreground">
-								Otherwise skip: {binding.appliesWhen.absentSays}
+								Otherwise skip: {reviewFields.precondition.skipReason}
 							</p>
 						</>
 					) : (
@@ -128,12 +126,11 @@ function OccasionSummary({ binding, sources, signals }: OccasionSummaryProps) {
 	);
 }
 
-export interface PracticeEvidenceSummaryProps {
+export interface PracticeEvidenceSummaryProps extends PracticeReviewFields {
 	policy: PracticeAutomatedReviewPolicy;
-	bindings: readonly PracticeBinding[];
 	validation: PracticeAutomatedReviewValidation;
 	sources: readonly PracticeEvidenceSourceOption[];
-	signals?: readonly PracticeSignalOption[];
+	signalOptions?: readonly PracticeSignalOption[];
 	workTypeLabel: string;
 	className?: string;
 	showValidation?: boolean;
@@ -172,10 +169,14 @@ const NO_SIGNALS: readonly PracticeSignalOption[] = [];
 
 export function PracticeEvidenceSummary({
 	policy,
-	bindings,
+	signals,
+	evidenceRequirements,
+	onDrafts,
+	subject,
+	precondition,
 	validation,
 	sources,
-	signals = NO_SIGNALS,
+	signalOptions = NO_SIGNALS,
 	workTypeLabel,
 	className,
 	showValidation = true,
@@ -208,15 +209,12 @@ export function PracticeEvidenceSummary({
 			<div className="sm:col-span-2">
 				<dt className="font-medium">When it is reviewed, and what it reads</dt>
 				<dd className="mt-1 space-y-2">
-					{bindings.length > 0 ? (
-						bindings.map((binding, index) => (
-							<OccasionSummary
-								key={binding.signals.join(",") || index}
-								binding={binding}
-								sources={sources}
-								signals={signals}
-							/>
-						))
+					{signals.length > 0 ? (
+						<OccasionSummary
+							reviewFields={{ signals, evidenceRequirements, onDrafts, subject, precondition }}
+							sources={sources}
+							signals={signalOptions}
+						/>
 					) : (
 						<span className="text-muted-foreground">No occasion starts a review</span>
 					)}

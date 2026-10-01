@@ -16,11 +16,9 @@ import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.inapp.FeedbackWithdrawalService;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
@@ -99,7 +97,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
         practice.setSlug("test-practice");
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.save(practice);
 
         agentJob = new AgentJob();
@@ -118,9 +116,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .artifactId(42L)
                 .aboutUserId(adminUser.getId())
                 .summary("Missing error handling")
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.ABSENT)
-                .assessment(Assessment.GOOD)
+                .outcome(Outcome.NOT_MET)
                 .severity(Severity.MAJOR)
                 .observedAt(Instant.now())
                 .build();
@@ -256,9 +252,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .artifactId(42L)
                     .aboutUserId(adminUser.getId())
                     .summary("Different behavior at the same location")
-                    .assessmentStatus(AssessmentStatus.ASSESSED)
-                    .presence(Presence.PRESENT)
-                    .assessment(Assessment.BAD)
+                    .outcome(Outcome.NOT_MET)
                     .severity(Severity.MINOR)
                     .observedAt(Instant.now())
                     .build());

@@ -66,7 +66,7 @@ type Story = StoryObj<typeof meta>;
 
 /**
  * Newest first under a heading per day. A row leads with the practices that slipped, by name, and
- * under it counts the practices that held, did not apply or stayed undecided, and how many practices
+ * under it counts the practices that were met, did not apply, or remained undetermined, and how many practices
  * the review reached. "Review this now" is offered only on the rows whose work
  * the reader may ask about, and feedback is linked where the provider's comment can be addressed
  * and counted elsewhere.
@@ -79,13 +79,13 @@ export const Default: Story = {
 		await expect(screen.getByLabelText("Timeframe")).toHaveTextContent("All time");
 		await expect(screen.getByText("2nd review")).toBeVisible();
 		await expect(
-			screen.getByText("one practice held, one undecided; three practices reached"),
+			screen.getByText("one practice met, one undetermined; three practices reached"),
 		).toBeVisible();
 		await expect(
-			screen.getByText("one practice held, five did not apply; nine practices reached"),
+			screen.getByText("one practice met, five did not apply; nine practices reached"),
 		).toBeVisible();
 		// A stopped review wrote no reach, so the line says only what it decided.
-		await expect(screen.getByText("one practice held")).toBeVisible();
+		await expect(screen.getByText("one practice met")).toBeVisible();
 		await expect(
 			screen.getByText("Explain each change, Keep the diff reviewable +1 more"),
 		).toBeVisible();

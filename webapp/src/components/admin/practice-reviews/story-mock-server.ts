@@ -99,9 +99,6 @@ function filterObservations(rows: ReviewObservation[], url: URL) {
 			matches(values(url, "outcome"), row.outcome) &&
 			(invalidated === undefined || invalidated === String(row.invalidatedAt !== undefined)) &&
 			(disputed === undefined || disputed === String(row.disputedAt !== undefined)) &&
-			matches(values(url, "assessmentStatus"), row.assessmentStatus) &&
-			matches(values(url, "presence"), row.presence) &&
-			matches(values(url, "assessment"), row.assessment) &&
 			matches(values(url, "severity"), row.severity) &&
 			(!hasText(subjectUserId) || String(row.subject?.id) === subjectUserId),
 	);
@@ -129,13 +126,14 @@ const ACTIONABILITY_RANK: Record<string, number> = { CRITICAL: 0, MAJOR: 1, MINO
 
 function actionability(row: ReviewObservation): number {
 	switch (row.outcome) {
-		case "NEGATIVE": {
+		case "NOT_MET": {
 			return ACTIONABILITY_RANK[row.severity ?? "INFO"] ?? 4;
 		}
-		case "POSITIVE": {
+		case "MET": {
 			return 5;
 		}
-		case undefined: {
+		case "NOT_APPLICABLE":
+		case "UNDETERMINED": {
 			return 6;
 		}
 	}

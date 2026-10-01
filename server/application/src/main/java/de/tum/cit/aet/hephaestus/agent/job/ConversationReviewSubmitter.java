@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -35,7 +35,7 @@ public class ConversationReviewSubmitter implements PendingSignalResubmitter {
     private final SignalRecorder signalRecorder;
     private final TransactionTemplate transactionTemplate;
     private final WorkspaceRepository workspaceRepository;
-    private final PracticeReviewDetectionGate detectionGate;
+    private final ReviewGate reviewGate;
 
     public ConversationReviewSubmitter(
             ConversationCandidateSource candidateSource,
@@ -43,13 +43,13 @@ public class ConversationReviewSubmitter implements PendingSignalResubmitter {
             SignalRecorder signalRecorder,
             TransactionTemplate transactionTemplate,
             WorkspaceRepository workspaceRepository,
-            PracticeReviewDetectionGate detectionGate) {
+            ReviewGate reviewGate) {
         this.candidateSource = candidateSource;
         this.agentJobService = agentJobService;
         this.signalRecorder = signalRecorder;
         this.transactionTemplate = transactionTemplate;
         this.workspaceRepository = workspaceRepository;
-        this.detectionGate = detectionGate;
+        this.reviewGate = reviewGate;
     }
 
     @Override
@@ -89,7 +89,7 @@ public class ConversationReviewSubmitter implements PendingSignalResubmitter {
                 continue;
             }
             try {
-                GateDecision decision = detectionGate.evaluateSignal(
+                GateDecision decision = reviewGate.evaluateSignal(
                         workspace, key.signalName(), TriggerMode.AUTO, new ReviewSubject(participant, true));
                 if (decision instanceof GateDecision.Skip skip) {
                     if (firstRefusal == null) firstRefusal = skip.resolvedSignalReason();

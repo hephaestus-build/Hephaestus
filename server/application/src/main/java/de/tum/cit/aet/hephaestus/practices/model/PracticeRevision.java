@@ -1,12 +1,17 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.ReviewRuleFingerprint;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.GeneratedValue;
@@ -86,9 +91,26 @@ public class PracticeRevision {
     private ArtifactKind artifactKind;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "bindings", columnDefinition = "jsonb")
+    @Column(name = "signals", columnDefinition = "jsonb")
     @ToString.Exclude
-    private List<PracticeBinding> bindings;
+    private @Nullable List<SignalName> signals;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "evidence_requirements", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable List<PracticeEvidenceRequirement> evidenceRequirements;
+
+    @Column(name = "on_drafts")
+    private @Nullable Boolean onDrafts;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subject", length = 16)
+    private @Nullable ActorRole subject;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "precondition", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticePrecondition precondition;
 
     @Column(name = "criteria", columnDefinition = "TEXT", nullable = false)
     @ToString.Exclude
@@ -145,7 +167,11 @@ public class PracticeRevision {
         this.slug = Objects.requireNonNull(practice.getSlug(), "practice.slug");
         this.name = Objects.requireNonNull(practice.getName(), "practice.name");
         this.artifactKind = Objects.requireNonNull(practice.getArtifactKind(), "practice.artifactKind");
-        this.bindings = List.copyOf(Objects.requireNonNull(practice.getBindings(), "practice.bindings"));
+        this.signals = List.copyOf(practice.getSignals());
+        this.evidenceRequirements = List.copyOf(practice.getEvidenceRequirements());
+        this.onDrafts = practice.isOnDrafts();
+        this.subject = practice.getSubject();
+        this.precondition = practice.getPrecondition();
         this.criteria = Objects.requireNonNull(practice.getCriteria(), "practice.criteria");
         this.precomputeScript = practice.getPrecomputeScript();
         this.automatedReviewPolicy =
@@ -169,8 +195,21 @@ public class PracticeRevision {
     }
 
     private String calculateReviewRuleFingerprint() {
+        if (signals == null || evidenceRequirements == null || onDrafts == null || subject == null) {
+            throw new IllegalStateException("A historical revision without an occasion cannot be fingerprinted");
+        }
         return ReviewRuleFingerprint.of(
-                slug, name, bindings, criteria, precomputeScript, automatedReviewPolicy, groupSlug);
+                slug,
+                name,
+                signals,
+                evidenceRequirements,
+                onDrafts,
+                subject,
+                precondition,
+                criteria,
+                precomputeScript,
+                automatedReviewPolicy,
+                groupSlug);
     }
 
     @PrePersist

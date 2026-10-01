@@ -1,6 +1,6 @@
-import type { PracticeBinding } from "@/api/types.gen";
+import type { PracticeReviewFields } from "@/components/admin/practice-editor/review-settings";
 
-export type ActorRole = NonNullable<PracticeBinding["subject"]>;
+export type ActorRole = NonNullable<PracticeReviewFields["subject"]>;
 
 /**
  * Who a practice judges on its work, in words. A plain map rather than a `StatusDefs` registry: the

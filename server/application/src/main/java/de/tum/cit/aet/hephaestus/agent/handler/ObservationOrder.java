@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import java.util.Comparator;

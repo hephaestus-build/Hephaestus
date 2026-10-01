@@ -23,11 +23,11 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Guidance only**                   | Keep the practice's criteria and guidance without asking Hephaestus to review it.                                                                                                                                                          | practice guidance only, invalid practice, human-only              |
 | **Review mode**                     | The implementation Hephaestus uses when automated review is configured.                                                                                                                                                                    | observability, mechanical/semantic classification                 |
 | **No automated review**             | Hephaestus does not review work against this practice.                                                                                                                                                                                     | human-only, unobservable                                          |
-| **Automated-review policy**         | The frame a review runs in for one practice: the source-contract version, the review mode, the refusal behaviour, and the known limits. Sources belong to the bindings, not here.                                                          | evidence requirements                                             |
-| **Practice binding**                | The one occasion a practice is reviewed on, and the evidence a review occasioned that way reads. A practice declares exactly one.                                                                                                          | trigger, review event, schedule, bare "binding"                   |
+| **Automated-review policy**         | The frame a review runs in for one practice: the source-contract version, the review mode, the refusal behaviour, and the known limits. Evidence requirements belong to the flat review configuration, not here.                                                          | evidence requirements                                             |
+| **Review occasion**                | The one occasion a practice is reviewed on, and the evidence a review occasioned that way reads. A practice declares exactly one.                                                                                                          | trigger, review event, schedule, bare "binding"                   |
 | **Model binding**                   | Which AI model, with which execution limits, a workspace runs a given purpose on. Lives in Administration &rarr; AI models, not in the practice catalogue.                                                                                 | bare "binding", practice binding, agent config                    |
-| **Signal**                          | The name of an ingested event a binding can be occasioned by, such as `scm.pull_request.merged`. Its prefix is the artifact kind, which is why a practice never states its artifact kind separately. On screen it is a **moment**, in the editor and in the filters alike. | trigger event, webhook, hook                                      |
-| **Evidence requirement**            | One source a binding reads, and the stance the practice takes towards it.                                                                                                                                                                  | required evidence, evidence declaration, detector configuration   |
+| **Signal**                          | The name of an ingested event a practice can be reviewed on, such as `scm.pull_request.merged`. Its prefix is the artifact kind, which is why a practice never states its artifact kind separately. On screen it is a **moment**, in the editor and in the filters alike. | trigger event, webhook, hook                                      |
+| **Evidence requirement**            | One source a practice review reads, and the stance the practice takes towards it.                                                                                                                                                                  | required evidence, evidence declaration, detector configuration   |
 | **Evidence stance**                 | How a practice relates to one source: `REQUIRED`, `EXHAUSTIVE`, or `CONTEXTUAL`.                                                                                                                                                           | required/optional lists, source role                              |
 | **Required capture quality**        | How well a source must be captured before a practice that reads it can be reviewed. It is a property of the source in the contract, not of the practice naming it.                                                                         | completeness requirement, per-practice completeness               |
 | **Evidence sufficiency**            | Whether passing every requirement gives Hephaestus enough context to review the practice.                                                                                                                                                  | evidence coverage, confidence                                     |
@@ -36,7 +36,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Materialization**                 | A file, database projection, cache entry, or tool result representing a source for one use.                                                                                                                                                | source kind                                                       |
 | **Job folder**                      | The directory the owning worker renders for one review attempt: permitted context areas as files plus a working copy of each permitted repository. [ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#evidence-admission-and-deletion) owns its lifetime.                                                 | workspace mount, evidence store, content-addressed store          |
 | **Source kind**                     | A stable identifier for one logical source, such as pull request details.                                                                                                                                                                  | file type                                                         |
-| **Artifact kind**                   | The family of reviewed work a practice is about, such as `scm.pull_request`. Derived from a binding's signals, never stated separately. On screen it is a **kind of work**, and the unfiltered choice is **All work**. | work type, artifact type                                          |
+| **Artifact kind**                   | The family of reviewed work a practice is about, such as `scm.pull_request`. Derived from a practice's signals, never stated separately. On screen it is a **kind of work**, and the unfiltered choice is **All work**. | work type, artifact type                                          |
 | **Known limitation**                | A claim the evidence cannot support even when every requirement passes.                                                                                                                                                                    | blind spot, caveat                                                |
 | **When evidence is insufficient**   | The required behavior when evidence requirements are not met. Skip automated review when the required source conditions are not met.                                                                                                                              | fallback, error handling                                          |
 | **Skip automated review**           | Make no practice claim because the requirements are not met or the mode is unsupported.                                                                                                                                                    | not applicable, decline judgment, failure                         |
@@ -82,7 +82,7 @@ label a practice as universally observable or unobservable.
 
 | Reviewer         | Current system support                                                                                                        |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Hephaestus**   | Modeled by `automatedReview` and the governed evidence each binding declares. It can only use authorized, connected evidence. |
+| **Hephaestus**   | Modeled by `automatedReview` and the governed evidence each practice declares. It can only use authorized, connected evidence. |
 | **Developer**    | A self-review may be possible for a specific practice; Hephaestus does not collect it.                                        |
 | **Peer**         | A peer review may be possible from team context; Hephaestus does not collect it.                                              |
 | **Human mentor** | A mentor review may be possible from interpersonal or private context; Hephaestus does not collect it.                        |
@@ -118,7 +118,7 @@ signal. `ObservationOrigin` is the population any resulting observation belongs 
   write "reconciliation never starts a review" without saying which artifact kind you mean.
 - **Asking by hand is a door, never an occasion.** A hand-requested review reviews every practice on that
   kind of work whatever state the work is in, so there is nothing for a practice to opt into;
-  `PracticeDefinitionValidator` refuses a binding that names a manual-request signal. Do not present it as
+  `PracticeDefinitionValidator` refuses a practice that names a manual-request signal. Do not present it as
   a moment an author can tick.
 - **A recurring sweep is `LIVE`, not `BACKFILL`.** `SWEEP` records how the work was *found*, and the work
   it finds is current work that never raised an event. Its observations therefore compose and deliver
@@ -505,12 +505,14 @@ resolution rule. Its rules, in one place:
 | ---------------------------- | ---------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
 | Practice-review AI purpose   | `PRACTICE_REVIEW`                  | `AgentPurpose.PRACTICE_REVIEW`             | `PRACTICE_REVIEW`                                                             |
 | Automated-review policy      | `automatedReviewPolicy`            | `PracticeAutomatedReviewPolicy`            | `automated_review_policy`                                                     |
-| Practice binding             | `on`                               | `PracticeBinding`                          | `bindings`                                                                    |
+| Review occasion              | `signals`, `evidenceRequirements`, `onDrafts`, `subject`, `precondition` | `PracticeDefinition` | flat columns on practice and revision                                                                    |
 | Model binding                | `AgentBinding`                     | `WorkspaceAgentBinding`                    | `workspace_agent_binding`                                                     |
-| Signal                       | `signals[]`                        | `SignalName`                               | inside `bindings`                                                             |
-| Draft occasion               | `onDrafts`                         | `PracticeBinding.onDrafts`                 | inside `bindings`                                                             |
-| Evidence requirement         | `needs[]`                          | `PracticeEvidenceRequirement`              | inside `bindings`                                                             |
-| Evidence stance              | `stance`                           | `EvidenceStance`                           | inside `bindings`                                                             |
+| Signal                       | `signals[]`                        | `SignalName`                               | `signals`                                                             |
+| Draft occasion               | `onDrafts`                         | `PracticeDefinition.onDrafts`                 | `on_drafts`                                                             |
+| Evidence requirement         | `evidenceRequirements[]`                          | `PracticeEvidenceRequirement`              | `evidence_requirements`                                                             |
+| Evidence stance              | `stance`                           | `EvidenceStance`                           | inside `evidence_requirements`                                                             |
+| Person judged | `subject` | `ActorRole` | `subject` |
+| Review precondition | `precondition` | `PracticePrecondition` | `precondition` |
 | Artifact kind                | `artifactKind`                     | `ArtifactKind`                             | `applies_to`                                                                  |
 | Reviewed work                | `reviewedWork` in the HTTP DTOs; `artifactKind`, `artifactId` in webapp search params and routes | `ReviewedWorkRefDTO` | `artifact_kind`, `artifact_id`                                              |
 | Source display name          | `displayName`                      | `ArtifactSourceContract.displayName`       | source catalog                                                                |
@@ -582,13 +584,12 @@ that a capture is *stale* — there is no such state, and the contract says why.
 
 ## Outcome states
 
-The [product vocabulary](./practice-feedback-language.md#observation-assessment-axes) owns observation
-status and result labels. The same axes are used by the generation tool, persisted observation and
+The [product vocabulary](./practice-feedback-language.md#observation-outcomes) owns observation
+outcome labels. The same outcome values are used by the generation tool, persisted observation and
 read DTOs; the [feedback schema](./practice-feedback-schema.md#evidence-warrants) owns their warrants.
 
-A readiness refusal belongs to the capture stage and creates no observation. It is not an assessment
-status. NOT_APPLICABLE and UNDETERMINED describe distinct facts established by reading available
-evidence, and neither contributes to the assessed-result denominator.
+A readiness refusal belongs to the capture stage and creates no observation. It is not an observation outcome. NOT_APPLICABLE and UNDETERMINED describe distinct facts established by reading available
+evidence, and neither contributes to the decided-result denominator.
 
 ## Lifecycle
 
@@ -614,9 +615,9 @@ evidence, and neither contributes to the assessed-result denominator.
 5. Prefer short names only when they remain unambiguous.
 6. Use **AI-supported mentoring** for the product promise and **practice review** for the bounded operation.
 7. Describe autonomy as release authority, never as loudness or reach. It does not affect the public **Profile** page.
-8. Never write bare **binding**. Two unrelated things carry the word — a *practice binding* (an occasion
-   a practice is reviewed on, `PracticeBinding`) and a *model binding* (a workspace's AI model for a
-   purpose, `WorkspaceAgentBinding`). Use `REVIEW_MODEL_UNBOUND` for a missing AI model.
+8. Use **review occasion** for when a practice is reviewed. Use **model binding** for a workspace's
+   AI model assigned to a purpose (`WorkspaceAgentBinding`), never bare **binding**.
+   Use `REVIEW_MODEL_UNBOUND` for a missing AI model.
 
 ## Member AI choice
 

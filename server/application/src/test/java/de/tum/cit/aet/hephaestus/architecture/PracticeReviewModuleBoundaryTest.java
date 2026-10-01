@@ -14,7 +14,7 @@ class PracticeReviewModuleBoundaryTest {
     void shouldKeepScmPersistenceOutOfObservationAdmission() {
         noClasses()
                 .that()
-                .haveSimpleName("PracticeDetectionDeliveryService")
+                .haveSimpleName("ReviewOutputService")
                 .should()
                 .dependOnClassesThat()
                 .resideInAnyPackage(

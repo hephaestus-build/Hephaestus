@@ -75,7 +75,7 @@ final class TrendSupportFactory {
             List<EvidenceOpportunity> trail) {
         // The comparison span excludes work that offered no opportunity to apply the practice.
         List<Instant> dated = trail.stream()
-                .filter(EvidenceOpportunity::applicable)
+                .filter(EvidenceOpportunity::decided)
                 .map(EvidenceOpportunity::occurredAt)
                 .toList();
         Instant first = dated.stream().min(Instant::compareTo).orElse(null);

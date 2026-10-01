@@ -27,7 +27,7 @@ class PracticeTrendTest {
                 .cleanWork();
 
         assertThat(cleanWork.count()).isEqualTo(2);
-        assertThat(cleanWork.applicableWork()).isEqualTo(4);
+        assertThat(cleanWork.decidedWork()).isEqualTo(4);
         assertThat(cleanWork.since()).isEqualTo(Instant.parse("2026-05-03T09:00:00Z"));
         assertThat(cleanWork.kind()).isEqualTo(ArtifactKinds.PULL_REQUEST);
         assertThat(cleanWork.jobIds()).containsExactly(newest.getAgentJobId(), older.getAgentJobId());
@@ -44,7 +44,7 @@ class PracticeTrendTest {
         // The verdictless piece neither breaks the run nor counts: two clean, two applicable, since the older clean
         // one.
         assertThat(cleanWork.count()).isEqualTo(2);
-        assertThat(cleanWork.applicableWork()).isEqualTo(2);
+        assertThat(cleanWork.decidedWork()).isEqualTo(2);
         assertThat(cleanWork.since()).isEqualTo(Instant.parse("2026-05-01T09:00:00Z"));
     }
 
@@ -67,7 +67,7 @@ class PracticeTrendTest {
                 .cleanWork();
 
         assertThat(cleanWork.count()).isZero();
-        assertThat(cleanWork.applicableWork()).isEqualTo(2);
+        assertThat(cleanWork.decidedWork()).isEqualTo(2);
         assertThat(cleanWork.kind()).isNull();
         assertThat(cleanWork.since()).isNull();
     }

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.slack;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -131,13 +132,21 @@ public final class SlackConversationTestSupport {
     /** Saves a minimal {@link Practice} owned by the given workspace, slugged so repeated calls do not collide. */
     public static Practice newPractice(PracticeRepository practiceRepository, Workspace workspace, String slugPrefix) {
         Practice practice = new Practice();
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+        practice.setSignals(PracticeTestEvidence.signals(ArtifactKinds.CONVERSATION_THREAD));
+        practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.CONVERSATION_THREAD));
+        practice.setOnDrafts(false);
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         practice.setWorkspace(workspace);
         practice.setSlug(slugPrefix + "-" + UUID.randomUUID());
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        practice.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
+        practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
+        practice.setOnDrafts(false);
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
         return practiceRepository.save(practice);
     }
 
@@ -167,9 +176,7 @@ public final class SlackConversationTestSupport {
                 threadId,
                 aboutUserId,
                 "Observation title",
-                "ASSESSED",
-                "ABSENT",
-                "BAD",
+                "MET",
                 "MAJOR",
                 null,
                 null,

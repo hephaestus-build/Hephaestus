@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.DeliveredFeedbackCount;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -190,7 +190,7 @@ public class PracticeProfileReviewRunService {
                             .collect(Collectors.groupingBy(
                                     Observation::getPractice,
                                     Collectors.mapping(
-                                            ObservationKind::of,
+                                            Observation::getOutcome,
                                             Collectors.collectingAndThen(Collectors.toList(), PracticeOutcome::of))));
                     ReviewRunFacts run = facts.get(jobId);
                     return new ProfileReviewRunDTO(
@@ -220,14 +220,14 @@ public class PracticeProfileReviewRunService {
         UNDECIDED;
 
         /** Any problem outweighs any strength. */
-        static PracticeOutcome of(List<ObservationKind> kinds) {
-            if (kinds.stream().anyMatch(ObservationKind::isNegative)) {
+        static PracticeOutcome of(List<Outcome> kinds) {
+            if (kinds.stream().anyMatch(Outcome::isNotMet)) {
                 return TO_IMPROVE;
             }
-            if (kinds.stream().anyMatch(ObservationKind::isPositive)) {
+            if (kinds.stream().anyMatch(Outcome::isMet)) {
                 return HELD;
             }
-            return kinds.stream().allMatch(ObservationKind.NOT_APPLICABLE::equals) ? NOT_APPLICABLE : UNDECIDED;
+            return kinds.stream().allMatch(Outcome.NOT_APPLICABLE::equals) ? NOT_APPLICABLE : UNDECIDED;
         }
     }
 

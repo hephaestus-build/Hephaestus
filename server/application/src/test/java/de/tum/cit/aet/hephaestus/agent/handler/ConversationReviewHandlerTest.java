@@ -54,7 +54,7 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
     private PracticeCatalogInjector practiceCatalogInjector;
 
     @Mock
-    private PracticeDetectionDeliveryService deliveryService;
+    private ReviewOutputService deliveryService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -73,8 +73,13 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                         practiceCatalogInjector,
                         new TaskEnvelopeWriter(objectMapper),
                         gitRepositoryManager,
-                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer()),
-                new PracticeDetectionResultParser(objectMapper),
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer(),
+                        org.mockito.Mockito.mock(
+                                de.tum.cit.aet.hephaestus.practices.PracticeRevisionService.class,
+                                invocation -> ((de.tum.cit.aet.hephaestus.practices.model.Practice)
+                                                invocation.getArgument(0))
+                                        .getCurrentRevision())),
+                new ReviewResultParser(objectMapper),
                 deliveryService,
                 eventPublisher,
                 transactionTemplate);
@@ -165,7 +170,7 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
             AgentJob job = conversationJob();
             Practice practice = new Practice();
             practice.setSlug("conversation-practice");
-            practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+            PracticeTestEvidence.configure(practice, ArtifactKinds.CONVERSATION_THREAD);
             practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.CONVERSATION_THREAD));
             var revision = new PracticeRevision();
             ReflectionTestUtils.setField(revision, "id", 12L);
@@ -178,7 +183,7 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                                     SandboxLayout.CONTEXT_PREFIX + "conversation_thread.json",
                                     "{\"messages\":[]}".getBytes()),
                             org.mockito.Mockito.mock(JobFolderIndex.class)));
-            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
+            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any()))
                     .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                             List.of(practice), mock(AutomatedReviewReadinessReport.class)));
 
@@ -208,8 +213,7 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
             [{
               "practiceSlug": "explains-why",
               "summary": "States the motivation",
-              "assessmentStatus": "ASSESSED", "presence": "PRESENT",
-              "assessment": "GOOD",
+              "outcome": "MET",
               "severity": null,
               "evidenceRationale": "The text says why.",
               "evidence": {}
@@ -233,7 +237,7 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
         void shouldRecordThroughTheDeliveryServiceOnlyWhenAsked() {
             var job = new AgentJob();
             job.setId(UUID.randomUUID());
-            var admissible = mock(PracticeDetectionDeliveryService.PreparedObservations.class);
+            var admissible = mock(ReviewOutputService.PreparedObservations.class);
             when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
                     .thenReturn(admissible);
 

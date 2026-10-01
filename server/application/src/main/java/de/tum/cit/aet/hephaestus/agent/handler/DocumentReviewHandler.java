@@ -40,14 +40,14 @@ public class DocumentReviewHandler implements JobTypeHandler {
 
     private final JsonMapper objectMapper;
     private final PracticeReviewPreparation preparation;
-    private final PracticeDetectionResultParser resultParser;
-    private final PracticeDetectionDeliveryService deliveryService;
+    private final ReviewResultParser resultParser;
+    private final ReviewOutputService deliveryService;
 
     DocumentReviewHandler(
             JsonMapper objectMapper,
             PracticeReviewPreparation preparation,
-            PracticeDetectionResultParser resultParser,
-            PracticeDetectionDeliveryService deliveryService) {
+            ReviewResultParser resultParser,
+            ReviewOutputService deliveryService) {
         this.objectMapper = objectMapper;
         this.preparation = preparation;
         this.resultParser = resultParser;
@@ -67,8 +67,7 @@ public class DocumentReviewHandler implements JobTypeHandler {
         }
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put(
-                PracticeDetectionDeliveryService.ORIGIN_METADATA_KEY,
-                r.observationOrigin().name());
+                ReviewOutputService.ORIGIN_METADATA_KEY, r.observationOrigin().name());
         metadata.put("artifact_kind", ArtifactKinds.DOCUMENT.value());
         metadata.put(DocumentContentSource.DOCUMENT_ID_METADATA_KEY, r.documentId());
         metadata.put("title", r.title());
@@ -153,8 +152,7 @@ public class DocumentReviewHandler implements JobTypeHandler {
                             + ", discarded="
                             + parsed.discarded().size());
         }
-        var admissible = deliveryService.prepare(
-                job, PracticeDetectionResultParser.validateCoherence(parsed.validObservations()));
+        var admissible = deliveryService.prepare(job, ReviewResultParser.validateCoherence(parsed.validObservations()));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 

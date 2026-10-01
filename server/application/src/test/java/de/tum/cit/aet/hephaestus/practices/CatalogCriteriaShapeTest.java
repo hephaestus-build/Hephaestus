@@ -24,19 +24,17 @@ class CatalogCriteriaShapeTest extends BaseUnitTest {
 
     static final int MAX_CRITERIA_CHARS = 8_000;
 
-    /** The four assessed cells; the Judge section decides each, as ordinary or as "no ordinary case". */
-    static final List<String> CELLS = List.of("PRESENT/GOOD", "PRESENT/BAD", "ABSENT/GOOD", "ABSENT/BAD");
-
     @Test
-    @DisplayName("every bundled practice opens with its behavior focus and carries the sections in order")
+    @DisplayName("every bundled practice states its review focus and carries the sections in order")
     void bundledPracticesFollowTheShape() throws IOException {
         List<String> failures = new ArrayList<>();
         for (JsonNode group : catalogue().path("groups")) {
             for (JsonNode practice : group.path("practices")) {
                 String slug = practice.path("slug").asText();
                 String criteria = practice.path("criteria").asText("");
-                if (!criteria.startsWith("BEHAVIOR FOCUS:")) {
-                    failures.add(slug + ": must open with 'BEHAVIOR FOCUS:'");
+                if (criteria.indexOf("REVIEW FOCUS:") < 0
+                        || criteria.indexOf("REVIEW FOCUS:") > criteria.indexOf("\n## The standard")) {
+                    failures.add(slug + ": must state 'REVIEW FOCUS:' before the standard");
                 }
                 int last = -1;
                 for (String section : SECTIONS) {
@@ -52,17 +50,12 @@ class CatalogCriteriaShapeTest extends BaseUnitTest {
                 if (criteria.length() > MAX_CRITERIA_CHARS) {
                     failures.add(slug + ": " + criteria.length() + " characters, over " + MAX_CRITERIA_CHARS);
                 }
-                // The runner refuses a cell the Judge section rules out, so a section that leaves a cell
-                // unnamed leaves the session free to record the clean bill of an undesirable behaviour
-                // as GOOD — the lapse it is not.
                 String judge = sectionOf(criteria, "## Judge");
-                for (String cell : CELLS) {
-                    if (!judge.contains(cell)) {
-                        failures.add(slug + ": the Judge section does not decide " + cell);
+                for (String outcome : List.of("MET", "NOT_MET")) {
+                    if (!judge.contains(outcome)) {
+                        failures.add(slug + ": the Judge section does not decide " + outcome);
                     }
                 }
-                // Ordinary work and a lapse are cells; uncertainty and inapplicability are the other two
-                // outcomes a review must tell apart from them, so the criteria name where each is decided.
                 if (!judge.contains("UNDETERMINED")) {
                     failures.add(slug + ": the Judge section does not say when the review is UNDETERMINED");
                 }

@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
@@ -40,18 +41,21 @@ final class PracticeReviewPreparation {
     private final TaskEnvelopeWriter taskEnvelopeWriter;
     private final GitRepositoryManager gitRepositoryManager;
     private final JobEvidenceFiles evidenceFiles;
+    private final PracticeRevisionService practiceRevisionService;
 
     PracticeReviewPreparation(
             WorkspaceContextBuilder workspaceContextBuilder,
             PracticeCatalogInjector practiceCatalogInjector,
             TaskEnvelopeWriter taskEnvelopeWriter,
             GitRepositoryManager gitRepositoryManager,
-            JobEvidenceFiles evidenceFiles) {
+            JobEvidenceFiles evidenceFiles,
+            PracticeRevisionService practiceRevisionService) {
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
         this.gitRepositoryManager = gitRepositoryManager;
         this.evidenceFiles = evidenceFiles;
+        this.practiceRevisionService = practiceRevisionService;
     }
 
     /**
@@ -68,17 +72,13 @@ final class PracticeReviewPreparation {
             Supplier<TaskEnvelope> envelope,
             Consumer<Map<String, byte[]>> staging) {
         List<Practice> eligible = practiceCatalogInjector.resolveEligiblePractices(job, artifactKind);
+        eligible.forEach(practice -> practice.setCurrentRevision(practiceRevisionService.forReview(practice)));
         PreparedEvidence prepared = workspaceContextBuilder.prepare(request, EvidencePlan.compile(eligible));
         try {
             JobFolderIndex manifest = Objects.requireNonNull(prepared.manifest(), "manifest");
             var change = ReviewChange.of(gitRepositoryManager, request);
             var readiness = workspaceContextBuilder.prepareAutomatedReviewReadiness(
-                    manifest,
-                    eligible,
-                    job.getCreatedAt(),
-                    practice -> PracticeCatalogInjector.occasionOf(job, practice.getSlug()),
-                    prepared.files(),
-                    change);
+                    manifest, eligible, job.getCreatedAt(), prepared.files(), change);
             List<Practice> ready = readiness.readyPractices();
             if (ready.size() < eligible.size()) {
                 log.info(

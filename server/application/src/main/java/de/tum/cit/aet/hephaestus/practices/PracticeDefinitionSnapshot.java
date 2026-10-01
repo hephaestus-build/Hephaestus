@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -10,7 +12,11 @@ record PracticeDefinitionSnapshot(
         String slug,
         String name,
         ArtifactKind artifactKind,
-        List<PracticeBinding> bindings,
+        List<SignalName> signals,
+        List<PracticeEvidenceRequirement> evidenceRequirements,
+        boolean onDrafts,
+        ActorRole subject,
+        @Nullable PracticePrecondition precondition,
         @Nullable Integer criteriaRevision,
         String criteriaSha256,
         @Nullable String precomputeScriptSha256,
@@ -29,7 +35,11 @@ record PracticeDefinitionSnapshot(
                 practice.getSlug(),
                 practice.getName(),
                 practice.getArtifactKind(),
-                practice.getBindings(),
+                practice.getSignals(),
+                practice.getEvidenceRequirements(),
+                practice.isOnDrafts(),
+                practice.getSubject(),
+                practice.getPrecondition(),
                 criteriaRevision,
                 CanonicalDigest.sha256Hex(practice.getCriteria()),
                 practice.getPrecomputeScript() == null

@@ -80,13 +80,31 @@ export function selectPracticePatch(
 ): Partial<Practice> {
 	const clear = new Set(request.clear);
 	return {
-		// The kind of work is read off the bindings server-side, so replacing them can move it — and can
+		// The kind of work is read off the signals server-side, so replacing them can move it — and can
 		// therefore swap in a different work type's recommended review settings.
-		...("bindings" in request
-			? { bindings: practice.bindings, artifactKind: practice.artifactKind }
+		...("signals" in request ||
+		"evidenceRequirements" in request ||
+		"onDrafts" in request ||
+		"subject" in request ||
+		"precondition" in request ||
+		clear.has("PRECONDITION")
+			? {
+					signals: practice.signals,
+					evidenceRequirements: practice.evidenceRequirements,
+					onDrafts: practice.onDrafts,
+					subject: practice.subject,
+					precondition: practice.precondition,
+					artifactKind: practice.artifactKind,
+				}
 			: {}),
 		...("criteria" in request ? { criteria: practice.criteria } : {}),
-		...("automatedReviewPolicy" in request || "bindings" in request
+		...("automatedReviewPolicy" in request ||
+		"signals" in request ||
+		"evidenceRequirements" in request ||
+		"onDrafts" in request ||
+		"subject" in request ||
+		"precondition" in request ||
+		clear.has("PRECONDITION")
 			? {
 					automatedReviewPolicy: practice.automatedReviewPolicy,
 					automatedReviewValidation: practice.automatedReviewValidation,

@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
-import de.tum.cit.aet.hephaestus.practices.BindingChange;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
@@ -21,14 +24,13 @@ public record UpdatePracticeRequestDTO(
         @Nullable
         String name,
 
-        @Size(
-                min = 1,
-                max = 1,
-                message = "A practice is reviewed on one occasion. To read different evidence at a different moment, "
-                        + "split this into two practices.")
-        @Schema(description = "Replacement occasion and its evidence; omit to leave it unchanged")
-        @Nullable
-        List<@Valid PracticeBinding> bindings,
+        @Size(min = 1, message = "Choose at least one review moment") @Nullable
+        List<SignalName> signals,
+
+        @Nullable List<@Valid PracticeEvidenceRequirement> evidenceRequirements,
+        @Nullable Boolean onDrafts,
+        @Nullable ActorRole subject,
+        @Valid @Nullable PracticePrecondition precondition,
 
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")
         @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*", message = "Criteria must not be blank")
@@ -46,7 +48,7 @@ public record UpdatePracticeRequestDTO(
         @Valid
         @Schema(
                 description = "Replacement review settings; omit to preserve them, or to take the recommended ones "
-                        + "when the bindings move the practice to a different kind of work")
+                        + "when the signals move the practice to a different kind of work")
         @Nullable
         PracticeAutomatedReviewPolicy automatedReviewPolicy,
 
@@ -71,12 +73,16 @@ public record UpdatePracticeRequestDTO(
         Set<ClearablePracticeField> clear,
 
         @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
-        Set<BindingChange> bindingChanges,
+        Set<DefinitionChange> definitionChanges,
 
         @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
     public UpdatePracticeRequestDTO(
             @Nullable String name,
-            @Nullable List<PracticeBinding> bindings,
+            @Nullable List<SignalName> signals,
+            @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
+            @Nullable Boolean onDrafts,
+            @Nullable ActorRole subject,
+            @Nullable PracticePrecondition precondition,
             @Nullable String criteria,
             @Nullable String precomputeScript,
             @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
@@ -84,10 +90,14 @@ public record UpdatePracticeRequestDTO(
             @Nullable String whatGoodLooksLike,
             @Nullable BindPracticeGroupRequestDTO group,
             @Nullable Set<ClearablePracticeField> clear,
-            @Nullable Set<BindingChange> bindingChanges) {
+            @Nullable Set<DefinitionChange> definitionChanges) {
         this(
                 name,
-                bindings,
+                signals,
+                evidenceRequirements,
+                onDrafts,
+                subject,
+                precondition,
                 criteria,
                 precomputeScript,
                 automatedReviewPolicy,
@@ -95,7 +105,7 @@ public record UpdatePracticeRequestDTO(
                 whatGoodLooksLike,
                 group,
                 clear,
-                bindingChanges,
+                definitionChanges,
                 null);
     }
 }

@@ -57,8 +57,8 @@ class PiResultParserTest extends BaseUnitTest {
     @Test
     void rebuildsFromReviewState() {
         String reviewState = """
-            {"observations":[{"practiceSlug":"x","title":"t","assessmentStatus": "ASSESSED", "presence": "ABSENT","assessment":"GOOD","severity":"MAJOR",
-            "evidence":{"citations":[]},"reasoning":"r"}]}""";
+            {"observations":[{"practiceSlug":"x","summary":"t","outcome": "NOT_MET","severity":"MAJOR",
+            "evidence":{"citations":[]},"evidenceRationale":"r"}]}""";
         var result = parser.parse(new SandboxResult(
                 1,
                 Map.of("review-state.json", reviewState.getBytes(StandardCharsets.UTF_8)),
@@ -66,7 +66,7 @@ class PiResultParserTest extends BaseUnitTest {
                 false,
                 Duration.ofSeconds(10)));
         String raw = rawOutput(result).toString();
-        assertThat(raw).contains("\"x\"").contains("\"ABSENT\"");
+        assertThat(raw).contains("\"x\"").contains("\"NOT_MET\"");
     }
 
     @Test

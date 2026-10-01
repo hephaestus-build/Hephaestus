@@ -152,15 +152,20 @@ both `dev` and `prod`.
 
 ## Observation outcome transition before 1.0
 
-The observation-axis migration introduces `assessment_status` and permits null presence for unassessed
-observations. Assessment describes the specified behavior in context, while outcome is derived from the
-[presence × assessment matrix](./practice-feedback-language.md#observation-assessment-axes).
-The migration swaps GOOD/BAD on historical ABSENT rows to preserve their previous positive/negative
-outcome, retains severity for historical negative outcomes and clears it otherwise. It does not relabel
-old evidence against the new catalogue. A historical negative row without severity blocks migration
-rather than receiving an invented impact band.
+The cutover stores one explicit outcome: `MET`, `NOT_MET`, `NOT_APPLICABLE` or `UNDETERMINED`.
+Severity is required only for `NOT_MET`. The forward migration maps the previous behavior-level
+outcomes for archival integrity and refuses inconsistent historical rows rather than inventing
+certainty or severity. It does not reassess old evidence against the complete practice standard.
 
-Back up the database, resolve any reported inconsistent historical rows explicitly, and upgrade the
-server, sandbox runtime, webapp and custom API consumers together. Consumers must read the derived
-`outcome` for verdicts and metrics, not interpret `assessment = BAD` as a negative outcome. Preserve
-schema versions on exported evaluation data; frozen legacy reports must not be silently reinterpreted.
+Historical revision fingerprints remain unchanged. Earlier fingerprint schemes and missing
+fingerprints are `UNVERIFIABLE` under the current standard, so these observations remain available
+in authorized history but do not count as current evidence. A new review receives a new immutable
+revision under the current fingerprint scheme; old observations retain their original revision.
+
+Before upgrading, make and verify a database backup. Upgrade the server, sandbox runtime, webapp
+and custom API consumers together. The migration removes the old assessment axes and nested
+practice bindings; there are no compatibility readers. Consumers must use the explicit `outcome`
+and the flat practice definition. Restore the verified backup to undo the destructive cutover.
+
+Preserve schema versions on exported evaluation data. Frozen historical reports must not be silently
+reinterpreted as assessments of the current standard.

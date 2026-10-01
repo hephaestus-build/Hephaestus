@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
@@ -18,23 +18,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Holds back feedback about an observation the developer has disputed or called not applicable, so a later review
- * of the same work does not say it again.
- *
- * <p>The developer answers feedback, and the feedback is bound to observations. Within one review, only the
- * observations the answered feedback was written from count: two observations there may share a place and still be
- * two behaviours. A later review records new observations, so there the answer carries to the same claim — the
- * same practice, piece of work, developer and place ({@code recurrence_key}), with the same presence and assessment.
- * When several answers speak for one observation, the newest wins, so withdrawing a dispute or marking the feedback
- * addressed lets the claim through again.
- */
+/** Holds back feedback about observations the developer disputed or called not applicable. */
 @Component
 class FeedbackResponseSuppressionFilter {
 
@@ -97,7 +86,7 @@ class FeedbackResponseSuppressionFilter {
             FeedbackResolution action = standingAnswer(pf, answers)
                     .map(answer -> FeedbackResolution.valueOf(answer.getResolution()))
                     .orElse(null);
-            boolean unsuppressableSecret = vf.outcome() == Outcome.NEGATIVE
+            boolean unsuppressableSecret = vf.outcome() == Outcome.NOT_MET
                     && vf.evidence() != null
                     && SECRET_SCANNER.equals(vf.evidence().path("detector").asString());
             if (!unsuppressableSecret && action != null && SUPPRESS_ACTIONS.contains(action)) {
@@ -136,12 +125,13 @@ class FeedbackResponseSuppressionFilter {
         return !answer.getAgentJobId().equals(jobId)
                 && observation.getRecurrenceKey() != null
                 && observation.getRecurrenceKey().equals(answer.getRecurrenceKey())
-                && Objects.equals(nameOf(observation.getPresence()), answer.getPresence())
-                && Objects.equals(nameOf(observation.getAssessment()), answer.getAssessment());
+                && observation.getOutcome().name().equals(answer.getOutcome())
+                && normalizeClaim(observation.getSummary()).equals(normalizeClaim(answer.getSummary()));
     }
 
-    private static @Nullable String nameOf(@Nullable Enum<?> value) {
-        return value == null ? null : value.name();
+    /** A location and outcome alone can describe different claims; carry a response only for the same statement. */
+    private static String normalizeClaim(String summary) {
+        return summary.strip().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
     }
 
     private static FeedbackSuppressionReason reasonFor(FeedbackResolution action) {

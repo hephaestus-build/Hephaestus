@@ -16,13 +16,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
@@ -99,7 +96,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
         practice.setGroup(group);
         practice.setSourceCuratedSlug(sourceCuratedSlug);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 1)));
         return practiceRepository.saveAndFlush(practice);
@@ -173,7 +170,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
             AgentJob job,
             long artifactId,
             User about,
-            ObservationKind kind,
+            Outcome kind,
             @Nullable Severity severity,
             Instant observedAt) {
         return observe(practice, job, artifactId, about, kind, severity, observedAt, DIFF_EVIDENCE_JSON);
@@ -185,7 +182,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
             AgentJob job,
             long artifactId,
             User about,
-            ObservationKind kind,
+            Outcome kind,
             @Nullable Severity severity,
             Instant observedAt,
             String evidenceJson) {
@@ -215,32 +212,11 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
             long artifactId,
             User about,
             @Nullable String title,
-            ObservationKind kind,
+            Outcome kind,
             @Nullable Severity severity,
             Instant observedAt,
             String evidenceJson,
             @Nullable String recurrenceKey) {
-        // The axes each kind stands for; ObservationKind.of reads them back the other way.
-        AssessmentStatus status =
-                switch (kind) {
-                    case NOT_APPLICABLE -> AssessmentStatus.NOT_APPLICABLE;
-                    case UNDETERMINED -> AssessmentStatus.UNDETERMINED;
-                    default -> AssessmentStatus.ASSESSED;
-                };
-        @Nullable
-        Presence presence =
-                switch (kind) {
-                    case DEMONSTRATED_STRENGTH, COMMISSION_PROBLEM -> Presence.PRESENT;
-                    case SAFE_AVOIDANCE, OMISSION_GAP -> Presence.ABSENT;
-                    case NOT_APPLICABLE, UNDETERMINED -> null;
-                };
-        @Nullable
-        Assessment assessment =
-                switch (kind) {
-                    case DEMONSTRATED_STRENGTH, OMISSION_GAP -> Assessment.GOOD;
-                    case COMMISSION_PROBLEM, SAFE_AVOIDANCE -> Assessment.BAD;
-                    case NOT_APPLICABLE, UNDETERMINED -> null;
-                };
         UUID id = UUID.randomUUID();
         String summary = title == null ? "Observation " + id : title;
         observationRepository.insertIfAbsent(
@@ -254,9 +230,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 artifactId,
                 about.getId(),
                 summary,
-                status.name(),
-                presence == null ? null : presence.name(),
-                assessment == null ? null : assessment.name(),
+                kind.name(),
                 severity == null ? null : severity.name(),
                 evidenceJson,
                 "Reasoning for " + summary,
@@ -326,7 +300,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
     /** A review of one of the developer's pull requests on which the practice raised nothing. */
     protected void cleanReview(Practice practice, User developer, int number, Instant reviewedAt) {
         AgentJob run = persistPullRequestReview(practice.getWorkspace(), number, reviewedAt);
-        observe(practice, run, number, developer, ObservationKind.DEMONSTRATED_STRENGTH, null, reviewedAt);
+        observe(practice, run, number, developer, Outcome.MET, null, reviewedAt);
     }
 
     /** The in-app feedback page as the signed-in developer reads it. */

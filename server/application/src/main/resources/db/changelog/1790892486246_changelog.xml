@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790892486246-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <columnExists tableName="practice" columnName="bindings"/>
+            <columnExists tableName="practice_revision" columnName="bindings"/>
+            <columnExists tableName="curated_practice_override" columnName="bindings"/>
+            <columnExists tableName="observation" columnName="assessment_status"/>
+        </preConditions>
+        <comment>Replace nested practice occasions and observation axes in one transaction. Keep historical unknown definition metadata unknown; refuse occasions that cannot be flattened without changing their meaning.</comment>
+        <sql splitStatements="false"><![CDATA[
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM (
+            SELECT bindings FROM practice
+            UNION ALL SELECT bindings FROM practice_revision WHERE bindings IS NOT NULL
+            UNION ALL SELECT bindings FROM curated_practice_override WHERE bindings IS NOT NULL
+            UNION ALL SELECT adopted_base->'bindings' FROM practice WHERE adopted_base IS NOT NULL
+            UNION ALL SELECT adopted_base->'bindings' FROM curated_practice_override WHERE adopted_base IS NOT NULL
+        ) definitions
+        WHERE bindings IS NULL OR jsonb_typeof(bindings) <> 'array' OR jsonb_array_length(bindings) <> 1
+            OR jsonb_typeof(bindings->0->'signals') IS DISTINCT FROM 'array'
+            OR jsonb_typeof(bindings->0->'needs') IS DISTINCT FROM 'array'
+            OR jsonb_array_length(bindings->0->'signals') = 0
+            OR (bindings->0->'appliesWhen' IS NOT NULL AND bindings->0->'appliesWhen' <> 'null'::jsonb AND (
+                jsonb_typeof(bindings->0->'appliesWhen') IS DISTINCT FROM 'object'
+                OR jsonb_typeof(bindings->0->'appliesWhen'->'absentSays') IS DISTINCT FROM 'string'
+                OR jsonb_typeof(bindings->0->'appliesWhen'->'anyOf') IS DISTINCT FROM 'array'
+                OR jsonb_array_length(bindings->0->'appliesWhen'->'anyOf') = 0))
+    ) THEN
+        RAISE EXCEPTION 'Practice cutover requires one complete occasion per definition; resolve incompatible occasions before upgrading'
+            USING ERRCODE = '23514';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM observation
+        WHERE (
+            (assessment_status = 'ASSESSED' AND presence IN ('PRESENT', 'ABSENT') AND assessment IN ('GOOD', 'BAD'))
+            OR (assessment_status IN ('NOT_APPLICABLE', 'UNDETERMINED') AND presence IS NULL AND assessment IS NULL)
+        ) IS NOT TRUE
+    ) THEN
+        RAISE EXCEPTION 'Observation cutover cannot map an incomplete assessment' USING ERRCODE = '23514';
+    END IF;
+END;
+$$;
+
+DROP TRIGGER practice_requires_current_revision_projection ON practice;
+DROP TRIGGER practice_revision_immutable_update ON practice_revision;
+
+ALTER TABLE practice
+    ADD COLUMN signals jsonb,
+    ADD COLUMN evidence_requirements jsonb,
+    ADD COLUMN on_drafts boolean DEFAULT false NOT NULL,
+    ADD COLUMN subject varchar(16) DEFAULT 'AUTHOR' NOT NULL,
+    ADD COLUMN precondition jsonb;
+ALTER TABLE practice_revision
+    ADD COLUMN signals jsonb,
+    ADD COLUMN evidence_requirements jsonb,
+    ADD COLUMN on_drafts boolean,
+    ADD COLUMN subject varchar(16),
+    ADD COLUMN precondition jsonb;
+ALTER TABLE curated_practice_override
+    ADD COLUMN signals jsonb,
+    ADD COLUMN evidence_requirements jsonb,
+    ADD COLUMN on_drafts boolean,
+    ADD COLUMN subject varchar(16),
+    ADD COLUMN precondition jsonb;
+
+CREATE FUNCTION pg_temp.flat_practice_precondition(value jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
+    SELECT CASE WHEN value IS NULL OR value = 'null'::jsonb THEN NULL
+        ELSE (value - 'absentSays') || jsonb_build_object('skipReason', value->'absentSays') END;
+$$;
+CREATE FUNCTION pg_temp.flat_practice_definition(value jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
+    SELECT (value - 'bindings') || jsonb_build_object(
+        'signals', value->'bindings'->0->'signals',
+        'evidenceRequirements', value->'bindings'->0->'needs',
+        'onDrafts', COALESCE(value->'bindings'->0->'onDrafts', 'false'::jsonb),
+        'subject', COALESCE(value->'bindings'->0->'subject', '"AUTHOR"'::jsonb),
+        'precondition', pg_temp.flat_practice_precondition(value->'bindings'->0->'appliesWhen'));
+$$;
+
+UPDATE practice SET
+    signals = bindings->0->'signals',
+    evidence_requirements = bindings->0->'needs',
+    on_drafts = COALESCE((bindings->0->>'onDrafts')::boolean, false),
+    subject = COALESCE(bindings->0->>'subject', 'AUTHOR'),
+    precondition = pg_temp.flat_practice_precondition(bindings->0->'appliesWhen'),
+    adopted_base = CASE WHEN adopted_base IS NULL THEN NULL ELSE pg_temp.flat_practice_definition(adopted_base) END;
+UPDATE practice_revision SET
+    signals = bindings->0->'signals',
+    evidence_requirements = bindings->0->'needs',
+    on_drafts = CASE WHEN bindings IS NULL THEN NULL ELSE COALESCE((bindings->0->>'onDrafts')::boolean, false) END,
+    subject = CASE WHEN bindings IS NULL THEN NULL ELSE COALESCE(bindings->0->>'subject', 'AUTHOR') END,
+    precondition = pg_temp.flat_practice_precondition(bindings->0->'appliesWhen');
+UPDATE curated_practice_override SET
+    signals = bindings->0->'signals',
+    evidence_requirements = bindings->0->'needs',
+    on_drafts = COALESCE((bindings->0->>'onDrafts')::boolean, false),
+    subject = COALESCE(bindings->0->>'subject', 'AUTHOR'),
+    precondition = pg_temp.flat_practice_precondition(bindings->0->'appliesWhen'),
+    adopted_base = CASE WHEN adopted_base IS NULL THEN NULL ELSE pg_temp.flat_practice_definition(adopted_base) END;
+
+DROP FUNCTION pg_temp.flat_practice_definition(jsonb);
+DROP FUNCTION pg_temp.flat_practice_precondition(jsonb);
+
+ALTER TABLE practice
+    DROP COLUMN bindings,
+    ALTER COLUMN signals SET NOT NULL,
+    ALTER COLUMN evidence_requirements SET NOT NULL,
+    ADD CONSTRAINT ck_practice_signals CHECK (jsonb_typeof(signals) = 'array' AND jsonb_array_length(signals) > 0),
+    ADD CONSTRAINT ck_practice_evidence_requirements CHECK (jsonb_typeof(evidence_requirements) = 'array'),
+    ADD CONSTRAINT ck_practice_subject CHECK (subject IN ('AUTHOR', 'ASSIGNEE', 'REVIEWER', 'MERGER'));
+ALTER TABLE practice_revision
+    DROP COLUMN bindings,
+    ADD CONSTRAINT ck_practice_revision_signals CHECK (signals IS NULL OR (jsonb_typeof(signals) = 'array' AND jsonb_array_length(signals) > 0)),
+    ADD CONSTRAINT ck_practice_revision_evidence_requirements CHECK (evidence_requirements IS NULL OR jsonb_typeof(evidence_requirements) = 'array'),
+    ADD CONSTRAINT ck_practice_revision_subject CHECK (subject IS NULL OR subject IN ('AUTHOR', 'ASSIGNEE', 'REVIEWER', 'MERGER')),
+    ADD CONSTRAINT ck_practice_revision_definition_shape CHECK (
+        (slug IS NULL AND name IS NULL AND applies_to IS NULL AND signals IS NULL AND evidence_requirements IS NULL
+            AND on_drafts IS NULL AND subject IS NULL AND precondition IS NULL AND review_rule_fingerprint IS NULL)
+        OR (slug IS NOT NULL AND name IS NOT NULL AND applies_to IS NOT NULL AND signals IS NOT NULL
+            AND evidence_requirements IS NOT NULL AND on_drafts IS NOT NULL AND subject IS NOT NULL));
+ALTER TABLE curated_practice_override
+    DROP COLUMN bindings,
+    ADD CONSTRAINT ck_curated_practice_override_signals CHECK (signals IS NULL OR (jsonb_typeof(signals) = 'array' AND jsonb_array_length(signals) > 0)),
+    ADD CONSTRAINT ck_curated_practice_override_evidence_requirements CHECK (evidence_requirements IS NULL OR jsonb_typeof(evidence_requirements) = 'array'),
+    ADD CONSTRAINT ck_curated_practice_override_subject CHECK (subject IS NULL OR subject IN ('AUTHOR', 'ASSIGNEE', 'REVIEWER', 'MERGER')),
+    ADD CONSTRAINT ck_curated_practice_override_shape CHECK (
+        (name IS NULL AND applies_to IS NULL AND signals IS NULL AND evidence_requirements IS NULL AND precondition IS NULL
+            AND criteria IS NULL AND precompute_script IS NULL AND why_it_matters IS NULL AND what_good_looks_like IS NULL
+            AND group_slug IS NULL AND based_on_digest IS NULL)
+        OR (name IS NOT NULL AND applies_to IS NOT NULL AND signals IS NOT NULL AND evidence_requirements IS NOT NULL
+            AND on_drafts IS NOT NULL AND subject IS NOT NULL AND criteria IS NOT NULL));
+
+ALTER TABLE observation ADD COLUMN outcome varchar(16);
+UPDATE observation SET outcome = CASE
+    WHEN assessment_status <> 'ASSESSED' THEN assessment_status
+    WHEN (presence = 'PRESENT' AND assessment = 'GOOD') OR (presence = 'ABSENT' AND assessment = 'BAD') THEN 'MET'
+    ELSE 'NOT_MET' END;
+ALTER TABLE observation
+    DROP COLUMN assessment_status,
+    DROP COLUMN presence,
+    DROP COLUMN assessment,
+    ALTER COLUMN outcome SET NOT NULL,
+    ADD CONSTRAINT chk_observation_outcome CHECK (outcome IN ('MET', 'NOT_MET', 'NOT_APPLICABLE', 'UNDETERMINED')),
+    ADD CONSTRAINT chk_observation_outcome_severity CHECK ((outcome = 'NOT_MET') = (severity IS NOT NULL));
+
+CREATE OR REPLACE FUNCTION public.enforce_practice_current_revision_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM practice practice
+                JOIN practice_revision revision
+                  ON revision.id = practice.current_revision_id
+                 AND revision.practice_id = practice.id
+                LEFT JOIN practice_group practice_group
+                  ON practice_group.id = practice.practice_group_id
+                WHERE practice.id = NEW.id
+                  AND revision.slug = practice.slug
+                  AND revision.name = practice.name
+                  AND revision.applies_to = practice.applies_to
+                  AND revision.signals = practice.signals
+                  AND revision.evidence_requirements = practice.evidence_requirements
+                  AND revision.on_drafts = practice.on_drafts
+                  AND revision.subject = practice.subject
+                  AND revision.precondition IS NOT DISTINCT FROM practice.precondition
+                  AND revision.criteria = practice.criteria
+                  AND revision.precompute_script IS NOT DISTINCT FROM practice.precompute_script
+                  AND revision.automated_review_policy = practice.automated_review_policy
+                  AND revision.delivery_behavior = practice.delivery_behavior
+                  AND revision.why_it_matters IS NOT DISTINCT FROM practice.why_it_matters
+                  AND revision.what_good_looks_like IS NOT DISTINCT FROM practice.what_good_looks_like
+                  AND revision.group_slug IS NOT DISTINCT FROM practice_group.slug
+            ) THEN
+                RAISE EXCEPTION 'practice current revision does not match its current projection'
+                    USING ERRCODE = '23514';
+            END IF;
+            RETURN NULL;
+        END;
+        $$;
+
+CREATE OR REPLACE FUNCTION public.enforce_practice_revision_immutability() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF NEW.practice_id = OLD.practice_id
+                   AND NEW.revision_number = OLD.revision_number
+                   AND NEW.created_at = OLD.created_at
+                   AND NEW.slug IS NOT DISTINCT FROM OLD.slug
+                   AND NEW.name IS NOT DISTINCT FROM OLD.name
+                   AND NEW.applies_to IS NOT DISTINCT FROM OLD.applies_to
+                   AND NEW.signals IS NOT DISTINCT FROM OLD.signals
+                   AND NEW.evidence_requirements IS NOT DISTINCT FROM OLD.evidence_requirements
+                   AND NEW.on_drafts IS NOT DISTINCT FROM OLD.on_drafts
+                   AND NEW.subject IS NOT DISTINCT FROM OLD.subject
+                   AND NEW.precondition IS NOT DISTINCT FROM OLD.precondition
+                   AND NEW.criteria = OLD.criteria
+                   AND NEW.precompute_script IS NOT DISTINCT FROM OLD.precompute_script
+                   AND NEW.automated_review_policy IS NOT DISTINCT FROM OLD.automated_review_policy
+                   AND NEW.delivery_behavior IS NOT DISTINCT FROM OLD.delivery_behavior
+                   AND NEW.why_it_matters IS NOT DISTINCT FROM OLD.why_it_matters
+                   AND NEW.what_good_looks_like IS NOT DISTINCT FROM OLD.what_good_looks_like
+                   AND NEW.group_slug IS NOT DISTINCT FROM OLD.group_slug
+                   AND NEW.group_name IS NOT DISTINCT FROM OLD.group_name
+                   AND NEW.group_description IS NOT DISTINCT FROM OLD.group_description
+                   AND NEW.group_icon IS NOT DISTINCT FROM OLD.group_icon
+                   AND NEW.group_color IS NOT DISTINCT FROM OLD.group_color
+                   AND (
+                       NEW.review_rule_fingerprint IS NOT DISTINCT FROM OLD.review_rule_fingerprint
+                       OR OLD.review_rule_fingerprint IS NULL
+                   )
+                THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'practice revisions are immutable' USING ERRCODE = '55000';
+            END;
+            $$;
+
+CREATE CONSTRAINT TRIGGER practice_requires_current_revision_projection
+    AFTER INSERT OR UPDATE OF current_revision_id, slug, name, applies_to, signals, evidence_requirements, on_drafts,
+        subject, precondition, criteria, precompute_script, automated_review_policy, delivery_behavior, why_it_matters,
+        what_good_looks_like, practice_group_id ON practice
+    DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_practice_current_revision_projection();
+CREATE TRIGGER practice_revision_immutable_update BEFORE UPDATE ON practice_revision
+    FOR EACH ROW EXECUTE FUNCTION public.enforce_practice_revision_immutability();
+        ]]></sql>
+        <rollback>
+            <stop>Restore a verified database backup made before the practice schema cutover. The removed observation axes cannot be reconstructed from outcomes.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

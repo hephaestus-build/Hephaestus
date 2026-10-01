@@ -454,13 +454,8 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                     "practiceSlug",
                     o.getPractice() == null ? null : o.getPractice().getSlug());
             node.put("summary", o.getSummary());
-            node.put("assessmentStatus", o.getAssessmentStatus().name());
-            node.put("outcome", o.getOutcome() == null ? null : o.getOutcome().name());
-            node.put(
-                    "presence", o.getPresence() == null ? null : o.getPresence().name());
-            node.put(
-                    "assessment",
-                    o.getAssessment() == null ? null : o.getAssessment().name());
+
+            node.put("outcome", o.getOutcome().name());
             node.put(
                     "severity", o.getSeverity() == null ? null : o.getSeverity().name());
             names.stageInto(node, o.getArtifactKind(), o.getArtifactId());

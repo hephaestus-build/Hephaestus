@@ -68,9 +68,7 @@ const EVIDENCE_CONTRACT_VERSION = "1.0.0";
 /** `FeedbackLedgerRecorder.IN_APP_UNIT_ORDINAL_BASE`: the band an in-app piece of feedback's position sits in. */
 const IN_APP_POSITION_BASE = 7000;
 
-type AssessmentStatus = "ASSESSED" | "NOT_APPLICABLE" | "UNDETERMINED";
-type Presence = "PRESENT" | "ABSENT";
-type Assessment = "GOOD" | "BAD";
+type Outcome = "MET" | "NOT_MET" | "NOT_APPLICABLE" | "UNDETERMINED";
 type Severity = "CRITICAL" | "MAJOR" | "MINOR" | "INFO";
 
 interface ArtifactRef {
@@ -90,13 +88,8 @@ interface Citation {
 
 interface SeedObservation {
 	practice: string;
-	/** `AssessmentStatus.validate`: only an ASSESSED observation carries a presence and an assessment. */
-	assessmentStatus: AssessmentStatus;
-	/** Whether the practice's behaviour was there, not whether that is good. */
-	presence?: Presence;
-	/** Whether that behaviour is desirable here, so ABSENT plus GOOD is the problem. */
-	assessment?: Assessment;
-	/** Set exactly on the negative outcomes: PRESENT with BAD, or ABSENT with GOOD. */
+	outcome: Outcome;
+	/** Required exactly for NOT_MET. */
 	severity?: Severity;
 	/** The observation's title on the timeline; at most 255 characters. */
 	summary: string;
@@ -215,9 +208,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The notification body interpolates the display name without escaping it.",
 				rationale:
@@ -231,9 +222,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The change adds the notification service and nothing else.",
 				rationale:
 					"Every file in the diff serves the new service; the unrelated import fix was left for its own change.",
@@ -251,9 +240,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The user lookup builds its query by concatenating the login.",
 				rationale:
@@ -267,18 +254,14 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "One fix, one file, one intention.",
 				rationale: "The diff touches the failing lookup and its test and nothing else.",
 				citation: description("Fixes the user lookup that failed for logins with a dot."),
 			},
 			{
 				practice: "leaves-useful-specific-review-comments",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "Two review comments say the code looks wrong without saying what to change.",
 				rationale:
@@ -294,9 +277,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "The domain exception carries the raw login into the response body.",
 				rationale:
@@ -310,9 +291,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The refactor stays inside the error handling it names.",
 				rationale:
 					"Every hunk replaces a return code with a domain exception; no behaviour change rides along.",
@@ -320,9 +299,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "leaves-useful-specific-review-comments",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "A comment asks whether the code can be better without saying how.",
 				rationale:
@@ -338,9 +315,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The report runner opens the file named by the request.",
 				rationale:
@@ -354,17 +329,13 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The runner arrives on its own.",
 				citation: description("Adds a report runner that executes one report definition."),
 			},
 			{
 				practice: "describe-what-and-why",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The description lists the files touched and not the problem behind them.",
 				rationale:
@@ -373,9 +344,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "honours-linked-issue-acceptance-criteria",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "The pull request closes its issue without naming a criterion.",
 				rationale:
@@ -391,9 +360,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "issue-has-checkable-outcome",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "The issue says the test is flaky and not what fixed looks like.",
 				rationale:
@@ -402,9 +369,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "issue-states-an-actionable-problem",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The issue names the failing test and how often it fails.",
 				rationale:
 					"The body names the test class, the CI job and the failure rate, which is what a maintainer needs to start.",
@@ -422,9 +387,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "BAD",
+				outcome: "MET",
 				summary: "The deactivation endpoint validates the id and binds it as a parameter.",
 				rationale:
 					"The id is parsed as a number before the lookup and the lookup binds it; nothing from the request reaches a sink as text.",
@@ -432,17 +395,13 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "One endpoint, one intention.",
 				citation: description("Adds POST /users/{id}/deactivate."),
 			},
 			{
 				practice: "describe-what-and-why",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The description says what was added and not why.",
 				rationale:
@@ -458,9 +417,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "issue-has-checkable-outcome",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "The issue asks for backoff without saying how a maintainer would verify it.",
 				rationale:
@@ -469,9 +426,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "issue-states-an-actionable-problem",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The issue states the failure a maintainer can reproduce.",
 				citation: issueBody("Sync jobs fail with 403 once the hourly budget is spent.", 2),
 			},
@@ -484,9 +439,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "BAD",
+				outcome: "MET",
 				summary: "The listing filter is parsed into an enum before it reaches the query.",
 				citation: diff(
 					USER_CONTROLLER,
@@ -497,9 +450,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The deactivation change carries a rename of the listing beside it.",
 				rationale:
@@ -513,9 +464,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "describe-what-and-why",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The description opens with the support request the listing answers.",
 				citation: description(
 					"Support asked for a way to see who is still active before a deactivation sweep.",
@@ -524,9 +473,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ready-and-traceable-handoff",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "Marked ready with no link to the issue that asked for the listing.",
 				rationale:
@@ -535,9 +482,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "commit-subjects-explain-each-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "Five of eight commit subjects say fix or wip.",
 				rationale:
@@ -553,17 +498,13 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "BAD",
+				outcome: "MET",
 				summary: "The new role is validated against the enum before it is stored.",
 				citation: diff(ROLE_CONTROLLER, 40, 41, "Role role = Role.parse(request.role());"),
 			},
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The role change ships with a cleanup of the user service.",
 				rationale:
@@ -572,9 +513,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "describe-what-and-why",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary:
 					"The description says why an admin needs to change a role and what happens to the old one.",
 				citation: description(
@@ -584,9 +523,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "commit-subjects-explain-each-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "Four of six commit subjects say fix or address comments.",
 				rationale:
@@ -595,9 +532,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "honours-linked-issue-acceptance-criteria",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "Closes an issue with four acceptance criteria and names none of them.",
 				rationale:
@@ -606,9 +541,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ships-tests-with-the-change",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "No test exercises the new role change.",
 				rationale:
@@ -617,7 +550,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "changes-dependencies-deliberately",
-				assessmentStatus: "NOT_APPLICABLE",
+				outcome: "NOT_APPLICABLE",
 				summary: "No dependency changed in this pull request.",
 				citation: files("No build file in the diff."),
 			},
@@ -630,9 +563,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "leaves-useful-specific-review-comments",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "Each comment names the line and the change to make.",
 				rationale:
 					"The three comments on the notification service each quote the line, say what breaks and propose the replacement.",
@@ -650,9 +581,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "validates-and-escapes-untrusted-input",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "BAD",
+				outcome: "MET",
 				summary: "Role inspection reads ids only and binds them.",
 				citation: diff(
 					"src/main/java/de/tum/cit/aet/users/RoleQueryRepository.java",
@@ -663,9 +592,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "Role management carries a reformat of the user service.",
 				rationale:
@@ -674,9 +601,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "describe-what-and-why",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The description explains who inspects roles and why.",
 				citation: description(
 					"Support needs to see a member's role without opening the database.",
@@ -685,9 +610,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ready-and-traceable-handoff",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "Marked ready without a link to its issue.",
 				rationale:
@@ -696,9 +619,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ships-tests-with-the-change",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The role listing has no test.",
 				rationale: "The diff adds the listing endpoint and touches no test file.",
@@ -706,7 +627,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "changes-dependencies-deliberately",
-				assessmentStatus: "NOT_APPLICABLE",
+				outcome: "NOT_APPLICABLE",
 				summary: "No dependency changed in this pull request.",
 				citation: files("No build file in the diff."),
 			},
@@ -719,9 +640,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The sweep ships with a rename of the deactivation service.",
 				rationale:
@@ -735,9 +654,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "leaves-useful-specific-review-comments",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The review names the boundary case and the fix for it.",
 				citation: reviewThreads(
 					"Accounts deactivated today would be swept too; compare against the day before the cut-off.",
@@ -753,9 +670,7 @@ const RUNS: SeedRun[] = [
 		observations: [
 			{
 				practice: "scope-one-reviewable-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "BAD",
+				outcome: "NOT_MET",
 				severity: "MAJOR",
 				summary: "The sign-in stamp arrives with a cleanup of the session store.",
 				rationale:
@@ -769,25 +684,19 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "ready-and-traceable-handoff",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "Marked ready with its issue linked and the draft label gone.",
 				citation: linkedIssues("Closes the last sign-in issue."),
 			},
 			{
 				practice: "commit-subjects-explain-each-change",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "Each commit subject says what it changes.",
 				citation: commits("Record the last sign-in on every successful login", 3),
 			},
 			{
 				practice: "ships-tests-with-the-change",
-				assessmentStatus: "ASSESSED",
-				presence: "ABSENT",
-				assessment: "GOOD",
+				outcome: "NOT_MET",
 				severity: "MINOR",
 				summary: "The sign-in stamp has no test that reads it back.",
 				rationale:
@@ -801,9 +710,7 @@ const RUNS: SeedRun[] = [
 			},
 			{
 				practice: "leaves-useful-specific-review-comments",
-				assessmentStatus: "ASSESSED",
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
 				summary: "The one comment names the line and the change.",
 				citation: reviewThreads("Use the injected clock here so the test can pin the instant."),
 			},
@@ -1161,9 +1068,9 @@ async function insertReviews(client: Client, resolved: Resolved, counts: Counts)
 			await client.query(
 				`INSERT INTO observation (
 					id, occurrence_key, agent_job_id, practice_id, artifact_kind, artifact_id, about_user_id,
-					summary, assessment_status, presence, severity, evidence, evidence_rationale, observed_at,
-					practice_revision_id, assessment, origin, workspace_id
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, 'LIVE', $17)`,
+					summary, outcome, severity, evidence, evidence_rationale, observed_at,
+					practice_revision_id, origin, workspace_id
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'LIVE', $15)`,
 				[
 					observationId,
 					`seed-practice-profile-${observationOrdinal}`,
@@ -1173,14 +1080,12 @@ async function insertReviews(client: Client, resolved: Resolved, counts: Counts)
 					artifact.id,
 					developerId,
 					observation.summary,
-					observation.assessmentStatus,
-					observation.presence ?? null,
+					observation.outcome,
 					observation.severity ?? null,
 					JSON.stringify({ citations: [citation] }),
 					observation.rationale ?? null,
 					run.at,
 					practice.revisionId,
-					observation.assessment ?? null,
 					workspaceId,
 				],
 			);

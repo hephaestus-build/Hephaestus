@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -36,13 +39,28 @@ public class CuratedPracticeOverride {
     @Column(name = "name", length = 128)
     private @Nullable String name;
 
-    /** Projection of {@link #bindings}, kept for the same reason {@code practice.applies_to} is. */
+    /** Projection of {@link #signals}, kept for the same reason {@code practice.applies_to} is. */
     @Column(name = "applies_to", length = ArtifactKind.MAX_LENGTH)
     private @Nullable ArtifactKind artifactKind;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "bindings", columnDefinition = "jsonb")
-    private @Nullable List<PracticeBinding> bindings;
+    @Column(name = "signals", columnDefinition = "jsonb")
+    private @Nullable List<SignalName> signals;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "evidence_requirements", columnDefinition = "jsonb")
+    private @Nullable List<PracticeEvidenceRequirement> evidenceRequirements;
+
+    @Column(name = "on_drafts")
+    private boolean onDrafts;
+
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "subject", length = 16)
+    private ActorRole subject = ActorRole.AUTHOR;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "precondition", columnDefinition = "jsonb")
+    private @Nullable PracticePrecondition precondition;
 
     @Column(name = "criteria", columnDefinition = "TEXT")
     private @Nullable String criteria;
@@ -104,14 +122,19 @@ public class CuratedPracticeOverride {
     public @Nullable PracticeDefinition definition() {
         if (name == null
                 || artifactKind == null
-                || bindings == null
+                || signals == null
+                || evidenceRequirements == null
                 || criteria == null
                 || automatedReviewPolicy == null) {
             return null;
         }
         return new PracticeDefinition(
                 name,
-                bindings,
+                signals,
+                evidenceRequirements,
+                onDrafts,
+                subject,
+                precondition,
                 criteria,
                 precomputeScript,
                 automatedReviewPolicy,
@@ -124,7 +147,11 @@ public class CuratedPracticeOverride {
     public void write(PracticeDefinition definition, @Nullable String acceptedBundledDigest, Instant now) {
         this.name = definition.name();
         this.artifactKind = definition.artifactKind();
-        this.bindings = definition.bindings();
+        this.signals = definition.signals();
+        this.evidenceRequirements = definition.evidenceRequirements();
+        this.onDrafts = definition.onDrafts();
+        this.subject = definition.subject();
+        this.precondition = definition.precondition();
         this.criteria = definition.criteria();
         this.precomputeScript = definition.precomputeScript();
         this.automatedReviewPolicy = definition.automatedReviewPolicy();
@@ -148,7 +175,11 @@ public class CuratedPracticeOverride {
     public void clearDefinition(Instant now) {
         this.name = null;
         this.artifactKind = null;
-        this.bindings = null;
+        this.signals = null;
+        this.evidenceRequirements = null;
+        this.onDrafts = false;
+        this.subject = ActorRole.AUTHOR;
+        this.precondition = null;
         this.criteria = null;
         this.precomputeScript = null;
         this.automatedReviewPolicy = null;
@@ -180,10 +211,6 @@ public class CuratedPracticeOverride {
         PracticeDefinition current = definition();
         if (current == null) {
             return;
-        }
-        if (bundled != null
-                && CuratedDefinitionDigest.beforeDeliveryBehavior(slug, bundled).equals(acceptedBundledDigest)) {
-            acceptedBundledDigest = CuratedDefinitionDigest.of(slug, bundled);
         }
         if (bundled != null && CuratedDefinitionDigest.of(slug, bundled).equals(acceptedBundledDigest)) {
             adoptedBase = bundled;

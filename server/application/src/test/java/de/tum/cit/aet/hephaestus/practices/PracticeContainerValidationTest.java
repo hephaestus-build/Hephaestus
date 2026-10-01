@@ -14,10 +14,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 class PracticeContainerValidationTest extends BaseUnitTest {
     @ParameterizedTest
     @CsvSource({
-        "create, bindings",
-        "update, bindings",
-        "curated, bindings",
-        "binding, needs",
+        "create, evidenceRequirements",
+        "update, evidenceRequirements",
+        "curated, evidenceRequirements",
         "policy, knownLimitations"
     })
     void shouldCascadeIntoElementsWithoutDeprecatedContainerValidation(String model, String property) {
@@ -26,7 +25,6 @@ class PracticeContainerValidationTest extends BaseUnitTest {
                     case "create" -> CreatePracticeRequestDTO.class;
                     case "update" -> UpdatePracticeRequestDTO.class;
                     case "curated" -> CuratedPracticeRequestDTO.class;
-                    case "binding" -> PracticeBinding.class;
                     case "policy" -> PracticeAutomatedReviewPolicy.class;
                     default -> throw new IllegalArgumentException(model);
                 };

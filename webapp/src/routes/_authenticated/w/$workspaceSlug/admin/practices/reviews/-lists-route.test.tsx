@@ -129,12 +129,12 @@ describe("practice review list routes", () => {
 		const { observationUrls } = recordRequests();
 
 		renderRouteAtWithRouter(
-			'/w/acme/admin/practices/reviews/observations?outcome=["NEGATIVE"]&invalidated=true',
+			'/w/acme/admin/practices/reviews/observations?outcome=["NOT_MET"]&invalidated=true',
 		);
 		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
 
 		const requested = observationUrls.at(-1);
-		expect(values(requested, "outcome")).toStrictEqual(["NEGATIVE"]);
+		expect(values(requested, "outcome")).toStrictEqual(["NOT_MET"]);
 		expect(requested?.searchParams.get("invalidated")).toBe("true");
 	});
 

@@ -1,11 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
-import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { DASHBOARD_VISIBILITY_DEFS } from "@/components/practice-vocabulary/dashboard-visibility-defs";
 import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-outcome-defs";
 import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-place-defs";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
-import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import {
 	REVIEW_STATUS_DEFS,
 	RESULT_PROCESSING_DEFS,
@@ -68,9 +66,7 @@ export const EveryRegistry: Story = {
 			<Gallery heading="Dashboard visibility" defs={DASHBOARD_VISIBILITY_DEFS} />
 			<Gallery heading="Why withheld" defs={WITHHOLDING_FAMILY_DEFS} />
 			<Gallery heading="Outcome" defs={OUTCOME_DEFS} />
-			<Gallery heading="Behavior assessment" defs={ASSESSMENT_DEFS} />
 			<Gallery heading="Severity" defs={SEVERITY_DEFS} />
-			<Gallery heading="Practice status" defs={PRESENCE_DEFS} />
 			<Gallery heading="Review status" defs={REVIEW_STATUS_DEFS} />
 			<Gallery heading="Result processing" defs={RESULT_PROCESSING_DEFS} />
 			<section className="space-y-2">

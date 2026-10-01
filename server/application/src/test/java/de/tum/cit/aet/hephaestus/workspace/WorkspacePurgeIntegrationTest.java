@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
@@ -853,7 +854,11 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             chatMessageRepository.save(message);
 
             Practice practice = new Practice();
-            practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+            practice.setSignals(PracticeTestEvidence.signals(ArtifactKinds.CONVERSATION_THREAD));
+            practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.CONVERSATION_THREAD));
+            practice.setOnDrafts(false);
+            practice.setSubject(ActorRole.AUTHOR);
+            practice.setPrecondition(null);
             practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
             practice.setWorkspace(workspace);
             practice.setSlug("conv-practice-" + workspace.getId());
@@ -882,9 +887,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         threadId,
                         owner.getId(),
                         "Observation title",
-                        "ASSESSED",
-                        "ABSENT",
-                        "GOOD",
+                        "NOT_MET",
                         "MAJOR",
                         null,
                         null,

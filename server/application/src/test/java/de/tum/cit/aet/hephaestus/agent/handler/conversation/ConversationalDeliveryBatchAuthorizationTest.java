@@ -215,8 +215,8 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
         PracticeRevision currentRevision = mock(PracticeRevision.class);
         Practice practice = mock(Practice.class);
         // Lenient: the unreadable fixture never reaches the currentness test, which is the point of it.
-        lenient().when(evaluated.getReviewRuleFingerprint()).thenReturn(current ? "fingerprint" : "superseded");
-        lenient().when(currentRevision.getReviewRuleFingerprint()).thenReturn("fingerprint");
+        lenient().when(evaluated.getReviewRuleFingerprint()).thenReturn(current ? "v5:fingerprint" : "v5:superseded");
+        lenient().when(currentRevision.getReviewRuleFingerprint()).thenReturn("v5:fingerprint");
         lenient().when(practice.getCurrentRevision()).thenReturn(currentRevision);
         UUID jobId = UUID.randomUUID();
         return Observation.builder()

@@ -80,18 +80,18 @@ function slippedLead(run: ProfileReviewRun): string {
 }
 
 /**
- * "5 practices held, 9 did not apply; 16 practices reached", every number a count of practices. A
+ * "5 practices met, 9 did not apply; 16 practices reached", every number a count of practices. A
  * nought is dropped: this is a sentence about somebody's own work, and what slipped is already
  * named above it. The reach is its own clause, never a total of the outcomes: it counts every
  * practice the review measured, the outcomes only those it decided something about for the reader.
  */
 function reachedPhrase(run: ProfileReviewRun): string {
-	const { held, notApplicable, undecided } = run.practices;
+	const { met, notApplicable, undetermined } = run.practices;
 	const reached = run.practicesEvaluated;
 	const outcomes = [
-		{ n: held, verb: "held" },
+		{ n: met, verb: "met" },
 		{ n: notApplicable, verb: "did not apply" },
-		{ n: undecided, verb: "undecided" },
+		{ n: undetermined, verb: "undetermined" },
 	].filter((outcome) => outcome.n > 0);
 	if (outcomes.length === 0 && reached === undefined) {
 		return run.status === "IN_PROGRESS" ? "Results appear as it finishes" : "";

@@ -328,7 +328,6 @@ erDiagram
         VARCHAR(64) slug PK
         VARCHAR(128) name
         VARCHAR(64) applies_to
-        JSONB bindings
         TEXT criteria
         TEXT precompute_script
         TEXT why_it_matters
@@ -344,6 +343,11 @@ erDiagram
         JSONB adopted_base
         VARCHAR(32) adopted_base_source
         JSONB delivery_behavior
+        JSONB signals
+        JSONB evidence_requirements
+        BOOLEAN on_drafts
+        VARCHAR(16) subject
+        JSONB precondition
     }
 
     DeliveryPolicyEvaluation {
@@ -897,18 +901,16 @@ erDiagram
         BIGINT artifact_id "NOT NULL"
         BIGINT about_user_id FK "NOT NULL"
         VARCHAR(255) summary "NOT NULL"
-        VARCHAR(16) presence
         VARCHAR(16) severity
         JSONB evidence
         TEXT evidence_rationale
         TIMESTAMPTZ observed_at "NOT NULL"
         VARCHAR(64) recurrence_key
         BIGINT practice_revision_id FK
-        VARCHAR(8) assessment
         VARCHAR(16) origin "NOT NULL"
         BIGINT workspace_id FK,UK "NOT NULL"
-        VARCHAR(16) assessment_status "NOT NULL"
         TIMESTAMPTZ superseded_at
+        VARCHAR(16) outcome "NOT NULL"
     }
 
     ObservationInvalidation {
@@ -1009,7 +1011,6 @@ erDiagram
         BIGINT workspace_id FK,UK "NOT NULL"
         VARCHAR(64) slug UK "NOT NULL"
         VARCHAR(128) name "NOT NULL"
-        JSONB bindings "NOT NULL"
         TEXT criteria "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
@@ -1028,6 +1029,11 @@ erDiagram
         VARCHAR(32) adopted_base_source
         VARCHAR(96) declined_offered_digest
         JSONB delivery_behavior "NOT NULL"
+        JSONB signals "NOT NULL"
+        JSONB evidence_requirements "NOT NULL"
+        BOOLEAN on_drafts "NOT NULL"
+        VARCHAR(16) subject "NOT NULL"
+        JSONB precondition
     }
 
     PracticeCatalogInstallation {
@@ -1073,7 +1079,6 @@ erDiagram
         VARCHAR(64) slug
         VARCHAR(128) name
         VARCHAR(64) applies_to
-        JSONB bindings
         TEXT precompute_script
         TEXT why_it_matters
         TEXT what_good_looks_like
@@ -1085,6 +1090,11 @@ erDiagram
         VARCHAR(96) review_rule_fingerprint
         JSONB automated_review_policy
         JSONB delivery_behavior "NOT NULL"
+        JSONB signals
+        JSONB evidence_requirements
+        BOOLEAN on_drafts
+        VARCHAR(16) subject
+        JSONB precondition
     }
 
     ProductFeedback {

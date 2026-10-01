@@ -1,11 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.reviewoutput;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationQueryFilter;
 import de.tum.cit.aet.hephaestus.practices.web.QueryFilterSupport;
@@ -23,16 +20,8 @@ import org.springframework.web.server.ResponseStatusException;
 public record ReviewObservationFilterParams(
         @RequestParam(required = false) @Nullable List<String> practiceSlug,
         @RequestParam(required = false) @Nullable List<String> groupSlug,
-        @RequestParam(required = false) @Nullable List<AssessmentStatus> assessmentStatus,
-        @RequestParam(required = false) @Nullable List<Presence> presence,
-        @RequestParam(required = false) @Nullable List<Assessment> assessment,
 
-        @Parameter(
-                description = "Outcomes to list (repeatable): POSITIVE where a desirable behavior was present or an"
-                        + " undesirable one absent, NEGATIVE the other way round. Only assessed observations have an"
-                        + " outcome.")
-        @RequestParam(required = false)
-        @Nullable
+        @Parameter(description = "Review outcomes to list (repeatable)") @RequestParam(required = false) @Nullable
         List<Outcome> outcome,
 
         @Parameter(
@@ -99,9 +88,6 @@ public record ReviewObservationFilterParams(
         return new ObservationQueryFilter(
                 practiceSlug,
                 groupSlug,
-                assessmentStatus,
-                presence,
-                assessment,
                 outcome,
                 invalidated,
                 disputed,

@@ -6,14 +6,13 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubject;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalog.BundledEntry;
 import java.io.IOException;
 import java.io.InputStream;
@@ -153,8 +152,8 @@ public class BundledPracticeCatalogLoader {
             String groupSlug,
             JsonNode node,
             String slug) {
-        List<PracticeBinding> bindings = bindings(objectMapper, evidenceDefaults, node, slug);
-        ArtifactKind artifactKind = PracticeBinding.artifactKindOf(bindings);
+        CatalogOccasion occasion = occasion(objectMapper, node, slug);
+        ArtifactKind artifactKind = occasion.signals().getFirst().artifactKind();
         String preambleKey = text(node, "preamble");
         if (preambleKey == null) {
             preambleKey = artifactKind.value();
@@ -164,7 +163,13 @@ public class BundledPracticeCatalogLoader {
         String whatGoodLooksLike = text(node, "whatGoodLooksLike");
         PracticeDefinition definition = new PracticeDefinition(
                 requiredText(node, "name"),
-                bindings,
+                occasion.signals(),
+                occasion.evidenceRequirements() == null
+                        ? evidenceDefaults.needsFor(artifactKind)
+                        : occasion.evidenceRequirements(),
+                Boolean.TRUE.equals(occasion.onDrafts()),
+                occasion.subject() == null ? ActorRole.AUTHOR : occasion.subject(),
+                occasion.precondition(),
                 criteria,
                 loadPrecomputeScript(node, slug),
                 policy(objectMapper, evidenceDefaults.policyFor(artifactKind), node, slug),
@@ -210,10 +215,9 @@ public class BundledPracticeCatalogLoader {
         }
     }
 
-    private static List<PracticeBinding> bindings(
-            JsonMapper objectMapper, PracticeEvidenceDefaults evidenceDefaults, JsonNode node, String slug) {
+    private static CatalogOccasion occasion(JsonMapper objectMapper, JsonNode node, String slug) {
         try {
-            return List.of(objectMapper.treeToValue(node, CatalogOccasion.class).toBinding(evidenceDefaults));
+            return objectMapper.treeToValue(node, CatalogOccasion.class);
         } catch (RuntimeException exception) {
             throw new IllegalStateException("invalid bundled practice occasion: " + slug, exception);
         }
@@ -225,7 +229,7 @@ public class BundledPracticeCatalogLoader {
             @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
             @Nullable Boolean onDrafts,
             @Nullable ActorRole subject,
-            @Nullable PracticeSubject precondition) {
+            @Nullable PracticePrecondition precondition) {
         CatalogOccasion {
             signals = List.copyOf(signals);
             if (signals.isEmpty()) {
@@ -237,17 +241,6 @@ public class BundledPracticeCatalogLoader {
                     throw new IllegalArgumentException("Declare the evidence the practice reads.");
                 }
             }
-        }
-
-        PracticeBinding toBinding(PracticeEvidenceDefaults defaults) {
-            return new PracticeBinding(
-                    signals,
-                    evidenceRequirements == null
-                            ? defaults.needsFor(signals.getFirst().artifactKind())
-                            : evidenceRequirements,
-                    Boolean.TRUE.equals(onDrafts),
-                    subject == null ? ActorRole.AUTHOR : subject,
-                    precondition);
         }
     }
 

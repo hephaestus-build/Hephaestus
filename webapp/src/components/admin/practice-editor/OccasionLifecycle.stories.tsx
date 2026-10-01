@@ -4,13 +4,13 @@ import { expect, fn, within } from "storybook/test";
 import type { PracticeWorkTypeDefinitionOptions } from "@/api/types.gen";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
 import {
-	mockConversationBinding,
+	mockConversationReviewFields,
 	mockConversationWorkType,
-	mockDocumentBinding,
+	mockDocumentReviewFields,
 	mockDocumentWorkType,
-	mockIssueBinding,
+	mockIssueReviewFields,
 	mockIssueWorkType,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
 import { expectNoOverflowingElement } from "@/stories/reflow";
@@ -22,7 +22,7 @@ const meta = {
 	component: OccasionLifecycle,
 	args: {
 		workType: mockPullRequestWorkType,
-		selected: mockPullRequestBinding.signals,
+		selected: mockPullRequestReviewFields.signals,
 		onToggle: fn(),
 		includeDrafts: false,
 		onIncludeDraftsChange: fn(),
@@ -70,7 +70,7 @@ export const PullRequest: Story = {
 };
 
 export const Conversation: Story = {
-	args: { workType: mockConversationWorkType, selected: mockConversationBinding.signals },
+	args: { workType: mockConversationWorkType, selected: mockConversationReviewFields.signals },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Ends")).toBeNull();
 	},
@@ -80,10 +80,10 @@ const ALL_WORK_TYPES: {
 	workType: PracticeWorkTypeDefinitionOptions;
 	selected: readonly string[];
 }[] = [
-	{ workType: mockPullRequestWorkType, selected: mockPullRequestBinding.signals },
-	{ workType: mockIssueWorkType, selected: mockIssueBinding.signals },
-	{ workType: mockDocumentWorkType, selected: mockDocumentBinding.signals },
-	{ workType: mockConversationWorkType, selected: mockConversationBinding.signals },
+	{ workType: mockPullRequestWorkType, selected: mockPullRequestReviewFields.signals },
+	{ workType: mockIssueWorkType, selected: mockIssueReviewFields.signals },
+	{ workType: mockDocumentWorkType, selected: mockDocumentReviewFields.signals },
+	{ workType: mockConversationWorkType, selected: mockConversationReviewFields.signals },
 ];
 
 /** Side by side, which is the only way to judge whether one visual language holds across them. */
@@ -118,7 +118,7 @@ export const TheHandAskedReviewIsNotOnTheStrip: Story = {
  */
 export const AMomentTheWorkTypeNoLongerOffers: Story = {
 	args: {
-		selected: [...mockPullRequestBinding.signals, "scm.pull_request.manual_review"],
+		selected: [...mockPullRequestReviewFields.signals, "scm.pull_request.manual_review"],
 	},
 	play: async ({ args, canvas, userEvent }) => {
 		const stray = canvas.getByRole("checkbox", { name: /^Review requested by hand/u });
@@ -132,7 +132,7 @@ export const AMomentTheWorkTypeNoLongerOffers: Story = {
 
 /** The fault is drawn on the strip, not only in the message. */
 export const NoMomentChosen: Story = {
-	args: { selected: [], errorId: "practice-bindings-error" },
+	args: { selected: [], errorId: "practice-reviewSettings-error" },
 };
 
 export const Disabled: Story = {

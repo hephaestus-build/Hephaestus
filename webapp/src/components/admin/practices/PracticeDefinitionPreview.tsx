@@ -54,10 +54,10 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 					<AccordionContent className="pt-2">
 						<PracticeEvidenceSummary
 							policy={definition.automatedReviewPolicy}
-							bindings={definition.bindings}
+							{...definition}
 							validation={definition.automatedReviewValidation}
 							sources={workType?.allowedSources ?? []}
-							signals={workType?.signals ?? []}
+							signalOptions={workType?.signals ?? []}
 							workTypeLabel={artifactKindLabel(definition.artifactKind)}
 							showValidation
 						/>

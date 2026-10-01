@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import java.time.Instant;
 import java.util.Objects;
@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
  * only makes the endpoint exist, not an access control, and this route spends real LLM budget.
  *
  * <p>Two modes: <b>bypass</b> (no {@code signal}) submits directly, skipping the detection gate;
- * <b>gate-routed</b> (with {@code signal}) runs {@link PracticeReviewDetectionGate} first, exactly what the
+ * <b>gate-routed</b> (with {@code signal}) runs {@link ReviewGate} first, exactly what the
  * production listener would do — the only way to validate RETROSPECTIVE (merged/closed) detection on a
  * SYNCED mirror, since real merge/close webhooks never arrive there.
  *
@@ -58,19 +58,19 @@ public class DevTriggerController {
 
     private final AgentJobService agentJobService;
     private final ReviewableArtifactLoader artifactLoader;
-    private final PracticeReviewDetectionGate detectionGate;
+    private final ReviewGate reviewGate;
     private final TransactionTemplate transactionTemplate;
     private final SignalRecorder signalRecorder;
 
     public DevTriggerController(
             AgentJobService agentJobService,
             ReviewableArtifactLoader artifactLoader,
-            PracticeReviewDetectionGate detectionGate,
+            ReviewGate reviewGate,
             TransactionTemplate transactionTemplate,
             SignalRecorder signalRecorder) {
         this.agentJobService = agentJobService;
         this.artifactLoader = artifactLoader;
-        this.detectionGate = detectionGate;
+        this.reviewGate = reviewGate;
         this.transactionTemplate = transactionTemplate;
         this.signalRecorder = signalRecorder;
     }
@@ -139,7 +139,7 @@ public class DevTriggerController {
         }
         SignalName triggerSignal = signal == null || signal.isBlank() ? null : SignalName.of(signal);
         if (triggerSignal != null) {
-            GateDecision decision = detectionGate.evaluate(pr, triggerSignal, TriggerMode.AUTO);
+            GateDecision decision = reviewGate.evaluate(pr, triggerSignal, TriggerMode.AUTO);
             if (decision instanceof GateDecision.Skip skip) {
                 recordRefusal(
                         ScmSignals.pullRequestKey(
@@ -179,7 +179,7 @@ public class DevTriggerController {
             return Prepared.done("Issue missing repository: issueId=" + issue.getId());
         }
         if (triggerSignal != null) {
-            GateDecision decision = detectionGate.evaluateIssue(issue, workspaceId, triggerSignal, TriggerMode.AUTO);
+            GateDecision decision = reviewGate.evaluateIssue(issue, workspaceId, triggerSignal, TriggerMode.AUTO);
             if (decision instanceof GateDecision.Skip skip) {
                 recordRefusal(
                         ScmSignals.issueKey(workspaceId, triggerSignal, ScmEventPayload.IssueData.from(issue))

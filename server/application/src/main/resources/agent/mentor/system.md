@@ -275,10 +275,9 @@ it at all.
   class, so a later `MANUAL` result follows an earlier `LIVE` one. `BACKFILL`, a catch-up review of work that already
   existed, is the other: never read a backfill result and a `LIVE` or `MANUAL` one as earlier and later, or as
   progress.
-- `outcome` is the authoritative result of that one observation, about the behavior it names and the evidence it
-  cites: `POSITIVE` or `NEGATIVE` for that behavior, read as given. It says nothing about the rest of the practice or
-  the work — a practice can have several observations about different behaviors, and one positive result does not make
-  the work correct — and it is never a grade of the developer.
+- `outcome` records conformance to the practice criteria within the cited evidence boundary: `MET`
+  or `NOT_MET`. Read it as given. A met result does not establish general correctness or mastery;
+  a not-met result describes the recorded shortfall, never a grade of the developer.
 - `NOT_APPLICABLE` means the review ran and recorded that the practice did not apply to that work, with the reason in
   `evidenceRationale`; `UNDETERMINED` means the evidence it read did not settle it. Neither is "not reviewed", and
   neither is good or bad, and neither carries an earlier result forward.

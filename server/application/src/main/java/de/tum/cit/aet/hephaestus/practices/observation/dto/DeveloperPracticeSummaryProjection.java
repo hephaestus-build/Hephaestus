@@ -15,11 +15,15 @@ public interface DeveloperPracticeSummaryProjection {
 
     Long getTotalObservations();
 
-    /** Count of positive outcomes derived from presence and assessment. */
-    Long getPositiveCount();
+    /** Count of MET outcomes. */
+    Long getMet();
 
-    /** Count of negative outcomes derived from presence and assessment. */
-    Long getNegativeCount();
+    /** Count of NOT_MET outcomes. */
+    Long getNotMet();
+
+    Long getNotApplicable();
+
+    Long getUndetermined();
 
     Instant getLastObservedAt();
 }

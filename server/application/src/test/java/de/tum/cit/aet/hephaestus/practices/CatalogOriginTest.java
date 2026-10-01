@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.curated.CatalogEntry;
 import de.tum.cit.aet.hephaestus.practices.curated.EffectiveCatalog;
@@ -88,7 +89,11 @@ class CatalogOriginTest extends BaseUnitTest {
         GroupDefinition group = new GroupDefinition("Quality", null, null, null);
         PracticeDefinition practice = new PracticeDefinition(
                 "Small PRs",
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 "Seed criteria",
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
@@ -105,7 +110,11 @@ class CatalogOriginTest extends BaseUnitTest {
     private static PracticeDefinition definition(String criteria) {
         return new PracticeDefinition(
                 "Small PRs",
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 criteria,
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
@@ -127,8 +136,8 @@ class CatalogOriginTest extends BaseUnitTest {
         practice.setId(1L);
         practice.setSlug(SLUG);
         practice.setName("Small PRs");
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria(criteria);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         practice.setWhyItMatters("Reason");

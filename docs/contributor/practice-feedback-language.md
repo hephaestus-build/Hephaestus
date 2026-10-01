@@ -163,70 +163,47 @@ For whether an instance entry is copied into new workspaces, use **include / exc
 above). Do not use *shipped*, *offered*, *retired*, *ours*, *yours*, or *here* in catalog UI copy;
 those terms expose implementation or depend on who is reading.
 
-## Observation assessment axes
+## Observation outcomes
 
-An observation first records whether the practice could be assessed. For assessed observations,
-`presence` records whether the specific behavior named by the observation occurred; `assessment`
-records whether that behavior is desirable (`GOOD`) or undesirable (`BAD`) in the evidenced context.
-The practice supplies the stable expectation. Each observation identifies a precise behavior and keeps
-that referent unchanged through its presence claim, assessment, rationale and evidence. Different
-behaviors under one practice may have different assessments.
+An observation records whether the reviewed work meets one practice's criteria within the recorded
+evidence boundary. It does not establish a developer's mastery or the correctness of the entire project.
 
-A practice review may record zero, one or several observations for the same practice and reviewed
-work. Each assessed observation names one behavior; independent material concerns may need separate
-observations. One positive observation does not declare the whole piece of work satisfactory.
-Outcome is derived:
+| Outcome | Meaning | Severity |
+| --- | --- | --- |
+| `MET` | The captured evidence establishes conformance to the practice standard. | None |
+| `NOT_MET` | The captured evidence establishes a material shortfall against that standard. | Required |
+| `NOT_APPLICABLE` | An evidenced fact rules out the occasion to apply the practice. | None |
+| `UNDETERMINED` | Adequate captured evidence was read, but a material question remains unresolved. | None |
 
-| Status | Presence | Assessment | Derived outcome | Severity |
-| --- | --- | --- | --- | --- |
-| ASSESSED | PRESENT | GOOD | POSITIVE | null |
-| ASSESSED | ABSENT | GOOD | NEGATIVE | required |
-| ASSESSED | PRESENT | BAD | NEGATIVE | required |
-| ASSESSED | ABSENT | BAD | POSITIVE | null |
-| NOT_APPLICABLE | null | null | null | null |
-| UNDETERMINED | null | null | null | null |
+`outcome` is the only result field. There is no separate presence, desirability, or derived result axis.
+Criteria states the positive standard. An undesirable action and a required action that is missing can
+both establish `NOT_MET`; the summary explains the actual shortfall without a second taxonomy.
+`MET` requires conformance to the standard, not merely the presence of one desirable behavior.
 
-For verification guidance, relevant instructions may be PRESENT/GOOD, misleading instructions
-PRESENT/BAD, and a needed restart check ABSENT/GOOD. State which behavior the evidence establishes:
-partial instructions are present even when a necessary part is absent. Select the observation that
-best explains the correction; do not count both formulations of the same problem as separate lapses.
+A review records at most one observation per practice. Its outcome applies to the complete standard
+within the evidence boundary; the rationale can describe several independent shortfalls. Do not
+record both `MET` and `NOT_MET` for one practice. Provisional runtime submissions may be corrected
+before server admission; admitted observations are immutable. A met observation does not require praise
+or delivery.
 
-ABSENT/GOOD requires an evidenced need for the named behavior in this context; an omitted optional
-improvement is not a lapse. ABSENT/BAD requires a relevant opportunity for the undesirable behavior and a complete bounded
-search establishing its absence. Optional guidance is not undesirable merely because it is unnecessary.
-An empty change supplies no meaningful verification occasion and can be NOT_APPLICABLE. A positive
-outcome establishes neither general correctness nor a requirement to send praise.
+A claim based on absence requires a complete bounded search, recorded in `evidence.search`.
+Conformance based on avoiding harm requires exhaustive coverage of the relevant corpus. Missing an
+optional improvement is not a shortfall. Citations and the rationale name the reviewed boundary.
 
-NOT_APPLICABLE needs an evidenced fact ruling out the prerequisite occasion. UNDETERMINED needs an
-unresolved question after the relevant evidence was captured and read. Neither is a judgment of the
-developer, and neither contributes to assessed-outcome trends. Missing, truncated or failed required
-capture belongs to the review's readiness/coverage record; it creates no observation.
+`NOT_APPLICABLE` requires an inapplicability warrant identifying the fact that excludes the occasion.
+`UNDETERMINED` requires an undecidability warrant naming the open question and what would settle it.
+Neither contributes to the decided-outcome denominator. Report both separately when measuring
+coverage: combining them hides the difference between no occasion and unresolved assessment.
+Missing, truncated, or failed required capture is a review readiness failure and creates no observation.
 
-Severity, feedback routing and result counts use the derived outcome, not assessment alone. The
-server, sandbox tool contract and database reject contradictory axes. They never manufacture a
-judgment by defaulting status, presence, assessment or severity. See the
-[review pipeline](./practice-review-pipeline.mdx) for capture and delivery boundaries.
+For a change to saved settings, complete non-destructive restart instructions can establish `MET`.
+Missing a required restart check, or instructions that erase the state under test, establishes
+`NOT_MET`. An empty change may establish `NOT_APPLICABLE`. Conflicting captured requirements that
+prevent a judgment may establish `UNDETERMINED`. A missing captured description establishes none of
+these outcomes: capture must succeed first.
 
-### Reading an observation without reversing its meaning
-
-Read an assessed observation as: **“This behavior is present or absent. Doing that behavior would
-be good or bad in this context. Together, those facts yield the outcome.”** For absence,
-GOOD/BAD still evaluates the named behavior, not the act of omitting it.
-
-For example, consider a change to saved settings and its verification instructions:
-
-| Named behavior | Evidence and context | Presence / assessment | Outcome |
-| --- | --- | --- | --- |
-| Describe a restart check for saved settings | The instructions say to save a setting, restart, and confirm the saved value. The change makes persistence material. | PRESENT / GOOD | POSITIVE |
-| Describe a restart check for saved settings | The same persistence requirement applies, but the complete recorded guidance supplies no restart check. | ABSENT / GOOD | NEGATIVE |
-| Tell the reviewer to erase their personal settings before checking persistence | The instructions require erasing the very state the check needs to preserve, without an isolated disposable fixture. | PRESENT / BAD | NEGATIVE |
-| Tell the reviewer to erase their personal settings before checking persistence | The revision removes that destructive step and supplies a non-destructive check; inspection of the complete guidance confirms the step is absent. | ABSENT / BAD | POSITIVE |
-
-These are illustrative observations, not four labels to assign to the same deficiency. In each pair,
-the named behavior and its assessment stay fixed; the evidence for presence changes. The last row
-has a concrete avoidance occasion. Merely failing to mention deletion on unrelated work does not
-earn that observation. If required guidance was not captured, none of these absence claims is
-available. If there is no material change to check, record the evidenced lack of occasion instead.
+The sandbox, server, and database reject invalid outcomes and severity combinations. Delivery remains
+an independent decision; see the [review pipeline](./practice-review-pipeline.mdx).
 
 ## Member onboarding and AI choices
 

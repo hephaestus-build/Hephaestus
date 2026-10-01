@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.curated.CatalogEntry;
 import de.tum.cit.aet.hephaestus.practices.curated.CuratedCatalogLock;
@@ -127,7 +128,11 @@ class PracticeCatalogInstallationManagerTest extends BaseUnitTest {
         GroupDefinition group = new GroupDefinition("Packaging work", null, null, null);
         PracticeDefinition practice = new PracticeDefinition(
                 "Small PRs",
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 "Seed criteria",
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),

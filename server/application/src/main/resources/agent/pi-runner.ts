@@ -24,18 +24,12 @@ import { CHANGE_ROOT } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 import { folderCitationIndex } from "./pi-folder-index.ts";
 import {
-	ASSESSMENT_STATUS_VALUES,
-	ASSESSMENT_STATUS_DESCRIPTIONS,
-	PRESENCE_VALUES,
-	PRESENCE_DESCRIPTIONS,
-	ASSESSMENT_VALUES,
-	ASSESSMENT_DESCRIPTIONS,
+	OUTCOME_VALUES,
+	OUTCOME_DESCRIPTIONS,
 	MAX_SUMMARY_CHARS,
 	SEVERITY_VALUES,
 	SEVERITY_DESCRIPTIONS,
 	boundedAtSentenceEnd,
-	cellsRuledOut,
-	deriveOutcome,
 	dedupeKeyForObservation,
 	describeVocabulary,
 	isRecord,
@@ -270,7 +264,7 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 		isRecord(value) &&
 		typeof value.id === "string" &&
 		typeof value.practiceSlug === "string" &&
-		(value.outcome === "POSITIVE" || value.outcome === "NEGATIVE" || value.outcome === null) &&
+		(value.outcome === "MET" || value.outcome === "NOT_MET" || value.outcome === null) &&
 		Array.isArray(value.citations) &&
 		value.citations.every(isAdmittedCitation)
 	);
@@ -570,16 +564,7 @@ const evidenceSchema = {
 const observationSchema = {
 	type: "object",
 	additionalProperties: false,
-	required: [
-		"practiceSlug",
-		"summary",
-		"assessmentStatus",
-		"presence",
-		"assessment",
-		"severity",
-		"evidence",
-		"evidenceRationale",
-	],
+	required: ["practiceSlug", "summary", "outcome", "severity", "evidence", "evidenceRationale"],
 	properties: {
 		practiceSlug: { type: "string", minLength: 1 },
 		summary: {
@@ -588,29 +573,19 @@ const observationSchema = {
 			maxLength: MAX_SUMMARY_CHARS,
 			// documentedShape removes schema bounds, so include this limit in the model-facing description.
 			description:
-				`A short phrase of at most ${MAX_SUMMARY_CHARS} characters identifying the specific behavior whose presence and contextual desirability you assess, such as 'Debug print left in the request handler'. ` +
+				`A short phrase of at most ${MAX_SUMMARY_CHARS} characters identifying the specific behavior whose conformance to the practice standard you assess, such as 'Debug print left in the request handler'. ` +
 				"Never a single word and never the practice's own name; the reasons, titles and quotes go in evidenceRationale. " +
 				"A longer summary is refused, not shortened.",
 		},
-		assessmentStatus: {
+		outcome: {
 			type: "string",
-			enum: ASSESSMENT_STATUS_VALUES,
-			description: describeVocabulary(ASSESSMENT_STATUS_VALUES, ASSESSMENT_STATUS_DESCRIPTIONS),
-		},
-		presence: {
-			type: ["string", "null"],
-			enum: [...PRESENCE_VALUES, null],
-			description: describeVocabulary(PRESENCE_VALUES, PRESENCE_DESCRIPTIONS),
-		},
-		assessment: {
-			type: ["string", "null"],
-			enum: [...ASSESSMENT_VALUES, null],
-			description: `Only when ASSESSED, otherwise null. ${describeVocabulary(ASSESSMENT_VALUES, ASSESSMENT_DESCRIPTIONS)}`,
+			enum: OUTCOME_VALUES,
+			description: describeVocabulary(OUTCOME_VALUES, OUTCOME_DESCRIPTIONS),
 		},
 		severity: {
 			type: ["string", "null"],
 			enum: [...SEVERITY_VALUES, null],
-			description: `Only for a NEGATIVE outcome, otherwise null. ${describeVocabulary(SEVERITY_VALUES, SEVERITY_DESCRIPTIONS)}`,
+			description: `Only for a NOT_MET outcome, otherwise null. ${describeVocabulary(SEVERITY_VALUES, SEVERITY_DESCRIPTIONS)}`,
 		},
 		evidence: {
 			...evidenceSchema,
@@ -701,11 +676,7 @@ interface Validated {
 
 function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 	const notes: string[] = [];
-	const observation = normalizeObservation(
-		rawObservation,
-		ruledOutCellsOf(slugOf(rawObservation).toLowerCase().replaceAll("_", "-")),
-		notes,
-	);
+	const observation = normalizeObservation(rawObservation, notes);
 	if (!admittedPractices.has(observation.practiceSlug)) {
 		throw new Error(`unknown practice '${observation.practiceSlug}'`);
 	}
@@ -740,9 +711,14 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 	validateInapplicabilityScope(observation, availableSourceKinds);
 	// Inapplicability must be grounded in the change unless another observation already consulted it.
 	if (
-		observation.assessmentStatus !== "ASSESSED" &&
+		(observation.outcome === "NOT_APPLICABLE" || observation.outcome === "UNDETERMINED") &&
 		availableSourceKinds.has(DIFF_SOURCE) &&
-		![...reviewState.observations, observation].some(readTheChange)
+		![
+			...reviewState.observations.filter(
+				(previous) => previous.practiceSlug !== observation.practiceSlug,
+			),
+			observation,
+		].some(readTheChange)
 	) {
 		throw new Error(
 			"an observation that decides nothing must show it read the change: cite a line of " +
@@ -988,6 +964,16 @@ function record(raw: unknown): Recorded {
 	if (reviewState.observationKeys.includes(key)) {
 		return { kind: "duplicate", slug };
 	}
+	const previousIndex = reviewState.observations.findIndex(
+		(previous) => previous.practiceSlug === observation.practiceSlug,
+	);
+	if (previousIndex !== -1) {
+		reviewState.observations.splice(previousIndex, 1);
+		reviewState.observationKeys.splice(previousIndex, 1);
+		notes.push(
+			"Replaced the earlier provisional result for this practice before server admission.",
+		);
+	}
 	reviewState.observationKeys.push(key);
 	reviewState.observations.push(observation);
 	// What the check recorded for a citation by coordinates alone, and where it moved a citation
@@ -995,27 +981,23 @@ function record(raw: unknown): Recorded {
 	return {
 		kind: "stored",
 		slug,
-		negative: deriveOutcome(observation.presence, observation.assessment) === "NEGATIVE",
+		negative: observation.outcome === "NOT_MET",
 		filled: notes,
 	};
 }
 
-/** Appends the observations a turn recorded to the notes file: the review's memory across compaction. */
-function noteRecorded(observations: readonly NormalizedObservation[]): void {
-	const lines = observations.map((observation) => {
+/** The current provisional results, rebuilt so compaction never restores a replaced judgment. */
+function noteRecorded(): void {
+	const lines = reviewState.observations.map((observation) => {
 		const cited = [...new Set(observation.evidence.citations.map((citation) => citation.path))];
-		const verdict =
-			observation.assessmentStatus === "ASSESSED"
-				? `${observation.presence}/${observation.assessment}`
-				: observation.assessmentStatus;
-		return `- ${observation.practiceSlug}: ${verdict} — ${observation.summary} (cites ${cited.join(", ")})`;
+		return `- ${observation.practiceSlug}: ${observation.outcome} — ${observation.summary} (cites ${cited.join(", ")})`;
 	});
 	try {
 		mkdirSync(nodePath.dirname(NOTES_PATH), { recursive: true });
-		const existing = existsSync(NOTES_PATH)
-			? readFileSync(NOTES_PATH, "utf8")
-			: "# Recorded observations\n\nOne line per observation this review has recorded, appended by the runner.\n";
-		writeFileSync(NOTES_PATH, lines.length === 0 ? existing : `${existing}${lines.join("\n")}\n`);
+		writeFileSync(
+			NOTES_PATH,
+			`# Recorded observations\n\nOne current provisional result per practice, pending server admission.\n${lines.join("\n")}\n`,
+		);
 	} catch (error) {
 		console.error(`[pi-runner] notes could not be written: ${errorText(error)}`);
 	}
@@ -1028,10 +1010,7 @@ function recordedSoFar(): string {
 	}
 	return reviewState.observations
 		.map((observation) => {
-			const verdict =
-				observation.assessmentStatus === "ASSESSED"
-					? `${observation.presence}/${observation.assessment}`
-					: observation.assessmentStatus;
+			const verdict = observation.outcome;
 			return `- ${observation.practiceSlug}: ${verdict} — ${observation.summary}`;
 		})
 		.join("\n");
@@ -1130,7 +1109,8 @@ function buildReportObservationTool() {
 		description:
 			"Record one or more evidenced practice observations in local review state, for server admission " +
 			"after the measuring turns. Send every observation you have ready in one call; each is stored or " +
-			"refused on its own, with the reason.",
+			"refused on its own, with the reason. A valid resubmission replaces the earlier provisional result " +
+			"for that practice before server admission; one final outcome covers the complete practice standard.",
 		parameters: {
 			type: "object",
 			required: ["observations"],
@@ -1176,7 +1156,7 @@ function buildReportObservationTool() {
 				persistReviewState();
 				maybeWriteResultFile();
 				persistPracticeCoverage();
-				noteRecorded(reviewState.observations.slice(-stored.length));
+				noteRecorded();
 			}
 			const observed = new Set(reviewState.observations.map((item) => item.practiceSlug));
 			const remainingPractices = currentTurnSlugs.filter((slug) => !observed.has(slug));
@@ -1255,7 +1235,7 @@ function logPracticeCoverage() {
 const COMPOSITION_NUDGE =
 	`Stop reading: the admitted observations and the history are in this turn's prompt and in ` +
 	`work/composition/observations.json, and nothing else decides a unit. Persist the units you have ` +
-	`with report_feedback now — and a WITHHOLD with its reason for each NEGATIVE practice you decided ` +
+	`with report_feedback now — and a WITHHOLD with its reason for each NOT_MET practice you decided ` +
 	`to stay quiet about — then call report_summary once. Use tools only from this point onward; no ` +
 	`planning prose.`;
 
@@ -1263,7 +1243,7 @@ const COMPOSITION_NUDGE =
 const COMPOSITION_EXPLORATION_NUDGE = 12;
 
 const PERSIST_DISCIPLINE =
-	`Record the outcome the evidence supports, positive or negative or not applicable; there is no quota ` +
+	`Record the outcome the evidence supports, MET, NOT_MET, NOT_APPLICABLE, or UNDETERMINED; there is no quota ` +
 	`and no next step to write. Use tools only from this point onward; no planning prose.`;
 
 /** Tells the server to retry a review whose admission endpoint was unreachable. */
@@ -1479,11 +1459,8 @@ interface LeanCitation {
 }
 
 interface LeanObservation {
-	assessmentStatus: unknown;
-	presence: unknown;
 	id: string;
 	practiceSlug: string;
-	assessment: unknown;
 	outcome: unknown;
 	severity: unknown;
 	anchorable: unknown;
@@ -1597,10 +1574,7 @@ function stagedPreparedTargets(): PreparedFeedbackTarget[] {
 function leanObservations(observations: readonly AdmittedObservation[]): LeanObservation[] {
 	return observations.map((observation) => ({
 		id: observation.id,
-		assessmentStatus: observation.assessmentStatus,
-		presence: observation.presence,
 		practiceSlug: observation.practiceSlug,
-		assessment: observation.assessment,
 		outcome: observation.outcome,
 		severity: observation.severity,
 		anchorable: observation.anchorable,
@@ -1686,13 +1660,13 @@ function buildFeedbackTool(
 		if (rejection !== null) {
 			return skipped(rejection);
 		}
-		// IN_APP pattern feedback requires NEGATIVE observations on distinct pieces of work.
+		// IN_APP pattern feedback requires NOT_MET observations on distinct pieces of work.
 		if (unit.channel === "IN_APP" && delivers) {
 			const pieces = negativePiecesOfWork(unit.practiceSlug, observations);
 			if (pieces < request.minDistinctArtifacts) {
 				return skipped(
 					`IN_APP needs a pattern across at least ${request.minDistinctArtifacts} pieces of work, and ` +
-						`${unit.practiceSlug} is NEGATIVE on ${pieces} (this work and the history); WITHHOLD it ` +
+						`${unit.practiceSlug} is NOT_MET on ${pieces} (this work and the history); WITHHOLD it ` +
 						`with BELOW_BAR, and keep the note on the work. Skipped.`,
 				);
 			}
@@ -1715,7 +1689,7 @@ function buildFeedbackTool(
 			"Persist feedback units, one per channel and practice. Send every unit you have ready in one " +
 			"call; each is stored or skipped on its own, with the reason, and a skipped unit can be sent " +
 			"again corrected without re-sending the stored ones. This is an intervention, not a " +
-			"measurement: it takes no presence, assessment, severity or confidence, and no citation you typed yourself.",
+			"measurement: it takes no outcome, severity or confidence, and no citation you typed yourself.",
 		// See documentedShape: validate feedback per unit, not per tool call.
 		parameters: {
 			type: "object",
@@ -2090,7 +2064,7 @@ function listOrSingle(value: unknown): unknown[] {
 }
 
 // Enforce snapshot-dependent constraints here for fast model correction; Java rechecks them.
-/** Count distinct artifacts with NEGATIVE observations, including this review. */
+/** Count distinct artifacts with NOT_MET observations, including this review. */
 function negativePiecesOfWork(
 	practiceSlug: string,
 	current: readonly AdmittedObservation[],
@@ -2099,7 +2073,7 @@ function negativePiecesOfWork(
 	if (
 		current.some(
 			(observation) =>
-				observation.practiceSlug === practiceSlug && observation.outcome === "NEGATIVE",
+				observation.practiceSlug === practiceSlug && observation.outcome === "NOT_MET",
 		)
 	) {
 		pieces.add("this work");
@@ -2112,7 +2086,7 @@ function negativePiecesOfWork(
 	const entries =
 		isRecord(history) && Array.isArray(history.observations) ? history.observations : [];
 	for (const entry of entries) {
-		if (!isRecord(entry) || entry.practiceSlug !== practiceSlug || entry.outcome !== "NEGATIVE") {
+		if (!isRecord(entry) || entry.practiceSlug !== practiceSlug || entry.outcome !== "NOT_MET") {
 			continue;
 		}
 		const artifact = isRecord(entry.artifact) ? entry.artifact : {};
@@ -2608,17 +2582,6 @@ function criteriaFileOf(slug: string): string | null {
 	return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
 }
 
-const ruledOutCells = new Map<string, Set<string>>();
-/** The cells the practice's Judge section rules out, read once from its criteria. */
-function ruledOutCellsOf(slug: string): Set<string> {
-	let cells = ruledOutCells.get(slug);
-	if (!cells) {
-		cells = cellsRuledOut(criteriaFileOf(slug) ?? "");
-		ruledOutCells.set(slug, cells);
-	}
-	return cells;
-}
-
 /** The criteria of the turn's practices, inlined: the turn carries what it asks about. */
 function criteriaOf(slugs: readonly string[]): string {
 	return slugs
@@ -2627,7 +2590,7 @@ function criteriaOf(slugs: readonly string[]): string {
 			const exhaustive = [...(practiceExhaustiveSources.get(slug) ?? [])];
 			const scope =
 				exhaustive.length > 0
-					? `Exhaustive sources (an ABSENT claim must have searched all of them): ${exhaustive.join(", ")}.\n\n`
+					? `Exhaustive sources (an absence claim must have searched all of them): ${exhaustive.join(", ")}.\n\n`
 					: "";
 			return `### Practice \`${slug}\`\n${scope}${criteria}`;
 		})
@@ -2675,12 +2638,12 @@ async function makeRoomFor(
 	}
 }
 
-/** The practices with an admitted NEGATIVE observation: what the composer has a decision to record on. */
-function negativePractices(observations: readonly AdmittedObservation[]): string[] {
+/** The practices with an admitted NOT_MET observation: what the composer has a decision to record on. */
+function notMetPractices(observations: readonly AdmittedObservation[]): string[] {
 	return [
 		...new Set(
 			observations
-				.filter((observation) => observation.outcome === "NEGATIVE")
+				.filter((observation) => observation.outcome === "NOT_MET")
 				.map((observation) => observation.practiceSlug),
 		),
 	].toSorted();
@@ -2689,11 +2652,11 @@ function negativePractices(observations: readonly AdmittedObservation[]): string
 /** Retry undecided composition once, with a fresh loop guard and the original deadline. */
 async function askComposerOnceMore(
 	session: AgentSession,
-	negatives: readonly string[],
+	notMet: readonly string[],
 	deadline: ReturnType<typeof scheduleDeadline>,
 ): Promise<void> {
 	console.error(
-		`[pi-runner] composition left ${negatives.length} NEGATIVE practice(s) undecided — asking once more`,
+		`[pi-runner] composition left ${notMet.length} NOT_MET practice(s) undecided — asking once more`,
 	);
 	if (!(await settleSession(session, "composition", ABORT_SETTLE_MS))) {
 		throw new Error("the session was still busy when the composition was asked once more");
@@ -2702,13 +2665,13 @@ async function askComposerOnceMore(
 		return;
 	}
 	repeatedCalls.clear();
-	await Promise.race([session.prompt(finishCompositionText(negatives)), deadline.elapsed]);
+	await Promise.race([session.prompt(finishCompositionText(notMet)), deadline.elapsed]);
 }
 
-function finishCompositionText(negatives: readonly string[]): string {
+function finishCompositionText(notMet: readonly string[]): string {
 	return (
 		`## Undecided\nThe turn ended with no unit and no WITHHOLD for these practices, each with a ` +
-		`NEGATIVE observation: ${negatives.join(", ")}. For each, persist the unit you decided on, or a ` +
+		`NOT_MET observation: ${notMet.join(", ")}. For each, persist the unit you decided on, or a ` +
 		`WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in one report_feedback ` +
 		`call. The admitted observations are in \`work/composition/observations.json\`. Use tools only ` +
 		`from this point onward; no prose.`
@@ -2862,7 +2825,7 @@ async function main() {
 
 	const allSlugs = loadPracticeSlugs();
 	practiceCoverageLedger = new PracticeCoverageLedger(PRACTICE_COVERAGE_PATH, allSlugs);
-	noteRecorded([]);
+	noteRecorded();
 	const turns = planTurns(practiceIndex, PRACTICES_PER_TURN);
 	const brief = buildBrief(CWD, {
 		contextRoot: taskEnvelope.paths.contextRoot,
@@ -3078,8 +3041,8 @@ async function main() {
 					throw new Error("the composition budget ran out while the session was compacted");
 				}
 				await Promise.race([session.prompt(compositionText), deadline.elapsed]);
-				// Ask once more for undecided negatives; otherwise they have no composed next step.
-				const undecided = negativePractices(admittedObservations).filter(
+				// Ask once more for undecided not-met practices; otherwise they have no composed next step.
+				const undecided = notMetPractices(admittedObservations).filter(
 					(slug) => !composedFeedback.units.some((unit) => unit.practiceSlug === slug),
 				);
 				if (!deadline.expired() && undecided.length > 0) {

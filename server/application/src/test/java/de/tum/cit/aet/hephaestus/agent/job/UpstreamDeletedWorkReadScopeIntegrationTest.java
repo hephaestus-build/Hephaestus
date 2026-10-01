@@ -41,7 +41,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -120,7 +120,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
     private AgentJobService agentJobService;
 
     @Autowired
-    private PracticeReviewDetectionGate gate;
+    private ReviewGate gate;
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -301,9 +301,9 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         var data = ScmEventPayload.PullRequestData.from(gateLoadedPullRequest());
         var event = new ScmDomainEvent.PullRequestCreated(data, webhookContext());
         var jobs = mock(AgentJobService.class);
-        var detectionGate = mock(PracticeReviewDetectionGate.class);
+        var reviewGate = mock(ReviewGate.class);
         var listener = new AgentJobEventListener(
-                jobs, pullRequestRepository, detectionGate, workspaceResolver, signalRecorder, manifests);
+                jobs, pullRequestRepository, reviewGate, workspaceResolver, signalRecorder, manifests);
         tombstonePullRequest();
 
         transactionTemplate.executeWithoutResult(status -> listener.onPullRequestCreated(event));
@@ -312,17 +312,17 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
                 .findForArtifact(workspace.getId(), ScmSignals.PULL_REQUEST.value(), pullRequestId)
                 .getFirst();
         assertHeld(held);
-        verifyNoInteractions(jobs, detectionGate);
+        verifyNoInteractions(jobs, reviewGate);
 
         upsertPullRequest();
         assertThat(gateLoadedPullRequest().getDeletedAt()).isNull();
         var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
-        when(detectionGate.evaluateQueued(
+        when(reviewGate.evaluateQueued(
                         any(), eq(workspace.getId()), eq(ScmSignals.PULL_REQUEST_OPENED), any(), eq(false)))
                 .thenReturn(decision);
         resubmit(
                 new PullRequestSignalResubmitter(
-                        jobs, pullRequestRepository, detectionGate, signalRecorder, reviewRepository, manifests),
+                        jobs, pullRequestRepository, reviewGate, signalRecorder, reviewRepository, manifests),
                 held);
 
         var request = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
@@ -348,12 +348,12 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         assertNotNull(data);
         var event = new ScmDomainEvent.IssueCreated(data, webhookContext());
         var jobs = mock(AgentJobService.class);
-        var detectionGate = mock(PracticeReviewDetectionGate.class);
+        var reviewGate = mock(ReviewGate.class);
         var listener = new IssueAgentJobEventListener(
                 jobs,
                 issueRepository,
                 pullRequestRepository,
-                detectionGate,
+                reviewGate,
                 workspaceResolver,
                 signalRecorder,
                 java.util.Objects.requireNonNull(transactionTemplate.getTransactionManager()));
@@ -365,14 +365,14 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
                 .findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), issueId)
                 .getFirst();
         assertHeld(held);
-        verifyNoInteractions(jobs, detectionGate);
+        verifyNoInteractions(jobs, reviewGate);
 
         upsertIssue();
         assertThat(gateLoadedIssue().getDeletedAt()).isNull();
         var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
-        when(detectionGate.evaluateIssue(any(), anyLong(), eq(ScmSignals.ISSUE_OPENED), eq(TriggerMode.AUTO)))
+        when(reviewGate.evaluateIssue(any(), anyLong(), eq(ScmSignals.ISSUE_OPENED), eq(TriggerMode.AUTO)))
                 .thenReturn(decision);
-        resubmit(new IssueSignalResubmitter(jobs, issueRepository, detectionGate, signalRecorder), held);
+        resubmit(new IssueSignalResubmitter(jobs, issueRepository, reviewGate, signalRecorder), held);
 
         var request = ArgumentCaptor.forClass(IssueReviewSubmissionRequest.class);
         verify(jobs)

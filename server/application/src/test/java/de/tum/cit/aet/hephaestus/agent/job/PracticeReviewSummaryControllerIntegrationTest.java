@@ -126,9 +126,9 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
         otherJob.setStatus(AgentJobStatus.COMPLETED);
         jobRepository.save(otherJob);
 
-        insertObservation("Problem", "ABSENT", "GOOD", "MAJOR");
-        insertObservation("Strength", "PRESENT", "GOOD", "INFO");
-        insertObservation("Not applicable", "NOT_APPLICABLE", null, null);
+        insertObservation("Problem", "NOT_MET", "MAJOR");
+        insertObservation("Strength", "MET", null);
+        insertObservation("Not applicable", "NOT_APPLICABLE", null);
         persistFeedback(0, FeedbackDeliveryState.DELIVERED, null, "Delivered");
         persistFeedback(1, FeedbackDeliveryState.SUPPRESSED, FeedbackSuppressionReason.VOLUME_CAPPED, "Withheld");
         persistFeedback(2, FeedbackDeliveryState.PREPARED, null, null);
@@ -166,9 +166,9 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo("review-summary-org/review-ui")
                 .jsonPath("$.content[0].target.reviewedWork.url")
                 .isEqualTo("https://github.com/review-summary-org/review-ui/pull/42")
-                .jsonPath("$.content[0].observations.strengths")
+                .jsonPath("$.content[0].observations.met")
                 .isEqualTo(1)
-                .jsonPath("$.content[0].observations.problems")
+                .jsonPath("$.content[0].observations.notMet")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].observations.notApplicable")
                 .isEqualTo(1)
@@ -508,7 +508,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
         result.setSlug("review-quality");
         result.setName("Review quality");
         result.setCriteria("Review the change");
-        result.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(result, ScmSignals.PULL_REQUEST_OPENED);
         result.setAutonomy(PracticeAutonomy.AUTOMATIC);
         return practiceRepository.save(result);
     }
@@ -522,8 +522,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
         return jobRepository.save(result);
     }
 
-    private void insertObservation(
-            String title, String presence, @Nullable String assessment, @Nullable String severity) {
+    private void insertObservation(String title, String outcome, @Nullable String severity) {
         UUID id = UUID.randomUUID();
         observationRepository.insertIfAbsent(
                 id,
@@ -536,9 +535,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 7L,
                 subject.getId(),
                 title,
-                assessment == null ? presence : "ASSESSED",
-                assessment == null ? null : presence,
-                assessment,
+                outcome,
                 severity,
                 "{}",
                 "Reasoning",

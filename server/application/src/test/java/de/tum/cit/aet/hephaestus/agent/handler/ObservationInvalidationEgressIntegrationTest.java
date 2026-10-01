@@ -6,9 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.WithheldObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.WithheldObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
@@ -32,7 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.ProposedPlacement;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation.ProviderCopy;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
@@ -163,8 +163,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         developer = persistUser("egress-developer");
         practice = persistPractice(workspace, null, "closes-linked-issues", "Closes linked issues", null);
         job = persistPullRequestReview(workspace, 7, Instant.now());
-        observation =
-                observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        observation = observe(practice, job, 7L, developer, Outcome.NOT_MET, Severity.MAJOR, Instant.now());
         note = noteAbout(observation, 3, "Closes #1 already.");
         when(policy.evaluatePullRequest(any(), any(), any(), any()))
                 .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new PullRequest()));
@@ -240,7 +239,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
 
     @Test
     void shouldDeliverAnAutomaticPackageWrittenOnlyFromAnotherObservationOfTheRun() {
-        UUID other = observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        UUID other = observe(practice, job, 7L, developer, Outcome.NOT_MET, Severity.MAJOR, Instant.now());
         DiffNote otherNote = noteAbout(other, 9, "Closes #2 already.");
         invalidate();
 
@@ -257,8 +256,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     @Test
     void shouldCorrectOnlyTheObservationsAnAutomaticPackageWasWrittenFrom() {
         String key = "review:" + job.getId();
-        UUID written =
-                observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        UUID written = observe(practice, job, 7L, developer, Outcome.NOT_MET, Severity.MAJOR, Instant.now());
         provider.duringWrite = this::invalidate;
 
         PracticeFeedbackDispatchService.Result result = dispatchService.dispatchAutomaticPackage(
@@ -578,7 +576,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     @Test
     void shouldKeepTheNotesALookupFoundWhileAnotherIsStillUnconfirmed() {
         String key = "review:" + job.getId();
-        UUID other = observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        UUID other = observe(practice, job, 7L, developer, Outcome.NOT_MET, Severity.MAJOR, Instant.now());
         DiffNote otherNote = noteAbout(other, 9, "Closes #2 already.");
         provider.failAfterAccept = true;
         dispatchAutomatic("", List.of(note, otherNote));
@@ -926,7 +924,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
     }
 
     private UUID invalidatedWithSummary(String commentRef, int position) {
-        UUID id = observe(practice, job, 7L, developer, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        UUID id = observe(practice, job, 7L, developer, Outcome.NOT_MET, Severity.MAJOR, Instant.now());
         deliveredWith(id, position, PlacementType.SUMMARY, commentRef);
         invalidationService.setValidity(workspace.getId(), id, ADMIN_ACCOUNT, false, "Wrong");
         return id;

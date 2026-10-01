@@ -34,7 +34,7 @@ public record PracticeWorkTypeDefinitionOptionsDTO(
 
         @NonNull
         @Schema(description = "Evidence a new binding on this work type starts with when the author says nothing")
-        List<PracticeEvidenceRequirement> recommendedNeeds,
+        List<PracticeEvidenceRequirement> recommendedEvidenceRequirements,
 
         @NonNull List<PracticeAutomatedReviewMode> supportedAutomatedReviewModes,
         @NonNull List<PracticeEvidenceSourceOptionDTO> allowedSources,

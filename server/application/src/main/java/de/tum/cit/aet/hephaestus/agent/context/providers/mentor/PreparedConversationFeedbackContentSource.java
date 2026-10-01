@@ -159,12 +159,8 @@ public class PreparedConversationFeedbackContentSource implements ContentSource 
             if (observation != null) {
                 // The review behind the observation, not the job that composed this feedback.
                 node.put("reviewId", observation.getAgentJobId().toString());
-                node.put("assessmentStatus", observation.getAssessmentStatus().name());
-                node.put(
-                        "outcome",
-                        observation.getOutcome() == null
-                                ? null
-                                : observation.getOutcome().name());
+
+                node.put("outcome", observation.getOutcome().name());
                 if (observation.getEvidence() != null) {
                     node.set("evidence", observation.getEvidence());
                 }

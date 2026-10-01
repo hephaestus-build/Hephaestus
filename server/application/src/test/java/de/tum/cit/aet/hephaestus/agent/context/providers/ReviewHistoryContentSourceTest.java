@@ -37,12 +37,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -294,16 +292,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .get("observations")
                 .get(0);
         assertThat(entry.propertyNames())
-                .containsExactlyInAnyOrder(
-                        "practiceSlug",
-                        "summary",
-                        "assessmentStatus",
-                        "outcome",
-                        "presence",
-                        "assessment",
-                        "severity",
-                        "artifact",
-                        "observedAt");
+                .containsExactlyInAnyOrder("practiceSlug", "summary", "outcome", "severity", "artifact", "observedAt");
         assertThat(entry.get("practiceSlug").asString()).isEqualTo("swallows-errors");
         assertThat(entry.get("summary").asString()).isEqualTo("Caught and ignored");
         assertThat(captured.contentStates())
@@ -730,7 +719,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     /** An observation measured under the practice's current review rules; {@code retired} marks it superseded. */
     private static Observation boundObservation(boolean retired) {
         PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
-        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("rules");
+        lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v5:rules");
         Practice practice = new Practice();
         practice.setCurrentRevision(revision);
         return Observation.builder()
@@ -878,9 +867,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                 .practice(practice)
                 .recurrenceKey(recurrenceKey)
                 .summary(title)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.PRESENT)
-                .assessment(Assessment.BAD)
+                .outcome(Outcome.NOT_MET)
                 .artifactKind(artifactKind)
                 .artifactId(artifactId)
                 .observedAt(Instant.parse("2026-07-01T09:00:00Z"))

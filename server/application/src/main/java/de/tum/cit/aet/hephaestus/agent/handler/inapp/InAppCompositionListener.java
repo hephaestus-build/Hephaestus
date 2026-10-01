@@ -4,18 +4,18 @@ import de.tum.cit.aet.hephaestus.agent.handler.FeedbackLedgerRecorder;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeFeedbackDeliveryPolicy;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
-import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent;
+import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.config.FeedbackLaneExecutor;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.PreviousInAppFeedback;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -92,7 +92,7 @@ public class InAppCompositionListener {
     @Async(FeedbackLaneExecutor.BEAN_NAME)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onPracticeDetectionDelivered(PracticeDetectionDeliveredEvent event) {
+    public void onPracticeFeedbackPreparationRequested(PracticeFeedbackPreparationRequestedEvent event) {
         try {
             prepare(event.agentJobId(), event.agentJobId(), event.workspaceId());
         } catch (RuntimeException e) {
@@ -241,13 +241,12 @@ public class InAppCompositionListener {
                 .orElse(null);
     }
 
-    // No occasion signal: consider all bindings when resolving whose conduct the practice reviews.
     private ActorRole subjectRole(List<Observation> evidence) {
         return evidence.stream()
                 .map(Observation::getPractice)
                 .filter(Objects::nonNull)
                 .findFirst()
-                .map(practice -> PracticeBinding.subjectRoleOf(practice.getBindings(), null))
+                .map(Practice::getSubject)
                 .orElse(ActorRole.AUTHOR);
     }
 }

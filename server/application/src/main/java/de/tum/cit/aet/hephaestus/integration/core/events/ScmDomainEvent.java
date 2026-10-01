@@ -19,7 +19,7 @@ public final class ScmDomainEvent {
 
     /**
      * Trigger event names persisted in {@code practice.trigger_events} JSONB; these
-     * literals are the join key for {@code PracticeReviewDetectionGate}. Must match
+     * literals are the join key for {@code ReviewGate}. Must match
      * the stored strings exactly — renaming requires a data migration.
      */
     public static final class TriggerEventNames {

@@ -8,7 +8,7 @@ import type { StandingCounts } from "./standing-counts";
 import { StandingCountsList } from "./StandingCountsList";
 
 /**
- * Where the box sits. `fit` is as wide as it needs beside a title, the legend in columns; `fill`
+ * Where the box sits. `fit` is as wide as it evidenceRequirements beside a title, the legend in columns; `fill`
  * is a card across the page, the legend on one line that wraps and `children` at its end, under
  * the legend below `sm`.
  */

@@ -382,8 +382,8 @@ class PracticeGroupServiceTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug(slug);
         practice.setName(slug);
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("criteria");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         return practice;

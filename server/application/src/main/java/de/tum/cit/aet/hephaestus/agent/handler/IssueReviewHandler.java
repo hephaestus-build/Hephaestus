@@ -53,9 +53,9 @@ public class IssueReviewHandler implements JobTypeHandler {
     private final JsonMapper objectMapper;
     private final PracticeReviewPreparation preparation;
     private final PracticeCatalogInjector practiceCatalogInjector;
-    private final PracticeDetectionResultParser resultParser;
+    private final ReviewResultParser resultParser;
     private final FeedbackCompositionResultParser compositionResultParser;
-    private final PracticeDetectionDeliveryService deliveryService;
+    private final ReviewOutputService deliveryService;
     private final InContextDeliveryGate inContextDeliveryGate;
     private final PullRequestCommentPoster commentPoster;
     private final FeedbackLedgerRecorder feedbackLedgerRecorder;
@@ -71,9 +71,9 @@ public class IssueReviewHandler implements JobTypeHandler {
             JsonMapper objectMapper,
             PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
-            PracticeDetectionResultParser resultParser,
+            ReviewResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
-            PracticeDetectionDeliveryService deliveryService,
+            ReviewOutputService deliveryService,
             InContextDeliveryGate inContextDeliveryGate,
             PullRequestCommentPoster commentPoster,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
@@ -115,7 +115,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         }
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put(
-                PracticeDetectionDeliveryService.ORIGIN_METADATA_KEY,
+                ReviewOutputService.ORIGIN_METADATA_KEY,
                 Objects.requireNonNull(r.observationOrigin()).name());
         metadata.put("artifact_kind", ArtifactKinds.ISSUE.value());
         metadata.put("repository_id", r.repositoryId());
@@ -158,7 +158,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                 // Compose feedback after observations are final; issues support artifact-level notes only.
                 files -> FeedbackCompositionInputs.stage(
                         files,
-                        PracticeDetectionDeliveryService.originOf(metadata),
+                        ReviewOutputService.originOf(metadata),
                         ISSUE_REVIEW_CHANNELS,
                         EnumSet.of(FeedbackCompositionInputs.InContextPlacementKind.ARTIFACT)));
         log.info(
@@ -206,7 +206,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         ObservationAdmissionService.requireMatchingCompositionDigest(job);
         List<Observation> persisted = observationRepository.findByAgentJobId(
                 job.getId(), job.getWorkspace().getId());
-        List<PracticeDetectionResultParser.ValidatedObservation> observations = persisted.stream()
+        List<ReviewResultParser.ValidatedObservation> observations = persisted.stream()
                 .map(observation -> {
                     CitationVerification.requireVerified(job, observation.getEvidence());
                     return validated(observation);
@@ -214,24 +214,22 @@ public class IssueReviewHandler implements JobTypeHandler {
                 .toList();
         Set<String> recurring = recurringLapses.recurringSlugs(persisted);
         if (feedbackDeliveryService.recoverAutomaticPackageIfPresent(job)) return;
-        List<PracticeDetectionResultParser.ValidatedObservation> eligible =
+        List<ReviewResultParser.ValidatedObservation> eligible =
                 feedbackResponseSuppressionFilter.evaluate(job, observations).deliverable();
-        List<PracticeDetectionResultParser.ValidatedObservation> loudEnough =
-                inContextDeliveryGate.admitInContext(job, eligible);
-        List<PracticeDetectionResultParser.ValidatedObservation> proposals =
-                inContextDeliveryGate.awaitingApproval(job, eligible);
+        List<ReviewResultParser.ValidatedObservation> loudEnough = inContextDeliveryGate.admitInContext(job, eligible);
+        List<ReviewResultParser.ValidatedObservation> proposals = inContextDeliveryGate.awaitingApproval(job, eligible);
         Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.ISSUE);
         List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
         String lead = compositionResultParser.lead(job.getOutput());
         // Everything either surface would compose from: both render an all-clear when no problem
         // survives the gates, so the coverage question is asked once, over the union.
-        List<PracticeDetectionResultParser.ValidatedObservation> composable = java.util.stream.Stream.concat(
+        List<ReviewResultParser.ValidatedObservation> composable = java.util.stream.Stream.concat(
                         proposals.stream(), loudEnough.stream())
                 .toList();
         Set<String> included = composable.stream()
-                .map(PracticeDetectionResultParser.ValidatedObservation::occurrenceKey)
+                .map(ReviewResultParser.ValidatedObservation::occurrenceKey)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        List<PracticeDetectionResultParser.ValidatedObservation> reviewPackage = observations.stream()
+        List<ReviewResultParser.ValidatedObservation> reviewPackage = observations.stream()
                 .filter(observation -> included.contains(observation.occurrenceKey()))
                 .toList();
         // The lead is unattributed prose that may speak for any practice, so automatic content goes without it.
@@ -256,13 +254,11 @@ public class IssueReviewHandler implements JobTypeHandler {
                 job, automatic, automatic == null ? Set.of() : automatic.contributingPracticeSlugs(reviewPackage));
     }
 
-    private PracticeDetectionResultParser.ValidatedObservation validated(Observation observation) {
-        return new PracticeDetectionResultParser.ValidatedObservation(
+    private ReviewResultParser.ValidatedObservation validated(Observation observation) {
+        return new ReviewResultParser.ValidatedObservation(
                 observation.getPractice().getSlug(),
                 observation.getSummary(),
-                observation.getAssessmentStatus(),
-                observation.getPresence(),
-                observation.getAssessment(),
+                observation.getOutcome(),
                 observation.getSeverity(),
                 observation.getEvidence(),
                 observation.getEvidenceRationale(),
@@ -280,8 +276,7 @@ public class IssueReviewHandler implements JobTypeHandler {
             throw new ObservationsRefusedException(
                     "no_valid_observations", "No valid observations in agent output: jobId=" + job.getId());
         }
-        var admissible = deliveryService.prepare(
-                job, PracticeDetectionResultParser.validateCoherence(parsed.validObservations()));
+        var admissible = deliveryService.prepare(job, ReviewResultParser.validateCoherence(parsed.validObservations()));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 
@@ -292,7 +287,7 @@ public class IssueReviewHandler implements JobTypeHandler {
 
     void postIssueNote(
             AgentJob job,
-            PracticeDetectionResultParser.@Nullable DeliveryContent delivery,
+            ReviewResultParser.@Nullable DeliveryContent delivery,
             Set<String> contributingPracticeSlugs) {
         if (delivery == null || delivery.mrNote() == null) {
             feedbackLedgerRecorder.recordNothingToPost(job, delivery);
@@ -310,7 +305,7 @@ public class IssueReviewHandler implements JobTypeHandler {
             return;
         }
         String formatted = commentFormatter.format(sanitized, job);
-        var providerPackage = new PracticeDetectionResultParser.DeliveryContent(
+        var providerPackage = new ReviewResultParser.DeliveryContent(
                 formatted, delivery.diffNotes(), delivery.withheld(), delivery.summaryContributors());
         PracticeFeedbackDispatchService.Result result =
                 dispatchService.dispatchAutomaticPackage(job, providerPackage, contributingPracticeSlugs);
@@ -330,7 +325,7 @@ public class IssueReviewHandler implements JobTypeHandler {
     }
 
     private void recordSuppressed(
-            AgentJob job, PracticeDetectionResultParser.DeliveryContent delivery, FeedbackSuppressionReason reason) {
+            AgentJob job, ReviewResultParser.DeliveryContent delivery, FeedbackSuppressionReason reason) {
         feedbackLedgerRecorder.recordSuppressedUnit(job, delivery, reason);
     }
 }

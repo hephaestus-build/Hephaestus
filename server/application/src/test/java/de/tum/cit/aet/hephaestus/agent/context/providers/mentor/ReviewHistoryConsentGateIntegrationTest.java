@@ -66,7 +66,7 @@ class ReviewHistoryConsentGateIntegrationTest extends AbstractSlackConsentGateIn
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
         practice.setCurrentRevision(revision);
@@ -123,9 +123,7 @@ class ReviewHistoryConsentGateIntegrationTest extends AbstractSlackConsentGateIn
                 artifactId,
                 recipient.getId(),
                 summary,
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 evidence(artifactKind),
                 null,

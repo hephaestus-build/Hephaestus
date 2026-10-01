@@ -1,12 +1,15 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewValidation;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
@@ -27,8 +30,18 @@ public record PracticeDTO(
         String name,
 
         @NonNull
-        @Schema(description = "The one occasion this practice is reviewed on, with the evidence that review reads")
-        List<PracticeBinding> bindings,
+        @Schema(description = "Signals that start a practice review", requiredMode = Schema.RequiredMode.REQUIRED)
+        List<SignalName> signals,
+
+        @NonNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+        List<PracticeEvidenceRequirement> evidenceRequirements,
+
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean onDrafts,
+
+        @NonNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
+        ActorRole subject,
+
+        @Nullable PracticePrecondition precondition,
 
         @NonNull @Schema(description = "Practice review criteria")
         String criteria,
@@ -40,7 +53,7 @@ public record PracticeDTO(
         @NonNull PracticeAutomatedReviewValidation automatedReviewValidation,
 
         @NonNull
-        @Schema(description = "Kind of work this practice reviews, read off its bindings", example = "scm.pull_request")
+        @Schema(description = "Kind of work this practice reviews, read off its signals", example = "scm.pull_request")
         ArtifactKind artifactKind,
 
         @Nullable @Schema(description = "Slug of the practice group this practice is bound to, if any")
@@ -90,7 +103,11 @@ public record PracticeDTO(
                 practice.getId(),
                 practice.getSlug(),
                 practice.getName(),
-                practice.getBindings(),
+                practice.getSignals(),
+                practice.getEvidenceRequirements(),
+                practice.isOnDrafts(),
+                practice.getSubject(),
+                practice.getPrecondition(),
                 practice.getCriteria(),
                 practice.getPrecomputeScript(),
                 practice.getAutomatedReviewPolicy(),

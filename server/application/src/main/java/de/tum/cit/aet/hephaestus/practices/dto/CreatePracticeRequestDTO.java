@@ -1,9 +1,12 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -31,17 +34,17 @@ public record CreatePracticeRequestDTO(
         @Nullable
         String name,
 
-        @NotNull(message = "An occasion is required")
-        @Size(
-                min = 1,
-                max = 1,
-                message = "A practice is reviewed on one occasion. To read different evidence at a different moment, "
-                        + "split this into two practices.")
-        @Schema(
-                description = "The one occasion this practice is reviewed on, with the evidence that review reads. "
-                        + "The kind of work reviewed is read off the signals.")
+        @NotNull(message = "Choose at least one review moment")
+        @Size(min = 1, message = "Choose at least one review moment")
         @Nullable
-        List<@Valid PracticeBinding> bindings,
+        List<SignalName> signals,
+
+        @NotNull(message = "Evidence requirements are required") @Nullable
+        List<@Valid PracticeEvidenceRequirement> evidenceRequirements,
+
+        @Nullable Boolean onDrafts,
+        @Nullable ActorRole subject,
+        @Valid @Nullable PracticePrecondition precondition,
 
         @NotBlank(message = "Criteria is required")
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")
@@ -59,7 +62,7 @@ public record CreatePracticeRequestDTO(
         @Valid
         @Schema(
                 description =
-                        "Versioned review settings; omit to use the recommended ones for the work type the bindings name")
+                        "Versioned review settings; omit to use the recommended ones for the work type the signals name")
         @Nullable
         PracticeAutomatedReviewPolicy automatedReviewPolicy,
 
@@ -83,7 +86,11 @@ public record CreatePracticeRequestDTO(
     public CreatePracticeRequestDTO(
             @Nullable String slug,
             @Nullable String name,
-            @Nullable List<PracticeBinding> bindings,
+            @Nullable List<SignalName> signals,
+            @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
+            @Nullable Boolean onDrafts,
+            @Nullable ActorRole subject,
+            @Nullable PracticePrecondition precondition,
             @Nullable String criteria,
             @Nullable String precomputeScript,
             @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
@@ -93,7 +100,11 @@ public record CreatePracticeRequestDTO(
         this(
                 slug,
                 name,
-                bindings,
+                signals,
+                evidenceRequirements,
+                onDrafts,
+                subject,
+                precondition,
                 criteria,
                 precomputeScript,
                 automatedReviewPolicy,

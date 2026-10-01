@@ -63,12 +63,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLab
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabPullRequestReviewCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.GitLabPullRequestReviewThreadProcessor;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.GraphQlResponses;
@@ -2294,7 +2293,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         private static final Instant MERGED_AT = Instant.parse("2026-01-31T18:04:06Z");
 
         private final AgentJobService jobs = mock(AgentJobService.class);
-        private final PracticeReviewDetectionGate gate = mock(PracticeReviewDetectionGate.class);
+        private final ReviewGate gate = mock(ReviewGate.class);
 
         /** Settles the occasion as the real submission does, so a redelivery meets a decided signal. */
         @BeforeEach
@@ -2762,11 +2761,11 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         /** A practice judging the merger's conduct when the merge request is merged. */
         private Practice mergerPractice() {
             Practice practice = new Practice();
-            practice.setBindings(List.of(new PracticeBinding(
-                    List.of(ScmSignals.PULL_REQUEST_MERGED),
-                    PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                    false,
-                    ActorRole.MERGER)));
+            practice.setSignals(List.of(ScmSignals.PULL_REQUEST_MERGED));
+            practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
+            practice.setOnDrafts(false);
+            practice.setSubject(ActorRole.MERGER);
+            practice.setPrecondition(null);
             return practice;
         }
 
@@ -2847,7 +2846,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     .isEqualTo(1);
 
             var jobs = mock(AgentJobService.class);
-            var gate = mock(PracticeReviewDetectionGate.class);
+            var gate = mock(ReviewGate.class);
             var listener = new AgentJobEventListener(
                     jobs, pullRequestRepository, gate, workspaceResolver, signalRecorder, manifests);
             transactionTemplate.executeWithoutResult(status -> listener.onPullRequestCreated(created));

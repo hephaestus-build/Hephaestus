@@ -39,7 +39,7 @@ class ArtifactKindsAgreementTest extends BaseUnitTest {
     @DisplayName("the persisted spellings are pinned: changing one is a data migration, not an edit")
     void spellingsArePinned() {
         // These strings are persisted in observation, feedback and agent_job rows and in every bundled
-        // practice's bindings. Re-spelling one without migrating orphans every row already written under
+        // practice's signals. Re-spelling one without migrating orphans every row already written under
         // the old spelling.
         assertThat(Stream.of(
                                 ArtifactKinds.PULL_REQUEST,

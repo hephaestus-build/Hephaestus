@@ -4,11 +4,11 @@ import { expect, fn, within } from "storybook/test";
 
 import { Button } from "@/components/ui/button";
 import {
-	mockConversationBinding,
+	mockConversationReviewFields,
 	mockConversationWorkType,
-	mockDocumentBinding,
+	mockDocumentReviewFields,
 	mockDocumentWorkType,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
 import { expectNoOverflowingElement } from "@/stories/reflow";
@@ -16,15 +16,21 @@ import { expectNoOverflowingElement } from "@/stories/reflow";
 import { PracticeEvidenceEditor } from "./PracticeEvidenceEditor";
 
 function ControlledEvidence(args: React.ComponentProps<typeof PracticeEvidenceEditor>) {
-	const [needs, setNeeds] = useState(args.needs);
-	return <PracticeEvidenceEditor {...args} needs={needs} onChange={setNeeds} />;
+	const [evidenceRequirements, setNeeds] = useState(args.evidenceRequirements);
+	return (
+		<PracticeEvidenceEditor
+			{...args}
+			evidenceRequirements={evidenceRequirements}
+			onChange={setNeeds}
+		/>
+	);
 }
 
 const meta = {
 	component: PracticeEvidenceEditor,
 	args: {
 		options: mockPullRequestWorkType,
-		needs: mockPullRequestBinding.needs,
+		evidenceRequirements: mockPullRequestReviewFields.evidenceRequirements,
 		idPrefix: "practice-occasion",
 		onChange: fn(),
 	},
@@ -93,7 +99,7 @@ export const AbsenceClaimNeedsARequiredSource: Story = {
 
 export const ReadsASourceExhaustively: Story = {
 	args: {
-		needs: [
+		evidenceRequirements: [
 			{ sourceKind: "scm.pull-request.core", stance: "REQUIRED" },
 			{ sourceKind: "scm.repository.tree", stance: "CONTEXTUAL" },
 			{ sourceKind: "scm.review-threads", stance: "EXHAUSTIVE" },
@@ -135,7 +141,10 @@ export const TheAbsenceClaimStatesItsBound: Story = {
 };
 
 export const ADocumentOffersLess: Story = {
-	args: { options: mockDocumentWorkType, needs: mockDocumentBinding.needs },
+	args: {
+		options: mockDocumentWorkType,
+		evidenceRequirements: mockDocumentReviewFields.evidenceRequirements,
+	},
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Choose sources" }));
 
@@ -148,7 +157,10 @@ export const ADocumentOffersLess: Story = {
 };
 
 export const AConversationReadsOneThread: Story = {
-	args: { options: mockConversationWorkType, needs: mockConversationBinding.needs },
+	args: {
+		options: mockConversationWorkType,
+		evidenceRequirements: mockConversationReviewFields.evidenceRequirements,
+	},
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Choose sources" }));
 
@@ -157,7 +169,7 @@ export const AConversationReadsOneThread: Story = {
 };
 
 export const NothingRequiredYet: Story = {
-	args: { needs: [], invalid: true },
+	args: { evidenceRequirements: [], invalid: true },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Nothing yet")).toBeVisible();
 		// The invalid state opens the source list, because the fix is not reachable from the summary.
@@ -189,7 +201,7 @@ function SubmittedIntoInvalid(args: React.ComponentProps<typeof PracticeEvidence
  * transition into it would re-open under the caret on every keystroke.
  */
 export const SubmittingRevealsTheSources: Story = {
-	args: { needs: [] },
+	args: { evidenceRequirements: [] },
 	render: (args) => <SubmittedIntoInvalid {...args} />,
 	play: async ({ canvas, userEvent }) => {
 		const sources = { name: "How Code changes is used" };

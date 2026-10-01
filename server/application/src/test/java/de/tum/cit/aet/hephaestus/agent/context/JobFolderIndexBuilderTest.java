@@ -21,18 +21,18 @@ import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReview;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewMode;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceSufficiency;
 import de.tum.cit.aet.hephaestus.practices.PracticeInsufficientEvidenceAction;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubject;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -142,7 +142,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
     void shouldAuthorizeCaptureForTheDetectionAudience() {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         JobFolderIndexBuilder target = new JobFolderIndexBuilder(
-                mapper, catalogs, new PracticeSubjectEvaluator(mapper), NO_FENCE, Clock.systemUTC());
+                mapper, catalogs, new PracticePreconditionEvaluator(mapper), NO_FENCE, Clock.systemUTC());
         SourceContractVersion version = new SourceContractVersion("1.3.0");
 
         target.isSourceUsePermitted(version, DIFF);
@@ -487,9 +487,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
             if (assessmentAbsent) {
                 // A practice nobody automates reads nothing, so its bindings carry no evidence — the
                 // shape PracticeService leaves behind when automated review is switched off.
-                practice.setBindings(practice.getBindings().stream()
-                        .map(binding -> new PracticeBinding(binding.signals(), List.of(), binding.onDrafts()))
-                        .toList());
+                practice.setEvidenceRequirements(List.of());
             }
 
             AutomatedReviewReadinessResult result =
@@ -538,7 +536,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         JobFolderIndex manifest = coreManifest(builder, "job-quiet-mirror", NOW.minusSeconds(14 * 86_400));
 
         assertThat(builder.checkAutomatedReviewReadiness(
-                                manifest, List.of(practiceRequiring(CORE, "pr-core")), NOW, null)
+                                manifest, List.of(practiceRequiring(CORE, "pr-core")), NOW, Map.of(), null)
                         .readyPractices())
                 .hasSize(1);
     }
@@ -548,11 +546,11 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         JobFolderIndex manifest = coreManifest(builder, "job-replay", NOW);
         List<Practice> practices = List.of(practiceRequiring(CORE, "pr-core"));
 
-        var original = builder.checkAutomatedReviewReadiness(manifest, practices, NOW, null);
+        var original = builder.checkAutomatedReviewReadiness(manifest, practices, NOW, Map.of(), null);
         // Readiness is a pure function of the recorded evidence and anchor, so re-evaluating later must
         // produce an identical result.
-        var replayed =
-                builderAt(NOW.plusSeconds(90 * 86_400)).checkAutomatedReviewReadiness(manifest, practices, NOW, null);
+        var replayed = builderAt(NOW.plusSeconds(90 * 86_400))
+                .checkAutomatedReviewReadiness(manifest, practices, NOW, Map.of(), null);
 
         assertThat(replayed.readyPractices()).hasSameElementsAs(original.readyPractices());
         assertThat(replayed.decisions().getFirst().ready())
@@ -566,7 +564,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         JobFolderIndex manifest = coreManifest(builder, "job-refused", NOW);
 
         var prepared = builder.prepareAutomatedReviewReadiness(
-                manifest, List.of(practiceRequiringComments()), NOW, practice -> null, Map.of(), null);
+                manifest, List.of(practiceRequiringComments()), NOW, Map.of(), null);
         assertThat(prepared.readyPractices()).isEmpty();
         JsonNode report = mapper.valueToTree(prepared.report());
         JsonNode decision = report.path("decisions").get(0);
@@ -646,7 +644,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
 
         Practice practice = practiceRequiring(CORE, "pr-core");
         assertThat(laterBuilder
-                        .prepareAutomatedReviewReadiness(manifest, List.of(practice), NOW, p -> null, Map.of(), null)
+                        .prepareAutomatedReviewReadiness(manifest, List.of(practice), NOW, Map.of(), null)
                         .readyPractices())
                 .containsExactly(practice);
     }
@@ -671,8 +669,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
                 files, Map.of("context/metadata.json", CORE), "job-delayed", plan(), metadata(CORE, NOW));
         Practice practice = practiceRequiring(CORE, "pr-core");
 
-        var prepared = delayedBuilder.prepareAutomatedReviewReadiness(
-                manifest, List.of(practice), NOW, p -> null, Map.of(), null);
+        var prepared = delayedBuilder.prepareAutomatedReviewReadiness(manifest, List.of(practice), NOW, Map.of(), null);
         assertThat(prepared.readyPractices()).containsExactly(practice);
         JsonNode sourceCheck = mapper.valueToTree(prepared.report())
                 .path("decisions")
@@ -735,7 +732,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
             return kind.equals(DIFF) ? restrictedDiff : realCatalogs.requireSource(invocation.getArgument(0), kind);
         });
         JobFolderIndexBuilder restrictedBuilder = new JobFolderIndexBuilder(
-                mapper, catalogs, new PracticeSubjectEvaluator(mapper), NO_FENCE, Clock.systemUTC());
+                mapper, catalogs, new PracticePreconditionEvaluator(mapper), NO_FENCE, Clock.systemUTC());
 
         // The live NOT_COLLECTED path: governance refused the source, and this contract says the diff may
         // never be reported that way.
@@ -863,7 +860,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         return new JobFolderIndexBuilder(
                 mapper,
                 new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
-                new PracticeSubjectEvaluator(mapper),
+                new PracticePreconditionEvaluator(mapper),
                 NO_FENCE,
                 Clock.fixed(instant, java.time.ZoneOffset.UTC));
     }
@@ -901,7 +898,6 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
                     java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
-                    practice -> null,
                     prepared.files(),
                     change(Set.of("src/App.java")));
 
@@ -924,7 +920,6 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
                     java.util.Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
-                    practice -> null,
                     prepared.files(),
                     change(Set.of("src/App.java", "pom.xml")));
 
@@ -945,12 +940,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
             AutomatedReviewReadinessResult asOfNow = builder.checkAutomatedReviewReadinessAsOfNow(
                     java.util.Objects.requireNonNull(prepared.manifest()), practices);
             AutomatedReviewReadinessResult withoutChange = builder.checkAutomatedReviewReadiness(
-                    java.util.Objects.requireNonNull(prepared.manifest()),
-                    practices,
-                    NOW,
-                    practice -> null,
-                    prepared.files(),
-                    null);
+                    java.util.Objects.requireNonNull(prepared.manifest()), practices, NOW, prepared.files(), null);
 
             assertThat(asOfNow.readyPractices()).hasSize(1);
             assertThat(withoutChange.readyPractices()).hasSize(1);
@@ -975,7 +965,6 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
                     manifest,
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
-                    practice -> null,
                     Map.of(),
                     change(Set.of("pom.xml")));
 
@@ -1024,17 +1013,15 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         }
     }
 
-    private static PracticeSubject dependencySubject() {
-        return new PracticeSubject(
+    private static PracticePrecondition dependencySubject() {
+        return new PracticePrecondition(
                 "the change touches no dependency manifest or lockfile",
-                List.of(PracticeSubjectClause.changedPathMatches(List.of("**/pom.xml", "**/package.json"))));
+                List.of(PracticePreconditionClause.changedPathMatches(List.of("**/pom.xml", "**/package.json"))));
     }
 
-    /** Re-declares the practice's single binding with a subject, leaving its evidence untouched. */
-    private static Practice withSubject(Practice practice, PracticeSubject subject) {
-        PracticeBinding binding = practice.getBindings().getFirst();
-        practice.setBindings(List.of(new PracticeBinding(
-                binding.signals(), binding.needs(), binding.onDrafts(), binding.subject(), subject)));
+    /** Sets the applicability predicate without changing evidence requirements. */
+    private static Practice withSubject(Practice practice, PracticePrecondition subject) {
+        practice.setPrecondition(subject);
         return practice;
     }
 
@@ -1050,10 +1037,12 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         boolean conversation = sourceKind.equals(CONVERSATION);
         Practice practice = new Practice();
         practice.setSlug(slug);
-        practice.setBindings(List.of(PracticeBinding.on(
-                PracticeTestEvidence.defaultSignal(
-                        conversation ? ArtifactKinds.CONVERSATION_THREAD : ArtifactKinds.PULL_REQUEST),
-                List.of(new PracticeEvidenceRequirement(sourceKind, stance)))));
+        practice.setSignals(List.of(PracticeTestEvidence.defaultSignal(
+                conversation ? ArtifactKinds.CONVERSATION_THREAD : ArtifactKinds.PULL_REQUEST)));
+        practice.setEvidenceRequirements(List.of(new PracticeEvidenceRequirement(sourceKind, stance)));
+        practice.setOnDrafts(false);
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
         practice.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(
                 new SourceContractVersion("1.3.0"),
                 new PracticeAutomatedReview(

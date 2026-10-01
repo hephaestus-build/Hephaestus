@@ -1,17 +1,17 @@
 import type {
 	PracticeAutomatedReviewPolicy,
 	PracticeAutomatedReviewValidation,
-	PracticeBinding,
 	PracticeDefinitionOptions,
 	PracticeEvidenceSourceOption,
 	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
+import type { PracticeReviewFields } from "@/components/admin/practice-editor/review-settings";
 
 export const mockAuthorDeclaredEvidenceValidation = {
 	status: "AUTHOR_DECLARED",
 	sourceContractVersion: "1.3.0",
 	policyDigest: "0".repeat(64),
-	reviewRuleFingerprint: `v4:${"0".repeat(64)}`,
+	reviewRuleFingerprint: `v5:${"0".repeat(64)}`,
 } satisfies PracticeAutomatedReviewValidation;
 
 export const mockPullRequestPolicy = {
@@ -76,41 +76,51 @@ const mockDocumentPolicy = {
 	],
 } satisfies PracticeAutomatedReviewPolicy;
 
-export const mockPullRequestBinding = {
+export const mockPullRequestReviewFields = {
+	onDrafts: false,
+	subject: "AUTHOR",
 	signals: ["scm.pull_request.opened", "scm.pull_request.ready", "scm.pull_request.synchronized"],
-	needs: [
+	evidenceRequirements: [
 		{ sourceKind: "scm.pull-request.comments", stance: "REQUIRED" },
 		{ sourceKind: "scm.pull-request.core", stance: "REQUIRED" },
 		{ sourceKind: "scm.pull-request.diff", stance: "REQUIRED" },
 	],
-} satisfies PracticeBinding;
+} satisfies PracticeReviewFields;
 
-export const mockMergeBinding = {
+export const mockMergeReviewFields = {
+	onDrafts: false,
+	subject: "AUTHOR",
 	signals: ["scm.pull_request.merged"],
-	needs: [
+	evidenceRequirements: [
 		{ sourceKind: "scm.pull-request.core", stance: "REQUIRED" },
 		{ sourceKind: "scm.repository.tree", stance: "CONTEXTUAL" },
 		{ sourceKind: "scm.review-threads", stance: "EXHAUSTIVE" },
 	],
-} satisfies PracticeBinding;
+} satisfies PracticeReviewFields;
 
-export const mockIssueBinding = {
+export const mockIssueReviewFields = {
+	onDrafts: false,
+	subject: "AUTHOR",
 	signals: ["scm.issue.opened", "scm.issue.updated"],
-	needs: [
+	evidenceRequirements: [
 		{ sourceKind: "scm.issue.comments", stance: "REQUIRED" },
 		{ sourceKind: "scm.issue.core", stance: "REQUIRED" },
 	],
-} satisfies PracticeBinding;
+} satisfies PracticeReviewFields;
 
-export const mockConversationBinding = {
+export const mockConversationReviewFields = {
+	onDrafts: false,
+	subject: "AUTHOR",
 	signals: ["chat.conversation_thread.settled"],
-	needs: [{ sourceKind: "slack.conversation.thread", stance: "REQUIRED" }],
-} satisfies PracticeBinding;
+	evidenceRequirements: [{ sourceKind: "slack.conversation.thread", stance: "REQUIRED" }],
+} satisfies PracticeReviewFields;
 
-export const mockDocumentBinding = {
+export const mockDocumentReviewFields = {
+	onDrafts: false,
+	subject: "AUTHOR",
 	signals: ["docs.document.published", "docs.document.updated"],
-	needs: [{ sourceKind: "docs.document.core", stance: "REQUIRED" }],
-} satisfies PracticeBinding;
+	evidenceRequirements: [{ sourceKind: "docs.document.core", stance: "REQUIRED" }],
+} satisfies PracticeReviewFields;
 
 /** Shared source options must match contracts/source-use/1.3.0/catalog.json; practice.test.ts checks them. */
 const relatedWorkSource = {
@@ -196,7 +206,7 @@ export const mockPracticeDefinitionOptions = {
 			supportedAutomatedReviewModes: ["LANGUAGE_MODEL"],
 			subjectRoles: ["AUTHOR", "ASSIGNEE", "REVIEWER", "MERGER"],
 			recommendedPolicy: mockPullRequestPolicy,
-			recommendedNeeds: mockPullRequestBinding.needs,
+			recommendedEvidenceRequirements: mockPullRequestReviewFields.evidenceRequirements,
 			allowedSources: [
 				{
 					sourceKind: "scm.pull-request.core",
@@ -293,7 +303,7 @@ export const mockPracticeDefinitionOptions = {
 			supportedAutomatedReviewModes: ["LANGUAGE_MODEL"],
 			subjectRoles: ["AUTHOR", "ASSIGNEE"],
 			recommendedPolicy: mockIssuePolicy,
-			recommendedNeeds: mockIssueBinding.needs,
+			recommendedEvidenceRequirements: mockIssueReviewFields.evidenceRequirements,
 			allowedSources: [
 				{
 					sourceKind: "scm.issue.core",
@@ -334,7 +344,7 @@ export const mockPracticeDefinitionOptions = {
 			supportedAutomatedReviewModes: ["LANGUAGE_MODEL"],
 			subjectRoles: ["AUTHOR"],
 			recommendedPolicy: mockConversationPolicy,
-			recommendedNeeds: mockConversationBinding.needs,
+			recommendedEvidenceRequirements: mockConversationReviewFields.evidenceRequirements,
 			allowedSources: [
 				{
 					sourceKind: "slack.conversation.thread",
@@ -362,7 +372,7 @@ export const mockPracticeDefinitionOptions = {
 			supportedAutomatedReviewModes: ["LANGUAGE_MODEL"],
 			subjectRoles: ["AUTHOR"],
 			recommendedPolicy: mockDocumentPolicy,
-			recommendedNeeds: mockDocumentBinding.needs,
+			recommendedEvidenceRequirements: mockDocumentReviewFields.evidenceRequirements,
 			allowedSources: [
 				{
 					sourceKind: "docs.document.core",

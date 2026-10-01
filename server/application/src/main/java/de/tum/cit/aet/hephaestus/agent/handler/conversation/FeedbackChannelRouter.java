@@ -1,10 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.handler.conversation;
 
-import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -74,8 +73,7 @@ public class FeedbackChannelRouter {
         if (context.recipientRole() != RecipientRole.AUTHOR) {
             return ConversationRoutingDecision.REVIEWER_DEFERRED;
         }
-        if (!(observation.getAssessmentStatus() == AssessmentStatus.ASSESSED)
-                || observation.getOutcome() != Outcome.NEGATIVE) {
+        if (!(observation.getOutcome().isDecided()) || observation.getOutcome() != Outcome.NOT_MET) {
             return ConversationRoutingDecision.NOT_DELIVERABLE;
         }
         if (hasNaturalInlineAnchor(observation)) {
@@ -121,7 +119,7 @@ public class FeedbackChannelRouter {
             return false;
         }
         for (JsonNode citation : citations) {
-            if (PracticeSubjectClause.DIFF_SOURCE
+            if (PracticePreconditionClause.DIFF_SOURCE
                     .value()
                     .equals(citation.path("sourceKind").asString())) {
                 return true;

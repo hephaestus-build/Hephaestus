@@ -103,14 +103,6 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
 
     boolean existsByWorkspaceIdAndSlug(Long workspaceId, String slug);
 
-    @Query("SELECT DISTINCT p.id FROM Practice p JOIN p.currentRevision current, PracticeRevision previous "
-            + "WHERE p.sourceCuratedSlug IS NOT NULL "
-            + "AND previous.practice = p "
-            + "AND previous.revisionNumber = current.revisionNumber - 1 "
-            + "AND p.sourceCuratedFingerprint = previous.reviewRuleFingerprint "
-            + "AND p.sourceCuratedFingerprint LIKE 'v1:%'")
-    List<Long> findSourceAlignedV1PracticeIds();
-
     @Query("SELECT p.id FROM Practice p WHERE p.sourceCuratedSlug IN :slugs")
     List<Long> findIdsDescendedFrom(@Param("slugs") Collection<String> slugs);
 

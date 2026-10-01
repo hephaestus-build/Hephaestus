@@ -18,7 +18,7 @@ public record AutomatedReviewReadinessDecision(
         boolean ready,
         List<AutomatedReviewReadinessReason> reasonCodes,
         List<SourceReadinessCheck> sourceChecks,
-        @Nullable PracticeSubjectCheck subjectCheck) {
+        @Nullable PracticePreconditionCheck subjectCheck) {
     /** A decision taken before subject declarations existed, or by a practice that declares none. */
     public AutomatedReviewReadinessDecision(
             String practiceSlug,

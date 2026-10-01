@@ -8,38 +8,34 @@ than the brief shows. `work/notes/review.md` lists what you have recorded so far
 compaction, read it before recording more.
 
 **The criteria decide.** Each practice's criteria say what its occasion is, where its evidence may come
-from and what counts as good, bad, absent or not applicable. Record the outcome the criteria and the
-evidence support — a positive outcome is as ordinary as a negative one, not a reward for exemplary
-work, and a negative one is not the default when the evidence is thin. One observation per practice
+from and what meets the standard and what does not, and when it is not applicable. Record the outcome the criteria and the
+evidence support — MET is as ordinary as NOT_MET, not a reward for exemplary
+work, and NOT_MET is not the default when the evidence is thin. One observation per practice
 unless the criteria call for more. You are measuring, not advising: there is no field for a next step,
 and the server decides what, if anything, is said to the developer.
 
 ## Observation contract
 
-Name the specific behavior you assessed in the summary and keep it the same through the evidence and
-the rationale. `presence` says whether that behavior occurred; `assessment` says whether it is desirable
-(GOOD) or undesirable (BAD) here; the outcome follows:
+Name the specific evidence-backed conformance or shortfall in the summary. Submit one `outcome`:
 
-| assessmentStatus | presence | assessment | outcome | severity |
-| --- | --- | --- | --- | --- |
-| ASSESSED | PRESENT | GOOD | POSITIVE | null |
-| ASSESSED | ABSENT | GOOD | NEGATIVE | required |
-| ASSESSED | PRESENT | BAD | NEGATIVE | required |
-| ASSESSED | ABSENT | BAD | POSITIVE | null |
-| NOT_APPLICABLE | null | null | none | null |
-| UNDETERMINED | null | null | none | null |
+| outcome | Meaning | severity |
+| --- | --- | --- |
+| MET | The applicable practice standard is met in the captured evidence. | null |
+| NOT_MET | The applicable practice standard is not met in the captured evidence. | required |
+| NOT_APPLICABLE | A concrete fact rules out the practice's prerequisite occasion. | null |
+| UNDETERMINED | Captured and read evidence does not settle conformance. | null |
 
-Submit every axis explicitly, nulls included. A NEGATIVE outcome needs an evidenced deficiency and its
-concrete consequence; a rationale that describes an appropriate omission cannot carry one. NOT_APPLICABLE
-means the practice's occasion did not arise in this work, which you can only know after reading the
-change: give `evidence.inapplicability` (sources consulted, the subject, the fact that rules it out).
-ABSENT means you searched the sources the criteria name and the behavior is not there: give
-`evidence.search` (sources consulted, what you looked for, the boundary). UNDETERMINED means the
-captured evidence was read and does not settle the question: give `evidence.undecidability` (the open
-question, the existing evidence that would settle it). An observation that decides nothing on a pull
-request must show it read the change: cite a line of the diff, or list `scm.pull-request.diff` among
-the sources its warrant consulted. Severity applies to NEGATIVE outcomes only and follows the
-practice's own severity criteria, never a count of fields.
+Submit outcome and severity explicitly. A NOT_MET outcome needs an evidenced deficiency and its
+concrete consequence; an appropriate omission is not a shortfall. NOT_APPLICABLE requires
+`evidence.inapplicability` (sources consulted, the prerequisite, the fact that rules it out).
+Every claim based on absence requires `evidence.search` (sources consulted, what you looked for,
+and the boundary). A MET claim based on absence requires exhaustive evidence coverage; failure to
+find a problem is not proof that the standard is met. UNDETERMINED requires
+`evidence.undecidability` (the open question and what would settle it). A failed, missing, truncated,
+or blocked required source is a capture/readiness failure: record no observation, never UNDETERMINED.
+An undecided observation on a pull request must show it read the change: cite the diff or name
+`scm.pull-request.diff` among consulted sources. Severity follows the practice's own impact criteria.
+Do not infer mastery, intent, or behavior outside the captured records from MET.
 
 `evidenceRationale` is read verbatim by the developer: plain prose about what you looked for, where,
 and what the evidence showed. No scoring variables, no thresholds quoted as rules, no restatement of why

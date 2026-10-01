@@ -582,15 +582,14 @@ void test("a compaction the watchdog interrupts is not checkpointed and the turn
 void test("each native request receives this turn's evidence without persisting or reusing the prior receipt", async (t) => {
 	const oldReceipt = JSON.stringify({
 		marker: "OLD-RECEIPT",
-		observations: [{ outcome: "POSITIVE" }],
+		observations: [{ outcome: "MET" }],
 	});
 	const newReceipt = JSON.stringify({
 		marker: "CURRENT-RECEIPT",
 		observations: [
 			{
 				reviewId: "recorded-review",
-				outcome: "NEGATIVE",
-				presence: "ABSENT",
+				outcome: "NOT_MET",
 				reviewedWork: {
 					producingReviewStatus: "RUNNING",
 					titleAndDescriptionCoverage: "DIFFERS_FROM_STORED_WORK",
@@ -615,7 +614,7 @@ void test("each native request receives this turn's evidence without persisting 
 	assert.deepEqual(model.calls, ["turn", "turn"]);
 	assert.ok((model.bodies[0] ?? "").includes("OLD-RECEIPT"));
 	const followup = model.bodies[1] ?? "";
-	assert.ok(followup.includes("CURRENT-RECEIPT") && followup.includes("NEGATIVE"));
+	assert.ok(followup.includes("CURRENT-RECEIPT") && followup.includes("NOT_MET"));
 	assert.ok(followup.includes("RUNNING"));
 	assert.ok(
 		followup.includes("DIFFERS_FROM_STORED_WORK") && followup.includes("MATCHES_STORED_WORK"),

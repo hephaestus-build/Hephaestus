@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from "vitest";
@@ -9,11 +9,14 @@ import type { ChatThreadDetail } from "@/api/types.gen";
 import type { Wire } from "@/lib/dates";
 import { server } from "@/mocks/server";
 import { applyUserViewHeaders, clearUserView } from "@/runtime/user-view/session";
-import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
+import { ROUTE_RENDER_WAIT, renderRouteAt, testQueryClient } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
+
+let queryClient: ReturnType<typeof testQueryClient>;
 
 beforeAll(() => client.interceptors.request.use(applyUserViewHeaders));
 beforeEach(() => {
+	queryClient = testQueryClient();
 	storeUserView();
 	server.use(
 		http.get("*/workspaces", () =>
@@ -34,7 +37,12 @@ beforeEach(() => {
 		),
 	);
 });
-afterEach(clearUserView);
+afterEach(async () => {
+	cleanup();
+	await queryClient.cancelQueries();
+	queryClient.clear();
+	clearUserView();
+});
 afterAll(() => client.interceptors.request.eject(applyUserViewHeaders));
 
 it("opens the viewed member's saved conversations", async () => {
@@ -46,7 +54,7 @@ it("opens the viewed member's saved conversations", async () => {
 		}),
 	);
 
-	renderRouteAt("/w/engineering/mentor");
+	renderRouteAt("/w/engineering/mentor", queryClient);
 	await screen.findByRole("heading", { name: "No conversation selected" }, ROUTE_RENDER_WAIT);
 	await waitFor(() => expect(viewedUser).toBe("11"));
 });
@@ -74,7 +82,7 @@ it("opens a saved conversation read-only", async () => {
 		),
 	);
 
-	renderRouteAt(`/w/engineering/mentor/${threadId}`);
+	renderRouteAt(`/w/engineering/mentor/${threadId}`, queryClient);
 	await screen.findByText("Earlier guidance remains readable.", {}, ROUTE_RENDER_WAIT);
 	expect(screen.queryByRole("textbox")).toBeNull();
 	expect(screen.queryByRole("heading", { name: "Heph is off for you" })).toBeNull();
@@ -86,7 +94,7 @@ const stepUpRequired = () =>
 it("asks for a recent sign-in when a viewed read is refused for it", async () => {
 	server.use(http.get("*/workspaces/:workspaceSlug/mentor/threads", stepUpRequired));
 
-	renderRouteAt("/w/engineering/mentor");
+	renderRouteAt("/w/engineering/mentor", queryClient);
 	await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
 });
 
@@ -95,7 +103,7 @@ it("asks again when a later read is refused after the first prompt was dismissed
 		http.get("*/workspaces/:workspaceSlug/mentor/threads", stepUpRequired),
 		http.get("*/workspaces/:workspaceSlug/mentor/threads/:threadId", stepUpRequired),
 	);
-	const queryClient = renderRouteAt("/w/engineering/mentor");
+	renderRouteAt("/w/engineering/mentor", queryClient);
 	await screen.findByRole("dialog", { name: "Confirm access" }, ROUTE_RENDER_WAIT);
 	await userEvent.keyboard("{Escape}");
 	await waitFor(() => expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull());

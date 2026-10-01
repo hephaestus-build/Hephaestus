@@ -5,7 +5,7 @@ import type { CatalogPracticePreview } from "@/api/types.gen";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
@@ -30,7 +30,7 @@ const preview: CatalogPracticePreview = {
 	definition: {
 		name: "Describe what changed and why",
 		artifactKind: "scm.pull_request",
-		bindings: [mockPullRequestBinding],
+		...mockPullRequestReviewFields,
 		criteria: "Confirm the pull request explains both the change and its motivation.",
 		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,

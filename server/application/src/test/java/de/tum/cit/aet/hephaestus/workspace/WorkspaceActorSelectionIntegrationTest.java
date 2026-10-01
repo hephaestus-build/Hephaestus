@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.OMISSION_GAP;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -68,7 +68,7 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
         connect(workspace, IntegrationKind.GITHUB, new ConnectionConfig.GitHubPatConfig("acme", null, Set.of()));
         Practice practice = persistPractice(workspace, null, "github-practice", "GitHub practice", null);
         AgentJob run = persistPullRequestReview(workspace, 1, NOW.minus(Duration.ofDays(1)));
-        observe(practice, run, 1L, githubActor, OMISSION_GAP, Severity.MAJOR, NOW.minus(Duration.ofDays(1)));
+        observe(practice, run, 1L, githubActor, NOT_MET, Severity.MAJOR, NOW.minus(Duration.ofDays(1)));
 
         String token = "mock-jwt-user-sub-" + account.getId();
         read(token, "/workspaces/actor-github/members/me")
@@ -165,8 +165,8 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
                         null));
         Practice practice = persistPractice(workspace, null, "lrz-practice", "LRZ practice", null);
         AgentJob run = persistPullRequestReview(workspace, 3, NOW.minus(Duration.ofDays(1)));
-        UUID observation = observe(
-                practice, run, 3L, selfHostedActor, OMISSION_GAP, Severity.MAJOR, NOW.minus(Duration.ofDays(1)));
+        UUID observation =
+                observe(practice, run, 3L, selfHostedActor, NOT_MET, Severity.MAJOR, NOW.minus(Duration.ofDays(1)));
         Feedback feedback = persistInAppFeedback(
                 run,
                 selfHostedActor,

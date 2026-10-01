@@ -6,7 +6,13 @@ final class PracticeDefinitionDigest {
 
     static String digest(String slug, PracticeDefinition definition) {
         CanonicalDigest digest = new CanonicalDigest().add(slug).add(definition.name());
-        ReviewRuleFingerprint.addBindings(digest, definition.bindings());
+        ReviewRuleFingerprint.addOccasion(
+                digest,
+                definition.signals(),
+                definition.evidenceRequirements(),
+                definition.onDrafts(),
+                definition.subject(),
+                definition.precondition());
         digest.add(definition.criteria())
                 .addNullable(definition.precomputeScript())
                 .add(PracticeAutomatedReviewPolicyDigest.digest(definition.automatedReviewPolicy()))

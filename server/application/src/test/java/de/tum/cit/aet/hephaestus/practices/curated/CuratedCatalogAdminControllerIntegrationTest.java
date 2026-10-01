@@ -8,11 +8,10 @@ import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.event.WorkspacesInitializedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.practices.BindingChange;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
+import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubject;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CreateCuratedGroupRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.curated.dto.CreateCuratedPracticeRequestDTO;
@@ -112,7 +111,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .isOk()
                 .expectBody()
                 // Selected by kind rather than by position; the list is ordered by the registered domains.
-                .jsonPath("$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].recommendedNeeds[0].sourceKind")
+                .jsonPath(
+                        "$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].recommendedEvidenceRequirements[0].sourceKind")
                 .value((java.util.List<String> value) ->
                         org.hamcrest.MatcherAssert.assertThat(value, contains("slack.conversation.thread")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].allowedSources[0].displayName")
@@ -123,20 +123,44 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     @Test
     void shouldKeepCatalogScopeOnWordingEditAndRequireIntentToRemoveIt() {
         CuratedPracticeDTO before = getPractice();
-        PracticeBinding base =
-                definitionOf(before, before.definition().criteria()).bindings().getFirst();
-        PracticeSubject gate = new PracticeSubject(
+        var base = new de.tum.cit.aet.hephaestus.practices.PracticeDefinition(
+                before.definition().name(),
+                before.definition().signals(),
+                before.definition().evidenceRequirements(),
+                before.definition().onDrafts(),
+                before.definition().subject(),
+                before.definition().precondition(),
+                before.definition().criteria(),
+                before.definition().precomputeScript(),
+                before.definition().automatedReviewPolicy(),
+                before.definition().whyItMatters(),
+                before.definition().whatGoodLooksLike(),
+                before.definition().groupSlug(),
+                before.definition().deliveryBehavior());
+        PracticePrecondition gate = new PracticePrecondition(
                 "the change has no Swift code",
-                List.of(PracticeSubjectClause.changedPathMatches(List.of("**/*.swift"))));
-        PracticeBinding scoped =
-                new PracticeBinding(base.signals(), base.needs(), base.onDrafts(), ActorRole.REVIEWER, gate);
+                List.of(PracticePreconditionClause.changedPathMatches(List.of("**/*.swift"))));
+        var scoped = new de.tum.cit.aet.hephaestus.practices.PracticeDefinition(
+                base.name(),
+                base.signals(),
+                base.evidenceRequirements(),
+                base.onDrafts(),
+                ActorRole.REVIEWER,
+                gate,
+                base.criteria(),
+                base.precomputeScript(),
+                base.automatedReviewPolicy(),
+                base.whyItMatters(),
+                base.whatGoodLooksLike(),
+                base.groupSlug(),
+                base.deliveryBehavior());
         CuratedPracticeDTO saved = putDefinition(
                         etagOf(before),
-                        requestWithBindings(
+                        requestWithDefinition(
                                 before,
                                 "Scoped practice",
                                 scoped,
-                                Set.of(BindingChange.APPLIES_WHEN, BindingChange.SUBJECT)))
+                                Set.of(DefinitionChange.PRECONDITION, DefinitionChange.SUBJECT)))
                 .expectStatus()
                 .isOk()
                 .expectBody(CuratedPracticeDTO.class)
@@ -145,34 +169,32 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         assertThat(saved).isNotNull();
 
         CuratedPracticeDTO renamed = putDefinition(
-                        etagOf(saved), requestWithBindings(saved, "Renamed practice", scoped, null))
+                        etagOf(saved), requestWithDefinition(saved, "Renamed practice", scoped, null))
                 .expectStatus()
                 .isOk()
                 .expectBody(CuratedPracticeDTO.class)
                 .returnResult()
                 .getResponseBody();
         assertThat(renamed).isNotNull();
-        assertThat(getPractice().definition().bindings().getFirst().appliesWhen())
-                .isEqualTo(gate);
-        assertThat(getPractice().definition().bindings().getFirst().subject()).isEqualTo(ActorRole.REVIEWER);
+        assertThat(getPractice().definition().precondition()).isEqualTo(gate);
+        assertThat(getPractice().definition().subject()).isEqualTo(ActorRole.REVIEWER);
 
-        putDefinition(etagOf(renamed), requestWithBindings(renamed, "Renamed practice", base, null))
+        putDefinition(etagOf(renamed), requestWithDefinition(renamed, "Renamed practice", base, null))
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
         putDefinition(
                         etagOf(renamed),
-                        requestWithBindings(
+                        requestWithDefinition(
                                 renamed,
                                 "Renamed practice",
                                 base,
-                                Set.of(BindingChange.APPLIES_WHEN, BindingChange.SUBJECT)))
+                                Set.of(DefinitionChange.PRECONDITION, DefinitionChange.SUBJECT)))
                 .expectStatus()
                 .isOk()
                 .expectBody(Void.class);
-        assertThat(getPractice().definition().bindings().getFirst().appliesWhen())
-                .isNull();
-        assertThat(getPractice().definition().bindings().getFirst().subject()).isEqualTo(ActorRole.AUTHOR);
+        assertThat(getPractice().definition().precondition()).isNull();
+        assertThat(getPractice().definition().subject()).isEqualTo(ActorRole.AUTHOR);
     }
 
     @Test
@@ -211,9 +233,13 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         CuratedPracticeDTO before = getPractice();
         CuratedPracticeRequestDTO body = new CuratedPracticeRequestDTO(
                 before.definition().name(),
-                // The shipped bindings, unchanged: they feed the review-rule fingerprint, so substituting
+                // The shipped occasion, unchanged: they feed the review-rule fingerprint, so substituting
                 // an equivalent-looking set would make this a change to what Hephaestus reviews.
-                before.definition().bindings(),
+                before.definition().signals(),
+                before.definition().evidenceRequirements(),
+                before.definition().onDrafts(),
+                before.definition().subject(),
+                before.definition().precondition(),
                 before.definition().criteria(),
                 before.definition().precomputeScript(),
                 before.definition().automatedReviewPolicy(),
@@ -722,7 +748,11 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         var source = definitionOf(template, "Server baseline criteria");
         var request = new CuratedPracticeRequestDTO(
                 source.name(),
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 source.criteria(),
                 source.precomputeScript(),
                 null,
@@ -983,7 +1013,11 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         CuratedPracticeDTO edited = getPractice();
         CuratedPracticeRequestDTO guidanceEdit = new CuratedPracticeRequestDTO(
                 edited.definition().name(),
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 edited.definition().criteria(),
                 edited.definition().precomputeScript(),
                 edited.definition().automatedReviewPolicy(),
@@ -1025,11 +1059,18 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .exchange();
     }
 
-    private static CuratedPracticeRequestDTO requestWithBindings(
-            CuratedPracticeDTO practice, String name, PracticeBinding binding, @Nullable Set<BindingChange> changes) {
+    private static CuratedPracticeRequestDTO requestWithDefinition(
+            CuratedPracticeDTO practice,
+            String name,
+            de.tum.cit.aet.hephaestus.practices.PracticeDefinition definition,
+            @Nullable Set<DefinitionChange> changes) {
         return new CuratedPracticeRequestDTO(
                 name,
-                List.of(binding),
+                definition.signals(),
+                definition.evidenceRequirements(),
+                definition.onDrafts(),
+                definition.subject(),
+                definition.precondition(),
                 practice.definition().criteria(),
                 practice.definition().precomputeScript(),
                 practice.definition().automatedReviewPolicy(),
@@ -1055,7 +1096,11 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     private static CuratedPracticeRequestDTO definitionOf(CuratedPracticeDTO practice, String criteria) {
         return new CuratedPracticeRequestDTO(
                 practice.definition().name(),
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 criteria,
                 practice.definition().precomputeScript(),
                 practice.definition().automatedReviewPolicy(),

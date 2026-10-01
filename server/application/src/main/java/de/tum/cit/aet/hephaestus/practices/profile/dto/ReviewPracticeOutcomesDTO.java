@@ -9,10 +9,10 @@ import org.jspecify.annotations.NonNull;
                 + " nothing")
 public record ReviewPracticeOutcomesDTO(
         @NonNull @Schema(description = "Practices with at least one problem observed")
-        Integer toImprove,
+        Integer notMet,
 
         @NonNull @Schema(description = "Practices with a strength observed and no problem")
-        Integer held,
+        Integer met,
 
         @NonNull @Schema(description = "Practices whose every observation said the practice did not apply to this work")
         Integer notApplicable,
@@ -21,4 +21,4 @@ public record ReviewPracticeOutcomesDTO(
         @Schema(
                 description = "Practices the run looked at and could not settle either way: no strength, no problem,"
                         + " and not only a verdict that the practice did not apply")
-        Integer undecided) {}
+        Integer undetermined) {}

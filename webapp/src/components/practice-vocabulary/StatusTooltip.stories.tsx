@@ -4,7 +4,7 @@ import { expect, userEvent } from "storybook/test";
 import { settledPopup } from "@/stories/overlay";
 import { expectTouchTarget } from "@/test/controls";
 
-import { OBSERVATION_OUTCOME_PRESENTATION } from "./observation-outcome";
+import { OUTCOME_DEFS } from "./outcome-defs";
 import { StatusIcon } from "./StatusTooltip";
 
 /**
@@ -16,7 +16,7 @@ const meta = {
 	component: StatusIcon,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { def: OBSERVATION_OUTCOME_PRESENTATION.PRESENT_BAD },
+	args: { def: OUTCOME_DEFS.NOT_MET },
 } satisfies Meta<typeof StatusIcon>;
 
 export default meta;
@@ -26,13 +26,13 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await userEvent.tab();
-		const icon = canvas.getByRole("button", { name: "Needs improvement" });
+		const icon = canvas.getByRole("button", { name: "Not met" });
 		await expect(icon).toHaveFocus();
 		// 14 px of glyph; the pointer target is still the minimum.
 		await expectTouchTarget(icon);
 		const tooltip = await settledPopup();
 		await expect(tooltip).toHaveTextContent(
-			"Needs improvement · Something in this work goes against the practice.",
+			"Not met · The applicable practice standard is not met in the reviewed evidence.",
 		);
 	},
 };

@@ -4,7 +4,7 @@ import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObserva
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
@@ -39,8 +39,8 @@ class GroupTrendAggregatorTest {
         PracticeTrend judged = PracticeTrendCalculator.calculatePractice(
                 "testing",
                 List.of(
-                        judged(40L, "2026-05-01T09:00:00Z", Assessment.BAD),
-                        judged(55L, "2026-06-01T09:00:00Z", Assessment.GOOD)),
+                        judged(40L, "2026-05-01T09:00:00Z", Outcome.NOT_MET),
+                        judged(55L, "2026-06-01T09:00:00Z", Outcome.MET)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 
@@ -59,12 +59,12 @@ class GroupTrendAggregatorTest {
         // opportunity counts from inflating with the number of practices rather than the amount of work.
         PracticeTrend naming = PracticeTrendCalculator.calculatePractice(
                 "naming",
-                List.of(judged(40L, "2026-05-01T09:00:00Z", Assessment.GOOD)),
+                List.of(judged(40L, "2026-05-01T09:00:00Z", Outcome.MET)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
         PracticeTrend testing = PracticeTrendCalculator.calculatePractice(
                 "testing",
-                List.of(judged(40L, "2026-05-01T10:00:00Z", Assessment.BAD)),
+                List.of(judged(40L, "2026-05-01T10:00:00Z", Outcome.NOT_MET)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 
@@ -72,7 +72,7 @@ class GroupTrendAggregatorTest {
                 "quality", List.of("naming", "testing"), List.of(naming, testing), properties);
 
         assertThat(group.opportunities()).hasSize(1);
-        assertThat(group.opportunities().getFirst().outcomes().applicable()).isEqualTo(2);
+        assertThat(group.opportunities().getFirst().outcomes().decided()).isEqualTo(2);
     }
 
     @Test
@@ -83,27 +83,27 @@ class GroupTrendAggregatorTest {
         PracticeTrend naming = PracticeTrendCalculator.calculatePractice(
                 "naming",
                 List.of(
-                        judged(100L, "2026-06-10T09:00:00Z", Assessment.GOOD),
-                        judged(101L, "2026-06-09T09:00:00Z", Assessment.GOOD),
-                        judged(102L, "2026-06-08T09:00:00Z", Assessment.GOOD),
-                        judged(103L, "2026-06-07T09:00:00Z", Assessment.GOOD),
-                        judged(104L, "2026-06-06T09:00:00Z", Assessment.BAD),
-                        judged(105L, "2026-06-05T09:00:00Z", Assessment.BAD),
-                        judged(106L, "2026-06-04T09:00:00Z", Assessment.BAD),
-                        judged(107L, "2026-06-03T09:00:00Z", Assessment.BAD)),
+                        judged(100L, "2026-06-10T09:00:00Z", Outcome.MET),
+                        judged(101L, "2026-06-09T09:00:00Z", Outcome.MET),
+                        judged(102L, "2026-06-08T09:00:00Z", Outcome.MET),
+                        judged(103L, "2026-06-07T09:00:00Z", Outcome.MET),
+                        judged(104L, "2026-06-06T09:00:00Z", Outcome.NOT_MET),
+                        judged(105L, "2026-06-05T09:00:00Z", Outcome.NOT_MET),
+                        judged(106L, "2026-06-04T09:00:00Z", Outcome.NOT_MET),
+                        judged(107L, "2026-06-03T09:00:00Z", Outcome.NOT_MET)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
         PracticeTrend testing = PracticeTrendCalculator.calculatePractice(
                 "testing",
                 List.of(
-                        judged(200L, "2026-06-14T09:00:00Z", Assessment.GOOD),
-                        judged(201L, "2026-06-13T09:00:00Z", Assessment.GOOD),
-                        judged(202L, "2026-06-12T09:00:00Z", Assessment.GOOD),
-                        judged(203L, "2026-06-11T09:00:00Z", Assessment.GOOD),
-                        judged(100L, "2026-06-10T09:00:00Z", Assessment.BAD),
-                        judged(204L, "2026-06-09T09:00:00Z", Assessment.BAD),
-                        judged(205L, "2026-06-08T09:00:00Z", Assessment.BAD),
-                        judged(206L, "2026-06-07T09:00:00Z", Assessment.BAD)),
+                        judged(200L, "2026-06-14T09:00:00Z", Outcome.MET),
+                        judged(201L, "2026-06-13T09:00:00Z", Outcome.MET),
+                        judged(202L, "2026-06-12T09:00:00Z", Outcome.MET),
+                        judged(203L, "2026-06-11T09:00:00Z", Outcome.MET),
+                        judged(100L, "2026-06-10T09:00:00Z", Outcome.NOT_MET),
+                        judged(204L, "2026-06-09T09:00:00Z", Outcome.NOT_MET),
+                        judged(205L, "2026-06-08T09:00:00Z", Outcome.NOT_MET),
+                        judged(206L, "2026-06-07T09:00:00Z", Outcome.NOT_MET)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 

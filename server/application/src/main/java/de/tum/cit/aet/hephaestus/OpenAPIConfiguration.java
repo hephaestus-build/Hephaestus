@@ -106,14 +106,13 @@ public class OpenAPIConfiguration {
             "PracticeAutomatedReviewPolicy",
             // The binding is the shape a practice is authored in, so a client that cannot see it cannot
             // create one. It has no DTO suffix because it is the domain type the API deliberately exposes.
-            "PracticeBinding",
             "PracticeDefinition",
             "PracticeDeliveryBehavior",
             "PracticeDefinitionField",
             "PracticeReleaseChoice",
             "AdoptedBaseSource",
-            "PracticeSubject",
-            "PracticeSubjectClause",
+            "PracticePrecondition",
+            "PracticePreconditionClause",
             "SubjectEvidenceCollection",
             "PracticeEvidenceRequirement",
             "PracticeOptionalContextSource",
@@ -131,7 +130,7 @@ public class OpenAPIConfiguration {
             "SourceKind",
             // The workspace review scope is the shape an admin edits directly on the settings resource; a
             // client that cannot see it cannot render, let alone change, the scope. Domain type by choice,
-            // like PracticeBinding: it is the same value the gate reads, not a transport copy of it.
+            // like PracticeDefinition: it is the same value the gate reads, not a transport copy of it.
             "WorkspaceReviewScope",
             "ReviewRepositoryTarget",
             "DeliveryPolicyFactsSnapshot",

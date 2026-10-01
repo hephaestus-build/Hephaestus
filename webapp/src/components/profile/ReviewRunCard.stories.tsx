@@ -9,7 +9,7 @@ import { ReviewRunCard } from "./ReviewRunCard";
 
 /** What every observation of the run below shares: the work, the moment, the ordinary origin. */
 const onTheRun = {
-	assessmentStatus: "ASSESSED",
+	outcome: "MET",
 	observedAt: daysBefore(2),
 	origin: "LIVE",
 	claimCurrentness: "CURRENT",
@@ -36,8 +36,7 @@ const run: PracticeGroupReviewRun = {
 			practiceSlug: "records-decisions",
 			practiceName: "Record significant decisions",
 			summary: "The workspace trade-off is documented",
-			presence: "PRESENT",
-			assessment: "GOOD",
+
 			evidenceRationale:
 				"The description records why one workspace per team was chosen over one per repository.",
 		},
@@ -48,8 +47,7 @@ const run: PracticeGroupReviewRun = {
 			practiceSlug: "keeps-docs-current",
 			practiceName: "Keep linked documentation current",
 			summary: "A linked page still uses the old component name",
-			presence: "ABSENT",
-			assessment: "GOOD",
+
 			severity: "MINOR",
 			evidenceRationale:
 				"The page the description links still calls the component by the name this change retires.",
@@ -169,8 +167,7 @@ const soleRun: PracticeGroupReviewRun = {
 			practiceSlug: "small-changes",
 			practiceName: "Keep changes focused",
 			summary: "The refactor and the fix arrived together",
-			presence: "PRESENT",
-			assessment: "BAD",
+
 			severity: "MAJOR",
 			evidenceRationale:
 				"The package move and the caching change land in one diff, so neither can be reverted alone.",
@@ -217,8 +214,7 @@ const denseRun: PracticeGroupReviewRun = {
 			practiceSlug: "small-changes",
 			practiceName: "Keep changes focused",
 			summary: "The refactor and the fix arrived together",
-			presence: "PRESENT",
-			assessment: "BAD",
+
 			severity: "MAJOR",
 		},
 		{
@@ -227,8 +223,7 @@ const denseRun: PracticeGroupReviewRun = {
 			practiceSlug: "covers-new-behavior",
 			practiceName: "Cover new behavior with a test",
 			summary: "The new branch has no test exercising it",
-			presence: "ABSENT",
-			assessment: "GOOD",
+
 			severity: "CRITICAL",
 		},
 	],

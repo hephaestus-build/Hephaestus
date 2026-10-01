@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The review frame: what a practice claims about its own automated review. What a review <em>reads</em>
- * is stated per occasion on the bindings, so the rules relating evidence to the review mode are enforced
+ * is stated on the definition, so the rules relating evidence to the review mode are enforced
  * where both are visible — on the definition — rather than here.
  */
 class PracticeAutomatedReviewPolicyTest extends BaseUnitTest {

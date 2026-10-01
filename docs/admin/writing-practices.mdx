@@ -40,24 +40,15 @@ enter:
 
 ```json
 {
-  "absentSays": "the change has no Swift code",
+  "skipReason": "the change has no Swift code",
   "anyOf": [{ "changedPathMatches": ["**/*.swift"] }]
 }
 ```
 
 `anyOf` is a list of alternatives. Each clause uses exactly one of `changedPathMatches`, `diffContains`,
-or `evidenceHasItems`. The explanation in `absentSays` appears when complete evidence proves that none
+or `evidenceHasItems`. The explanation in `skipReason` appears when complete evidence proves that none
 of the alternatives is present. Clear the field only when the practice must apply to all work. Saving a
 name or wording change leaves both the gate and the person judged unchanged.
-
-### Check practices saved before this fix
-
-An earlier editor could remove the gate or change the person judged during an unrelated save. An
-upgrade cannot tell a deliberate API edit from that earlier error, so it does not restore values
-automatically. Check practices that were edited before the fix, especially practices copied from the
-catalog. Compare **Only review when** and **Person this practice judges** with the original practice
-definition or the instance catalog. If either value is wrong, set it explicitly and save. The catalog
-preview now shows both values when you inspect a practice before you add it to a workspace.
 
 ## Write the review criteria
 
@@ -66,12 +57,12 @@ Use these questions as a drafting outline, not as mandatory headings or a word-c
 | Decision | What the author must make clear |
 | --- | --- |
 | Applicability | What fact in the work makes this expectation relevant? What ordinary cases need no observation? |
-| Behavior | What exactly could be present or absent? Keep that same behavior in the assessment, evidence and rationale. |
+| Standard | What observable requirements must the reviewed work meet? |
 | Evidence | Which captured sources may establish each claim? Who authored them, and at what point in the work? |
-| Sufficiency | What makes the behavior useful or harmful here? Distinguish an inadequate example from no example. |
+| Conformance | What evidence establishes the complete standard or a material shortfall? |
 | Absence | What complete, bounded search would justify saying the needed behavior is missing or a harmful behavior is absent? |
 | Uncertainty | What unresolved question would prevent a judgment, even with the required evidence captured? |
-| Consequence | Why does a negative observation matter, and what consequence justifies its severity? |
+| Consequence | Why does a not-met observation matter, and what consequence justifies its severity? |
 | Feedback | What specific change could the developer make? When would no corrective feedback be useful? |
 
 Prefer “identify a material decision whose rationale the reviewer needs” to a keyword test for
@@ -79,28 +70,23 @@ Prefer “identify a material decision whose rationale the reviewer needs” to 
 If a threshold represents a team policy, identify that policy and its exceptions. Do not present a
 convenient number as a universal engineering standard.
 
-### Presence, assessment and outcome
+### One outcome against the standard
 
-Presence says whether the **named behavior** occurred. GOOD or BAD evaluates doing that behavior in
-this context; it does not evaluate the act of omitting it. Together they determine the outcome.
+Use one outcome for conformance within the recorded evidence boundary:
 
-For a practice about proportionate verification guidance on a persistence change:
+| Outcome | Example for verification guidance on a persistence change |
+| --- | --- |
+| `MET` | Complete instructions save a setting, restart the app, and check the saved value without destroying it. |
+| `NOT_MET` | A required restart check is missing, or the instructions claim an in-memory preview proves persistence. |
+| `NOT_APPLICABLE` | The work has no material behavior requiring this verification. |
+| `UNDETERMINED` | Adequate captured evidence contains an unresolved conflict about the required behavior. |
 
-| Named behavior and evidence | Presence / assessment | Outcome |
-| --- | --- | --- |
-| Written steps save a setting, restart the app and check the saved value. | PRESENT / GOOD | POSITIVE |
-| Written instructions claim an in-memory preview establishes persistence across restarts. | PRESENT / BAD | NEGATIVE |
-| A necessary restart check is missing after all permitted guidance was inspected. | ABSENT / GOOD | NEGATIVE |
-| Destructive production-data instructions are absent from a fully inspected procedure for a check that should use isolated test data. | ABSENT / BAD | POSITIVE |
+A useful instruction alone does not establish conformance to the complete standard. Absence claims
+need a complete bounded search. An optional improvement being missing is not a shortfall. Required
+capture failing creates no observation; it is not uncertainty about the developer's work.
 
-The last example needs a genuine opportunity for that harmful instruction and an adequate search;
-it is not a reason to praise every unrelated change. Likewise, optional extra guidance is not BAD
-merely because it is unnecessary. A biography-only edit may have no meaningful occasion for this
-runtime-verification practice. That is NOT_APPLICABLE, not positive absence.
-
-One practice can produce different scoped observations. Do not force every review to fill all four
-cells, and do not count “inadequate instructions” and “the missing part of those instructions” as two
-separate lapses when they request the same correction.
+Do not count inadequate instructions and their missing part as separate shortfalls when both request
+the same correction. Severity applies only to `NOT_MET`. Delivery is a separate decision.
 
 ### Evidence is more than a matching quotation
 
@@ -119,25 +105,24 @@ A previous observation records an earlier judgment; it is not independent proof 
 The bundled catalog uses the following order. It is also a useful template for custom practices;
 the questions above remain the basis for deciding what belongs in each section.
 
-1. **BEHAVIOR FOCUS** — name the observable behavior.
+1. **REVIEW FOCUS** — name the observable standard.
 2. **The standard** — define what doing that behavior well means.
 3. **Occasion** — identify work where the expectation does not apply.
 4. **Sources** — state which captured sources can support each claim and their limits.
-5. **Judge** — define the assessed cells, NOT_APPLICABLE and UNDETERMINED. Make the conditions
-   distinct, and state the order of checks where it matters. Give at least one example of work that
-   looks like a lapse but is not, beside the cell it belongs to: the line between ordinary work and
-   a lapse is the one a review most often draws in the wrong place.
-6. **Severity** — tie negative outcomes to consequences.
+5. **Judge** — state when the complete standard is MET and what evidenced shortfall makes it
+   NOT_MET. Define the exclusion that supports NOT_APPLICABLE and the unresolved question that
+   supports UNDETERMINED. Make these conditions distinct, and state the order of checks where it
+   matters. Include an example that looks like a lapse but meets the standard.
+6. **Severity** — tie NOT_MET outcomes to consequences.
 7. **Grounding** — state the evidence needed to support each claim.
 8. **Defer** — identify expectations owned by other practices.
 
-Keep each requirement in one place. Use the matrix terms consistently. The bundled catalog has an
-8,000-character limit; meeting that limit does not establish that the criteria are clear or correct.
+Keep each requirement in one place. Use the four outcome terms consistently. The bundled catalog has
+an 8,000-character limit; meeting that limit does not establish that the criteria are clear or correct.
 
-The review recording tool reads excluded assessed cells from the Judge section. For example,
-`- PRESENT/GOOD and ABSENT/GOOD: no ordinary case.` excludes those two cells. Use that wording only
-when neither cell can apply to the named behavior. Do not copy exclusions from another practice
-without checking their meaning.
+The recording tool checks the outcome and its required evidence fields. It does not establish that
+an assessment meets the practice criteria. Criteria must state the standard and the evidence needed
+to judge it; do not encode excluded presence or desirability combinations.
 
 To see the template in use, open **State how to verify the change** in the practice editor.
 Adapt its structure, not its applicability rules: each practice needs evidence and consequences

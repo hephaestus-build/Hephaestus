@@ -41,8 +41,7 @@ const PRACTICES: FacetSource = {
 /** The facets a search always names, each unset. */
 const UNFILTERED = {
 	outcome: undefined,
-	presence: undefined,
-	assessment: undefined,
+
 	severity: undefined,
 	origin: undefined,
 } satisfies ObservationsSearch;
@@ -193,14 +192,12 @@ export const Mobile: Story = {
 export const UnassessedStatuses: Story = {
 	args: {
 		search: {
-			assessmentStatus: ["NOT_APPLICABLE", "UNDETERMINED"],
 			...UNFILTERED,
+			outcome: ["NOT_APPLICABLE", "UNDETERMINED"],
 		},
 	},
 	play: async ({ canvas, userEvent }) => {
-		await expect(canvas.getByRole("combobox", { name: /Assessment status/u })).toHaveTextContent(
-			"2",
-		);
+		await expect(canvas.getByRole("combobox", { name: /Outcome/u })).toHaveTextContent("2");
 		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
 		await expect(canvas.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
 	},
@@ -208,16 +205,13 @@ export const UnassessedStatuses: Story = {
 
 /**
  * Outcome is what every row's badge says, so it is the facet a count on the overview links to.
- * Behaviour is the practice's own framing of the same judgement and stays beside it.
  */
 export const ReportsAChosenOutcome: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("combobox", { name: "Outcome" }));
 		const listbox = await screen.findByRole("listbox", { name: "Outcome options" });
-		await userEvent.click(
-			await within(listbox).findByRole("option", { name: /Negative outcome/u }),
-		);
-		await expect(args.onPatch).toHaveBeenCalledWith({ outcome: ["NEGATIVE"] });
+		await userEvent.click(await within(listbox).findByRole("option", { name: /Not met/u }));
+		await expect(args.onPatch).toHaveBeenCalledWith({ outcome: ["NOT_MET"] });
 	},
 };
 
@@ -226,17 +220,17 @@ export const AnOutcomeFromTheOverview: Story = {
 	args: {
 		search: {
 			...UNFILTERED,
-			outcome: ["POSITIVE"],
+			outcome: ["MET"],
 		},
 		total: 4,
 	},
 	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
 	play: async ({ args, canvas, userEvent }) => {
 		canvas.getByText("4 observations match your filters.");
-		await canvas.findByTitle("Outcome: Positive outcome");
-		await userEvent.click(canvas.getByLabelText("Clear outcome filter (Positive outcome)"));
+		await canvas.findByTitle("Outcome: Met");
+		await userEvent.click(canvas.getByLabelText("Clear outcome filter (Met)"));
 		await expect(args.onPatch).toHaveBeenCalledWith({ outcome: undefined });
-		await expect(canvas.queryByTitle("Outcome: Positive outcome")).not.toBeInTheDocument();
+		await expect(canvas.queryByTitle("Outcome: Met")).not.toBeInTheDocument();
 	},
 };
 

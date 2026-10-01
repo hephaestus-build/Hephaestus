@@ -305,7 +305,7 @@ The tree supplies surrounding code that the diff may not show. This binding does
 repository requirement for capturing the pinned diff: if that required capture fails, the practice
 cannot proceed. A missing local mirror can be cloned during review preparation.
 
-`automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared bindings, and
+`automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared evidence requirements, and
 the governed integrations. It does not claim that a practice is universally observable. A developer, peer, or human mentor may have different context for a particular practice. This contract makes no claim that human review is always possible.
 
 `mode` is `LANGUAGE_MODEL` or `NONE`. `evidenceSufficiency` says whether passing every requirement is
@@ -379,7 +379,7 @@ practice taking an `EXHAUSTIVE` stance is refused by a partial one.
 
 The runtime resolves exact practice revisions before capture and then stages **every governed source the
 purpose permits in the workspace** — all of them, on every review. There is no per-run
-source selection: practice bindings decide which practices may run, never which sources are captured, so a
+source selection: practice review configuration decide which practices may run, never which sources are captured, so a
 source listed as anything other than `AVAILABLE` always says why in a typed reason code and never because
 no practice asked for it. Bindings enter afterwards, in the readiness check. Readiness is evaluated per
 practice. A `CONTEXTUAL` failure does not skip an otherwise eligible practice; a `REQUIRED` or `EXHAUSTIVE`
@@ -424,8 +424,8 @@ Historical records keep their original contract and practice revision. Currentne
 
 - source resources are immutable within a published contract version; any semantic change creates a new
   version;
-- moving a practice to that version changes what its bindings may name and stales that practice's earlier claims;
-- changing a practice's bindings or automated-review policy stales that practice's claims;
+- moving a practice to that version changes what its evidence requirements may name and stales that practice's earlier claims;
+- changing a practice's review configuration or automated-review policy stales that practice's claims;
 - adding a source cannot silently alter existing requirements because each binding names its sources explicitly;
 - governance withdrawal disables its exact future use, including collection, observation persistence and delivery,
   mentoring reuse, or evidence disclosure, without rewriting historical semantics; and

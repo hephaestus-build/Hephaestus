@@ -124,14 +124,14 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 false, null, null, EntityTagPrecondition.parse("\"" + settings.getVersion() + "\""));
         workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("conv-delivery-test"));
         practice = new Practice();
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
         practice.setWorkspace(workspace);
         practice.setSlug("test-practice");
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
         practice.setCurrentRevision(revision);
@@ -328,9 +328,7 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 42L,
                 recipient.getId(),
                 "Observation title",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 AdmittedObservationFixtures.evidence(
                                 job.getId(),

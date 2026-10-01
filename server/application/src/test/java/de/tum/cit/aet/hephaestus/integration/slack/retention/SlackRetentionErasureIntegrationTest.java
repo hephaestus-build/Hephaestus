@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -270,9 +271,7 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
                 artifactId,
                 recipient.getId(),
                 "Observation title",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 null,
                 null,
@@ -284,13 +283,21 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
 
     private Practice savePractice(Workspace ws) {
         Practice p = new Practice();
-        p.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+        p.setSignals(PracticeTestEvidence.signals(ArtifactKinds.CONVERSATION_THREAD));
+        p.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.CONVERSATION_THREAD));
+        p.setOnDrafts(false);
+        p.setSubject(ActorRole.AUTHOR);
+        p.setPrecondition(null);
         p.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         p.setWorkspace(ws);
         p.setSlug("retain-practice-" + ws.getId());
         p.setName("Retention Practice");
         p.setCriteria("Test description");
-        p.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        p.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
+        p.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
+        p.setOnDrafts(false);
+        p.setSubject(ActorRole.AUTHOR);
+        p.setPrecondition(null);
         return practiceRepository.save(p);
     }
 

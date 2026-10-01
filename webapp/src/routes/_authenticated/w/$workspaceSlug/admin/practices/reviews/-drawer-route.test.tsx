@@ -185,7 +185,7 @@ describe("practice review levels", () => {
 		const { router } = renderRouteAtWithRouter(REVIEWS);
 
 		await userEvent.click(
-			await screen.findByRole("link", { name: "27 negative outcomes" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("link", { name: "27 not met observations" }, ROUTE_RENDER_WAIT),
 		);
 		await waitFor(
 			() => expect(router.state.location.pathname).toBe(`${REVIEWS}/observations`),
@@ -202,7 +202,7 @@ describe("practice review levels", () => {
 		const start = new Date(from);
 		expect([start.getHours(), start.getMinutes(), start.getSeconds()]).toStrictEqual([0, 0, 0]);
 		expect(instant(list, "from")).toBe(from);
-		expect(values(list, "outcome")).toStrictEqual(["NEGATIVE"]);
+		expect(values(list, "outcome")).toStrictEqual(["NOT_MET"]);
 	});
 
 	/**

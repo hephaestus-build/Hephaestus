@@ -162,7 +162,7 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
         practice.setSlug("sweep-guard-practice");
         practice.setName("Sweep guard practice");
         practice.setCriteria("Review the pull request");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_READY));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_READY);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practiceRepository.save(practice);
 

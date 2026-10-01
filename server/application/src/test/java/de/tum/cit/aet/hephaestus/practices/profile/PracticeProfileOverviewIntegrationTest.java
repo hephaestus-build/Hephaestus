@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.profile;
 
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.DEMONSTRATED_STRENGTH;
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.OMISSION_GAP;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.MET;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -107,14 +107,13 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         latestRun = persistPullRequestReview(workspace, 22, LATEST_RUN_AT);
 
         // Descriptions held on every pull request; the diff slipped on #20, recovered on #21 and slipped again on #22.
-        observe(describeWhatAndWhy, firstRun, 20L, developer, DEMONSTRATED_STRENGTH, null, FIRST_RUN_AT);
-        olderProblem =
-                observe(reviewableDiffSize, firstRun, 20L, developer, OMISSION_GAP, Severity.MINOR, FIRST_RUN_AT);
-        observe(describeWhatAndWhy, previousRun, 21L, developer, DEMONSTRATED_STRENGTH, null, PREVIOUS_RUN_AT);
-        observe(reviewableDiffSize, previousRun, 21L, developer, DEMONSTRATED_STRENGTH, null, PREVIOUS_RUN_AT);
-        observe(describeWhatAndWhy, latestRun, 22L, developer, DEMONSTRATED_STRENGTH, null, LATEST_RUN_AT);
+        observe(describeWhatAndWhy, firstRun, 20L, developer, MET, null, FIRST_RUN_AT);
+        olderProblem = observe(reviewableDiffSize, firstRun, 20L, developer, NOT_MET, Severity.MINOR, FIRST_RUN_AT);
+        observe(describeWhatAndWhy, previousRun, 21L, developer, MET, null, PREVIOUS_RUN_AT);
+        observe(reviewableDiffSize, previousRun, 21L, developer, MET, null, PREVIOUS_RUN_AT);
+        observe(describeWhatAndWhy, latestRun, 22L, developer, MET, null, LATEST_RUN_AT);
         UUID latestProblem =
-                observe(reviewableDiffSize, latestRun, 22L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT);
+                observe(reviewableDiffSize, latestRun, 22L, developer, NOT_MET, Severity.MAJOR, LATEST_RUN_AT);
 
         olderFeedback = persistInAppFeedback(
                 firstRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, FIRST_RUN_AT.plusSeconds(30));
@@ -250,8 +249,8 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     void shouldMoveTheWindowWhenANewerRunArrives() {
         Instant recoveryRunAt = NOW.minus(Duration.ofHours(12));
         AgentJob recoveryRun = persistPullRequestReview(workspace, 23, recoveryRunAt);
-        observe(describeWhatAndWhy, recoveryRun, 23L, developer, DEMONSTRATED_STRENGTH, null, recoveryRunAt);
-        observe(reviewableDiffSize, recoveryRun, 23L, developer, DEMONSTRATED_STRENGTH, null, recoveryRunAt);
+        observe(describeWhatAndWhy, recoveryRun, 23L, developer, MET, null, recoveryRunAt);
+        observe(reviewableDiffSize, recoveryRun, 23L, developer, MET, null, recoveryRunAt);
 
         readOverview()
                 .jsonPath("$.window.since")
@@ -334,7 +333,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         for (int number = 17; number <= 18; number++) {
             Instant reviewedAt = FIRST_RUN_AT.minus(Duration.ofDays(20 - number));
             AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-            observe(describeWhatAndWhy, run, number, developer, DEMONSTRATED_STRENGTH, null, reviewedAt);
+            observe(describeWhatAndWhy, run, number, developer, MET, null, reviewedAt);
         }
 
         readOverview()
@@ -371,7 +370,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         for (int number = 16; number <= 18; number++) {
             Instant reviewedAt = preparedAt.plus(Duration.ofDays(number - 15));
             AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-            observe(describeWhatAndWhy, run, number, developer, DEMONSTRATED_STRENGTH, null, reviewedAt);
+            observe(describeWhatAndWhy, run, number, developer, MET, null, reviewedAt);
         }
         markAddressed(feedback, developer, LATEST_RUN_AT.plus(Duration.ofHours(2)));
 
@@ -461,7 +460,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
                 persistPractice(workspace, null, "issue-has-checkable-outcome", "Define a checkable outcome", null);
         Instant preparedAt = FIRST_RUN_AT.minus(Duration.ofDays(4));
         AgentJob problemRun = persistPullRequestReview(workspace, 11, preparedAt);
-        UUID problem = observe(checkableOutcome, problemRun, 11L, developer, OMISSION_GAP, Severity.MINOR, preparedAt);
+        UUID problem = observe(checkableOutcome, problemRun, 11L, developer, NOT_MET, Severity.MINOR, preparedAt);
         Feedback feedback = persistInAppFeedback(
                 problemRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
         bind(feedback, problem);
@@ -469,7 +468,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         for (int number = 12; number <= 14; number++) {
             Instant reviewedAt = FIRST_RUN_AT.minus(Duration.ofDays(15 - number));
             AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-            observe(checkableOutcome, run, number, developer, DEMONSTRATED_STRENGTH, null, reviewedAt);
+            observe(checkableOutcome, run, number, developer, MET, null, reviewedAt);
         }
         markAddressed(feedback, developer, LATEST_RUN_AT.plus(Duration.ofHours(2)));
 
@@ -490,7 +489,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         // A different practice from the latest run's feedback, so a wrongly dated piece would survive the
         // per-practice dedupe and show up beside it rather than behind it.
         UUID previousRunsProblem =
-                observe(describeWhatAndWhy, previousRun, 21L, developer, OMISSION_GAP, Severity.MINOR, PREVIOUS_RUN_AT);
+                observe(describeWhatAndWhy, previousRun, 21L, developer, NOT_MET, Severity.MINOR, PREVIOUS_RUN_AT);
         Feedback previousRunsFeedback = persistInAppFeedback(
                 previousRun, developer, 2, FeedbackDeliveryState.DELIVERED, BODY, PREVIOUS_RUN_AT.plusSeconds(30));
         bind(previousRunsFeedback, previousRunsProblem);
@@ -528,8 +527,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         // Newer than every run seeded here, so a leak would move the window as well as add to it.
         Instant foreignRunAt = NOW.minus(Duration.ofHours(6));
         AgentJob foreignRun = persistPullRequestReview(other, 30, foreignRunAt);
-        UUID foreignProblem =
-                observe(otherPractice, foreignRun, 30L, developer, OMISSION_GAP, Severity.MAJOR, foreignRunAt);
+        UUID foreignProblem = observe(otherPractice, foreignRun, 30L, developer, NOT_MET, Severity.MAJOR, foreignRunAt);
         Feedback foreignFeedback = persistInAppFeedback(
                 foreignRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, foreignRunAt.plusSeconds(30));
         bind(foreignFeedback, foreignProblem);
@@ -586,7 +584,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     void shouldNotReportAResolutionWhenThePracticeChangedBeforeTheDeveloperAnswered() {
         Instant preparedAt = FIRST_RUN_AT.minus(Duration.ofDays(2));
         AgentJob run = persistPullRequestReview(workspace, 50, preparedAt);
-        UUID problem = observe(releaseNotes, run, 50L, developer, OMISSION_GAP, Severity.MINOR, preparedAt);
+        UUID problem = observe(releaseNotes, run, 50L, developer, NOT_MET, Severity.MINOR, preparedAt);
         Feedback feedback = persistInAppFeedback(
                 run, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
         bind(feedback, problem);
@@ -633,7 +631,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     void shouldReportAResetWhenTheWorkFallsBackInsideTheWindow() {
         Feedback feedback = releaseNotesFeedbackWithTwoCleanPieces();
         // The latest run found the practice missing again, inside the window.
-        observe(releaseNotes, latestRun, 22L, developer, OMISSION_GAP, Severity.MAJOR, LATEST_RUN_AT);
+        observe(releaseNotes, latestRun, 22L, developer, NOT_MET, Severity.MAJOR, LATEST_RUN_AT);
 
         String change = "$.changes[?(@.type == 'FEEDBACK_RESET')]";
         readOverview()
@@ -663,7 +661,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
         // The problem is older than the previous run, so the window opens on a clean run already at nothing.
         Instant slipAt = FIRST_RUN_AT.minus(Duration.ofDays(1));
         AgentJob slipRun = persistPullRequestReview(workspace, 43, slipAt);
-        observe(releaseNotes, slipRun, 43L, developer, OMISSION_GAP, Severity.MAJOR, slipAt);
+        observe(releaseNotes, slipRun, 43L, developer, NOT_MET, Severity.MAJOR, slipAt);
 
         readOverview().jsonPath("$.changes[?(@.type == 'FEEDBACK_RESET')]").isEmpty();
     }
@@ -675,14 +673,14 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
     private Feedback releaseNotesFeedbackWithTwoCleanPieces() {
         Instant preparedAt = FIRST_RUN_AT.minus(Duration.ofDays(6));
         AgentJob problemRun = persistPullRequestReview(workspace, 40, preparedAt);
-        UUID problem = observe(releaseNotes, problemRun, 40L, developer, OMISSION_GAP, Severity.MINOR, preparedAt);
+        UUID problem = observe(releaseNotes, problemRun, 40L, developer, NOT_MET, Severity.MINOR, preparedAt);
         Feedback feedback = persistInAppFeedback(
                 problemRun, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
         bind(feedback, problem);
         for (int number = 41; number <= 42; number++) {
             Instant reviewedAt = FIRST_RUN_AT.minus(Duration.ofDays(45 - number));
             AgentJob run = persistPullRequestReview(workspace, number, reviewedAt);
-            observe(releaseNotes, run, number, developer, DEMONSTRATED_STRENGTH, null, reviewedAt);
+            observe(releaseNotes, run, number, developer, MET, null, reviewedAt);
         }
         return feedback;
     }
@@ -724,7 +722,7 @@ class PracticeProfileOverviewIntegrationTest extends AbstractPracticeReviewInteg
 
     private Feedback describingFeedbackPreparedAt(int number, Instant preparedAt) {
         AgentJob run = persistPullRequestReview(workspace, number, preparedAt);
-        UUID problem = observe(describeWhatAndWhy, run, number, developer, OMISSION_GAP, Severity.MINOR, preparedAt);
+        UUID problem = observe(describeWhatAndWhy, run, number, developer, NOT_MET, Severity.MINOR, preparedAt);
         Feedback feedback = persistInAppFeedback(
                 run, developer, 1, FeedbackDeliveryState.DELIVERED, BODY, preparedAt.plusSeconds(30));
         bind(feedback, problem);

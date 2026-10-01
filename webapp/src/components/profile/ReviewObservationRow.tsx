@@ -18,10 +18,7 @@ import {
 import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
-import {
-	OBSERVATION_OUTCOME_PRESENTATION,
-	observationOutcome,
-} from "@/components/practice-vocabulary/observation-outcome";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -102,7 +99,7 @@ export function ReviewObservationRow({
 	onRespond,
 	pendingResponse,
 }: ReviewObservationRowProps) {
-	const outcome = OBSERVATION_OUTCOME_PRESENTATION[observationOutcome(observation)];
+	const outcome = OUTCOME_DEFS[observation.outcome];
 	const OutcomeIcon = outcome.icon;
 	const note = claimCurrentnessNote(observation.claimCurrentness);
 	const invalidated = observation.invalidatedAt !== undefined;

@@ -3,9 +3,6 @@
     {
       "practiceSlug": "pr-description-quality",
       "summary": "Well-structured PR description with context",
-      "assessmentStatus": "ASSESSED",
-      "presence": "PRESENT",
-      "assessment": "GOOD",
       "severity": null,
       "evidence": {
         "locations": [],
@@ -13,14 +10,12 @@
           "## Summary\nThis PR implements..."
         ]
       },
-      "evidenceRationale": "The PR description clearly explains the motivation, changes made, and testing approach."
+      "evidenceRationale": "The PR description clearly explains the motivation, changes made, and testing approach.",
+      "outcome": "MET"
     },
     {
       "practiceSlug": "error-handling",
       "summary": "Missing error handling in Main.java",
-      "assessmentStatus": "ASSESSED",
-      "presence": "ABSENT",
-      "assessment": "GOOD",
       "severity": "MAJOR",
       "evidence": {
         "locations": [
@@ -34,37 +29,32 @@
           "try { connect(); } catch (Exception e) {}"
         ]
       },
-      "evidenceRationale": "Empty catch block swallows exceptions silently, making debugging difficult."
+      "evidenceRationale": "Empty catch block swallows exceptions silently, making debugging difficult.",
+      "outcome": "NOT_MET"
     },
     {
       "practiceSlug": "commit-message-quality",
       "summary": "Commit messages follow conventional format",
-      "assessmentStatus": "ASSESSED",
-      "presence": "PRESENT",
-      "assessment": "GOOD",
       "severity": null,
       "evidence": {},
-      "evidenceRationale": "All commits follow the conventional commit format (feat:, fix:, etc.)."
+      "evidenceRationale": "All commits follow the conventional commit format (feat:, fix:, etc.).",
+      "outcome": "MET"
     },
     {
       "practiceSlug": "pr-scope",
       "summary": "PR scope is appropriately sized",
-      "assessmentStatus": "ASSESSED",
-      "presence": "PRESENT",
-      "assessment": "GOOD",
       "severity": null,
       "evidence": {},
-      "evidenceRationale": "Single-file documentation change is well-scoped and focused."
+      "evidenceRationale": "Single-file documentation change is well-scoped and focused.",
+      "outcome": "MET"
     },
     {
       "practiceSlug": "review-thoroughness",
       "summary": "Insufficient test coverage for new feature",
-      "assessmentStatus": "ASSESSED",
-      "presence": "ABSENT",
-      "assessment": "GOOD",
       "severity": "MINOR",
       "evidence": {},
-      "evidenceRationale": "New utility class has no unit tests, but the change is small and well-understood."
+      "evidenceRationale": "New utility class has no unit tests, but the change is small and well-understood.",
+      "outcome": "NOT_MET"
     }
   ]
 }

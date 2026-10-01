@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The digest of the review frame (contract version, review mode, insufficient-evidence handling, and
- * limitations) — not of what a review reads, which lives on the bindings and is digested by
+ * limitations) — not of what a review reads, which lives on the definition and is digested by
  * {@code ReviewRuleFingerprint}.
  */
 class PracticeAutomatedReviewPolicyDigestTest extends BaseUnitTest {

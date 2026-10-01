@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
-import de.tum.cit.aet.hephaestus.agent.context.PracticeSubjectEvaluator;
+import de.tum.cit.aet.hephaestus.agent.context.PracticePreconditionEvaluator;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
@@ -47,7 +47,7 @@ class LinkedWorkItemCaptureFailureReadinessTest extends BaseUnitTest {
     private final JobFolderIndexBuilder builder = new JobFolderIndexBuilder(
             mapper,
             catalogs,
-            new PracticeSubjectEvaluator(mapper),
+            new PracticePreconditionEvaluator(mapper),
             new AutomatedReviewFence(loader.withdrawnFromAutomatedReview()),
             Clock.systemUTC());
 
@@ -74,7 +74,11 @@ class LinkedWorkItemCaptureFailureReadinessTest extends BaseUnitTest {
                 .map(entry -> {
                     Practice practice = new Practice();
                     practice.setSlug(entry.slug());
-                    practice.setBindings(entry.definition().bindings());
+                    practice.setSignals(entry.definition().signals());
+                    practice.setEvidenceRequirements(entry.definition().evidenceRequirements());
+                    practice.setOnDrafts(entry.definition().onDrafts());
+                    practice.setSubject(entry.definition().subject());
+                    practice.setPrecondition(entry.definition().precondition());
                     practice.setAutomatedReviewPolicy(entry.definition().automatedReviewPolicy());
                     return practice;
                 })

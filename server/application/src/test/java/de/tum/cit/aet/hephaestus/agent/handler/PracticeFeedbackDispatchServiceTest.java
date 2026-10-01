@@ -224,10 +224,10 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     void shouldLeaveAPackageWithLineNotesToTheirOwnReconciliation() {
         String body = summaryMarker(job) + "\nSix surfaces.\n";
         givenLastDeliveredNote("<!-- hephaestus:practice-review:" + UUID.randomUUID() + " -->\nSix surfaces.\n");
-        var lineNotes = List.of(new PracticeDetectionResultParser.DiffNote("src/App.java", 3, null, "Split this."));
+        var lineNotes = List.of(new ReviewResultParser.DiffNote("src/App.java", 3, null, "Split this."));
         dispatch = withPackage(
                 dispatch(job, FeedbackDispatchState.PENDING, false, 0, body),
-                new PracticeDetectionResultParser.DeliveryContent(body, lineNotes, List.of(), null));
+                new ReviewResultParser.DeliveryContent(body, lineNotes, List.of(), null));
         when(repository.findByDestinationKeyAndWorkspaceId("review:" + job.getId(), 7L))
                 .thenReturn(Optional.of(dispatch));
         when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
@@ -236,9 +236,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(new DiffNotePoster.DiffNoteResult(1, 0, List.of()));
 
         service.dispatchAutomaticPackage(
-                job,
-                new PracticeDetectionResultParser.DeliveryContent(body, lineNotes, List.of(), null),
-                Set.of("practice"));
+                job, new ReviewResultParser.DeliveryContent(body, lineNotes, List.of(), null), Set.of("practice"));
 
         verify(channel).postSummary(any(), any());
     }
@@ -258,8 +256,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(storedBody));
     }
 
-    private static FeedbackDispatch withPackage(
-            FeedbackDispatch base, PracticeDetectionResultParser.DeliveryContent content) {
+    private static FeedbackDispatch withPackage(FeedbackDispatch base, ReviewResultParser.DeliveryContent content) {
         var mapper = JsonMapper.builder().build();
         return new FeedbackDispatch(
                 base.getId(),
@@ -509,7 +506,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .reconcileApprovedInlineNotes(
                         job,
                         feedback.getId(),
-                        List.of(new PracticeDetectionResultParser.DiffNote(
+                        List.of(new ReviewResultParser.DiffNote(
                                 "src/Review.java", 12, null, "exact inline", "old-key", null)));
     }
 
@@ -694,8 +691,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 approved.getState(),
                 approved.getBody(),
                 approved.getPracticeSlugs(),
-                mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(
-                        approved.getBody(), List.of(), List.of(), null)),
+                mapper.valueToTree(
+                        new ReviewResultParser.DeliveryContent(approved.getBody(), List.of(), List.of(), null)),
                 approved.getDeliveredPlacements(),
                 approved.getWriteStarted(),
                 approved.getWriteStartedAt(),
@@ -744,9 +741,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 state,
                 "approved body",
                 base.getPracticeSlugs(),
-                mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(
+                mapper.valueToTree(new ReviewResultParser.DeliveryContent(
                         "approved body",
-                        List.of(new PracticeDetectionResultParser.DiffNote(
+                        List.of(new ReviewResultParser.DiffNote(
                                 "src/Review.java", 12, null, "exact inline", "old-key", null)),
                         List.of(),
                         null)),
@@ -791,9 +788,9 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 FeedbackDispatchState.UNCERTAIN,
                 "",
                 base.getPracticeSlugs(),
-                mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(
+                mapper.valueToTree(new ReviewResultParser.DeliveryContent(
                         null,
-                        List.of(new PracticeDetectionResultParser.DiffNote(
+                        List.of(new ReviewResultParser.DiffNote(
                                 "src/Main.java", 3, null, "note", "observation:k1", List.of("k1"))),
                         List.of(),
                         List.of())),
@@ -855,9 +852,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     private PracticeFeedbackDispatchService.Result dispatchAutomaticReview(
             AgentJob job, String body, Set<String> practiceSlugs) {
         return service.dispatchAutomaticPackage(
-                job,
-                new PracticeDetectionResultParser.DeliveryContent(body, List.of(), List.of(), null),
-                practiceSlugs);
+                job, new ReviewResultParser.DeliveryContent(body, List.of(), List.of(), null), practiceSlugs);
     }
 
     private FeedbackDispatch dispatch(FeedbackDispatchState state, boolean writeStarted) {
@@ -886,7 +881,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 state,
                 body,
                 mapper.valueToTree(List.of("practice")),
-                mapper.valueToTree(new PracticeDetectionResultParser.DeliveryContent(body, List.of(), List.of(), null)),
+                mapper.valueToTree(new ReviewResultParser.DeliveryContent(body, List.of(), List.of(), null)),
                 mapper.valueToTree(List.of()),
                 writeStarted,
                 null,

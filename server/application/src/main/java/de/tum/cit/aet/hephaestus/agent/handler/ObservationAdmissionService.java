@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.io.Serial;
@@ -242,22 +242,8 @@ public class ObservationAdmissionService {
         out.put("id", observation.getId().toString());
         out.put("practiceSlug", observation.getPractice().getSlug());
         out.put("summary", observation.getSummary());
-        out.put("assessmentStatus", observation.getAssessmentStatus().name());
-        out.put(
-                "outcome",
-                observation.getOutcome() == null
-                        ? null
-                        : observation.getOutcome().name());
-        out.put(
-                "presence",
-                observation.getPresence() == null
-                        ? null
-                        : observation.getPresence().name());
-        out.put(
-                "assessment",
-                observation.getAssessment() == null
-                        ? null
-                        : observation.getAssessment().name());
+
+        out.put("outcome", observation.getOutcome().name());
         out.put(
                 "severity",
                 observation.getSeverity() == null
@@ -275,7 +261,7 @@ public class ObservationAdmissionService {
                 ObjectNode copy = citations.addObject();
                 copy.put("index", index++);
                 citation.properties().forEach(entry -> copy.set(entry.getKey(), entry.getValue()));
-                boolean anchorable = PracticeSubjectClause.DIFF_SOURCE
+                boolean anchorable = PracticePreconditionClause.DIFF_SOURCE
                                 .value()
                                 .equals(citation.path("sourceKind").asString())
                         && citation.path("path").isString()

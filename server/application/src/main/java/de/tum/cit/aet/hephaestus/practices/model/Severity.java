@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
-/** Impact of a negative outcome. Positive and unassessed observations carry no severity. */
+/** Impact of a NOT_MET outcome. Other outcomes carry no severity. */
 public enum Severity {
     /** Must be acted on now — e.g. a leaked secret or a security vulnerability. */
     CRITICAL,

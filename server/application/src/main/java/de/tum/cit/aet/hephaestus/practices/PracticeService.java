@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.DataIntegrityViolationConstraints;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.dto.ClearablePracticeField;
 import de.tum.cit.aet.hephaestus.practices.dto.CreatePracticeRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.UpdatePracticeRequestDTO;
@@ -290,11 +291,9 @@ public class PracticeService {
         PracticeAutonomy effectiveAutonomyBefore = effectiveAutonomy(practice, ctx.id());
 
         Set<ClearablePracticeField> fieldsToClear = request.clear() == null ? Set.of() : request.clear();
-        List<PracticeBinding> bindings = request.bindings() == null ? beforeDefinition.bindings() : request.bindings();
-        BindingChange.requireExplicit(beforeDefinition.bindings(), bindings, request.bindingChanges());
-        // The kind is read off the bindings, so "the author moved this practice to another kind of
-        // work" is a question about the new bindings rather than a separate field to compare.
-        ArtifactKind artifactKind = PracticeBinding.artifactKindOf(bindings);
+        var signals = request.signals() == null ? beforeDefinition.signals() : request.signals();
+        ArtifactKind artifactKind =
+                PracticeDefinition.canonicalSignals(signals).getFirst().artifactKind();
         PracticeAutomatedReviewPolicy automatedReviewPolicy = request.automatedReviewPolicy() != null
                 ? request.automatedReviewPolicy()
                 : artifactKind.equals(beforeDefinition.artifactKind())
@@ -302,16 +301,23 @@ public class PracticeService {
                         : evidenceDefaults.policyFor(artifactKind);
         boolean removesAutomatedReview = request.automatedReviewPolicy() != null
                 && !automatedReviewPolicy.automatedReview().canAttemptAutomatedReview();
-        if (request.automatedReviewPolicy() != null
-                && automatedReviewPolicy.automatedReview().mode() == PracticeAutomatedReviewMode.NONE) {
-            // A practice nobody automates still says what occasions it — that is where its kind comes
-            // from — but it reads nothing, so the evidence goes with the automation that read it. One that
-            // needs human review keeps its evidence: it still names what a review would have to read.
-            bindings = bindings.stream().map(PracticeService::withoutEvidence).toList();
+        var evidenceRequirements = request.evidenceRequirements() == null
+                ? beforeDefinition.evidenceRequirements()
+                : request.evidenceRequirements();
+        if (automatedReviewPolicy.automatedReview().mode() == PracticeAutomatedReviewMode.NONE) {
+            evidenceRequirements = List.of();
         }
         PracticeDefinition afterDefinition = new PracticeDefinition(
                 request.name() == null ? beforeDefinition.name() : request.name(),
-                bindings,
+                signals,
+                evidenceRequirements,
+                request.onDrafts() == null ? beforeDefinition.onDrafts() : request.onDrafts(),
+                request.subject() == null ? beforeDefinition.subject() : request.subject(),
+                request.precondition() != null
+                        ? request.precondition()
+                        : fieldsToClear.contains(ClearablePracticeField.PRECONDITION)
+                                ? null
+                                : beforeDefinition.precondition(),
                 request.criteria() == null ? beforeDefinition.criteria() : request.criteria(),
                 removesAutomatedReview && request.precomputeScript() == null
                         ? null
@@ -333,6 +339,7 @@ public class PracticeService {
                         : request.group().groupSlug(),
                 request.deliveryBehavior() == null ? beforeDefinition.deliveryBehavior() : request.deliveryBehavior());
 
+        DefinitionChange.requireExplicit(beforeDefinition, afterDefinition, request.definitionChanges());
         if (afterDefinition.equals(beforeDefinition)) {
             return practice;
         }
@@ -345,7 +352,7 @@ public class PracticeService {
         if (!fence.effectivePolicy(practice).automatedReview().canAttemptAutomatedReview()) {
             practice.setAutonomy(PracticeAutonomy.OFF);
         }
-        validateUpdate(afterDefinition, request.bindings() != null);
+        definitionValidator.validate(afterDefinition);
         practice = practiceRepository.save(practice);
         revisionNumber = practiceRevisionService.append(practice).getRevisionNumber();
         configAudit.record(ConfigAuditEntry.updated(
@@ -448,11 +455,16 @@ public class PracticeService {
     }
 
     private PracticeDefinition definition(CreatePracticeRequestDTO request) {
-        List<PracticeBinding> bindings = required(request.bindings(), "bindings");
-        ArtifactKind artifactKind = PracticeBinding.artifactKindOf(bindings);
+        var signals = required(request.signals(), "signals");
+        ArtifactKind artifactKind =
+                PracticeDefinition.canonicalSignals(signals).getFirst().artifactKind();
         return new PracticeDefinition(
                 required(request.name(), "name"),
-                bindings,
+                signals,
+                required(request.evidenceRequirements(), "evidenceRequirements"),
+                Boolean.TRUE.equals(request.onDrafts()),
+                request.subject() == null ? ActorRole.AUTHOR : request.subject(),
+                request.precondition(),
                 required(request.criteria(), "criteria"),
                 request.precomputeScript(),
                 request.automatedReviewPolicy() == null
@@ -471,53 +483,13 @@ public class PracticeService {
         return value;
     }
 
-    /**
-     * Validates an edit, holding the single-occasion rule to what the caller actually said.
-     *
-     * <p>A practice reviewed on one occasion is a rule about the occasion somebody <em>submits</em>. An
-     * update that omits {@code bindings} makes no statement about occasions at all — a rename is the
-     * plainest example — so carrying the stored occasion forward and then refusing it would leave a
-     * practice written while two were still legal impossible to edit ever again, by anyone, in any
-     * field. Refusing the caller's own second occasion still happens, in the same words, both here and
-     * in bean validation on the request.
-     *
-     * <p>Carried-over occasions are not waved through: they are validated one at a time, because this
-     * same request can move the review policy they hang off — a different source-contract version can
-     * retire a source an untouched occasion reads. Only the count is a property of the list; every
-     * other rule the validator applies is a property of a single occasion, so checking each alone is
-     * the same coverage minus exactly the rule that does not apply.
-     */
-    private void validateUpdate(PracticeDefinition afterDefinition, boolean occasionSubmitted) {
-        if (occasionSubmitted || afterDefinition.bindings().size() <= 1) {
-            definitionValidator.validate(afterDefinition);
-            return;
-        }
-        for (PracticeBinding carried : afterDefinition.bindings()) {
-            definitionValidator.validate(withBindings(afterDefinition, List.of(carried)));
-        }
-    }
-
-    private static PracticeDefinition withBindings(PracticeDefinition definition, List<PracticeBinding> bindings) {
-        return new PracticeDefinition(
-                definition.name(),
-                bindings,
-                definition.criteria(),
-                definition.precomputeScript(),
-                definition.automatedReviewPolicy(),
-                definition.whyItMatters(),
-                definition.whatGoodLooksLike(),
-                definition.groupSlug(),
-                definition.deliveryBehavior());
-    }
-
-    private static PracticeBinding withoutEvidence(PracticeBinding binding) {
-        return new PracticeBinding(
-                binding.signals(), List.of(), binding.onDrafts(), binding.subject(), binding.appliesWhen());
-    }
-
     static void applyDefinition(Practice practice, PracticeDefinition definition) {
         practice.setName(definition.name());
-        practice.setBindings(definition.bindings());
+        practice.setSignals(definition.signals());
+        practice.setEvidenceRequirements(definition.evidenceRequirements());
+        practice.setOnDrafts(definition.onDrafts());
+        practice.setSubject(definition.subject());
+        practice.setPrecondition(definition.precondition());
         practice.setCriteria(definition.criteria());
         practice.setPrecomputeScript(definition.precomputeScript());
         practice.setAutomatedReviewPolicy(definition.automatedReviewPolicy());

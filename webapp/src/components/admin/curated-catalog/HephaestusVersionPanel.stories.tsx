@@ -4,7 +4,7 @@ import { expect, fn, userEvent } from "storybook/test";
 import type { CatalogEntryStatus } from "@/api/types.gen";
 import {
 	mockAuthorDeclaredEvidenceValidation,
-	mockMergeBinding,
+	mockMergeReviewFields,
 	mockPracticeDefinitionOptions,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
@@ -23,16 +23,13 @@ const status = (overrides: Partial<CatalogEntryStatus> = {}): CatalogEntryStatus
 const shipped = {
 	name: "Say what changed and why",
 	artifactKind: "scm.pull_request" as const,
-	bindings: [
-		{
-			...mockMergeBinding,
-			subject: "REVIEWER" as const,
-			appliesWhen: {
-				absentSays: "the change has no Swift code",
-				anyOf: [{ changedPathMatches: ["**/*.swift"] }],
-			},
-		},
-	],
+
+	...mockMergeReviewFields,
+	subject: "REVIEWER" as const,
+	precondition: {
+		skipReason: "the change has no Swift code",
+		anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+	},
 	criteria: "The updated default criteria.",
 	whyItMatters: "So a reviewer can start from intent rather than diff archaeology.",
 	automatedReviewPolicy: mockPullRequestPolicy,

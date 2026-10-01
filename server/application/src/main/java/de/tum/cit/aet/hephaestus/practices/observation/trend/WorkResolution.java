@@ -64,7 +64,7 @@ public record WorkResolution(List<Work> cleanWork, @Nullable Instant resolvedAt,
             List<Work> clean = new ArrayList<>();
             List<Work> problems = new ArrayList<>();
             for (EvidenceOpportunity opportunity : oldestFirst) {
-                if (!opportunity.occurredAt().isAfter(preparedAt) || !opportunity.applicable()) {
+                if (!opportunity.occurredAt().isAfter(preparedAt) || !opportunity.decided()) {
                     continue;
                 }
                 Work work = new Work(

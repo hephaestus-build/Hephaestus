@@ -9,7 +9,7 @@ import { mockReviewSettings } from "@/components/admin/practices/fixtures";
 import type { PracticeAutonomy } from "@/lib/practice-autonomy";
 import {
 	mockAuthorDeclaredEvidenceValidation,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 
@@ -85,7 +85,7 @@ export function buildAutonomyFixture({
 				slug: `${group.slug ?? "unassigned"}-${slugify(spec.name)}`,
 				name: spec.name,
 				groupSlug: group.slug ?? undefined,
-				bindings: [mockPullRequestBinding],
+				...mockPullRequestReviewFields,
 				criteria: `## ${spec.name}\n\nWhat a review looks for.`,
 				artifactKind: spec.artifactKind ?? "scm.pull_request",
 				whyItMatters: spec.whyItMatters,

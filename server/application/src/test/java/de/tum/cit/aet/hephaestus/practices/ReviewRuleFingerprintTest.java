@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
  * What counts as the same review rule, the occasion and its evidence included.
  *
  * <p>Changing what a review must read makes it a different review; the order the author happened to
- * write it in does not. Without both claims the bindings could be dropped from the fingerprint entirely
+ * write it in does not. Without both claims the occasion could be dropped from the fingerprint entirely
  * and every test would stay green while every stored fingerprint went stale.
  */
 class ReviewRuleFingerprintTest extends BaseUnitTest {
@@ -24,14 +24,14 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
 
     @Test
     void shouldChangeWhenARequiredSourceChanges() {
-        assertThat(fingerprintOf(binding(ScmSignals.PULL_REQUEST_OPENED, required(CORE))))
-                .isNotEqualTo(fingerprintOf(binding(ScmSignals.PULL_REQUEST_OPENED, required(DIFF))));
+        assertThat(fingerprintOf(definition(ScmSignals.PULL_REQUEST_OPENED, required(CORE))))
+                .isNotEqualTo(fingerprintOf(definition(ScmSignals.PULL_REQUEST_OPENED, required(DIFF))));
     }
 
     @Test
     void shouldBeStableAcrossDeclarationOrdering() {
-        assertThat(fingerprintOf(binding(ScmSignals.PULL_REQUEST_OPENED, required(DIFF), required(CORE))))
-                .isEqualTo(fingerprintOf(binding(ScmSignals.PULL_REQUEST_OPENED, required(CORE), required(DIFF))));
+        assertThat(fingerprintOf(definition(ScmSignals.PULL_REQUEST_OPENED, required(DIFF), required(CORE))))
+                .isEqualTo(fingerprintOf(definition(ScmSignals.PULL_REQUEST_OPENED, required(CORE), required(DIFF))));
     }
 
     /**
@@ -40,8 +40,8 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
      */
     @Test
     void shouldChangeWhenAStanceChanges() {
-        assertThat(fingerprintOf(binding(ScmSignals.PULL_REQUEST_OPENED, required(CORE), required(DIFF))))
-                .isNotEqualTo(fingerprintOf(binding(
+        assertThat(fingerprintOf(definition(ScmSignals.PULL_REQUEST_OPENED, required(CORE), required(DIFF))))
+                .isNotEqualTo(fingerprintOf(definition(
                         ScmSignals.PULL_REQUEST_OPENED,
                         required(CORE),
                         new PracticeEvidenceRequirement(DIFF, EvidenceStance.CONTEXTUAL))));
@@ -49,47 +49,57 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
 
     @Test
     void shouldChangeWhenTheOccasionChanges() {
-        assertThat(fingerprintOf(binding(ScmSignals.PULL_REQUEST_OPENED, required(CORE))))
-                .isNotEqualTo(fingerprintOf(binding(ScmSignals.PULL_REQUEST_MERGED, required(CORE))));
+        assertThat(fingerprintOf(definition(ScmSignals.PULL_REQUEST_OPENED, required(CORE))))
+                .isNotEqualTo(fingerprintOf(definition(ScmSignals.PULL_REQUEST_MERGED, required(CORE))));
     }
 
     /** Whether a draft occasions the review decides which work is reviewed at all. */
     @Test
     void shouldChangeWhenDraftsStartOccasioningTheReview() {
-        assertThat(fingerprintOf(binding(ScmSignals.PULL_REQUEST_OPENED, required(CORE))))
-                .isNotEqualTo(fingerprintOf(
-                        new PracticeBinding(List.of(ScmSignals.PULL_REQUEST_OPENED), List.of(required(CORE)), true)));
+        assertThat(fingerprintOf(definition(ScmSignals.PULL_REQUEST_OPENED, required(CORE))))
+                .isNotEqualTo(fingerprintOf(definition(
+                        List.of(ScmSignals.PULL_REQUEST_OPENED),
+                        List.of(required(CORE)),
+                        true,
+                        de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
+                        null)));
     }
 
     @Test
     void shouldChangeWhenTheSubjectPredicateChanges() {
-        PracticeSubject manifests = new PracticeSubject(
+        PracticePrecondition manifests = new PracticePrecondition(
                 "the change touches no dependency manifest",
-                List.of(PracticeSubjectClause.changedPathMatches(List.of("**/pom.xml"))));
-        PracticeSubject tests = new PracticeSubject(
+                List.of(PracticePreconditionClause.changedPathMatches(List.of("**/pom.xml"))));
+        PracticePrecondition tests = new PracticePrecondition(
                 "the change touches no tests",
-                List.of(PracticeSubjectClause.changedPathMatches(List.of("**/*Test.java"))));
+                List.of(PracticePreconditionClause.changedPathMatches(List.of("**/*Test.java"))));
 
-        assertThat(fingerprintOf(bindingWithSubject(manifests))).isNotEqualTo(fingerprintOf(bindingWithSubject(tests)));
+        assertThat(fingerprintOf(definitionWithPrecondition(manifests)))
+                .isNotEqualTo(fingerprintOf(definitionWithPrecondition(tests)));
     }
 
     @Test
     void shouldChangeWhenThePersonJudgedChanges() {
-        PracticeBinding author = binding(ScmSignals.PULL_REQUEST_OPENED, required(DIFF));
-        PracticeBinding reviewer = new PracticeBinding(
+        PracticeDefinition author = definition(ScmSignals.PULL_REQUEST_OPENED, required(DIFF));
+        PracticeDefinition reviewer = definition(
                 author.signals(),
-                author.needs(),
+                author.evidenceRequirements(),
                 author.onDrafts(),
-                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.REVIEWER);
+                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.REVIEWER,
+                null);
         assertThat(fingerprintOf(reviewer)).isNotEqualTo(fingerprintOf(author));
-        assertThat(fingerprintOf(reviewer)).startsWith("v4:");
+        assertThat(fingerprintOf(reviewer)).startsWith("v5:");
     }
 
-    private static String fingerprintOf(PracticeBinding binding) {
+    private static String fingerprintOf(PracticeDefinition definition) {
         return ReviewRuleFingerprint.of(
                 "describe-the-change",
                 "Describe the change",
-                List.of(binding),
+                definition.signals(),
+                definition.evidenceRequirements(),
+                definition.onDrafts(),
+                definition.subject(),
+                definition.precondition(),
                 "Criteria.",
                 null,
                 new PracticeAutomatedReviewPolicy(
@@ -103,17 +113,43 @@ class ReviewRuleFingerprintTest extends BaseUnitTest {
                 null);
     }
 
-    private static PracticeBinding binding(SignalName signal, PracticeEvidenceRequirement... needs) {
-        return PracticeBinding.on(signal, List.of(needs));
+    private static PracticeDefinition definition(SignalName signal, PracticeEvidenceRequirement... needs) {
+        return definition(
+                List.of(signal),
+                List.of(needs),
+                false,
+                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
+                null);
     }
 
-    private static PracticeBinding bindingWithSubject(PracticeSubject subject) {
-        return new PracticeBinding(
+    private static PracticeDefinition definitionWithPrecondition(PracticePrecondition subject) {
+        return definition(
                 List.of(ScmSignals.PULL_REQUEST_OPENED),
                 List.of(required(DIFF)),
                 false,
                 de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
                 subject);
+    }
+
+    private static PracticeDefinition definition(
+            List<SignalName> signals,
+            List<PracticeEvidenceRequirement> evidenceRequirements,
+            boolean onDrafts,
+            de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole subject,
+            @org.jspecify.annotations.Nullable PracticePrecondition precondition) {
+        return new PracticeDefinition(
+                "Describe the change",
+                signals,
+                evidenceRequirements,
+                onDrafts,
+                subject,
+                precondition,
+                "Criteria.",
+                null,
+                PracticeTestEvidence.pullRequest(),
+                null,
+                null,
+                null);
     }
 
     private static PracticeEvidenceRequirement required(SourceKind sourceKind) {

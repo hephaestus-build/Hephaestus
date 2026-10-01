@@ -59,6 +59,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
@@ -73,7 +74,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -82,7 +82,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
@@ -90,8 +90,8 @@ import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
@@ -202,7 +202,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     private SignalRecorder recorder;
 
     @Autowired
-    private PracticeReviewDetectionGate gate;
+    private ReviewGate gate;
 
     @Autowired
     private AgentJobService agentJobService;
@@ -273,8 +273,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice sized = practice("scope-one-reviewable-change", ScmSignals.PULL_REQUEST_OPENED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
-        observe(sized, opened, pr.getId(), developer, ObservationKind.DEMONSTRATED_STRENGTH, null, NOW);
+        observe(describe, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
+        observe(sized, opened, pr.getId(), developer, Outcome.MET, null, NOW);
 
         edit("Adds the thing. Why: first try", Set.of("body"));
         edit("Adds the thing. Why: first try", Set.of("body")); // the same delivery again
@@ -328,10 +328,12 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         connections.saveAndFlush(scm);
         monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, REPO));
         Practice linked = practice("closing-issue-criteria", ScmSignals.PULL_REQUEST_MERGED);
-        linked.setBindings(List.of(PracticeBinding.on(
-                ScmSignals.PULL_REQUEST_MERGED,
-                List.of(new PracticeEvidenceRequirement(
-                        new SourceKind("scm.linked-work-items"), EvidenceStance.REQUIRED)))));
+        linked.setSignals(List.of(ScmSignals.PULL_REQUEST_MERGED));
+        linked.setEvidenceRequirements(List.of(
+                new PracticeEvidenceRequirement(new SourceKind("scm.linked-work-items"), EvidenceStance.REQUIRED)));
+        linked.setOnDrafts(false);
+        linked.setSubject(ActorRole.AUTHOR);
+        linked.setPrecondition(null);
         linked.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(linked, 2)));
         linked = practiceRepository.saveAndFlush(linked);
         PullRequest pr = pullRequest(false, HEAD, "Closes #18");
@@ -358,7 +360,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
             managed.replaceClosingIssues(Set.of(issueRepository.getReferenceById(linkedIssueId)));
             pullRequestRepository.saveAndFlush(managed);
         });
-        AgentJob merged = admittedLinkedReview(pr, linked, ObservationKind.OMISSION_GAP);
+        AgentJob merged = admittedLinkedReview(pr, linked);
         UUID olderNegative = observationRepository
                 .findByAgentJobId(merged.getId(), workspace.getId())
                 .getFirst()
@@ -369,22 +371,12 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Feedback deliveredCard =
                 persistInAppFeedback(merged, developer, 1, FeedbackDeliveryState.DELIVERED, "Recorded history", NOW);
         bind(deliveredCard, olderNegative);
-        AgentJob laterNegativeRun =
-                admittedLinkedReview(pr, linked, ObservationKind.OMISSION_GAP, ObservationKind.COMMISSION_PROBLEM);
+        AgentJob laterNegativeRun = admittedLinkedReview(pr, linked);
         laterNegativeRun.setRetryCount(1);
         laterNegativeRun = agentJobRepository.saveAndFlush(laterNegativeRun);
         List<Observation> admitted =
                 observationRepository.findByAgentJobId(laterNegativeRun.getId(), workspace.getId());
-        UUID currentNegative = admitted.stream()
-                .filter(row -> ObservationKind.of(row) == ObservationKind.OMISSION_GAP)
-                .findFirst()
-                .orElseThrow()
-                .getId();
-        UUID secondCurrentNegative = admitted.stream()
-                .filter(row -> ObservationKind.of(row) == ObservationKind.COMMISSION_PROBLEM)
-                .findFirst()
-                .orElseThrow()
-                .getId();
+        UUID currentNegative = admitted.getFirst().getId();
         for (AgentJob baseline : List.of(merged, laterNegativeRun)) {
             JsonNode manifest = agentJobRepository
                     .findById(baseline.getId())
@@ -416,7 +408,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 FeedbackDeliveryState.PREPARED,
                 "Current guidance",
                 NOW.plusSeconds(1));
-        bind(currentBrief, secondCurrentNegative);
+        bind(currentBrief, currentNegative);
         String capturedRevision = LinkedWorkItemContentSource.currentClosingMaterialKey(
                         workspace.getId(), pr, List.of(issue))
                 .orElseThrow()
@@ -521,7 +513,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 .isEmpty();
         assertThat(feedbackRepository.findById(oldBrief.getId()).orElseThrow().getDeliveryState())
                 .isEqualTo(FeedbackDeliveryState.PREPARED);
-        assertThat(standing(pr)).containsExactlyInAnyOrder(currentNegative, secondCurrentNegative);
+        assertThat(standing(pr)).containsExactly(currentNegative);
 
         SignalKey newerKey = LinkedWorkItemContentSource.currentClosingMaterialKey(
                         workspace.getId(), reload(), pullRequestRepository.findClosingIssuesById(pr.getId()))
@@ -537,17 +529,11 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Long linkedId = linked.getId();
         assertThat(positive).singleElement().satisfies(row -> {
             assertThat(row.getPractice().getId()).isEqualTo(linkedId);
-            assertThat(row.getPresence().name()).isEqualTo("PRESENT");
-            assertThat(row.getAssessment().name()).isEqualTo("GOOD");
+            assertThat(row.getOutcome()).isEqualTo(Outcome.MET);
         });
         assertThat(observationRepository.findById(olderNegative)).isPresent();
         assertThat(observationRepository.findById(currentNegative)).isPresent();
         assertThat(observationRepository.findById(currentNegative).orElseThrow().getSupersededAt())
-                .isNotNull();
-        assertThat(observationRepository
-                        .findById(secondCurrentNegative)
-                        .orElseThrow()
-                        .getSupersededAt())
                 .isNotNull();
         assertThat(observationRepository.findById(olderNegative).orElseThrow().getSupersededAt())
                 .isNull();
@@ -657,9 +643,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         var result = observations.addObject();
         result.put("practiceSlug", linked.getSlug())
                 .put("summary", "Linked criteria are complete")
-                .put("assessmentStatus", "ASSESSED")
-                .put("presence", "PRESENT")
-                .put("assessment", "GOOD")
+                .put("outcome", "MET")
                 .put("evidenceRationale", "The captured linked issue shows the completed acceptance criterion.")
                 .putNull("severity");
         result.putObject("evidence")
@@ -756,25 +740,16 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         return agentJobRepository.saveAndFlush(job);
     }
 
-    private AgentJob admittedLinkedReview(PullRequest pr, Practice linked, ObservationKind... kinds) throws Exception {
+    private AgentJob admittedLinkedReview(PullRequest pr, Practice linked) throws Exception {
         try (LinkedAttempt capture = captureLinkedAttempt(linkedReviewJob(pr), linked, "- [ ] Confirm repair")) {
             var observations = MAPPER.createArrayNode();
-            for (ObservationKind kind : kinds) {
-                var result = (tools.jackson.databind.node.ObjectNode)
-                        capture.observations().get(0).deepCopy();
-                result.put("summary", "Linked criteria need confirmation")
-                        .put("presence", kind == ObservationKind.OMISSION_GAP ? "ABSENT" : "PRESENT")
-                        .put("assessment", kind == ObservationKind.OMISSION_GAP ? "GOOD" : "BAD")
-                        .put("severity", "MINOR")
-                        .put("evidenceRationale", "The captured criterion remains unchecked.");
-                if (kind == ObservationKind.OMISSION_GAP) {
-                    var search = ((tools.jackson.databind.node.ObjectNode) result.path("evidence")).putObject("search");
-                    search.putArray("consulted").add("scm.linked-work-items");
-                    search.put("lookedFor", "confirmation of the acceptance criterion");
-                    search.put("boundary", "the captured closing issue #18");
-                }
-                observations.add(result);
-            }
+            var result = (tools.jackson.databind.node.ObjectNode)
+                    capture.observations().get(0).deepCopy();
+            result.put("summary", "Linked criteria need confirmation")
+                    .put("outcome", "NOT_MET")
+                    .put("severity", "MINOR")
+                    .put("evidenceRationale", "The captured criterion remains unchecked.");
+            observations.add(result);
             admissionService.admit(capture.identity(), observations);
             AgentJob completed =
                     agentJobRepository.findById(capture.job().getId()).orElseThrow();
@@ -792,7 +767,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(describe, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
 
         push(NEXT_HEAD);
         edit("Adds the thing because reviewers could not tell why", Set.of("body"));
@@ -815,7 +790,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(describe, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         String explained = "Adds the thing because reviewers could not tell why";
         edit(explained, Set.of("body"));
         settle(pr);
@@ -843,7 +818,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(describe, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         SignalKey olderPush = currentKey(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
         Instant quietSince =
                 Instant.now().minus(PullRequestPushCoalescer.QUIET_PERIOD).minusSeconds(60);
@@ -921,7 +896,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         practice("ships-tests-with-the-change", ScmSignals.PULL_REQUEST_SYNCHRONIZED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(describe, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         SignalKey heldPush = pending(pr, ScmSignals.PULL_REQUEST_SYNCHRONIZED);
         edit("Adds the thing because reviewers could not tell why", Set.of("body"));
         SignalKey newerEdit = currentKey(pr, ScmSignals.PULL_REQUEST_EDITED);
@@ -947,7 +922,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing because reviewers could not tell why");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(describe, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         SignalKey queued = pending(pr, ScmSignals.PULL_REQUEST_EDITED);
         CountDownLatch mergeWritten = new CountDownLatch(1);
         CountDownLatch releaseMerge = new CountDownLatch(1);
@@ -991,11 +966,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice superseded = practice("superseded", ScmSignals.PULL_REQUEST_OPENED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(answered, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
-        observe(abstained, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
-        observe(obsolete, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
-        UUID supersededId =
-                observe(superseded, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(answered, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
+        observe(abstained, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
+        observe(obsolete, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
+        UUID supersededId = observe(superseded, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         jdbcTemplate.update(
                 "UPDATE observation SET superseded_at = ? WHERE id = ?",
                 java.sql.Timestamp.from(NOW.plusSeconds(90)),
@@ -1004,19 +978,11 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         obsolete.setCurrentRevision(practiceRevisionRepository.save(
                 new de.tum.cit.aet.hephaestus.practices.model.PracticeRevision(obsolete, 2)));
         practiceRepository.saveAndFlush(obsolete);
-        UUID invalid =
-                observe(withdrawn, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
-        observe(unanswered, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        UUID invalid = observe(withdrawn, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
+        observe(unanswered, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         AgentJob ready = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW.plusSeconds(60));
-        observe(
-                answered,
-                ready,
-                pr.getId(),
-                developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
-                null,
-                NOW.plusSeconds(60));
-        observe(abstained, ready, pr.getId(), developer, ObservationKind.NOT_APPLICABLE, null, NOW.plusSeconds(60));
+        observe(answered, ready, pr.getId(), developer, Outcome.MET, null, NOW.plusSeconds(60));
+        observe(abstained, ready, pr.getId(), developer, Outcome.NOT_APPLICABLE, null, NOW.plusSeconds(60));
         invalidationRepository.save(new ObservationInvalidation(
                 observationRepository.findById(invalid).orElseThrow(), 1L, "Wrong when made", NOW.plusSeconds(90)));
 
@@ -1034,16 +1000,9 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice sized = practice("scope-one-reviewable-change", ScmSignals.PULL_REQUEST_OPENED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(describe, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         AgentJob recheck = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW.plusSeconds(60));
-        observe(
-                sized,
-                recheck,
-                pr.getId(),
-                developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
-                null,
-                NOW.plusSeconds(60));
+        observe(sized, recheck, pr.getId(), developer, Outcome.MET, null, NOW.plusSeconds(60));
 
         pr.setBody("A material description repair");
         assertThat(rechecked(revision(pr))).containsExactly("describe-what-and-why");
@@ -1063,8 +1022,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         edit("Adds the thing", Set.of("body"));
         SignalKey initialEdit = currentKey(pr, ScmSignals.PULL_REQUEST_EDITED);
         AgentJob ready = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        UUID negative =
-                observe(describe, ready, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        UUID negative = observe(describe, ready, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
 
         settle(pr);
 
@@ -1092,7 +1050,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
             edit("Adds the thing", Set.of("body"));
         }
         AgentJob ready = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(describe, ready, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(describe, ready, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
 
         settle(pr);
 
@@ -1108,17 +1066,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice sameWorkProblem = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_READY);
         PullRequest pr = pullRequest(false, HEAD, "Before the edit");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        observe(olderProblem, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(olderProblem, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         edit("Adds the thing", Set.of("body"));
         AgentJob ready = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW.plusSeconds(60));
-        observe(
-                sameWorkProblem,
-                ready,
-                pr.getId(),
-                developer,
-                ObservationKind.OMISSION_GAP,
-                Severity.MINOR,
-                NOW.plusSeconds(60));
+        observe(sameWorkProblem, ready, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW.plusSeconds(60));
 
         settle(pr);
 
@@ -1132,8 +1083,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         PullRequest pr = pullRequest(false, HEAD, "Before the edit");
         AgentJob unknown = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        UUID negative =
-                observe(describe, unknown, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        UUID negative = observe(describe, unknown, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         edit("Adds the thing because it fixes the missing motivation", Set.of("body"));
 
         settle(pr);
@@ -1151,8 +1101,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Practice describe = practice("describe-what-and-why", ScmSignals.PULL_REQUEST_OPENED);
         PullRequest pr = pullRequest(false, HEAD, "Adds the thing");
         AgentJob opened = capturedReview(workspace, pr.getNumber(), pr.getId(), NOW);
-        UUID negative =
-                observe(describe, opened, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        UUID negative = observe(describe, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         edit("Adds the thing because it fixes the missing motivation", Set.of("body"));
         settle(pr);
         AgentJob repair = jobOf(rowOf(currentKey(pr, ScmSignals.PULL_REQUEST_EDITED)));
@@ -1294,7 +1243,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
 
     private Practice practice(Workspace workspace, String slug, SignalName occasion) {
         Practice practice = persistPractice(workspace, null, slug, slug, null);
-        practice.setBindings(PracticeTestEvidence.bindings(occasion));
+        PracticeTestEvidence.configure(practice, occasion);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         return practiceRepository.saveAndFlush(practice);
     }

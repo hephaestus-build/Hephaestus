@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 import static de.tum.cit.aet.hephaestus.practices.curated.CuratedCatalogFixtures.group;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -18,7 +19,11 @@ class EffectiveCatalogTest extends BaseUnitTest {
         var retiredGroup = new CatalogEntry<>("quality", groupDefinition, groupDefinition, null, null, true, 0, null);
         PracticeDefinition definition = new PracticeDefinition(
                 "Small PRs",
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 "Criteria",
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),

@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationNames;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
@@ -231,9 +230,7 @@ class ArtifactTraceQueryService {
     }
 
     private List<PracticeSignalDTO> watches(Practice practice) {
-        return PracticeBinding.signalsOf(practice.getBindings()).stream()
-                .map(this::label)
-                .toList();
+        return practice.getSignals().stream().map(this::label).toList();
     }
 
     private PracticeSignalDTO label(SignalName signal) {

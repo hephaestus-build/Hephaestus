@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
@@ -34,7 +35,11 @@ class PracticeAutomatedReviewValidationTest extends BaseUnitTest {
         PracticeDefinition original = definition(requirements());
         PracticeDefinition revised = new PracticeDefinition(
                 original.name(),
-                original.bindings(),
+                original.signals(),
+                original.evidenceRequirements(),
+                original.onDrafts(),
+                original.subject(),
+                original.precondition(),
                 original.criteria(),
                 original.precomputeScript(),
                 original.automatedReviewPolicy(),
@@ -69,7 +74,11 @@ class PracticeAutomatedReviewValidationTest extends BaseUnitTest {
     private static PracticeDefinition definition(PracticeAutomatedReviewPolicy requirements) {
         return new PracticeDefinition(
                 "Focused review",
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                false,
+                ActorRole.AUTHOR,
+                null,
                 "Assess whether the change stays focused.",
                 null,
                 requirements,

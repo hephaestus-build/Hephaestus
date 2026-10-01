@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingObservationDTO;
 import java.util.List;
@@ -127,7 +127,7 @@ class DeterministicGroupGuidanceComposerTest {
                 "Observation",
                 null,
                 null,
-                ObservationKind.OMISSION_GAP,
+                Outcome.NOT_MET,
                 ArtifactKinds.PULL_REQUEST,
                 1L,
                 null,

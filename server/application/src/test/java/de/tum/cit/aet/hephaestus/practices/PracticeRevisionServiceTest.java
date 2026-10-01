@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -36,12 +37,29 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         practice.setId(42L);
         practice.setSlug("clear-feedback");
         practice.setName("Clear feedback");
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("Give specific feedback");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         when(practiceRepository.findByIdForUpdate(42L)).thenReturn(Optional.of(practice));
         when(revisionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    void shouldAppendANewStandardRevisionOnceWithoutRewritingHistoricalProvenance() {
+        PracticeRevision historical = org.mockito.Mockito.mock(PracticeRevision.class);
+        when(historical.getReviewRuleFingerprint()).thenReturn("v4:" + "a".repeat(64));
+        when(historical.getRevisionNumber()).thenReturn(4);
+        practice.setCurrentRevision(historical);
+        when(revisionRepository.findFirstByPracticeIdOrderByRevisionNumberDesc(42L))
+                .thenReturn(Optional.of(historical));
+
+        PracticeRevision current = service.forReview(practice);
+        assertThat(current.getRevisionNumber()).isEqualTo(5);
+        assertThat(current.getReviewRuleFingerprint()).startsWith("v5:");
+        assertThat(historical.getReviewRuleFingerprint()).startsWith("v4:");
+        assertThat(service.forReview(practice)).isSameAs(current);
+        org.mockito.Mockito.verify(revisionRepository).save(current);
     }
 
     @Test
@@ -68,7 +86,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         PracticeRevision appended = service.append(practice);
 
         assertThat(appended.getCriteria()).isEqualTo("Give specific feedback");
-        assertThat(appended.getReviewRuleFingerprint()).hasSize(67).startsWith("v4:");
+        assertThat(appended.getReviewRuleFingerprint()).hasSize(67).startsWith("v5:");
         assertThat(practice.getCurrentRevision()).isSameAs(appended);
     }
 
@@ -102,13 +120,13 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
 
         // The fingerprint has to follow an evidence edit: a review that reads a different set of
         // sources is a different rule, and a stale digest would report it as the shipped one.
-        practice.setBindings(List.of(PracticeBinding.on(
-                ScmSignals.PULL_REQUEST_OPENED,
-                List.of(
-                        new PracticeEvidenceRequirement(
-                                new SourceKind("scm.pull-request.core"), EvidenceStance.REQUIRED),
-                        new PracticeEvidenceRequirement(
-                                new SourceKind("scm.review-threads"), EvidenceStance.CONTEXTUAL)))));
+        practice.setSignals(List.of(ScmSignals.PULL_REQUEST_OPENED));
+        practice.setEvidenceRequirements(List.of(
+                new PracticeEvidenceRequirement(new SourceKind("scm.pull-request.core"), EvidenceStance.REQUIRED),
+                new PracticeEvidenceRequirement(new SourceKind("scm.review-threads"), EvidenceStance.CONTEXTUAL)));
+        practice.setOnDrafts(false);
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
 
         assertThat(service.append(practice).getReviewRuleFingerprint()).isNotEqualTo(before);
     }

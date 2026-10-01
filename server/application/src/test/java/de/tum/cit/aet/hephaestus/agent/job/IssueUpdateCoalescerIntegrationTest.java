@@ -33,8 +33,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -142,7 +142,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         practice.setName("Issue metadata review");
         practice.setCriteria("Review the issue");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ScmSignals.ISSUE));
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.ISSUE_UPDATED));
+        PracticeTestEvidence.configure(practice, ScmSignals.ISSUE_UPDATED);
         practices.save(practice);
 
         var connection = connections.save(LlmCatalogTestFixtures.connection(slug));
@@ -423,7 +423,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                 });
     }
 
-    record Fixture(IssueRepository issues, PracticeReviewDetectionGate gate, WorkspaceResolver workspaceResolver) {}
+    record Fixture(IssueRepository issues, ReviewGate gate, WorkspaceResolver workspaceResolver) {}
 
     @TestConfiguration
     static class Configuration {
@@ -432,7 +432,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
             return new PullRequestSignalResubmitter(
                     mock(AgentJobService.class),
                     mock(PullRequestRepository.class),
-                    mock(PracticeReviewDetectionGate.class),
+                    mock(ReviewGate.class),
                     recorder,
                     mock(PullRequestReviewRepository.class),
                     mock(IntegrationManifestRegistry.class));
@@ -440,10 +440,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
         @Bean
         Fixture coalescerFixture() {
-            return new Fixture(
-                    mock(IssueRepository.class),
-                    mock(PracticeReviewDetectionGate.class),
-                    mock(WorkspaceResolver.class));
+            return new Fixture(mock(IssueRepository.class), mock(ReviewGate.class), mock(WorkspaceResolver.class));
         }
 
         @Bean

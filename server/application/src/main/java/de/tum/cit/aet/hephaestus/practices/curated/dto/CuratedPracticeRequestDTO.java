@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.practices.curated.dto;
 
-import de.tum.cit.aet.hephaestus.practices.BindingChange;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -22,15 +25,17 @@ public record CuratedPracticeRequestDTO(
         @NonNull
         String name,
 
-        @NotNull(message = "An occasion is required")
-        @Size(
-                min = 1,
-                max = 1,
-                message = "A practice is reviewed on one occasion. To read different evidence at a different moment, "
-                        + "split this into two practices.")
-        @Schema(description = "The one occasion this practice is reviewed on; the kind of work is read off the signals")
+        @NotNull(message = "Choose at least one review moment")
+        @Size(min = 1, message = "Choose at least one review moment")
         @NonNull
-        List<@Valid PracticeBinding> bindings,
+        List<SignalName> signals,
+
+        @NotNull(message = "Evidence requirements are required") @NonNull
+        List<@Valid PracticeEvidenceRequirement> evidenceRequirements,
+
+        @Nullable Boolean onDrafts,
+        @Nullable ActorRole subject,
+        @Valid @Nullable PracticePrecondition precondition,
 
         @NotBlank(message = "Criteria is required")
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")
@@ -46,7 +51,7 @@ public record CuratedPracticeRequestDTO(
         @Valid
         @Schema(
                 description =
-                        "Evidence requirements; omit to use the recommended requirements for the selected work type")
+                        "Versioned review settings; omit to use the recommended settings for the selected work type")
         @Nullable
         PracticeAutomatedReviewPolicy automatedReviewPolicy,
 
@@ -60,36 +65,48 @@ public record CuratedPracticeRequestDTO(
         String groupSlug,
 
         @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
-        Set<BindingChange> bindingChanges,
+        Set<DefinitionChange> definitionChanges,
 
         @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
     public CuratedPracticeRequestDTO(
             String name,
-            List<PracticeBinding> bindings,
+            List<SignalName> signals,
+            List<PracticeEvidenceRequirement> evidenceRequirements,
+            @Nullable Boolean onDrafts,
+            @Nullable ActorRole subject,
+            @Nullable PracticePrecondition precondition,
             String criteria,
             @Nullable String precomputeScript,
             @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
             @Nullable String whyItMatters,
             @Nullable String whatGoodLooksLike,
             @Nullable String groupSlug,
-            @Nullable Set<BindingChange> bindingChanges) {
+            @Nullable Set<DefinitionChange> definitionChanges) {
         this(
                 name,
-                bindings,
+                signals,
+                evidenceRequirements,
+                Boolean.TRUE.equals(onDrafts),
+                subject == null ? ActorRole.AUTHOR : subject,
+                precondition,
                 criteria,
                 precomputeScript,
                 automatedReviewPolicy,
                 whyItMatters,
                 whatGoodLooksLike,
                 groupSlug,
-                bindingChanges,
+                definitionChanges,
                 null);
     }
 
     public PracticeDefinition definition(PracticeAutomatedReviewPolicy resolvedEvidence) {
         return new PracticeDefinition(
                 name,
-                bindings,
+                signals,
+                evidenceRequirements,
+                Boolean.TRUE.equals(onDrafts),
+                subject == null ? ActorRole.AUTHOR : subject,
+                precondition,
                 criteria,
                 precomputeScript,
                 resolvedEvidence,

@@ -154,7 +154,7 @@ export const EditClearsOptionalGuidance: Story = {
 		await expect(editSubmit).toHaveBeenCalledWith(
 			"commit-discipline",
 			expect.objectContaining({
-				clear: ["WHY_IT_MATTERS", "WHAT_GOOD_LOOKS_LIKE"],
+				clear: ["PRECONDITION", "WHY_IT_MATTERS", "WHAT_GOOD_LOOKS_LIKE"],
 			}),
 			null,
 		);
@@ -193,16 +193,14 @@ export const ValidationAndSubmit: Story = {
 				name: "Clear review context",
 				slug: "clear-review-context",
 				criteria: "Check whether the reviewed work explains its purpose.",
-				bindings: [
-					expect.objectContaining({
-						signals: [
-							"scm.pull_request.opened",
-							"scm.pull_request.ready",
-							"scm.pull_request.synchronized",
-						],
-						needs: mockPullRequestWorkType.recommendedNeeds,
-					}),
+
+				signals: [
+					"scm.pull_request.opened",
+					"scm.pull_request.ready",
+					"scm.pull_request.synchronized",
 				],
+				evidenceRequirements: mockPullRequestWorkType.recommendedEvidenceRequirements,
+
 				automatedReviewPolicy: mockPullRequestWorkType.recommendedPolicy,
 			}),
 			null,
@@ -230,12 +228,10 @@ export const ConversationPractice: Story = {
 				name: "Helpful discussion",
 				slug: "helpful-discussion",
 				criteria: "Check whether the conversation stays constructive.",
-				bindings: [
-					expect.objectContaining({
-						signals: ["chat.conversation_thread.settled"],
-						needs: mockConversationWorkType.recommendedNeeds,
-					}),
-				],
+
+				signals: ["chat.conversation_thread.settled"],
+				evidenceRequirements: mockConversationWorkType.recommendedEvidenceRequirements,
+
 				automatedReviewPolicy: mockConversationWorkType.recommendedPolicy,
 			}),
 			null,

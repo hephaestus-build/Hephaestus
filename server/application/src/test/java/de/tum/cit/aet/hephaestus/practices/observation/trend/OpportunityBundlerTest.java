@@ -4,8 +4,8 @@ import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObserva
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -21,21 +21,20 @@ class OpportunityBundlerTest {
         UUID latest = UUID.randomUUID();
 
         OpportunityBundler.Bundles result = bundle(
-                judged(1, older, "2026-08-10T09:00:00Z", Assessment.BAD),
-                judged(1, latest, "2026-08-11T09:00:00Z", Assessment.GOOD));
+                judged(1, older, "2026-08-10T09:00:00Z", Outcome.NOT_MET),
+                judged(1, latest, "2026-08-11T09:00:00Z", Outcome.MET));
 
         assertThat(result.current()).hasSize(1);
-        assertThat(result.current().getFirst().outcomes().demonstratedStrengths())
-                .isEqualTo(1);
-        assertThat(result.current().getFirst().outcomes().commissionProblems()).isZero();
+        assertThat(result.current().getFirst().outcomes().met()).isEqualTo(1);
+        assertThat(result.current().getFirst().outcomes().notMet()).isZero();
     }
 
     @Test
     void shouldTreatBurstySameDayArtifactsAsSeparateOpportunities() {
         OpportunityBundler.Bundles result = bundle(
-                judged(1, UUID.randomUUID(), "2026-08-11T09:00:00Z", Assessment.GOOD),
-                judged(2, UUID.randomUUID(), "2026-08-11T09:01:00Z", Assessment.GOOD),
-                judged(3, UUID.randomUUID(), "2026-08-11T09:02:00Z", Assessment.BAD));
+                judged(1, UUID.randomUUID(), "2026-08-11T09:00:00Z", Outcome.MET),
+                judged(2, UUID.randomUUID(), "2026-08-11T09:01:00Z", Outcome.MET),
+                judged(3, UUID.randomUUID(), "2026-08-11T09:02:00Z", Outcome.NOT_MET));
 
         assertThat(result.current()).hasSize(3);
     }
@@ -43,8 +42,8 @@ class OpportunityBundlerTest {
     @Test
     void shouldNotTurnCalendarGapIntoABundleBoundary() {
         OpportunityBundler.Bundles result = bundle(
-                judged(1, UUID.randomUUID(), "2026-07-01T09:00:00Z", Assessment.BAD),
-                judged(2, UUID.randomUUID(), "2026-08-11T09:00:00Z", Assessment.GOOD));
+                judged(1, UUID.randomUUID(), "2026-07-01T09:00:00Z", Outcome.NOT_MET),
+                judged(2, UUID.randomUUID(), "2026-08-11T09:00:00Z", Outcome.MET));
 
         assertThat(result.current()).hasSize(2);
         assertThat(result.previous()).isEmpty();
@@ -52,8 +51,8 @@ class OpportunityBundlerTest {
 
     @Test
     void shouldUseStableArtifactOrderWhenTimestampsTie() {
-        Observation first = judged(1, UUID.randomUUID(), "2026-08-11T09:00:00Z", Assessment.GOOD);
-        Observation second = judged(2, UUID.randomUUID(), "2026-08-11T09:00:00Z", Assessment.BAD);
+        Observation first = judged(1, UUID.randomUUID(), "2026-08-11T09:00:00Z", Outcome.MET);
+        Observation second = judged(2, UUID.randomUUID(), "2026-08-11T09:00:00Z", Outcome.NOT_MET);
 
         OpportunityBundler.Bundles forward =
                 OpportunityBundler.bundle(List.of(first, second), Instant.parse("2026-05-01T00:00:00Z"), 1);
@@ -68,8 +67,8 @@ class OpportunityBundlerTest {
     void shouldDiscardOpportunitiesOutsideTheHorizon() {
         OpportunityBundler.Bundles result = OpportunityBundler.bundle(
                 List.of(
-                        judged(1, UUID.randomUUID(), "2026-01-01T09:00:00Z", Assessment.BAD),
-                        judged(2, UUID.randomUUID(), "2026-08-11T09:00:00Z", Assessment.GOOD)),
+                        judged(1, UUID.randomUUID(), "2026-01-01T09:00:00Z", Outcome.NOT_MET),
+                        judged(2, UUID.randomUUID(), "2026-08-11T09:00:00Z", Outcome.MET)),
                 Instant.parse("2026-05-01T00:00:00Z"),
                 4);
 
@@ -79,11 +78,11 @@ class OpportunityBundlerTest {
     @Test
     void shouldReportHowManyMoreOpportunitiesEnableComparison() {
         OpportunityBundler.Bundles result = bundle(
-                judged(1, UUID.randomUUID(), "2026-08-11T09:00:00Z", Assessment.GOOD),
-                judged(2, UUID.randomUUID(), "2026-08-11T10:00:00Z", Assessment.GOOD),
-                judged(3, UUID.randomUUID(), "2026-08-11T11:00:00Z", Assessment.BAD),
-                judged(4, UUID.randomUUID(), "2026-08-11T12:00:00Z", Assessment.BAD),
-                judged(5, UUID.randomUUID(), "2026-08-11T13:00:00Z", Assessment.BAD));
+                judged(1, UUID.randomUUID(), "2026-08-11T09:00:00Z", Outcome.MET),
+                judged(2, UUID.randomUUID(), "2026-08-11T10:00:00Z", Outcome.MET),
+                judged(3, UUID.randomUUID(), "2026-08-11T11:00:00Z", Outcome.NOT_MET),
+                judged(4, UUID.randomUUID(), "2026-08-11T12:00:00Z", Outcome.NOT_MET),
+                judged(5, UUID.randomUUID(), "2026-08-11T13:00:00Z", Outcome.NOT_MET));
 
         assertThat(result.current()).hasSize(4);
         assertThat(result.previous()).hasSize(1);
@@ -96,9 +95,9 @@ class OpportunityBundlerTest {
         // never
         // having reviewed it. But it carries no verdict, so it must not become a sample.
         OpportunityBundler.Bundles result = bundle(
-                judged(1, UUID.randomUUID(), "2026-08-11T09:00:00Z", Assessment.GOOD),
+                judged(1, UUID.randomUUID(), "2026-08-11T09:00:00Z", Outcome.MET),
                 noVerdict(2, UUID.randomUUID(), "2026-08-11T10:00:00Z"),
-                judged(3, UUID.randomUUID(), "2026-08-11T11:00:00Z", Assessment.BAD));
+                judged(3, UUID.randomUUID(), "2026-08-11T11:00:00Z", Outcome.NOT_MET));
 
         assertThat(result.trail()).hasSize(3);
         assertThat(result.current()).hasSize(2);
@@ -111,11 +110,11 @@ class OpportunityBundlerTest {
         // Same artifact, later run found nothing to judge. The latest run still wins — a re-review that says
         // the practice no longer applies here must not leave the old problem standing.
         OpportunityBundler.Bundles result = bundle(
-                judged(1, UUID.randomUUID(), "2026-08-10T09:00:00Z", Assessment.BAD),
+                judged(1, UUID.randomUUID(), "2026-08-10T09:00:00Z", Outcome.NOT_MET),
                 noVerdict(1, UUID.randomUUID(), "2026-08-11T09:00:00Z"));
 
         assertThat(result.trail()).hasSize(1);
-        assertThat(result.trail().getFirst().applicable()).isFalse();
+        assertThat(result.trail().getFirst().decided()).isFalse();
         assertThat(result.current()).isEmpty();
     }
 

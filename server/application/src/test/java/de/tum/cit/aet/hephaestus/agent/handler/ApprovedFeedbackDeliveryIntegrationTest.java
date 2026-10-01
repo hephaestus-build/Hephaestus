@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
@@ -41,7 +41,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalDecision;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.DecideFeedbackProposalRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -392,7 +392,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     void shouldPostAnAutomaticIssueProblemAloneWhenAnApprovalGatedPracticeBesideItDidNotApply() {
-        IssueReview issue = reviewBesideTriage(ObservationKind.NOT_APPLICABLE);
+        IssueReview issue = reviewBesideTriage(Outcome.NOT_APPLICABLE);
         compose(issue, issue.gap());
 
         handlerRegistry.getHandler(AgentJobType.ISSUE_REVIEW).deliver(issue.job());
@@ -413,7 +413,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     void shouldProposeAnIssueNoteWhoseUnitCitesAnObservationOfAPracticeNeedingApproval() {
-        IssueReview issue = reviewBesideTriage(ObservationKind.DEMONSTRATED_STRENGTH);
+        IssueReview issue = reviewBesideTriage(Outcome.MET);
         compose(issue, issue.gap(), issue.triage());
 
         handlerRegistry.getHandler(AgentJobType.ISSUE_REVIEW).deliver(issue.job());
@@ -430,7 +430,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
     private record IssueReview(AgentJob job, IssueHost host, UUID gap, UUID triage) {}
 
     /** The issue #7 shape: an automatic problem beside one result of a practice that needs approval. */
-    private IssueReview reviewBesideTriage(ObservationKind triageKind) {
+    private IssueReview reviewBesideTriage(Outcome triageKind) {
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practiceRepository.saveAndFlush(practice);
         Practice triage = persistPractice(workspace, null, "triage-labels-owner", "Triage the issue", null);
@@ -449,7 +449,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
                 issueId,
                 host.author(),
                 "The issue bundles three deliverables with no subtasks",
-                ObservationKind.OMISSION_GAP,
+                Outcome.NOT_MET,
                 Severity.MAJOR,
                 Instant.now(),
                 evidence,
@@ -567,8 +567,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
                 .put("repository_full_name", "acme/api")
                 .put("commit_sha", reviewedCommit));
         AgentJob review = agentJobRepository.save(job);
-        UUID observation =
-                observe(practice, review, mergeRequestId, developer, ObservationKind.DEMONSTRATED_STRENGTH, null, now);
+        UUID observation = observe(practice, review, mergeRequestId, developer, Outcome.MET, null, now);
         return recordProposal(review, observation);
     }
 
@@ -604,7 +603,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
                 Objects.requireNonNull(review.getMetadata()).path("issue_id").asLong(),
                 host.author(),
                 null,
-                ObservationKind.DEMONSTRATED_STRENGTH,
+                Outcome.MET,
                 null,
                 Instant.now(),
                 DIFF_EVIDENCE_JSON,

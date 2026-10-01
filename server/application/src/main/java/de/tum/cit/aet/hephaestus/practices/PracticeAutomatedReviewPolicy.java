@@ -18,7 +18,7 @@ import org.jspecify.annotations.Nullable;
  * <p>The frame the review runs in: which contract version names the sources, whether a language model
  * runs at all, and the claims the evidence cannot support whatever the occasion. Which sources it
  * actually reads is <em>not</em> here — that depends on what occasioned the review, so it lives on
- * {@link PracticeBinding#needs()}.
+ * {@link PracticeDefinition#evidenceRequirements()}.
  */
 @Schema(description = "Author-defined automated review settings for one practice revision")
 public record PracticeAutomatedReviewPolicy(

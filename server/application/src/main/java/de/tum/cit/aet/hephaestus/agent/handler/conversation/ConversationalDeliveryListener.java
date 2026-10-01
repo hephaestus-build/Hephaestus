@@ -24,7 +24,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * Drives the conversational-feedback router + preparer off {@link PracticeDetectionDeliveredEvent}. Runs
+ * Drives the conversational-feedback router + preparer off {@link PracticeFeedbackPreparationRequestedEvent}. Runs
  * {@code @Async @TransactionalEventListener(AFTER_COMMIT)} so it never blocks the delivery path and reads the
  * cycle's observations only after they are committed, in its own {@code REQUIRES_NEW} transaction. A failure
  * here is logged, never propagated: the feedback the developer already received is unaffected.
@@ -68,7 +68,7 @@ public class ConversationalDeliveryListener {
     @Async(FeedbackLaneExecutor.BEAN_NAME)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onPracticeDetectionDelivered(PracticeDetectionDeliveredEvent event) {
+    public void onPracticeFeedbackPreparationRequested(PracticeFeedbackPreparationRequestedEvent event) {
         try {
             prepare(event.agentJobId(), event.agentJobId(), event.workspaceId());
         } catch (RuntimeException e) {

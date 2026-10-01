@@ -3,7 +3,11 @@ package de.tum.cit.aet.hephaestus.practices;
 /** Independently selectable parts of a practice definition. */
 public enum PracticeDefinitionField {
     NAME,
-    BINDINGS,
+    SIGNALS,
+    EVIDENCE_REQUIREMENTS,
+    ON_DRAFTS,
+    SUBJECT,
+    PRECONDITION,
     CRITERIA,
     PRECOMPUTE_SCRIPT,
     AUTOMATED_REVIEW_POLICY,

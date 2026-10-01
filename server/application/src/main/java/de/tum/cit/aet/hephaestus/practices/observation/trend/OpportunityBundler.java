@@ -18,12 +18,12 @@ final class OpportunityBundler {
 
     static Bundles bundle(List<Observation> observations, Instant cutoff, int bundleSize) {
         List<EvidenceOpportunity> all = opportunities(observations, cutoff);
-        List<EvidenceOpportunity> applicable =
-                all.stream().filter(EvidenceOpportunity::applicable).toList();
+        List<EvidenceOpportunity> decided =
+                all.stream().filter(EvidenceOpportunity::decided).toList();
         List<EvidenceOpportunity> current =
-                tagged(applicable.stream().limit(bundleSize).toList(), TrendBundle.CURRENT);
+                tagged(decided.stream().limit(bundleSize).toList(), TrendBundle.CURRENT);
         List<EvidenceOpportunity> previous =
-                tagged(applicable.stream().skip(bundleSize).limit(bundleSize).toList(), TrendBundle.PREVIOUS);
+                tagged(decided.stream().skip(bundleSize).limit(bundleSize).toList(), TrendBundle.PREVIOUS);
         Map<ReviewedWorkKey, TrendBundle> bundleByArtifact = new LinkedHashMap<>();
         current.forEach(opportunity -> bundleByArtifact.put(opportunity.key(), TrendBundle.CURRENT));
         previous.forEach(opportunity -> bundleByArtifact.put(opportunity.key(), TrendBundle.PREVIOUS));
@@ -61,7 +61,7 @@ final class OpportunityBundler {
                 .filter(row -> latestJob.equals(row.getAgentJobId()))
                 .toList();
         OutcomeVector outcomes = latest.stream()
-                .map(row -> OutcomeVector.of(row.getAssessmentStatus(), row.getPresence(), row.getAssessment()))
+                .map(row -> OutcomeVector.of(row.getOutcome()))
                 .reduce(OutcomeVector.EMPTY, OutcomeVector::plus);
         Instant occurredAt = latest.stream()
                 .map(Observation::getObservedAt)
@@ -81,12 +81,12 @@ final class OpportunityBundler {
      */
     static List<EvidenceOpportunity> cappedTrail(List<EvidenceOpportunity> trail, int bundleSize) {
         int cap = 2 * bundleSize + 4;
-        int applicable = 0;
+        int decided = 0;
         for (int index = trail.size() - 1; index >= 0; index--) {
-            if (trail.get(index).applicable()) {
-                applicable++;
+            if (trail.get(index).decided()) {
+                decided++;
             }
-            if (applicable == cap) {
+            if (decided == cap) {
                 return trail.subList(index, trail.size());
             }
         }

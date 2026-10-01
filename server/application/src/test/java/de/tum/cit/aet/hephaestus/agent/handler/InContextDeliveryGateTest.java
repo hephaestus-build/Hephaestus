@@ -10,17 +10,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -211,7 +209,7 @@ class InContextDeliveryGateTest extends BaseUnitTest {
         AgentJob job = job();
         job.setMetadata(new tools.jackson.databind.ObjectMapper()
                 .createObjectNode()
-                .put(PracticeDetectionDeliveryService.ORIGIN_METADATA_KEY, ObservationOrigin.BACKFILL.name()));
+                .put(ReviewOutputService.ORIGIN_METADATA_KEY, ObservationOrigin.BACKFILL.name()));
         return job;
     }
 
@@ -235,9 +233,7 @@ class InContextDeliveryGateTest extends BaseUnitTest {
         return new ValidatedObservation(
                 slug,
                 "title",
-                AssessmentStatus.ASSESSED,
-                Presence.ABSENT,
-                Assessment.GOOD,
+                Outcome.NOT_MET,
                 Severity.MAJOR,
                 null,
                 "reasoning",

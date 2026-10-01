@@ -1,40 +1,36 @@
-import { CircleCheckIcon, WrenchIcon } from "lucide-react";
+import { CircleCheckIcon, CircleDashedIcon, CircleHelpIcon, WrenchIcon } from "lucide-react";
+import type { ReviewObservation } from "@/api/types.gen";
 import type { StatusDefs } from "@/components/common/status-def";
 
-export type Outcome = "POSITIVE" | "NEGATIVE";
+export type Outcome = ReviewObservation["outcome"];
 export const OUTCOME_DEFS: StatusDefs<Outcome> = {
-	POSITIVE: {
-		label: "Positive outcome",
+	MET: {
+		label: "Met",
 		icon: CircleCheckIcon,
 		badgeVariant: "success",
-		description:
-			"Desirable behaviour is present, or undesirable behaviour is absent from the applicable, fully searched evidence.",
+		description: "The applicable practice standard is met in the reviewed evidence.",
 	},
-	NEGATIVE: {
-		label: "Negative outcome",
+	NOT_MET: {
+		label: "Not met",
 		icon: WrenchIcon,
 		badgeVariant: "destructive",
-		description: "Undesirable behaviour is present, or required desirable behaviour is missing.",
+		description: "The applicable practice standard is not met in the reviewed evidence.",
+	},
+	NOT_APPLICABLE: {
+		label: "Not applicable",
+		icon: CircleDashedIcon,
+		badgeVariant: "secondary",
+		description: "The work offers no occasion for this practice.",
+	},
+	UNDETERMINED: {
+		label: "Undetermined",
+		icon: CircleHelpIcon,
+		badgeVariant: "secondary",
+		description: "The captured evidence does not settle whether the practice standard is met.",
 	},
 };
 
-/**
- * The outcomes as a count names them: "1 positive outcome", "27 negative outcomes". The label with
- * a number in front, so a count and the badge on the rows it opens read as the same word.
- */
-export const OUTCOME_COUNT_NOUNS = {
-	POSITIVE: { one: "positive outcome", other: "positive outcomes" },
-	NEGATIVE: { one: "negative outcome", other: "negative outcomes" },
-} as const satisfies Record<Outcome, { one: string; other: string }>;
-
 export function outcomeCountNoun(outcome: Outcome, count: number): string {
-	const noun = OUTCOME_COUNT_NOUNS[outcome];
-	return count === 1 ? noun.one : noun.other;
-}
-
-export function derivedOutcome(
-	presence: "PRESENT" | "ABSENT",
-	assessment: "GOOD" | "BAD",
-): Outcome {
-	return (presence === "PRESENT") === (assessment === "GOOD") ? "POSITIVE" : "NEGATIVE";
+	const label = OUTCOME_DEFS[outcome].label.toLowerCase();
+	return `${label} ${count === 1 ? "observation" : "observations"}`;
 }

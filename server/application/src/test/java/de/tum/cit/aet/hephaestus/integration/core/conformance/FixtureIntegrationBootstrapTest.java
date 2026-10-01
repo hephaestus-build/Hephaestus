@@ -17,10 +17,10 @@ import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestR
 import de.tum.cit.aet.hephaestus.integration.core.framework.ReviewContractValidator;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandlerRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -192,7 +192,11 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setId(1L);
         practice.setSlug("assemble-widgets-carefully");
-        practice.setBindings(List.of(new PracticeBinding(List.of(signals), List.of(FixtureIntegration.need()), false)));
+        practice.setSignals(List.of(signals));
+        practice.setEvidenceRequirements(List.of(FixtureIntegration.need()));
+        practice.setOnDrafts(false);
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
         return practice;
     }
 }

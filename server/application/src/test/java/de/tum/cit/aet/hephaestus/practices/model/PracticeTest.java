@@ -8,16 +8,16 @@ import org.junit.jupiter.api.Test;
 
 class PracticeTest extends BaseUnitTest {
 
-    /** {@code artifactKind} is a projection of the bindings, so setting bindings must re-derive it. */
+    /** {@code artifactKind} is a projection of the signals, so setting signals must re-derive it. */
     @Test
     void settingBindingsIsTheOnlyThingThatDecidesTheArtifactKind() {
         Practice practice = new Practice();
         assertThat(practice.getArtifactKind()).isEqualTo(ArtifactKinds.PULL_REQUEST);
 
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.CONVERSATION_THREAD);
         assertThat(practice.getArtifactKind()).isEqualTo(ArtifactKinds.CONVERSATION_THREAD);
 
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.ISSUE));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.ISSUE);
         assertThat(practice.getArtifactKind()).isEqualTo(ArtifactKinds.ISSUE);
     }
 }

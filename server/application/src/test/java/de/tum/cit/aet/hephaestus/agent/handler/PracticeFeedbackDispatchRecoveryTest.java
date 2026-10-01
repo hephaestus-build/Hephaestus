@@ -192,8 +192,7 @@ class PracticeFeedbackDispatchRecoveryTest extends BaseUnitTest {
                 state,
                 "body",
                 mapper.valueToTree(List.of("practice")),
-                mapper.valueToTree(
-                        new PracticeDetectionResultParser.DeliveryContent("body", List.of(), List.of(), null)),
+                mapper.valueToTree(new ReviewResultParser.DeliveryContent("body", List.of(), List.of(), null)),
                 mapper.valueToTree(List.of()),
                 false,
                 null,

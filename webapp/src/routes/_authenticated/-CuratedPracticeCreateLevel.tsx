@@ -79,7 +79,7 @@ export function CuratedPracticeCreateLevel({
 				definitionOptions={definitionOptionsQuery.data}
 				onSubmit={({
 					slug,
-					bindingChanges: _bindingChanges,
+					definitionChanges: _definitionChanges,
 					...definition
 				}: CuratedPracticeFormValue) => createPractice.mutate({ body: { slug, definition } })}
 			/>

@@ -61,7 +61,7 @@ class PracticeDefinitionOptionsServiceTest {
                 .containsExactly(ActorRole.AUTHOR);
         assertThat(pullRequests.supportedAutomatedReviewModes())
                 .containsExactly(PracticeAutomatedReviewMode.LANGUAGE_MODEL);
-        assertThat(pullRequests.recommendedNeeds())
+        assertThat(pullRequests.recommendedEvidenceRequirements())
                 .extracting(need -> need.sourceKind().value())
                 .containsExactly("scm.pull-request.core", "scm.pull-request.diff", "scm.pull-request.comments");
         assertThat(pullRequests.allowedSources())

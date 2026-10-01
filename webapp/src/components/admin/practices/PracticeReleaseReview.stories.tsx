@@ -2,13 +2,13 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, within } from "storybook/test";
 
 import type { PracticeDefinition, PracticeReleaseProposal } from "@/api/types.gen";
-import { mockPullRequestBinding, mockPullRequestPolicy } from "@/mocks/fixtures/practice";
+import { mockPullRequestReviewFields, mockPullRequestPolicy } from "@/mocks/fixtures/practice";
 
 import { PracticeReleaseReview } from "./PracticeReleaseReview";
 
 const base: PracticeDefinition = {
 	name: "Explain the change",
-	bindings: [mockPullRequestBinding],
+	...mockPullRequestReviewFields,
 	criteria: "Explain the old behavior",
 	automatedReviewPolicy: mockPullRequestPolicy,
 	whyItMatters: "Reviewers need context.",
