@@ -139,7 +139,9 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                     case ContextRequest.IssueReviewRequest r -> r.job();
                     case ContextRequest.ConversationReviewRequest r -> r.job();
                     case ContextRequest.DocumentReviewRequest r -> r.job();
-                    case ContextRequest.MentorChatRequest ignored -> throw new IllegalArgumentException("Not a review");
+                    case ContextRequest.MentorChatRequest mentor ->
+                        throw new IllegalArgumentException(
+                                "No review job for mentor workspace " + mentor.workspaceId());
                 };
         long workspace = job.getWorkspace().getId();
         Path root = evidenceFiles.renderingDirectory(job);
