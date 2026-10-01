@@ -239,6 +239,16 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         workspace.getFeatures().setPracticesEnabled(true);
         workspace = workspaceRepository.save(workspace);
 
+        var scm = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
+                workspace,
+                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
+                "1732",
+                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig(
+                        1732L, workspace.getAccountLogin(), null, java.util.Set.of()));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                scm, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
+        connections.save(scm);
+
         Practice description = createPractice("pr-description-quality", "PR Description Quality");
         Practice errors = createPractice("error-handling", "Error Handling");
 
@@ -363,15 +373,6 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     @Test
     void jobFolderVerifiesCrossSourceQuotesAndIncludesFreshlyCommittedPullRequest() throws Exception {
         setJobOutput(validAgentOutput());
-        var scm = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
-                workspace,
-                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
-                "1732",
-                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig(
-                        1732L, workspace.getAccountLogin(), null, java.util.Set.of()));
-        org.springframework.test.util.ReflectionTestUtils.setField(
-                scm, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
-        connections.save(scm);
         var provider = java.util.Objects.requireNonNull(repository.getProvider());
         var other = new Repository();
         other.setProvider(provider);

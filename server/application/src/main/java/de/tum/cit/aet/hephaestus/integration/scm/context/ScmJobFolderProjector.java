@@ -20,7 +20,10 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
 
     @Override
     public void forEachRecord(
-            long workspace, long repository, Set<SourceKind> allowed, java.util.function.Consumer<Record> consumer) {
+            long workspace,
+            long repository,
+            Set<SourceKind> allowed,
+            java.util.function.Consumer<ProjectedRecord> consumer) {
         rows("""
             SELECT (to_jsonb(i)||jsonb_build_object('synced_at',i.last_sync_at))::text FROM issue i
             WHERE i.repository_id=? AND i.deleted_at IS NULL AND EXISTS
@@ -32,8 +35,9 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
                     (pull ? "pulls/" : "issues/") + record.path("number").asInt() + "/";
             String kind = pull ? "scm.pull-request.core" : "scm.issue.core";
             if (allowed.contains(new SourceKind(kind))) {
-                consumer.accept(new Record(prefix + "record.json", new SourceKind(kind), Format.JSON, record));
-                consumer.accept(new Record(prefix + "description.md", new SourceKind(kind), Format.MARKDOWN, record));
+                consumer.accept(new ProjectedRecord(prefix + "record.json", new SourceKind(kind), Format.JSON, record));
+                consumer.accept(
+                        new ProjectedRecord(prefix + "description.md", new SourceKind(kind), Format.MARKDOWN, record));
             }
             long issue = record.path("id").asLong();
             comments(
@@ -85,7 +89,7 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
             long workspace,
             Set<SourceKind> allowed,
             String kind,
-            java.util.function.Consumer<Record> consumer) {
+            java.util.function.Consumer<ProjectedRecord> consumer) {
         if (!allowed.contains(new SourceKind(kind))) return;
         String foreign = table.equals("issue_comment") ? "issue_id" : "pull_request_id";
         rows(
@@ -96,7 +100,7 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
                 p -> {
                     String body = p.path("body").asString("");
                     if (!body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER))
-                        consumer.accept(new Record(prefix + filename, new SourceKind(kind), Format.JSONL, p));
+                        consumer.accept(new ProjectedRecord(prefix + filename, new SourceKind(kind), Format.JSONL, p));
                 });
     }
 

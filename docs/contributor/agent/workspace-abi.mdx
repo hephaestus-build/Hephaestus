@@ -403,3 +403,14 @@ would bypass them anyway; the mount and container isolation are the boundary. Th
 [sandbox threat model](/admin/threat-model#boundary-2-llm-agent-sandbox) owns the isolation
 requirements. Deployment connectivity is covered in
 [practice-review operations](/admin/practice-review-operations).
+
+### Composed views and live citation access
+
+The normalized history under `inputs/history/` supports readiness and composition, not citations.
+Cite the person-scoped canonical JSONL record so admission and delivery can recheck that record's
+current visibility and withdrawal state. The citation inventory excludes composed history.
+Normalized primary document citations bind to the job's document identity. Normalized thread
+citations bind to every message in that frozen projection; withdrawal of any included message
+refuses that citation. Use canonical chat JSONL lines for message-specific checks. Primary SCM
+projections bind to the reviewed repository, with the same live repository permission check as
+canonical SCM paths.

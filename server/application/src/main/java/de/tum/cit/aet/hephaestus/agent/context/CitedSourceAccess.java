@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -64,13 +65,38 @@ public class CitedSourceAccess {
     public void bind(AgentJob job, ObjectNode citation, String digest) {
         String path = citation.path("artifactPath").asString();
         if (path.startsWith("context/people/")) {
-            long person = Long.parseLong(path.split("/")[2]);
+            long person = sourceNumber(path.split("/")[2]);
             if (!memberPolicy.allowsPerson(job, person))
                 throw new JobDeliveryException("The cited person no longer permits this processor");
         }
         var reference = mapper.createObjectNode();
         var records = reference.putArray("records");
-        if (path.startsWith("context/chat/") || (path.startsWith("context/people/") && path.endsWith(".jsonl"))) {
+        if (path.startsWith("inputs/history/")) {
+            throw new JobDeliveryException("Cite the canonical source record, not a composed view");
+        }
+        if (path.equals("context/document.md") || path.equals("context/document.json")) {
+            long id = java.util.Objects.requireNonNull(job.getMetadata())
+                    .path("docs_document_id")
+                    .asLong(-1);
+            records.addObject().put("type", "document").put("id", id);
+        } else if (path.equals("context/conversation_thread.json")) {
+            JsonNode payload = files.inspect(
+                            job,
+                            path,
+                            digest,
+                            input -> mapper.reader()
+                                    .without(StreamReadFeature.AUTO_CLOSE_SOURCE)
+                                    .readTree(input))
+                    .orElseThrow(() -> new JobDeliveryException("The cited conversation is unavailable"));
+            for (JsonNode message : payload.path("messages")) {
+                records.addObject()
+                        .put("type", "chat")
+                        .put("channel", payload.path("channel").asString(""))
+                        .put("message", message.path("ts").asString(""));
+            }
+            if (records.isEmpty()) throw new JobDeliveryException("The cited conversation has no source identity");
+        } else if (path.startsWith("context/chat/")
+                || (path.startsWith("context/people/") && path.endsWith(".jsonl"))) {
             int first = citation.path("startLine").asInt();
             int last = citation.path("endLine").asInt(first);
             var selected = files.inspect(job, path, digest, input -> {
@@ -91,7 +117,7 @@ public class CitedSourceAccess {
                             } else {
                                 entry.put("type", path.endsWith("observations.jsonl") ? "observation" : "feedback")
                                         .put("id", record.path("id").asString())
-                                        .put("person", Long.parseLong(path.split("/")[2]));
+                                        .put("person", sourceNumber(path.split("/")[2]));
                             }
                         }
                         return rows;
@@ -100,7 +126,7 @@ public class CitedSourceAccess {
             records.addAll(selected);
             if (records.isEmpty()) throw new JobDeliveryException("The cited folder record has no source identity");
         } else if (path.startsWith("context/people/") && path.endsWith("/person.json")) {
-            records.addObject().put("type", "person").put("person", Long.parseLong(path.split("/")[2]));
+            records.addObject().put("type", "person").put("person", sourceNumber(path.split("/")[2]));
         } else if (path.startsWith("context/docs/")) {
             String[] parts = path.split("/");
             if (parts.length != 4 || !parts[3].endsWith(".md")) throw new JobDeliveryException("Invalid document path");
@@ -124,14 +150,17 @@ public class CitedSourceAccess {
                     .put("id", sourceId)
                     .put("collection", decode(parts[2]))
                     .put("slug", decode(parts[3].substring(0, parts[3].length() - 3)));
-        } else if (path.startsWith("context/scm/") || path.startsWith("repos/")) {
+        } else if (path.startsWith("context/scm/")
+                || path.startsWith("repos/")
+                || citation.path("sourceKind").asString("").startsWith("scm.")) {
             String[] parts = path.split("/");
-            String repo = parts[path.startsWith("repos/") ? 1 : 2];
+            String repo =
+                    path.startsWith("repos/") ? parts[1] : path.startsWith("context/scm/") ? parts[2] : "reviewed";
             long id = repo.equals("reviewed")
                     ? java.util.Objects.requireNonNull(job.getMetadata())
                             .path("repository_id")
                             .asLong(-1)
-                    : Long.parseLong(repo);
+                    : sourceNumber(repo);
             records.addObject().put("type", "repository").put("id", id);
         } else {
             citation.remove("sourceReference");
@@ -144,10 +173,16 @@ public class CitedSourceAccess {
     }
 
     public boolean permits(long workspace, JsonNode citation, SourceUsePurpose purpose) {
+        String artifact = citation.path("artifactPath").asString("");
+        if (artifact.startsWith("inputs/history/")) return false;
         JsonNode reference = citation.path("sourceReference");
         String path = citation.path("artifactPath").asString("");
         if (reference.isMissingNode()) {
-            return !path.startsWith("context/chat/")
+            return !path.equals("context/document.md")
+                    && !path.equals("context/document.json")
+                    && !path.equals("context/conversation_thread.json")
+                    && !citation.path("sourceKind").asString("").startsWith("scm.")
+                    && !path.startsWith("context/chat/")
                     && !path.startsWith("context/docs/")
                     && !path.startsWith("context/people/")
                     && !path.startsWith("context/scm/")
@@ -175,6 +210,12 @@ public class CitedSourceAccess {
                                         workspace,
                                         record.path("channel").asString(),
                                         record.path("message").asString());
+                            case "document" ->
+                                documents
+                                        .documentById(
+                                                workspace, record.path("id").asLong(-1))
+                                        .filter(doc -> !doc.deleted() && doc.bodyMarkdown() != null)
+                                        .isPresent();
                             case "docs" ->
                                 documents
                                         .documentsByReference(
@@ -213,6 +254,14 @@ public class CitedSourceAccess {
             return true;
         } catch (IllegalArgumentException exception) {
             return false;
+        }
+    }
+
+    private static long sourceNumber(String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException exception) {
+            throw new JobDeliveryException("Invalid cited source identity", exception);
         }
     }
 

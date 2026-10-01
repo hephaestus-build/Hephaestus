@@ -91,6 +91,84 @@ class CitedSourceAccessTest extends BaseUnitTest {
     }
 
     @Test
+    void normalizedThreadCannotBypassAWithdrawnMessage() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+        var job = job();
+        String path = "context/conversation_thread.json";
+        byte[] bytes =
+                "{\"channel\":\"C1\",\"messages\":[{\"ts\":\"1\"},{\"ts\":\"2\"}]}".getBytes(StandardCharsets.UTF_8);
+        try (var prepared = files.prepare(job, new PreparedEvidence(Map.of(path, bytes), null), null)) {
+            assertThat(prepared.filesOnDisk()).containsKey(path);
+            var citation = mapper.createObjectNode().put("artifactPath", path);
+            when(conversations.isMessageReadable(1L, "C1", "1")).thenReturn(true);
+            when(conversations.isMessageReadable(1L, "C1", "2")).thenReturn(true);
+            var access = access(files);
+            access.bind(job, citation, ProvenanceDigest.sha256Hex(bytes));
+            assertThat(citation.path("sourceReference").path("records")).hasSize(2);
+            when(conversations.isMessageReadable(1L, "C1", "2")).thenReturn(false);
+            assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void normalizedDocumentCannotBypassErasure() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+        var job = job();
+        job.setMetadata(mapper.createObjectNode().put("docs_document_id", 7L));
+        var document = DocumentProjection.ProjectedDocument.withoutAuthors("c", "d", "Title", "quote", false);
+        when(documents.documentById(1L, 7L)).thenReturn(java.util.Optional.of(document));
+        var citation = mapper.createObjectNode().put("artifactPath", "context/document.md");
+        var access = access(files);
+        access.bind(job, citation, "a".repeat(64));
+        assertThat(citation.path("sourceReference")
+                        .path("records")
+                        .get(0)
+                        .path("id")
+                        .asLong())
+                .isEqualTo(7L);
+        when(documents.documentById(1L, 7L)).thenReturn(java.util.Optional.empty());
+        assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .isFalse();
+    }
+
+    @Test
+    void normalizedScmCannotBypassRepositoryRemoval() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+        var job = job();
+        job.setMetadata(mapper.createObjectNode().put("repository_id", 2L));
+        var citation = mapper.createObjectNode()
+                .put("artifactPath", "context/comments.json")
+                .put("sourceKind", "scm.pull-request.discussion");
+        when(repositories.permittedRepositories(1L)).thenReturn(java.util.List.of());
+        assertThatThrownBy(() -> access(files).bind(job, citation, "a".repeat(64)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("no longer permitted");
+        assertThat(citation.path("sourceReference")
+                        .path("records")
+                        .get(0)
+                        .path("id")
+                        .asLong())
+                .isEqualTo(2L);
+    }
+
+    @Test
+    void composedHistoryCannotBypassCanonicalRecordAuthorization() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+        var citation = mapper.createObjectNode().put("artifactPath", "inputs/history/observations.json");
+        assertThatThrownBy(() -> access(files).bind(job(), citation, "a".repeat(64)))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessageContaining("canonical");
+        citation.putObject("sourceReference").putArray("records").addObject().put("type", "person");
+        assertThat(access(files).permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .isFalse();
+    }
+
+    @Test
     void refusesHistoryWhenItsDeveloperChangesTheProcessorChoiceAfterRendering() {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
@@ -106,11 +184,26 @@ class CitedSourceAccessTest extends BaseUnitTest {
     }
 
     @Test
+    void malformedNumericSourceIdentityIsATypedAdmissionRefusal() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+        for (String path : java.util.List.of("context/people/not-a-person/person.json", "repos/not-a-repo/.git/HEAD")) {
+            assertThatThrownBy(() -> access(files)
+                            .bind(job(), mapper.createObjectNode().put("artifactPath", path), "a".repeat(64)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("source identity");
+        }
+    }
+
+    @Test
     void refusesMissingCanonicalReferencesAndForeignRepositories() {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
         var access = access(files);
         for (String path : java.util.List.of(
+                "context/conversation_thread.json",
+                "context/document.md",
+                "inputs/history/feedback.json",
                 "context/chat/C1/2026-10.jsonl",
                 "context/docs/c/d.md",
                 "context/people/42/person.json",

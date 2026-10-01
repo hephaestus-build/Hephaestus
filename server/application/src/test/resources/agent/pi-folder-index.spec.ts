@@ -37,3 +37,15 @@ await test("missing, duplicate and unsafe folder proofs fail closed", () => {
 		);
 	}
 });
+
+await test("composed history is readable but only canonical history is citable", () => {
+	const result = folderCitationIndex({
+		sources: [],
+		artifacts: [
+			{ kind: "review.observations", artifact: { path: "inputs/history/observations.json" } },
+			{ kind: "review.observations", artifact: { path: "context/people/42/observations.jsonl" } },
+		],
+	});
+	assert.equal(result.artifactSources.has("inputs/history/observations.json"), false);
+	assert.equal(result.artifactSources.has("context/people/42/observations.jsonl"), true);
+});
