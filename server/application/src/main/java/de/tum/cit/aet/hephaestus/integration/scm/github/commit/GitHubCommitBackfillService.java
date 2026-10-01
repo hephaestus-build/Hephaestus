@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryAvailabilityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class GitHubCommitBackfillService {
 
+    private final RepositoryAvailabilityProvider repositoryAvailabilityProvider;
     private final GitRepositoryManager gitRepositoryManager;
     private final GitHubAppTokenService tokenService;
     private final CommitRepository commitRepository;
@@ -41,7 +43,8 @@ public class GitHubCommitBackfillService {
      * @return number of commits captured, or -1 if intentionally skipped
      */
     public int backfillCommits(SyncTarget syncTarget, Repository repository, Long scopeId) {
-        if (!gitRepositoryManager.isEnabled()) {
+        if (repositoryAvailabilityProvider.isRepositoryUnavailable(scopeId, syncTarget.id())
+                || !gitRepositoryManager.isEnabled()) {
             return -1;
         }
 

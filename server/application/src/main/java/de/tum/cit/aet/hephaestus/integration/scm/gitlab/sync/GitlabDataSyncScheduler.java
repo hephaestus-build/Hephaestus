@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRequest;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -37,6 +38,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroup
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.collaborator.GitLabCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
@@ -49,12 +51,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -69,6 +70,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 /**
  * Scheduler for periodic GitLab data synchronization across all GitLab scopes.
@@ -114,6 +116,7 @@ public class GitlabDataSyncScheduler {
     private final GitLabRepositoryMonitors repositoryMonitors;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceActorSelector actorSelector;
+    private final GitLabProjectSyncService projectSyncService;
 
     public GitlabDataSyncScheduler(
             SyncTargetProvider syncTargetProvider,
@@ -130,7 +133,8 @@ public class GitlabDataSyncScheduler {
             GitLabWorkspaceInitializationService initializationService,
             GitLabRepositoryMonitors repositoryMonitors,
             WorkspaceRepository workspaceRepository,
-            WorkspaceActorSelector actorSelector) {
+            WorkspaceActorSelector actorSelector,
+            GitLabProjectSyncService projectSyncService) {
         this.syncTargetProvider = syncTargetProvider;
         this.syncContextProvider = syncContextProvider;
         this.organizationRepository = organizationRepository;
@@ -146,6 +150,7 @@ public class GitlabDataSyncScheduler {
         this.repositoryMonitors = repositoryMonitors;
         this.workspaceRepository = workspaceRepository;
         this.actorSelector = actorSelector;
+        this.projectSyncService = projectSyncService;
     }
 
     @PostConstruct
@@ -297,7 +302,7 @@ public class GitlabDataSyncScheduler {
             // Phase 0: Open a group webhook an earlier initialization had to leave closed
             openMissingWebhook(session, handle);
 
-            // Phase 1: Sync group projects (discovers new repos, removes deleted ones)
+            // Phase 1: Sync group projects (discovers new repositories and heals their identities)
             syncGroupProjects(services, session, handle);
 
             // Phase 2: Sync group memberships
@@ -314,12 +319,12 @@ public class GitlabDataSyncScheduler {
             // Phase 3: Per-repository sync (labels, milestones, issues, MRs, collaborators) —
             // the dominant-cost phase, where cancel/progress are threaded through the handle.
             Map<Long, String> resourceErrors = new HashMap<>();
-            syncRepositories(services, session, handle, resourceErrors);
+            List<Repository> availableRepos = syncRepositories(services, session, handle, resourceErrors);
 
             // A cancel observed during the repo phase skips the remaining phases (cooperative best-effort).
             if (handle == null || !handle.isCancellationRequested()) {
                 // Phase 4: Post-repo sync (sub-issues, dependencies — needs issues to exist)
-                syncPostRepo(services, session, handle, resourceErrors);
+                syncPostRepo(services, session, handle, resourceErrors, availableRepos);
             }
 
             resourceErrors.forEach((targetId, error) -> {
@@ -398,9 +403,9 @@ public class GitlabDataSyncScheduler {
                     result.synced().size(),
                     result.pagesCompleted());
 
-            // Stale repo cleanup: only when sync completed normally
+            // Discover monitors only from a complete listing. Missing projects retain their work.
             if (result.status() == GitLabSyncResult.Status.COMPLETED) {
-                removeStaleRepositories(session, result);
+
                 // A complete listing also monitors projects created since the workspace was set up.
                 workspaceRepository
                         .findById(session.scopeId())
@@ -411,41 +416,6 @@ public class GitlabDataSyncScheduler {
         } catch (Exception e) {
             log.error("Failed GitLab group project sync: scopeId={}", session.scopeId(), e);
             reportWarning(handle);
-        }
-    }
-
-    /**
-     * Removes repositories that exist in the database but were not found during
-     * the latest group project sync. Guards against false positives by only running
-     * when the sync completed fully (all pages fetched).
-     */
-    private void removeStaleRepositories(SyncSession session, GitLabSyncResult result) {
-        Long providerId = getGitLabProviderId(session.scopeId());
-        if (providerId == null) return;
-
-        Set<Long> syncedNativeIds =
-                result.synced().stream().map(Repository::getNativeId).collect(Collectors.toSet());
-
-        List<Repository> existingRepos = repositoryRepository.findAllByOrganization_LoginIgnoreCaseAndProviderId(
-                session.accountLogin(), providerId);
-
-        int removed = 0;
-        for (Repository repo : existingRepos) {
-            if (repo.getProvider() != null
-                    && Objects.requireNonNull(repo.getProvider().getId()).equals(providerId)
-                    && !syncedNativeIds.contains(repo.getNativeId())) {
-                log.info(
-                        "Removing stale repository: repoId={}, name={}, nativeId={}",
-                        repo.getId(),
-                        sanitizeForLog(repo.getNameWithOwner()),
-                        repo.getNativeId());
-                repositoryRepository.delete(repo);
-                removed++;
-            }
-        }
-
-        if (removed > 0) {
-            log.info("Removed stale repositories: scopeId={}, count={}", session.scopeId(), removed);
         }
     }
 
@@ -564,7 +534,7 @@ public class GitlabDataSyncScheduler {
         }
     }
 
-    private void syncRepositories(
+    private List<Repository> syncRepositories(
             GitLabSyncServiceHolder services,
             SyncSession session,
             @Nullable SyncExecutionHandle handle,
@@ -590,14 +560,17 @@ public class GitlabDataSyncScheduler {
 
         if (repos.isEmpty()) {
             log.debug("No repositories to sync for GitLab workspace: scopeId={}", session.scopeId());
-            return;
+            return List.of();
         }
 
-        // Map nameWithOwner → sync target id from the session so each phase can write
+        // Use current monitor identities after reconciliation so each phase can write
         // its per-repo watermark via the SPI without reaching into workspace internals.
-        Map<String, Long> syncTargetIdsByNameWithOwner = session.syncTargets().stream()
-                .collect(Collectors.toMap(SyncTarget::repositoryNameWithOwner, SyncTarget::id, (a, b) -> a));
+        Map<String, Long> syncTargetIdsByNameWithOwner =
+                syncTargetProvider.getSyncTargetsForScope(session.scopeId()).stream()
+                        .collect(Collectors.toMap(SyncTarget::repositoryNameWithOwner, SyncTarget::id, (a, b) -> a));
 
+        List<Repository> availableRepos = new ArrayList<>();
+        Map<Long, Long> availableTargetIds = new HashMap<>();
         GitLabRateLimitTracker rateLimitTracker = rateLimitTrackerProvider.getIfAvailable();
         int totalLabels = 0,
                 totalMilestones = 0,
@@ -645,8 +618,45 @@ public class GitlabDataSyncScheduler {
 
             // Look up the sync-target id from the session so each phase can write its
             // per-repo watermark via the SPI. Not all repositories have an entry in the
-            // session (edge case), in which case we skip the watermark writes silently.
+            // refreshed targets (edge case); without a monitor, do not fetch the row.
             Long rtmId = syncTargetIdsByNameWithOwner.get(repo.getNameWithOwner());
+
+            if (rtmId == null || syncTargetProvider.deferUnavailableRepository(session.scopeId(), rtmId)) {
+                reportWarning(handle);
+                continue;
+            }
+            try {
+                var metadata = repo.getNativeId() != null
+                        ? projectSyncService.fetchProjectById(session.scopeId(), repo.getNativeId())
+                        : projectSyncService.fetchProject(session.scopeId(), repo.getNameWithOwner());
+                if (metadata.isEmpty()) {
+                    syncTargetProvider.recordRepositoryUnavailable(session.scopeId(), rtmId);
+                    reportWarning(handle);
+                    continue;
+                }
+                var refreshed = projectSyncService.persistProject(metadata.get(), repo.getProvider());
+                if (refreshed.isEmpty()) {
+                    syncTargetProvider.retryUnavailableRepository(session.scopeId(), rtmId);
+                    resourceErrors.put(rtmId, "Repository metadata sync failed");
+                    reportWarning(handle);
+                    continue;
+                }
+                repo = refreshed.get();
+                syncTargetProvider.reconcileSyncTargetIdentity(rtmId, repo.getNativeId(), repo.getNameWithOwner());
+                syncTargetProvider.clearRepositoryUnavailable(session.scopeId(), rtmId);
+                availableRepos.add(repo);
+                availableTargetIds.put(repo.getId(), rtmId);
+            } catch (RepositoryNotFoundOnGitProviderException | WebClientResponseException.NotFound e) {
+                syncTargetProvider.recordRepositoryUnavailable(session.scopeId(), rtmId);
+                reportWarning(handle);
+                continue;
+            } catch (Exception e) {
+                // A refused credential, rate limit, partial response or transport failure is not absence.
+                syncTargetProvider.retryUnavailableRepository(session.scopeId(), rtmId);
+                resourceErrors.put(rtmId, "Repository metadata sync failed");
+                reportWarning(handle);
+                continue;
+            }
 
             String error = null;
             boolean issuesDone = false;
@@ -859,7 +869,7 @@ public class GitlabDataSyncScheduler {
         // a commit whose SHA appears on an MR in a sibling repo can still be linked (the target MR
         // repo may not have synced its MRs when this repo's commits were fetched).
         if (commitMrLinker != null && (handle == null || !handle.isCancellationRequested())) {
-            for (Repository repo : repos) {
+            for (Repository repo : availableRepos) {
                 OffsetDateTime repoUpdatedAfter = null;
                 if (repo.getLastSyncAt() != null) {
                     Instant buffered = repo.getLastSyncAt().minus(Duration.ofMinutes(5));
@@ -867,7 +877,7 @@ public class GitlabDataSyncScheduler {
                 }
                 try {
                     SyncResult result = commitMrLinker.linkCommits(session.scopeId(), repo, repoUpdatedAfter);
-                    Long targetId = syncTargetIdsByNameWithOwner.get(repo.getNameWithOwner());
+                    Long targetId = availableTargetIds.get(repo.getId());
                     if (targetId != null) {
                         resourceErrors.putIfAbsent(
                                 targetId,
@@ -876,7 +886,7 @@ public class GitlabDataSyncScheduler {
                                         : "Commit linking: " + result.status());
                     }
                 } catch (Exception e) {
-                    Long targetId = syncTargetIdsByNameWithOwner.get(repo.getNameWithOwner());
+                    Long targetId = availableTargetIds.get(repo.getId());
                     if (targetId != null) {
                         resourceErrors.putIfAbsent(
                                 targetId,
@@ -902,27 +912,30 @@ public class GitlabDataSyncScheduler {
                 totalMRs,
                 totalCollaborators,
                 totalCommits);
+        return availableRepos;
     }
 
     private void syncPostRepo(
             GitLabSyncServiceHolder services,
             SyncSession session,
             @Nullable SyncExecutionHandle handle,
-            Map<Long, String> resourceErrors) {
+            Map<Long, String> resourceErrors,
+            List<Repository> repos) {
         GitLabSubIssueSyncService subIssueSync = services.getSubIssueSyncService();
         GitLabIssueDependencySyncService depSync = services.getIssueDependencySyncService();
 
         if (subIssueSync == null && depSync == null) return;
 
-        List<Repository> repos = repositoryRepository.findAllByWorkspaceMonitors(session.scopeId());
-
         int totalSubIssues = 0, totalDeps = 0;
 
-        Map<String, Long> syncTargetIdsByName = session.syncTargets().stream()
+        Map<String, Long> syncTargetIdsByName = syncTargetProvider.getSyncTargetsForScope(session.scopeId()).stream()
                 .collect(Collectors.toMap(SyncTarget::repositoryNameWithOwner, SyncTarget::id, (a, b) -> a));
 
         for (Repository repo : repos) {
             Long syncTargetId = syncTargetIdsByName.get(repo.getNameWithOwner());
+            if (syncTargetId != null && syncTargetProvider.isRepositoryUnavailable(session.scopeId(), syncTargetId)) {
+                continue;
+            }
             if (syncTargetId != null) {
                 resourceErrors.putIfAbsent(syncTargetId, null);
             }

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -33,6 +34,40 @@ public interface RepositoryToMonitorRepository extends JpaRepository<RepositoryT
     @Transactional
     @Query("UPDATE RepositoryToMonitor m SET m.historicalBackfillSyncError = :error WHERE m.id = :id")
     int updateHistoricalBackfillSyncError(@Param("id") Long id, @Param("error") @Nullable String error);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.unavailableRetryAt = :reservedUntil "
+            + "WHERE m.workspace.id = :workspaceId AND m.id = :id AND m.unavailableSince IS NOT NULL "
+            + "AND (m.unavailableRetryAt IS NULL OR m.unavailableRetryAt <= :now)")
+    int reserveUnavailableRecheck(Long workspaceId, Long id, Instant now, Instant reservedUntil);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.unavailableRetryAt = CASE WHEN m.unavailableSince IS NULL "
+            + "THEN cast(:now as Instant) ELSE cast(:retryAt as Instant) END, m.unavailableSince = COALESCE(m.unavailableSince, :now) "
+            + "WHERE m.workspace.id = :workspaceId AND m.id = :id")
+    int recordUnavailable(Long workspaceId, Long id, Instant now, Instant retryAt);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.unavailableSince = NULL, m.unavailableRetryAt = NULL "
+            + "WHERE m.workspace.id = :workspaceId AND m.id = :id")
+    int clearUnavailable(Long workspaceId, Long id);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.unavailableRetryAt = NULL "
+            + "WHERE m.workspace.id = :workspaceId AND m.unavailableSince IS NOT NULL")
+    int recheckUnavailable(Long workspaceId);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE RepositoryToMonitor m SET m.unavailableRetryAt = NULL "
+            + "WHERE m.workspace.id = :workspaceId AND m.id = :id")
+    int retryUnavailable(Long workspaceId, Long id);
+
+    boolean existsByWorkspaceIdAndIdAndUnavailableSinceIsNotNull(Long workspaceId, Long id);
 
     /** Resolves which workspace a repository belongs to during sync, by full name (owner/name). */
     Optional<RepositoryToMonitor> findByNameWithOwner(String nameWithOwner);

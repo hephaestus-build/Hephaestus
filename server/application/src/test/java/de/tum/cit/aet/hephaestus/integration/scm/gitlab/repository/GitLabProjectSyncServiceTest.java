@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -14,17 +15,21 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler.HandleResult;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabGroupResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -33,10 +38,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 @Tag("unit")
@@ -86,7 +97,35 @@ class GitLabProjectSyncServiceTest extends BaseUnitTest {
                 projectProcessor,
                 groupProcessor,
                 gitLabProperties,
-                gitProviderRepository);
+                gitProviderRepository,
+                new GitLabExceptionClassifier(new SimpleMeterRegistry()));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"RATE_LIMITED, true", "UNAUTHORIZED, true", "NOT_FOUND, true", "NOT_FOUND, false"})
+    void shouldClassifyFieldErrorsBeforeTreatingProjectAsUnavailable(String errorType, boolean projectMissing) {
+        var webClient = WebClient.builder()
+                .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
+                        .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                        .body("""
+                                {"data":{"project":%s},"errors":[{"message":"Unavailable",
+                                "path":%s,"extensions":{"code":"%s"}}]}
+                                """.formatted(
+                                        projectMissing ? "null" : "{\"id\":\"gid://gitlab/Project/123\"}",
+                                        projectMissing ? "[\"project\"]" : "[\"project\",\"group\"]",
+                                        errorType))
+                        .build()))
+                .build();
+        when(graphQlClientProvider.forScope(1L))
+                .thenReturn(HttpGraphQlClient.builder(webClient)
+                        .documentSource(name -> Mono.just("query { project(fullPath: \"course/project\") { id } }"))
+                        .build());
+
+        assertThatThrownBy(() -> service.fetchProject(1L, "course/project"))
+                .isInstanceOf(
+                        errorType.equals("NOT_FOUND") && projectMissing
+                                ? RepositoryNotFoundOnGitProviderException.class
+                                : GitLabSyncException.class);
     }
 
     @Nested

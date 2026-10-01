@@ -1375,6 +1375,8 @@ erDiagram
         VARCHAR(2048) historical_backfill_sync_error
         VARCHAR(2048) recent_sync_error
         JSONB generated_paths "NOT NULL"
+        TIMESTAMPTZ unavailable_retry_at
+        TIMESTAMPTZ unavailable_since
     }
 
     ReviewBackfillRun {

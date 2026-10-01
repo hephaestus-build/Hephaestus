@@ -7,7 +7,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Main SPI for the integration.scm sync engine to discover and manage synchronization
  * targets. Extends {@link SyncTimestampProvider} (sync timestamps) and
- * {@link BackfillStateProvider} (backfill tracking).
+ * {@link BackfillStateProvider} (backfill tracking) and {@link RepositoryAvailabilityProvider}
+ * (persisted repository rechecks).
  * <p>
  * The SPI is domain-agnostic: sync targets are identified by {@code syncTargetId},
  * scopes group sync targets and are identified by {@code scopeId}; the host application
@@ -16,7 +17,8 @@ import org.jspecify.annotations.Nullable;
  * <b>Thread Safety:</b> Implementations must be thread-safe. The sync engine may call
  * methods concurrently from multiple sync threads.
  */
-public interface SyncTargetProvider extends SyncTimestampProvider, BackfillStateProvider {
+public interface SyncTargetProvider
+        extends SyncTimestampProvider, BackfillStateProvider, RepositoryAvailabilityProvider {
     /**
      * Gets all active sync targets across all scopes — targets in active-status scopes with
      * at least one configured repository. Never null (may be empty).
@@ -172,8 +174,8 @@ public interface SyncTargetProvider extends SyncTimestampProvider, BackfillState
      *                                            {@code null} for legacy/unresolved rows. Unlike
      *                                            {@code repositoryNameWithOwner} it never changes across a
      *                                            rename/transfer, so the sync engine uses it to re-key the
-     *                                            monitor and to decide that a name-404 is a rename (heal),
-     *                                            not a deletion (remove).
+     *                                            monitor after a rename. A missing name alone is never
+     *                                            evidence that retained work can be deleted.
      */
     record SyncTarget(
             Long id,

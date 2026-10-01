@@ -1,12 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception;
 
 import java.io.Serial;
+import org.jspecify.annotations.Nullable;
 
 /**
- * The git provider <em>definitively</em> responded that a repository does not exist —
- * distinct from a transient failure ({@code Optional.empty()}). Only callers taking
- * irreversible action (e.g. removing a {@code RepositoryToMonitor} row) should react
- * to this; transient-tolerant callers stay on the Optional path.
+ * The provider did not expose the requested repository to the caller. This can mean a rename,
+ * loss of access or deletion; it is never sufficient evidence to delete retained work.
+ * Transient failures remain distinct from this unavailable-resource response.
  */
 public class RepositoryNotFoundOnGitProviderException extends RuntimeException {
 
@@ -16,7 +16,11 @@ public class RepositoryNotFoundOnGitProviderException extends RuntimeException {
     private final String nameWithOwner;
 
     public RepositoryNotFoundOnGitProviderException(String nameWithOwner) {
-        super("Repository not found on git provider: " + nameWithOwner);
+        this(nameWithOwner, null);
+    }
+
+    public RepositoryNotFoundOnGitProviderException(String nameWithOwner, @Nullable Throwable cause) {
+        super("Repository not found on git provider: " + nameWithOwner, cause);
         this.nameWithOwner = nameWithOwner;
     }
 

@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AuthMode;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
@@ -60,8 +61,20 @@ class GitHubCommitBackfillServiceTest extends BaseUnitTest {
     @Mock
     private CommitAuthorResolver authorResolver;
 
+    @Mock
+    private SyncTargetProvider syncTargetProvider;
+
     @InjectMocks
     private GitHubCommitBackfillService service;
+
+    @Test
+    void shouldNotFetchGitWhenRepositoryIsUnavailable() {
+        var target = createSyncTarget(AuthMode.PERSONAL_ACCESS_TOKEN);
+        when(syncTargetProvider.isRepositoryUnavailable(100L, target.id())).thenReturn(true);
+        assertThat(service.backfillCommits(target, TestEntities.repository(1L, "owner/repo", "main"), 100L))
+                .isEqualTo(-1);
+        verify(gitRepositoryManager, never()).ensureRepository(any(), any(), any());
+    }
 
     /** Feeds the walk the way JGit does: ask which shas are captured, then hand over each commit. */
     private void stubCommits(List<CommitDetails> commits) {
