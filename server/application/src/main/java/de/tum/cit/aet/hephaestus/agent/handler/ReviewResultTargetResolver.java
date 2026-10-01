@@ -76,7 +76,7 @@ class ReviewResultTargetResolver {
             if (issueIdNode == null || issueIdNode.isNull() || !issueIdNode.isNumber()) {
                 throw new JobDeliveryException("Missing issue_id in job metadata: jobId=" + job.getId());
             }
-            Long issueId = issueIdNode.asLong();
+            long issueId = issueIdNode.asLong();
             ReviewTargetQuery.Target issue = reviewTargets
                     .findIssue(issueId)
                     .orElseThrow(() ->
@@ -95,7 +95,7 @@ class ReviewResultTargetResolver {
         if (pullRequestIdNode == null || pullRequestIdNode.isNull() || !pullRequestIdNode.isNumber()) {
             throw new JobDeliveryException("Missing pull_request_id in job metadata: jobId=" + job.getId());
         }
-        Long pullRequestId = pullRequestIdNode.asLong();
+        long pullRequestId = pullRequestIdNode.asLong();
         ReviewTargetQuery.Target pullRequest = reviewTargets
                 .findPullRequest(pullRequestId)
                 .orElseThrow(() -> new JobDeliveryException(

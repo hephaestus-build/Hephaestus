@@ -116,6 +116,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -410,7 +411,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 pr,
                 merged,
                 capturedRevision,
-                () -> jdbcTemplate.update("UPDATE issue SET deleted_at = ? WHERE id = ?", Instant.now(), pr.getId()));
+                () -> jdbcTemplate.update(
+                        "UPDATE issue SET deleted_at = ? WHERE id = ?",
+                        java.sql.Timestamp.from(Instant.now()),
+                        pr.getId()));
         jdbcTemplate.update("UPDATE issue SET deleted_at = NULL WHERE id = ?", pr.getId());
         assertPrimaryAdmissionWaitsAndRefuses(
                 pr,
@@ -448,12 +452,14 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 recorder,
                 transactionManager);
         for (String body : List.of("- [x] Confirm repair", "- [x] Confirm repair", "- [x] Confirm repair and test")) {
-            Issue current = issueRepository.findById(issue.getId()).orElseThrow();
-            current.setBody(body);
-            issueRepository.saveAndFlush(current);
-            var event = new ScmDomainEvent.IssueUpdated(
-                    ScmEventPayload.IssueData.from(current), Set.of("body"), liveContext());
-            transactions.executeWithoutResult(status -> issueListener.onIssueUpdated(event));
+            transactions.executeWithoutResult(status -> {
+                Issue current = issueRepository.findById(linkedIssueId).orElseThrow();
+                current.setBody(body);
+                issueRepository.saveAndFlush(current);
+                var event = new ScmDomainEvent.IssueUpdated(
+                        ScmEventPayload.IssueData.from(current), Set.of("body"), liveContext());
+                issueListener.onIssueUpdated(event);
+            });
         }
         assertThat(signalsOf(pr, ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED)).hasSize(2);
         settle(pr);
@@ -474,12 +480,14 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 .containsExactlyInAnyOrder(merged.getId(), laterNegativeRun.getId(), recheck.getId());
 
         try (LinkedAttempt stale = captureLinkedAttempt(recheck, linked, "- [x] Confirm repair and test")) {
-            Issue changed = issueRepository.findById(issue.getId()).orElseThrow();
-            changed.setBody("- [x] Confirm repair and test twice");
-            issueRepository.saveAndFlush(changed);
-            var newerEvent = new ScmDomainEvent.IssueUpdated(
-                    ScmEventPayload.IssueData.from(changed), Set.of("body"), liveContext());
-            transactions.executeWithoutResult(status -> issueListener.onIssueUpdated(newerEvent));
+            transactions.executeWithoutResult(status -> {
+                Issue changed = issueRepository.findById(linkedIssueId).orElseThrow();
+                changed.setBody("- [x] Confirm repair and test twice");
+                issueRepository.saveAndFlush(changed);
+                var newerEvent = new ScmDomainEvent.IssueUpdated(
+                        ScmEventPayload.IssueData.from(changed), Set.of("body"), liveContext());
+                issueListener.onIssueUpdated(newerEvent);
+            });
             assertThatThrownBy(() -> admissionService.admit(stale.identity(), stale.observations()))
                     .isInstanceOf(ObservationsRefusedException.class)
                     .satisfies(error -> assertThat(((ObservationsRefusedException) error).reasonCode())
@@ -603,7 +611,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 job,
                 new PreparedEvidence(raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
                 null);
-        String path = "inputs/context/linked_work_items/18.md";
+        String path = SandboxLayout.CONTEXT_PREFIX + "linked_work_items/18.md";
         List<String> lines = Files.readAllLines(inputs.filesOnDisk().get(path));
         int line = java.util.stream.IntStream.range(0, lines.size())
                         .filter(index -> lines.get(index).contains(expectedBody))
@@ -649,7 +657,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
             PullRequest pr, AgentJob merged, String capturedRevision, Runnable update) throws Exception {
         CountDownLatch primaryLoaded = new CountDownLatch(1);
         CountDownLatch releasePrimaryReader = new CountDownLatch(1);
-        CountDownLatch primaryWritten = new CountDownLatch(1);
+        CompletableFuture<Void> primaryWritten = new CompletableFuture<>();
         CountDownLatch releasePrimaryWriter = new CountDownLatch(1);
         ExecutorService primaryThreads = Executors.newFixedThreadPool(2);
         try {
@@ -661,12 +669,17 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                         workspace.getId(), merged.getId(), pr.getId(), capturedRevision);
             }));
             assertThat(primaryLoaded.await(30, TimeUnit.SECONDS)).isTrue();
-            Future<?> writer = primaryThreads.submit(() -> transactions.executeWithoutResult(status -> {
-                update.run();
-                primaryWritten.countDown();
-                awaitUninterruptibly(releasePrimaryWriter);
-            }));
-            assertThat(primaryWritten.await(30, TimeUnit.SECONDS)).isTrue();
+            CompletableFuture<Void> writer = CompletableFuture.runAsync(
+                    () -> transactions.executeWithoutResult(status -> {
+                        update.run();
+                        primaryWritten.complete(null);
+                        awaitUninterruptibly(releasePrimaryWriter);
+                    }),
+                    primaryThreads);
+            writer.whenComplete((result, failure) -> {
+                if (failure != null) primaryWritten.completeExceptionally(failure);
+            });
+            primaryWritten.get(30, TimeUnit.SECONDS);
             releasePrimaryReader.countDown();
             assertThat(aBackendWaitsOnALock()).isTrue();
             releasePrimaryWriter.countDown();
@@ -690,7 +703,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                         SourceCompleteness.PARTIAL,
                         new SourceCaptureFacts(NOW, null, null, null)),
                 List.of(new SourceArtifact(
-                        "inputs/context/linked_work_items/18.md",
+                        SandboxLayout.CONTEXT_PREFIX + "linked_work_items/18.md",
                         "text/markdown",
                         ProvenanceDigest.sha256Hex(LinkedWorkItemContentSource.asText(issue)),
                         1))));
