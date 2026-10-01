@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
+import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -7,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import java.io.IOException;
@@ -67,7 +70,25 @@ public class JobEvidenceFiles {
         this.clock = clock;
     }
 
-    public PreparedJobInputs prepare(AgentJob job, PreparedJobInputs inputs) {
+    /** Rendering scratch belongs to the fenced attempt and has the same cleanup boundary as its frozen folder. */
+    public Path renderingDirectory(AgentJob job) {
+        Path root = directory(job);
+        try {
+            Files.createDirectories(root.getParent());
+            return Files.createTempDirectory(root.getParent(), "." + root.getFileName() + ".preparing-");
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    public PreparedJobInputs prepare(
+            AgentJob job, PreparedEvidence inputs, @Nullable AutomatedReviewReadinessReport report) {
+        try {
+            requireBudget(inputs);
+        } catch (RuntimeException exception) {
+            inputs.close();
+            throw exception;
+        }
         Path root = directory(job);
         Path staging = null;
         try {
@@ -75,7 +96,6 @@ public class JobEvidenceFiles {
             if (Files.exists(root)) throw new IllegalStateException("Attempt evidence already exists");
             staging = Files.createTempDirectory(root.getParent(), "." + root.getFileName() + ".preparing-");
             var staged = new LinkedHashMap<String, Path>();
-            var frozen = new LinkedHashMap<String, byte[]>();
             var directories = new ArrayList<EvidenceDirectory>();
             for (EvidenceDirectory directory : inputs.directories()) {
                 Path destination = safePath(
@@ -96,7 +116,7 @@ public class JobEvidenceFiles {
                 byte[] bytes = entry.getValue().clone();
                 Files.write(target, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
                 Files.setPosixFilePermissions(target, Set.of(PosixFilePermission.OWNER_READ));
-                frozen.put(entry.getKey(), bytes);
+                staged.put(entry.getKey(), safePath(root, entry.getKey()));
             }
             for (var entry : inputs.filesOnDisk().entrySet()) {
                 Path target = safePath(staging, entry.getKey());
@@ -127,20 +147,52 @@ public class JobEvidenceFiles {
             // rename(2) refuses a populated target, so two preparations of one attempt cannot both publish.
             Files.move(staging, root, StandardCopyOption.ATOMIC_MOVE);
             staging = null;
-            var cleanups = new ArrayList<>(inputs.cleanups());
+            inputs.close();
+            var cleanups = new ArrayList<AutoCloseable>();
             var closed = new AtomicBoolean();
             cleanups.add(() -> {
                 if (closed.compareAndSet(false, true)) {
                     retire(root);
                 }
             });
-            return new PreparedJobInputs(
-                    new PreparedEvidence(frozen, staged, cleanups, inputs.artifactSourceManifest(), directories),
-                    inputs.automatedReviewReadinessReport());
+            return new PreparedJobInputs(staged, directories, cleanups, inputs.manifest(), report);
         } catch (IOException | RuntimeException exception) {
             if (staging != null) delete(staging);
             inputs.close();
             throw new IllegalStateException("Could not prepare attempt evidence: " + job.getId(), exception);
+        }
+    }
+
+    private static void requireBudget(PreparedEvidence inputs) {
+        long bytes = 0;
+        try {
+            for (byte[] value : inputs.files().values()) bytes = Math.addExact(bytes, value.length);
+            for (var directory : inputs.directories()) {
+                try (var entries = Files.walk(directory.source())) {
+                    for (Path entry : entries.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                            .toList()) {
+                        bytes = Math.addExact(bytes, Files.size(entry));
+                        checkBudget(bytes);
+                    }
+                }
+            }
+            for (var entry : inputs.filesOnDisk().entrySet()) {
+                if (inputs.directories().stream()
+                        .noneMatch(directory -> entry.getKey().startsWith(directory.target()))) {
+                    bytes = Math.addExact(bytes, Files.size(entry.getValue()));
+                    checkBudget(bytes);
+                }
+            }
+            checkBudget(bytes);
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    private static void checkBudget(long bytes) {
+        long budget = SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET;
+        if (bytes > budget) {
+            throw new WorkspaceBudgetExceededException(bytes, budget);
         }
     }
 
@@ -216,16 +268,17 @@ public class JobEvidenceFiles {
     }
 
     public Path repositoryForVerification(AgentJob job, String headSha256, String refsSha256) {
-        String headPath = SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
+        return repositoryForVerification(job, SandboxLayout.REPO_MOUNT_RELATIVE, headSha256, refsSha256);
+    }
+
+    public Path repositoryForVerification(AgentJob job, String root, String headSha256, String refsSha256) {
+        if (!root.matches("repos/[a-zA-Z0-9_-]+/")) throw new IllegalArgumentException("Invalid repository root");
+        String headPath = root + ".git/HEAD";
         inspect(job, headPath, headSha256, reader -> Boolean.TRUE)
                 .orElseThrow(() -> new IllegalStateException("Captured repository is unavailable"));
-        inspect(
-                        job,
-                        SandboxLayout.REPO_MOUNT_RELATIVE + ".git/hephaestus-captured-refs",
-                        refsSha256,
-                        reader -> Boolean.TRUE)
+        inspect(job, root + ".git/hephaestus-captured-refs", refsSha256, reader -> Boolean.TRUE)
                 .orElseThrow(() -> new IllegalStateException("Captured repository refs are unavailable"));
-        return directory(job).resolve(SandboxLayout.REPO_MOUNT_RELATIVE);
+        return directory(job).resolve(root);
     }
 
     /** @param artifactSha256 digest of the raw bytes read, or null when the cited artifact does not exist */
@@ -330,6 +383,7 @@ public class JobEvidenceFiles {
                     }
                     if (restarting) {
                         deleteAttempt(root);
+                        discardRetiredInventory(root, job);
                         continue;
                     }
                     Path ended = markEnded(root);
@@ -338,6 +392,7 @@ public class JobEvidenceFiles {
                             .plus(RETENTION_GRACE)
                             .isAfter(clock.instant())) {
                         deleteAttempt(root);
+                        discardRetiredInventory(root, job);
                     }
                 } catch (RuntimeException | IOException exception) {
                     log.warn("Could not clean attempt folder {}", root, exception);
@@ -346,6 +401,16 @@ public class JobEvidenceFiles {
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         }
+    }
+
+    private void discardRetiredInventory(Path root, Optional<AgentJob> recorded) {
+        if (recorded.isEmpty() || !matches(root, recorded.get())) return;
+        AgentJob job = recorded.get();
+        jobs.discardRetiredArtifactInventory(
+                job.getId(),
+                job.getWorkspace().getId(),
+                job.getRetryCount(),
+                java.util.Objects.requireNonNull(job.getWorkerId()));
     }
 
     private void cleanStaleGitSpool() {

@@ -3,12 +3,12 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
-import de.tum.cit.aet.hephaestus.agent.context.EvidenceLimits;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
@@ -23,7 +23,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -48,10 +48,6 @@ public class ReviewThreadContentSource implements EvidenceSource {
     private static final Logger log = LoggerFactory.getLogger(ReviewThreadContentSource.class);
 
     static final String FILE_NAME = "review_threads.json";
-
-    static final int MAX_THREADS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
-
-    static final int MAX_DECISIONS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
     private final ObjectMapper objectMapper;
     private final PullRequestRepository pullRequestRepository;
@@ -92,23 +88,16 @@ public class ReviewThreadContentSource implements EvidenceSource {
     private ObjectNode collect(long pullRequestId) {
         try {
             List<Long> threadIds = new java.util.ArrayList<>(
-                    threadRepository.findRecentIdsByPullRequestId(pullRequestId, PageRequest.of(0, MAX_THREADS + 1)));
-            boolean threadsTruncated = threadIds.size() > MAX_THREADS;
-            if (threadsTruncated) threadIds.remove(threadIds.size() - 1);
+                    threadRepository.findRecentIdsByPullRequestId(pullRequestId, Pageable.unpaged()));
+            boolean threadsTruncated = false;
             List<PullRequestReviewThread> threads =
                     threadIds.isEmpty() ? List.of() : threadRepository.findAllByIdWithResolvedBy(threadIds);
             List<PullRequestReview> reviews =
                     new java.util.ArrayList<>(reviewRepository.findRecentByPullRequestIdWithAuthor(
                             pullRequestId,
                             Set.of(PullRequestReview.State.PENDING, PullRequestReview.State.UNKNOWN),
-                            PageRequest.of(0, MAX_DECISIONS + 1)));
-            if (reviews.size() > MAX_DECISIONS + 1) {
-                reviews = new java.util.ArrayList<>(reviews.subList(0, MAX_DECISIONS + 1));
-            }
-            // The query returns newest first so the bound keeps the latest decision; the file lists
-            // them oldest first, the order comments.json and general_comments.json share.
-            boolean decisionsTruncated = reviews.size() > MAX_DECISIONS;
-            if (decisionsTruncated) reviews.remove(reviews.size() - 1);
+                            Pageable.unpaged()));
+            boolean decisionsTruncated = false;
             reviews.sort(Comparator.comparing(
                     PullRequestReview::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder())));
 
@@ -201,8 +190,6 @@ public class ReviewThreadContentSource implements EvidenceSource {
      * login substring match would silently drop a genuine reviewer thread from anyone whose login happens
      * to contain "hephaestus" (e.g. a fork named {@code hephaestus-fan}) — masking a real review signal.
      */
-    public static final String HEPHAESTUS_MARKER = "<!-- hephaestus";
-
     private static boolean isHephaestusThread(PullRequestReviewThread t) {
         var comments = t.getComments();
         if (comments == null || comments.isEmpty()) {
@@ -213,7 +200,7 @@ public class ReviewThreadContentSource implements EvidenceSource {
                 continue;
             }
             String body = c.getBody();
-            if (body != null && body.contains(HEPHAESTUS_MARKER)) {
+            if (body != null && body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)) {
                 return true;
             }
         }

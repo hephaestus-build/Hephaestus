@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
-import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import java.util.Map;
 
 /**
@@ -9,7 +8,7 @@ import java.util.Map;
  * belong downstream.
  */
 public interface ContentSource {
-    String OUTPUT_PREFIX = SandboxLayout.CONTEXT_PREFIX;
+    String OUTPUT_PREFIX = "inputs/context/";
 
     boolean supports(ContextRequest request);
 

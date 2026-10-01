@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.DocumentContentSource;
@@ -12,7 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.EvidenceQuoteUnverifiedExcept
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -60,7 +60,6 @@ public class PracticeDetectionDeliveryService {
 
     private static final Logger log = LoggerFactory.getLogger(PracticeDetectionDeliveryService.class);
 
-    private final ReviewMemberAiPolicy memberAiPolicy;
     private final PracticeRevisionRepository practiceRevisionRepository;
     private final ObservationRepository observationRepository;
     private final ReviewTargetQuery reviewTargets;
@@ -69,6 +68,7 @@ public class PracticeDetectionDeliveryService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final JobEvidenceFiles evidenceFiles;
+    private final CitedSourceAccess citedSourceAccess;
     private final HistoricalGitEvidence historicalGit;
     private final ArtifactSourceCatalogRegistry sourceCatalogs;
     private final AutomatedReviewFence fence;
@@ -84,8 +84,8 @@ public class PracticeDetectionDeliveryService {
             JobEvidenceFiles evidenceFiles,
             ArtifactSourceCatalogRegistry sourceCatalogs,
             HistoricalGitEvidence historicalGit,
-            ReviewMemberAiPolicy memberAiPolicy,
-            AutomatedReviewFence fence) {
+            AutomatedReviewFence fence,
+            CitedSourceAccess citedSourceAccess) {
         this.practiceRevisionRepository = practiceRevisionRepository;
         this.observationRepository = observationRepository;
         this.reviewTargets = reviewTargets;
@@ -96,8 +96,8 @@ public class PracticeDetectionDeliveryService {
         this.evidenceFiles = evidenceFiles;
         this.sourceCatalogs = sourceCatalogs;
         this.historicalGit = historicalGit;
-        this.memberAiPolicy = memberAiPolicy;
         this.fence = fence;
+        this.citedSourceAccess = citedSourceAccess;
     }
 
     /** Metadata key for the run's immutable observation origin. */
@@ -106,7 +106,7 @@ public class PracticeDetectionDeliveryService {
     private record Target(ArtifactKind type, Long id, Long aboutUserId) {}
 
     /**
-     * The origin stamped on this job, or {@link ObservationOrigin#LIVE} for a job with no origin key: every
+     * The origin stamped on this job, or {@link de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin#LIVE} for a job with no origin key: every
      * such job came from the event-driven path, so LIVE is a fact, not a guess.
      */
     public static ObservationOrigin originOf(@Nullable JsonNode metadata) {
@@ -419,7 +419,7 @@ public class PracticeDetectionDeliveryService {
             CapturedEvidence evidence, Target target, Map<String, PracticeRevision> revisionsBySlug) {}
 
     private Admissible requireAdmissible(AgentJob job, JsonNode metadata) {
-        if (!memberAiPolicy.allowsResult(job))
+        if (!citedSourceAccess.permitsReviewResult(job))
             throw new ObservationsRefusedException(
                     "member_ai_declined", "The developer's AI choice no longer permits recording this review result.");
         CapturedEvidence evidence = CapturedEvidence.of(job, objectMapper);
@@ -505,38 +505,71 @@ public class PracticeDetectionDeliveryService {
                 }
             }
         }
-        if (candidates.isEmpty()) return new CodeQuotes(Map.of(), Set.of());
-        SourceKind kind = RepositoryTreeContentSource.KIND;
-        String root = SandboxLayout.REPO_MOUNT_RELATIVE;
-        CapturedEvidence.Artifact head = captured.requireArtifact(kind, root + ".git/HEAD");
-        CapturedEvidence.Artifact refs = captured.requireArtifact(kind, root + ".git/hephaestus-captured-refs");
-        String pinnedHead = captured.pinnedHead();
-        var requested = candidates.stream()
-                .map(citation -> codeCitation(citation, captured))
-                .toList();
+        if (candidates.isEmpty()) return new CodeQuotes(Map.of(), Set.of(), Map.of());
+        var groups = candidates.stream()
+                .collect(java.util.stream.Collectors.groupingBy(PracticeDetectionDeliveryService::repositoryRoot));
+        var matches = new HashMap<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch>();
+        var heads = new HashMap<String, String>();
         Set<String> changedPaths = Set.of();
-        if (citesChange) {
-            String[] range = captured.reviewRange();
-            changedPaths = historicalGit.changedPaths(job, head.sha256(), refs.sha256(), range[0], range[1]);
+        for (var group : groups.entrySet()) {
+            String root = group.getKey();
+            var head = captured.requireArtifact(RepositoryTreeContentSource.KIND, root + ".git/HEAD");
+            var refs =
+                    captured.requireArtifact(RepositoryTreeContentSource.KIND, root + ".git/hephaestus-captured-refs");
+            String pinnedHead = root.equals(SandboxLayout.REPO_MOUNT_RELATIVE)
+                    ? captured.pinnedHead()
+                    : evidenceFiles
+                            .inspect(job, root + ".git/HEAD", head.sha256(), reader -> {
+                                String identity = new java.io.BufferedReader(reader).readLine();
+                                if (identity == null || !identity.matches(CitationVerification.GIT_OBJECT_ID))
+                                    throw new JobDeliveryException("Captured repository has no pinned head");
+                                return identity;
+                            })
+                            .orElseThrow(() -> new JobDeliveryException("Captured repository is unavailable"));
+            heads.put(root, pinnedHead);
+            var requested = group.getValue().stream()
+                    .map(citation -> codeCitation(citation, captured, pinnedHead))
+                    .toList();
+            if (citesChange && root.equals(SandboxLayout.REPO_MOUNT_RELATIVE)) {
+                String[] range = captured.reviewRange();
+                changedPaths = historicalGit.changedPaths(job, head.sha256(), refs.sha256(), range[0], range[1]);
+            }
+            matches.putAll(
+                    root.equals(SandboxLayout.REPO_MOUNT_RELATIVE)
+                            ? historicalGit.verifyAll(job, head.sha256(), refs.sha256(), pinnedHead, requested)
+                            : historicalGit.verifyAllAt(
+                                    job, root, head.sha256(), refs.sha256(), pinnedHead, requested));
         }
-        return new CodeQuotes(
-                historicalGit.verifyAll(job, head.sha256(), refs.sha256(), pinnedHead, requested), changedPaths);
+        return new CodeQuotes(Map.copyOf(matches), changedPaths, Map.copyOf(heads));
+    }
+
+    private static String repositoryRoot(JsonNode citation) {
+        if (PracticeSubjectClause.DIFF_SOURCE
+                .value()
+                .equals(citation.path("sourceKind").asString())) return SandboxLayout.REPO_MOUNT_RELATIVE;
+        String artifact = citation.path("artifactPath").asString();
+        if (!artifact.matches("repos/[a-zA-Z0-9_-]+/\\.git/HEAD"))
+            throw new JobDeliveryException("A repository citation must name its captured HEAD witness");
+        return artifact.substring(0, artifact.length() - ".git/HEAD".length());
     }
 
     private record CodeQuotes(
-            Map<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch> matches, Set<String> changedPaths) {}
+            Map<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch> matches,
+            Set<String> changedPaths,
+            Map<String, String> pinnedHeads) {}
 
     /**
      * A quote of code as a revision, a path and a line range. A checkout citation names the captured
      * {@code .git/HEAD} and may select a revision; a change citation names the pinned change and a side,
      * which selects the revision for it.
      */
-    private static HistoricalGitEvidence.Citation codeCitation(JsonNode citation, CapturedEvidence captured) {
+    private static HistoricalGitEvidence.Citation codeCitation(
+            JsonNode citation, CapturedEvidence captured, String pinnedHead) {
         boolean change = PracticeSubjectClause.DIFF_SOURCE
                 .value()
                 .equals(citation.path("sourceKind").asString());
         String expectedArtifact =
-                change ? PullRequestContentSource.CHANGE_FILE : SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD";
+                change ? PullRequestContentSource.CHANGE_FILE : repositoryRoot(citation) + ".git/HEAD";
         String side = citation.path("side").asString("");
         String revision;
         if (change) {
@@ -550,7 +583,7 @@ public class PracticeDetectionDeliveryService {
             if (!citation.path("side").isMissingNode()) {
                 throw new JobDeliveryException("Invalid repository citation: a checkout quote has no side");
             }
-            revision = citation.path("revision").asString(captured.pinnedHead());
+            revision = citation.path("revision").asString(pinnedHead);
         }
         String path = citation.path("path").asString();
         String quote = citation.path("quote").asString();
@@ -669,7 +702,10 @@ public class PracticeDetectionDeliveryService {
                     || !citation.path("side").isMissingNode()) {
                 if (!isCodeSource(kind))
                     throw new JobDeliveryException("Only repository citations may select a revision or a side");
-                var requested = codeCitation(citation, captured);
+                var requested = codeCitation(
+                        citation,
+                        captured,
+                        Objects.requireNonNull(codeQuotes.pinnedHeads().get(repositoryRoot(citation))));
                 ((ObjectNode) citation).put("revision", requested.revision());
                 if (PracticeSubjectClause.DIFF_SOURCE.equals(kind)
                         && !codeQuotes.changedPaths().contains(requested.path())) {
@@ -685,6 +721,7 @@ public class PracticeDetectionDeliveryService {
                 if (!match.matches())
                     throw new EvidenceQuoteUnverifiedException(
                             "Quote does not match the cited revision and lines", citationIndex);
+                citedSourceAccess.bind(job, (ObjectNode) citation, artifact.sha256());
                 CitationVerification.record((ObjectNode) citation, job, blobDigest, quoteDigest);
                 continue;
             }
@@ -706,6 +743,7 @@ public class PracticeDetectionDeliveryService {
                                 + ", jobId=" + job.getId(),
                         citationIndex);
             }
+            citedSourceAccess.bind(job, (ObjectNode) citation, artifact.sha256());
             CitationVerification.record((ObjectNode) citation, job, artifact.sha256(), quoteDigest);
         }
         return evidence;

@@ -335,7 +335,7 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 AdmittedObservationFixtures.evidence(
                                 job.getId(),
                                 "scm.pull-request.core",
-                                "inputs/context/metadata.json",
+                                "context/metadata.json",
                                 "metadata.json",
                                 "example")
                         .toString(),

@@ -39,9 +39,8 @@ class PracticeStandingObservationDTOTest extends BaseUnitTest {
     }
 
     private static String citation(String path, int line, String sourceKind) {
-        String artifactPath = sourceKind.equals("scm.pull-request.diff")
-                ? "inputs/context/diff.patch"
-                : "inputs/context/metadata.json";
+        String artifactPath =
+                sourceKind.equals("scm.pull-request.diff") ? "context/diff.patch" : "context/metadata.json";
         String side = sourceKind.equals("scm.pull-request.diff") ? ",\"side\":\"NEW\"" : "";
         return """
         {"citations":[{"sourceKind":"%s",\

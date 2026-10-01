@@ -42,7 +42,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Handles {@link AgentJobType#PULL_REQUEST_REVIEW} jobs.
+ * Handles {@link de.tum.cit.aet.hephaestus.agent.AgentJobType#PULL_REQUEST_REVIEW} jobs.
  * The workspace layout is defined in {@code docs/contributor/agent/workspace-abi.mdx}.
  */
 public class PullRequestReviewHandler implements JobTypeHandler {
@@ -190,7 +190,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
         log.info(
                 "Context preparation complete: {} files, {} ms, repoId={}, pullRequestId={}",
-                inputs.files().size(),
+                inputs.filesOnDisk().size(),
                 elapsedMs,
                 repositoryId,
                 pullRequestId);

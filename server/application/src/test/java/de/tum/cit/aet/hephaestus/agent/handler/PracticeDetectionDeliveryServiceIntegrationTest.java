@@ -280,13 +280,13 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER);
         var diff = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", baseSha + ":" + headSha);
         EvidenceSnapshotFixtures.artifact(
-                        diff, PullRequestContentSource.CHANGE_FILE, ProvenanceDigest.sha256Hex(change))
+                        snapshot, diff, PullRequestContentSource.CHANGE_FILE, ProvenanceDigest.sha256Hex(change))
                 .put("mediaType", "application/json")
                 .put("bytes", change.length);
         var tree = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.repository.tree", headSha + ":" + treeSha);
-        EvidenceSnapshotFixtures.artifact(tree, HEAD_PATH, ProvenanceDigest.sha256Hex(headWitness))
+        EvidenceSnapshotFixtures.artifact(snapshot, tree, HEAD_PATH, ProvenanceDigest.sha256Hex(headWitness))
                 .put("bytes", headWitness.length);
-        EvidenceSnapshotFixtures.artifact(tree, REFS_PATH, ProvenanceDigest.sha256Hex(refsWitness))
+        EvidenceSnapshotFixtures.artifact(snapshot, tree, REFS_PATH, ProvenanceDigest.sha256Hex(refsWitness))
                 .put("bytes", refsWitness.length);
         EvidenceSnapshotFixtures.admittedPractice(
                 snapshot,
@@ -297,9 +297,10 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
                 snapshot,
                 errors.getSlug(),
                 java.util.Objects.requireNonNull(errors.getCurrentRevision().getId()));
-        preparedEvidence.add(evidenceFiles.prepare(
+        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                evidenceFiles,
                 agentJob,
-                new PreparedJobInputs(
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
                         new PreparedEvidence(
                                 Map.of(PullRequestContentSource.CHANGE_FILE, change),
                                 Map.of(

@@ -25,7 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Handler for {@link AgentJobType#DOCUMENT_REVIEW} jobs. <strong>Repo-less</strong>: no clone, no diff,
+ * Handler for {@link de.tum.cit.aet.hephaestus.agent.AgentJobType#DOCUMENT_REVIEW} jobs. <strong>Repo-less</strong>: no clone, no diff,
  * no {@code inputs/sources/scm/} mount. The case context is one mirrored document — its prose, its
  * collection and its authorship — at {@code inputs/context/document.md} and {@code document.json}.
  *
@@ -105,7 +105,7 @@ public class DocumentReviewHandler implements JobTypeHandler {
                 files -> {});
         log.info(
                 "Document context preparation complete: {} files, jobId={}",
-                inputs.files().size(),
+                inputs.filesOnDisk().size(),
                 job.getId());
         return inputs;
     }

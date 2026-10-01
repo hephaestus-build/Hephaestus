@@ -19,6 +19,10 @@ import org.jspecify.annotations.Nullable;
  * no vendor is switched on.
  */
 final class NoDocumentationMirror implements DocumentProjection {
+    @Override
+    public boolean workspaceReadable(long workspaceId) {
+        return false;
+    }
 
     @Override
     public List<ProjectedDocument> documentsForWorkspace(long workspaceId) {

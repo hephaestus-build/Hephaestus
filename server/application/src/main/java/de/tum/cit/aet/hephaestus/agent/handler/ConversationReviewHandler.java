@@ -27,7 +27,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Handler for {@link AgentJobType#CONVERSATION_REVIEW} jobs. <strong>Repo-less</strong>: no clone, no diff,
+ * Handler for {@link de.tum.cit.aet.hephaestus.agent.AgentJobType#CONVERSATION_REVIEW} jobs. <strong>Repo-less</strong>: no clone, no diff,
  * no {@code inputs/sources/scm/} mount, and no SCM comment. The case context is the thread's ordered human
  * turns ({@code inputs/context/conversation_thread.json}) plus the workspace-wide project inventory, since a
  * conversation isn't anchored to one repo.
@@ -118,7 +118,7 @@ public class ConversationReviewHandler implements JobTypeHandler {
                 files -> {});
         log.info(
                 "Conversation context preparation complete: {} files, jobId={}",
-                inputs.files().size(),
+                inputs.filesOnDisk().size(),
                 job.getId());
         return inputs;
     }

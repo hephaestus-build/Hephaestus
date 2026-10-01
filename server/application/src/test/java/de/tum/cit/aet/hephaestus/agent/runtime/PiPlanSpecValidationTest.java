@@ -38,7 +38,7 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"inputs/context/diff.patch", ".sessions/abc-123.jsonl"})
+    @ValueSource(strings = {"context/diff.patch", ".sessions/abc-123.jsonl"})
     void perTurnPathsRejected(String path) {
         assertThatThrownBy(() -> specWith(Map.of(path, BYTES))).isInstanceOf(IllegalArgumentException.class);
     }

@@ -29,6 +29,8 @@ public final class EvidenceSnapshotFixtures {
         manifest.put("artifactKind", artifactKind);
         manifest.put("capturedAt", CAPTURED_AT);
         manifest.putArray("sources");
+        manifest.putArray("refusals");
+        manifest.putArray("artifacts");
         snapshot.putArray("practices");
         return snapshot;
     }
@@ -49,19 +51,27 @@ public final class EvidenceSnapshotFixtures {
         return source;
     }
 
-    public static ObjectNode artifact(ObjectNode source, String path, String sha256) {
-        return source.withArray("artifacts")
+    public static ObjectNode artifact(ObjectNode snapshot, ObjectNode source, String path, String sha256) {
+        ObjectNode artifact = source.withArray("artifacts")
                 .addObject()
                 .put("path", path)
                 .put("mediaType", "text/plain")
                 .put("sha256", sha256)
                 .put("bytes", 0);
+        var proof = snapshot.withObject("manifest").withArray("artifacts").addObject();
+        proof.set("kind", source.path("kind"));
+        proof.set("artifact", artifact);
+        return artifact;
     }
 
     /** Turns a source into one the capture could not read; its artifacts go with it. */
-    public static void unavailable(ObjectNode source) {
+    public static void unavailable(ObjectNode snapshot, ObjectNode source) {
         source.putObject("state").put("availability", "UNAVAILABLE").put("reasonCode", "NOT_FOUND");
         source.putArray("artifacts");
+        var artifacts = snapshot.withObject("manifest").withArray("artifacts");
+        for (int index = artifacts.size() - 1; index >= 0; index--) {
+            if (artifacts.get(index).path("kind").equals(source.path("kind"))) artifacts.remove(index);
+        }
     }
 
     public static ObjectNode admittedPractice(ObjectNode snapshot, String slug, long revisionId) {

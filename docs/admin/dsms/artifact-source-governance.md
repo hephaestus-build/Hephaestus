@@ -21,8 +21,8 @@ defines the governance decision that permits collection, retention, processing, 
 2. **Necessity before benefit.** Name the capability that requires the source and why a less intrusive source is
    insufficient. Accuracy, convenience, and possible reuse are not purposes.
 3. **Minimize the catalog, not each invocation.** For an admitted review, the runtime captures every governed
-   source that applies to that artifact kind. Practice bindings control whether a practice may use a source; they
-   do not reduce what is staged for that invocation. Keep each source's selection scope and limits minimal, and
+   source in the permitted workspace scope. Practice bindings control whether a practice may use a source; they
+   do not reduce what is staged for that invocation. Keep each source's selection scope minimal, and
    remove a source from the next contract version when no approved consumer remains.
 4. **Separate purposes.** Product feedback, mentoring, operator quality assurance, and research evaluation require
    separate decisions. Product use does not authorize evaluation retention or ablation.
@@ -53,13 +53,27 @@ missing or expired is never read, whatever the deployment sets. Disabling a use 
 contract version in which that decision no longer permits it.
 
 The runtime registry is
-[`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.2.0/source-use-decisions.json).
+[`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/1.3.0/source-use-decisions.json).
 It is an engineering gate and contains only releasable decision summaries. Each record governs exactly one source-use purpose; a source references separate records for automated review, feedback delivery, Mentor context, and operator evidence review:
 
 - `ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, minimized
-  product scope. It is not controller or DPO approval and cannot cover scope expansion. It is the only basis
+  product scope, including a scope expansion explicitly approved by the maintainer in a new version. It is not
+  controller or DPO approval. It is the only basis
   the contract can express: a use no maintainer has approved carries no record at all, rather than a record
   saying it was refused, so nothing here can ever be mistaken for a controller sign-off.
+
+### Full job-folder scope
+
+On 2026-10-01, the maintainer explicitly approved the engineering scope in
+[#1732](https://github.com/hephaestus-build/Hephaestus/issues/1732): every permitted workspace area and repository,
+including Slack threads and person-scoped observation and feedback history, without record-count or history-window
+caps. Version 1.3.0 records this approval for automated practice review. It does **not** record controller or DPO
+approval. The existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks still apply.
+The folder is not permission to disclose a refused record or to retain a source after its deletion boundary.
+
+The wider Slack-thread and person-scoped history scope must be part of the pending TUM privacy-notice review in
+[#1377](https://github.com/hephaestus-build/Hephaestus/issues/1377). That legal-review item remains open and is owned
+by the maintainer. Engineering approval does not close it.
 
 Every record carries a reviewer, a decision time, and an expiry, and the server refuses
 to start if a source's decisions do not cover every product purpose or if a decision's retention or erasure
@@ -177,7 +191,7 @@ source/workspace/person erasure paths are implemented and tested.
 ## Approval renewal
 
 The shipped decisions expire on the date recorded in
-`server/application/src/main/resources/contracts/artifact-source/1.2.0/source-use-decisions.json`. Every governed use fails
+`server/application/src/main/resources/contracts/source-use/1.3.0/source-use-decisions.json`. Every governed use fails
 closed after expiry. Instance operators should alert when
 `artifact_source_governance_expiry_seconds` falls below 30 days and assign the alert to the instance
 privacy/governance owner. The server logs a warning at startup inside the same window.

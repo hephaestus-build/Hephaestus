@@ -163,7 +163,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                         EnumSet.of(FeedbackCompositionInputs.InContextPlacementKind.ARTIFACT)));
         log.info(
                 "Issue context preparation complete: {} files, issueNumber={}, jobId={}",
-                inputs.files().size(),
+                inputs.filesOnDisk().size(),
                 metadata.path("issue_number").asInt(),
                 job.getId());
         return inputs;

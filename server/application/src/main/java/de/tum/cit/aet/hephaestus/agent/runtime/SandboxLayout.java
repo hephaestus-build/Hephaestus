@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
+import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import java.time.Duration;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -17,8 +18,8 @@ public final class SandboxLayout {
     /** Container workspace root. */
     public static final String WORKSPACE_ROOT = "/workspace";
 
-    // ── Layout (ADR 0020): read-only vs writable by LOCATION, not lore ──────────────────────────────
-    //   inputs/  — EVERYTHING the agent may only read (the /workspace volume is mounted read-only)
+    // ── Job folder (ADR 0041): read-only inputs and separate writable mounts ──────────────────────────────
+    //   context/, repos/, inputs/, task.json, INDEX.* — the read-only job folder
     //   work/    — scratch the agent + precompute write during the run; NEVER collected
     //   out/     — the ONLY directory collected back into SQL
     //   .pi/     — the Pi SDK runtime home (vendor dir)
@@ -26,18 +27,10 @@ public final class SandboxLayout {
     /** Workspace-relative prefix for the read-only input subtree. */
     public static final String INPUTS_PREFIX = "inputs/";
 
-    public static final String SOURCES_PREFIX = INPUTS_PREFIX + "sources/";
+    public static final String REPO_MOUNT = WORKSPACE_ROOT + "/repos/reviewed";
 
-    public static String sourceMount(String originId) {
-        return SOURCES_PREFIX + originId + "/";
-    }
-
-    public static final String SCM_SOURCE_KEEP = sourceMount("scm") + ".keep";
-
-    public static final String REPO_MOUNT = WORKSPACE_ROOT + "/" + sourceMount("scm") + "repo";
-
-    /** Workspace-relative prefix the agent cites for repo files ({@code inputs/sources/scm/repo/<path>}). */
-    public static final String REPO_MOUNT_RELATIVE = sourceMount("scm") + "repo/";
+    /** Workspace-relative prefix the agent cites for repo files ({@code repos/reviewed/<path>}). */
+    public static final String REPO_MOUNT_RELATIVE = "repos/reviewed/";
 
     /** Output directory the sandbox collects after the run. */
     public static final String OUTPUT_PREFIX = "out/";
@@ -47,10 +40,10 @@ public final class SandboxLayout {
     /** Workspace-relative filename of the task envelope ({@code task.json}). */
     public static final String TASK_ENVELOPE_FILENAME = "task.json";
 
-    /** Workspace-relative prefix every {@link de.tum.cit.aet.hephaestus.agent.context.ContentSource} must write under. */
-    public static final String CONTEXT_PREFIX = INPUTS_PREFIX + "context/";
+    /** Workspace-relative prefix every {@link ContentSource} must write under. */
+    public static final String CONTEXT_PREFIX = "context/";
 
-    public static final String MANIFEST_PATH = INPUTS_PREFIX + "manifest.json";
+    public static final String MANIFEST_PATH = "INDEX.json";
 
     /**
      * Workspace-relative path of the feedback-composition request: whether this run should compose

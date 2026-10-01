@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import java.time.Instant;
 import java.util.List;
 import java.util.Set;
@@ -51,16 +52,16 @@ class SourceContractValueTest {
                 .isThrownBy(() -> new SourceCapture(
                         new SourceKind("scm.pull-request.diff"),
                         new SourceCaptureState.Unavailable(SourceAbsenceReason.NO_WORKING_COPY),
-                        List.of(new SourceArtifact("inputs/context/diff.patch", "text/x-diff", "a".repeat(64), 1))));
+                        List.of(new SourceArtifact("context/diff.patch", "text/x-diff", "a".repeat(64), 1))));
     }
 
     @Test
-    void shouldRejectLegacyContextIndexesAsArtifactSourceManifests() {
+    void shouldRejectLegacyContextIndexesAsJobFolderIndexs() {
         String legacy = """
             {"schemaVersion":1,"entries":[]}
             """;
 
-        assertThatThrownBy(() -> objectMapper.readValue(legacy, ArtifactSourceManifest.class))
+        assertThatThrownBy(() -> objectMapper.readValue(legacy, JobFolderIndex.class))
                 .isInstanceOf(RuntimeException.class);
     }
 
@@ -142,7 +143,7 @@ class SourceContractValueTest {
         Instant now = Instant.parse("2026-08-03T10:00:00Z");
 
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> new ArtifactSourceManifest(
+                .isThrownBy(() -> new JobFolderIndex(
                         new SourceContractVersion("1.2.0"), "a".repeat(64), "scm.pull_request", now, List.of()));
         assertThatIllegalArgumentException()
                 .isThrownBy(

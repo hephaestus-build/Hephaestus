@@ -12,9 +12,10 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
-import de.tum.cit.aet.hephaestus.agent.context.ContextManifestBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
@@ -27,7 +28,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
@@ -99,7 +99,11 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 objectMapper,
                 practiceCatalogInjector,
                 new PracticeReviewPreparation(
-                        workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter, gitRepositoryManager),
+                        workspaceContextBuilder,
+                        practiceCatalogInjector,
+                        taskEnvelopeWriter,
+                        gitRepositoryManager,
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer()),
                 resultParser,
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
@@ -199,7 +203,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 .put("defectDetector", true);
         ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
                 snapshot, "scm.pull-request.diff", "a".repeat(40) + ":" + "b".repeat(40));
-        EvidenceSnapshotFixtures.artifact(diff, PullRequestContentSource.CHANGE_FILE, CHANGE_SHA);
+        EvidenceSnapshotFixtures.artifact(snapshot, diff, PullRequestContentSource.CHANGE_FILE, CHANGE_SHA);
         return snapshot;
     }
 
@@ -207,7 +211,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     private ObjectNode admittedPracticeSnapshotWithoutChange() {
         ObjectNode snapshot = admittedPracticeSnapshot();
         for (JsonNode source : snapshot.withObject("manifest").withArray("sources")) {
-            EvidenceSnapshotFixtures.unavailable((ObjectNode) source);
+            EvidenceSnapshotFixtures.unavailable(snapshot, (ObjectNode) source);
         }
         return snapshot;
     }
@@ -237,7 +241,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         lenient()
                 .when(workspaceContextBuilder.prepare(
                         any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
-                .thenReturn(prepared(Map.of("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8))));
+                .thenReturn(prepared(Map.of("context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8))));
         lenient()
                 .when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
@@ -247,13 +251,13 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     }
 
     private PreparedEvidence prepared(Map<String, byte[]> files) {
-        return new PreparedEvidence(files, org.mockito.Mockito.mock(ArtifactSourceManifest.class));
+        return new PreparedEvidence(files, org.mockito.Mockito.mock(JobFolderIndex.class));
     }
 
     /** Every practice asked is ready, recorded the way the readiness check records it. */
-    private ContextManifestBuilder.PreparedAutomatedReviewReadiness readiness(List<Practice> practices) {
+    private JobFolderIndexBuilder.PreparedAutomatedReviewReadiness readiness(List<Practice> practices) {
         Instant now = Instant.parse("2026-08-03T10:00:00Z");
-        return new ContextManifestBuilder.PreparedAutomatedReviewReadiness(
+        return new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                 practices,
                 new AutomatedReviewReadinessReport(
                         de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry.CURRENT_VERSION,
@@ -372,8 +376,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         void stagesTheRequestThatTurnsFeedbackCompositionOn() {
             stubDefaults();
 
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files)
                     .as("a live review composes feedback, so the request must reach the sandbox")
@@ -391,23 +395,23 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             byte[] metadataBytes = "{\"pr_number\":42}".getBytes(StandardCharsets.UTF_8);
             when(workspaceContextBuilder.prepare(
                             any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
-                    .thenReturn(prepared(Map.of("inputs/context/metadata.json", metadataBytes)));
+                    .thenReturn(prepared(Map.of("context/metadata.json", metadataBytes)));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                     .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
             when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
                     .thenReturn(samplePractices());
 
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
-            assertThat(files.get("inputs/context/metadata.json")).isEqualTo(metadataBytes);
+            assertThat(files.get("context/metadata.json")).isEqualTo(metadataBytes);
         }
 
         @Test
         void writesTaskJsonEnvelope() throws Exception {
             stubDefaults();
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files).containsKey("task.json");
             JsonNode envelope = objectMapper.readTree(files.get("task.json"));
@@ -425,8 +429,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void injectsPracticeCatalog() {
             stubDefaults();
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files).containsKey("inputs/practices/index.json");
             assertThat(files).doesNotContainKey("inputs/practices/all-criteria.md");
@@ -438,8 +442,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void doesNotWriteLegacyPromptFile() {
             stubDefaults();
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
             assertThat(files).doesNotContainKey(".prompt");
         }
 
@@ -476,21 +480,21 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void preservesProviderOrder() {
             var providerFiles = new LinkedHashMap<String, byte[]>();
-            providerFiles.put("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
-            providerFiles.put("inputs/context/change.json", "{}".getBytes(StandardCharsets.UTF_8));
-            providerFiles.put("inputs/context/comments.json", "[]".getBytes(StandardCharsets.UTF_8));
+            providerFiles.put("context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
+            providerFiles.put("context/change.json", "{}".getBytes(StandardCharsets.UTF_8));
+            providerFiles.put("context/comments.json", "[]".getBytes(StandardCharsets.UTF_8));
             when(workspaceContextBuilder.prepare(any(), any())).thenReturn(prepared(providerFiles));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                     .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
             when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
                     .thenReturn(samplePractices());
 
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
             var keys = files.keySet().iterator();
-            assertThat(keys.next()).isEqualTo("inputs/context/metadata.json");
-            assertThat(keys.next()).isEqualTo("inputs/context/change.json");
-            assertThat(keys.next()).isEqualTo("inputs/context/comments.json");
+            assertThat(keys.next()).isEqualTo("context/metadata.json");
+            assertThat(keys.next()).isEqualTo("context/change.json");
+            assertThat(keys.next()).isEqualTo("context/comments.json");
         }
     }
 
@@ -931,7 +935,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     "evidence": {
                       "citations": [{
                         "sourceKind": "scm.pull-request.diff",
-                        "artifactPath": "inputs/context/change.json",
+                        "artifactPath": "context/change.json",
                         "path": "Sources/Auth.swift",
                         "side": "NEW",
                         "startLine": 1,

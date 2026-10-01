@@ -351,7 +351,7 @@ class PracticeRunnerLiveLlmTest {
                 1L,
                 new Task(
                         "Review merge request #1 in test/fixture. Read inputs/practices/index.json, "
-                                + "inputs/practices/avoids-insecure-defaults-and-over-broad-permissions.md, and inputs/context/metadata.json. "
+                                + "inputs/practices/avoids-insecure-defaults-and-over-broad-permissions.md, and context/metadata.json. "
                                 + "Apply the avoids-insecure-defaults-and-over-broad-permissions practice to "
                                 + CHANGE_VIEW_PREFIX
                                 + "diff.patch. Persist each "

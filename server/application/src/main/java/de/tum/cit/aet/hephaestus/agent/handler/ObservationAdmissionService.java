@@ -157,6 +157,8 @@ public class ObservationAdmissionService {
                 metadata.put(DIGEST_METADATA_KEY, digest);
                 job.setMetadata(metadata);
                 jobs.save(job);
+                jobs.discardRetiredArtifactInventory(
+                        job.getId(), identity.workspaceId(), identity.attempt(), identity.workerId());
             }
             return response(job, digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
         }));

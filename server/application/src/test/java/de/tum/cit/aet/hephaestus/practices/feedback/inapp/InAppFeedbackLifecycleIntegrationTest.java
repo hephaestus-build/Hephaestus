@@ -673,7 +673,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     /** Evidence a new card may cite: the citation carries the verdict admission records for the run. */
     private static String admittedEvidence(AgentJob run) {
         return AdmittedObservationFixtures.evidence(
-                        run.getId(), "scm.pull-request.diff", "inputs/context/diff.patch", "src/Main.java", "example")
+                        run.getId(), "scm.pull-request.diff", "context/diff.patch", "src/Main.java", "example")
                 .toString();
     }
 

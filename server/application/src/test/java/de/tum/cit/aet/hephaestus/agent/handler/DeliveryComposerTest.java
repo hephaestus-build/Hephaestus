@@ -62,8 +62,8 @@ class DeliveryComposerTest extends BaseUnitTest {
                 citation.put(
                         "artifactPath",
                         loc.sourceKind.equals("scm.pull-request.diff")
-                                ? "inputs/context/diff.patch"
-                                : "inputs/context/metadata.json");
+                                ? "context/diff.patch"
+                                : "context/metadata.json");
                 citation.put("path", loc.path);
                 if (loc.sourceKind.equals("scm.pull-request.diff")) {
                     citation.put("side", "NEW");
@@ -1106,13 +1106,13 @@ class DeliveryComposerTest extends BaseUnitTest {
                 "ships-tests-with-the-change",
                 "Production logic without a test",
                 Severity.MINOR,
-                List.of(new LocationSpec("inputs/sources/scm/repo/client/App/Services/APIClient.swift", 12)),
+                List.of(new LocationSpec("repos/reviewed/client/App/Services/APIClient.swift", 12)),
                 null,
                 "New logic added without a test."));
         var dc = DeliveryComposer.compose(observations, ArtifactKinds.PULL_REQUEST);
         assertThat(dc).isNotNull();
         assertThat(reachedTheDeveloper(dc)).contains("client/App/Services/APIClient.swift");
-        assertThat(reachedTheDeveloper(dc)).doesNotContain("inputs/sources/scm/repo/client/");
+        assertThat(reachedTheDeveloper(dc)).doesNotContain("repos/reviewed/client/");
     }
 
     @Test
@@ -1482,7 +1482,7 @@ class DeliveryComposerTest extends BaseUnitTest {
                 "code-hygiene",
                 "Unused import",
                 Severity.MINOR,
-                List.of(new LocationSpec("inputs/sources/scm/repo/src/components/Button.tsx", 1)),
+                List.of(new LocationSpec("repos/reviewed/src/components/Button.tsx", 1)),
                 null,
                 "Remove unused imports.");
 

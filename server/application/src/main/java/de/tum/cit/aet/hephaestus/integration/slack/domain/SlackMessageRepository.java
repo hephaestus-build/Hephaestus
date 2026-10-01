@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.domain;
 
+import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper;
 import java.time.Instant;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -15,6 +16,34 @@ import org.springframework.transaction.annotation.Transactional;
  * {@code StatementInspector} requires.
  */
 public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long> {
+
+    String MESSAGE_READ_GUARD = """
+          AND m.workspaceId=:workspaceId AND c.workspaceId=:workspaceId
+          AND c.consentState=de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState.ACTIVE
+          AND m.deletedAt IS NULL AND NOT EXISTS
+            (SELECT 1 FROM SlackParticipantConsent p WHERE p.workspaceId=:workspaceId
+             AND p.slackUserId=m.authorSlackUserId AND p.ingestionOptedOut=TRUE)
+        """;
+
+    @Query("""
+        SELECT m FROM SlackMessage m JOIN SlackMonitoredChannel c
+          ON c.workspaceId=m.workspaceId AND c.slackChannelId=m.slackChannelId
+        WHERE m.workspaceId=:workspaceId
+        """ + MESSAGE_READ_GUARD + " ORDER BY m.slackChannelId,m.slackTs,m.id")
+    @org.springframework.data.jpa.repository.QueryHints(
+            @jakarta.persistence.QueryHint(name = org.hibernate.jpa.HibernateHints.HINT_FETCH_SIZE, value = "256"))
+    java.util.stream.Stream<SlackMessage> streamWorkspaceMessages(@Param("workspaceId") long workspaceId);
+
+    @Query("""
+        SELECT COUNT(m)>0 FROM SlackMessage m JOIN SlackMonitoredChannel c
+          ON c.workspaceId=m.workspaceId AND c.slackChannelId=m.slackChannelId
+        WHERE m.workspaceId=:workspaceId AND m.slackChannelId=:channelId AND m.slackTs=:messageTs
+        """ + MESSAGE_READ_GUARD)
+    boolean isMessageReadable(
+            @Param("workspaceId") long workspaceId,
+            @Param("channelId") String channelId,
+            @Param("messageTs") String messageTs);
+
     boolean existsByWorkspaceIdAndSlackChannelIdAndSlackTs(Long workspaceId, String slackChannelId, String slackTs);
 
     /** Retention sweep: delete messages only for thread aggregates selected as aged. */
@@ -92,7 +121,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
 
     /**
      * Retention-sweep fan-out: every workspace that currently has at least one ingested message. Native +
-     * unscoped by design (the {@link de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper}
+     * unscoped by design (the {@link SlackRetentionSweeper}
      * runs {@code @WorkspaceAgnostic}, so the tenancy {@code StatementInspector} treats this as exempt). Callers
      * outside a bypass scope will trip the inspector — that is intentional.
      */
@@ -184,10 +213,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
         WHERE m.workspaceId = :workspaceId
           AND m.slackChannelId = :channelId
           AND (m.slackThreadTs = :threadTs OR m.slackTs = :threadTs)
-          AND m.deletedAt IS NULL
-          AND c.consentState = de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState.ACTIVE
-        ORDER BY m.slackTs ASC
-        """)
+        """ + MESSAGE_READ_GUARD + " ORDER BY m.slackTs ASC")
     List<SlackThreadMessageRow> findThreadMessages(
             @Param("workspaceId") long workspaceId,
             @Param("channelId") String channelId,

@@ -60,7 +60,14 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         lenient()
                 .when(git.reviewBase(any(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
-        preparer = new ReviewRepositoryPreparer(git, pullRequests, monitors, connections, List.of(tokens));
+        preparer = new ReviewRepositoryPreparer(
+                git,
+                pullRequests,
+                monitors,
+                connections,
+                List.of(tokens),
+                org.mockito.Mockito.mock(
+                        de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository.class));
         var workspace = new Workspace();
         workspace.setId(1L);
         job = new AgentJob();

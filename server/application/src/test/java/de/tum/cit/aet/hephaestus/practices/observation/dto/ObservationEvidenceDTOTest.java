@@ -33,7 +33,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
         evidence.putArray("citations")
                 .addObject()
                 .put("sourceKind", "scm.pull-request.diff")
-                .put("artifactPath", "inputs/context/change.json")
+                .put("artifactPath", "context/change.json")
                 .put("path", "src/Auth.java")
                 .put("side", "NEW")
                 .put("revision", "b".repeat(40))
@@ -66,7 +66,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     void shouldCarryTheSearchWhenTheEvidenceRecordsAnAbsence() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
-                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "artifactPath":"context/pull_request.json","path":"pull_request.json",\
                 "startLine":1,"endLine":1,"quote":"{}"}],\
                 "search":{"lookedFor":"a Testing section","consulted":["scm.pull-request.diff",\
                 "scm.pull-request.core"],"boundary":"the description and the whole diff"}}
@@ -86,7 +86,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     void shouldCarryWhyWhenThePracticeDidNotApply() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
-                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "artifactPath":"context/pull_request.json","path":"pull_request.json",\
                 "startLine":1,"endLine":1,"quote":"{}"}],\
                 "inapplicability":{"subject":"a database migration","consulted":["scm.pull-request.diff"],\
                 "ruledOutBy":"this change touches no migration file"}}
@@ -105,7 +105,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     void shouldCarryTheOpenQuestionWhenTheReviewCouldNotSettleIt() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
-                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "artifactPath":"context/pull_request.json","path":"pull_request.json",\
                 "startLine":1,"endLine":1,"quote":"{}"}],\
                 "undecidability":{"openQuestion":"whether the new endpoint is covered",\
                 "wouldSettleIt":"the test file the diff does not include"}}
@@ -122,7 +122,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     void shouldCarryNoWarrantWhenTheWarrantMissesAPart() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
-                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "artifactPath":"context/pull_request.json","path":"pull_request.json",\
                 "startLine":1,"endLine":1,"quote":"{}"}],\
                 "search":{"lookedFor":"a Testing section","consulted":[]},\
                 "inapplicability":{"subject":"a database migration","consulted":["scm.pull-request.diff"]},\
@@ -139,7 +139,7 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     void shouldCarryNoWarrantWhenTheEvidenceRecordsNone() {
         var evidence = ObservationEvidenceDTO.from(MAPPER.readTree("""
                 {"citations":[{"sourceKind":"scm.pull-request.core",\
-                "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                "artifactPath":"context/pull_request.json","path":"pull_request.json",\
                 "startLine":1,"endLine":1,"quote":"{}"}]}
                 """));
 
@@ -165,14 +165,14 @@ class ObservationEvidenceDTOTest extends BaseUnitTest {
     void requiresSideExactlyForDiffCitations() {
         assertThatThrownBy(() -> ObservationEvidenceDTO.from(MAPPER.readTree("""
                     {"citations":[{"sourceKind":"scm.pull-request.diff",\
-                    "artifactPath":"inputs/context/diff.patch","path":"src/Auth.java",\
+                    "artifactPath":"context/diff.patch","path":"src/Auth.java",\
                     "startLine":10,"endLine":10,"quote":"+ insecure();"}]}
                     """)))
                 .isInstanceOf(IllegalArgumentException.class);
 
         assertThatThrownBy(() -> ObservationEvidenceDTO.from(MAPPER.readTree("""
                     {"citations":[{"sourceKind":"scm.pull-request.core",\
-                    "artifactPath":"inputs/context/pull_request.json","path":"pull_request.json",\
+                    "artifactPath":"context/pull_request.json","path":"pull_request.json",\
                     "side":"NEW","startLine":1,"endLine":1,"quote":"{}"}]}
                     """)))
                 .isInstanceOf(IllegalArgumentException.class);

@@ -26,6 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBeans;
 class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
+            assignment("agent.handler.PracticeDetectionPipelineIntegrationTest", "workspace-folder"),
             assignment(
                     "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment("testconfig.BaseIntegrationTest", "base"),
@@ -59,6 +60,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"));
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
+            Map.entry(
+                    "workspace-folder",
+                    "real Slack and Outline visibility, repeatable-read capture and cross-source admission; projection spy commits a concurrent row to prove isolation"),
             Map.entry(
                     "mentor-worker-split",
                     "server-only role with authenticated worker transport and controlled runner, routing and admission boundaries"),
@@ -110,6 +114,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
+            "agent.handler.PracticeDetectionPipelineIntegrationTest",
             "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
             "notification.AccountDeletionEmailIntegrationTest",
             "notification.AccountSecurityEmailIntegrationTest",
@@ -182,7 +187,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
         Set<String> mergedKeys =
                 fullContextTests.stream().map(this::mergedContextKey).collect(Collectors.toCollection(TreeSet::new));
-        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(17);
+        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(18);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.keySet()).isEqualTo(mergedKeys);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.values())
                 .allSatisfy(reason -> assertThat(reason).isNotBlank());

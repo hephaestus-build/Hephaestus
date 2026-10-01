@@ -6,7 +6,6 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
-import de.tum.cit.aet.hephaestus.agent.context.EvidenceLimits;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -16,8 +15,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -37,7 +35,7 @@ import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.annotation.Order;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
@@ -82,8 +80,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         if (path.equals(CHANGE_FILE)) return DIFF;
         return CORE;
     }
-
-    static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
     private final ObjectMapper objectMapper;
     private final GitRepositoryManager gitRepositoryManager;
@@ -166,10 +162,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         }
         if (prepared != null) {
             String range = prepared.target() + ":" + prepared.head();
-            if (selectedKinds.contains(CORE)) {
-                identities.put(CORE, range);
-                storeCommits(files, prepared);
-            }
             if (selectedKinds.contains(DIFF)) {
                 storeChange(files, prepared);
                 completeness.put(DIFF, SourceCompleteness.COMPLETE);
@@ -187,7 +179,7 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
     }
 
     private static boolean readsClone(Set<SourceKind> selectedKinds) {
-        return selectedKinds.contains(CORE) || selectedKinds.contains(DIFF);
+        return selectedKinds.contains(DIFF);
     }
 
     private void ensureRepositoryAvailable(RepositoryKey repositoryId) {
@@ -221,58 +213,6 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
         } catch (JacksonException e) {
             throw new JobPreparationException("Failed to serialize the reviewed change", e);
         }
-    }
-
-    private void storeCommits(Map<String, byte[]> files, ReviewRepositoryPreparer.PreparedReview prepared) {
-        List<CommitDetails> commits =
-                gitRepositoryManager.commitsBetween(prepared.key(), prepared.target(), prepared.head());
-        ObjectNode root = objectMapper.createObjectNode();
-        ArrayNode array = root.putArray("commits");
-        for (CommitDetails commit : commits) {
-            ObjectNode node = array.addObject();
-            node.put("sha", commit.sha());
-            ArrayNode parents = node.putArray("parents");
-            commit.parentShas().forEach(parents::add);
-            // Names, never addresses: the record names who did what, and an address is not that.
-            node.put("author", commit.authorName());
-            node.put("authoredAt", commit.authoredAt().toString());
-            node.put("committer", commit.committerName());
-            node.put("committedAt", commit.committedAt().toString());
-            node.put(
-                    "message",
-                    commit.messageBody() == null ? commit.message() : commit.message() + "\n\n" + commit.messageBody());
-            ArrayNode changes = node.putArray("files");
-            for (CommitDetails.FileChange change : commit.fileChanges()) {
-                ObjectNode file = changes.addObject();
-                file.put("path", change.filename());
-                file.put("status", statusLetter(change.changeType()));
-                if (change.previousFilename() != null) {
-                    file.put("oldPath", change.previousFilename());
-                }
-                file.put("additions", change.additions());
-                file.put("deletions", change.deletions());
-            }
-        }
-        try {
-            files.put(
-                    COMMITS_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
-        } catch (JacksonException e) {
-            throw new JobPreparationException("Failed to serialize the commits of the change", e);
-        }
-    }
-
-    /** The status letter {@code git diff --name-status} prints, which is what the container's readers parse. */
-    private static String statusLetter(ChangeType changeType) {
-        return switch (changeType) {
-            case ADDED -> "A";
-            case MODIFIED -> "M";
-            case REMOVED -> "D";
-            case RENAMED -> "R";
-            case COPIED -> "C";
-            // The mirror's diff never yields these two; a provider's own sync does.
-            case CHANGED -> "M";
-            case UNKNOWN -> "M";
-        };
     }
 
     private void storeComments(Map<String, byte[]> files, List<PullRequestReviewComment> comments) {
@@ -351,12 +291,8 @@ public class PullRequestContentSource implements EvidenceSource, ReviewContextBu
 
     private CommentCapture loadComments(long pullRequestId) {
         var comments = new ArrayList<>(reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
-                pullRequestId, ReviewThreadContentSource.HEPHAESTUS_MARKER, PageRequest.of(0, MAX_COMMENTS + 1)));
-        if (comments.size() > MAX_COMMENTS + 1) {
-            comments = new ArrayList<>(comments.subList(0, MAX_COMMENTS + 1));
-        }
-        boolean complete = comments.size() <= MAX_COMMENTS;
-        if (!complete) comments.remove(comments.size() - 1);
+                pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
+        boolean complete = true;
         comments.sort(Comparator.comparing(
                 PullRequestReviewComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
         return new CommentCapture(comments, complete);

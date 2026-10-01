@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import java.util.HashSet;
@@ -9,6 +10,13 @@ import java.util.Set;
 
 /** Binds emitted paths and capture facts to contract source kinds. */
 public interface EvidenceSource extends ContentSource {
+    String OUTPUT_PREFIX = SandboxLayout.CONTEXT_PREFIX;
+
+    @Override
+    default boolean ownsPath(String path) {
+        return path.startsWith(OUTPUT_PREFIX);
+    }
+
     Set<SourceKind> sourceKinds();
 
     SourceKind sourceKindFor(String path);

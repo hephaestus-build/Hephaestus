@@ -22,6 +22,7 @@ import {
 } from "./pi-agent-sandbox.ts";
 import { CHANGE_ROOT } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
+import { folderCitationIndex } from "./pi-folder-index.ts";
 import {
 	ASSESSMENT_STATUS_VALUES,
 	ASSESSMENT_STATUS_DESCRIPTIONS,
@@ -333,33 +334,6 @@ setTimeout(() => {
 
 mkdirSync(OUTPUT, { recursive: true });
 
-/** Citation ownership comes from the captured manifest; fail closed when it is unreadable. */
-function readManifest(): {
-	availableSourceKinds: Set<string>;
-	artifactSources: Map<string, string>;
-} {
-	const manifest = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
-	if (!isRecord(manifest) || !Array.isArray(manifest.sources)) {
-		throw new Error("Task manifest: expected a sources array");
-	}
-	const availableSourceKinds = new Set<string>();
-	const artifactSources = new Map<string, string>();
-	for (const source of jsonArray(manifest.sources)) {
-		if (!isRecord(source) || typeof source.kind !== "string" || !isRecord(source.state)) {
-			throw new Error("Task manifest: every source needs a string kind and a state");
-		}
-		if (source.state.availability === "AVAILABLE") {
-			availableSourceKinds.add(source.kind);
-		}
-		for (const artifact of jsonArray(source.artifacts)) {
-			if (isRecord(artifact) && typeof artifact.path === "string") {
-				artifactSources.set(artifact.path, source.kind);
-			}
-		}
-	}
-	return { availableSourceKinds, artifactSources };
-}
-
 /** Snapshot the eligible practices once for the whole review. */
 function readPracticeIndex(): PracticeIndexEntry[] {
 	const index = parseJson(readFileSync(INPUT_PATHS.practiceIndex, "utf8"));
@@ -384,7 +358,9 @@ function readPracticeIndex(): PracticeIndexEntry[] {
 	});
 }
 
-const { availableSourceKinds, artifactSources } = readManifest();
+const { availableSourceKinds, artifactSources } = folderCitationIndex(
+	parseJson(readFileSync(INPUT_PATHS.manifest, "utf8")),
+);
 const availableSourceKindValues = [...availableSourceKinds].toSorted();
 const stagedArtifactPaths = [...artifactSources.keys()].toSorted();
 const practiceIndex = readPracticeIndex();
@@ -844,8 +820,8 @@ const BINARY = Symbol("binary");
 function citedContent(citation: NormalizedCitation): string | typeof BINARY | null {
 	if (citation.sourceKind === "scm.repository.tree") {
 		return citation.revision === undefined
-			? readCheckoutFile(citation.path)
-			: readRevisionFile(citation.path, citation.revision);
+			? readCheckoutFile(citation.path, citationRepository(citation))
+			: readRevisionFile(citation.path, citation.revision, citationRepository(citation));
 	}
 	if (citation.sourceKind === "scm.pull-request.diff") {
 		return readFileSync(`${CWD}/${CHANGE_ROOT}/diff.patch`, "utf8");
@@ -880,26 +856,35 @@ function asText(bytes: Buffer): string | typeof BINARY {
 	return bytes.subarray(0, 8000).includes(0) ? BINARY : bytes.toString("utf8");
 }
 
+/** The artifact index, not the task's primary checkout, determines which repository a citation reads. */
+function citationRepository(citation: NormalizedCitation): string {
+	const match = /^repos\/(?<repository>[A-Za-z0-9_-]+)\/\.git\/HEAD$/u.exec(citation.artifactPath);
+	if (!match?.groups || typeof match.groups.repository !== "string") {
+		throw new Error("Repository citation requires a captured repository HEAD");
+	}
+	return nodePath.resolve(CWD, "repos", match.groups.repository);
+}
+
 /** The blob at a repository-relative path in a revision of the checkout's history, or null. */
-function readRevisionFile(path: string, revision: string): string | typeof BINARY | null {
+function readRevisionFile(
+	path: string,
+	revision: string,
+	repository: string,
+): string | typeof BINARY | null {
 	if (path.startsWith("/") || path.split("/").includes("..")) {
 		return null;
 	}
-	const child = spawnSync(
-		"git",
-		["-C", INPUT_PATHS.repositoryRoot, "--no-pager", "show", `${revision}:${path}`],
-		{
-			maxBuffer: 64 * 1024 * 1024,
-			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
-		},
-	);
+	const child = spawnSync("git", ["-C", repository, "--no-pager", "show", `${revision}:${path}`], {
+		maxBuffer: 64 * 1024 * 1024,
+		env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
+	});
 	return child.status === 0 ? asText(child.stdout) : null;
 }
 
 /** The file at a repository-relative path in the checkout, or null when there is none. */
-function readCheckoutFile(path: string): string | typeof BINARY | null {
-	const file = nodePath.resolve(INPUT_PATHS.repositoryRoot, path);
-	if (!file.startsWith(`${INPUT_PATHS.repositoryRoot}/`)) {
+function readCheckoutFile(path: string, repository: string): string | typeof BINARY | null {
+	const file = nodePath.resolve(repository, path);
+	if (!file.startsWith(`${repository}/`)) {
 		return null;
 	}
 	try {

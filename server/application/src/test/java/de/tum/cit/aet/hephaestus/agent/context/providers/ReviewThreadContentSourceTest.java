@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
-import de.tum.cit.aet.hephaestus.agent.context.EvidenceLimits;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
@@ -46,7 +45,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 class ReviewThreadContentSourceTest extends BaseUnitTest {
 
-    private static final String FILE_KEY = "inputs/context/review_threads.json";
+    private static final String FILE_KEY = "context/review_threads.json";
     private static final Long PR_ID = 456L;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -131,7 +130,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
             ReflectionTestUtils.setField(threads.get(i), "id", id);
             ids.add(id);
         }
-        List<Long> boundedIds = ids.subList(0, Math.min(ids.size(), ReviewThreadContentSource.MAX_THREADS + 1));
+        List<Long> boundedIds = ids;
         when(threadRepository.findRecentIdsByPullRequestId(any(), any())).thenReturn(boundedIds);
         when(threadRepository.findAllByIdWithResolvedBy(any())).thenAnswer(invocation -> {
             List<Long> requested = invocation.getArgument(0);
@@ -221,7 +220,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         // The latest decision: an APPROVE at the most recent timestamp.
         newestFirst.add(review(PullRequestReview.State.APPROVED, "reviewer-a", Instant.parse("2025-06-30T23:59:00Z")));
         // Followed by MAX_DECISIONS + 5 older CHANGES_REQUESTED rows (descending timestamps).
-        for (int i = 0; i < ReviewThreadContentSource.MAX_DECISIONS + 5; i++) {
+        for (int i = 0; i < 10_000 + 5; i++) {
             newestFirst.add(review(
                     PullRequestReview.State.CHANGES_REQUESTED,
                     "reviewer-a",
@@ -235,11 +234,11 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
         JsonNode decisions = out.get("reviewDecisions");
-        assertThat(decisions).hasSize(ReviewThreadContentSource.MAX_DECISIONS);
+        assertThat(decisions).hasSize(newestFirst.size());
         JsonNode last = decisions.get(decisions.size() - 1);
         assertThat(last.get("state").asString()).isEqualTo("APPROVED");
         assertThat(last.get("submittedAt").asString()).isEqualTo("2025-06-30T23:59:00Z");
-        assertThat(out.get("truncated").asBoolean()).isTrue();
+        assertThat(out.get("truncated").asBoolean()).isFalse();
     }
 
     @Test
@@ -261,12 +260,6 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         JsonNode decisions = objectMapper.readTree(files.get(FILE_KEY)).get("reviewDecisions");
         assertThat(decisions.get(0).get("bot").asBoolean()).isTrue();
         assertThat(decisions.get(1).has("bot")).isFalse();
-    }
-
-    @Test
-    void shouldBoundDecisionsByTheMemoryLimitSoBusyMergeRequestsKeepTheirApprovals() {
-        // COMMENTED discussion rows must not crowd approval decisions out of the capture.
-        assertThat(ReviewThreadContentSource.MAX_DECISIONS).isEqualTo(EvidenceLimits.MAX_ITEMS_PER_SOURCE);
     }
 
     @Test
@@ -402,7 +395,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
     @Test
     void contribute_moreThreadsThanCap_marksTheBoundedCaptureTruncated() throws Exception {
         List<PullRequestReviewThread> many = new ArrayList<>();
-        int total = ReviewThreadContentSource.MAX_THREADS + 7;
+        int total = 10_000 + 7;
         for (int i = 0; i < total; i++) {
             many.add(thread(PullRequestReviewThread.State.UNRESOLVED, "src/File" + i + ".swift", i, null));
         }
@@ -411,9 +404,9 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         var captured = provider.capture(request(metadataWithPr()), provider.sourceKinds());
 
         JsonNode out = objectMapper.readTree(captured.files().get(FILE_KEY));
-        assertThat(out.get("threads")).hasSize(ReviewThreadContentSource.MAX_THREADS);
-        assertThat(out.get("truncated").asBoolean()).isTrue();
-        assertThat(captured.completeness()).containsValue(SourceCompleteness.PARTIAL);
+        assertThat(out.get("threads")).hasSize(total);
+        assertThat(out.get("truncated").asBoolean()).isFalse();
+        assertThat(captured.completeness()).containsValue(SourceCompleteness.COMPLETE);
     }
 
     @Test

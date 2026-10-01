@@ -286,7 +286,7 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         String index = new String(files.get(SandboxLayout.PRACTICES_PREFIX + "index.json"), StandardCharsets.UTF_8);
         assertThat(index).contains("authoring").contains("retrospective");
         // A pointer to where this practice's author expects the answer — not a fence. What may be cited
-        // is what the run staged, and inputs/manifest.json is where that is stated, once.
+        // is what the run staged, and INDEX.json is where that is stated, once.
         assertThat(index).contains("readsSources").contains("scm.pull-request.diff");
         assertThat(index).doesNotContain("allowedSources");
         assertThat(files)

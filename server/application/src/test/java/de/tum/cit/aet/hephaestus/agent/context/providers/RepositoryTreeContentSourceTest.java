@@ -68,11 +68,10 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
 
         assertThat(contribution.files()).isEmpty();
         assertThat(contribution.filesOnDisk())
-                .containsOnlyKeys(
-                        "inputs/sources/scm/repo/.git/HEAD", "inputs/sources/scm/repo/.git/hephaestus-captured-refs");
+                .containsOnlyKeys("repos/reviewed/.git/HEAD", "repos/reviewed/.git/hephaestus-captured-refs");
         assertThat(contribution.directories())
-                .containsExactly(new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory(
-                        "inputs/sources/scm/repo/", stagingDir));
+                .containsExactly(
+                        new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory("repos/reviewed/", stagingDir));
         verify(gitRepositoryManager)
                 .readTreeSnapshot(new RepositoryKey(99L, 17L), "0123456789012345678901234567890123456789");
     }

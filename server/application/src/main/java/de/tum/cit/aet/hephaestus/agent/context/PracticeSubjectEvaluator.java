@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.PracticeSubjectCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
@@ -27,7 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Evaluates mechanical practice preconditions against staged evidence.
  *
  * <p>Only complete captures can prove absence. Missing, partial, malformed, or unsupported evidence is
- * {@link SubjectFinding#UNDECIDABLE} and keeps the practice eligible.
+ * {@link de.tum.cit.aet.hephaestus.evidence.SubjectFinding#UNDECIDABLE} and keeps the practice eligible.
  */
 @Component
 public class PracticeSubjectEvaluator {
@@ -45,7 +44,7 @@ public class PracticeSubjectEvaluator {
      */
     public @Nullable PracticeSubjectCheck evaluate(
             @Nullable PracticeSubject subject,
-            ArtifactSourceManifest manifest,
+            JobFolderIndex manifest,
             Map<String, byte[]> staged,
             @Nullable ReviewChange change) {
         if (subject == null) {

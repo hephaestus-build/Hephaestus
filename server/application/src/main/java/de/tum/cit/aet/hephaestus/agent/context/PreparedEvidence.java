@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -18,7 +17,7 @@ public record PreparedEvidence(
         Map<String, byte[]> files,
         Map<String, Path> filesOnDisk,
         List<AutoCloseable> cleanups,
-        @Nullable ArtifactSourceManifest manifest,
+        @Nullable JobFolderIndex manifest,
         List<EvidenceDirectory> directories)
         implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(PreparedEvidence.class);
@@ -27,11 +26,11 @@ public record PreparedEvidence(
             Map<String, byte[]> files,
             Map<String, Path> filesOnDisk,
             List<AutoCloseable> cleanups,
-            @Nullable ArtifactSourceManifest manifest) {
+            @Nullable JobFolderIndex manifest) {
         this(files, filesOnDisk, cleanups, manifest, List.of());
     }
 
-    public PreparedEvidence(Map<String, byte[]> files, @Nullable ArtifactSourceManifest manifest) {
+    public PreparedEvidence(Map<String, byte[]> files, @Nullable JobFolderIndex manifest) {
         this(files, Map.of(), List.of(), manifest);
     }
 

@@ -141,7 +141,7 @@ const INTENTIONALLY_MISSING_PATHS = [
 	},
 	{
 		document: "docs/contributor/agent/workspace-abi.mdx",
-		value: "inputs/context/commits.json",
+		value: "context/commits.json",
 		reason: "the staged commit record, written into the agent workspace",
 	},
 	{
@@ -191,7 +191,7 @@ const INTENTIONALLY_MISSING_PATHS = [
 	},
 	{
 		document: "docs/contributor/agent/workspace-abi.mdx",
-		value: "inputs/manifest.json",
+		value: "INDEX.md",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{
@@ -206,12 +206,12 @@ const INTENTIONALLY_MISSING_PATHS = [
 	},
 	{
 		document: "docs/contributor/artifact-source-contract.mdx",
-		value: "inputs/manifest.json",
+		value: "INDEX.md",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{
 		document: "docs/contributor/artifact-source-contract.mdx",
-		value: "inputs/context/change.json",
+		value: "context/change.json",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{

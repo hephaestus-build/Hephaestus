@@ -13,7 +13,10 @@ import org.jspecify.annotations.Nullable;
  * size-cap-evicted document is returned as a marker rather than dropped, so a link to it still resolves.
  */
 public interface DocumentProjection {
-    /** Live ahead of tombstoned, capped so a large workspace never floods the context. */
+    /** Reuses the mirror owner's active-connection and approved-origin check. */
+    boolean workspaceReadable(long workspaceId);
+
+    /** Every permitted record in the workspace, including tombstones and evicted-body markers. */
     List<ProjectedDocument> documentsForWorkspace(long workspaceId);
 
     /** Each reference may be a document id or URL. */
@@ -73,7 +76,9 @@ public interface DocumentProjection {
             @Nullable Long updatedByMemberId,
             List<Collaborator> collaborators,
             boolean archived,
-            @Nullable String collectionName) {
+            @Nullable String collectionName,
+            @Nullable Instant syncedAt,
+            @Nullable String sourceId) {
         /** One document editor: provider-native subject, display name if known, resolved member id if linked. */
         public record Collaborator(
                 String subject,
@@ -99,6 +104,8 @@ public interface DocumentProjection {
                     null,
                     List.of(),
                     false,
+                    null,
+                    null,
                     null);
         }
     }

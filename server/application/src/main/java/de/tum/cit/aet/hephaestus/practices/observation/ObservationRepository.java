@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
@@ -347,7 +348,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     /**
      * Hard-delete the {@code chat.conversation_thread} observations for a workspace whose {@code artifact_id} (the
      * {@code slack_thread} id) is one of {@code artifactIds} — the derived-content erasure the Slack module invokes
-     * through {@link de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure} when a channel's consent is
+     * through {@link ConversationFeedbackErasure} when a channel's consent is
      * withdrawn. the {@code artifactKind} + {@code artifactId} predicates keep PR/ISSUE observations
      * and other tenants' rows untouched. DB {@code ON DELETE CASCADE} clears any bound {@code feedback_observation} /
      * {@code reaction} children. Callers guard an empty {@code artifactIds}.
@@ -779,6 +780,17 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("workspaceId") Long workspaceId,
             @Param("since") Instant since,
             Pageable pageable);
+
+    /** Full person history for a job folder, with the existing repository and claim visibility guards. */
+    @Query(value = """
+            SELECT f.* FROM observation f
+            WHERE f.about_user_id = :aboutUserId AND f.workspace_id = :workspaceId
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
+              AND f.superseded_at IS NULL AND f.assessment_status = 'ASSESSED'
+            ORDER BY f.observed_at DESC, f.id DESC
+            """, nativeQuery = true)
+    List<Observation> findForPersonHistory(
+            @Param("aboutUserId") Long aboutUserId, @Param("workspaceId") Long workspaceId);
 
     /**
      * Every observation about a developer inside a span, newest first, every run's rows and every presence:

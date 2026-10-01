@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
@@ -17,7 +19,7 @@ const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], {
 	encoding: "utf8",
 	env,
 }).trim();
-const root = "server/application/src/main/resources/contracts/artifact-source";
+const root = "server/application/src/main/resources/contracts/source-use";
 const githubBaseRef = process.env.GITHUB_BASE_REF;
 const baseRef =
 	process.env.CONTRACT_BASE_REF ??
@@ -38,36 +40,51 @@ const base = git("merge-base", "HEAD", baseRef).trim();
 // so every diff is empty and the check would report success having compared a commit with itself.
 if (base === git("rev-parse", "HEAD").trim()) {
 	console.log(
-		`Artifact-source contract immutability: HEAD is the merge base with ${baseRef}; nothing to compare.`,
+		`Source-use contract immutability: HEAD is the merge base with ${baseRef}; nothing to compare.`,
 	);
 	process.exit(0);
 }
 
-const rootExists = git("ls-tree", "-d", "--name-only", base, "--", root).trim() === root;
+const legacyRoot = "server/application/src/main/resources/contracts/artifact-source";
+const baselineRoot =
+	git("ls-tree", "-d", "--name-only", base, "--", root).trim() === root ? root : legacyRoot;
+const rootExists =
+	git("ls-tree", "-d", "--name-only", base, "--", baselineRoot).trim() === baselineRoot;
 const publishedVersions = rootExists
-	? git("ls-tree", "-d", "--name-only", `${base}:${root}`).trim().split("\n").filter(Boolean)
+	? git("ls-tree", "-d", "--name-only", `${base}:${baselineRoot}`)
+			.trim()
+			.split("\n")
+			.filter(Boolean)
 	: [];
 
 if (publishedVersions.length === 0) {
 	console.log(
-		`Artifact-source contract immutability: no version is published at ${base.slice(0, 8)} yet.`,
+		`Source-use contract immutability: no version is published at ${base.slice(0, 8)} yet.`,
 	);
 	process.exit(0);
 }
 
 for (const version of publishedVersions) {
-	const versionPath = `${root}/${version}`;
-	// --quiet exits non-zero on any difference, which covers edits, deletions, and the rename of a
-	// published directory (its old path reads as deleted).
-	try {
-		git("diff", "--quiet", base, "--", versionPath);
-	} catch {
-		throw new Error(
-			`Published artifact-source contract ${version} is immutable; add a new version.`,
-		);
+	const publishedFiles = git("ls-tree", "-r", "--name-only", `${base}:${baselineRoot}/${version}`)
+		.trim()
+		.split("\n")
+		.filter(Boolean);
+	for (const file of publishedFiles) {
+		// #1732 retires capture manifests, not historical source-use approvals or policy definitions.
+		if (baselineRoot === legacyRoot && file === "artifact-source-manifest.schema.json") {
+			continue;
+		}
+		const expected = git("show", `${base}:${baselineRoot}/${version}/${file}`);
+		try {
+			if (readFileSync(path.join(repoRoot, root, version, file), "utf8") !== expected) {
+				throw new Error("Changed bytes");
+			}
+		} catch {
+			throw new Error(`Published source-use contract ${version} is immutable; add a new version.`);
+		}
 	}
 }
 
 console.log(
-	`Artifact-source contract immutability: ${publishedVersions.length} published version(s) unchanged since ${base.slice(0, 8)} (${publishedVersions.join(", ")}).`,
+	`Source-use contract immutability: ${publishedVersions.length} published version(s) unchanged since ${base.slice(0, 8)} (${publishedVersions.join(", ")}).`,
 );

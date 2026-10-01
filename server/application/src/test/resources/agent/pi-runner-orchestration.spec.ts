@@ -818,6 +818,13 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(
 						nodePath.join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
+							artifacts: [
+								{ kind: "scm.pull-request.core", artifact: { path: "evidence/metadata.json" } },
+								{ kind: "scm.pull-request.diff", artifact: { path: "evidence/change.json" } },
+								...(stage === "tree-citation"
+									? [{ kind: "scm.repository.tree", artifact: { path: "repos/primary/.git/HEAD" } }]
+									: []),
+							],
 							sources: [
 								{
 									kind: "scm.pull-request.core",

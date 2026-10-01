@@ -112,7 +112,7 @@ export const mockDocumentBinding = {
 	needs: [{ sourceKind: "docs.document.core", stance: "REQUIRED" }],
 } satisfies PracticeBinding;
 
-/** Shared source options must match contracts/artifact-source/1.2.0/catalog.json; practice.test.ts checks them. */
+/** Shared source options must match contracts/source-use/1.2.0/catalog.json; practice.test.ts checks them. */
 const relatedWorkSource = {
 	sourceKind: "workspace.project-inventory",
 	displayName: "Related workspace work",

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -294,6 +295,15 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
             @Param("artifactKind") String artifactKind,
             @Param("artifactId") long artifactId);
 
+    /** The same delivered-feedback selection without a review history window. */
+    @Query("""
+        SELECT f FROM Feedback f WHERE f.workspaceId = :workspaceId AND f.recipientUserId = :recipientUserId
+          AND f.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
+        ORDER BY f.createdAt DESC, f.id DESC
+        """)
+    List<Feedback> findDeliveredForPersonHistory(
+            @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId);
+
     /** Delivered summary and inline-only feedback for a recipient, newest first. */
     @Query("""
         SELECT f FROM Feedback f
@@ -508,7 +518,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
 
     /**
      * Erases {@code chat.conversation_thread} feedback by {@code artifact_id}, invoked through
-     * {@link de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure} when a channel's consent is
+     * {@link ConversationFeedbackErasure} when a channel's consent is
      * withdrawn.
      *
      * @return the number of pieces of feedback deleted

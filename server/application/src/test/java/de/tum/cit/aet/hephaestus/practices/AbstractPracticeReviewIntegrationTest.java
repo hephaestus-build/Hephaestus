@@ -48,7 +48,7 @@ import tools.jackson.databind.ObjectMapper;
 public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     protected static final String DIFF_EVIDENCE_JSON =
-            "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"inputs/context/diff.patch\","
+            "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"context/diff.patch\","
                     + "\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":42,\"quote\":\"example\","
                     + "\"quoteRedacted\":false}]}";
 

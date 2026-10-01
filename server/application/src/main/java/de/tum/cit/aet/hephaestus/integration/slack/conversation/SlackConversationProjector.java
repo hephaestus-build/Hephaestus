@@ -33,10 +33,8 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     /** Cap on distinct threads surfaced per turn — the envelope budget. */
     static final int MAX_THREADS = 30;
 
-    /** Cap on messages materialised per thread. */
-    static final int MAX_MESSAGES_PER_THREAD = 100;
-
     private final SlackThreadRepository threadRepository;
+
     private final SlackMessageRepository messageRepository;
     private final ObjectMapper objectMapper;
 
@@ -47,6 +45,35 @@ public class SlackConversationProjector implements ConversationThreadProjection 
         this.threadRepository = threadRepository;
         this.messageRepository = messageRepository;
         this.objectMapper = objectMapper;
+    }
+
+    @Override
+    public boolean isMessageReadable(long workspaceId, String channelId, String messageTs) {
+        return messageRepository.isMessageReadable(workspaceId, channelId, messageTs);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public void forEachWorkspaceMessage(long workspaceId, java.util.function.Consumer<ObjectNode> consumer) {
+        try (var messages = messageRepository.streamWorkspaceMessages(workspaceId)) {
+            messages.forEach(message -> {
+                ObjectNode record = objectMapper.createObjectNode();
+                record.put("id", message.getId());
+                record.put("channel", message.getSlackChannelId());
+                record.put("ts", message.getSlackTs());
+                record.put("thread_ts", message.getSlackThreadTs());
+                record.put("author_id", message.getAuthorMemberId());
+                record.put("text", message.getText());
+                record.put("synced_at", message.getIngestedAt().toString());
+                Instant sent = sourceEffectiveAt(message.getSlackTs());
+                record.put(
+                        "month",
+                        (sent == null ? message.getIngestedAt() : sent)
+                                .toString()
+                                .substring(0, 7));
+                consumer.accept(record);
+            });
+        }
     }
 
     /** A thread the audience participates in — the key pair used to fetch its messages. */
@@ -149,7 +176,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     /**
      * Threads in the workspace whose channel consent is ACTIVE and whose participant set contains the audience.
      * Newest-active first. GIN-backed membership test ({@code = ANY}), via the native
-     * {@link SlackThreadRepository#findParticipatingThreadRows}.
+     * {@link de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository#findParticipatingThreadRows}.
      */
     private List<ThreadKey> findParticipatingThreads(long workspaceId, long audienceMemberId) {
         List<Object[]> rows = threadRepository.findParticipatingThreadRows(workspaceId, audienceMemberId, MAX_THREADS);
@@ -163,7 +190,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     /**
      * Non-tombstoned messages of one thread (root {@code slack_ts = thread_ts} + replies
      * {@code slack_thread_ts = thread_ts}), oldest first. Workspace-pinned and gated on the channel's consent
-     * being {@code ACTIVE}, via {@link SlackMessageRepository#findThreadMessages}. The consent predicate lives on
+     * being {@code ACTIVE}, via {@link de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository#findThreadMessages}. The consent predicate lives on
      * the message read itself (not only on the thread scan) so the detection path — which enters via
      * {@link #buildThreadPayload} without a prior consent-filtered thread scan — cannot leak messages from a
      * channel paused or revoked between enqueue and execution: a non-ACTIVE channel yields zero messages,
@@ -171,8 +198,8 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      */
     private boolean appendThreadMessages(long workspaceId, ThreadKey key, ArrayNode messages) {
         List<SlackThreadMessageRow> rows = messageRepository.findThreadMessages(
-                workspaceId, key.channelId(), key.threadTs(), PageRequest.of(0, MAX_MESSAGES_PER_THREAD + 1));
-        for (int index = 0; index < Math.min(rows.size(), MAX_MESSAGES_PER_THREAD); index++) {
+                workspaceId, key.channelId(), key.threadTs(), org.springframework.data.domain.Pageable.unpaged());
+        for (int index = 0; index < rows.size(); index++) {
             SlackThreadMessageRow row = rows.get(index);
             ObjectNode node = messages.addObject();
             node.put("ts", row.slackTs());
@@ -188,6 +215,6 @@ public class SlackConversationProjector implements ConversationThreadProjection 
                 node.put("edited", true);
             }
         }
-        return rows.size() > MAX_MESSAGES_PER_THREAD;
+        return false;
     }
 }

@@ -10,7 +10,7 @@ public final class AdmittedObservationFixtures {
     private AdmittedObservationFixtures() {}
 
     public static JsonNode evidence(UUID jobId, String sourceKind) {
-        return evidence(jobId, sourceKind, "inputs/context/evidence.txt", "evidence.txt", "verified quote");
+        return evidence(jobId, sourceKind, "context/evidence.txt", "evidence.txt", "verified quote");
     }
 
     /** One admitted citation at line 1 of {@code path}, carrying the verdict a real admission records. */

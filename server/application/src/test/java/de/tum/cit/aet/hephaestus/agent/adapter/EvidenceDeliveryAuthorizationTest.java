@@ -34,14 +34,21 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         AgentJobRepository jobs = mock(AgentJobRepository.class);
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         UUID jobId = UUID.randomUUID();
-        when(jobs.findEvidenceContractVersion(jobId, 7L)).thenReturn(Optional.of("1.2.0"));
+        when(jobs.findEvidenceContractVersion(jobId, 7L)).thenReturn(Optional.of("1.3.0"));
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.2.0"),
+                        new SourceContractVersion("1.3.0"),
                         new SourceKind("scm.pull-request.diff"),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(false);
 
-        boolean permitted = new EvidenceDeliveryAuthorization(jobs, catalogs)
+        boolean permitted = new EvidenceDeliveryAuthorization(
+                        jobs,
+                        catalogs,
+                        org.mockito.Mockito.mock(
+                                de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                                call -> call.getMethod().getName().equals("permits")
+                                        ? true
+                                        : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)))
                 .permits(
                         7L,
                         jobId,
@@ -56,14 +63,21 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         AgentJobRepository jobs = mock(AgentJobRepository.class);
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         UUID jobId = UUID.randomUUID();
-        when(jobs.findEvidenceContractVersion(jobId, 7L)).thenReturn(Optional.of("1.2.0"));
+        when(jobs.findEvidenceContractVersion(jobId, 7L)).thenReturn(Optional.of("1.3.0"));
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.2.0"),
+                        new SourceContractVersion("1.3.0"),
                         new SourceKind("scm.pull-request.diff"),
                         SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW))
                 .thenReturn(true);
 
-        assertThat(new EvidenceDeliveryAuthorization(jobs, catalogs)
+        assertThat(new EvidenceDeliveryAuthorization(
+                                jobs,
+                                catalogs,
+                                org.mockito.Mockito.mock(
+                                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                                        call -> call.getMethod().getName().equals("permits")
+                                                ? true
+                                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)))
                         .permits(
                                 7L,
                                 jobId,
@@ -76,9 +90,16 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
     void rejectsMissingOrMalformedCitationSources() {
         AgentJobRepository jobs = mock(AgentJobRepository.class);
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
-        EvidenceDeliveryAuthorization authorization = new EvidenceDeliveryAuthorization(jobs, catalogs);
+        EvidenceDeliveryAuthorization authorization = new EvidenceDeliveryAuthorization(
+                jobs,
+                catalogs,
+                org.mockito.Mockito.mock(
+                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                        call -> call.getMethod().getName().equals("permits")
+                                ? true
+                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)));
         UUID malformedJobId = UUID.randomUUID();
-        when(jobs.findEvidenceContractVersion(malformedJobId, 7L)).thenReturn(Optional.of("1.2.0"));
+        when(jobs.findEvidenceContractVersion(malformedJobId, 7L)).thenReturn(Optional.of("1.3.0"));
 
         assertThat(authorization.permits(7L, (UUID) null, (JsonNode) null, SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .isFalse();
@@ -108,7 +129,14 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
     void batchedAuthorizationDecidesEveryObservationTheWayTheSingleRowFormDoes() {
         AgentJobRepository jobs = mock(AgentJobRepository.class);
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
-        EvidenceDeliveryAuthorization authorization = new EvidenceDeliveryAuthorization(jobs, catalogs);
+        EvidenceDeliveryAuthorization authorization = new EvidenceDeliveryAuthorization(
+                jobs,
+                catalogs,
+                org.mockito.Mockito.mock(
+                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                        call -> call.getMethod().getName().equals("permits")
+                                ? true
+                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)));
 
         Observation permittedSource = observation("scm.pull-request.diff");
         Observation deniedSource = observation("hephaestus.observation-history");
@@ -118,21 +146,21 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
 
         when(jobs.findEvidenceContractVersions(eq(7L), any()))
                 .thenReturn(List.of(
-                        new ContractRow(permittedSource.getAgentJobId(), "1.2.0"),
-                        new ContractRow(deniedSource.getAgentJobId(), "1.2.0"),
+                        new ContractRow(permittedSource.getAgentJobId(), "1.3.0"),
+                        new ContractRow(deniedSource.getAgentJobId(), "1.3.0"),
                         new ContractRow(snapshotless.getAgentJobId(), null)));
         when(jobs.findEvidenceContractVersion(permittedSource.getAgentJobId(), 7L))
-                .thenReturn(Optional.of("1.2.0"));
-        when(jobs.findEvidenceContractVersion(deniedSource.getAgentJobId(), 7L)).thenReturn(Optional.of("1.2.0"));
+                .thenReturn(Optional.of("1.3.0"));
+        when(jobs.findEvidenceContractVersion(deniedSource.getAgentJobId(), 7L)).thenReturn(Optional.of("1.3.0"));
         when(jobs.findEvidenceContractVersion(runMissing.getAgentJobId(), 7L)).thenReturn(Optional.empty());
         when(jobs.findEvidenceContractVersion(snapshotless.getAgentJobId(), 7L)).thenReturn(Optional.empty());
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.2.0"),
+                        new SourceContractVersion("1.3.0"),
                         new SourceKind("scm.pull-request.diff"),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(true);
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.2.0"),
+                        new SourceContractVersion("1.3.0"),
                         new SourceKind("hephaestus.observation-history"),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(false);
@@ -162,7 +190,14 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
                 .evidence(MAPPER.readTree("{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\"}]}"))
                 .build();
 
-        assertThat(new EvidenceDeliveryAuthorization(jobs, catalogs)
+        assertThat(new EvidenceDeliveryAuthorization(
+                                jobs,
+                                catalogs,
+                                org.mockito.Mockito.mock(
+                                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                                        call -> call.getMethod().getName().equals("permits")
+                                                ? true
+                                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)))
                         .permitsAll(7L, List.of(transientObservation), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .isEmpty();
         verifyNoInteractions(jobs);
@@ -174,10 +209,17 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         var observation = observation("scm.pull-request.diff");
         UUID jobId = observation.getAgentJobId();
-        when(jobs.findEvidenceContractVersions(eq(7L), any())).thenReturn(List.of(new ContractRow(jobId, "1.2.0")));
+        when(jobs.findEvidenceContractVersions(eq(7L), any())).thenReturn(List.of(new ContractRow(jobId, "1.3.0")));
         when(catalogs.isSourceUsePermitted(any(), any(), eq(SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY)))
                 .thenReturn(true);
-        var authorization = new EvidenceDeliveryAuthorization(jobs, catalogs);
+        var authorization = new EvidenceDeliveryAuthorization(
+                jobs,
+                catalogs,
+                org.mockito.Mockito.mock(
+                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                        call -> call.getMethod().getName().equals("permits")
+                                ? true
+                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)));
         assertThat(authorization.permitsAll(7L, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactly(observation.getId());
         assertThat(authorization.permitsForNewDelivery(

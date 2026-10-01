@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
@@ -383,6 +384,24 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT j FROM AgentJob j LEFT JOIN FETCH j.workspace WHERE j.id = :id")
     Optional<AgentJob> findByIdWithWorkspaceForUpdate(@Param("id") UUID id);
+
+    /** Keeps source-use and readiness verdicts, not the uncited workspace inventory, after its lifetime. */
+    @org.springframework.transaction.annotation.Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE agent_job j SET evidence_snapshot = jsonb_set(
+              jsonb_set(jsonb_set(j.evidence_snapshot, '{manifest,artifacts}', '[]'::jsonb), '{manifest,refusals}', '[]'::jsonb),
+              '{manifest,sources}', (SELECT COALESCE(jsonb_agg(jsonb_set(source, '{artifacts}', '[]'::jsonb)), '[]'::jsonb)
+                FROM jsonb_array_elements(j.evidence_snapshot #> '{manifest,sources}') source))
+            WHERE j.id = :jobId AND j.workspace_id = :workspaceId
+              AND j.retry_count = :attempt AND j.worker_id = :workerId
+              AND jsonb_typeof(j.evidence_snapshot #> '{manifest,sources}') = 'array'
+              AND (j.status <> 'RUNNING' OR COALESCE(j.metadata ->> '""" + ObservationAdmissionService.DIGEST_METADATA_KEY + "', '') <> '')", nativeQuery = true)
+    int discardRetiredArtifactInventory(
+            @Param("jobId") UUID jobId,
+            @Param("workspaceId") Long workspaceId,
+            @Param("attempt") int attempt,
+            @Param("workerId") String workerId);
 
     /** @return rows updated (0 or 1); 0 means a concurrent transition won. */
     @WorkspaceAgnostic("ID-based status transition; job ID from workspace-scoped context")
