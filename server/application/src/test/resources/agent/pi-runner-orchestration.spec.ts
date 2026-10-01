@@ -1269,7 +1269,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-quiet:")) ?? "",
-								/#1: test-practice has no NEGATIVE observation in this run, so there is nothing to withhold; skipped\./u,
+								/NEGATIVE for the primary practice 'test-practice'/u,
 							);
 							assert.doesNotMatch(child.stderr, /asking once more/u);
 							break;
