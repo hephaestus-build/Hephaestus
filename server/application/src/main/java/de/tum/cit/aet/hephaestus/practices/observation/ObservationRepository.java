@@ -55,6 +55,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
           AND superseded_at IS NULL
         """, nativeQuery = true)
     int supersedeIssueObservations(@Param("issueId") long issueId, @Param("at") Instant at);
+
+    @Modifying(flushAutomatically = true)
+    @Transactional
+    @Query(
+            value =
+                    "UPDATE observation SET superseded_at = :at WHERE id = :id AND workspace_id = :workspaceId AND superseded_at IS NULL",
+            nativeQuery = true)
+    int supersedeById(@Param("workspaceId") long workspaceId, @Param("id") UUID id, @Param("at") Instant at);
     /**
      * Excludes observations about artifacts in repositories hidden from contributions in this workspace.
      * Requires the observation alias {@code f}. Native SQL crosses integration and workspace tables

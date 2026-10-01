@@ -25,7 +25,8 @@ public record PullRequestReviewSubmissionRequest(
         @Nullable SignalName triggerSignal,
         @Nullable ObservationOrigin observationOrigin,
         @Nullable Long reviewId,
-        @Nullable Long aboutUserId)
+        @Nullable Long aboutUserId,
+        @Nullable String linkedIssueRevision)
         implements JobSubmissionRequest {
     public PullRequestReviewSubmissionRequest {
         Objects.requireNonNull(pullRequest, "pullRequest must not be null");
@@ -50,6 +51,29 @@ public record PullRequestReviewSubmissionRequest(
             // self-selected sample (not a random draw from the work) and are recorded as such.
             observationOrigin = triggerSignal == null ? ObservationOrigin.MANUAL : ObservationOrigin.LIVE;
         }
+    }
+
+    public PullRequestReviewSubmissionRequest(
+            ScmEventPayload.PullRequestData pullRequest,
+            String headRefName,
+            String headRefOid,
+            String baseRefName,
+            @Nullable String baseRefOid,
+            @Nullable SignalName triggerSignal,
+            @Nullable ObservationOrigin observationOrigin,
+            @Nullable Long reviewId,
+            @Nullable Long aboutUserId) {
+        this(
+                pullRequest,
+                headRefName,
+                headRefOid,
+                baseRefName,
+                baseRefOid,
+                triggerSignal,
+                observationOrigin,
+                reviewId,
+                aboutUserId,
+                null);
     }
 
     /** For the event-driven and resubmission paths, which take the origin rule as it stands. */
@@ -104,7 +128,8 @@ public record PullRequestReviewSubmissionRequest(
                 triggerSignal,
                 origin,
                 reviewId,
-                aboutUserId);
+                aboutUserId,
+                linkedIssueRevision);
     }
 
     /** The same request about one submitted review: the review is the subject and its author the developer. */
@@ -118,6 +143,21 @@ public record PullRequestReviewSubmissionRequest(
                 triggerSignal,
                 observationOrigin,
                 review.id(),
-                Objects.requireNonNull(review.authorId(), "submitted review must have an author"));
+                Objects.requireNonNull(review.authorId(), "submitted review must have an author"),
+                linkedIssueRevision);
+    }
+
+    public PullRequestReviewSubmissionRequest withLinkedIssueRevision(String revision) {
+        return new PullRequestReviewSubmissionRequest(
+                pullRequest,
+                headRefName,
+                headRefOid,
+                baseRefName,
+                baseRefOid,
+                triggerSignal,
+                observationOrigin,
+                reviewId,
+                aboutUserId,
+                revision);
     }
 }

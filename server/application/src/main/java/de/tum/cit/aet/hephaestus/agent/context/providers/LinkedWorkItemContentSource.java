@@ -4,15 +4,21 @@ import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -209,14 +215,60 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         }
     }
 
-    private static byte[] asText(Issue issue) {
+    public static Optional<SignalKey> currentClosingMaterialKey(
+            long workspaceId, PullRequest pullRequest, List<Issue> closingIssues) {
+        if (closingIssues.isEmpty() || closingIssues.stream().anyMatch(issue -> issue.getDeletedAt() != null)) {
+            return Optional.empty();
+        }
+        List<String> parts = new ArrayList<>();
+        parts.add(pullRequest.getHeadRefOid());
+        parts.add(pullRequest.getTitle());
+        parts.add(pullRequest.getBody());
+        closingIssues.stream()
+                .sorted(java.util.Comparator.comparingInt(Issue::getNumber))
+                .forEach(issue -> {
+                    parts.add(String.valueOf(issue.getNumber()));
+                    parts.add(text(issue));
+                });
+        return Optional.of(new SignalKey(
+                workspaceId,
+                pullRequest.getId(),
+                ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED,
+                SignalRevision.ofContentDigest(parts.toArray(String[]::new))));
+    }
+
+    public static byte[] asText(Issue issue) {
+        return text(issue).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** The same staged issue-file projection capture wrote, compared only for provider closing candidates. */
+    public static Optional<Boolean> capturedClosingMaterialMatches(JobFolderIndex manifest, List<Issue> closingIssues) {
+        var capture = manifest.sources().stream()
+                .filter(source -> KIND.equals(source.kind()) && source.state() instanceof SourceCaptureState.Available)
+                .findFirst()
+                .orElse(null);
+        if (capture == null
+                || closingIssues.isEmpty()
+                || closingIssues.stream().anyMatch(issue -> issue.getDeletedAt() != null)) return Optional.empty();
+        for (Issue issue : closingIssues) {
+            String path = ITEMS_PREFIX + issue.getNumber() + ".md";
+            var artifact = capture.artifacts().stream()
+                    .filter(candidate -> path.equals(candidate.path()))
+                    .findFirst()
+                    .orElse(null);
+            if (artifact == null) return Optional.empty();
+            if (!artifact.sha256().equals(ProvenanceDigest.sha256Hex(asText(issue)))) return Optional.of(false);
+        }
+        return Optional.of(true);
+    }
+
+    private static String text(Issue issue) {
         String body = issue.getBody() == null ? "" : issue.getBody();
         // The dates as a quotable line, so a review can cite the opening or the close from the text it reads.
         String dates = "Opened " + (issue.getCreatedAt() == null ? "at an unknown time" : issue.getCreatedAt())
                 + (issue.getClosedAt() == null ? "" : ", closed " + issue.getClosedAt())
                 + (issue.getState() == null ? "" : ", state " + issue.getState().name()) + ".";
-        return ("# " + issue.getTitle() + "\n\n" + dates + "\n" + BODY_PROVENANCE + "\n\n" + body)
-                .getBytes(StandardCharsets.UTF_8);
+        return "# " + issue.getTitle() + "\n\n" + dates + "\n" + BODY_PROVENANCE + "\n\n" + body;
     }
 
     /**

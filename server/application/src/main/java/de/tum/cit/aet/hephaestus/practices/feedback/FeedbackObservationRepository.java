@@ -247,6 +247,28 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
             @Param("recipientUserId") Long recipientUserId,
             @Param("observationId") UUID observationId);
 
+    @Query("""
+        SELECT DISTINCT fo.feedback.id FROM FeedbackObservation fo JOIN fo.observation o
+        WHERE fo.feedback.workspaceId = :workspaceId
+          AND fo.feedback.recipientUserId = :recipientUserId
+          AND fo.feedback.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_CHAT
+          AND fo.feedback.deliveryState = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PREPARED
+          AND fo.role = de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole.PRIMARY
+          AND o.practice.id = :practiceId AND o.artifactKind = :artifactKind AND o.artifactId = :artifactId
+          AND o.origin <> de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin.BACKFILL
+          AND o.assessmentStatus = de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.ASSESSED
+          AND ((o.presence = de.tum.cit.aet.hephaestus.practices.model.Presence.PRESENT
+                AND o.assessment = de.tum.cit.aet.hephaestus.practices.model.Assessment.BAD)
+            OR (o.presence = de.tum.cit.aet.hephaestus.practices.model.Presence.ABSENT
+                AND o.assessment = de.tum.cit.aet.hephaestus.practices.model.Assessment.GOOD))
+        """)
+    List<UUID> findPreparedConversationFeedbackIdsForNegativeClaim(
+            @Param("workspaceId") Long workspaceId,
+            @Param("recipientUserId") Long recipientUserId,
+            @Param("practiceId") Long practiceId,
+            @Param("artifactKind") ArtifactKind artifactKind,
+            @Param("artifactId") Long artifactId);
+
     /** Newest prepared conversation facts and optional {@link ConversationBriefBody} bodies for a recipient. */
     @Query("""
         SELECT fo.feedback.id AS feedbackId,

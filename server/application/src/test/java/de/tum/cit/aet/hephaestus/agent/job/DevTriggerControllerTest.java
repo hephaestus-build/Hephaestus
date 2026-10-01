@@ -69,6 +69,15 @@ class DevTriggerControllerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRejectAnInternalRepairSignalBeforeEvaluation() {
+        String response = controller.triggerReview(
+                PR_ID, null, WORKSPACE_ID, ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.value());
+
+        assertThat(response).startsWith("Error:").contains("cannot be triggered manually");
+        verifyNoInteractions(artifactLoader, detectionGate, agentJobService, signalRecorder);
+    }
+
+    @Test
     void shouldRecordAPullRequestGateRefusalAgainstItsSignal() {
         PullRequest pr = pullRequest();
         when(artifactLoader.findPullRequestForGate(WORKSPACE_ID, PR_ID)).thenReturn(Optional.of(pr));

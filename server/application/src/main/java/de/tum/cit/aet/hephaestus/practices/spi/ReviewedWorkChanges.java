@@ -13,6 +13,10 @@ public interface ReviewedWorkChanges {
      */
     Set<UUID> materiallyChanged(long workspaceId, Collection<UUID> runIds, PullRequestRevision current);
 
+    Set<UUID> materiallyChangedLinkedIssues(long workspaceId, Collection<UUID> runIds, long pullRequestId);
+
+    boolean linkedCaptureCurrent(long workspaceId, UUID jobId, long pullRequestId, String signalRevision);
+
     /** The mirrored material fields, not an integration entity or an event delivery identity. */
     record PullRequestRevision(
             long artifactId,

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -15,19 +16,39 @@ import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
+import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
+import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
+import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
+import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
@@ -43,8 +64,11 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
@@ -53,12 +77,20 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
+import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
+import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
@@ -66,13 +98,16 @@ import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -81,6 +116,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -94,7 +130,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.task.support.TaskExecutorAdapter;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -127,7 +165,34 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     private RepositoryRepository repositoryRepository;
 
     @Autowired
+    private ConnectionRepository connections;
+
+    @Autowired
+    private RepositoryToMonitorRepository monitors;
+
+    @Autowired
     private PullRequestRepository pullRequestRepository;
+
+    @Autowired
+    private IssueRepository issueRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private ReviewedWorkChanges reviewedWorkChanges;
+
+    @Autowired
+    private WorkspaceContextBuilder folderBuilder;
+
+    @Autowired
+    private JobEvidenceFiles evidenceFiles;
+
+    @Autowired
+    private ObservationAdmissionService admissionService;
+
+    @Autowired
+    private JobTypeHandlerRegistry handlerRegistry;
 
     @Autowired
     private PullRequestReviewRepository reviewRepository;
@@ -241,6 +306,422 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         assertThat(signalOf(recheck)).isEqualTo(ScmSignals.PULL_REQUEST_EDITED.value());
         assertThat(recheckedOf(recheck)).isEqualTo("[\"describe-what-and-why\"]");
         assertThat(jobsOf(workspace)).containsExactlyInAnyOrder(opened.getId(), recheck.getId());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRecheckTheMergedRequestsCurrentNegativeAfterTheLinkedClosedIssueChanges(boolean gitLab)
+            throws Exception {
+        provider(gitLab);
+        Connection scm = new Connection(
+                workspace,
+                gitLab ? IntegrationKind.GITLAB : IntegrationKind.GITHUB,
+                "repair-scm",
+                gitLab
+                        ? new ConnectionConfig.GitLabConfig(
+                                "https://gitlab.com",
+                                null,
+                                null,
+                                ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                                Set.of(),
+                                null)
+                        : new ConnectionConfig.GitHubAppConfig(1732L, "org", null, Set.of()));
+        scm.setState(IntegrationState.ACTIVE);
+        connections.saveAndFlush(scm);
+        monitors.saveAndFlush(WorkspaceTestFixtures.repositoryMonitor(workspace, REPO));
+        Practice linked = practice("closing-issue-criteria", ScmSignals.PULL_REQUEST_MERGED);
+        linked.setBindings(List.of(PracticeBinding.on(
+                ScmSignals.PULL_REQUEST_MERGED,
+                List.of(new PracticeEvidenceRequirement(
+                        new SourceKind("scm.linked-work-items"), EvidenceStance.REQUIRED)))));
+        linked.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(linked, 2)));
+        linked = practiceRepository.saveAndFlush(linked);
+        PullRequest pr = pullRequest(false, HEAD, "Closes #18");
+        Issue issue = new Issue();
+        issue.setNativeId(7201L);
+        issue.setProvider(repository.getProvider());
+        issue.setRepository(repository);
+        issue.setNumber(18);
+        issue.setState(Issue.State.CLOSED);
+        issue.setTitle("Acceptance criteria");
+        issue.setBody("- [ ] Confirm repair");
+        issue.setCreatedAt(NOW.minus(Duration.ofDays(2)));
+        issue.setClosedAt(NOW);
+        issue = issueRepository.saveAndFlush(issue);
+        pr.setState(Issue.State.MERGED);
+        pr.setMerged(true);
+        pr.setMergedAt(NOW);
+        long linkedIssueId = issue.getId();
+        transactions.executeWithoutResult(status -> {
+            PullRequest managed = pullRequestRepository.findById(pr.getId()).orElseThrow();
+            managed.setState(Issue.State.MERGED);
+            managed.setMerged(true);
+            managed.setMergedAt(NOW);
+            managed.replaceClosingIssues(Set.of(issueRepository.getReferenceById(linkedIssueId)));
+            pullRequestRepository.saveAndFlush(managed);
+        });
+        AgentJob merged = capturedLinkedReview(pr, issue);
+        UUID olderNegative =
+                observe(linked, merged, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        Feedback oldBrief = persistFeedback(
+                merged, developer, FeedbackChannel.IN_CHAT, 0, FeedbackDeliveryState.PREPARED, "Old guidance", NOW);
+        bind(oldBrief, olderNegative);
+        Feedback deliveredCard =
+                persistInAppFeedback(merged, developer, 1, FeedbackDeliveryState.DELIVERED, "Recorded history", NOW);
+        bind(deliveredCard, olderNegative);
+        AgentJob laterNegativeRun = capturedLinkedReview(pr, issue);
+        UUID currentNegative = observe(
+                linked,
+                laterNegativeRun,
+                pr.getId(),
+                developer,
+                ObservationKind.OMISSION_GAP,
+                Severity.MINOR,
+                NOW.plusSeconds(1));
+        UUID secondCurrentNegative = observe(
+                linked,
+                laterNegativeRun,
+                pr.getId(),
+                developer,
+                ObservationKind.COMMISSION_PROBLEM,
+                Severity.MINOR,
+                NOW.plusSeconds(1));
+        Feedback currentBrief = persistFeedback(
+                laterNegativeRun,
+                developer,
+                FeedbackChannel.IN_CHAT,
+                0,
+                FeedbackDeliveryState.PREPARED,
+                "Current guidance",
+                NOW.plusSeconds(1));
+        bind(currentBrief, secondCurrentNegative);
+        String capturedRevision = LinkedWorkItemContentSource.currentClosingMaterialKey(
+                        workspace.getId(), pr, List.of(issue))
+                .orElseThrow()
+                .revision()
+                .value();
+        assertPrimaryAdmissionWaitsAndRefuses(
+                pr,
+                merged,
+                capturedRevision,
+                () -> jdbcTemplate.update(
+                        "UPDATE issue SET body = ? WHERE id = ?", "Closes #18 with revised scope", pr.getId()));
+        jdbcTemplate.update("UPDATE issue SET body = ? WHERE id = ?", "Closes #18", pr.getId());
+        assertPrimaryAdmissionWaitsAndRefuses(
+                pr,
+                merged,
+                capturedRevision,
+                () -> jdbcTemplate.update(
+                        "UPDATE issue SET deleted_at = ? WHERE id = ?",
+                        java.sql.Timestamp.from(Instant.now()),
+                        pr.getId()));
+        jdbcTemplate.update("UPDATE issue SET deleted_at = NULL WHERE id = ?", pr.getId());
+        assertPrimaryAdmissionWaitsAndRefuses(
+                pr,
+                merged,
+                capturedRevision,
+                () -> jdbcTemplate.update("UPDATE issue SET state = 'OPEN' WHERE id = ?", pr.getId()));
+        jdbcTemplate.update("UPDATE issue SET state = 'MERGED' WHERE id = ?", pr.getId());
+        long issueId = issue.getId();
+        CountDownLatch issueWritten = new CountDownLatch(1);
+        CountDownLatch releaseIssue = new CountDownLatch(1);
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> writer = threads.submit(() -> transactions.executeWithoutResult(status -> {
+                jdbcTemplate.update("UPDATE issue SET body = ? WHERE id = ?", "- [x] Confirm repair", issueId);
+                issueWritten.countDown();
+                awaitUninterruptibly(releaseIssue);
+            }));
+            assertThat(issueWritten.await(30, TimeUnit.SECONDS)).isTrue();
+            Future<Boolean> admission = threads.submit(() -> reviewedWorkChanges.linkedCaptureCurrent(
+                    workspace.getId(), merged.getId(), pr.getId(), capturedRevision));
+            assertThat(aBackendWaitsOnALock()).isTrue();
+            releaseIssue.countDown();
+            writer.get(30, TimeUnit.SECONDS);
+            assertThat(admission.get(30, TimeUnit.SECONDS)).isFalse();
+        } finally {
+            releaseIssue.countDown();
+            threads.shutdownNow();
+        }
+        var issueListener = new IssueAgentJobEventListener(
+                agentJobService,
+                issueRepository,
+                pullRequestRepository,
+                gate,
+                workspaceResolver,
+                recorder,
+                transactionManager);
+        for (String body : List.of("- [x] Confirm repair", "- [x] Confirm repair", "- [x] Confirm repair and test")) {
+            transactions.executeWithoutResult(status -> {
+                Issue current = issueRepository.findById(linkedIssueId).orElseThrow();
+                current.setBody(body);
+                issueRepository.saveAndFlush(current);
+                var event = new ScmDomainEvent.IssueUpdated(
+                        ScmEventPayload.IssueData.from(current), Set.of("body"), liveContext());
+                issueListener.onIssueUpdated(event);
+            });
+        }
+        assertThat(signalsOf(pr, ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED)).hasSize(2);
+        settle(pr);
+        var rows = signalsOf(pr, ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED);
+        assertThat(rows)
+                .filteredOn(row -> row.getState() == SignalState.TRIGGERED)
+                .hasSize(1);
+        assertThat(rows)
+                .filteredOn(row -> row.getStateReason() == SignalStateReason.COALESCED)
+                .hasSize(1);
+        AgentJob recheck = jobOf(rows.stream()
+                .filter(row -> row.getState() == SignalState.TRIGGERED)
+                .findFirst()
+                .orElseThrow());
+        assertThat(signalOf(recheck)).isEqualTo(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.value());
+        assertThat(recheckedOf(recheck)).isEqualTo("[\"closing-issue-criteria\"]");
+        assertThat(jobsOf(workspace))
+                .containsExactlyInAnyOrder(merged.getId(), laterNegativeRun.getId(), recheck.getId());
+
+        try (LinkedAttempt stale = captureLinkedAttempt(recheck, linked, "- [x] Confirm repair and test")) {
+            transactions.executeWithoutResult(status -> {
+                Issue changed = issueRepository.findById(linkedIssueId).orElseThrow();
+                changed.setBody("- [x] Confirm repair and test twice");
+                issueRepository.saveAndFlush(changed);
+                var newerEvent = new ScmDomainEvent.IssueUpdated(
+                        ScmEventPayload.IssueData.from(changed), Set.of("body"), liveContext());
+                issueListener.onIssueUpdated(newerEvent);
+            });
+            assertThatThrownBy(() -> admissionService.admit(stale.identity(), stale.observations()))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .satisfies(error -> assertThat(((ObservationsRefusedException) error).reasonCode())
+                            .isEqualTo("linked_issue_capture_stale"));
+        }
+        assertThat(observationRepository.findByAgentJobId(recheck.getId(), workspace.getId()))
+                .isEmpty();
+        assertThat(feedbackRepository.findById(oldBrief.getId()).orElseThrow().getDeliveryState())
+                .isEqualTo(FeedbackDeliveryState.PREPARED);
+        assertThat(standing(pr)).containsExactlyInAnyOrder(currentNegative, secondCurrentNegative);
+
+        SignalKey newerKey = LinkedWorkItemContentSource.currentClosingMaterialKey(
+                        workspace.getId(), reload(), pullRequestRepository.findClosingIssuesById(pr.getId()))
+                .orElseThrow();
+        assertThat(rowOf(newerKey).getState()).isEqualTo(SignalState.DEFERRED);
+        settle(pr);
+        AgentJob fresh = jobOf(rowOf(newerKey));
+        assertThat(recheckedOf(fresh)).isEqualTo("[\"closing-issue-criteria\"]");
+        try (LinkedAttempt current = captureLinkedAttempt(fresh, linked, "- [x] Confirm repair and test twice")) {
+            admissionService.admit(current.identity(), current.observations());
+        }
+        List<Observation> positive = observationRepository.findByAgentJobId(fresh.getId(), workspace.getId());
+        Long linkedId = linked.getId();
+        assertThat(positive).singleElement().satisfies(row -> {
+            assertThat(row.getPractice().getId()).isEqualTo(linkedId);
+            assertThat(row.getPresence().name()).isEqualTo("PRESENT");
+            assertThat(row.getAssessment().name()).isEqualTo("GOOD");
+        });
+        assertThat(observationRepository.findById(olderNegative)).isPresent();
+        assertThat(observationRepository.findById(currentNegative)).isPresent();
+        assertThat(observationRepository.findById(currentNegative).orElseThrow().getSupersededAt())
+                .isNotNull();
+        assertThat(observationRepository
+                        .findById(secondCurrentNegative)
+                        .orElseThrow()
+                        .getSupersededAt())
+                .isNotNull();
+        assertThat(observationRepository.findById(olderNegative).orElseThrow().getSupersededAt())
+                .isNull();
+        assertThat(feedbackRepository
+                        .findById(currentBrief.getId())
+                        .orElseThrow()
+                        .getDeliveryState())
+                .isEqualTo(FeedbackDeliveryState.SUPERSEDED);
+        assertThat(standing(pr)).containsExactly(positive.getFirst().getId());
+        assertThat(feedbackRepository.findById(oldBrief.getId()).orElseThrow().getDeliveryState())
+                .isEqualTo(FeedbackDeliveryState.SUPERSEDED);
+        assertThat(feedbackObservationRepository.findPreparedConversationFeedbackIdsForNegativeClaim(
+                        workspace.getId(), developer.getId(), linked.getId(), ArtifactKinds.PULL_REQUEST, pr.getId()))
+                .isEmpty();
+        assertThat(feedbackRepository
+                        .findById(deliveredCard.getId())
+                        .orElseThrow()
+                        .getDeliveryState())
+                .isEqualTo(FeedbackDeliveryState.DELIVERED);
+
+        fresh = agentJobRepository.findById(fresh.getId()).orElseThrow();
+        var output = MAPPER.createObjectNode();
+        var feedback = output.putObject("feedback");
+        feedback.put(
+                "admissionDigest",
+                Objects.requireNonNull(fresh.getMetadata())
+                        .path(ObservationAdmissionService.DIGEST_METADATA_KEY)
+                        .asString());
+        feedback.put("lead", "The linked criteria are complete");
+        feedback.putArray("observations")
+                .addObject()
+                .put("id", positive.getFirst().getId().toString())
+                .put("practiceSlug", linked.getSlug())
+                .put("anchorable", false)
+                .putArray("citations");
+        feedback.putArray("units")
+                .addObject()
+                .put("channel", "IN_CONTEXT")
+                .put("action", "NEW")
+                .put("practiceSlug", linked.getSlug())
+                .put("title", "Linked criteria completed")
+                .put("nextStep", "Keep the completed criteria visible")
+                .putObject("placement")
+                .put("kind", "ARTIFACT");
+        ((tools.jackson.databind.node.ObjectNode) feedback.path("units").get(0))
+                .putArray("basedOn")
+                .add(positive.getFirst().getId().toString());
+        output.putObject("practiceCoverage").put("eligible", 1).put("evaluated", 1);
+        fresh.setOutput(output);
+        fresh.setStatus(AgentJobStatus.COMPLETED);
+        agentJobRepository.saveAndFlush(fresh);
+        handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW).deliver(fresh);
+        assertThat(feedbackRepository.findByAgentJobIdAndPositionAndWorkspaceId(fresh.getId(), 0, workspace.getId()))
+                .isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM feedback WHERE workspace_id = ? AND agent_job_id = ? AND channel = 'IN_CONTEXT' AND delivery_state = 'DELIVERED'",
+                        Long.class,
+                        workspace.getId(),
+                        fresh.getId()))
+                .isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT count(*) FROM feedback_dispatch WHERE workspace_id = ? AND agent_job_id = ?",
+                        Long.class,
+                        workspace.getId(),
+                        fresh.getId()))
+                .isZero();
+    }
+
+    private LinkedAttempt captureLinkedAttempt(AgentJob job, Practice linked, String expectedBody) throws Exception {
+        job.setStatus(AgentJobStatus.RUNNING);
+        job.setWorkerId("test-worker");
+        job = agentJobRepository.saveAndFlush(job);
+        var raw = folderBuilder.prepare(
+                new ContextRequest.PracticeReviewRequest(job), EvidencePlan.compile(List.of(linked)));
+        JobFolderIndex manifest = Objects.requireNonNull(raw.manifest());
+        var snapshot = MAPPER.createObjectNode();
+        snapshot.set("manifest", MAPPER.valueToTree(manifest));
+        snapshot.putArray("practices")
+                .addObject()
+                .put("slug", linked.getSlug())
+                .put("revisionId", linked.getCurrentRevision().getId());
+        job.setEvidenceSnapshot(snapshot);
+        job = agentJobRepository.saveAndFlush(job);
+        PreparedJobInputs inputs = evidenceFiles.prepare(
+                job,
+                new PreparedEvidence(raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
+                null);
+        String path = SandboxLayout.CONTEXT_PREFIX + "linked_work_items/18.md";
+        List<String> lines = Files.readAllLines(inputs.filesOnDisk().get(path));
+        int line = java.util.stream.IntStream.range(0, lines.size())
+                        .filter(index -> lines.get(index).contains(expectedBody))
+                        .findFirst()
+                        .orElseThrow()
+                + 1;
+        assertThat(lines.get(line - 1)).contains(expectedBody);
+        var observations = MAPPER.createArrayNode();
+        var result = observations.addObject();
+        result.put("practiceSlug", linked.getSlug())
+                .put("summary", "Linked criteria are complete")
+                .put("assessmentStatus", "ASSESSED")
+                .put("presence", "PRESENT")
+                .put("assessment", "GOOD")
+                .put("evidenceRationale", "The captured linked issue shows the completed acceptance criterion.")
+                .putNull("severity");
+        result.putObject("evidence")
+                .putArray("citations")
+                .addObject()
+                .put("sourceKind", "scm.linked-work-items")
+                .put("path", path)
+                .put("artifactPath", path)
+                .put("startLine", line)
+                .put("endLine", line)
+                .put("quote", expectedBody);
+        return new LinkedAttempt(job, inputs, observations);
+    }
+
+    private record LinkedAttempt(AgentJob job, PreparedJobInputs inputs, JsonNode observations)
+            implements AutoCloseable {
+        ObservationAdmissionService.AdmissionIdentity identity() {
+            return new ObservationAdmissionService.AdmissionIdentity(
+                    job.getId(), job.getWorkspace().getId(), 0, "test-worker");
+        }
+
+        @Override
+        public void close() {
+            inputs.close();
+        }
+    }
+
+    private void assertPrimaryAdmissionWaitsAndRefuses(
+            PullRequest pr, AgentJob merged, String capturedRevision, Runnable update) throws Exception {
+        CountDownLatch primaryLoaded = new CountDownLatch(1);
+        CountDownLatch releasePrimaryReader = new CountDownLatch(1);
+        CompletableFuture<Void> primaryWritten = new CompletableFuture<>();
+        CountDownLatch releasePrimaryWriter = new CountDownLatch(1);
+        ExecutorService primaryThreads = Executors.newFixedThreadPool(2);
+        try {
+            Future<Boolean> admission = primaryThreads.submit(() -> transactions.execute(status -> {
+                pullRequestRepository.findByIdWithAllForGate(pr.getId()).orElseThrow();
+                primaryLoaded.countDown();
+                awaitUninterruptibly(releasePrimaryReader);
+                return reviewedWorkChanges.linkedCaptureCurrent(
+                        workspace.getId(), merged.getId(), pr.getId(), capturedRevision);
+            }));
+            assertThat(primaryLoaded.await(30, TimeUnit.SECONDS)).isTrue();
+            CompletableFuture<Void> writer = CompletableFuture.runAsync(
+                    () -> transactions.executeWithoutResult(status -> {
+                        update.run();
+                        primaryWritten.complete(null);
+                        awaitUninterruptibly(releasePrimaryWriter);
+                    }),
+                    primaryThreads);
+            writer.whenComplete((result, failure) -> {
+                if (failure != null) primaryWritten.completeExceptionally(failure);
+            });
+            primaryWritten.get(30, TimeUnit.SECONDS);
+            releasePrimaryReader.countDown();
+            assertThat(aBackendWaitsOnALock()).isTrue();
+            releasePrimaryWriter.countDown();
+            writer.get(30, TimeUnit.SECONDS);
+            assertThat(admission.get(30, TimeUnit.SECONDS)).isFalse();
+        } finally {
+            releasePrimaryReader.countDown();
+            releasePrimaryWriter.countDown();
+            primaryThreads.shutdownNow();
+        }
+    }
+
+    private AgentJob capturedLinkedReview(PullRequest pr, Issue issue) {
+        AgentJob job = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), NOW);
+        JobFolderIndex base = ReviewedWorkFixtures.pullRequestManifest(NOW, pr.getBody(), pr.getHeadRefOid());
+        var sources = new java.util.ArrayList<>(base.sources());
+        sources.add(new SourceCapture(
+                new SourceKind("scm.linked-work-items"),
+                new SourceCaptureState.Available(
+                        SourceContentState.NON_EMPTY,
+                        SourceCompleteness.PARTIAL,
+                        new SourceCaptureFacts(NOW, null, null, null)),
+                List.of(new SourceArtifact(
+                        SandboxLayout.CONTEXT_PREFIX + "linked_work_items/18.md",
+                        "text/markdown",
+                        ProvenanceDigest.sha256Hex(LinkedWorkItemContentSource.asText(issue)),
+                        1))));
+        var manifest = new JobFolderIndex(
+                base.contractVersion(), base.catalogDigest(), base.artifactKind(), base.capturedAt(), sources);
+        var work = ReviewedWork.captured(
+                        MAPPER.writeValueAsBytes(manifest),
+                        Map.of(
+                                SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+                                ReviewedWorkFixtures.metadata(MAPPER, pr.getTitle(), pr.getBody(), pr.getHeadRefOid())),
+                        pr.getId(),
+                        MAPPER)
+                .orElseThrow();
+        var snapshot = MAPPER.createObjectNode();
+        snapshot.set("manifest", MAPPER.valueToTree(manifest));
+        snapshot.set(ReviewedWork.SNAPSHOT_KEY, MAPPER.valueToTree(work));
+        job.setEvidenceSnapshot(snapshot);
+        return agentJobRepository.saveAndFlush(job);
     }
 
     @ParameterizedTest

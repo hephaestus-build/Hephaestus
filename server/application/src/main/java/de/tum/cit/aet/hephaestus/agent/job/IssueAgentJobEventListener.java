@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent.TriggerEventNames;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
@@ -55,6 +57,7 @@ public class IssueAgentJobEventListener {
     private final AgentJobService agentJobService;
 
     private final IssueRepository issueRepository;
+    private final PullRequestRepository pullRequestRepository;
     private final PracticeReviewDetectionGate practiceReviewDetectionGate;
     private final WorkspaceResolver workspaceResolver;
     private final SignalRecorder signalRecorder;
@@ -63,12 +66,14 @@ public class IssueAgentJobEventListener {
     public IssueAgentJobEventListener(
             AgentJobService agentJobService,
             IssueRepository issueRepository,
+            PullRequestRepository pullRequestRepository,
             PracticeReviewDetectionGate practiceReviewDetectionGate,
             WorkspaceResolver workspaceResolver,
             SignalRecorder signalRecorder,
             PlatformTransactionManager transactionManager) {
         this.agentJobService = agentJobService;
         this.issueRepository = issueRepository;
+        this.pullRequestRepository = pullRequestRepository;
         this.practiceReviewDetectionGate = practiceReviewDetectionGate;
         this.workspaceResolver = workspaceResolver;
         this.signalRecorder = signalRecorder;
@@ -91,8 +96,33 @@ public class IssueAgentJobEventListener {
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onIssueUpdated(ScmDomainEvent.IssueUpdated event) {
         if (event.issue().isPullRequest()
-                || event.issue().state() == Issue.State.CLOSED
                 || Collections.disjoint(event.changedFields(), ScmSignals.REVIEWABLE_ISSUE_FIELDS)) {
+            return;
+        }
+        if (event.issue().state() == Issue.State.CLOSED) {
+            if (Collections.disjoint(event.changedFields(), java.util.Set.of("title", "body"))) return;
+            for (Long pullRequestId : pullRequestRepository.findMergedClosingPullRequestIdsByIssueId(
+                    event.issue().id())) {
+                var pullRequest = pullRequestRepository
+                        .findByIdWithAllForGate(pullRequestId)
+                        .orElse(null);
+                if (pullRequest == null || pullRequest.getRepository() == null) continue;
+                var closing = pullRequestRepository.findClosingIssuesById(pullRequestId);
+                for (Workspace workspace : workspaceResolver.resolveAllForRepository(
+                        pullRequest.getRepository().getNameWithOwner())) {
+                    LinkedWorkItemContentSource.currentClosingMaterialKey(workspace.getId(), pullRequest, closing)
+                            .ifPresent(key -> {
+                                if (event.context().isSync()) {
+                                    signalRecorder.record(key, event.context().occurredAt(), DiscoveredVia.SYNC);
+                                } else {
+                                    signalRecorder.defer(
+                                            key,
+                                            event.context().occurredAt(),
+                                            event.context().actorUserId());
+                                }
+                            });
+                }
+            }
             return;
         }
         for (Workspace workspace : workspaceResolver.resolveAllForRepository(

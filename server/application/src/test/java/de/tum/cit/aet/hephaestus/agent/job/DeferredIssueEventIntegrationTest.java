@@ -140,6 +140,7 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
         var listener = new IssueAgentJobEventListener(
                 mock(AgentJobService.class),
                 fixture.issueRepository(),
+                fixture.pullRequests(),
                 mock(PracticeReviewDetectionGate.class),
                 fixture.resolver(),
                 recorder,
@@ -250,6 +251,7 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
             return new IssueAgentJobEventListener(
                     mock(AgentJobService.class),
                     fixture.issueRepository(),
+                    fixture.pullRequests(),
                     mock(PracticeReviewDetectionGate.class),
                     fixture.resolver(),
                     recorder,

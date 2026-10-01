@@ -35,7 +35,12 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     private final AgentJobRepository jobs = mock(AgentJobRepository.class);
     private final ObjectMapper mapper = new ObjectMapper();
     private final ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
-    private final CapturedReviewedWorkChanges changes = new CapturedReviewedWorkChanges(jobs, mapper, catalogs);
+    private final CapturedReviewedWorkChanges changes = new CapturedReviewedWorkChanges(
+            jobs,
+            mapper,
+            catalogs,
+            mock(de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository.class),
+            mock(de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.class));
 
     @BeforeEach
     void permitCapturedSources() {

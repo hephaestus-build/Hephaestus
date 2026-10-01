@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
@@ -247,7 +248,7 @@ public class PracticeReviewDetectionGate {
             ReviewSubject subject) {
         Long authorId = subject.actorId();
         if (!(reviewable instanceof PullRequest pullRequest)
-                || !reviewable.isOpen()
+                || (signalOptions.isInternalRepair(signal) ? !pullRequest.isMerged() : !reviewable.isOpen())
                 || draft
                 || triggerMode != TriggerMode.AUTO
                 || authorId == null) {
@@ -263,20 +264,28 @@ public class PracticeReviewDetectionGate {
         }
         Set<UUID> current = observationVisibility.permitsAll(
                 workspace.getId(), negative, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
-        Set<UUID> changed = reviewedWorkChanges.materiallyChanged(
-                workspace.getId(),
-                negative.stream()
-                        .filter(observation -> current.contains(observation.getId()))
-                        .map(Observation::getAgentJobId)
-                        .collect(Collectors.toSet()),
-                new ReviewedWorkChanges.PullRequestRevision(
-                        pullRequest.getId(),
-                        pullRequest.getHeadRefOid(),
-                        pullRequest.getTitle(),
-                        pullRequest.getBody()));
+        Set<UUID> runIds = negative.stream()
+                .filter(observation -> current.contains(observation.getId()))
+                .map(Observation::getAgentJobId)
+                .collect(Collectors.toSet());
+        Set<UUID> changed = signalOptions.isInternalRepair(signal)
+                ? reviewedWorkChanges.materiallyChangedLinkedIssues(workspace.getId(), runIds, pullRequest.getId())
+                : reviewedWorkChanges.materiallyChanged(
+                        workspace.getId(),
+                        runIds,
+                        new ReviewedWorkChanges.PullRequestRevision(
+                                pullRequest.getId(),
+                                pullRequest.getHeadRefOid(),
+                                pullRequest.getTitle(),
+                                pullRequest.getBody()));
         return negative.stream()
                 .filter(observation -> current.contains(observation.getId()))
                 .filter(observation -> changed.contains(observation.getAgentJobId()))
+                .filter(observation -> !signalOptions.isInternalRepair(signal)
+                        || observation.getPractice().getBindings().stream()
+                                .anyMatch(binding -> binding.needs().stream()
+                                        .anyMatch(need ->
+                                                need.sourceKind().equals(new SourceKind("scm.linked-work-items")))))
                 .map(observation -> observation.getPractice().getId())
                 .collect(Collectors.toSet());
     }
@@ -376,7 +385,8 @@ public class PracticeReviewDetectionGate {
                 workspace.getReviewSettings().getRolloutRevision(),
                 triggerMode,
                 match.admitted().stream()
-                        .filter(p -> isCandidate(p, rechecks) && !occasionedBy(p, signal, draft))
+                        .filter(p -> isCandidate(p, rechecks)
+                                && (signalOptions.isInternalRepair(signal) || !occasionedBy(p, signal, draft)))
                         .map(Practice::getSlug)
                         .collect(Collectors.toSet()));
     }
@@ -403,9 +413,11 @@ public class PracticeReviewDetectionGate {
             Workspace workspace, SignalName signal, boolean draft, Set<Long> rechecks) {
         boolean requestedByHand = signalOptions.isManualRequest(signal);
         List<Practice> bound = practiceRepository.findByWorkspaceId(workspace.getId()).stream()
-                .filter(p -> requestedByHand
-                        ? p.getBindings().stream().anyMatch(binding -> binding.appliesTo(signal.artifactKind()))
-                        : occasionedBy(p, signal, draft) || rechecked(p, signal, rechecks))
+                .filter(p -> signalOptions.isInternalRepair(signal)
+                        ? rechecked(p, signal, rechecks)
+                        : requestedByHand
+                                ? p.getBindings().stream().anyMatch(binding -> binding.appliesTo(signal.artifactKind()))
+                                : occasionedBy(p, signal, draft) || rechecked(p, signal, rechecks))
                 // Withdrawn from automated review whatever its stored policy says: bound, but no occasion.
                 .filter(p -> fence.withdrawal(p).isEmpty())
                 .toList();
