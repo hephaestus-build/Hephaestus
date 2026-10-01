@@ -6,9 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.WorkspaceFolderRenderer;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
@@ -615,6 +617,101 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             var iter = files.keySet().iterator();
             assertThat(iter.next()).isEqualTo("inputs/context/first.txt");
             assertThat(iter.next()).isEqualTo("inputs/context/second.txt");
+        }
+
+        private static final SourceKind ISSUE_CORE = new SourceKind("scm.issue.core");
+        private static final SourceKind INVENTORY = new SourceKind("workspace.project-inventory");
+
+        /** The reviewed issue's own source. */
+        private static EvidenceSource issueSource(@Nullable RuntimeException failure) {
+            return new EvidenceSource() {
+                @Override
+                public Set<SourceKind> sourceKinds() {
+                    return Set.of(ISSUE_CORE);
+                }
+
+                @Override
+                public SourceKind sourceKindFor(String path) {
+                    return ISSUE_CORE;
+                }
+
+                @Override
+                public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
+                    if (failure != null) throw failure;
+                    return new EvidenceContribution(
+                            Map.of("context/metadata.json", new byte[] {1}),
+                            Map.of(ISSUE_CORE, SourceCompleteness.COMPLETE),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(ISSUE_CORE, SourceContentState.NON_EMPTY));
+                }
+
+                @Override
+                public boolean supports(ContextRequest request) {
+                    return true;
+                }
+
+                @Override
+                public void contribute(ContextRequest request, Map<String, byte[]> files) {}
+            };
+        }
+
+        /** The folder, injected ahead of the issue source and writing workspace records of the issue's kind too. */
+        private static WorkspaceFolderRenderer folder() {
+            WorkspaceFolderRenderer folder = mock(WorkspaceFolderRenderer.class);
+            when(folder.supports(any())).thenReturn(true);
+            when(folder.ownsPath(any())).thenReturn(true);
+            when(folder.sourceKinds()).thenReturn(Set.of(ISSUE_CORE, INVENTORY));
+            when(folder.sourceKindFor(any()))
+                    .thenAnswer(call -> call.<String>getArgument(0).contains("inventory") ? INVENTORY : ISSUE_CORE);
+            when(folder.capture(any(), any()))
+                    .thenReturn(new EvidenceContribution(
+                            Map.of(
+                                    "context/workspace/inventory.json", new byte[] {2},
+                                    "context/workspace/issues/18.md", new byte[] {3}),
+                            Map.of(ISSUE_CORE, SourceCompleteness.COMPLETE, INVENTORY, SourceCompleteness.COMPLETE),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(),
+                            Map.of(ISSUE_CORE, SourceContentState.NON_EMPTY, INVENTORY, SourceContentState.NON_EMPTY)));
+            return folder;
+        }
+
+        private static SourceCapture issueCapture(EvidenceSource issue) {
+            JsonMapper mapper = JsonMapper.builder().build();
+            JobFolderIndexBuilder manifests = new JobFolderIndexBuilder(
+                    mapper,
+                    new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
+                    new PracticeSubjectEvaluator(mapper),
+                    new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(Map.of()),
+                    Clock.systemUTC());
+            var builder = new WorkspaceContextBuilder(List.of(folder(), issue), new SimpleMeterRegistry(), manifests);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.ISSUE);
+            PreparedEvidence prepared = builder.prepare(new ContextRequest.IssueReviewRequest(anyJob()), plan);
+            return java.util.Objects.requireNonNull(prepared.manifest()).sources().stream()
+                    .filter(source -> source.kind().equals(ISSUE_CORE))
+                    .findFirst()
+                    .orElseThrow();
+        }
+
+        @Test
+        void shouldCaptureTheReviewedIssueWhenTheFolderIsInjectedFirst() {
+            SourceCapture core = issueCapture(issueSource(null));
+
+            assertThat(core.state())
+                    .isInstanceOfSatisfying(
+                            SourceCaptureState.Available.class,
+                            available -> assertThat(available.content()).isEqualTo(SourceContentState.NON_EMPTY));
+            assertThat(core.artifacts()).extracting("path").containsExactly("context/metadata.json");
+        }
+
+        @Test
+        void shouldKeepTheIssueCaptureFailureWhenTheFolderHoldsRecordsOfTheSameKind() {
+            SourceCapture core = issueCapture(issueSource(new EvidenceCollectionException("issue gone", null)));
+
+            assertThat(core.state())
+                    .isEqualTo(new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE));
         }
     }
 
