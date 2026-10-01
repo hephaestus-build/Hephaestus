@@ -45,8 +45,10 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
     void shouldPreviewAndExportEveryRegisteredStoreForGitLabOnlyPerson() {
         var provider = provider(IdentityProviderType.GITLAB);
         var user = user(provider, 42);
-        long administratorId = Objects.requireNonNull(
-                accounts.saveAndFlush(new Account("Administrator")).getId());
+        Account administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
         var snapshot = personData.preview(administratorId, null, List.of(identity(provider, "42", null)));
         var export = personData.export(snapshot.request().getId());
         java.util.Set<String> exportedStores = new java.util.TreeSet<>();

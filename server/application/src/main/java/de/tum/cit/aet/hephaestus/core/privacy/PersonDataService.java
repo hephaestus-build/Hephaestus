@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Instant;
@@ -26,6 +28,7 @@ public class PersonDataService {
     private final PersonDataRegistry registry;
     private final PersonDataRequestRepository requests;
     private final PersonSuppressionService suppression;
+    private final IssuedJwtRepository issuedTokens;
     private final PlatformTransactionManager transactions;
     private final ObjectMapper mapper;
     private final JdbcTemplate jdbc;
@@ -76,27 +79,22 @@ public class PersonDataService {
     public void requestErasure(UUID id, long administratorId, boolean externalCopiesRemoved) {
         PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
         if (r.getState() == PersonDataRequest.State.COMPLETE || r.getState() == PersonDataRequest.State.ERASING) return;
+        if (r.getState() != PersonDataRequest.State.FAILED) requirePreview(r);
+        PersonScope person = scope(r);
+        if (Objects.equals(person.accountId(), administratorId))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Another administrator must authorize this erasure");
+        requireActiveAdministratorAndLockAccount(administratorId, person.accountId());
         if (r.getState() == PersonDataRequest.State.FAILED) {
-            PersonScope person = scope(r);
-            if (Objects.equals(person.accountId(), administratorId))
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT, "Another administrator must resume this erasure");
             requireExternalRemoval(selections(r), externalCopiesRemoved);
             r.setAdministratorAccountId(administratorId);
             r.setState(PersonDataRequest.State.ERASING);
             r.setFailureCode(null);
             return;
         }
-        requirePreview(r);
         var selected = selections(r);
         requireUnchanged(r, selected);
-        PersonScope person = scope(r);
-        if (person.accountId() != null && person.accountId().equals(r.getAdministratorAccountId()))
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Another administrator must create a new preview for this erasure");
         requireExternalRemoval(selected, externalCopiesRemoved);
         if (person.accountId() != null) {
-            jdbc.queryForList("SELECT id FROM account WHERE id=? FOR UPDATE", person.accountId());
             Boolean busy = jdbc.queryForObject(
                     "SELECT EXISTS(SELECT 1 FROM person_data_request WHERE id<>? AND state IN ('ERASING','FAILED') AND scope_json IS NOT NULL AND (scope_json::jsonb)->>'accountId'=?)",
                     Boolean.class,
@@ -108,16 +106,29 @@ public class PersonDataService {
         }
         suppression.suppress(person, id);
         if (person.accountId() != null) {
-            if (person.accountId().equals(administratorId))
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT, "Another administrator must perform this erasure");
             jdbc.update(
                     "UPDATE account SET status='DELETING',deleted_at=CURRENT_TIMESTAMP WHERE id=? AND status<>'DELETED'",
                     person.accountId());
+            issuedTokens.revokeAllForAccount(
+                    person.accountId(), Instant.now(), IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         }
         r.setAdministratorAccountId(administratorId);
         r.setState(PersonDataRequest.State.ERASING);
         r.setFailureCode(null);
+    }
+
+    private void requireActiveAdministratorAndLockAccount(
+            long administratorId, @org.jspecify.annotations.Nullable Long personAccountId) {
+        // Lock both accounts in one order. Concurrent requests must not erase each other's
+        // administrators after both have accepted a token validated before either erasure.
+        List<Boolean> eligible = jdbc.query(
+                "SELECT id,(status='ACTIVE' AND app_role='APP_ADMIN') FROM account WHERE id IN (?,?) ORDER BY id FOR UPDATE",
+                (rs, row) -> rs.getLong(1) == administratorId && rs.getBoolean(2),
+                administratorId,
+                Objects.requireNonNullElse(personAccountId, -1L));
+        if (!eligible.contains(Boolean.TRUE))
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "An active instance administrator must authorize erasure");
     }
 
     public void run(UUID id) {

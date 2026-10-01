@@ -26,6 +26,9 @@ class PersonDataServiceTest extends BaseUnitTest {
     private PersonDataRequestRepository requests;
 
     @Mock
+    private de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository issuedTokens;
+
+    @Mock
     private PersonSuppressionService suppression;
 
     @Mock

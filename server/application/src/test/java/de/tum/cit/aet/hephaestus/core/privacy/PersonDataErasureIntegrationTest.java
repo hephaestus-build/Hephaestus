@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.account.*;
 import de.tum.cit.aet.hephaestus.agent.*;
 import de.tum.cit.aet.hephaestus.agent.job.*;
 import de.tum.cit.aet.hephaestus.core.auth.domain.*;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.integration.core.connection.*;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -51,6 +53,9 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private IssuedJwtRepository issuedTokens;
 
     @Autowired
     private AccountRepository accounts;
@@ -117,9 +122,16 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://privacy-gitlab.example.com"));
         IdentityProvider slack =
                 providers.saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"));
-        Account administrator = accounts.saveAndFlush(new Account("Administrator"));
+        Account administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        administrator = accounts.saveAndFlush(administrator);
         Account targetAccount = accounts.saveAndFlush(new Account("Target"));
         Account otherAccount = accounts.saveAndFlush(new Account("Other"));
+        UUID targetTokenId = UUID.randomUUID();
+        issuedTokens.saveAndFlush(new IssuedJwt(
+                targetTokenId,
+                Objects.requireNonNull(targetAccount.getId()),
+                Instant.now().plusSeconds(3600)));
         User target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", scm));
         User other = users.saveAndFlush(TestUserFactory.createUser(84L, "other", scm));
         link(targetAccount, scm, "42", null, target.getId());
@@ -212,6 +224,9 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         "credential-canary",
                         "unrelated-profile-canary");
         personData.requestErasure(requestId, administratorId, true);
+        assertThat(issuedTokens.findActive(targetTokenId, Instant.now())).isEmpty();
+        assertThat(issuedTokens.findById(targetTokenId).orElseThrow().getRevokedReason())
+                .isEqualTo(IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         assertThat(suppression.isUserSuppressed(target.getId())).isTrue();
         assertThat(suppression.isUserSuppressed(other.getId())).isFalse();
         for (long threadId : sharedThreads) {
@@ -302,6 +317,51 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .hasMessageContaining("exact SCM provider identity");
         assertThat(resolver.resolve(null, List.of(gitlabKey, slackKey)).userIds())
                 .containsExactly(target.getId());
+    }
+
+    @Test
+    void shouldRejectErasureAuthorizedByAnAdministratorWhoseRoleWasRevokedAfterPreview() {
+        IdentityProvider scm = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://role-gitlab.example.org"));
+        User target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", scm));
+        Account administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        administrator = accounts.saveAndFlush(administrator);
+        long administratorId = Objects.requireNonNull(administrator.getId());
+        var preview = personData.preview(
+                administratorId, null, List.of(new PersonIdentity(Objects.requireNonNull(scm.getId()), "42", null)));
+        administrator.setAppRole(Account.AppRole.USER);
+        accounts.saveAndFlush(administrator);
+        assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), administratorId, true))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("403");
+        assertThat(personData.get(preview.request().getId()).request().getState())
+                .isEqualTo(PersonDataRequest.State.PREVIEW);
+        assertThat(suppression.isUserSuppressed(target.getId())).isFalse();
+        assertThat(users.findById(target.getId()).orElseThrow().getLogin()).isEqualTo("target");
+    }
+
+    @Test
+    void shouldPreserveActualAdministratorWhenAnotherAdministratorUsesThePersonsOwnPreview() {
+        Account person = new Account("Person");
+        person.setAppRole(Account.AppRole.APP_ADMIN);
+        person = accounts.saveAndFlush(person);
+        Account administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        administrator = accounts.saveAndFlush(administrator);
+        long personId = Objects.requireNonNull(person.getId());
+        long administratorId = Objects.requireNonNull(administrator.getId());
+        var preview = personData.preview(personId, personId, List.of());
+        UUID requestId = preview.request().getId();
+        assertThatThrownBy(() -> personData.requestErasure(requestId, personId, true))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("Another administrator");
+        personData.requestErasure(requestId, administratorId, true);
+        personData.run(requestId);
+        var receipt = personData.get(requestId).request();
+        assertThat(receipt.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(receipt.getAdministratorAccountId()).isEqualTo(administratorId);
+        assertThat(accounts.findById(administratorId).orElseThrow().getStatus()).isEqualTo(Account.Status.ACTIVE);
     }
 
     private void link(

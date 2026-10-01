@@ -160,9 +160,9 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "person_data_request_administration",
                         "person_data_request",
                         "t.administrator_account_id=:account",
-                        "id,state,created_at,expires_at,completed_at",
-                        "id",
-                        "administrator_account_id=NULL",
+                        "id,administrator_account_id,state,created_at,expires_at,completed_at",
+                        "id,administrator_account_id",
+                        "administrator_account_id=NULL,version=version+1",
                         950),
                 new JdbcPersonDataStore(
                         jdbc,
