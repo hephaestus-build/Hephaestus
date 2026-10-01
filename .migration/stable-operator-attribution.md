@@ -11,3 +11,5 @@ It retains the recorded role changes and their times. No historical name, login 
 recover attribution.
 
 Pending integration authorizations must be started again after the upgrade. Older signed OAuth states are rejected rather than interpreting their historical display-login attribution as an account reference.
+
+New pending integration authorizations are tied to the initiating account and removed by person erasure. Existing nonce rows remain without account attribution; no old identity is inferred. Erasure revokes sign-in sessions as soon as the job starts, including when a later store step needs a retry.

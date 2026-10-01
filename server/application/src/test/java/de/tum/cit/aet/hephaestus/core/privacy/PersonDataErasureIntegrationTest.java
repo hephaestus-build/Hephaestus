@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.integration.core.connection.*;
+import de.tum.cit.aet.hephaestus.integration.core.oauth.state.*;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.*;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.*;
@@ -53,6 +54,9 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private OAuthStateNonceStore oauthNonces;
 
     @Autowired
     private IssuedJwtRepository issuedTokens;
@@ -127,6 +131,17 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         administrator = accounts.saveAndFlush(administrator);
         Account targetAccount = accounts.saveAndFlush(new Account("Target"));
         Account otherAccount = accounts.saveAndFlush(new Account("Other"));
+        var targetOAuthBinding = new OAuthStateService.StateBinding(
+                1L,
+                IntegrationKind.GITHUB,
+                Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS),
+                targetAccount.getId());
+        oauthNonces.issue(
+                "nonce-credential-canary",
+                1L,
+                IntegrationKind.GITHUB,
+                targetOAuthBinding.issuedAt(),
+                targetOAuthBinding.actorAccountId());
         UUID targetTokenId = UUID.randomUUID();
         issuedTokens.saveAndFlush(new IssuedJwt(
                 targetTokenId,
@@ -207,6 +222,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         UUID requestId = preview.request().getId();
         var export = personData.export(requestId);
         Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
+        assertThat(counts.get("oauth_state_nonce")).isEqualTo(1L);
         assertThat(counts.get("feedback")).isEqualTo(4L);
         assertThat(counts.get("observation")).isEqualTo(4L);
         assertThat(counts.get("observation_invalidation")).isEqualTo(2L);
@@ -224,6 +240,8 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         "credential-canary",
                         "unrelated-profile-canary");
         personData.requestErasure(requestId, administratorId, true);
+        assertThat(oauthNonces.tryConsume("nonce-credential-canary", targetOAuthBinding))
+                .isFalse();
         assertThat(issuedTokens.findActive(targetTokenId, Instant.now())).isEmpty();
         assertThat(issuedTokens.findById(targetTokenId).orElseThrow().getRevokedReason())
                 .isEqualTo(IssuedJwt.RevokedReason.ACCOUNT_DELETED);
@@ -238,6 +256,9 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                     .isFalse();
         }
         personData.run(requestId);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM oauth_state_nonce WHERE nonce='nonce-credential-canary'", Long.class))
+                .isZero();
         var receipt = personData.get(requestId).request();
         assertThat(receipt.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
         assertThat(receipt.getScopeJson()).isNull();

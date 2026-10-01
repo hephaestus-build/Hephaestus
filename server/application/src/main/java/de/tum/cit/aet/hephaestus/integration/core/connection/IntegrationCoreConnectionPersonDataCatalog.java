@@ -12,6 +12,7 @@ import tools.jackson.databind.ObjectMapper;
 @ConditionalOnServerRole
 @RequiredArgsConstructor
 @PersonDataStores({
+    "oauth_state_nonce",
     "user",
     "organization_membership",
     "team_membership",
@@ -52,6 +53,16 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "oauth_state_nonce",
+                        "oauth_state_nonce",
+                        "t.actor_account_id=:account",
+                        "workspace_id,kind,issued_at,consumed_at,actor_account_id",
+                        "nonce",
+                        "",
+                        100),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.oauth.state;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -28,8 +29,21 @@ public interface OAuthStateNonceRepository extends JpaRepository<OAuthStateNonce
      * @return 1 if this caller flipped the row from unconsumed → consumed; 0 otherwise.
      */
     @Modifying
-    @Query("UPDATE OAuthStateNonce n SET n.consumedAt = :now " + "WHERE n.nonce = :nonce AND n.consumedAt IS NULL")
-    int markConsumed(@Param("nonce") String nonce, @Param("now") Instant now);
+    @Query(value = """
+            UPDATE oauth_state_nonce n SET consumed_at = :now
+            WHERE n.nonce = :nonce AND n.consumed_at IS NULL
+              AND n.workspace_id = :workspace AND n.kind = :kind AND n.issued_at = :issued
+              AND n.actor_account_id IS NOT DISTINCT FROM CAST(:actor AS bigint)
+              AND (n.actor_account_id IS NULL OR EXISTS (
+                  SELECT 1 FROM account a WHERE a.id = n.actor_account_id AND a.status = 'ACTIVE'))
+            """, nativeQuery = true)
+    int markConsumed(
+            @Param("nonce") String nonce,
+            @Param("now") Instant now,
+            @Param("workspace") long workspaceId,
+            @Param("kind") String kind,
+            @Param("issued") Instant issuedAt,
+            @Param("actor") @Nullable Long actorAccountId);
 
     /** Cleanup helper — drops rows older than the cutoff. */
     @Modifying

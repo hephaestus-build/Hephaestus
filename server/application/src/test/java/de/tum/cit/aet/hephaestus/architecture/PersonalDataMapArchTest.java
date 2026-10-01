@@ -72,7 +72,6 @@ class PersonalDataMapArchTest {
             "llm_model_price",
             "llm_model_workspace_grant",
             "login_provider",
-            "oauth_state_nonce",
             "practice",
             "practice_catalog_installation",
             "practice_group",

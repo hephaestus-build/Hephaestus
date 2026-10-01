@@ -153,7 +153,7 @@ public class HmacOAuthStateService implements OAuthStateService {
         // Persist the nonce BEFORE returning so a fast OAuth roundtrip can't race the
         // first consume to an empty row. Skipped when no store is wired (test path).
         if (nonceStore != null) {
-            nonceStore.issue(nonce, workspaceId, kind, Instant.ofEpochSecond(issuedAt));
+            nonceStore.issue(nonce, workspaceId, kind, Instant.ofEpochSecond(issuedAt), actorAccountId);
         }
         return Base64.getUrlEncoder()
                 .withoutPadding()
@@ -213,12 +213,13 @@ public class HmacOAuthStateService implements OAuthStateService {
             throw new IllegalArgumentException("OAuth state workspaceId malformed", e);
         }
         Long actorAccountId = decodeActor(actorSegment);
+        StateBinding binding = new StateBinding(workspaceId, kind, issued, actorAccountId);
         // Single-use enforcement via atomic UPDATE inside tryConsume. The HMAC + TTL are
         // already verified — any forged or stale token has been rejected.
-        if (nonceStore != null && !nonceStore.tryConsume(nonce)) {
+        if (nonceStore != null && !nonceStore.tryConsume(nonce, binding)) {
             throw new IllegalArgumentException("OAuth state already consumed");
         }
-        return new StateBinding(workspaceId, kind, issued, actorAccountId);
+        return binding;
     }
 
     private static String encodeActor(@Nullable Long actorAccountId) {

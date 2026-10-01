@@ -293,13 +293,18 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         }
 
         @Override
-        public void issue(@Nullable String nonce, long workspaceId, IntegrationKind kind, java.time.Instant issuedAt) {
+        public void issue(
+                @Nullable String nonce,
+                long workspaceId,
+                IntegrationKind kind,
+                java.time.Instant issuedAt,
+                @Nullable Long actorAccountId) {
             if (nonce == null) return;
             consumed.putIfAbsent(nonce, false);
         }
 
         @Override
-        public boolean tryConsume(@Nullable String nonce) {
+        public boolean tryConsume(@Nullable String nonce, StateBinding binding) {
             if (nonce == null) return false;
             Boolean prior = consumed.get(nonce);
             if (prior == null || prior) return false;

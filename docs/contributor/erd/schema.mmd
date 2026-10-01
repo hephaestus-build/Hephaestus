@@ -857,6 +857,7 @@ erDiagram
         VARCHAR(48) kind "NOT NULL"
         TIMESTAMPTZ issued_at "NOT NULL"
         TIMESTAMPTZ consumed_at
+        BIGINT actor_account_id FK
     }
 
     Observation {
@@ -1816,6 +1817,7 @@ erDiagram
     Repository ||--o{ Milestone : has
     User ||--o{ Milestone : created_by
     Account ||--o{ NotificationSubscription : has
+    Account ||--o{ OauthStateNonce : has
     Practice ||--o{ Observation : practice_id
     Practice ||--o{ Observation : practice_id
     PracticeRevision ||--o{ Observation : has

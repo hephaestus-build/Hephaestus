@@ -193,4 +193,13 @@ CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS tr
             <sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Historical attribution cannot be restored. Restore a verified pre-migration backup instead.'; END $$;</sql>
         </rollback>
     </changeSet>
+    <changeSet id="1790837066126-17" author="hephaestus">
+        <addColumn tableName="oauth_state_nonce">
+            <column name="actor_account_id" type="BIGINT"/>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="oauth_state_nonce" baseColumnNames="actor_account_id"
+            constraintName="fk_oauth_state_nonce_actor_account" referencedTableName="account"
+            referencedColumnNames="id" onDelete="SET NULL"/>
+        <rollback><dropColumn tableName="oauth_state_nonce" columnName="actor_account_id"/></rollback>
+    </changeSet>
 </databaseChangeLog>
