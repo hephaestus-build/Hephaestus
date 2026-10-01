@@ -9,9 +9,10 @@ public record PersonScope(
         List<PersonIdentity> identities,
         List<Long> userIds,
         List<Long> conversationIds,
-        List<Long> outlineDocumentIds) {
+        List<Long> outlineDocumentIds,
+        List<Long> scmArtifactIds) {
     public PersonScope(@Nullable Long accountId, List<PersonIdentity> identities, List<Long> userIds) {
-        this(accountId, identities, userIds, List.of(), List.of());
+        this(accountId, identities, userIds, List.of(), List.of(), List.of());
     }
 
     public PersonScope {
@@ -19,5 +20,6 @@ public record PersonScope(
         userIds = List.copyOf(userIds);
         conversationIds = List.copyOf(conversationIds);
         outlineDocumentIds = List.copyOf(outlineDocumentIds);
+        scmArtifactIds = List.copyOf(scmArtifactIds);
     }
 }

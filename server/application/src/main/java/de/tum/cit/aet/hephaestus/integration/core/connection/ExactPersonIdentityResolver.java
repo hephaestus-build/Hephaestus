@@ -155,7 +155,31 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                 ordered,
                 users.stream().distinct().sorted().toList(),
                 conversations.stream().sorted().toList(),
-                documents.stream().sorted().toList());
+                documents.stream().sorted().toList(),
+                scmArtifacts(users));
+    }
+
+    private List<Long> scmArtifacts(List<Long> users) {
+        return jdbc.query(
+                """
+                WITH person_users AS (SELECT id FROM "user" WHERE id=ANY(?)),
+                person_commits AS (
+                    SELECT id FROM git_commit WHERE author_id IN (SELECT id FROM person_users)
+                        OR committer_id IN (SELECT id FROM person_users)
+                    UNION SELECT commit_id FROM commit_contributor WHERE user_id IN (SELECT id FROM person_users)
+                ), artifacts AS (
+                    SELECT id FROM issue WHERE author_id IN (SELECT id FROM person_users)
+                        OR merged_by_id IN (SELECT id FROM person_users)
+                    UNION SELECT issue_id FROM issue_assignee WHERE user_id IN (SELECT id FROM person_users)
+                    UNION SELECT pull_request_id FROM pull_request_requested_reviewers WHERE user_id IN (SELECT id FROM person_users)
+                    UNION SELECT issue_id FROM issue_comment WHERE author_id IN (SELECT id FROM person_users)
+                    UNION SELECT pull_request_id FROM pull_request_review WHERE author_id IN (SELECT id FROM person_users)
+                    UNION SELECT pull_request_id FROM pull_request_review_comment WHERE author_id IN (SELECT id FROM person_users)
+                    UNION SELECT pull_request_id FROM commit_pull_request WHERE commit_id IN (SELECT id FROM person_commits)
+                ) SELECT id FROM artifacts WHERE id IS NOT NULL ORDER BY id
+                """,
+                (rs, row) -> rs.getLong(1),
+                new org.springframework.jdbc.support.SqlArrayValue("bigint", users.toArray()));
     }
 
     private record CachedSlackIdentity(

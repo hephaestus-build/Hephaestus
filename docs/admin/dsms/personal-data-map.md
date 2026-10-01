@@ -13,6 +13,9 @@ moved.
 Workspace purge applies storage limitation when a workspace loses its purpose; a verified
 person-erasure request follows the [instance-admin procedure](../production-operations-runbook#access-and-erasure-for-one-person).
 The implementation inventory below owns each store's exact selection, export and erasure citations.
+The frozen scope includes reviewed work on which the person authored, merged, commented, reviewed,
+was assigned, was requested to review, or contributed a linked commit. Derived observations, feedback
+and evidence copies use that same source scope, including when their primary author is another person.
 OAuth state nonces record only a new exact initiating account; exports omit the nonce capability, and erasure deletes its row. Older rows have no inferred account attribution.
 The self-service account export and cooldown remain separate, narrower operations.
 

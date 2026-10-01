@@ -24,6 +24,9 @@ import org.springframework.web.server.ResponseStatusException;
 class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+
+    @Autowired
     private ExactPersonIdentityResolver resolver;
 
     @Autowired
@@ -78,6 +81,94 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         personData.run(snapshot.request().getId());
         assertThat(personData.get(snapshot.request().getId()).request().getCompletedJson())
                 .isEqualTo(receipt.getCompletedJson());
+    }
+
+    @Test
+    void shouldResolveAssignedRequestedAndCommitRelatedSourcesByStableUserKeys() {
+        var provider = provider(IdentityProviderType.GITLAB);
+        var target = user(provider, 42);
+        var other = user(provider, 84);
+        var seed = new de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder(jdbc);
+        long repositoryId = 995201L;
+        seed.insert(
+                "repository",
+                java.util.Map.of(
+                        "id",
+                        repositoryId,
+                        "provider_id",
+                        provider.getId(),
+                        "native_id",
+                        repositoryId,
+                        "name",
+                        "source-repository",
+                        "name_with_owner",
+                        "other/source-repository"));
+        for (long sourceId : List.of(995202L, 995203L, 995204L, 995205L)) {
+            var source = new java.util.HashMap<String, Object>(java.util.Map.of(
+                    "id",
+                    sourceId,
+                    "provider_id",
+                    provider.getId(),
+                    "native_id",
+                    sourceId,
+                    "repository_id",
+                    repositoryId,
+                    "author_id",
+                    other.getId(),
+                    "issue_type",
+                    "PULL_REQUEST",
+                    "number",
+                    sourceId,
+                    "state",
+                    "OPEN"));
+            source.putAll(java.util.Map.of(
+                    "is_draft",
+                    false,
+                    "is_merged",
+                    false,
+                    "commits",
+                    0,
+                    "additions",
+                    0,
+                    "deletions",
+                    0,
+                    "changed_files",
+                    0));
+            seed.insert("issue", source);
+        }
+        jdbc.update("INSERT INTO issue_assignee(issue_id,user_id) VALUES (?,?)", 995202L, target.getId());
+        jdbc.update(
+                "INSERT INTO pull_request_requested_reviewers(pull_request_id,user_id) VALUES (?,?)",
+                995203L,
+                target.getId());
+        seed.insert(
+                "git_commit",
+                java.util.Map.of(
+                        "id",
+                        995206L,
+                        "repository_id",
+                        repositoryId,
+                        "sha",
+                        "1234567890123456789012345678901234567890",
+                        "author_id",
+                        other.getId(),
+                        "committer_id",
+                        target.getId()));
+        jdbc.update("INSERT INTO commit_pull_request(commit_id,pull_request_id) VALUES (?,?)", 995206L, 995204L);
+        var scope = resolver.resolve(null, List.of(identity(provider, "42", null)));
+        assertThat(scope.userIds()).containsExactly(target.getId());
+        assertThat(scope.scmArtifactIds())
+                .containsExactly(995202L, 995203L, 995204L)
+                .doesNotContain(995205L);
+        assertThat(resolver.resolve(null, List.of(identity(provider, "84", null)))
+                        .scmArtifactIds())
+                .contains(995205L);
+        jdbc.update("DELETE FROM commit_pull_request WHERE commit_id=?", 995206L);
+        jdbc.update("DELETE FROM git_commit WHERE id=?", 995206L);
+        jdbc.update("DELETE FROM issue_assignee WHERE issue_id=?", 995202L);
+        jdbc.update("DELETE FROM pull_request_requested_reviewers WHERE pull_request_id=?", 995203L);
+        jdbc.update("DELETE FROM issue WHERE repository_id=?", repositoryId);
+        jdbc.update("DELETE FROM repository WHERE id=?", repositoryId);
     }
 
     @Test
