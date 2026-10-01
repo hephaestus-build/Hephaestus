@@ -336,7 +336,7 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         when(repositorySyncService.resolveRepositoryNameById(SCOPE_ID, NATIVE_ID))
                 .thenReturn("owner/renamed");
         var repository = new Repository();
-        repository.setId(REPOSITORY_ID);
+        repository.setId(REPOSITORY_ID + 1);
         repository.setNativeId(NATIVE_ID);
         repository.setNameWithOwner("owner/renamed");
         repository.setProvider(gitProviderRepository
@@ -345,8 +345,8 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq("owner/renamed"), any()))
                 .thenReturn(Optional.of(repository));
         assertThat(service.syncSyncTarget(target)).isTrue();
-        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
-        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID + 1), any(), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID + 1), any(), any(), any());
         verify(repositorySyncService, never()).syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any());
         verify(syncTargetProvider).clearRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID);
         verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, "owner/renamed");
