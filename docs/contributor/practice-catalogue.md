@@ -291,8 +291,10 @@ standard as an experiment or a convention as a proven outcome.
    [artifact-source governance gate](../admin/dsms/artifact-source-governance).
 5. Update `server/application/src/main/resources/practices/default-catalog.json`; its adjacent JSON Schema provides
    editor completion and CI validation, and Git history is the bundled version history. Declare the one
-   occasion as `on` — a bare signal name is shorthand for a binding on that signal reading the
-   artifact kind's default evidence. Reference any precompute script explicitly; a script must be named
+   occasion directly as `signals`, with optional `onDrafts` and `subject`. Declare sources as
+   `evidenceRequirements`; omitting that field uses the artifact kind's default evidence. An explicit
+   empty list is invalid. Declare a mechanical gate as `precondition`. There is no occasion array or
+   string-or-object shorthand. Reference any precompute script explicitly; a script must be named
    after the practice slug, and an unreferenced one fails validation. What a script is and what the
    library owns is in [Precompute scripts](#precompute-scripts) below. Give the practice a `holdsAs`
    sentence — [Holds as](./practice-feedback-language.md) in the feedback language: one present-tense

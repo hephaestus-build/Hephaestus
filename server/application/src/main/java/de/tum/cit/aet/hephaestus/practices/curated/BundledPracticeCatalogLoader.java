@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
@@ -10,6 +12,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeSubject;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalog.BundledEntry;
 import java.io.IOException;
 import java.io.InputStream;
@@ -206,49 +210,45 @@ public class BundledPracticeCatalogLoader {
         }
     }
 
-    /**
-     * Reads the {@code on} list.
-     *
-     * <p>A bare string is a binding on that signal reading the kind's default evidence; requiring each
-     * practice to spell those out would only let the copies drift. An object names the evidence instead,
-     * and is how a practice that must establish an <em>absence</em> declares the exhaustive capture that
-     * licenses the claim.
-     */
     private static List<PracticeBinding> bindings(
             JsonMapper objectMapper, PracticeEvidenceDefaults evidenceDefaults, JsonNode node, String slug) {
-        JsonNode on = node.path("on");
-        if (!on.isArray() || on.isEmpty()) {
-            throw new IllegalStateException("bundled practice must declare a non-empty 'on' array: " + slug);
+        try {
+            return List.of(objectMapper.treeToValue(node, CatalogOccasion.class).toBinding(evidenceDefaults));
+        } catch (RuntimeException exception) {
+            throw new IllegalStateException("invalid bundled practice occasion: " + slug, exception);
         }
-        List<PracticeBinding> bindings = new ArrayList<>();
-        for (JsonNode entry : on) {
-            if (entry.isString()) {
-                SignalName signal = SignalName.of(entry.asString());
-                bindings.add(PracticeBinding.on(signal, evidenceDefaults.needsFor(signal.artifactKind())));
-                continue;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record CatalogOccasion(
+            List<SignalName> signals,
+            @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
+            @Nullable Boolean onDrafts,
+            @Nullable ActorRole subject,
+            @Nullable PracticeSubject precondition) {
+        CatalogOccasion {
+            signals = List.copyOf(signals);
+            if (signals.isEmpty()) {
+                throw new IllegalArgumentException("Choose at least one moment that starts a review.");
             }
-            if (!entry.isObject()) {
-                throw new IllegalStateException("bundled practice binding must be a signal name or object: " + slug);
+            if (evidenceRequirements != null) {
+                evidenceRequirements = List.copyOf(evidenceRequirements);
+                if (evidenceRequirements.isEmpty()) {
+                    throw new IllegalArgumentException("Declare the evidence the practice reads.");
+                }
             }
-            PracticeBinding binding;
-            try {
-                binding = objectMapper.treeToValue(entry, PracticeBinding.class);
-            } catch (RuntimeException exception) {
-                throw new IllegalStateException("invalid bundled practice binding: " + slug, exception);
-            }
-            if (binding.needs().isEmpty()) {
-                // Every component but `needs` is carried through: filling in the kind's default evidence
-                // must not quietly reset whose conduct the occasion judges.
-                binding = new PracticeBinding(
-                        binding.signals(),
-                        evidenceDefaults.needsFor(binding.artifactKind()),
-                        binding.onDrafts(),
-                        binding.subject(),
-                        binding.appliesWhen());
-            }
-            bindings.add(binding);
         }
-        return List.copyOf(bindings);
+
+        PracticeBinding toBinding(PracticeEvidenceDefaults defaults) {
+            return new PracticeBinding(
+                    signals,
+                    evidenceRequirements == null
+                            ? defaults.needsFor(signals.getFirst().artifactKind())
+                            : evidenceRequirements,
+                    Boolean.TRUE.equals(onDrafts),
+                    subject == null ? ActorRole.AUTHOR : subject,
+                    precondition);
+        }
     }
 
     private static @Nullable String loadPrecomputeScript(JsonNode node, String slug) {

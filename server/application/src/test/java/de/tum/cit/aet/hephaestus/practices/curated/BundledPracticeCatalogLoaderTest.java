@@ -1,12 +1,16 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Locale;
@@ -96,14 +100,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         assertThat(practice.definition().precomputeScript()).isNotBlank());
     }
 
-    /**
-     * The declarations that stop us spending a model call on a question the staged evidence already
-     * answers. Pinned by slug because the value of each is measured — on the corpus these were written
-     * against, they account for the great majority of every {@code NOT_APPLICABLE} ever recorded — and a
-     * declaration dropped in an edit would restore that cost in silence. The iOS practices are gated on a
-     * Swift file in the change for the same reason: on a repository with no Swift in it they would be
-     * asked on every change and answer nothing.
-     */
+    /** Gates prevent model reviews when complete evidence proves that the subject is absent. */
     @Test
     void shouldShipTheSubjectDeclarationsThatKeepPracticesFromBeingAskedForNothing() {
         BundledPracticeCatalog catalog = loader.catalog();
@@ -164,6 +161,68 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 .allSatisfy(practice -> assertThat(practice.definition().bindings())
                         .as("occasions of '%s'", practice.slug())
                         .hasSize(1));
+    }
+
+    @Test
+    void shouldPreserveDraftEligibilityAndTheMergeSubjectFromFlatFields() {
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> practice.slug().equals("ready-and-traceable-handoff"))
+                .singleElement()
+                .satisfies(practice -> assertThat(
+                                practice.definition().bindings().getFirst().onDrafts())
+                        .isTrue());
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> practice.slug().equals("merges-only-after-approval"))
+                .singleElement()
+                .satisfies(practice -> {
+                    var occasion = practice.definition().bindings().getFirst();
+                    assertThat(occasion.subject()).isEqualTo(ActorRole.MERGER);
+                    assertThat(occasion.onDrafts()).isFalse();
+                });
+    }
+
+    @Test
+    void shouldPreserveTheOccasionWhenEvidenceRequirementsAreOmitted() {
+        var defaults = new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog());
+        var occasion = objectMapper.readValue("""
+                {
+                  "signals": ["scm.pull_request.merged"],
+                  "subject": "MERGER",
+                  "onDrafts": true,
+                  "precondition": {
+                    "absentSays": "the change has no Swift code",
+                    "anyOf": [{"changedPathMatches": ["**/*.swift"]}]
+                  }
+                }
+                """, BundledPracticeCatalogLoader.CatalogOccasion.class);
+
+        var binding = occasion.toBinding(defaults);
+        assertThat(binding.needs())
+                .containsExactlyInAnyOrderElementsOf(defaults.needsFor(ArtifactKind.of("scm.pull_request")));
+        assertThat(binding.subject()).isEqualTo(ActorRole.MERGER);
+        assertThat(binding.onDrafts()).isTrue();
+        assertThat(binding.appliesWhen()).isNotNull().satisfies(precondition -> {
+            assertThat(precondition.absentSays()).isEqualTo("the change has no Swift code");
+            assertThat(precondition.anyOf())
+                    .singleElement()
+                    .satisfies(clause -> assertThat(clause.changedPathMatches()).containsExactly("**/*.swift"));
+        });
+    }
+
+    @Test
+    void shouldKeepCompleteDiffCoverageAndContextualCheckoutRequirements() {
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> practice.slug().equals("keeps-views-free-of-networking-and-persistence"))
+                .singleElement()
+                .satisfies(practice -> {
+                    assertThat(practice.definition().bindings().getFirst().needs())
+                            .extracting(
+                                    requirement -> requirement.sourceKind().value(),
+                                    PracticeEvidenceRequirement::stance)
+                            .containsExactlyInAnyOrder(
+                                    tuple("scm.pull-request.diff", EvidenceStance.EXHAUSTIVE),
+                                    tuple("scm.repository.tree", EvidenceStance.CONTEXTUAL));
+                });
     }
 
     @Test

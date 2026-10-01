@@ -18,26 +18,19 @@
 				{
 					"slug": "scope-one-reviewable-change",
 					"name": "Scope the change to one concern",
-					"on": [
+					"signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"whyItMatters": "A reviewer can only hold so much in their head at once. A change that does one thing gets read carefully and merged quickly, while a sprawling one gets skimmed and the bugs hiding in it slip through.",
@@ -47,22 +40,17 @@
 				},
 				{
 					"slug": "describe-what-and-why",
-					"deliveryBehavior": {"summaryOnly": true},
 					"name": "Describe what changed and why",
-					"on": [
+					"signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
 						}
 					],
+					"deliveryBehavior": {
+						"summaryOnly": true
+					},
 					"whyItMatters": "Your reviewer was not in your head when you wrote the code. A sentence on why you made the change spares them from reverse-engineering your intent from the diff, and missing that rationale is one of the most common things that leaves a reviewer confused.",
 					"whatGoodLooksLike": "A title like 'Cache user lookups to cut the dashboard load time' with a body that opens 'The dashboard re-fetched every user on each render, so it stuttered on large teams.'",
 					"holdsAs": "Every description says what changed and why",
@@ -71,38 +59,31 @@
 				{
 					"slug": "states-how-to-verify-the-change",
 					"name": "State how to verify the change",
-					"on": [
+					"signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.linked-work-items",
-									"stance": "CONTEXTUAL"
-								},
-								{
-									"sourceKind": "scm.general-review-comments",
-									"stance": "CONTEXTUAL"
-								},
-								{
-									"sourceKind": "scm.review-threads",
-									"stance": "CONTEXTUAL"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.linked-work-items",
+							"stance": "CONTEXTUAL"
+						},
+						{
+							"sourceKind": "scm.general-review-comments",
+							"stance": "CONTEXTUAL"
+						},
+						{
+							"sourceKind": "scm.review-threads",
+							"stance": "CONTEXTUAL"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/states-how-to-verify-the-change.ts",
@@ -113,27 +94,23 @@
 				},
 				{
 					"slug": "ready-and-traceable-handoff",
-					"deliveryBehavior": {"summaryOnly": false, "redundantToSlug": "ships-tests-with-the-change"},
 					"name": "Mark the change ready and link its issue",
-					"on": [
+					"signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								}
-							],
-							"onDrafts": true
+							"sourceKind": "scm.pull-request.core",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
 						}
 					],
+					"onDrafts": true,
+					"deliveryBehavior": {
+						"summaryOnly": false,
+						"redundantToSlug": "ships-tests-with-the-change"
+					},
 					"precomputeScript": "practices/precompute/ready-and-traceable-handoff.ts",
 					"whyItMatters": "When you mark work ready, people start spending time on it. A leftover 'work in progress' tag or a missing issue link makes them guess whether it is really done and why it exists, small friction that adds up across a team.",
 					"whatGoodLooksLike": "A change that is out of draft, has no 'do not merge' label left on it, and carries a 'Closes #482' line so anyone can trace it back to the need it answers.",
@@ -142,23 +119,21 @@
 				},
 				{
 					"slug": "commit-subjects-explain-each-change",
-					"deliveryBehavior": {"summaryOnly": true},
 					"name": "Write commit subjects a reviewer can follow",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
 						}
 					],
+					"deliveryBehavior": {
+						"summaryOnly": true
+					},
 					"whyItMatters": "Six months from now, someone, maybe you, will run git blame on a confusing line and read your commit subject to understand it. 'wip' and 'fix stuff' tell them nothing, while a clear subject tells the whole story.",
 					"whatGoodLooksLike": "A history you can read top to bottom, where each subject names exactly what that step did, such as 'Extract the retry logic into a helper' then 'Add a timeout to the upload call'.",
 					"holdsAs": "Commit subjects say what each step changed",
@@ -168,31 +143,27 @@
 				{
 					"slug": "honours-linked-issue-acceptance-criteria",
 					"name": "Say which acceptance criteria are done",
-					"on": [
+					"signals": [
+						"scm.pull_request.merged",
+						"scm.pull_request.opened",
+						"scm.pull_request.ready"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.merged",
-								"scm.pull_request.opened",
-								"scm.pull_request.ready"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.linked-work-items",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.linked-work-items",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/honours-linked-issue-acceptance-criteria.ts",
@@ -214,38 +185,31 @@
 				{
 					"slug": "engaging-with-inline-review-comments",
 					"name": "Respond to each review comment",
-					"on": [
+					"signals": ["scm.pull_request.merged", "scm.pull_request.synchronized"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.merged",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.review-threads",
-									"stance": "EXHAUSTIVE"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "nobody left a review comment on this pull request",
-								"anyOf": [
-									{
-										"evidenceHasItems": "scm.review-threads"
-									},
-									{
-										"evidenceHasItems": "scm.inline-review-comments"
-									},
-									{
-										"evidenceHasItems": "scm.general-review-comments"
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.review-threads",
+							"stance": "EXHAUSTIVE"
 						}
 					],
+					"precondition": {
+						"absentSays": "nobody left a review comment on this pull request",
+						"anyOf": [
+							{
+								"evidenceHasItems": "scm.review-threads"
+							},
+							{
+								"evidenceHasItems": "scm.inline-review-comments"
+							},
+							{
+								"evidenceHasItems": "scm.general-review-comments"
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/engaging-with-inline-review-comments.ts",
 					"whyItMatters": "A reviewer spent real attention pointing at a specific line. When the thread just sits there, they cannot tell whether you agreed, fixed it, or missed it, and they will hesitate before putting in that effort again.",
 					"whatGoodLooksLike": "Every reviewer comment gets a visible response, either a follow-up commit that addresses it or a short reply like 'Good catch, switched to the shared client in a2b1c3', so no thread sits unanswered.",
@@ -255,17 +219,11 @@
 				{
 					"slug": "merged-past-unresolved-review-threads",
 					"name": "Resolve open threads before merging",
-					"on": [
+					"signals": ["scm.pull_request.merged"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.merged"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.review-threads",
-									"stance": "EXHAUSTIVE"
-								}
-							]
+							"sourceKind": "scm.review-threads",
+							"stance": "EXHAUSTIVE"
 						}
 					],
 					"precomputeScript": "practices/precompute/merged-past-unresolved-review-threads.ts",
@@ -286,22 +244,15 @@
 				{
 					"slug": "issue-states-an-actionable-problem",
 					"name": "State a problem a maintainer can act on",
-					"on": [
+					"signals": ["scm.issue.opened", "scm.issue.updated"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.issue.opened",
-								"scm.issue.updated"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.issue.comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.issue.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.issue.comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.issue.core",
+							"stance": "REQUIRED"
 						}
 					],
 					"precomputeScript": "practices/precompute/issue-states-an-actionable-problem.ts",
@@ -312,22 +263,18 @@
 				},
 				{
 					"slug": "issue-scoped-to-single-concern",
-					"deliveryBehavior": {"summaryOnly": false, "overlapGroup": "issue-structure"},
 					"name": "Keep the issue to one concern",
-					"on": [
+					"signals": ["scm.issue.opened", "scm.issue.updated"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.issue.opened",
-								"scm.issue.updated"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.issue.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.issue.core",
+							"stance": "REQUIRED"
 						}
 					],
+					"deliveryBehavior": {
+						"summaryOnly": false,
+						"overlapGroup": "issue-structure"
+					},
 					"precomputeScript": "practices/precompute/issue-scoped-to-single-concern.ts",
 					"whyItMatters": "An issue that quietly bundles three unrelated asks cannot be assigned, estimated, or closed cleanly. One part lands, the rest linger, and the whole thing stays open forever, tracking nothing.",
 					"whatGoodLooksLike": "One issue, one deliverable, such as 'add CSV export to the reports page', rather than 'add CSV export, fix the date picker, and bump the chart library' crammed into one ticket.",
@@ -336,27 +283,22 @@
 				},
 				{
 					"slug": "issue-has-checkable-outcome",
-					"deliveryBehavior": {"summaryOnly": false, "overlapGroup": "issue-structure"},
 					"name": "Define a checkable outcome",
-					"on": [
+					"signals": ["scm.issue.closed", "scm.issue.opened", "scm.issue.updated"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.issue.closed",
-								"scm.issue.opened",
-								"scm.issue.updated"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.issue.comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.issue.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.issue.comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.issue.core",
+							"stance": "REQUIRED"
 						}
 					],
+					"deliveryBehavior": {
+						"summaryOnly": false,
+						"overlapGroup": "issue-structure"
+					},
 					"precomputeScript": "practices/precompute/issue-has-checkable-outcome.ts",
 					"whyItMatters": "Without a clear line for 'done', nobody can tell when the work is finished, including the person doing it. A checkable outcome turns 'improve performance' from an open-ended wish into a task someone can actually complete.",
 					"whatGoodLooksLike": "A short acceptance checklist a maintainer can tick off when the work is truly finished, such as 'export downloads a valid CSV' and 'an empty result shows a friendly message', rather than a vague hope of improvement.",
@@ -366,18 +308,11 @@
 				{
 					"slug": "issue-points-to-relevant-context",
 					"name": "Point the issue to the context it depends on",
-					"on": [
+					"signals": ["scm.issue.opened", "scm.issue.updated"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.issue.opened",
-								"scm.issue.updated"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.issue.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.issue.core",
+							"stance": "REQUIRED"
 						}
 					],
 					"whyItMatters": "An issue that silently depends on decisions made elsewhere forces every implementer to re-discover the context — or, worse, to guess it and build the wrong thing.",
@@ -397,36 +332,30 @@
 				{
 					"slug": "leaves-useful-specific-review-comments",
 					"name": "Leave specific, actionable review comments",
-					"on": [
+					"signals": ["scm.pull_request.reviewed"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.reviewed"
-							],
-							"subject": "REVIEWER",
-							"needs": [
-								{
-									"sourceKind": "scm.general-review-comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.general-review-comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"subject": "REVIEWER",
 					"whyItMatters": "'This looks off' leaves the author guessing what to change and why. A comment that points at the exact line and names the concern gets fixed, while a vague one just slows the change down.",
 					"whatGoodLooksLike": "A note anchored to the line that says 'this throws when items is empty, so guard the loop or return early on a null list', so the author knows exactly what to do next.",
 					"holdsAs": "Review comments name the line and the fix",
@@ -436,28 +365,22 @@
 				{
 					"slug": "reviews-respectfully-asks-rather-than-demands",
 					"name": "Comment on the code, not the person",
-					"on": [
+					"signals": ["scm.pull_request.reviewed"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.reviewed"
-							],
-							"subject": "REVIEWER",
-							"needs": [
-								{
-									"sourceKind": "scm.general-review-comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.general-review-comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
 						}
 					],
+					"subject": "REVIEWER",
 					"whyItMatters": "The same point can be made as a question or as a put-down, and people remember which one you chose. A curious question gets acted on, while sarcasm and bare orders breed defensiveness and make the next review harder.",
 					"whatGoodLooksLike": "'What happens if this runs twice, could we hit a race here?' rather than 'this is obviously broken, did you even test it?', so disagreement lands on the code and never on the author.",
 					"holdsAs": "Comments land on the code, never on the author",
@@ -467,40 +390,34 @@
 				{
 					"slug": "reviews-substantively-with-understanding",
 					"name": "Explain consequential review judgments",
-					"on": [
+					"signals": ["scm.pull_request.reviewed"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.reviewed"
-							],
-							"subject": "REVIEWER",
-							"needs": [
-								{
-									"sourceKind": "scm.general-review-comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								},
-								{
-									"sourceKind": "scm.review-threads",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.general-review-comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
+						},
+						{
+							"sourceKind": "scm.review-threads",
+							"stance": "REQUIRED"
 						}
 					],
+					"subject": "REVIEWER",
 					"whyItMatters": "A short explanation makes the basis of an important approval or concern available to the author and other reviewers. A bare approval alone does not show what was checked; it also does not prove that the reviewer failed to read the change.",
 					"whatGoodLooksLike": "For a consequential authorization change, a reviewer names the permission check they considered and explains why it addresses the concern, or asks a specific unresolved question. A routine change with no material concern may need only a brief approval.",
 					"holdsAs": "Reviews that call for reasoning get it in writing",
@@ -519,23 +436,19 @@
 				{
 					"slug": "ships-tests-with-the-change",
 					"name": "Include tests with the change",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/ships-tests-with-the-change.ts",
@@ -548,95 +461,91 @@
 				{
 					"slug": "keeps-the-test-suite-honest",
 					"name": "Keep the test suite honest",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change touches no test file and neither adds nor removes a test declaration",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/test/**",
-											"**/tests/**",
-											"**/Test/**",
-											"**/Tests/**",
-											"**/spec/**",
-											"**/specs/**",
-											"**/Spec/**",
-											"**/Specs/**",
-											"**/__tests__/**",
-											"**/__mocks__/**",
-											"**/testing/**",
-											"**/testdata/**",
-											"**/fixtures/**",
-											"**/e2e/**",
-											"**/*test*",
-											"**/*Test*",
-											"**/*TEST*",
-											"**/*spec*",
-											"**/*Spec*",
-											"**/*SPEC*",
-											"**/conftest.py",
-											"**/*.feature"
-										]
-									},
-									{
-										"diffContains": [
-											"#[test]",
-											"#[cfg(test)]",
-											"#[should_panic]",
-											"#[ignore]",
-											"@Test",
-											"@ParameterizedTest",
-											"@RepeatedTest",
-											"@Disabled",
-											"@Ignore",
-											"@Suite",
-											"@pytest.mark",
-											"def test_",
-											"unittest.",
-											"func Test",
-											"func Benchmark",
-											"testing.T",
-											"t.Skip(",
-											"it.skip(",
-											"it.only(",
-											"describe.skip(",
-											"describe.only(",
-											"test.skip(",
-											"test.only(",
-											"xit(",
-											"xdescribe(",
-											"XCTAssert",
-											"XCTestCase",
-											"XCTSkip",
-											"[Fact]",
-											"[Theory]",
-											"[TestMethod]",
-											"[Ignore(",
-											"TEST(",
-											"TEST_F(",
-											"TEST_P("
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change touches no test file and neither adds nor removes a test declaration",
+						"anyOf": [
+							{
+								"changedPathMatches": [
+									"**/test/**",
+									"**/tests/**",
+									"**/Test/**",
+									"**/Tests/**",
+									"**/spec/**",
+									"**/specs/**",
+									"**/Spec/**",
+									"**/Specs/**",
+									"**/__tests__/**",
+									"**/__mocks__/**",
+									"**/testing/**",
+									"**/testdata/**",
+									"**/fixtures/**",
+									"**/e2e/**",
+									"**/*test*",
+									"**/*Test*",
+									"**/*TEST*",
+									"**/*spec*",
+									"**/*Spec*",
+									"**/*SPEC*",
+									"**/conftest.py",
+									"**/*.feature"
+								]
+							},
+							{
+								"diffContains": [
+									"#[test]",
+									"#[cfg(test)]",
+									"#[should_panic]",
+									"#[ignore]",
+									"@Test",
+									"@ParameterizedTest",
+									"@RepeatedTest",
+									"@Disabled",
+									"@Ignore",
+									"@Suite",
+									"@pytest.mark",
+									"def test_",
+									"unittest.",
+									"func Test",
+									"func Benchmark",
+									"testing.T",
+									"t.Skip(",
+									"it.skip(",
+									"it.only(",
+									"describe.skip(",
+									"describe.only(",
+									"test.skip(",
+									"test.only(",
+									"xit(",
+									"xdescribe(",
+									"XCTAssert",
+									"XCTestCase",
+									"XCTSkip",
+									"[Fact]",
+									"[Theory]",
+									"[TestMethod]",
+									"[Ignore(",
+									"TEST(",
+									"TEST_F(",
+									"TEST_P("
+								]
+							}
+						]
+					},
 					"whyItMatters": "Deleting or skipping a failing test to get a passing build hides the breakage instead of fixing it, and removes the alarm that would have caught it next time. The suite only protects you while it tells the truth.",
 					"whatGoodLooksLike": "When a test starts failing, the change fixes the underlying cause, and if the test genuinely needs to go, it is removed with a one-line note on why, never quietly skipped to get a passing build.",
 					"holdsAs": "Failing tests get fixed at the cause, never skipped",
@@ -655,23 +564,19 @@
 				{
 					"slug": "removes-duplication-instead-of-copy-pasting",
 					"name": "Factor out duplication instead of copy-pasting",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/removes-duplication-instead-of-copy-pasting.ts",
@@ -684,23 +589,19 @@
 				{
 					"slug": "keeps-functions-small-and-single-purpose",
 					"name": "Keep functions small and single-purpose",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"whyItMatters": "A function that does five things is hard to name, hard to test, and hard to change without breaking a part you forgot it touched. Small, focused functions are the ones you can actually hold in your head.",
@@ -712,23 +613,19 @@
 				{
 					"slug": "leaves-the-code-clean-with-intent-revealing-comments",
 					"name": "Leave the code clean and comment the why",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/leaves-the-code-clean-with-intent-revealing-comments.ts",
@@ -741,23 +638,19 @@
 				{
 					"slug": "logs-through-the-platform-logger",
 					"name": "Log through the platform logger, not print",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/logs-through-the-platform-logger.ts",
@@ -779,23 +672,19 @@
 				{
 					"slug": "handles-errors-instead-of-swallowing-them",
 					"name": "Handle errors instead of swallowing them",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/handles-errors-instead-of-swallowing-them.ts",
@@ -808,23 +697,19 @@
 				{
 					"slug": "validates-inputs-and-edge-cases-at-the-boundary",
 					"name": "Validate inputs and edge cases at the boundary",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/validates-inputs-and-edge-cases-at-the-boundary.ts",
@@ -837,23 +722,19 @@
 				{
 					"slug": "avoids-unsafe-panics-and-chosen-crashes",
 					"name": "Avoid crashing on recoverable problems",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/avoids-unsafe-panics-and-chosen-crashes.ts",
@@ -875,74 +756,70 @@
 				{
 					"slug": "validates-and-escapes-untrusted-input",
 					"name": "Neutralize untrusted input before a dangerous sink",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the added lines build no query, command, path, URL or markup from a value",
-								"anyOf": [
-									{
-										"diffContains": [
-											"URL(string",
-											"URLRequest",
-											"URLComponents",
-											"query",
-											"Query",
-											"SELECT ",
-											"INSERT ",
-											"UPDATE ",
-											"DELETE ",
-											"WHERE ",
-											"exec(",
-											"eval(",
-											"Process(",
-											"system(",
-											"popen",
-											"subprocess",
-											"os.system",
-											"Runtime.getRuntime",
-											"ProcessBuilder",
-											"innerHTML",
-											"dangerouslySetInnerHTML",
-											"document.write",
-											"readLine",
-											"argv",
-											"stdin",
-											"TextField",
-											"SecureField",
-											"request.",
-											"req.",
-											"params",
-											"form",
-											"WebView",
-											"WKWebView",
-											"loadHTMLString",
-											"FileManager",
-											"Path(",
-											"path:",
-											"appendingPathComponent",
-											"sh -c",
-											"bash"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the added lines build no query, command, path, URL or markup from a value",
+						"anyOf": [
+							{
+								"diffContains": [
+									"URL(string",
+									"URLRequest",
+									"URLComponents",
+									"query",
+									"Query",
+									"SELECT ",
+									"INSERT ",
+									"UPDATE ",
+									"DELETE ",
+									"WHERE ",
+									"exec(",
+									"eval(",
+									"Process(",
+									"system(",
+									"popen",
+									"subprocess",
+									"os.system",
+									"Runtime.getRuntime",
+									"ProcessBuilder",
+									"innerHTML",
+									"dangerouslySetInnerHTML",
+									"document.write",
+									"readLine",
+									"argv",
+									"stdin",
+									"TextField",
+									"SecureField",
+									"request.",
+									"req.",
+									"params",
+									"form",
+									"WebView",
+									"WKWebView",
+									"loadHTMLString",
+									"FileManager",
+									"Path(",
+									"path:",
+									"appendingPathComponent",
+									"sh -c",
+									"bash"
+								]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/validates-and-escapes-untrusted-input.ts",
 					"whyItMatters": "Gluing raw user input straight into a query, a shell command, or a page is how injection bugs are born, the kind that leak a database or run an attacker's code. Parameterizing or escaping it first is what keeps that door shut.",
 					"whatGoodLooksLike": "User-supplied values reach the database through bound parameters and the page through proper escaping, never concatenated into a SQL string or dropped into HTML as-is.",
@@ -953,88 +830,84 @@
 				{
 					"slug": "avoids-insecure-defaults-and-over-broad-permissions",
 					"name": "Avoid insecure defaults and over-broad permissions",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the added lines touch no transport, origin, permission, file-mode, auth, credential, logging or debug setting",
-								"anyOf": [
-									{
-										"diffContains": [
-											"http://",
-											"https://",
-											"Info.plist",
-											"entitlements",
-											"NSAppTransportSecurity",
-											"AllowsArbitraryLoads",
-											"CORS",
-											"Origin",
-											"Access-Control",
-											"chmod",
-											"0777",
-											"0666",
-											"verify",
-											"trust",
-											"allow",
-											"debug",
-											"DEBUG",
-											"token",
-											"Token",
-											"secret",
-											"Secret",
-											"password",
-											"Password",
-											"apiKey",
-											"api_key",
-											"API_KEY",
-											"Authorization",
-											"Bearer",
-											"Keychain",
-											"keychain",
-											"UserDefaults",
-											"permission",
-											"Permission",
-											"uses-permission",
-											"auth",
-											"print(",
-											"NSLog(",
-											"Logger",
-											"logger.",
-											"console.",
-											"System.out",
-											"logging."
-										]
-									},
-									{
-										"changedPathMatches": [
-											"**/Info.plist",
-											"**/*.entitlements",
-											"**/AndroidManifest.xml",
-											"**/*.env",
-											"**/*.env.*",
-											"**/*.xcconfig",
-											"**/project.yml",
-											"**/*.plist"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the added lines touch no transport, origin, permission, file-mode, auth, credential, logging or debug setting",
+						"anyOf": [
+							{
+								"diffContains": [
+									"http://",
+									"https://",
+									"Info.plist",
+									"entitlements",
+									"NSAppTransportSecurity",
+									"AllowsArbitraryLoads",
+									"CORS",
+									"Origin",
+									"Access-Control",
+									"chmod",
+									"0777",
+									"0666",
+									"verify",
+									"trust",
+									"allow",
+									"debug",
+									"DEBUG",
+									"token",
+									"Token",
+									"secret",
+									"Secret",
+									"password",
+									"Password",
+									"apiKey",
+									"api_key",
+									"API_KEY",
+									"Authorization",
+									"Bearer",
+									"Keychain",
+									"keychain",
+									"UserDefaults",
+									"permission",
+									"Permission",
+									"uses-permission",
+									"auth",
+									"print(",
+									"NSLog(",
+									"Logger",
+									"logger.",
+									"console.",
+									"System.out",
+									"logging."
+								]
+							},
+							{
+								"changedPathMatches": [
+									"**/Info.plist",
+									"**/*.entitlements",
+									"**/AndroidManifest.xml",
+									"**/*.env",
+									"**/*.env.*",
+									"**/*.xcconfig",
+									"**/project.yml",
+									"**/*.plist"
+								]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/avoids-insecure-defaults-and-over-broad-permissions.ts",
 					"whyItMatters": "A default or permission that ships wider than it needs sits quietly until someone exploits it, and this kind of misconfiguration is among the most common security gaps there is. Starting locked down means you only open what you can justify.",
 					"whatGoodLooksLike": "A new endpoint or credential grants exactly the access it needs and no more, with scoped permissions and a specific allowed origin from an allowlist, not an origin reflected back from the request or a blanket wildcard, instead of a permissive default dropped in to make things work.",
@@ -1045,114 +918,110 @@
 				{
 					"slug": "changes-dependencies-deliberately",
 					"name": "Change dependencies deliberately",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change touches no dependency manifest or lockfile",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/package.json",
-											"**/package-lock.json",
-											"**/pnpm-lock.yaml",
-											"**/yarn.lock",
-											"**/npm-shrinkwrap.json",
-											"**/pom.xml",
-											"**/build.gradle",
-											"**/build.gradle.kts",
-											"**/settings.gradle",
-											"**/settings.gradle.kts",
-											"**/gradle/libs.versions.toml",
-											"**/ivy.xml",
-											"**/requirements.txt",
-											"**/requirements-*.txt",
-											"**/Pipfile",
-											"**/Pipfile.lock",
-											"**/pyproject.toml",
-											"**/poetry.lock",
-											"**/uv.lock",
-											"**/setup.py",
-											"**/setup.cfg",
-											"**/environment.yml",
-											"**/go.mod",
-											"**/go.sum",
-											"**/Cargo.toml",
-											"**/Cargo.lock",
-											"**/Gemfile",
-											"**/Gemfile.lock",
-											"**/*.gemspec",
-											"**/composer.json",
-											"**/composer.lock",
-											"**/*.csproj",
-											"**/*.fsproj",
-											"**/packages.config",
-											"**/paket.dependencies",
-											"**/paket.lock",
-											"**/Directory.Packages.props",
-											"**/Package.swift",
-											"**/project.yml",
-											"**/project.yaml",
-											"**/*.xcodeproj/project.pbxproj",
-											"**/Package.resolved",
-											"**/Podfile",
-											"**/Podfile.lock",
-											"**/*.podspec",
-											"**/Cartfile",
-											"**/Cartfile.resolved",
-											"**/pubspec.yaml",
-											"**/pubspec.lock",
-											"**/mix.exs",
-											"**/mix.lock",
-											"**/rebar.config",
-											"**/cabal.project",
-											"**/stack.yaml",
-											"**/*.cabal",
-											"**/conanfile.txt",
-											"**/conanfile.py",
-											"**/vcpkg.json",
-											"**/CMakeLists.txt",
-											"**/MODULE.bazel",
-											"**/MODULE.bazel.lock",
-											"**/WORKSPACE",
-											"**/WORKSPACE.bazel",
-											"**/flake.nix",
-											"**/flake.lock",
-											"**/shell.nix",
-											"**/default.nix",
-											"**/Chart.yaml",
-											"**/Chart.lock",
-											"**/Dockerfile",
-											"**/Dockerfile.*",
-											"**/*.Dockerfile",
-											"**/.gitmodules",
-											"**/.tool-versions",
-											"**/vendor/**",
-											"**/third_party/**",
-											"**/third-party/**",
-											"**/.github/workflows/**",
-											"**/.github/dependabot.yml",
-											"**/renovate.json"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change touches no dependency manifest or lockfile",
+						"anyOf": [
+							{
+								"changedPathMatches": [
+									"**/package.json",
+									"**/package-lock.json",
+									"**/pnpm-lock.yaml",
+									"**/yarn.lock",
+									"**/npm-shrinkwrap.json",
+									"**/pom.xml",
+									"**/build.gradle",
+									"**/build.gradle.kts",
+									"**/settings.gradle",
+									"**/settings.gradle.kts",
+									"**/gradle/libs.versions.toml",
+									"**/ivy.xml",
+									"**/requirements.txt",
+									"**/requirements-*.txt",
+									"**/Pipfile",
+									"**/Pipfile.lock",
+									"**/pyproject.toml",
+									"**/poetry.lock",
+									"**/uv.lock",
+									"**/setup.py",
+									"**/setup.cfg",
+									"**/environment.yml",
+									"**/go.mod",
+									"**/go.sum",
+									"**/Cargo.toml",
+									"**/Cargo.lock",
+									"**/Gemfile",
+									"**/Gemfile.lock",
+									"**/*.gemspec",
+									"**/composer.json",
+									"**/composer.lock",
+									"**/*.csproj",
+									"**/*.fsproj",
+									"**/packages.config",
+									"**/paket.dependencies",
+									"**/paket.lock",
+									"**/Directory.Packages.props",
+									"**/Package.swift",
+									"**/project.yml",
+									"**/project.yaml",
+									"**/*.xcodeproj/project.pbxproj",
+									"**/Package.resolved",
+									"**/Podfile",
+									"**/Podfile.lock",
+									"**/*.podspec",
+									"**/Cartfile",
+									"**/Cartfile.resolved",
+									"**/pubspec.yaml",
+									"**/pubspec.lock",
+									"**/mix.exs",
+									"**/mix.lock",
+									"**/rebar.config",
+									"**/cabal.project",
+									"**/stack.yaml",
+									"**/*.cabal",
+									"**/conanfile.txt",
+									"**/conanfile.py",
+									"**/vcpkg.json",
+									"**/CMakeLists.txt",
+									"**/MODULE.bazel",
+									"**/MODULE.bazel.lock",
+									"**/WORKSPACE",
+									"**/WORKSPACE.bazel",
+									"**/flake.nix",
+									"**/flake.lock",
+									"**/shell.nix",
+									"**/default.nix",
+									"**/Chart.yaml",
+									"**/Chart.lock",
+									"**/Dockerfile",
+									"**/Dockerfile.*",
+									"**/*.Dockerfile",
+									"**/.gitmodules",
+									"**/.tool-versions",
+									"**/vendor/**",
+									"**/third_party/**",
+									"**/third-party/**",
+									"**/.github/workflows/**",
+									"**/.github/dependabot.yml",
+									"**/renovate.json"
+								]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/changes-dependencies-deliberately.ts",
 					"whyItMatters": "Every dependency you add is code you now trust and have to keep patched, and many malicious packages slip in disguised as a real name a letter or two off. A one-line note on why a package is there, plus a lockfile that moves with the manifest, lets a reviewer sanity-check the addition and keeps the build reproducible.",
 					"whatGoodLooksLike": "A new package arrives with a sentence on what it is for, and the lockfile is updated in the same change as the manifest so the build still resolves the same way.",
@@ -1172,23 +1041,19 @@
 				{
 					"slug": "records-significant-decisions-with-rationale",
 					"name": "Record significant decisions and the evidenceRationale",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"whyItMatters": "When you pick one design over another, the evidenceRationale is the first thing to fade. A maintainer who cannot find why you chose it will either undo a good decision or be too afraid to touch it, and both cost the team later.",
@@ -1200,23 +1065,19 @@
 				{
 					"slug": "documents-public-api-and-behaviour-changes",
 					"name": "Document public API and behaviour changes",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/documents-public-api-and-behaviour-changes.ts",
@@ -1229,35 +1090,31 @@
 				{
 					"slug": "change-keeps-linked-docs-consistent",
 					"name": "Keep linked wiki docs consistent with the change",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "outline.documents",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.linked-work-items",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "outline.documents",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.linked-work-items",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"whyItMatters": "A wiki that contradicts the code is worse than no wiki: teammates act on documented behaviour that no longer holds, and the drift compounds silently until someone is burned by it.",
@@ -1269,18 +1126,11 @@
 				{
 					"slug": "published-decisions-name-the-alternatives",
 					"name": "Say what else you considered",
-					"on": [
+					"signals": ["docs.document.published", "docs.document.updated"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"docs.document.published",
-								"docs.document.updated"
-							],
-							"needs": [
-								{
-									"sourceKind": "docs.document.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "docs.document.core",
+							"stance": "REQUIRED"
 						}
 					],
 					"whyItMatters": "A decision record that names only the winner tells the next person what was done, not what it cost. When a constraint later changes — a library is deprecated, the traffic grows, the team shrinks — the first question is always \"what else did we look at, and does that reason still hold?\". If the alternatives were never written down, that question can only be answered by redoing the whole investigation, and usually it is not answered at all: the decision quietly becomes something nobody feels able to revisit.",
@@ -1299,23 +1149,21 @@
 			"practices": [
 				{
 					"slug": "commits-are-atomic-and-cohesive",
-					"deliveryBehavior": {"summaryOnly": true},
 					"name": "Keep each commit to one logical change",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
 						}
 					],
+					"deliveryBehavior": {
+						"summaryOnly": true
+					},
 					"whyItMatters": "Mixing unrelated changes in a commit makes selective review, reverts and backports harder. Keeping changes separable makes the history more useful; clear commit subjects help a reader understand that intended separation.",
 					"whatGoodLooksLike": "Separate commits for separate ideas, such as 'Fix off-by-one in pagination' in one and 'Rename helper for clarity' in another, so each can be reviewed, reverted, or backported on its own.",
 					"holdsAs": "Each commit holds one logical change and no more",
@@ -1326,23 +1174,19 @@
 				{
 					"slug": "excludes-generated-and-build-artifacts",
 					"name": "Keep generated and build files out of the diff",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"whyItMatters": "A reviewer catches the most problems in the hand-written lines they can read closely, and a committed build output or editor config buries that source under machine noise nobody reviews. Leaving generated files out keeps the diff to the change a person can actually check, and spares everyone the odd conflict in a file no human wrote.",
@@ -1363,46 +1207,31 @@
 				{
 					"slug": "breaks-large-work-into-trackable-subtasks",
 					"name": "Break large work into trackable subtasks",
-					"on": [
+					"signals": ["scm.issue.closed", "scm.issue.opened", "scm.issue.updated"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.issue.closed",
-								"scm.issue.opened",
-								"scm.issue.updated"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.issue.comments",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.issue.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.issue.comments",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.issue.core",
+							"stance": "REQUIRED"
 						}
 					],
 					"precomputeScript": "practices/precompute/breaks-large-work-into-trackable-subtasks.ts",
 					"whyItMatters": "A big ask written as one wall of text is either 0% or 100% done, with no way to see progress or split the load. Breaking it into checkable steps turns a daunting job into pieces people can pick up and finish one at a time.",
 					"whatGoodLooksLike": "A genuinely large issue split into a task list or linked sub-issues, such as 'design the schema', 'add the endpoint', and 'wire up the UI', so progress is visible and pieces can be worked in parallel.",
 					"holdsAs": "Large work arrives split into trackable pieces",
-					"criteria": "BEHAVIOR FOCUS: a trackable breakdown of work that is large enough to need one — checkable sub-units a maintainer can watch reach done, rather than one monolithic ask.\n\n## The standard\nJudge ONE thing: when the issue describes genuinely LARGE or multi-part work, is that work broken into explicit, trackable sub-units, rather than left as a single undivided block? Trackable means the parts are individually checkable or addressable: a task list of checkboxes that name work to do, a tracked sub-issue tree, or enumerated child or tracking issues the body frames as parts. Reason like a senior reviewer scanning a backlog: a big ask written as one block is either 0% or 100% done with no visible progress; a decomposed one lets pieces be picked up in parallel and tracked to done. What counts as LARGE is a judgment, not a word count: the signal is two or more SEPARABLE deliverables that could ship or be assigned independently, or an explicit epic, initiative, meta or tracking framing the issue itself chose. Two or more such deliverables joined by commas or \"and\" in one sentence \u2014 a rename, a new tab, a theme, a changed default \u2014 are large work by this test however short the body is; the body's length is never the test. Sequential steps of ONE cohesive flow described as a journey are a single deliverable, not several parts. A checklist of verification items is not a work breakdown unless it also names concrete implementation sub-steps.\n\n## Occasion\nThis is a gate. Record NOT_APPLICABLE, name the case, and stop — never ABSENT — when: the issue is a pure question, a support request or an open discussion with no concrete deliverable; the body is empty, title-only or an unmodified template, so nothing is quotable; or the work is a focused single-concern deliverable (one feature, one bug), which neither needs a breakdown nor is penalised for lacking one. Never manufacture a strength from the mere absence of largeness, and never make the single-concern scope judgment here — that belongs to `issue-scoped-to-single-concern`.\n\n## Sources\nYour context is the issue only; there is no diff or code.\n1. The title and the WHOLE body (`context/description.md`): every section, checklist and enumerated list. It establishes whether the work is large (separable deliverables, epic framing) and whether a checklist or a set of framed child issues breaks it down. It never establishes largeness from title length or tone alone.\n2. The labels and the sub-issue rollup (`context/metadata.json`): a label such as epic or tracking, and the `sub_issues_total` / `sub_issues_completed` figures. A non-zero rollup is a tracked sub-issue tree. The labels establish the framing the issue chose; they never by themselves establish that a breakdown exists.\n3. The comments (`context/comments.json`): a later comment can supply the breakdown or the child issues. They establish a breakdown on that surface; they never establish one the text does not show.\nAn image in the body: read its caption and the sentence around it. An external link: nothing. Before concluding that no breakdown exists, scan ALL three surfaces. If the body or the comments were not captured, report a collection gap and record no observation.\n\n## Judge\nTest the cells in this order.\n- PRESENT/GOOD (POSITIVE): the work is genuinely large AND a trackable breakdown is quotable — named sub-steps as a checklist (\"design the schema\", \"add the endpoint\", \"wire up the UI\"), a non-zero sub-issue rollup, or child issues the body frames as parts. Sibling issues in the project inventory that this body never names are not its breakdown, however well they match its sentences.\n- PRESENT/BAD and ABSENT/BAD: no ordinary case. A breakdown that exists is the behaviour; its quality is not judged here.\n- ABSENT/GOOD (NEGATIVE): the work is clearly large AND no trackable breakdown exists on any of the three surfaces — an epic or tracking-framed issue with nothing tracked under it, or a body that enumerates several independent deliverables as prose with no way to track each. An element you cannot quote counts as absent.\n- UNDETERMINED only when the text genuinely cannot settle whether its spans are one journey or several separable deliverables AND no breakdown exists on any surface; quote the ambiguous span and say what would settle it. Do not resolve that doubt into silence. Having scanned every surface and found no breakdown for clearly large work is ABSENT, not UNDETERMINED.\nOne observation per review, over the whole issue. Identical evidence yields the same call.\n\n## Severity\nNegatives only; never above MAJOR on decomposition alone — a non-blocking workflow practice, not a merge gate. MINOR, the usual band: only a couple of parts go untracked, and a short checklist would fix it. MAJOR: an issue the text itself frames as an epic, initiative, meta or tracking issue has nothing tracked under it at all.\n\n## Grounding\nEvery \"large\" claim and every \"no breakdown\" claim quotes the exact span: a label name, a body sentence naming each separable deliverable, the rollup figure, or a comment. For PRESENT/GOOD, quote the checklist lines, the rollup figure or the framed child references. For ABSENT/GOOD, cite the spans that establish largeness and name the boundary searched: the body, the rollup, and the comments. Never invent largeness, never fabricate a breakdown you did not see. Never assert technical feasibility, hour estimates or design correctness, and never grade the reporter as a person; describe the observable artifact state only.\n\n## Defer\nWhether the work SHOULD have been one concern belongs to `issue-scoped-to-single-concern`; treat a multi-part ask as legitimately large work needing a breakdown, and do not re-judge its scope. Whether acceptance criteria or a Definition of Done are present belongs to `issue-has-checkable-outcome`; do not re-flag a verification checklist here. Here only: is large work DECOMPOSED into trackable parts?"
+					"criteria": "BEHAVIOR FOCUS: a trackable breakdown of work that is large enough to need one — checkable sub-units a maintainer can watch reach done, rather than one monolithic ask.\n\n## The standard\nJudge ONE thing: when the issue describes genuinely LARGE or multi-part work, is that work broken into explicit, trackable sub-units, rather than left as a single undivided block? Trackable means the parts are individually checkable or addressable: a task list of checkboxes that name work to do, a tracked sub-issue tree, or enumerated child or tracking issues the body frames as parts. Reason like a senior reviewer scanning a backlog: a big ask written as one block is either 0% or 100% done with no visible progress; a decomposed one lets pieces be picked up in parallel and tracked to done. What counts as LARGE is a judgment, not a word count: the signal is two or more SEPARABLE deliverables that could ship or be assigned independently, or an explicit epic, initiative, meta or tracking framing the issue itself chose. Two or more such deliverables joined by commas or \"and\" in one sentence — a rename, a new tab, a theme, a changed default — are large work by this test however short the body is; the body's length is never the test. Sequential steps of ONE cohesive flow described as a journey are a single deliverable, not several parts. A checklist of verification items is not a work breakdown unless it also names concrete implementation sub-steps.\n\n## Occasion\nThis is a gate. Record NOT_APPLICABLE, name the case, and stop — never ABSENT — when: the issue is a pure question, a support request or an open discussion with no concrete deliverable; the body is empty, title-only or an unmodified template, so nothing is quotable; or the work is a focused single-concern deliverable (one feature, one bug), which neither needs a breakdown nor is penalised for lacking one. Never manufacture a strength from the mere absence of largeness, and never make the single-concern scope judgment here — that belongs to `issue-scoped-to-single-concern`.\n\n## Sources\nYour context is the issue only; there is no diff or code.\n1. The title and the WHOLE body (`context/description.md`): every section, checklist and enumerated list. It establishes whether the work is large (separable deliverables, epic framing) and whether a checklist or a set of framed child issues breaks it down. It never establishes largeness from title length or tone alone.\n2. The labels and the sub-issue rollup (`context/metadata.json`): a label such as epic or tracking, and the `sub_issues_total` / `sub_issues_completed` figures. A non-zero rollup is a tracked sub-issue tree. The labels establish the framing the issue chose; they never by themselves establish that a breakdown exists.\n3. The comments (`context/comments.json`): a later comment can supply the breakdown or the child issues. They establish a breakdown on that surface; they never establish one the text does not show.\nAn image in the body: read its caption and the sentence around it. An external link: nothing. Before concluding that no breakdown exists, scan ALL three surfaces. If the body or the comments were not captured, report a collection gap and record no observation.\n\n## Judge\nTest the cells in this order.\n- PRESENT/GOOD (POSITIVE): the work is genuinely large AND a trackable breakdown is quotable — named sub-steps as a checklist (\"design the schema\", \"add the endpoint\", \"wire up the UI\"), a non-zero sub-issue rollup, or child issues the body frames as parts. Sibling issues in the project inventory that this body never names are not its breakdown, however well they match its sentences.\n- PRESENT/BAD and ABSENT/BAD: no ordinary case. A breakdown that exists is the behaviour; its quality is not judged here.\n- ABSENT/GOOD (NEGATIVE): the work is clearly large AND no trackable breakdown exists on any of the three surfaces — an epic or tracking-framed issue with nothing tracked under it, or a body that enumerates several independent deliverables as prose with no way to track each. An element you cannot quote counts as absent.\n- UNDETERMINED only when the text genuinely cannot settle whether its spans are one journey or several separable deliverables AND no breakdown exists on any surface; quote the ambiguous span and say what would settle it. Do not resolve that doubt into silence. Having scanned every surface and found no breakdown for clearly large work is ABSENT, not UNDETERMINED.\nOne observation per review, over the whole issue. Identical evidence yields the same call.\n\n## Severity\nNegatives only; never above MAJOR on decomposition alone — a non-blocking workflow practice, not a merge gate. MINOR, the usual band: only a couple of parts go untracked, and a short checklist would fix it. MAJOR: an issue the text itself frames as an epic, initiative, meta or tracking issue has nothing tracked under it at all.\n\n## Grounding\nEvery \"large\" claim and every \"no breakdown\" claim quotes the exact span: a label name, a body sentence naming each separable deliverable, the rollup figure, or a comment. For PRESENT/GOOD, quote the checklist lines, the rollup figure or the framed child references. For ABSENT/GOOD, cite the spans that establish largeness and name the boundary searched: the body, the rollup, and the comments. Never invent largeness, never fabricate a breakdown you did not see. Never assert technical feasibility, hour estimates or design correctness, and never grade the reporter as a person; describe the observable artifact state only.\n\n## Defer\nWhether the work SHOULD have been one concern belongs to `issue-scoped-to-single-concern`; treat a multi-part ask as legitimately large work needing a breakdown, and do not re-judge its scope. Whether acceptance criteria or a Definition of Done are present belongs to `issue-has-checkable-outcome`; do not re-flag a verification checklist here. Here only: is large work DECOMPOSED into trackable parts?"
 				},
 				{
 					"slug": "triages-the-issue-with-labels-and-ownership",
 					"name": "Classify the issue the way the project classifies issues",
-					"on": [
+					"signals": ["scm.issue.opened", "scm.issue.updated"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.issue.opened",
-								"scm.issue.updated"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.issue.core",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.issue.core",
+							"stance": "REQUIRED"
 						}
 					],
 					"precomputeScript": "practices/precompute/triages-the-issue-with-labels-and-ownership.ts",
@@ -1414,7 +1243,7 @@
 				{
 					"slug": "issue-closed-with-unmet-outcome",
 					"name": "Confirm the outcome before closing the issue",
-					"on": ["scm.issue.closed"],
+					"signals": ["scm.issue.closed"],
 					"insufficiencyReason": {
 						"code": "AT_CLOSE_STATE_NOT_CAPTURED",
 						"description": "Hephaestus reads an issue as it stands when the review runs, after the close. Its checklist, sub-issue progress and comments can all change after the close, and the issue can be reopened and closed again, so what Hephaestus reads cannot show what was still open when it was closed. Whether the outcome was confirmed at that close needs a person who saw it."
@@ -1426,22 +1255,15 @@
 				{
 					"slug": "links-the-change-to-its-issue",
 					"name": "Link the change to the issue it implements",
-					"on": [
+					"signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.linked-work-items",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.linked-work-items",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"precomputeScript": "practices/precompute/links-the-change-to-its-issue.ts",
@@ -1452,33 +1274,30 @@
 				},
 				{
 					"slug": "merge-confirms-the-linked-issue-outcome",
-					"deliveryBehavior": {"summaryOnly": false, "redundantToSlug": "honours-linked-issue-acceptance-criteria"},
 					"name": "Confirm the linked issue's outcome",
-					"on": [
+					"signals": ["scm.pull_request.merged"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.merged"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.linked-work-items",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.general-review-comments",
-									"stance": "CONTEXTUAL"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.linked-work-items",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.general-review-comments",
+							"stance": "CONTEXTUAL"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
 						}
 					],
+					"deliveryBehavior": {
+						"summaryOnly": false,
+						"redundantToSlug": "honours-linked-issue-acceptance-criteria"
+					},
 					"whyItMatters": "A linked issue with its outcome unconfirmed tells the next person little about what was delivered. After a change merges, ticking what landed and naming what moves elsewhere keeps the tracker true.",
 					"whatGoodLooksLike": "After a change merges, its linked issue accounts for what landed: delivered items are ticked or a closing sentence names them and says what moves elsewhere, and the issue's state matches.",
 					"holdsAs": "The linked issue accounts for merged work",
@@ -1488,33 +1307,27 @@
 				{
 					"slug": "defers-review-asks-into-tracked-work",
 					"name": "Track the review asks you defer",
-					"on": [
+					"signals": ["scm.pull_request.merged"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.merged"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.review-threads",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.general-review-comments",
-									"stance": "CONTEXTUAL"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.linked-work-items",
-									"stance": "CONTEXTUAL"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.review-threads",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.general-review-comments",
+							"stance": "CONTEXTUAL"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.linked-work-items",
+							"stance": "CONTEXTUAL"
 						}
 					],
 					"whyItMatters": "A reviewer's ask answered with 'later' and nothing else is a promise that evaporates at the merge. Turning a deferred ask into a tracked issue, or getting the reviewer's explicit agreement to drop it, keeps the review's value after the thread is resolved.",
@@ -1526,28 +1339,22 @@
 				{
 					"slug": "merges-only-after-approval",
 					"name": "Merge only after someone else approved",
-					"on": [
+					"signals": ["scm.pull_request.merged"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.merged"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.review-threads",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.general-review-comments",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"subject": "MERGER"
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.review-threads",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.general-review-comments",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"subject": "MERGER",
 					"precomputeScript": "practices/precompute/merges-only-after-approval.ts",
 					"whyItMatters": "A change merged before anyone approved it skips the one check the team agreed on: a second pair of eyes before the code is everyone's. It is also how a reviewer's outstanding request for changes gets buried. Waiting for the approval, and re-requesting it after a rework, is what keeps the review real.",
 					"whatGoodLooksLike": "The person who merges does so after an approval from someone other than the author that is still current — no later request for changes, no dismissal — and after a rework asks for the approval again before merging.",
@@ -1557,26 +1364,19 @@
 				{
 					"slug": "plans-the-work-in-an-issue-first",
 					"name": "Plan the work in an issue before starting it",
-					"on": [
+					"signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.core",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.linked-work-items",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								}
-							]
+							"sourceKind": "scm.pull-request.core",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.linked-work-items",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
 						}
 					],
 					"whyItMatters": "An issue written before the first commit is a plan: it says what will be built and how anyone will know it is done, and it can be discussed before the code exists. An issue created after the work is finished, to give the merge request something to close, is paperwork — the decision it should have recorded was made in the code.",
@@ -1597,35 +1397,29 @@
 				{
 					"slug": "keeps-views-free-of-networking-and-persistence",
 					"name": "Keep networking and persistence out of views",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "EXHAUSTIVE"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change adds no SwiftUI view code",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/*.swift"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "EXHAUSTIVE"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change adds no SwiftUI view code",
+						"anyOf": [
+							{
+								"changedPathMatches": ["**/*.swift"]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/keeps-views-free-of-networking-and-persistence.ts",
 					"whyItMatters": "A SwiftUI view that fetches, decodes or saves is a view nobody can preview, test or reuse, and its logic is invisible to the next screen that needs the same data. Keeping that work in a model or store is what lets the view stay a description of the screen.",
 					"whatGoodLooksLike": "Views describe the screen from state they are handed; requests, decoding and file or preference access live in a model, store or service the view talks to through a method or a binding, and SwiftData is used through its own view-side idiom.",
@@ -1636,35 +1430,29 @@
 				{
 					"slug": "owns-state-at-the-right-level",
 					"name": "Own SwiftUI state at the right level",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change adds no SwiftUI view code",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/*.swift"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change adds no SwiftUI view code",
+						"anyOf": [
+							{
+								"changedPathMatches": ["**/*.swift"]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/owns-state-at-the-right-level.ts",
 					"whyItMatters": "State declared in the wrong place is the root of the bugs that make SwiftUI feel unpredictable: a model recreated on every render, a value copied into two views that drift apart, a derived value stored and forgotten. Declaring each piece of state where it is owned keeps the screen a function of its data.",
 					"whatGoodLooksLike": "Value state a single view owns is `@State`; a shared model is `@Observable` and injected through the environment or passed down, never recreated in a child; a child that edits a parent's value takes a `Binding`; a derived value is computed, not stored.",
@@ -1675,35 +1463,29 @@
 				{
 					"slug": "makes-ui-accessible-by-default",
 					"name": "Make the UI accessible by default",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change adds no SwiftUI view code",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/*.swift"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change adds no SwiftUI view code",
+						"anyOf": [
+							{
+								"changedPathMatches": ["**/*.swift"]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/makes-ui-accessible-by-default.ts",
 					"whyItMatters": "A control a screen reader cannot name, a label that cannot grow with the user's text size, an image that says nothing — each locks a group of people out of the screen, and each is a line the author could have written when the view was made. Accessibility added later is the expensive kind.",
 					"whatGoodLooksLike": "Every icon-only control and meaningful image has a label; text uses semantic fonts so Dynamic Type works; nothing is fixed to a size that clips at larger text; colour is never the only signal.",
@@ -1714,35 +1496,29 @@
 				{
 					"slug": "uses-structured-concurrency-safely",
 					"name": "Use structured concurrency safely",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change touches no Swift source file",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/*.swift"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change touches no Swift source file",
+						"anyOf": [
+							{
+								"changedPathMatches": ["**/*.swift"]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/uses-structured-concurrency-safely.ts",
 					"whyItMatters": "An unstructured task that outlives its view, UI state mutated off the main actor, a fire-and-forget request that cannot be cancelled — these are the crashes and stale screens that appear only on a slow network. Swift's structured concurrency prevents them when it is used the way it is designed.",
 					"whatGoodLooksLike": "Async work a view starts runs in `.task` so it is cancelled with the view; UI state is mutated on the main actor; a detached or unstructured `Task` exists only with a reason and a handle; errors from async work are handled, not swallowed.",
@@ -1753,35 +1529,29 @@
 				{
 					"slug": "ships-a-preview-with-each-new-view",
 					"name": "Ship a preview with each new view",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change adds no SwiftUI view code",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/*.swift"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change adds no SwiftUI view code",
+						"anyOf": [
+							{
+								"changedPathMatches": ["**/*.swift"]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/ships-a-preview-with-each-new-view.ts",
 					"whyItMatters": "A SwiftUI view without a preview is a screen nobody can see without running the whole app to it, and the first thing the next person deletes when it breaks. A preview with representative data is the cheapest verification a view can have, and the way a reviewer sees what changed.",
 					"whatGoodLooksLike": "Every new view type ships a `#Preview` that renders it with representative sample data — including an empty or error state when the view has one — so the screen can be seen and checked without launching the app.",
@@ -1792,35 +1562,29 @@
 				{
 					"slug": "declares-permissions-truthfully-at-point-of-use",
 					"name": "Declare permissions truthfully and ask at the point of use",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change touches no Swift source file",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/*.swift"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change touches no Swift source file",
+						"anyOf": [
+							{
+								"changedPathMatches": ["**/*.swift"]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/declares-permissions-truthfully-at-point-of-use.ts",
 					"whyItMatters": "A capability the app requests without a usage description crashes on the device; one with a boilerplate description fails App Review and the user's trust; one requested at launch instead of at the moment it is needed is denied and never asked again. The declaration and the ask are part of the feature.",
 					"whatGoodLooksLike": "When a change adds a capability that needs the user's permission, the `Info.plist` usage description arrives in the same change, says truthfully what the app does with the access, and the permission is requested where the feature needs it, not at launch.",
@@ -1831,35 +1595,29 @@
 				{
 					"slug": "uses-adaptive-colors-for-every-appearance",
 					"name": "Use adaptive colors so every appearance works",
-					"on": [
+					"signals": [
+						"scm.pull_request.opened",
+						"scm.pull_request.ready",
+						"scm.pull_request.synchronized"
+					],
+					"evidenceRequirements": [
 						{
-							"signals": [
-								"scm.pull_request.opened",
-								"scm.pull_request.ready",
-								"scm.pull_request.synchronized"
-							],
-							"needs": [
-								{
-									"sourceKind": "scm.pull-request.diff",
-									"stance": "REQUIRED"
-								},
-								{
-									"sourceKind": "scm.repository.tree",
-									"stance": "CONTEXTUAL"
-								}
-							],
-							"appliesWhen": {
-								"absentSays": "the change adds no SwiftUI view code",
-								"anyOf": [
-									{
-										"changedPathMatches": [
-											"**/*.swift"
-										]
-									}
-								]
-							}
+							"sourceKind": "scm.pull-request.diff",
+							"stance": "REQUIRED"
+						},
+						{
+							"sourceKind": "scm.repository.tree",
+							"stance": "CONTEXTUAL"
 						}
 					],
+					"precondition": {
+						"absentSays": "the change adds no SwiftUI view code",
+						"anyOf": [
+							{
+								"changedPathMatches": ["**/*.swift"]
+							}
+						]
+					},
 					"precomputeScript": "practices/precompute/uses-adaptive-colors-for-every-appearance.ts",
 					"whyItMatters": "A screen built from literal colors is right in one appearance and wrong in the other: white text vanishes on a light background, a hard-coded card stays white in Dark Mode, and every screen has to be revisited when the palette changes. Semantic and asset colors adapt on their own, and the whole app follows one palette.",
 					"whatGoodLooksLike": "Text, backgrounds and fills use semantic colors (`.primary`, `.secondary`, `Color(.systemBackground)`), materials, the accent color or named asset colors with light and dark variants; a literal is used only where the color is part of the content, such as text over a fill the same view sets.",
@@ -1879,9 +1637,7 @@
 				{
 					"slug": "asks-answerable-questions",
 					"name": "Ask questions a teammate can answer",
-					"on": [
-						"chat.conversation_thread.settled"
-					],
+					"signals": ["chat.conversation_thread.settled"],
 					"whyItMatters": "A vague question forces the person helping you to stop and ask what you actually mean before they can even start, turning a one-message answer into a slow exchange. A question that carries its own context gets answered on the first reply.",
 					"whatGoodLooksLike": "A question that says what you are trying to do, what you already tried, and exactly where it broke, so a teammate can answer it in a single reply without asking you anything first.",
 					"holdsAs": "Questions carry the goal, the attempt and the error",
@@ -1890,9 +1646,7 @@
 				{
 					"slug": "gives-actionable-answers",
 					"name": "Give answers people can act on",
-					"on": [
-						"chat.conversation_thread.settled"
-					],
+					"signals": ["chat.conversation_thread.settled"],
 					"whyItMatters": "When someone asks for help, a reply that only gestures at the problem leaves them exactly as stuck as before and burns another round of messages. An answer with a concrete next step lets them get moving right away.",
 					"whatGoodLooksLike": "A reply that either solves the question outright or points to the exact next step or place to look, so the person who asked can act on it immediately instead of asking again.",
 					"holdsAs": "Answers give the next step, not another question",
@@ -1901,9 +1655,7 @@
 				{
 					"slug": "posts-clear-status-and-blocker-updates",
 					"name": "Post clear status and blocker updates",
-					"on": [
-						"chat.conversation_thread.settled"
-					],
+					"signals": ["chat.conversation_thread.settled"],
 					"whyItMatters": "When work stalls quietly, the people depending on it keep waiting without knowing anything is wrong, and a blocker someone else could have cleared in minutes sits for days. A plain update on where things stand and what you need keeps the team moving.",
 					"whatGoodLooksLike": "An update that says where the work stands and, when you are stuck, names the blocker and what would unblock it, so teammates can plan around it or step in to help.",
 					"holdsAs": "Updates say where the work stands and what blocks it",

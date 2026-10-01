@@ -75,33 +75,74 @@
 			"description": "One bundled engineering-practice definition.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["slug", "name", "on", "criteria"],
-			"if": { "properties": { "insufficiencyReason": true }, "required": ["insufficiencyReason"] },
-			"then": { "properties": { "holdsAs": false } },
-			"else": { "properties": { "holdsAs": true }, "required": ["holdsAs"] },
+			"required": ["slug", "name", "signals", "criteria"],
+			"if": {
+				"properties": {
+					"insufficiencyReason": true
+				},
+				"required": ["insufficiencyReason"]
+			},
+			"then": {
+				"properties": {
+					"holdsAs": false
+				}
+			},
+			"else": {
+				"properties": {
+					"holdsAs": true
+				},
+				"required": ["holdsAs"]
+			},
 			"properties": {
 				"slug": {
-					"description": "Stable practice identifier used for provenance, findings, and URLs.",
+					"description": "Stable practice identifier used for provenance, observations, and URLs.",
 					"$ref": "#/$defs/slug"
 				},
 				"name": {
 					"description": "Human-facing practice name.",
 					"$ref": "#/$defs/name"
 				},
-				"on": {
-					"description": "Occasions this practice is reviewed on. A bare signal name is shorthand for a binding on that signal reading the artifact kind's default evidence.",
+				"signals": {
+					"description": "Signals that occasion this review. All must share one artifact kind; that kind is what the practice reviews.",
+					"type": "array",
+					"minItems": 1,
+					"uniqueItems": true,
+					"items": {
+						"$ref": "#/$defs/signalName"
+					}
+				},
+				"evidenceRequirements": {
+					"description": "Sources a review occasioned this way reads. Omit to read the artifact kind's default evidence.",
 					"type": "array",
 					"minItems": 1,
 					"items": {
-						"oneOf": [
-							{
-								"$ref": "#/$defs/signalName"
+						"type": "object",
+						"additionalProperties": false,
+						"required": ["sourceKind", "stance"],
+						"properties": {
+							"sourceKind": {
+								"description": "Stable source identifier from the shipped source contract.",
+								"type": "string",
+								"minLength": 1
 							},
-							{
-								"$ref": "#/$defs/binding"
+							"stance": {
+								"description": "REQUIRED: the claim reads it. EXHAUSTIVE: the claim asserts something is absent from it, so a partial capture cannot satisfy it. CONTEXTUAL: used if present, never fatal.",
+								"enum": ["REQUIRED", "EXHAUSTIVE", "CONTEXTUAL"]
 							}
-						]
+						}
 					}
+				},
+				"onDrafts": {
+					"description": "Whether an artifact still marked draft occasions this review. Defaults to false.",
+					"type": "boolean"
+				},
+				"subject": {
+					"description": "Whose conduct a review occasioned this way judges, and therefore which person its observations are filed against. Defaults to AUTHOR. A practice about reviewing somebody else's work names REVIEWER; one about the act of merging names MERGER, reviewed only when the merger is the author the run is about.",
+					"enum": ["AUTHOR", "ASSIGNEE", "REVIEWER", "MERGER"]
+				},
+				"precondition": {
+					"description": "What must be in the work for this practice to have anything to judge. Decided from staged evidence before the practice is put to a model, so a practice whose subject is provably absent is not asked. Omit to apply to every artifact of this kind.",
+					"$ref": "#/$defs/subject"
 				},
 				"precomputeScript": {
 					"description": "Optional classpath resource containing TypeScript that prepares structured review context.",
@@ -134,7 +175,7 @@
 				"holdsAs": {
 					"description": "One present-tense sentence naming what the developer keeps doing when this practice holds, shown on the practice profile beside a practice that stands as a strength, written without dashes. Read from the bundled catalog by slug, never copied into a workspace.",
 					"type": "string",
-					"pattern": "^[^\\-\u2014]+$",
+					"pattern": "^[^\\-—]+$",
 					"minLength": 20,
 					"maxLength": 80
 				},
@@ -195,56 +236,6 @@
 			"minLength": 3,
 			"maxLength": 128
 		},
-		"binding": {
-			"description": "One occasion this practice is reviewed on, and the evidence that review reads.",
-			"type": "object",
-			"additionalProperties": false,
-			"required": ["signals"],
-			"properties": {
-				"signals": {
-					"description": "Signals that occasion this review. All must share one artifact kind; that kind is what the practice reviews.",
-					"type": "array",
-					"minItems": 1,
-					"uniqueItems": true,
-					"items": {
-						"$ref": "#/$defs/signalName"
-					}
-				},
-				"needs": {
-					"description": "Sources a review occasioned this way reads. Omit to read the artifact kind's default evidence.",
-					"type": "array",
-					"minItems": 1,
-					"items": {
-						"type": "object",
-						"additionalProperties": false,
-						"required": ["sourceKind", "stance"],
-						"properties": {
-							"sourceKind": {
-								"description": "Stable source identifier from the shipped source contract.",
-								"type": "string",
-								"minLength": 1
-							},
-							"stance": {
-								"description": "REQUIRED: the claim reads it. EXHAUSTIVE: the claim asserts something is absent from it, so a partial capture cannot satisfy it. CONTEXTUAL: used if present, never fatal.",
-								"enum": ["REQUIRED", "EXHAUSTIVE", "CONTEXTUAL"]
-							}
-						}
-					}
-				},
-				"onDrafts": {
-					"description": "Whether an artifact still marked draft occasions this review. Defaults to false.",
-					"type": "boolean"
-				},
-				"subject": {
-					"description": "Whose conduct a review occasioned this way judges, and therefore which person its observations are filed against. Defaults to AUTHOR. A practice about reviewing somebody else's work names REVIEWER; one about the act of merging names MERGER, reviewed only when the merger is the author the run is about.",
-					"enum": ["AUTHOR", "ASSIGNEE", "REVIEWER", "MERGER"]
-				},
-				"appliesWhen": {
-					"description": "What must be in the work for this practice to have anything to judge. Decided from staged evidence before the practice is put to a model, so a practice whose subject is provably absent is not asked. Omit to apply to every artifact of this kind.",
-					"$ref": "#/$defs/subject"
-				}
-			}
-		},
 		"signalName": {
 			"description": "Vendor-neutral signal name, <domain>.<kind>.<signal>; its prefix is the artifact kind.",
 			"type": "string",
@@ -291,7 +282,7 @@
 					}
 				},
 				"diffContains": {
-					"description": "Literal strings sought anywhere in the diff \u2014 added, removed or context \u2014 so that removing the last test in a file still counts as the subject being present. Literals rather than patterns: the declaration is operator-editable and is scanned over every diff of every review.",
+					"description": "Literal strings sought anywhere in the diff — added, removed or context — so that removing the last test in a file still counts as the subject being present. Literals rather than patterns: the declaration is operator-editable and is scanned over every diff of every review.",
 					"type": "array",
 					"minItems": 1,
 					"maxItems": 100,
@@ -303,7 +294,11 @@
 				},
 				"evidenceHasItems": {
 					"description": "A named evidence collection that must hold at least one entry. An empty collection settles the clause only when its source was captured whole.",
-					"enum": ["scm.review-threads", "scm.inline-review-comments", "scm.general-review-comments"]
+					"enum": [
+						"scm.review-threads",
+						"scm.inline-review-comments",
+						"scm.general-review-comments"
+					]
 				}
 			},
 			"minProperties": 1,
