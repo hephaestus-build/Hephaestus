@@ -1,8 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewRunTargetRow;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -19,15 +18,7 @@ public record ReviewRunTargetDTO(
 
         @NonNull @Schema(description = "Heading the run is listed under, which a run without recorded work still needs")
         String title) {
-    static ReviewRunTargetDTO from(AgentJob job) {
-        return from(ReviewRunTargetMapper.from(job));
-    }
-
-    static ReviewRunTargetDTO from(ReviewRunTargetRow row) {
-        return from(ReviewRunTargetMapper.from(row));
-    }
-
-    private static ReviewRunTargetDTO from(Target target) {
+    static ReviewRunTargetDTO from(Target target) {
         return new ReviewRunTargetDTO(
                 target.type(), ReviewedWorkLabels.refOrNull(target.type(), target.id(), target), target.title());
     }

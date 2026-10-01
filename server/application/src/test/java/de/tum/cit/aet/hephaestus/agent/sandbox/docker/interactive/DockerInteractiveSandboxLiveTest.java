@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerClientOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.LiveSandboxGateway;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxNetworkManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxWorkspaceManager;
@@ -104,8 +105,7 @@ class DockerInteractiveSandboxLiveTest {
     void setUp() throws Exception {
         gateway = new LiveSandboxGateway();
         SandboxProperties sandboxProperties = new SandboxProperties(5, 10, 60, null);
-        var dockerProperties = new DockerSandboxProperties(
-                "unix:///var/run/docker.sock", false, null, null, gateway.containerId(), "default");
+        var dockerProperties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
         // Tight TTL so idle eviction tests don't have to wait minutes.
         InteractiveSandboxProperties interactiveProperties = new InteractiveSandboxProperties(
                 /* idleTtlSeconds */ 2,
@@ -130,14 +130,19 @@ class DockerInteractiveSandboxLiveTest {
         dockerWaitExecutor = Executors.newCachedThreadPool();
         containerManager =
                 new SandboxContainerManager(dockerOps, image -> {}, sandboxProperties, "default", dockerWaitExecutor);
-        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
+        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties, new SandboxCreator(dockerOps));
         workspaceManager = new SandboxWorkspaceManager();
         securityPolicy = new ContainerSecurityPolicy(dockerProperties, null);
         meterRegistry = new SimpleMeterRegistry();
         metrics = new InteractiveSandboxMetrics(meterRegistry);
         watchdog = new StdinWriteWatchdog();
         registry = new InteractiveSandboxRegistry(
-                interactiveProperties, containerManager, metrics, watchdog, meterRegistry);
+                interactiveProperties,
+                containerManager,
+                metrics,
+                watchdog,
+                meterRegistry,
+                new SandboxCreator(dockerOps));
         proxyCredentialRegistry = new MentorProxyCredentialRegistry();
         adapter = new DockerInteractiveSandboxAdapter(
                 interactiveProperties,
@@ -153,7 +158,8 @@ class DockerInteractiveSandboxLiveTest {
                 gateway.port(),
                 proxyCredentialRegistry,
                 gateway.sessions(),
-                dockerOps);
+                dockerOps,
+                new SandboxCreator(dockerOps));
 
         runnerBytes = Files.readAllBytes(Path.of("src/main/resources/agent/pi-mentor-runner.ts"));
     }
@@ -262,7 +268,7 @@ class DockerInteractiveSandboxLiveTest {
         void pingPong() {
             AttachedSandbox sb = adapter.attach(buildSpec("u1", "w1"));
             CopyOnWriteArrayList<JsonNode> frames = new CopyOnWriteArrayList<>();
-            sb.subscribe(frames::add);
+            sb.subscribe(frames::add, () -> {});
             sb.send(ping());
 
             await().atMost(Duration.ofSeconds(15))
@@ -285,7 +291,7 @@ class DockerInteractiveSandboxLiveTest {
         void unicodeSurvives() {
             AttachedSandbox sb = adapter.attach(buildSpec("u2", "w2"));
             CopyOnWriteArrayList<JsonNode> frames = new CopyOnWriteArrayList<>();
-            sb.subscribe(frames::add);
+            sb.subscribe(frames::add, () -> {});
             String payload = "a" + LINE_SEP + "b" + PARA_SEP + "c\nd\re";
             sb.send(echo(payload));
 
@@ -323,7 +329,7 @@ class DockerInteractiveSandboxLiveTest {
                             .isEqualTo((double) expectedDrops));
 
             CopyOnWriteArrayList<JsonNode> snapshot = new CopyOnWriteArrayList<>();
-            sb.subscribe(snapshot::add);
+            sb.subscribe(snapshot::add, () -> {});
             await().atMost(Duration.ofSeconds(5))
                     .untilAsserted(() -> assertThat(snapshot.stream()
                                     .filter(n -> "tick".equals(n.path("type").asString()))
@@ -624,7 +630,7 @@ class DockerInteractiveSandboxLiveTest {
             // A failed bootstrap step means the pump sees EOF with a non-zero exit and attach() throws.
             AttachedSandbox sb = adapter.attach(buildMentorSpec("u_boot", "w_boot"));
             CopyOnWriteArrayList<JsonNode> frames = new CopyOnWriteArrayList<>();
-            sb.subscribe(frames::add);
+            sb.subscribe(frames::add, () -> {});
             await().atMost(RPC_TIMEOUT)
                     .untilAsserted(() -> assertThat(frames.stream()
                                     .anyMatch(f -> "runner_ready"
@@ -642,7 +648,7 @@ class DockerInteractiveSandboxLiveTest {
             assumeTrue(dockerOps.imageIsPresent(AGENT_PI_IMAGE), "agent-pi image not in local daemon");
             AttachedSandbox sb = adapter.attach(buildMentorSpec("u_hello", "w_hello"));
             CopyOnWriteArrayList<JsonNode> frames = new CopyOnWriteArrayList<>();
-            sb.subscribe(frames::add);
+            sb.subscribe(frames::add, () -> {});
 
             await().atMost(RPC_TIMEOUT)
                     .untilAsserted(() -> assertThat(frames.stream()
@@ -678,7 +684,7 @@ class DockerInteractiveSandboxLiveTest {
             assumeTrue(dockerOps.imageIsPresent(AGENT_PI_IMAGE), "agent-pi image not in local daemon");
             AttachedSandbox sb = adapter.attach(buildMentorSpec("u_turn", "w_turn"));
             CopyOnWriteArrayList<JsonNode> frames = new CopyOnWriteArrayList<>();
-            sb.subscribe(frames::add);
+            sb.subscribe(frames::add, () -> {});
 
             await().atMost(RPC_TIMEOUT)
                     .untilAsserted(() -> assertThat(frames.stream()

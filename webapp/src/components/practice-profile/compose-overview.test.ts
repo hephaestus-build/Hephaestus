@@ -80,7 +80,7 @@ type Overview = Parameters<typeof composeOverview>[0];
 
 const overview = (partial: Partial<Overview>): Overview => ({
 	...EMPTY_OVERVIEW,
-	latestRun: { jobId: "job-1", at: AT, reviewedWork: pullRequest(425) },
+	latestRun: { reviewId: "job-1", at: AT, reviewedWork: pullRequest(425) },
 	...partial,
 });
 
@@ -433,7 +433,8 @@ describe("composeOverview held rows", () => {
 		expect(composed.holdingUp[1]).toMatchObject({
 			statement: "Every reviewer comment gets a visible answer",
 		});
-		expect(plain(composed.holdingUp[1]?.note)).toBe("held across nine pull requests");
+		// No provider on the held work, so the noun is the glossary's for either.
+		expect(plain(composed.holdingUp[1]?.note)).toBe("held across nine pull or merge requests");
 		expect(composed.holdingUpNote).toBe("Another practice held too.");
 	});
 

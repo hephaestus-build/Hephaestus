@@ -19,6 +19,8 @@ import com.github.dockerjava.api.command.CreateContainerResponse;
 import com.github.dockerjava.api.command.CreateNetworkCmd;
 import com.github.dockerjava.api.command.CreateNetworkResponse;
 import com.github.dockerjava.api.command.DisconnectFromNetworkCmd;
+import com.github.dockerjava.api.command.InspectContainerCmd;
+import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.command.InspectNetworkCmd;
 import com.github.dockerjava.api.command.ListContainersCmd;
 import com.github.dockerjava.api.command.ListNetworksCmd;
@@ -34,14 +36,19 @@ import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.exception.NotModifiedException;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Network;
+import com.github.dockerjava.core.DefaultDockerClientConfig;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 
 class DockerClientOperationsTest extends BaseUnitTest {
@@ -95,13 +102,15 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(cmd.withOptions(Map.of("com.docker.network.bridge.gateway_mode_ipv4", "isolated")))
                     .thenReturn(cmd);
             when(cmd.withCheckDuplicate(true)).thenReturn(cmd);
+            when(cmd.withLabels(Map.of(SandboxLabels.SESSION_ID, "s1"))).thenReturn(cmd);
             when(cmd.exec()).thenReturn(response);
             when(response.getId()).thenReturn("net-abc");
 
-            String id = ops.createNetwork("test-net", true);
+            String id = ops.createNetwork("test-net", true, Map.of(SandboxLabels.SESSION_ID, "s1"));
 
             assertThat(id).isEqualTo("net-abc");
             verify(cmd).withInternal(true);
+            verify(cmd).withLabels(Map.of(SandboxLabels.SESSION_ID, "s1"));
             verify(cmd).withOptions(Map.of("com.docker.network.bridge.gateway_mode_ipv4", "isolated"));
         }
 
@@ -114,9 +123,10 @@ class DockerClientOperationsTest extends BaseUnitTest {
             when(cmd.withInternal(false)).thenReturn(cmd);
             when(cmd.withOptions(Map.of())).thenReturn(cmd);
             when(cmd.withCheckDuplicate(true)).thenReturn(cmd);
+            when(cmd.withLabels(Map.of())).thenReturn(cmd);
             when(cmd.exec()).thenThrow(new DockerException("Network conflict", 409));
 
-            assertThatThrownBy(() -> ops.createNetwork("dup-net", false))
+            assertThatThrownBy(() -> ops.createNetwork("dup-net", false, Map.of()))
                     .isInstanceOf(SandboxException.class)
                     .hasMessageContaining("dup-net");
         }
@@ -333,14 +343,20 @@ class DockerClientOperationsTest extends BaseUnitTest {
     class ListNetworksByName {
 
         @Test
-        void shouldMapNetworkFields() {
+        void shouldMapNetworkFields() throws Exception {
             ListNetworksCmd cmd = mock(ListNetworksCmd.class);
             when(dockerClient.listNetworksCmd()).thenReturn(cmd);
             when(cmd.withNameFilter(anyString())).thenReturn(cmd);
 
-            Network network = mock(Network.class);
-            when(network.getId()).thenReturn("net-1");
-            when(network.getName()).thenReturn("hephaestus-sandbox-default--abc");
+            // One item of the Engine's GET /networks response, read the way the client reads it.
+            Network network = DefaultDockerClientConfig.createDefaultConfigBuilder()
+                    .withDockerHost("unix:///var/run/docker.sock")
+                    .build()
+                    .getObjectMapper()
+                    .readValue("""
+                            {"Name": "hephaestus-sandbox-default--abc", "Id": "net-1",
+                             "Created": "2026-08-21T12:00:00.123456789+02:00", "Driver": "bridge", "Internal": true}
+                            """, Network.class);
 
             when(cmd.exec()).thenReturn(List.of(network));
 
@@ -349,6 +365,7 @@ class DockerClientOperationsTest extends BaseUnitTest {
             assertThat(results).hasSize(1);
             assertThat(results.get(0).id()).isEqualTo("net-1");
             assertThat(results.get(0).name()).isEqualTo("hephaestus-sandbox-default--abc");
+            assertThat(results.get(0).createdAt()).isEqualTo(Instant.parse("2026-08-21T10:00:00.123Z"));
         }
     }
 
@@ -479,6 +496,59 @@ class DockerClientOperationsTest extends BaseUnitTest {
             ops.waitContainer("ctr-1");
 
             verifyNoInteractions(dockerClient);
+        }
+    }
+
+    /** Inspect responses as the daemon sends them, decoded by the client's own mapper. */
+    @Nested
+    class InspectContainerIdentity {
+
+        private void inspecting(String json) throws Exception {
+            InspectContainerCmd cmd = mock(InspectContainerCmd.class);
+            when(dockerClient.inspectContainerCmd("worker")).thenReturn(cmd);
+            when(cmd.exec())
+                    .thenReturn(DefaultDockerClientConfig.createDefaultConfigBuilder()
+                            .withDockerHost("unix:///var/run/docker.sock")
+                            .build()
+                            .getObjectMapper()
+                            .readValue(json, InspectContainerResponse.class));
+        }
+
+        @Test
+        void shouldReportARunningContainerWithItsStart() throws Exception {
+            inspecting("""
+                    {"Id": "3f2a9c1b7d4e00", "Config": {"Hostname": "3f2a9c1b7d4e"},
+                     "State": {"Running": true, "StartedAt": "2026-09-30T13:49:58.1Z"}}
+                    """);
+
+            assertThat(ops.inspectContainerIdentity("worker"))
+                    .contains(new DockerOperations.ContainerIdentity(
+                            "3f2a9c1b7d4e00", true, "2026-09-30T13:49:58.1Z", "3f2a9c1b7d4e"));
+        }
+
+        @Test
+        void shouldReportAStatedStopEvenWithoutAStart() throws Exception {
+            inspecting("""
+                    {"Id": "3f2a9c1b7d4e00", "State": {"Running": false}}
+                    """);
+
+            assertThat(ops.inspectContainerIdentity("worker"))
+                    .hasValueSatisfying(
+                            container -> assertThat(container.running()).isFalse());
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "{\"Id\": \"3f2a9c1b7d4e00\", \"State\": {\"StartedAt\": \"2026-09-30T13:49:58.1Z\"}}",
+                    "{\"Id\": \"3f2a9c1b7d4e00\", \"State\": {\"Running\": true}}",
+                    "{\"Id\": \"3f2a9c1b7d4e00\"}"
+                })
+        void shouldTreatAPartialStateAsUnreadableRatherThanStopped(String json) throws Exception {
+            inspecting(json);
+
+            assertThatThrownBy(() -> ops.inspectContainerIdentity("worker"))
+                    .isInstanceOf(SandboxInfrastructureException.class);
         }
     }
 

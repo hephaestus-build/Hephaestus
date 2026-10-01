@@ -115,7 +115,7 @@ public class WebhookIngestPipeline {
         }
 
         return switch (result) {
-            case VerificationResult.Verified ignored -> publish(kind, body, headers);
+            case VerificationResult.Verified() -> publish(kind, body, headers, null);
             case VerificationResult.RespondImmediately r -> respondImmediately(r);
             case VerificationResult.StaleTimestamp s -> {
                 log.debug("Webhook rejected for kind={}: stale timestamp drift={}s", kind, s.driftSeconds());
@@ -125,12 +125,30 @@ public class WebhookIngestPipeline {
                 log.warn("Webhook rejected for kind={}: {}", kind, i.reason());
                 yield ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "invalid"));
             }
-            case VerificationResult.MissingSignature ignored ->
+            case VerificationResult.MissingSignature() ->
                 ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "missing-signature"));
         };
     }
 
-    private ResponseEntity<?> publish(IntegrationKind kind, byte[] body, Map<String, String> headers) {
+    /**
+     * Publishes a delivery its caller has authenticated for one route, on the subject {@code subject} derives from the
+     * payload, under {@code dedupId} and carrying {@code routeHeaders}. Those headers are written here, never copied
+     * from the request, so a sender cannot supply them.
+     */
+    public ResponseEntity<?> publishAuthenticated(
+            IntegrationKind kind,
+            byte[] body,
+            Map<String, String> headers,
+            Function<JsonNode, String> subject,
+            String dedupId,
+            Map<String, String> routeHeaders) {
+        return publish(kind, body, headers, new Route(subject, dedupId, routeHeaders));
+    }
+
+    private record Route(Function<JsonNode, String> subject, String dedupId, Map<String, String> headers) {}
+
+    private ResponseEntity<?> publish(
+            IntegrationKind kind, byte[] body, Map<String, String> headers, @Nullable Route route) {
         if (jetStreamPublisher == null) {
             // No publisher bean — the webhook runtime role is disabled. Vendor will retry.
             // 503 is the right surface here: the verification succeeded, but the downstream
@@ -163,8 +181,8 @@ public class WebhookIngestPipeline {
             }
         }
 
-        String subject = deriver.deriveSubject(payload, headers);
-        String dedupId = deriver.deriveDedupKey(body, headers);
+        String subject = route != null ? route.subject().apply(payload) : deriver.deriveSubject(payload, headers);
+        String dedupId = route != null ? route.dedupId() : deriver.deriveDedupKey(body, headers);
 
         // Nats-Msg-Id also rides in JetStreamPublisher's PublishOptions; duplicating it on the
         // headers keeps the wire trace self-describing.
@@ -173,6 +191,9 @@ public class WebhookIngestPipeline {
         passthroughHeader(outboundHeaders, headers, "X-GitHub-Delivery");
         passthroughHeader(outboundHeaders, headers, "X-Gitlab-Event");
         passthroughHeader(outboundHeaders, headers, "X-Gitlab-Webhook-UUID");
+        if (route != null) {
+            outboundHeaders.putAll(route.headers());
+        }
         outboundHeaders.put(NATS_MSG_ID, dedupId);
 
         try {
@@ -225,7 +246,7 @@ public class WebhookIngestPipeline {
         return resp.body(r.body());
     }
 
-    private static Map<String, String> readHeaders(HttpServletRequest req) {
+    public static Map<String, String> readHeaders(HttpServletRequest req) {
         Map<String, String> headers = new LinkedHashMap<>();
         var names = req.getHeaderNames();
         if (names == null) return Collections.unmodifiableMap(headers);

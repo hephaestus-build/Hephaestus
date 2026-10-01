@@ -178,12 +178,12 @@ export const Default: Story = {
 		const labels = ["Why it was noted", "Evidence", "Next step", "Your response"];
 		const positions = labels.map((label) => canvas.getByText(label).getBoundingClientRect().top);
 		await expect([...positions].sort((a, b) => a - b)).toStrictEqual(positions);
-		// Every quote is shown, with nothing to unfold; the scanner that captured them is named once.
+		// Every quote is shown, with nothing to unfold; the member is never shown which detector ran.
 		await expect(
 			canvas.getByText("private static final Duration TIMEOUT = Duration.ofSeconds(90);"),
 		).toBeVisible();
 		await expect(canvas.getByText("agent.timeout: 90s")).toBeVisible();
-		await expect(canvas.getAllByText("practice-observer")).toHaveLength(1);
+		await expect(canvas.queryByText(/practice-observer/u)).not.toBeInTheDocument();
 		const response = canvas.getByRole("group", { name: "Your response" });
 		await expect(
 			within(response)
@@ -215,6 +215,26 @@ export const StaleWithoutEvidence: Story = {
 		await expect(canvas.queryByText("Why it was noted")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("Evidence")).not.toBeInTheDocument();
 		await expect(canvas.getByText("Next step")).toBeVisible();
+	},
+};
+
+/**
+ * An admin found the claim wrong when it was made. The row stays in the developer's history, marked,
+ * with the admin's reason in its own words.
+ */
+export const MarkedIncorrect: Story = {
+	args: {
+		observation: {
+			...strength,
+			invalidatedAt: daysBefore(1),
+			invalidationReason: "Issue #1 was still open; it closes when the merge request is merged.",
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Marked incorrect")).toBeVisible();
+		await expect(
+			canvas.getByText(/Issue #1 was still open; it closes when the merge request is merged\./u),
+		).toBeVisible();
 	},
 };
 
@@ -378,6 +398,8 @@ export const DisputeWaitsForItsSentence: Story = {
 		await expect(args.onRespond).not.toHaveBeenCalled();
 		const field = canvas.getByRole("textbox", { name: "What was missed?" });
 		await expect(field).toBeRequired();
+		// The one answer written for somebody else says so before it is sent.
+		await expect(field).toHaveAccessibleDescription(/Workspace admins read this/u);
 		// An empty sentence does not send.
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
 		await expect(args.onRespond).not.toHaveBeenCalled();

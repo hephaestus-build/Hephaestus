@@ -35,18 +35,22 @@ public record PracticeSubject(
     public PracticeSubject(
             @JsonProperty("absentSays") String absentSays, @JsonProperty("anyOf") List<PracticeSubjectClause> anyOf) {
         this.absentSays = Objects.requireNonNull(absentSays, "absentSays");
+        // Named the way PracticeSubjectClause names its fields: the editor's label, then the key typed.
         if (absentSays.isBlank()) {
-            throw new IllegalArgumentException("A subject must say what its absence means, for the reader");
+            throw new IllegalArgumentException(
+                    "“Otherwise skip” (absentSays) needs a sentence saying why the practice does not apply.");
         }
         if (absentSays.length() > MAX_SENTENCE_LENGTH) {
-            throw new IllegalArgumentException("absentSays may not exceed " + MAX_SENTENCE_LENGTH + " characters");
+            throw new IllegalArgumentException(
+                    "“Otherwise skip” (absentSays) may be at most " + MAX_SENTENCE_LENGTH + " characters long.");
         }
         this.anyOf = List.copyOf(Objects.requireNonNull(anyOf, "anyOf"));
         if (this.anyOf.isEmpty()) {
-            throw new IllegalArgumentException("A subject needs at least one clause, or should be omitted entirely");
+            throw new IllegalArgumentException("The gate needs at least one clause in anyOf. Add one, or clear "
+                    + "“Only review when” to review all work.");
         }
         if (this.anyOf.size() > MAX_CLAUSES) {
-            throw new IllegalArgumentException("A subject may not declare more than " + MAX_CLAUSES + " clauses");
+            throw new IllegalArgumentException("The gate may list at most " + MAX_CLAUSES + " clauses in anyOf.");
         }
     }
 }

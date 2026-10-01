@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
+import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalFeedbackPreparer;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.FeedbackChannelRouter;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.RoutingContext;
@@ -23,8 +24,13 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -88,6 +94,15 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
 
     @Autowired
     private PullRequestRepository pullRequestRepository;
+
+    @Autowired
+    private ConversationalDeliveryReconciler reconciler;
+
+    @Autowired
+    private FeedbackRepository feedbackRepository;
+
+    @Autowired
+    private FeedbackPlacementRepository feedbackPlacementRepository;
 
     private Practice practice;
     private Repository monitoredRepository;
@@ -187,6 +202,77 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
         assertThat(feedbackObservationRepository.findPreparedConversationFactsForRecipient(
                         workspace.getId(), recipient.getId(), PageRequest.of(0, 10)))
                 .isEmpty();
+    }
+
+    /**
+     * Pausing a channel erases nothing, so a link the mentor was allowed to show while the channel was active must
+     * not settle once it is paused before the reply completes: the unit stays prepared, with no placement, until the
+     * channel is active again.
+     */
+    @Test
+    void aLinkAdmittedWhileItsChannelWasActiveSettlesNothingAfterTheChannelIsPaused() {
+        long threadId = seedThread("C-linked", "100.0", ConsentState.ACTIVE);
+        AgentJob job = conversationJob(threadId);
+        Observation linked = saveConversationObservation(job, "occ-linked", threadId);
+        preparer.prepare(job.getId(), workspace.getId(), List.of(linked), List.of(conversationUnit(List.of(linked))));
+        long workspaceId = workspace.getId();
+        long recipientId = recipient.getId();
+        assertThat(reconciler.admits(workspaceId, recipientId, linked.getId())).isTrue();
+
+        setConsent("C-linked", ConsentState.PAUSED);
+
+        assertThat(reconciler.admits(workspaceId, recipientId, linked.getId())).isFalse();
+        assertThat(reconciler.reconcile(workspaceId, recipientId, UUID.randomUUID(), List.of(linked.getId())))
+                .isZero();
+        assertThat(reconciler.suppressForSilentMode(workspaceId, recipientId, List.of(linked.getId())))
+                .isZero();
+        assertThat(feedbackRepository.findRecentPreparedConversationForRecipient(
+                        workspaceId, recipientId, PageRequest.of(0, 10)))
+                .singleElement()
+                .extracting(Feedback::getDeliveryState)
+                .isEqualTo(FeedbackDeliveryState.PREPARED);
+        assertThat(feedbackPlacementRepository.findAll()).isEmpty();
+
+        setConsent("C-linked", ConsentState.ACTIVE);
+        UUID reply = UUID.randomUUID();
+
+        assertThat(reconciler.reconcile(workspaceId, recipientId, reply, List.of(linked.getId())))
+                .isEqualTo(1);
+        assertThat(feedbackRepository.findRecentPreparedConversationForRecipient(
+                        workspaceId, recipientId, PageRequest.of(0, 10)))
+                .isEmpty();
+        assertThat(feedbackPlacementRepository.findAll())
+                .singleElement()
+                .extracting(FeedbackPlacement::getChatMessageId)
+                .isEqualTo(reply);
+    }
+
+    private void setConsent(String channelId, ConsentState consent) {
+        var channel = slackMonitoredChannelRepository
+                .findByWorkspaceIdAndSlackChannelId(workspace.getId(), channelId)
+                .orElseThrow();
+        channel.setConsentState(consent);
+        slackMonitoredChannelRepository.saveAndFlush(channel);
+    }
+
+    @Test
+    void namesTheReviewBehindAPreparedItemRatherThanTheJobThatComposedIt() {
+        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
+        practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
+        practice = practiceRepository.saveAndFlush(practice);
+        AgentJob review = pullRequestJob();
+        Observation observation = savePullRequestObservation(review, "occ-reviewed", pullRequest.getId());
+        AgentJob composer = pullRequestJob();
+        List<Observation> admitted = router.admit(List.of(observation), workspace.getId(), RoutingContext.author());
+        preparer.prepare(composer.getId(), workspace.getId(), admitted, List.of(conversationUnit(admitted)));
+
+        JsonNode item = contribute().get("preparedConversationFeedback").get(0);
+
+        assertThat(item.get("reviewId").asString()).isEqualTo(review.getId().toString());
+        assertThat(item.get("assessmentStatus").asString()).isEqualTo("ASSESSED");
+        assertThat(item.get("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(item.path("reviewedWork").path("coreCoverage").asString()).isEqualTo("UNKNOWN");
     }
 
     @Test

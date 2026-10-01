@@ -34,11 +34,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO.CommitInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -85,6 +87,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
     private final SyncTargetProvider syncTargetProvider;
     private final ApplicationEventPublisher eventPublisher;
     private final GitLabCommitMergeRequestLinker commitMergeRequestLinker;
+    private final GitLabRouteAdmission routeAdmission;
 
     private final TransactionTemplate transactions;
 
@@ -103,6 +106,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
             SyncTargetProvider syncTargetProvider,
             ApplicationEventPublisher eventPublisher,
             GitLabCommitMergeRequestLinker commitMergeRequestLinker,
+            GitLabRouteAdmission routeAdmission,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -125,6 +129,7 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
         this.syncTargetProvider = syncTargetProvider;
         this.eventPublisher = eventPublisher;
         this.commitMergeRequestLinker = commitMergeRequestLinker;
+        this.routeAdmission = routeAdmission;
         this.transactions = transactionTemplate;
     }
 
@@ -159,7 +164,23 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                 safeRef,
                 event.totalCommitsCount());
 
+        Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
+        if (route.isPresent() && !route.get().contains(projectPath)) {
+            log.warn("Skipped push event: reason=outsideConnectedGroup, projectPath={}", safeProjectPath);
+            return;
+        }
+
         var repository = transactions.execute(status -> {
+            // On a connection route admission already stored the project as GitLab reports it; the payload's copy of
+            // its metadata is not written over that.
+            if (route.isPresent()) {
+                return repositoryRepository
+                        .findByNameWithOwnerAndProviderId(
+                                projectPath, route.get().providerId())
+                        .filter(admitted -> routeAdmission.admitRepository(route.get(), admitted))
+                        .flatMap(admitted -> repositoryRepository.findByIdWithOrganization(admitted.getId()))
+                        .orElse(null);
+            }
             IdentityProvider provider = gitProviderRepository
                     .findByTypeAndServerUrl(IdentityProviderType.GITLAB, gitLabProperties.defaultServerUrl())
                     .orElseThrow(() -> new IllegalStateException("GitLab identity provider is unavailable"));
@@ -267,7 +288,9 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                     afterSha,
                     shas -> commitRepository.findGitDetailsCapturedShas(repository.getId(), shas),
                     info -> {
-                        if (persister.persist(info, repository, origin) == Outcome.FAILED) failed[0]++;
+                        Outcome outcome = transactions.execute(
+                                status -> mayWrite() ? persister.persist(info, repository, origin) : Outcome.FAILED);
+                        if (outcome == Outcome.FAILED) failed[0]++;
                     });
 
             log.info("Processed push commits via local git: repoName={}, failed={}", repoName, failed[0]);
@@ -300,7 +323,11 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
                 continue;
             }
             try {
-                transactions.executeWithoutResult(status -> persistWebhookCommit(commit, repository, asFallback));
+                transactions.executeWithoutResult(status -> {
+                    if (mayWrite()) {
+                        persistWebhookCommit(commit, repository, asFallback);
+                    }
+                });
                 created++;
             } catch (Exception e) {
                 log.warn(
@@ -405,8 +432,20 @@ public class GitLabPushMessageHandler extends AbstractIntegrationMessageHandler<
 
     // Scope resolution
 
+    /**
+     * For a write transaction after the git fetch: whether the delivery may still write, which on a connection route
+     * means the connection is still active, held so until the transaction ends.
+     */
+    private boolean mayWrite() {
+        return GitLabRouteAdmission.current().map(routeAdmission::holdActive).orElse(true);
+    }
+
     @Nullable
     private Long resolveScopeId(Repository repository) {
+        Optional<GitLabRouteAdmission.AdmittedRoute> route = GitLabRouteAdmission.current();
+        if (route.isPresent()) {
+            return route.get().workspaceId();
+        }
         if (repository.getOrganization() != null) {
             String orgLogin = repository.getOrganization().getLogin();
             Long scopeId = scopeIdResolver.findScopeIdByOrgLogin(orgLogin).orElse(null);

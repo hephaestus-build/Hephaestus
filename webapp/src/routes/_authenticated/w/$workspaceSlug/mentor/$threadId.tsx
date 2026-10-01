@@ -131,6 +131,7 @@ function ThreadContainer() {
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
 				status={mentorChat.status}
+				errorMessage={mentorChat.error?.message}
 				readonly={readonly}
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
@@ -143,7 +144,7 @@ function ThreadContainer() {
 						? undefined
 						: () => {
 								mentorChat.clearError();
-								void mentorChat.regenerate();
+								mentorChat.retry();
 							}
 				}
 				onCopy={copyToClipboard}

@@ -25,14 +25,7 @@ class WorkspaceContextHolderTest {
     @Test
     void shouldStoreAndRetrieveContext() {
         WorkspaceContext context = new WorkspaceContext(
-                1L,
-                "test-workspace",
-                "Test Workspace",
-                AccountType.ORG,
-                123L,
-                false,
-                false,
-                Set.of(WorkspaceRole.OWNER));
+                1L, "test-workspace", "Test Workspace", AccountType.ORG, 123L, false, Set.of(WorkspaceRole.OWNER));
 
         WorkspaceContextHolder.setContext(context);
         WorkspaceContext retrieved = WorkspaceContextHolder.getContext();
@@ -49,7 +42,7 @@ class WorkspaceContextHolderTest {
     @Test
     void shouldEnrichMDC() {
         WorkspaceContext context =
-                new WorkspaceContext(42L, "test-slug", "Test", AccountType.USER, 999L, false, false, Set.of());
+                new WorkspaceContext(42L, "test-slug", "Test", AccountType.USER, 999L, false, Set.of());
 
         WorkspaceContextHolder.setContext(context);
 
@@ -60,8 +53,7 @@ class WorkspaceContextHolderTest {
 
     @Test
     void shouldClearContextAndMDC() {
-        WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 100L, false, false, Set.of());
+        WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 100L, false, Set.of());
         WorkspaceContextHolder.setContext(context);
 
         WorkspaceContextHolder.clearContext();
@@ -81,7 +73,6 @@ class WorkspaceContextHolderTest {
                 AccountType.ORG,
                 null, // No installation ID
                 false,
-                false,
                 Set.of());
 
         WorkspaceContextHolder.setContext(context);
@@ -94,10 +85,10 @@ class WorkspaceContextHolderTest {
     @Test
     void shouldIsolateContextBetweenThreads() throws InterruptedException {
         WorkspaceContext mainContext = new WorkspaceContext(
-                1L, "main-workspace", "Main", AccountType.ORG, 100L, false, false, Set.of(WorkspaceRole.OWNER));
+                1L, "main-workspace", "Main", AccountType.ORG, 100L, false, Set.of(WorkspaceRole.OWNER));
 
         WorkspaceContext otherContext = new WorkspaceContext(
-                2L, "other-workspace", "Other", AccountType.USER, 200L, false, false, Set.of(WorkspaceRole.MEMBER));
+                2L, "other-workspace", "Other", AccountType.USER, 200L, false, Set.of(WorkspaceRole.MEMBER));
 
         WorkspaceContextHolder.setContext(mainContext);
 
@@ -133,8 +124,7 @@ class WorkspaceContextHolderTest {
 
     @Test
     void shouldHandleSettingNullContext() {
-        WorkspaceContext context =
-                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 100L, false, false, Set.of());
+        WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 100L, false, Set.of());
         WorkspaceContextHolder.setContext(context);
 
         WorkspaceContextHolder.setContext(null);

@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository.ProviderPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
@@ -75,6 +76,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         when(feedbackRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(feedbackObservationRepository.findObservationIdsSuppressedForJob(any()))
                 .thenReturn(List.of());
+        lenient()
+                .when(feedbackObservationRepository.insertIfAbsent(any(), any(), any(), anyInt()))
+                .thenReturn(1);
         when(feedbackPlacementRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(feedbackPlacementRepository.findLatestDeliveredSummary(any())).thenReturn(Optional.empty());
         return new FeedbackLedgerRecorder(
@@ -110,7 +114,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 .insertProviderPlacementIfAbsent(
                         argThat(placement -> placement.feedbackId().equals(feedback.getId())
                                 && placement.placementType().equals("SUMMARY")
-                                && placement.postedCommentRef().equals("summary-ref")
+                                && "summary-ref".equals(placement.postedCommentRef())
                                 && "https://github.com/owner/repo/pull/42#issuecomment-987654"
                                         .equals(placement.postedCommentUrl())));
         verify(feedbackPlacementRepository)
@@ -122,7 +126,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                                 && Integer.valueOf(9).equals(placement.anchorStartLine())
                                 && Integer.valueOf(12).equals(placement.anchorEndLine())
                                 && "NEW".equals(placement.anchorSide())
-                                && placement.postedCommentRef().equals("inline-ref")
+                                && "inline-ref".equals(placement.postedCommentRef())
                                 && "https://github.com/owner/repo/pull/42#discussion_r123"
                                         .equals(placement.postedCommentUrl())));
     }
@@ -213,13 +217,14 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         "summary-ref",
                         null);
 
-        var placements = ArgumentCaptor.forClass(FeedbackPlacement.class);
-        verify(feedbackPlacementRepository, org.mockito.Mockito.atLeastOnce()).save(placements.capture());
-        FeedbackPlacement inline = placements.getAllValues().stream()
-                .filter(p -> p.getPlacementType() == PlacementType.INLINE)
+        var placements = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository, org.mockito.Mockito.atLeastOnce())
+                .insertProviderPlacementIfAbsent(placements.capture());
+        ProviderPlacement inline = placements.getAllValues().stream()
+                .filter(p -> p.placementType().equals(PlacementType.INLINE.name()))
                 .findFirst()
                 .orElseThrow();
-        assertThat(inline.getPostedCommentRef()).isEqualTo("note-gid-42");
+        assertThat(inline.postedCommentRef()).isEqualTo("note-gid-42");
     }
 
     @Test
@@ -245,7 +250,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         null,
                         null);
 
-        verify(feedbackPlacementRepository, org.mockito.Mockito.never()).save(any());
+        verify(feedbackPlacementRepository, org.mockito.Mockito.never()).insertProviderPlacementIfAbsent(any());
     }
 
     @Test
@@ -344,7 +349,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         when(feedbackRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         AgentJob job = job();
         when(commentFormatter.appendDisclosure("proposed body", job)).thenReturn("proposed body\n\nAI disclosure");
-        when(commentFormatter.appendInlineFeedbackPrompt("inline body")).thenReturn("inline body\n\nAI disclosure");
+        when(commentFormatter.appendInlineFeedbackPrompt(eq("inline body"), any()))
+                .thenReturn("inline body\n\nAI disclosure");
         var metadata = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
         metadata.put("commit_sha", "abc123");
         job.setMetadata(metadata);
@@ -495,10 +501,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         assertThat(savedFeedback.getValue().getReplacesId()).isNull();
         verify(feedbackRepository, org.mockito.Mockito.never()).supersedeDelivered(any(), any());
 
-        var savedPlacement = ArgumentCaptor.forClass(FeedbackPlacement.class);
-        verify(feedbackPlacementRepository).save(savedPlacement.capture());
-        assertThat(savedPlacement.getValue().getPlacementType()).isEqualTo(PlacementType.INLINE);
-        assertThat(savedPlacement.getValue().getPostedCommentRef()).isEqualTo("note-1");
+        var savedPlacement = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(savedPlacement.capture());
+        assertThat(savedPlacement.getValue().placementType()).isEqualTo(PlacementType.INLINE.name());
+        assertThat(savedPlacement.getValue().postedCommentRef()).isEqualTo("note-1");
         verify(feedbackPlacementRepository, org.mockito.Mockito.never()).findLatestDeliveredSummary(any());
     }
 
@@ -586,10 +592,21 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
     }
 
-    /** Silence stops the note on the work; a gate decision on the work applies to every channel. */
+    /**
+     * A reason that withholds only the note on the work wakes the lanes at once; closed, gone or opted-out work
+     * wakes none. Either way the withheld review is on the ledger.
+     */
     @ParameterizedTest
-    @CsvSource({"INSTANCE_SILENCED,true", "ARTIFACT_CLOSED,false"})
-    void shouldWakeTheLanesOnlyWhenSilentModeSuppressedTheFeedback(FeedbackSuppressionReason reason, boolean wakes) {
+    @CsvSource({
+        "INSTANCE_SILENCED,true",
+        "REPEATS_DELIVERED_NOTE,true",
+        "ARTIFACT_MERGED,true",
+        "ARTIFACT_CLOSED,false",
+        "ARTIFACT_GONE,false",
+        "RECIPIENT_OPTED_OUT,false"
+    })
+    void shouldWakeTheLanesOnlyWhenTheReasonWithholdsJustTheNoteOnTheWork(
+            FeedbackSuppressionReason reason, boolean wakes) {
         Observation bad = problem();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
                 .thenReturn(List.of(bad));
@@ -597,6 +614,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         rec.recordSuppressedUnit(job(), new DeliveryContent("body", List.of(), List.of(), null), reason);
 
+        var saved = ArgumentCaptor.forClass(Feedback.class);
+        verify(feedbackRepository).save(saved.capture());
+        assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+        assertThat(saved.getValue().getSuppressionReason()).isEqualTo(reason);
         verify(eventPublisher, wakes ? org.mockito.Mockito.times(1) : org.mockito.Mockito.never())
                 .publishEvent(any(
                         de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
@@ -686,8 +707,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     @Test
     void recordSuppressedUnit_persistsGateReasonAndBody_bindsFindings_noConversationSignal() {
-        // A gate decision applies to every channel, so the whole review collapses to ONE suppressed unit
-        // and the loci must not be re-raised as a conversational signal in a mentor turn.
+        // A closed PR withholds more than the note on the work, so the whole review collapses to ONE suppressed
+        // unit and no lane is woken to re-raise its loci.
         Observation bad = problem();
         Observation good = strength();
         when(observationRepository.findByAgentJobId(any(), org.mockito.ArgumentMatchers.anyLong()))
@@ -777,10 +798,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         recorder.recordSuppressedRemainder(
                 job, delivery, FeedbackSuppressionReason.INSTANCE_SILENCED, List.of("observation:key-2"));
 
-        ArgumentCaptor<FeedbackPlacement> placement = ArgumentCaptor.forClass(FeedbackPlacement.class);
-        verify(feedbackPlacementRepository).save(placement.capture());
-        assertThat(placement.getValue().getAnchorPath()).isEqualTo("src/Foo.java");
-        assertThat(placement.getValue().getPostedCommentUrl())
+        ArgumentCaptor<ProviderPlacement> placement = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(placement.capture());
+        assertThat(placement.getValue().anchorPath()).isEqualTo("src/Foo.java");
+        assertThat(placement.getValue().postedCommentUrl())
                 .isEqualTo("https://gitlab.example.com/a/b/-/merge_requests/1#note_123");
 
         ArgumentCaptor<Feedback> feedback = ArgumentCaptor.forClass(Feedback.class);
@@ -831,7 +852,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         null,
                         null);
 
-        verify(feedbackPlacementRepository, org.mockito.Mockito.never()).save(any());
+        verify(feedbackPlacementRepository, org.mockito.Mockito.never()).insertProviderPlacementIfAbsent(any());
     }
 
     @Test
@@ -851,10 +872,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         "dispatch-ref",
                         null);
 
-        var placement = ArgumentCaptor.forClass(FeedbackPlacement.class);
-        verify(feedbackPlacementRepository).save(placement.capture());
-        assertThat(placement.getValue().getPlacementType()).isEqualTo(PlacementType.SUMMARY);
-        assertThat(placement.getValue().getPostedCommentRef()).isEqualTo("dispatch-ref");
+        var placement = ArgumentCaptor.forClass(ProviderPlacement.class);
+        verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(placement.capture());
+        assertThat(placement.getValue().placementType()).isEqualTo(PlacementType.SUMMARY.name());
+        assertThat(placement.getValue().postedCommentRef()).isEqualTo("dispatch-ref");
     }
 
     private AgentJob job() {

@@ -28,19 +28,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/**
- * Materialises the {@code docs.document} review context under {@code inputs/context/} as one quarantined
- * {@code document.md}: the document's prose, with its title, collection, author and upstream timestamps in
- * a front-matter block.
- *
- * <p>The repo-less, diff-less counterpart of {@link IssueContentSource}, and deliberately <em>not</em> the
- * same thing as {@link OutlineDocumentContentSource}: that one collects documents a change happens to
- * reference as supporting evidence, so retrieval there can never prove it found every relevant one. Here
- * the document is the subject, so the one document a review was occasioned by is a complete capture of it.
- *
- * <p>Reads the mirror through the agent-owned {@link DocumentProjection} SPI, implemented by the vendor
- * module owning the schema, so the dependency runs one way and this class names no vendor.
- */
+/** Primary document projections for review readiness and precompute; reads through the mirror owner's SPI. */
 @Component
 public class DocumentContentSource implements EvidenceSource, ReviewContextBuilder {
 

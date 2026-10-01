@@ -11,8 +11,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventAction
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
+import java.time.Instant;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,9 +33,12 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>{@code close} → {@link GitLabMergeRequestProcessor#processClosed}</li>
  *   <li>{@code reopen} → {@link GitLabMergeRequestProcessor#processReopened}</li>
  *   <li>{@code merge} → {@link GitLabMergeRequestProcessor#processMerged}</li>
- *   <li>{@code approved} → {@link GitLabMergeRequestProcessor#processApproved}</li>
- *   <li>{@code unapproved} → {@link GitLabMergeRequestProcessor#processUnapproved}</li>
+ *   <li>{@code approved} / {@code approval} → {@link GitLabMergeRequestProcessor#processApproved}</li>
+ *   <li>{@code unapproved} / {@code unapproval} → {@link GitLabMergeRequestProcessor#processUnapproved}</li>
  * </ul>
+ * Each pair is one person's act; the two names only say whether the merge request's approval rules were met
+ * afterwards. An {@code unapproved} or {@code unapproval} marked {@code system} is GitLab resetting approvals after a
+ * push instead.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -39,15 +46,33 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
 
     private static final Logger log = LoggerFactory.getLogger(GitLabMergeRequestMessageHandler.class);
 
+    /**
+     * The events after which the merge request is read: its head, status or approvals can have moved, or, on a merge,
+     * the hook left who merged it and when unsaid.
+     */
+    private static final Set<GitLabEventAction> READS_READINESS = EnumSet.of(
+            GitLabEventAction.OPEN,
+            GitLabEventAction.UPDATE,
+            GitLabEventAction.REOPEN,
+            GitLabEventAction.MERGE,
+            GitLabEventAction.APPROVED,
+            GitLabEventAction.APPROVAL,
+            GitLabEventAction.UNAPPROVED,
+            GitLabEventAction.UNAPPROVAL);
+
     private final GitLabMergeRequestProcessor mergeRequestProcessor;
     private final GitLabWebhookContextResolver contextResolver;
     private final GitLabClosingIssueClient closingIssueClient;
+    private final GitLabMergeRequestReadinessReader readinessReader;
+    private final GitLabDiscussionSyncService discussionSyncService;
     private final TransactionTemplate transactionTemplate;
 
     GitLabMergeRequestMessageHandler(
             GitLabMergeRequestProcessor mergeRequestProcessor,
             GitLabWebhookContextResolver contextResolver,
             GitLabClosingIssueClient closingIssueClient,
+            GitLabMergeRequestReadinessReader readinessReader,
+            GitLabDiscussionSyncService discussionSyncService,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -59,46 +84,101 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
         this.mergeRequestProcessor = mergeRequestProcessor;
         this.contextResolver = contextResolver;
         this.closingIssueClient = closingIssueClient;
+        this.readinessReader = readinessReader;
+        this.discussionSyncService = discussionSyncService;
         this.transactionTemplate = transactionTemplate;
     }
 
+    /** An event stored in its transaction, with the version of the merge request it left stored. */
+    private record Stored(ProcessingContext context, GitLabMergeRequestProcessor.StoredVersion version) {}
+
     /**
-     * The event is stored in the short transaction; an opened or updated merge request then has the
-     * issues it closes read from GitLab outside it — the webhook stores the {@code updated_at} the sync
-     * later compares against, so the sync would not read them for this change.
+     * The event is stored in the short transaction. GitLab's webhook carries none of the merge request's readiness —
+     * its merge status, head pipeline and approvals — so after an event that can move them GitLab is read for this
+     * one merge request, outside the transaction, and what it said is recorded in a second short one where the
+     * delivery may still write to the project as stored now ({@link GitLabWebhookContextResolver#mayStillWrite}) and
+     * the answer still describes the stored head ({@link GitLabMergeRequestProcessor#applyReadiness}). A failed read
+     * records nothing: the facts stay as the event left them, unknown where it moved the head, until the next event or
+     * sync. After a merge the same read records who merged it, when and the merge commit where the hook named none of
+     * them ({@link GitLabMergeRequestProcessor#applyTerminalFacts}), and only then, in the same second transaction and
+     * under the same project check, is the merge offered for review ({@link GitLabMergeRequestProcessor#offerMerge}) —
+     * also when the read failed, so that a merger it could not name holds the review pending instead of dropping it.
+     * An opened or updated merge request also has the issues it closes read from GitLab — the webhook stores the
+     * {@code updated_at} the sync later compares against, so the sync would not read them for this change. An update
+     * also has its discussions' resolution read ({@link GitLabDiscussionSyncService#readThreadResolutions}) and
+     * recorded under the same check: GitLab documents an update for all threads becoming resolved, and the hook
+     * itself names no thread.
      */
     @Override
-    protected void dispatchEvent(GitLabMergeRequestEventDTO event) {
-        ProcessingContext context = transactionTemplate.execute(status -> handleEventAndReturnContext(event));
-        Repository repository = context == null ? null : context.repository();
-        Long scopeId = context == null ? null : context.scopeId();
+    protected void dispatchEvent(GitLabMergeRequestEventDTO event, Instant arrivedAt) {
         var attributes = event.objectAttributes();
         var project = event.project();
-        if (repository == null
-                || scopeId == null
-                || attributes == null
-                || attributes.iid() == null
-                || project == null
-                || project.id() == null) {
+        Stored stored = transactionTemplate.execute(status -> {
+            ProcessingContext context = handle(event, arrivedAt);
+            if (context == null || context.repository() == null || attributes == null || attributes.iid() == null) {
+                return null;
+            }
+            return mergeRequestProcessor
+                    .storedVersion(context.repository(), attributes.iid())
+                    .map(version -> new Stored(context, version))
+                    .orElse(null);
+        });
+        GitLabEventAction action = event.actionType();
+        if (stored == null || !READS_READINESS.contains(action) || attributes == null || attributes.iid() == null) {
             return;
         }
-        if (event.actionType() != GitLabEventAction.OPEN && event.actionType() != GitLabEventAction.UPDATE) {
+        Repository repository = Objects.requireNonNull(stored.context().repository());
+        Long scopeId = stored.context().scopeId();
+        boolean merge = action == GitLabEventAction.MERGE;
+        if (scopeId == null && !merge) {
             return;
         }
         int iid = attributes.iid();
-        List<Integer> closing = closingIssueClient.closesIssues(scopeId, project.id(), iid);
-        if (closing != null) {
-            transactionTemplate.executeWithoutResult(
-                    status -> mergeRequestProcessor.replaceClosingIssues(repository, iid, closing));
+        Instant requestedAt = Instant.now();
+        GitLabMergeRequestReadinessReader.Facts facts =
+                scopeId == null ? null : readinessReader.read(scopeId, repository.getNameWithOwner(), iid);
+        List<Integer> closing = scopeId != null
+                        && (action == GitLabEventAction.OPEN || action == GitLabEventAction.UPDATE)
+                        && project != null
+                        && project.id() != null
+                ? closingIssueClient.closesIssues(scopeId, project.id(), iid)
+                : null;
+        GitLabDiscussionSyncService.DiscussionRead threads = scopeId != null && action == GitLabEventAction.UPDATE
+                ? discussionSyncService.readThreadResolutions(scopeId, repository.getNameWithOwner(), iid)
+                : null;
+        if (facts == null && closing == null && threads == null && !merge) {
+            return;
         }
+        transactionTemplate.executeWithoutResult(status -> {
+            if (!contextResolver.mayStillWrite(stored.context())) {
+                return;
+            }
+            if (closing != null) {
+                mergeRequestProcessor.replaceClosingIssues(repository, iid, closing, stored.version());
+            }
+            if (threads != null && scopeId != null) {
+                discussionSyncService.applyThreadResolutions(repository, iid, threads, scopeId);
+            }
+            if (merge) {
+                if (facts != null) {
+                    mergeRequestProcessor.applyTerminalFacts(repository, iid, facts);
+                }
+                // Offered whether or not the read succeeded: a merger it could not name holds the review pending.
+                mergeRequestProcessor.offerMerge(repository, iid, stored.context());
+            } else if (facts != null) {
+                mergeRequestProcessor.applyReadiness(repository, iid, facts, requestedAt, stored.context());
+            }
+        });
     }
 
     @Override
     protected void handleEvent(GitLabMergeRequestEventDTO event) {
-        handleEventAndReturnContext(event);
+        dispatchEvent(event, Instant.now());
     }
 
-    private @Nullable ProcessingContext handleEventAndReturnContext(GitLabMergeRequestEventDTO event) {
+    /** Stores the event Hephaestus received at {@code arrivedAt}. */
+    @Nullable
+    ProcessingContext handle(GitLabMergeRequestEventDTO event, Instant arrivedAt) {
         if (event.objectAttributes() == null) {
             log.warn("Received merge request event with missing object_attributes");
             return null;
@@ -130,21 +210,19 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
                 event.objectAttributes().iid(),
                 action);
 
-        ProcessingContext context = contextResolver.resolve(projectPath, action.getValue(), "merge request");
-        if (context == null) {
+        ProcessingContext resolved = contextResolver.resolve(projectPath, action.getValue(), "merge request");
+        if (resolved == null) {
             return null;
         }
+        ProcessingContext context = resolved.withObservedAt(arrivedAt);
 
         switch (action) {
             case OPEN, UPDATE -> mergeRequestProcessor.process(event, context);
             case CLOSE -> mergeRequestProcessor.processClosed(event, context);
             case REOPEN -> mergeRequestProcessor.processReopened(event, context);
             case MERGE -> mergeRequestProcessor.processMerged(event, context);
-            case APPROVED -> mergeRequestProcessor.processApproved(event, context);
-            case UNAPPROVED -> mergeRequestProcessor.processUnapproved(event, context);
-            case APPROVAL, UNAPPROVAL ->
-                log.debug(
-                        "Skipped group-level approval rule event: projectPath={}, action={}", safeProjectPath, action);
+            case APPROVED, APPROVAL -> mergeRequestProcessor.processApproved(event, context);
+            case UNAPPROVED, UNAPPROVAL -> mergeRequestProcessor.processUnapproved(event, context);
             default -> log.debug("Unhandled merge request action: projectPath={}, action={}", safeProjectPath, action);
         }
         return context;

@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pipeline.dto.GitLabPipelineEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import org.slf4j.Logger;
@@ -25,7 +26,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Handles GitLab Pipeline Hook events: the pipeline's status becomes the head-check state of the
  * merge request it names, or of every merge request whose head is the pipeline's commit. A pipeline
  * is GitLab's whole verdict on a commit, so it replaces the state outright, as the sync's head
- * pipeline does.
+ * pipeline does, unless what is stored was observed later.
  */
 @Component
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -35,6 +36,7 @@ public class GitLabPipelineMessageHandler extends AbstractIntegrationMessageHand
 
     private final GitLabWebhookContextResolver contextResolver;
     private final PullRequestRepository pullRequestRepository;
+    private final TransactionTemplate transactionTemplate;
 
     GitLabPipelineMessageHandler(
             GitLabWebhookContextResolver contextResolver,
@@ -49,10 +51,25 @@ public class GitLabPipelineMessageHandler extends AbstractIntegrationMessageHand
                 transactionTemplate);
         this.contextResolver = contextResolver;
         this.pullRequestRepository = pullRequestRepository;
+        this.transactionTemplate = transactionTemplate;
+    }
+
+    @Override
+    protected void dispatchEvent(GitLabPipelineEventDTO event, Instant arrivedAt) {
+        transactionTemplate.executeWithoutResult(status -> handle(event, arrivedAt));
     }
 
     @Override
     protected void handleEvent(GitLabPipelineEventDTO event) {
+        transactionTemplate.executeWithoutResult(status -> handle(event, Instant.now()));
+    }
+
+    /**
+     * Records the pipeline Hephaestus received at {@code arrivedAt}, where nothing observed later is stored: a
+     * delayed hook does not put back a status the pipeline or a later read has since replaced. Runs in the caller's
+     * transaction, which holds each merge request's row while it compares.
+     */
+    void handle(GitLabPipelineEventDTO event, Instant arrivedAt) {
         var pipeline = event.objectAttributes();
         if (pipeline == null || pipeline.sha() == null || pipeline.status() == null) {
             log.warn("Received pipeline event with missing object_attributes");
@@ -71,14 +88,14 @@ public class GitLabPipelineMessageHandler extends AbstractIntegrationMessageHand
         CheckState state = GitLabMergeRequestProcessor.mapPipelineStatus(pipeline.status());
 
         List<PullRequest> targets = event.mergeRequest() == null
-                ? pullRequestRepository.findAllByRepository_IdAndHeadRefOid(repositoryId, pipeline.sha())
+                ? pullRequestRepository.findAllForUpdateByRepositoryIdAndHeadRefOid(repositoryId, pipeline.sha())
                 : pullRequestRepository
-                        .findByRepositoryIdAndNumber(
+                        .findForUpdateByRepositoryIdAndNumber(
                                 repositoryId, event.mergeRequest().iid())
                         .map(List::of)
                         .orElse(List.of());
         for (PullRequest pr : targets) {
-            if (pr.observeHeadChecks(pipeline.sha(), state, true)) {
+            if (pr.observeHeadChecks(pipeline.sha(), state, true, arrivedAt)) {
                 pullRequestRepository.save(pr);
             }
         }

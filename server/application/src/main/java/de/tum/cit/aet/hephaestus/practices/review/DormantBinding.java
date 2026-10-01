@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -22,13 +23,23 @@ public record DormantBinding(Long practiceId, Set<SignalName> signals, Set<Integ
         raisedByAnyOf = Set.copyOf(raisedByAnyOf);
     }
 
-    /** Phrased as the action that would end the dormancy; joined by hand rather than {@code Collection.toString}. */
-    public String reason() {
-        String names = signals.stream().map(SignalName::value).sorted().collect(Collectors.joining(", "));
+    /**
+     * The fact, in the words a reader knows: each signal and integration by its display name, never by its
+     * identifier. Stated rather than phrased as the fix, by the rule {@code SignalStateReason#describe()}
+     * keeps: a developer reads it on the trace of their own work and cannot connect an integration.
+     *
+     * @param signalName      a signal's display name
+     * @param integrationName an integration's display name
+     */
+    public String reason(Function<SignalName, String> signalName, Function<IntegrationKind, String> integrationName) {
+        String moments = signals.stream().map(signalName).distinct().sorted().collect(Collectors.joining(", "));
         if (raisedByAnyOf.isEmpty()) {
-            return "no integration can raise " + names + " — the practice is bound to signals nothing produces";
+            return "Nothing Hephaestus can connect reports the moments this practice watches for (" + moments
+                    + "), so it is never reviewed.";
         }
-        String integrations = raisedByAnyOf.stream().map(Enum::name).sorted().collect(Collectors.joining(" or "));
-        return "no connected integration raises " + names + "; connect " + integrations;
+        String integrations =
+                raisedByAnyOf.stream().map(integrationName).sorted().collect(Collectors.joining(" or "));
+        return "Nothing connected to this workspace reports the moments this practice watches for (" + moments + "); "
+                + integrations + " would.";
     }
 }

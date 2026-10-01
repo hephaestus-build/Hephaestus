@@ -159,10 +159,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     @Test
     void transition_slackOAuthReconnectFromUninstalled_writesAuditRowAndReactivates() {
         Connection connection = new Connection(
-                workspace,
-                IntegrationKind.SLACK,
-                "T1",
-                new ConnectionConfig.SlackConfig("T1", "Acme", null, null, null, Set.of()));
+                workspace, IntegrationKind.SLACK, "T1", new ConnectionConfig.SlackConfig("T1", "Acme", null, Set.of()));
         setId(connection, 55L);
         connection.setState(IntegrationState.UNINSTALLED);
         when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
@@ -182,6 +179,19 @@ class ConnectionServiceTest extends BaseUnitTest {
         assertThat(audit.getValue().getToState()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(audit.getValue().getEventType()).isEqualTo("OAUTH_COMPLETE");
         verify(connectionRepository).save(connection);
+    }
+
+    @Test
+    void shouldReactivateTheWorkspacesOwnDisconnectedGitHubInstallationWhenAConnectProvesItAgain() {
+        Connection connection = connectionInState(IntegrationState.UNINSTALLED);
+        when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
+                .thenReturn(java.util.Optional.of(connection));
+
+        Connection result = service.transition(
+                connection,
+                new TransitionRequest(IntegrationState.ACTIVE, "OAUTH_COMPLETE", "USER", "5", "corr-gh", "acme"));
+
+        assertThat(result.getState()).isEqualTo(IntegrationState.ACTIVE);
     }
 
     @Test
@@ -273,7 +283,12 @@ class ConnectionServiceTest extends BaseUnitTest {
         Connection gitLab = connection(
                 IntegrationKind.GITLAB,
                 new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.example", 12L, 34L, ConnectionConfig.GitLabConfig.SigningMode.WHSEC, Set.of()));
+                        "https://gitlab.example",
+                        12L,
+                        34L,
+                        ConnectionConfig.GitLabConfig.SigningMode.WHSEC,
+                        Set.of(),
+                        null));
         Connection outline = connection(
                 IntegrationKind.OUTLINE,
                 new ConnectionConfig.OutlineConfig("https://outline.example", "subscription-1", "secret-1", Set.of()));
@@ -292,8 +307,8 @@ class ConnectionServiceTest extends BaseUnitTest {
 
     @Test
     void findReferenced_resolvesAnExplicitSuspendedConnection() {
-        Connection connection = connection(
-                IntegrationKind.SLACK, new ConnectionConfig.SlackConfig("team-1", "Acme", null, null, null, Set.of()));
+        Connection connection =
+                connection(IntegrationKind.SLACK, new ConnectionConfig.SlackConfig("team-1", "Acme", null, Set.of()));
         connection.setState(IntegrationState.SUSPENDED);
         IntegrationRef ref = new IntegrationRef(
                 IntegrationKind.SLACK, workspace.getId(), connection.getInstanceKey(), connection.getId());

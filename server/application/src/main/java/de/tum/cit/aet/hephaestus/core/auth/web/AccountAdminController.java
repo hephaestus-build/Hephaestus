@@ -5,12 +5,15 @@ import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.AccountService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account.Status;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -38,7 +41,11 @@ public class AccountAdminController {
     }
 
     public record AdminAccountViewDTO(
-            Long id, String displayName, @Nullable String primaryEmail, String appRole, String status) {}
+            Long id,
+            String displayName,
+            @Nullable String primaryEmail,
+            @NonNull AppRole appRole,
+            @NonNull Status status) {}
 
     public record UpdateAccountRequestDTO(@Nullable String appRole) {}
 
@@ -80,7 +87,7 @@ public class AccountAdminController {
                 Objects.requireNonNull(a.getId()),
                 a.getDisplayName(),
                 a.getPrimaryEmail(),
-                a.getAppRole().name(),
-                a.getStatus().name());
+                a.getAppRole(),
+                a.getStatus());
     }
 }

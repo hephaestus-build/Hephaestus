@@ -171,6 +171,8 @@ jobs:
           # image into the daemon leaves something nothing can name.
           load: ${{ !inputs.publish && inputs.single-arch }}
           outputs: ${{ inputs.publish && !inputs.single-arch && format('type=image,"name={0}/{1}",push-by-digest=true,name-canonical=true,push=true', inputs.registry, inputs.image-name) || '' }}
+          # Live distribution indexes are not BuildKit cache inputs. Refresh them even on reruns.
+          no-cache-filters: os-packages
           cache-from: |
             type=registry,ref=${{ inputs.registry }}/${{ inputs.image-name }}:cache-main-${{ steps.prep.outputs.platform_pair }}
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:cache-main-{2},mode=max', inputs.registry, inputs.image-name, steps.prep.outputs.platform_pair) || '' }}
@@ -439,15 +441,21 @@ jobs:
           gh attestation verify "oci://$IMAGE_REF" --owner "${{ github.repository_owner }}"
 
   scan:
-    name: Scan linux/amd64 Image
+    name: Scan ${{ matrix.platform }} Image
     needs: [build, merge]
     # `merge` is skipped for single-architecture builds, which would skip this job too
     # without a status-check function to suppress the implicit success() over every need.
     if: >-
       ${{ inputs.scan-images && inputs.publish && !cancelled() && needs.build.result == 'success' &&
       needs.merge.result != 'failure' && needs.merge.result != 'cancelled' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.single-arch && '["linux/amd64"]' || '["linux/amd64","linux/arm64"]') }}
     timeout-minutes: 20
     runs-on: ubuntu-24.04
+    env:
+      SCAN_PLATFORM: ${{ matrix.platform }}
     permissions:
       contents: read
       packages: read
@@ -474,7 +482,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve the linux/amd64 subject
+      - name: Resolve the platform subject
         id: subject
         env:
           IMAGE_REF: ${{ inputs.registry }}/${{ inputs.image-name }}@${{ inputs.single-arch && needs.build.outputs.manifest-digest || needs.merge.outputs.manifest-digest }}
@@ -492,23 +500,24 @@ jobs:
           IMAGE: ${{ steps.subject.outputs.image }}
           REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
           SUBJECT_DIGEST: ${{ steps.subject.outputs.digest }}
+          REPORT_STEM: ${{ steps.subject.outputs.report-stem }}
           TRIVY_USERNAME: ${{ github.actor }}
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p reports
           trivy image --skip-db-update --scanners vuln --format json \
-            --output "reports/$IMAGE-linux-amd64.json" "$REPOSITORY@$SUBJECT_DIGEST"
-          node scripts/check-release-vulnerabilities.ts "$IMAGE" linux/amd64 "$SUBJECT_DIGEST" \
-            "$REPOSITORY" "reports/$IMAGE-linux-amd64.json" security/vulnerability-policy.json \
-            "reports/$IMAGE-linux-amd64.policy.json"
+            --output "reports/$REPORT_STEM.json" "$REPOSITORY@$SUBJECT_DIGEST"
+          node scripts/check-release-vulnerabilities.ts "$IMAGE" "$SCAN_PLATFORM" "$SUBJECT_DIGEST" \
+            "$REPOSITORY" "reports/$REPORT_STEM.json" security/vulnerability-policy.json \
+            "reports/$REPORT_STEM.policy.json"
 
       # The policy result names the CVEs; the gate's exit status alone cannot.
       - name: Upload the vulnerability policy result
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: vulnerability-policy-${{ steps.subject.outputs.image }}-linux-amd64
+          name: vulnerability-policy-${{ steps.subject.outputs.report-stem }}
           path: reports
           if-no-files-found: warn
           retention-days: 7

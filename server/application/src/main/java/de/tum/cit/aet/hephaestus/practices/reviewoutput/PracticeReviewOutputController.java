@@ -5,10 +5,14 @@ import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.FeedbackApprovalService;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.DecideFeedbackProposalRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.approval.dto.FeedbackApprovalDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.FeedbackWithdrawalService;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationService;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewFeedbackDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewObservationDetailDTO;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.UpdateFeedbackWithdrawalRequestDTO;
+import de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.UpdateObservationValidityRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.authorization.RequireAtLeastWorkspaceAdmin;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
@@ -31,6 +35,7 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,6 +52,8 @@ public class PracticeReviewOutputController {
     private final ReviewObservationQueryService observationQueryService;
     private final ReviewFeedbackQueryService feedbackQueryService;
     private final FeedbackApprovalService feedbackApprovalService;
+    private final ObservationInvalidationService invalidationService;
+    private final FeedbackWithdrawalService withdrawalService;
 
     @GetMapping("/observations")
     @Operation(
@@ -67,8 +74,8 @@ public class PracticeReviewOutputController {
             @RequestParam(defaultValue = "50") @Min(1) @Max(100) int size,
             @Parameter(
                             description =
-                                    "Sorting strategy. ACTIONABILITY orders problems from CRITICAL to INFO, then strengths, "
-                                            + "then not-applicable observations; ties are newest first.")
+                                    "Sorting strategy. ACTIONABILITY orders negative outcomes from CRITICAL to INFO, then "
+                                            + "positive outcomes, then not-applicable observations; ties are newest first.")
                     @RequestParam(defaultValue = "NEWEST")
                     ReviewObservationSort sort,
             @Valid @ParameterObject ReviewObservationFilterParams filter) {
@@ -96,10 +103,46 @@ public class PracticeReviewOutputController {
         return ResponseEntity.ok(observationQueryService.get(workspaceContext.id(), observationId));
     }
 
+    @PatchMapping("/observations/{observationId}/validity")
+    @AuditExempt(reason = "The observation_invalidation row is the domain audit trail")
+    @Operation(
+            summary = "Invalidate an observation that was wrong when recorded, or restore it",
+            description = "Invalidating stops feedback citing the observation that has not reached anyone yet. "
+                    + "Feedback already delivered keeps its record, and a comment already posted on the "
+                    + "provider stays there. Restoring does not re-send anything.",
+            operationId = "updatePracticeReviewObservationValidity")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Observation detail after the change",
+            content = @Content(schema = @Schema(implementation = ReviewObservationDetailDTO.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Observation not found in this workspace",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The observation is already in the requested state",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    public ResponseEntity<ReviewObservationDetailDTO> updateObservationValidity(
+            WorkspaceContext workspaceContext,
+            @PathVariable UUID observationId,
+            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateObservationValidityRequestDTO request) {
+        long actorAccountId = SecurityUtils.getCurrentAccountId().orElseThrow();
+        invalidationService.setValidity(
+                workspaceContext.id(), observationId, actorAccountId, request.valid(), request.reason());
+        return ResponseEntity.ok(observationQueryService.get(workspaceContext.id(), observationId));
+    }
+
     @GetMapping("/feedback")
     @Operation(
             summary = "List practice review feedback across the workspace",
-            description = "Results are ordered newest first and include every delivery state.",
+            description = "Results include every delivery state and are ordered newest first by default.",
             operationId = "listPracticeReviewFeedback")
     @ApiResponse(responseCode = "200", description = "Paginated feedback returned")
     @ApiResponse(
@@ -113,9 +156,14 @@ public class PracticeReviewOutputController {
             WorkspaceContext workspaceContext,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(100) int size,
+            @Parameter(
+                            description = "Sorting strategy. NEWEST and OLDEST order by when the feedback was created; "
+                                    + "ties by id.")
+                    @RequestParam(defaultValue = "NEWEST")
+                    ReviewFeedbackSort sort,
             @Valid @ParameterObject ReviewFeedbackFilterParams filter) {
         return ResponseEntity.ok(new PagedModel<>(
-                feedbackQueryService.list(workspaceContext.id(), filter.toFilter(), PageRequest.of(page, size))));
+                feedbackQueryService.list(workspaceContext.id(), filter.toFilter(), sort, PageRequest.of(page, size))));
     }
 
     @GetMapping("/feedback/{feedbackId}")
@@ -135,6 +183,42 @@ public class PracticeReviewOutputController {
                             schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<ReviewFeedbackDetailDTO> getFeedback(
             WorkspaceContext workspaceContext, @PathVariable UUID feedbackId) {
+        return ResponseEntity.ok(feedbackQueryService.get(workspaceContext.id(), feedbackId));
+    }
+
+    @PatchMapping("/feedback/{feedbackId}/withdrawal")
+    @AuditExempt(reason = "The feedback_withdrawal row is the domain audit trail")
+    @Operation(
+            summary = "Withdraw a card from a developer's practice page, or restore it",
+            description = "Only practice-page feedback that is waiting to be read or already shown can be withdrawn."
+                    + " The developer sees that it was withdrawn, not what it said; its record and evidence stay."
+                    + " Restoring puts it back through the page's ordinary checks and sends nothing.",
+            operationId = "updatePracticeReviewFeedbackWithdrawal")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Feedback detail after the change",
+            content = @Content(schema = @Schema(implementation = ReviewFeedbackDetailDTO.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "Feedback not found in this workspace",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The feedback is not on a practice page, or is not waiting to be read or shown there",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    public ResponseEntity<ReviewFeedbackDetailDTO> updateFeedbackWithdrawal(
+            WorkspaceContext workspaceContext,
+            @PathVariable UUID feedbackId,
+            @Valid @org.springframework.web.bind.annotation.RequestBody UpdateFeedbackWithdrawalRequestDTO request) {
+        long actorAccountId = SecurityUtils.getCurrentAccountId().orElseThrow();
+        withdrawalService.setWithdrawn(
+                workspaceContext.id(), feedbackId, actorAccountId, request.withdrawn(), request.reason());
         return ResponseEntity.ok(feedbackQueryService.get(workspaceContext.id(), feedbackId));
     }
 

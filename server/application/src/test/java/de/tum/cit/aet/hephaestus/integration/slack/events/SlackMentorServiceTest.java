@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorSandboxPreparer;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackMentorIdentityResolver;
@@ -58,8 +59,11 @@ class SlackMentorServiceTest extends BaseUnitTest {
     @Mock
     private MentorReadinessQuery mentorReadinessQuery;
 
+    @Mock
+    private MentorSandboxPreparer sandboxPreparer;
+
     private SlackMentorService service() {
-        when(mentorReadinessQuery.isEnabled(WORKSPACE)).thenReturn(true);
+        when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(true);
         return new SlackMentorService(
                 workspaceResolver,
                 threadLinker,
@@ -68,7 +72,8 @@ class SlackMentorServiceTest extends BaseUnitTest {
                 identityResolver,
                 new KeywordSlackMentorInputGuard(),
                 onboardingService,
-                mentorReadinessQuery);
+                mentorReadinessQuery,
+                sandboxPreparer);
     }
 
     @ParameterizedTest
@@ -87,10 +92,43 @@ class SlackMentorServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void disabledWorkspace_ignoresDmWithoutAnyMentorSideEffect() {
+    void shouldPrepareTheSandboxOfALinkedDeveloperWhoOpensTheApp() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
+
+        service().prepare(TEAM, USER);
+
+        verify(sandboxPreparer).prepare(WORKSPACE, 314L);
+        verifyNoInteractions(slackMessageService, threadLinker);
+    }
+
+    @Test
+    void shouldPrepareNothingForAnUnlinkedSlackUser() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.empty());
+
+        service().prepare(TEAM, USER);
+
+        verify(sandboxPreparer, never()).prepare(anyLong(), anyLong());
+        verifyNoInteractions(slackMessageService, threadLinker);
+    }
+
+    @Test
+    void shouldPrepareNothingWhenHephIsNotReady() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         SlackMentorService service = service();
-        when(mentorReadinessQuery.isEnabled(WORKSPACE)).thenReturn(false);
+        when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(false);
+
+        service.prepare(TEAM, USER);
+
+        verifyNoInteractions(identityResolver, sandboxPreparer, slackMessageService);
+    }
+
+    @Test
+    void shouldIgnoreTheDmWithoutAnySideEffectWhenHephIsNotReady() {
+        when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
+        SlackMentorService service = service();
+        when(mentorReadinessQuery.isReady(WORKSPACE)).thenReturn(false);
 
         service.handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
 
@@ -98,17 +136,16 @@ class SlackMentorServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void enabledWorkspace_acceptsDmWithoutConsultingOperationalReadiness() {
+    void shouldStartATurnForAnAdmittedMemberWhenHephIsReady() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         when(identityResolver.resolveActiveMemberId(WORKSPACE, TEAM, USER)).thenReturn(Optional.of(314L));
         UUID threadId = UUID.randomUUID();
         when(threadLinker.findOrCreateThread(WORKSPACE, TEAM, CHANNEL, "100.1", USER, 314L))
                 .thenReturn(threadId);
-        SlackMentorService service = service();
-        service.handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
+
+        service().handleDm(TEAM, CHANNEL, USER, "Can you review my work?", "100.1", "100.1");
 
         verify(mentorTurnRunner).run(any(), any(), eq(314L));
-        verify(mentorReadinessQuery, never()).isReady(WORKSPACE);
     }
 
     @Test

@@ -35,7 +35,7 @@ class ReviewableArtifactLoader {
 
     /** Empty both when no such pull request exists and when this workspace does not monitor it. */
     Optional<PullRequest> findPullRequestForGate(long workspaceId, long pullRequestId) {
-        if (!ownership.pullRequestBelongsToWorkspace(workspaceId, pullRequestId)) {
+        if (!ownership.belongsToWorkspace(workspaceId, PullRequest.class, pullRequestId)) {
             return Optional.empty();
         }
         return pullRequestRepository.findByIdWithAllForGate(pullRequestId);
@@ -47,7 +47,7 @@ class ReviewableArtifactLoader {
      * <p>Assignees must be fetched too: the gate's role check iterates them.
      */
     Optional<Issue> findIssueForGate(long workspaceId, long issueId) {
-        if (!ownership.issueBelongsToWorkspace(workspaceId, issueId)) {
+        if (!ownership.belongsToWorkspace(workspaceId, Issue.class, issueId)) {
             return Optional.empty();
         }
         return issueRepository.findByIdWithRepositoryAndAssignees(issueId);

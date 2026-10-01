@@ -65,8 +65,8 @@ class WorkspaceLlmModelServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        workspaceContext = new WorkspaceContext(
-                1L, "test-workspace", "Test Workspace", AccountType.ORG, null, false, false, Set.of());
+        workspaceContext =
+                new WorkspaceContext(1L, "test-workspace", "Test Workspace", AccountType.ORG, null, false, Set.of());
     }
 
     private void byoEnabled(boolean enabled) {

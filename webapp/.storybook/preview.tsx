@@ -1,7 +1,12 @@
 import { withThemeByClassName, withThemeFromJSXProvider } from "@storybook/addon-themes";
 import type { Decorator, Preview } from "@storybook/react-vite";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
+import {
+	createMemoryHistory,
+	createRootRoute,
+	createRouter,
+	RouterProvider,
+} from "@tanstack/react-router";
 import { isCommonAssetRequest } from "msw";
 import { initialize, mswLoader } from "msw-storybook-addon";
 import type { ReactNode } from "react";
@@ -47,14 +52,25 @@ const withQueryClient: Decorator = (Story) => {
 	);
 };
 
-const withRouter: Decorator = (Story) => {
-	const rootRoute = createRootRoute({
-		component: () => <Story />,
+/**
+ * A story that renders what the app reads from the address — a level open in the detail stack, say —
+ * starts the router there with `parameters: { router: { initialUrl: "/?detail=…" } }`.
+ */
+const withRouter: Decorator = (Story, { parameters }) => {
+	const url = initialUrl(parameters.router);
+	const router = createRouter({
+		routeTree: createRootRoute({ component: () => <Story /> }),
+		history: url === undefined ? undefined : createMemoryHistory({ initialEntries: [url] }),
 	});
-	const routeTree = rootRoute;
-	const router = createRouter({ routeTree });
 	return <RouterProvider router={router} />;
 };
+
+function initialUrl(router: unknown): string | undefined {
+	if (typeof router === "object" && router !== null && "initialUrl" in router) {
+		return typeof router.initialUrl === "string" ? router.initialUrl : undefined;
+	}
+	return undefined;
+}
 
 /**
  * `__root.tsx` mounts one of these for the whole app, so a story without it has no error channel at

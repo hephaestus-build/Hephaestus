@@ -165,9 +165,39 @@ class FeedbackDispatchStateMachine {
         return retry(dispatch, owner, error, externalRef, externalUrl, true, signals);
     }
 
+    /** Keeps a dispatch whose started write is unconfirmed looking for it, at {@code nextAttemptAt}. */
+    PracticeFeedbackDispatchService.Result recheckAt(
+            FeedbackDispatch dispatch,
+            String owner,
+            String error,
+            @Nullable String externalRef,
+            @Nullable String externalUrl,
+            List<DeliveredSignal> signals,
+            Instant nextAttemptAt) {
+        return finish(
+                        dispatch,
+                        owner,
+                        FeedbackDispatchState.UNCERTAIN,
+                        externalRef,
+                        externalUrl,
+                        error,
+                        null,
+                        nextAttemptAt,
+                        signals)
+                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl)
+                : PracticeFeedbackDispatchService.Result.inProgress();
+    }
+
     PracticeFeedbackDispatchService.Result retryAfterWrite(
             FeedbackDispatch dispatch, String owner, @Nullable String error) {
         return retry(dispatch, owner, error, null, null, true, deliveredSignals(dispatch));
+    }
+
+    /** Records that inline notes are about to be requested; false once the lease is lost, so nothing is sent. */
+    boolean beginInlineWrite(FeedbackDispatch dispatch, String owner) {
+        Integer began = transactionTemplate.execute(
+                status -> repository.beginInlineWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
+        return began != null && began == 1;
     }
 
     void fail(FeedbackDispatch dispatch, String error) {

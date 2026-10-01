@@ -149,7 +149,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends AbstractWorkspaceIn
         administrator = linked(other);
         ensureWorkspaceMembership(workspace, other, WorkspaceRole.ADMIN);
         var config = new ConnectionConfig.GitLabConfig(
-                ORIGIN, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of());
+                ORIGIN, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null);
         Connection connection = new Connection(workspace, IntegrationKind.GITLAB, ORIGIN, config);
         connection.setDisplayName("GitLab");
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);

@@ -111,6 +111,12 @@ public class MentorProxyCredentialRegistry {
      */
     public String mint(UUID sessionId, Route route) {
         String token = AgentJob.generateJobToken();
+        install(sessionId, token, route);
+        return token;
+    }
+
+    /** Install the server-minted scoped credential on its owning worker. Never log this token. */
+    public void install(UUID sessionId, String token, Route route) {
         String hash = AgentJob.computeTokenHash(token);
         byTokenHash.put(
                 hash,
@@ -128,7 +134,20 @@ public class MentorProxyCredentialRegistry {
         if (previous != null && !previous.equals(hash)) {
             byTokenHash.invalidate(previous);
         }
-        return token;
+    }
+
+    public Optional<Route> route(UUID sessionId) {
+        String hash = tokenHashBySession.get(sessionId);
+        Entry entry = hash == null ? null : byTokenHash.getIfPresent(hash);
+        return entry == null
+                ? Optional.empty()
+                : Optional.of(new Route(
+                        entry.apiProtocol(),
+                        entry.baseUrl(),
+                        entry.connectionScope(),
+                        entry.connectionId(),
+                        entry.modelId(),
+                        entry.workspaceId()));
     }
 
     /**

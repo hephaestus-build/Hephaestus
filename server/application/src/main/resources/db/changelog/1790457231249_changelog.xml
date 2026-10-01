@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790457231249-1" author="hephaestus">
+        <createTable tableName="observation_invalidation">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="observation_invalidationPK"/>
+            </column>
+            <column name="invalidated_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invalidated_by_account_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="observation_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_copy" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_copy_retry_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="restoration_reason" type="VARCHAR(500)"/>
+            <column name="restored_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="restored_by_account_id" type="BIGINT"/>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790457231249-2" author="hephaestus">
+        <addUniqueConstraint columnNames="id, workspace_id" constraintName="uk_observation_workspace_id" tableName="observation"/>
+    </changeSet>
+    <changeSet id="1790457231249-3" author="hephaestus">
+        <createIndex indexName="idx_observation_invalidation_observation" tableName="observation_invalidation">
+            <column name="observation_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790457231249-4" author="hephaestus">
+        <addForeignKeyConstraint baseColumnNames="observation_id,workspace_id" baseTableName="observation_invalidation" constraintName="fk_observation_invalidation_observation" deferrable="false" initiallyDeferred="false" onDelete="CASCADE" referencedColumnNames="id,workspace_id" referencedTableName="observation" validate="true"/>
+    </changeSet>
+    <changeSet id="1790457231249-5" author="hephaestus">
+        <comment>Actors of an observation correction, at most one open correction per observation, and its states.</comment>
+        <addForeignKeyConstraint baseTableName="observation_invalidation" baseColumnNames="invalidated_by_account_id"
+                                 referencedTableName="account" referencedColumnNames="id"
+                                 constraintName="sfk_observation_invalidation_invalidated_by"/>
+        <addForeignKeyConstraint baseTableName="observation_invalidation" baseColumnNames="restored_by_account_id"
+                                 referencedTableName="account" referencedColumnNames="id"
+                                 constraintName="sfk_observation_invalidation_restored_by"/>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            CREATE UNIQUE INDEX uk_observation_invalidation_active
+                ON observation_invalidation (observation_id) WHERE restored_at IS NULL;
+            ALTER TABLE observation_invalidation ADD CONSTRAINT ck_observation_invalidation_reason
+                CHECK (btrim(reason) <> '');
+            ALTER TABLE observation_invalidation ADD CONSTRAINT ck_observation_invalidation_restoration
+                CHECK ((restored_at IS NULL AND restored_by_account_id IS NULL AND restoration_reason IS NULL)
+                    OR (restored_at IS NOT NULL AND restored_by_account_id IS NOT NULL
+                        AND restoration_reason IS NOT NULL AND btrim(restoration_reason) <> ''));
+            ALTER TABLE observation_invalidation ADD CONSTRAINT ck_observation_invalidation_provider_copy
+                CHECK (provider_copy IN ('PENDING', 'NONE', 'UPDATED', 'INLINE_REMAINS', 'UNRESOLVED'));
+            CREATE INDEX idx_observation_invalidation_provider_copy_due
+                ON observation_invalidation (provider_copy_retry_at) WHERE provider_copy IN ('PENDING', 'UNRESOLVED');
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1790457231249-6" author="hephaestus">
+        <comment>Allow an observation invalidation to stop feedback that cites it.</comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE feedback DROP CONSTRAINT chk_feedback_suppression_reason;
+            ALTER TABLE feedback ADD CONSTRAINT chk_feedback_suppression_reason
+                CHECK (suppression_reason IS NULL OR suppression_reason IN (
+                    'VOLUME_CAPPED', 'COMPOSER_DEDUPED', 'COMPOSER_WITHHELD', 'REACTED_DISPUTED',
+                    'REACTED_NOT_APPLICABLE', 'CONVERSATION_EXPIRED', 'ARTIFACT_GONE', 'ARTIFACT_CLOSED',
+                    'ISSUE_SNAPSHOT_CHANGED', 'ARTIFACT_MERGED', 'ARTIFACT_DRAFT', 'RECIPIENT_OPTED_OUT',
+                    'EMPTY_AFTER_SANITIZE', 'INSTANCE_SILENCED', 'PRACTICE_REQUIRES_APPROVAL', 'BACKFILL_QUIET',
+                    'WORKSPACE_DISABLED', 'APPROVAL_STALE', 'APPROVAL_NO_LONGER_ELIGIBLE',
+                    'WORKSPACE_DELIVERY_PAUSED', 'STALE_ROLLOUT_REVISION', 'OUTSIDE_CURRENT_COVERAGE',
+                    'OBSERVATION_INVALIDATED'));
+        ]]></sql>
+    </changeSet>
+    <changeSet id="1790457231249-7" author="hephaestus">
+        <addColumn tableName="feedback_dispatch">
+            <column name="write_started_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790457231249-8" author="hephaestus">
+        <addColumn tableName="feedback_dispatch">
+            <column name="inline_write_started" type="BOOLEAN"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

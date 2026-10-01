@@ -64,8 +64,7 @@ On a supported page, the practice review sits in the page's own content column:
 - on a GitLab issue or work item, at the top of its activity;
 - on the changes of a pull request or merge request, above the changed files.
 
-It starts as **one line**, the same height whatever it says. The line says, in this order, what is
-happening to a review right now, if anything — *Review queued or running* — then how many comments
+It starts as **one line**, the same height whatever it says. The line says, in this order, any pending or deferred decision recorded for your review, then how many comments
 Hephaestus recorded posting on this work for you, then when the work was last reviewed, and whether
 that review could not finish for some practices. For example: *3 comments for you · reviewed 2 hr.
 ago*. Click the line to open the report in place; the rest of the page moves down to make room, and
@@ -94,15 +93,13 @@ Opened, the report is one flat list; nothing in it opens further.
   and a one-sentence summary. An observation made before the practice or the work changed says it is
   no longer current. The first five show, and the rest on request.
 - **When and where the rest is.** The exact time the work was last reviewed and the commit it looked
-  at, when that is known, and **Open in Hephaestus** for the work's review activity: every occasion,
-  its history and what each practice made of it. Workspace admins, including an instance administrator
+  at, when that is known, and **Open in Hephaestus** for your feedback and observations on the work. Workspace admins, including an instance administrator
   working in the workspace, also get **Review details**: every developer's observations, what became
   of each piece of feedback, and each review run, where a run can be cancelled or its results retried.
 
 **No recorded comments does not mean no problems.** *No recorded comments for you* says only that
 Hephaestus recorded no comment for you on this work. It is not a clean result: the work may not have
-been reviewed, or no practice may watch for what happened to it. Likewise, *No review recorded* says
-that Hephaestus has nothing about this work, not that it is fine.
+been reviewed, or no practice may watch for what happened to it. *Review status unavailable* means no review trace is available to your account; it does not say that the work was never reviewed.
 
 ## Previewing work from a list
 

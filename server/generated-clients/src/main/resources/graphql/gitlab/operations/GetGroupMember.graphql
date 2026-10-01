@@ -1,0 +1,16 @@
+query GetGroupMember($fullPath: ID!, $userIds: [ID!]!, $relations: [GroupMemberRelation!]!) {
+    group(fullPath: $fullPath) {
+        id
+        groupMembers(ids: $userIds, relations: $relations, first: 20) {
+            nodes {
+                user {
+                    ...GitLabUserFields
+                }
+                accessLevel {
+                    stringValue
+                    integerValue
+                }
+            }
+        }
+    }
+}

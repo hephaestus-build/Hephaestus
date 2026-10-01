@@ -40,12 +40,40 @@ public record EvidenceContribution(
         @Nullable AutoCloseable cleanup,
         /**
          * Per source, what the capture could not include — the same codes the collector would use to say
-         * why it reported {@link SourceCompleteness#PARTIAL}. Reported here rather than inferred, because
+         * why it reported {@link de.tum.cit.aet.hephaestus.evidence.SourceCompleteness#PARTIAL}. Reported here rather than inferred, because
          * only the collector knows the difference between a tree with nothing more in it and a tree whose
          * walk it stopped.
          */
         Map<SourceKind, List<String>> captureLimitations,
-        List<EvidenceDirectory> directories) {
+        List<EvidenceDirectory> directories,
+        List<WorkspaceRefusal> refusals) {
+    public EvidenceContribution(
+            Map<String, byte[]> files,
+            Map<SourceKind, SourceCompleteness> completeness,
+            Map<SourceKind, String> immutableIdentities,
+            Map<SourceKind, Instant> observedAt,
+            Map<SourceKind, Instant> sourceEffectiveAt,
+            Map<SourceKind, SourceContentState> contentStates,
+            Map<SourceKind, SourceCaptureState> stateOverrides,
+            Map<String, Path> filesOnDisk,
+            @Nullable AutoCloseable cleanup,
+            Map<SourceKind, List<String>> captureLimitations,
+            List<EvidenceDirectory> directories) {
+        this(
+                files,
+                completeness,
+                immutableIdentities,
+                observedAt,
+                sourceEffectiveAt,
+                contentStates,
+                stateOverrides,
+                filesOnDisk,
+                cleanup,
+                captureLimitations,
+                directories,
+                List.of());
+    }
+
     public EvidenceContribution(
             Map<String, byte[]> files,
             Map<SourceKind, SourceCompleteness> completeness,
@@ -160,6 +188,7 @@ public record EvidenceContribution(
     }
 
     public EvidenceContribution {
+        refusals = List.copyOf(refusals);
         directories = List.copyOf(directories);
         files = Map.copyOf(Objects.requireNonNull(files, "files"));
         completeness = Map.copyOf(Objects.requireNonNull(completeness, "completeness"));

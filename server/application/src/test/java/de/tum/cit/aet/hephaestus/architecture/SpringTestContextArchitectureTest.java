@@ -26,7 +26,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBeans;
 class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
+            assignment("agent.handler.PracticeDetectionPipelineIntegrationTest", "workspace-folder"),
+            assignment(
+                    "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment("testconfig.BaseIntegrationTest", "base"),
+            assignment("agent.mentor.chat.MentorWorkerSplitIntegrationTest", "mentor-worker-split"),
             assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
             assignment("notification.AccountSecurityEmailIntegrationTest", "email-capture"),
             assignment("productfeedback.ProductFeedbackEmailIntegrationTest", "email-capture"),
@@ -59,6 +63,15 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"));
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
+            Map.entry(
+                    "workspace-folder",
+                    "real Slack and Outline visibility, repeatable-read capture and cross-source admission; projection spy commits a concurrent row to prove isolation"),
+            Map.entry(
+                    "mentor-worker-split",
+                    "server-only role with authenticated worker transport and controlled runner, routing and admission boundaries"),
+            Map.entry(
+                    "gitlab-token-lifecycle",
+                    "real credential storage, lifecycle locks and attention with only irreversible upstream token rotation mocked"),
             Map.entry("base", "shared PostgreSQL, HTTP, security, and application acceptance context"),
             Map.entry(
                     "email-capture",
@@ -109,6 +122,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
+            "agent.handler.PracticeDetectionPipelineIntegrationTest",
+            "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
             "notification.AccountDeletionEmailIntegrationTest",
             "notification.AccountSecurityEmailIntegrationTest",
             "productfeedback.ProductFeedbackEmailIntegrationTest",
@@ -132,6 +147,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> DIRTY_CONTEXT_TESTS = Set.of();
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
+            "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
+            "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
             "integration.slack.SlackConsentLifecycleE2EIntegrationTest");
 
@@ -181,7 +198,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
         Set<String> mergedKeys =
                 fullContextTests.stream().map(this::mergedContextKey).collect(Collectors.toCollection(TreeSet::new));
-        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(16);
+        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(19);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.keySet()).isEqualTo(mergedKeys);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.values())
                 .allSatisfy(reason -> assertThat(reason).isNotBlank());

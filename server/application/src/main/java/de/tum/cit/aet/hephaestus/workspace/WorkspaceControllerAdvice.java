@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.workspace.exception.InvalidWorkspaceSlugExcepti
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
 import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryAlreadyMonitoredException;
 import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryManagementNotAllowedException;
+import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryProviderNotConnectedException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceLifecycleViolationException;
 import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceSlugConflictException;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeBlockedException;
@@ -88,6 +89,14 @@ public class WorkspaceControllerAdvice {
         return problem(
                 HttpStatus.BAD_REQUEST,
                 "Repository management not allowed",
+                userFacingDetail(Objects.requireNonNullElse(exception.getMessage(), "Unexpected error")));
+    }
+
+    @ExceptionHandler(RepositoryProviderNotConnectedException.class)
+    ProblemDetail handleRepositoryProviderNotConnected(RepositoryProviderNotConnectedException exception) {
+        return problem(
+                HttpStatus.CONFLICT,
+                "Repository provider not connected",
                 userFacingDetail(Objects.requireNonNullElse(exception.getMessage(), "Unexpected error")));
     }
 

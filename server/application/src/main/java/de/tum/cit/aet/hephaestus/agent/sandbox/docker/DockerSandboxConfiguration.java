@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.DockerInteract
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.StdinWriteWatchdog;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -62,6 +61,12 @@ import tools.jackson.databind.ObjectMapper;
 public class DockerSandboxConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(DockerSandboxConfiguration.class);
+
+    private final Clock clock;
+
+    public DockerSandboxConfiguration(Clock clock) {
+        this.clock = clock;
+    }
 
     /** RPC connections per container: create/start, logs and the wait. */
     private static final int RPC_CONNECTIONS_PER_CONTAINER = 3;
@@ -149,8 +154,14 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
-    public SandboxNetworkManager sandboxNetworkManager(DockerClientOperations ops, DockerSandboxProperties properties) {
-        return new SandboxNetworkManager(ops, properties);
+    public SandboxCreator sandboxCreator(DockerClientOperations ops) {
+        return new SandboxCreator(ops);
+    }
+
+    @Bean
+    public SandboxNetworkManager sandboxNetworkManager(
+            DockerClientOperations ops, DockerSandboxProperties properties, SandboxCreator creator) {
+        return new SandboxNetworkManager(ops, properties, creator);
     }
 
     @Bean
@@ -228,10 +239,10 @@ public class DockerSandboxConfiguration {
             SandboxContainerManager containerManager,
             SandboxNetworkManager networkManager,
             SandboxVolumeManager volumeManager,
-            MeterRegistry meterRegistry,
-            Clock clock) {
+            SandboxCreator creator,
+            MeterRegistry meterRegistry) {
         return new SandboxReconciler(
-                jobRepository, containerManager, networkManager, volumeManager, meterRegistry, clock);
+                jobRepository, containerManager, networkManager, volumeManager, creator, meterRegistry, clock);
     }
 
     @Bean
@@ -260,12 +271,13 @@ public class DockerSandboxConfiguration {
             SandboxContainerManager containerManager,
             InteractiveSandboxMetrics metrics,
             StdinWriteWatchdog watchdog,
-            MeterRegistry meterRegistry) {
-        return new InteractiveSandboxRegistry(properties, containerManager, metrics, watchdog, meterRegistry);
+            MeterRegistry meterRegistry,
+            SandboxCreator creator) {
+        return new InteractiveSandboxRegistry(properties, containerManager, metrics, watchdog, meterRegistry, creator);
     }
 
     @Bean
-    public InteractiveSandboxService dockerInteractiveSandboxAdapter(
+    public DockerInteractiveSandboxAdapter dockerInteractiveSandboxAdapter(
             InteractiveSandboxProperties interactiveProperties,
             SandboxNetworkManager networkManager,
             SandboxWorkspaceManager workspaceManager,
@@ -281,7 +293,8 @@ public class DockerSandboxConfiguration {
             SandboxGatewayProperties gatewayProperties,
             MentorProxyCredentialRegistry mentorProxyCredentialRegistry,
             SandboxGatewaySessions gatewaySessions,
-            DockerClientOperations volumeOperations) {
+            DockerClientOperations volumeOperations,
+            SandboxCreator creator) {
         return new DockerInteractiveSandboxAdapter(
                 interactiveProperties,
                 networkManager,
@@ -296,7 +309,8 @@ public class DockerSandboxConfiguration {
                 gatewayProperties.port(),
                 mentorProxyCredentialRegistry,
                 gatewaySessions,
-                volumeOperations);
+                volumeOperations,
+                creator);
     }
 
     /**

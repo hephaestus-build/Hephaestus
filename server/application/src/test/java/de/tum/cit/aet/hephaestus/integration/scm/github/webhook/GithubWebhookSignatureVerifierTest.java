@@ -131,7 +131,8 @@ class GithubWebhookSignatureVerifierTest extends BaseUnitTest {
                 new WebhookProperties.Publish(Duration.ofSeconds(9), 5, Duration.ofMillis(200)),
                 WebhookPropertiesFixture.stream(),
                 new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
-                new WebhookProperties.Http(26_214_400L));
+                new WebhookProperties.Http(26_214_400L),
+                new WebhookProperties.Routing(null, null));
     }
 
     private static String hmacHex(byte[] body) {

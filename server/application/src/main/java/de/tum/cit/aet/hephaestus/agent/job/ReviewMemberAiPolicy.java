@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.util.Optional;
@@ -50,15 +51,24 @@ public class ReviewMemberAiPolicy {
 
     @Transactional(readOnly = true)
     public boolean allowsResult(AgentJob job) {
-        var decision = preferences.forDeveloper(
-                job.getWorkspace().getId(), subject(job.getWorkspace().getId(), job.getJobType(), job.getMetadata()));
+        return evaluatePerson(job, subject(job.getWorkspace().getId(), job.getJobType(), job.getMetadata()));
+    }
+
+    /** The job's processor must also be permitted to read another developer's person-scoped history. */
+    @Transactional(readOnly = true)
+    public boolean allowsPerson(AgentJob job, @Nullable Long personId) {
+        return evaluatePerson(job, personId);
+    }
+
+    private boolean evaluatePerson(AgentJob job, @Nullable Long personId) {
+        var decision = preferences.forDeveloper(job.getWorkspace().getId(), personId);
         if (!decision.permitsAi()) return false;
         if (job.getConfigSnapshot() == null) return false;
         try {
             var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
             return routing.allows(
                     job.getWorkspace().getId(),
-                    subject(job.getWorkspace().getId(), job.getJobType(), job.getMetadata()),
+                    personId,
                     new LlmModelResolver.ConnectionRef(
                             snapshot.connectionScope(),
                             snapshot.connectionId(),
@@ -76,8 +86,8 @@ public class ReviewMemberAiPolicy {
         if (artifact == null) return null;
         boolean owned =
                 switch (type) {
-                    case PULL_REQUEST_REVIEW -> ownership.pullRequestBelongsToWorkspace(workspaceId, artifact);
-                    case ISSUE_REVIEW -> ownership.issueBelongsToWorkspace(workspaceId, artifact);
+                    case PULL_REQUEST_REVIEW -> ownership.belongsToWorkspace(workspaceId, PullRequest.class, artifact);
+                    case ISSUE_REVIEW -> ownership.belongsToWorkspace(workspaceId, Issue.class, artifact);
                     default -> false;
                 };
         return owned

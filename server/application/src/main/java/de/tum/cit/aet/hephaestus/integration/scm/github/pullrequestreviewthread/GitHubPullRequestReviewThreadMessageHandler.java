@@ -33,6 +33,7 @@ public class GitHubPullRequestReviewThreadMessageHandler
     private final GitHubPullRequestProcessor prProcessor;
     private final GitHubPullRequestReviewThreadProcessor threadProcessor;
     private final GitHubUserProcessor userProcessor;
+    private final TransactionTemplate transactionTemplate;
 
     GitHubPullRequestReviewThreadMessageHandler(
             ProcessingContextFactory contextFactory,
@@ -51,10 +52,21 @@ public class GitHubPullRequestReviewThreadMessageHandler
         this.prProcessor = prProcessor;
         this.threadProcessor = threadProcessor;
         this.userProcessor = userProcessor;
+        this.transactionTemplate = transactionTemplate;
+    }
+
+    /** The payload's pull request carries review requests, which are dated by when Hephaestus received them. */
+    @Override
+    protected void dispatchEvent(GitHubPullRequestReviewThreadEventDTO event, Instant arrivedAt) {
+        transactionTemplate.executeWithoutResult(status -> handle(event, arrivedAt));
     }
 
     @Override
     protected void handleEvent(GitHubPullRequestReviewThreadEventDTO event) {
+        handle(event, Instant.now());
+    }
+
+    private void handle(GitHubPullRequestReviewThreadEventDTO event, Instant arrivedAt) {
         var threadDto = event.thread();
         var prDto = event.pullRequest();
 
@@ -73,7 +85,10 @@ public class GitHubPullRequestReviewThreadMessageHandler
                 threadId,
                 event.repository() != null ? sanitizeForLog(event.repository().fullName()) : "unknown");
 
-        ProcessingContext context = contextFactory.forWebhookEvent(event).orElse(null);
+        ProcessingContext context = contextFactory
+                .forWebhookEvent(event)
+                .map(resolved -> resolved.withObservedAt(arrivedAt))
+                .orElse(null);
         if (context == null) {
             return;
         }

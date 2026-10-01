@@ -60,17 +60,17 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("an approval stamped with the merge time is moved back to the system note's time")
-    void shouldMoveApprovalBackToTheSystemNote() {
-        approval(MERGED_AT);
-        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    @DisplayName("an old approval note cannot date the current approval")
+    void shouldKeepTheCurrentApprovalUndatedWhenAnOldNoteIsReplayed() {
+        PullRequestReview current = approval(MERGED_AT);
+        current.setSubmittedAt(null);
 
-        PullRequestReview review = reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider, false);
+        PullRequestReview review = reconciler.recordApproval(pr, approver, provider, false);
 
-        assertThat(review).isNotNull();
-        assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT);
-        assertThat(review.getCreatedAt()).isEqualTo(APPROVED_AT);
-        verify(reviewRepository).save(review);
+        assertThat(review).isSameAs(current);
+        assertThat(current.getSubmittedAt()).isNull();
+        assertThat(current.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+        verify(reviewRepository, never()).save(any());
     }
 
     @Test
@@ -79,7 +79,7 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
         Instant earlier = APPROVED_AT.minusSeconds(60);
         approval(earlier);
 
-        PullRequestReview review = reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider, false);
+        PullRequestReview review = reconciler.recordApproval(pr, approver, provider, false);
 
         assertThat(review).isNotNull();
         assertThat(review.getSubmittedAt()).isEqualTo(earlier);
@@ -142,12 +142,12 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
         assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
         assertThat(review.isDismissed()).isTrue();
 
-        PullRequestReview reapproved = reconciler.recordApprovalTime(pr, approver, reapprovedAt, provider, true);
+        PullRequestReview reapproved = reconciler.recordApproval(pr, approver, provider, true);
 
         assertThat(reapproved).isSameAs(review);
         assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
         assertThat(review.isDismissed()).isFalse();
-        assertThat(review.getSubmittedAt()).isEqualTo(reapprovedAt);
+        assertThat(review.getSubmittedAt()).isNull();
     }
 
     @Test
@@ -158,7 +158,7 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
         review.setState(PullRequestReview.State.DISMISSED);
         review.setDismissed(true);
 
-        PullRequestReview result = reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider, false);
+        PullRequestReview result = reconciler.recordApproval(pr, approver, provider, false);
 
         assertThat(result).isSameAs(review);
         assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
@@ -166,54 +166,34 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a replayed approval note re-approves only after an unapproval note of the same pass")
-    void shouldReplayTheThreeNotesInOrder() {
+    void shouldNotChangeCurrentApprovalMembershipWhenHistoricalWithdrawalAndReapprovalAreReplayed() {
         PullRequestReview review = approval(MERGED_AT);
-        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        java.util.Set<Long> unapproved = new java.util.HashSet<>();
-
-        assertThat(reconciler.recordSystemNote(
-                        pr,
-                        approver,
-                        new GitLabReviewReconciler.SystemNote(
-                                "approved this merge request", APPROVED_AT, "gid://gitlab/Note/1", false),
-                        provider,
-                        unapproved))
-                .isTrue();
-        assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT);
-
-        reconciler.recordSystemNote(
-                pr,
-                approver,
-                new GitLabReviewReconciler.SystemNote(
-                        "unapproved this merge request", APPROVED_AT.plusSeconds(60), "gid://gitlab/Note/2", false),
-                provider,
-                unapproved);
-        assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
-        assertThat(unapproved).containsExactly(99L);
-
-        reconciler.recordSystemNote(
-                pr,
-                approver,
-                new GitLabReviewReconciler.SystemNote(
-                        "approved this merge request", APPROVED_AT.plusSeconds(120), "gid://gitlab/Note/3", false),
-                provider,
-                unapproved);
+        review.setSubmittedAt(null);
+        for (String body : java.util.List.of("unapproved this merge request", "approved this merge request")) {
+            assertThat(reconciler.recordSystemNote(
+                            pr,
+                            approver,
+                            new GitLabReviewReconciler.SystemNote(body, APPROVED_AT, "gid://gitlab/Note/1", false),
+                            provider))
+                    .isFalse();
+        }
         assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
-        assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT.plusSeconds(120));
-
+        review.setDismissed(true);
+        review.setState(PullRequestReview.State.DISMISSED);
         assertThat(reconciler.recordSystemNote(
                         pr,
                         approver,
                         new GitLabReviewReconciler.SystemNote(
-                                "requested review from @x", APPROVED_AT, "gid://gitlab/Note/4", false),
-                        provider,
-                        unapproved))
+                                "approved this merge request", APPROVED_AT, "gid://gitlab/Note/2", false),
+                        provider))
                 .isFalse();
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
+        assertThat(review.getSubmittedAt()).isNull();
+        verify(reviewRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("a live approval note with no approval row yet makes the row at the note's time")
+    @DisplayName("a live approval note creates an undated current approval")
     void shouldCreateTheApprovalFromALiveNoteWhenTheMergeRequestHookHasNotArrived() {
         when(reviewRepository.findByNativeIdAndProviderId(any(), any())).thenReturn(Optional.empty());
         when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -223,12 +203,11 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
                 approver,
                 new GitLabReviewReconciler.SystemNote(
                         "approved this merge request", APPROVED_AT, "gid://gitlab/Note/1", true),
-                provider,
-                new java.util.HashSet<>());
+                provider);
 
         assertThat(pr.getReviews()).singleElement().satisfies(review -> {
             assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
-            assertThat(review.getSubmittedAt()).isEqualTo(APPROVED_AT);
+            assertThat(review.getSubmittedAt()).isNull();
             assertThat(review.getAuthor()).isSameAs(approver);
             assertThat(review.getNativeId())
                     .isEqualTo(GitLabMergeRequestProcessor.generateApprovalNativeId(4242L, 99L));
@@ -248,11 +227,36 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
                 approver,
                 new GitLabReviewReconciler.SystemNote(
                         "approved this merge request", APPROVED_AT.plusSeconds(60), "gid://gitlab/Note/1", true),
-                provider,
-                new java.util.HashSet<>());
+                provider);
 
         assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
         assertThat(review.isDismissed()).isFalse();
+    }
+
+    @Test
+    @DisplayName("a live requested-changes note withdraws its author's approval once, however often it arrives")
+    void shouldWithdrawTheRequestersApprovalOnlyForANewRequestForChanges() {
+        PullRequestReview review = approval(APPROVED_AT);
+        long nativeId = GitLabReviewReconciler.generateChangesRequestedNativeId("gid://gitlab/Note/5", 99L);
+        PullRequestReview recorded = new PullRequestReview();
+        recorded.setState(PullRequestReview.State.CHANGES_REQUESTED);
+        when(reviewRepository.findByNativeIdAndProviderId(nativeId, 7L))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(recorded));
+        when(reviewRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        GitLabReviewReconciler.SystemNote note = new GitLabReviewReconciler.SystemNote(
+                "requested changes", APPROVED_AT.plusSeconds(60), "gid://gitlab/Note/5", true);
+
+        assertThat(reconciler.recordSystemNote(pr, approver, note, provider)).isTrue();
+        assertThat(review.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
+
+        review.setState(PullRequestReview.State.APPROVED);
+        review.setDismissed(false);
+        assertThat(reconciler.recordSystemNote(pr, approver, note, provider)).isFalse();
+        assertThat(review.getState())
+                .as("an approval given after the request for changes outlives the note's redelivery")
+                .isEqualTo(PullRequestReview.State.APPROVED);
     }
 
     @Test
@@ -260,8 +264,7 @@ class GitLabReviewReconcilerTest extends BaseUnitTest {
     void shouldRecordNothingWithoutAnApproval() {
         when(reviewRepository.findByNativeIdAndProviderId(any(), any())).thenReturn(Optional.empty());
 
-        assertThat(reconciler.recordApprovalTime(pr, approver, APPROVED_AT, provider, false))
-                .isNull();
+        assertThat(reconciler.recordApproval(pr, approver, provider, false)).isNull();
         verify(reviewRepository, never()).save(any());
     }
 }

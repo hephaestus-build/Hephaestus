@@ -48,7 +48,7 @@ class ArchitectureTest extends HephaestusArchitectureTest {
         /**
          * No cyclic dependencies between bounded contexts.
          *
-         * <p>Six top-level packages fold into one {@code scm-data-platform} slice. The set
+         * <p>Three top-level packages fold into one {@code scm-data-platform} slice. The set
          * is derived from the actual cycle paths, and each member is here for a specific,
          * documented reason — not a blanket "they share entities" claim:
          *
@@ -58,33 +58,26 @@ class ArchitectureTest extends HephaestusArchitectureTest {
          *       rows are workspace-owned and the GitHub/GitLab workspace bridges mutate
          *       {@code Workspace}/{@code RepositoryToMonitor}. Splitting them means relocating
          *       the Workspace aggregate — wrong and out of scope.</li>
-         *   <li><b>activity, leaderboard</b> — folded by a structural tension between two rules,
-         *       NOT entity sharing. {@code ExternalVendorImportAllowlistTest} forces vendor code
-         *       (the Slack leaderboard publisher, the GitHub Projects-v2 activity listener) to
-         *       live inside {@code integration}; that bridge code legitimately reads feature data
-         *       (the leaderboard digest, the activity write SPI), giving {@code integration →
-         *       leaderboard} and {@code integration → activity}. With the normal {@code feature →
-         *       integration} direction this is a cycle no relocation removes — the vendor code can
-         *       neither leave integration (allowlist) nor stop reading feature data (its job). The
-         *       only escapes are a neutral cross-module event bus or per-sub-package slicing, both
-         *       larger dedicated changes tracked as follow-ups.</li>
-         *   <li><b>config, profile</b> — transitive collateral of the single {@code integration →
-         *       leaderboard} edge ({@code config → integration → leaderboard → config};
-         *       {@code profile → integration → leaderboard → profile}). They leave this slice
-         *       automatically once that edge is broken.</li>
+         *   <li><b>activity</b> — folded by a structural tension between two rules, NOT entity
+         *       sharing. {@code ExternalVendorImportAllowlistTest} forces vendor code (the GitHub
+         *       Projects-v2 activity listener) to live inside {@code integration}; that bridge
+         *       code legitimately writes through the activity SPI, giving {@code integration →
+         *       activity}. With the normal {@code feature → integration} direction this is a cycle
+         *       no relocation removes — the listener can neither leave integration (allowlist)
+         *       nor stop recording activity (its job). The only escapes are a neutral
+         *       cross-module event bus or per-sub-package slicing.</li>
          * </ul>
          *
          * <p>No frozen baseline — the rule passes cleanly and still fails on any NEW cycle that
          * pulls a genuinely-independent module (agent, mentor, practices, account, notification,
-         * activity, analytics, …) into the platform or into each other. Finer boundaries inside
+         * config, analytics, …) into the platform or into each other. Finer boundaries inside
          * the platform stay policed by {@code ModuleBoundaryTest},
          * {@code CrossCuttingModuleBoundaryTest}, {@code IntegrationCoreVendorNeutralityTest}, and
          * {@code ExternalVendorImportAllowlistTest}.
          */
         @Test
         void noCyclesBetweenModules() {
-            Set<String> dataPlatform =
-                    Set.of("integration", "workspace", "config", "activity", "leaderboard", "profile");
+            Set<String> dataPlatform = Set.of("integration", "workspace", "activity");
             SliceAssignment boundedContexts = new SliceAssignment() {
                 @Override
                 public SliceIdentifier getIdentifierOf(JavaClass javaClass) {

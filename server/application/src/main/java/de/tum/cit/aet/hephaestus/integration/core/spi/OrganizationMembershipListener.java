@@ -41,8 +41,10 @@ public interface OrganizationMembershipListener {
      *
      * @param organizationId    the organization's internal database ID
      * @param organizationLogin the organization login (GitHub login or GitLab group path)
+     * @param rosterComplete    whether the provider listed the whole roster, so that an empty roster is a real
+     *                          answer rather than a shortfall
      */
-    record OrganizationSyncedEvent(Long organizationId, String organizationLogin) {}
+    record OrganizationSyncedEvent(Long organizationId, String organizationLogin, boolean rosterComplete) {}
 
     /**
      * Event data for organization membership changes.

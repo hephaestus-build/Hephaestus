@@ -568,7 +568,7 @@ class ReviewContextControllerIntegrationTest extends AbstractWorkspaceIntegratio
     /** An active GitLab connection to {@code serverUrl}; deliberately without a stored token. */
     private void connectGitLab(Workspace target, String serverUrl) {
         var config = new ConnectionConfig.GitLabConfig(
-                serverUrl, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of());
+                serverUrl, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null);
         Connection connection = new Connection(target, IntegrationKind.GITLAB, serverUrl, config);
         connection.setDisplayName(target.getAccountLogin());
         ReflectionTestUtils.setField(connection, "state", IntegrationState.ACTIVE);

@@ -6,7 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.context.ContextManifestBuilder;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.DocumentContentSource;
@@ -14,7 +15,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
@@ -68,7 +68,8 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
                         workspaceContextBuilder,
                         practiceCatalogInjector,
                         new TaskEnvelopeWriter(objectMapper),
-                        gitRepositoryManager),
+                        gitRepositoryManager,
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer()),
                 new PracticeDetectionResultParser(objectMapper),
                 deliveryService);
     }
@@ -212,17 +213,27 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
             when(workspaceContextBuilder.prepare(any(), any()))
                     .thenReturn(new PreparedEvidence(
                             Map.of(SandboxLayout.CONTEXT_PREFIX + "document.md", "# Runbook".getBytes()),
-                            mock(ArtifactSourceManifest.class)));
+                            mock(JobFolderIndex.class)));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
-                    .thenReturn(new ContextManifestBuilder.PreparedAutomatedReviewReadiness(
+                    .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                             List.of(practice), mock(AutomatedReviewReadinessReport.class)));
 
-            Map<String, byte[]> files = handler.prepareInputs(job).files();
+            try (var prepared = handler.prepareInputs(job)) {
+                Map<String, byte[]> files =
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(prepared);
 
-            assertThat(files).containsKey(SandboxLayout.CONTEXT_PREFIX + "document.md");
-            assertThat(files).containsKey(SandboxLayout.TASK_ENVELOPE_FILENAME);
-            assertThat(files).doesNotContainKey(SandboxLayout.SCM_SOURCE_KEEP);
-            assertThat(files.keySet()).noneMatch(k -> k.startsWith(SandboxLayout.SOURCES_PREFIX));
+                assertThat(files).containsKey(SandboxLayout.CONTEXT_PREFIX + "document.md");
+                assertThat(files).containsKey(SandboxLayout.TASK_ENVELOPE_FILENAME);
+                String prompt = objectMapper
+                        .readTree(files.get(SandboxLayout.TASK_ENVELOPE_FILENAME))
+                        .path("prompt")
+                        .asString();
+                assertThat(prompt)
+                        .contains(
+                                SandboxLayout.CONTEXT_PREFIX + "document.md",
+                                SandboxLayout.CONTEXT_PREFIX + "document.json")
+                        .doesNotContain("inputs/context/");
+            }
         }
     }
 

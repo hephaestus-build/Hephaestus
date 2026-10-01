@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.net.URI;
 import java.time.Instant;
@@ -52,10 +54,7 @@ public record AgentJobDTO(
         @Schema(description = "Human-readable error message") @Nullable
         String errorMessage,
 
-        @Schema(
-                description =
-                        "Result-processing status: null = not applicable, PENDING = awaiting processing, DELIVERED = processing finished, FAILED = processing error. Processing may include delivery; this status alone does not establish feedback publication.")
-        @Nullable
+        @Schema(description = DeliveryStatus.DESCRIPTION) @Nullable
         DeliveryStatus deliveryStatus,
 
         @Schema(description = "Git provider comment/note ID for posted feedback") @Nullable
@@ -113,14 +112,20 @@ public record AgentJobDTO(
         Integer llmCacheReadTokens,
 
         @Schema(description = "Tokens written to prompt cache") @Nullable
-        Integer llmCacheWriteTokens) {
-    public static AgentJobDTO from(AgentJob job) {
+        Integer llmCacheWriteTokens,
+
+        @Schema(
+                description =
+                        "Frozen generated-path policy and changed paths marked generated; available on review detail after evidence capture")
+        @Nullable
+        GeneratedPathReviewDTO generatedPaths) {
+    public static AgentJobDTO from(AgentJob job, Target target) {
         JsonNode snapshot = job.getConfigSnapshot();
         return new AgentJobDTO(
                 job.getId(),
                 job.getJobType(),
                 job.getStatus(),
-                ReviewRunTargetDTO.from(job),
+                ReviewRunTargetDTO.from(target),
                 job.getMetadata(),
                 job.getOutput(),
                 ReviewRunOutcome.fromJobOutput(job.getOutput()),
@@ -143,20 +148,22 @@ public record AgentJobDTO(
                 job.getLlmTotalOutputTokens(),
                 job.getLlmTotalReasoningTokens(),
                 job.getLlmCacheReadTokens(),
-                job.getLlmCacheWriteTokens());
+                job.getLlmCacheWriteTokens(),
+                generatedPaths(job.getEvidenceSnapshot()));
     }
 
     /**
      * The listing's row, which carries every column this record renders and no transcript — the one
-     * thing an entity page would have read per row and thrown away.
+     * thing an entity page would have read per row and thrown away. Captured generated-path details
+     * are loaded only for the individual review, not for its listing.
      */
-    public static AgentJobDTO from(AgentJobRepository.AgentJobListRow row) {
+    public static AgentJobDTO from(AgentJobRepository.AgentJobListRow row, Target target) {
         JsonNode snapshot = row.getConfigSnapshot();
         return new AgentJobDTO(
                 row.getId(),
                 row.getJobType(),
                 row.getStatus(),
-                ReviewRunTargetDTO.from(row),
+                ReviewRunTargetDTO.from(target),
                 row.getMetadata(),
                 row.getOutput(),
                 ReviewRunOutcome.fromJobOutput(row.getOutput()),
@@ -179,7 +186,20 @@ public record AgentJobDTO(
                 row.getLlmTotalOutputTokens(),
                 row.getLlmTotalReasoningTokens(),
                 row.getLlmCacheReadTokens(),
-                row.getLlmCacheWriteTokens());
+                row.getLlmCacheWriteTokens(),
+                null);
+    }
+
+    private static @Nullable GeneratedPathReviewDTO generatedPaths(@Nullable JsonNode snapshot) {
+        if (snapshot == null || !snapshot.has("generatedPaths")) return null;
+        var policy = snapshot.path("generatedPaths");
+        return new GeneratedPathReviewDTO(
+                java.util.stream.StreamSupport.stream(policy.path("patterns").spliterator(), false)
+                        .map(JsonNode::asString)
+                        .toList(),
+                java.util.stream.StreamSupport.stream(policy.path("paths").spliterator(), false)
+                        .map(JsonNode::asString)
+                        .toList());
     }
 
     /**

@@ -8,6 +8,8 @@ package de.tum.cit.aet.hephaestus.evidence;
 public enum SourceAbsenceReason {
     /** {@code NOT_COLLECTED}: no unexpired use decision permits this source for this purpose. */
     GOVERNANCE_NOT_EFFECTIVE,
+    /** The existing workspace or integration access check refuses this area or repository. */
+    ACCESS_NOT_PERMITTED,
     /** {@code NOT_COLLECTED}: collection is switched off for this source in this deployment. */
     DISABLED,
     /** {@code UNAVAILABLE}: this deployment ships no collector for the source. */

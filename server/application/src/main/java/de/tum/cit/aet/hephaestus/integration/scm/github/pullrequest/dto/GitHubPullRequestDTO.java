@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReviewRe
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHReviewRequestConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHStatusCheckRollup;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHStatusState;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHTeam;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUserConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
@@ -94,7 +95,31 @@ public record GitHubPullRequestDTO(
          * The numbers of this repository's issues GitHub lists as closing candidates for the pull request,
          * from GraphQL; null when the source did not read them, which leaves the stored set alone.
          */
-        @Nullable List<Integer> closingIssueNumbers) {
+        @Nullable List<Integer> closingIssueNumbers,
+        /**
+         * The teams asked to review: every webhook payload and every sync lists them all, so a team no longer
+         * listed is no longer asked. Null when the source did not read them, which leaves the stored set alone.
+         *
+         * @see <a href="https://docs.github.com/en/webhooks/webhook-events-and-payloads#pull_request">GitHub
+         *     pull_request webhook</a>
+         */
+        @JsonProperty("requested_teams") @Nullable List<GitHubTeamRefDTO> requestedTeams) {
+    /** A team asked to review, by GitHub's database id. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record GitHubTeamRefDTO(
+            @JsonProperty("id") @Nullable Long id) {}
+
+    /** The GitHub ids of the teams asked to review; null when the source did not read them. */
+    public @Nullable List<Long> requestedTeamIds() {
+        if (requestedTeams == null) {
+            return null;
+        }
+        return requestedTeams.stream()
+                .map(GitHubTeamRefDTO::id)
+                .filter(Objects::nonNull)
+                .toList();
+    }
+
     /** The head the checks were observed for, and their rolled-up state. */
     public record HeadChecks(String sha, CheckState state) {}
 
@@ -145,6 +170,7 @@ public record GitHubPullRequestDTO(
         if (pr.getCommits() != null) {
             commitsCount = pr.getCommits().getTotalCount();
         }
+        List<GHReviewRequest> reviewRequests = readWhole(pr.getReviewRequests(), "PR #" + pr.getNumber());
 
         return new GitHubPullRequestDTO(
                 null,
@@ -173,7 +199,7 @@ public record GitHubPullRequestDTO(
                 0, // review comments count
                 GitHubUserDTO.fromActor(pr.getAuthor()),
                 extractAssignees(pr.getAssignees(), "PR #" + pr.getNumber()),
-                extractRequestedReviewers(pr.getReviewRequests(), "PR #" + pr.getNumber()),
+                requestedReviewers(reviewRequests),
                 GitHubLabelDTO.fromLabelConnection(pr.getLabels(), "PR #" + pr.getNumber()),
                 GitHubMilestoneDTO.fromMilestone(pr.getMilestone()),
                 new GitHubBranchRefDTO(pr.getHeadRefName(), pr.getHeadRefOid(), null),
@@ -186,7 +212,8 @@ public record GitHubPullRequestDTO(
                 pr.getMaintainerCanModify(),
                 extractMergeCommitInfo(pr),
                 extractHeadChecks(pr),
-                extractClosingIssueNumbers(pr));
+                extractClosingIssueNumbers(pr),
+                requestedTeams(reviewRequests));
     }
 
     /**
@@ -374,24 +401,47 @@ public record GitHubPullRequestDTO(
         return result;
     }
 
-    private static List<GitHubUserDTO> extractRequestedReviewers(
+    /**
+     * The review requests, or null when they were not read, or not read whole: a list cut short by
+     * {@code reviewRequests(first: 100)} would take the rest off the pull request. GitHub counts every request, teams,
+     * bots and mannequins included, so every node counts.
+     */
+    private static @Nullable List<GHReviewRequest> readWhole(
             @Nullable GHReviewRequestConnection connection, String context) {
         if (connection == null || connection.getNodes() == null) {
-            return Collections.emptyList();
+            return null;
         }
-        // Check overflow using the pre-filter count (total nodes fetched, including
-        // Teams/Bots/Mannequins) against totalCount. The previous implementation
-        // compared the post-filter count (only Users) against totalCount, producing
-        // false-positive overflow warnings whenever non-User reviewers existed.
-        int fetchedCount = connection.getNodes().size();
-        GraphQlConnectionOverflowDetector.check(
-                "requestedReviewers", fetchedCount, connection.getTotalCount(), context);
-        List<GitHubUserDTO> result = connection.getNodes().stream()
+        if (GraphQlConnectionOverflowDetector.check(
+                "reviewRequests", connection.getNodes().size(), connection.getTotalCount(), context)) {
+            return null;
+        }
+        return connection.getNodes();
+    }
+
+    /** The people among the review requests; null when the requests were not read whole. */
+    private static @Nullable List<GitHubUserDTO> requestedReviewers(@Nullable List<GHReviewRequest> requests) {
+        if (requests == null) {
+            return null;
+        }
+        return requests.stream()
                 .map(GHReviewRequest::getRequestedReviewer)
                 .filter(reviewer -> reviewer instanceof GHUser)
                 .map(reviewer -> GitHubUserDTO.fromUser((GHUser) reviewer))
                 .filter(Objects::nonNull)
                 .toList();
-        return result;
+    }
+
+    /** The teams among the review requests; null when the requests were not read whole. */
+    private static @Nullable List<GitHubTeamRefDTO> requestedTeams(@Nullable List<GHReviewRequest> requests) {
+        if (requests == null) {
+            return null;
+        }
+        return requests.stream()
+                .map(GHReviewRequest::getRequestedReviewer)
+                .filter(reviewer -> reviewer instanceof GHTeam)
+                .map(reviewer -> ((GHTeam) reviewer).getDatabaseId())
+                .filter(Objects::nonNull)
+                .map(databaseId -> new GitHubTeamRefDTO(databaseId.longValue()))
+                .toList();
     }
 }

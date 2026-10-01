@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
-import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -37,15 +36,6 @@ class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrati
     @BeforeEach
     void resetMentorChatStarter() {
         mentorChatStarter.reset();
-    }
-
-    @Autowired
-    private WorkspaceRepository workspaceRepositoryForFeatures;
-
-    /** Flip the per-workspace mentor toggle on so the controller's feature gate passes. */
-    private Workspace enableMentor(Workspace workspace) {
-        workspace.getFeatures().setMentorEnabled(true);
-        return workspaceRepositoryForFeatures.save(workspace);
     }
 
     /** Minimal valid mentor turn request body. */
@@ -87,7 +77,6 @@ class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrati
         persistUser("mentor");
         User owner = persistUser("workspace-owner-for-mentor-test");
         Workspace workspace = createWorkspace("mentor-auth-space", "MentorAuth", "mentor-auth", AccountType.ORG, owner);
-        enableMentor(workspace);
 
         webTestClient
                 .post()
@@ -107,7 +96,6 @@ class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrati
         User mentor = persistUser("mentor");
         User owner = persistUser("workspace-owner-for-mentor-happy");
         Workspace workspace = createWorkspace("mentor-happy-space", "Happy", "mentor-happy", AccountType.ORG, owner);
-        enableMentor(workspace);
         ensureWorkspaceMembership(workspace, mentor, WorkspaceMembership.WorkspaceRole.MEMBER);
 
         webTestClient
@@ -129,28 +117,5 @@ class MentorChatControllerAuthIntegrationTest extends AbstractWorkspaceIntegrati
                 .expectBody(Void.class);
 
         assertThat(mentorChatStarter.awaitInvocation()).isTrue();
-    }
-
-    @Test
-    @WithMentorUser
-    void authenticatedMember_mentorDisabled_returnsNotFound() {
-        User mentor = persistUser("mentor");
-        User owner = persistUser("workspace-owner-for-mentor-disabled");
-        Workspace workspace =
-                createWorkspace("mentor-disabled-space", "Disabled", "mentor-disabled", AccountType.ORG, owner);
-        // Deliberately NOT enabling mentor — the gate is what we're asserting.
-        ensureWorkspaceMembership(workspace, mentor, WorkspaceMembership.WorkspaceRole.MEMBER);
-
-        webTestClient
-                .post()
-                .uri("/workspaces/{workspaceSlug}/mentor/chat", workspace.getWorkspaceSlug())
-                .headers(TestAuthUtils.withCurrentUser())
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.TEXT_EVENT_STREAM)
-                .bodyValue(validBody())
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
     }
 }

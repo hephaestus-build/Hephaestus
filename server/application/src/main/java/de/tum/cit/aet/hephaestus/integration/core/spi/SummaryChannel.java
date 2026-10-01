@@ -58,6 +58,15 @@ public interface SummaryChannel {
         return repoFullName + "#" + issueNumber;
     }
 
+    /**
+     * The posted summary's address on the work's own page, or null when this channel cannot address it.
+     *
+     * @param commentId the identifier this channel recorded for the posted summary
+     */
+    default @Nullable String summaryCommentUrl(String workUrl, String commentId) {
+        return null;
+    }
+
     record FeedbackTarget(
             IntegrationRef ref,
             String subjectExternalId,

@@ -41,6 +41,7 @@ public class PiEventToUiChunkTranslator {
             case "pi_error" -> handleError(piEvent, state);
             case "turn_watchdog_fired" -> handleWatchdogFired(state);
             case "session_persisted" -> handleSessionPersisted(piEvent, state);
+            case "compaction_start" -> handleCompactionStart(state);
             // Every other AgentSessionEvent of the pinned Pi SDK, none of which carries reply content.
             // An event not listed here may, so it fails the turn rather than vanishing: a Pi upgrade that
             // adds one must add it here.
@@ -49,7 +50,6 @@ public class PiEventToUiChunkTranslator {
                     "turn_start",
                     "tool_execution_update",
                     "queue_update",
-                    "compaction_start",
                     "compaction_end",
                     "entry_appended",
                     "session_info_changed",
@@ -84,6 +84,13 @@ public class PiEventToUiChunkTranslator {
             return List.of();
         }
         state.observeSessionJsonl(jsonl.getBytes(StandardCharsets.UTF_8));
+        return List.of();
+    }
+
+    // compaction_start → the turn's usage now includes summary calls Pi does not report one by one
+
+    private List<UIMessageChunk> handleCompactionStart(TranslatorState state) {
+        state.markCompactionAttempted();
         return List.of();
     }
 
@@ -430,6 +437,11 @@ public class PiEventToUiChunkTranslator {
         }
         if (observationId == null || text == null || text.isBlank()) {
             return failTurn(state, "a link_observation without a readable observationId and text");
+        }
+        // The runner emits a link only after the server admitted it, once per admission, so any other is a runner that
+        // broke the protocol.
+        if (!state.consumeLinkAdmission(observationId)) {
+            return failTurn(state, "a link_observation the server did not admit");
         }
         UIMessageChunk.DataObservation observation = UIMessageChunk.DataObservation.of(observationId, text);
         state.recordDataObservation(observation);

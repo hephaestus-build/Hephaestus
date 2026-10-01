@@ -24,6 +24,9 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -48,7 +51,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
@@ -59,6 +61,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -161,7 +164,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        lenient().when(evidenceFiles.prepare(any(), any())).thenAnswer(invocation -> invocation.getArgument(1));
 
         executor = new AgentJobExecutor(
                 AGENT_PROPS,
@@ -710,7 +712,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
             when(handler.prepareInputs(any()))
-                    .thenReturn(PreparedJobInputs.filesOnly(Map.of("task.json", "{}".getBytes())));
+                    .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                            Map.of("task.json", "{}".getBytes())));
             when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
             when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
                     .thenReturn(0);
@@ -725,15 +728,75 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @Test
+        void stampTheTitleDescriptionHeadAndGeneratedPathsThePullRequestCaptureStaged() {
+            stubClaimableJob();
+            job.setMetadata(objectMapper.createObjectNode().put("pull_request_id", 42L));
+            stubCapture(HEAD_SHA);
+            when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            ArgumentCaptor<AgentJobRepository.ProvenanceStamp> stamp =
+                    ArgumentCaptor.forClass(AgentJobRepository.ProvenanceStamp.class);
+            verify(jobRepository).updateProvenanceDigests(eq(jobId), isNull(), eq(0), stamp.capture());
+            var snapshot = stamp.getValue().evidenceSnapshot();
+            org.junit.jupiter.api.Assertions.assertNotNull(snapshot);
+            JsonNode reviewed = snapshot.path(ReviewedWork.SNAPSHOT_KEY);
+            assertThat(reviewed.path("artifactId").asLong()).isEqualTo(42L);
+            assertThat(reviewed.path("head").asString()).isEqualTo(HEAD_SHA);
+            assertThat(snapshot.path("generatedPaths").path("patterns").get(0).asString())
+                    .isEqualTo("generated/**");
+            assertThat(snapshot.path("generatedPaths").path("paths").get(0).asString())
+                    .isEqualTo("generated/client.ts");
+            assertThat(reviewed.path("titleAndDescriptionRevision").asString())
+                    .isEqualTo(ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, "MR !2", "No issue link"));
+        }
+
+        @Test
+        void failsTheRunBeforeTheSandboxWhenStagedMetadataNamesAnotherCommitThanThePinnedChange() {
+            stubClaimableJob();
+            job.setMetadata(objectMapper.createObjectNode().put("pull_request_id", 42L));
+            stubCapture("c".repeat(40));
+            when(jobRepository.transitionStatus(any(), eq(AgentJobStatus.FAILED), any(), any(), any()))
+                    .thenReturn(1);
+
+            executor.processJob(jobId);
+
+            verify(jobRepository, never()).updateProvenanceDigests(any(), any(), anyInt(), any());
+            verify(sandboxManager, never()).execute(any());
+        }
+
+        @Test
+        void oversizedWorkspaceIsATypedTerminalRefusalBeforeSandboxLaunch() {
+            stubClaimableJob();
+            var handler = mock(JobTypeHandler.class);
+            when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
+            when(handler.prepareInputs(any()))
+                    .thenThrow(
+                            new de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException(513L, 512L));
+            when(jobRepository.transitionToEvidenceRefused(any(), any(), anyInt(), any(), any()))
+                    .thenReturn(1);
+            executor.processJob(jobId);
+            var output = ArgumentCaptor.forClass(JsonNode.class);
+            verify(jobRepository).transitionToEvidenceRefused(eq(jobId), isNull(), eq(0), any(), output.capture());
+            assertThat(output.getValue().path("reasonCode").asString()).isEqualTo("WORKSPACE_BUDGET_EXCEEDED");
+            assertThat(output.getValue().path("details").path("workspaceBytes").asLong())
+                    .isEqualTo(513L);
+            verify(sandboxManager, never()).execute(any());
+            verify(usageRecorder, never()).recordUnverifiable(any(), any());
+        }
+
+        @Test
         void insufficientEvidencePersistsTypedReadinessWithoutStartingTheSandbox() {
             stubClaimableJob();
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
             Instant now = Instant.parse("2026-08-03T10:00:00Z");
-            SourceContractVersion version = new SourceContractVersion("1.2.0");
+            SourceContractVersion version = new SourceContractVersion("1.3.0");
             String artifactKind = "scm.pull_request";
             SourceKind source = new SourceKind("scm.pull-request.diff");
-            ArtifactSourceManifest manifest = new ArtifactSourceManifest(
+            JobFolderIndex manifest = new JobFolderIndex(
                     version,
                     "a".repeat(64),
                     artifactKind,
@@ -751,7 +814,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     List.of(new AutomatedReviewReadinessDecision(
                             "example", now, false, List.of(), List.of(assessment))));
             var released = new java.util.concurrent.atomic.AtomicBoolean();
-            PreparedJobInputs inputs = new PreparedJobInputs(
+            PreparedJobInputs inputs = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
                     new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(
                             Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes()),
                             Map.of(),
@@ -2479,7 +2542,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(1);
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
-            when(handler.prepareInputs(any())).thenReturn(PreparedJobInputs.filesOnly(Map.of()));
+            when(handler.prepareInputs(any()))
+                    .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(Map.of()));
             when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
 
             executor.processJob(jobId);
@@ -2488,6 +2552,38 @@ class AgentJobExecutorTest extends BaseUnitTest {
             verify(usageRecorder, never()).record(any(), any());
             verify(usageRecorder, never()).recordUnverifiable(any(), any());
         }
+    }
+
+    private static final String HEAD_SHA = "b".repeat(40);
+
+    /** A pull request capture of {@code "MR !2"} pinned at {@link #HEAD_SHA}, whose metadata names {@code stagedCommit}. */
+    private void stubCapture(String stagedCommit) {
+        Instant capturedAt = Instant.parse("2026-09-30T00:05:00Z");
+        JobFolderIndex manifest = ReviewedWorkFixtures.pullRequestManifest(capturedAt, "No issue link", HEAD_SHA);
+        SourceKind core = new SourceKind("scm.pull-request.core");
+        SourceReadinessCheck check =
+                new SourceReadinessCheck(core, manifest.contractVersion(), capturedAt, capturedAt, true, List.of());
+        AutomatedReviewReadinessReport readiness = new AutomatedReviewReadinessReport(
+                manifest.contractVersion(),
+                manifest.catalogDigest(),
+                manifest.artifactKind(),
+                capturedAt,
+                capturedAt,
+                List.of(new AutomatedReviewReadinessDecision("example", capturedAt, true, List.of(), List.of(check))));
+        Map<String, byte[]> files = Map.of(
+                de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO.INPUT_PATH,
+                objectMapper.writeValueAsBytes(new de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO(
+                        List.of("generated/**"), List.of("generated/client.ts"))),
+                SandboxLayout.MANIFEST_PATH,
+                objectMapper.writeValueAsBytes(manifest),
+                SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+                ReviewedWorkFixtures.metadata(objectMapper, "MR !2", "No issue link", stagedCommit));
+        JobTypeHandler handler = mock(JobTypeHandler.class);
+        when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
+        when(handler.prepareInputs(any()))
+                .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
+                        new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(files, manifest), readiness));
+        when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
     }
 
     private void stubClaimableJob() {
@@ -2526,7 +2622,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
         JobTypeHandler handler = mock(JobTypeHandler.class);
         when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
         when(handler.prepareInputs(any()))
-                .thenReturn(PreparedJobInputs.filesOnly(Map.of("code.py", "print('hi')".getBytes())));
+                .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                        Map.of("code.py", "print('hi')".getBytes())));
 
         PracticeSandboxSpec agentSpec = new PracticeSandboxSpec(
                 "ghcr.io/agent:latest",
@@ -2571,7 +2668,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 .thenReturn(1);
         JobTypeHandler handler = mock(JobTypeHandler.class);
         when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
-        when(handler.prepareInputs(any())).thenReturn(PreparedJobInputs.filesOnly(Map.of()));
+        when(handler.prepareInputs(any()))
+                .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(Map.of()));
 
         PracticeSandboxSpec agentSpec = new PracticeSandboxSpec(
                 "ghcr.io/agent:latest", List.of("/bin/agent"), Map.of(), Map.of(), "/output", null, null, null);

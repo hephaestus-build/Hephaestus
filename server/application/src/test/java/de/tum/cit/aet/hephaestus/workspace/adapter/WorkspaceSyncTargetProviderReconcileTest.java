@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.workspace.adapter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
+import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTargetRepository;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
@@ -71,7 +73,8 @@ class WorkspaceSyncTargetProviderReconcileTest extends BaseUnitTest {
                 workspaceScopeFilter,
                 connectionService,
                 new NatsConnectionProperties(true, "nats://localhost:4222", null, null),
-                natsConsumerService);
+                natsConsumerService,
+                mock(PracticeReviewRepositoryTargetRepository.class));
     }
 
     private RepositoryToMonitor monitor(@Nullable Long nativeId, String nameWithOwner) {

@@ -28,6 +28,44 @@ class SandboxWorkspaceControllerTest {
     private final SandboxWorkspaceController controller = new SandboxWorkspaceController(sessions);
 
     @Test
+    void shouldTransferAnAuthorizedAreaAndRejectAmbiguousSelectors() throws Exception {
+        Path archive = temporary.resolve("context.tar");
+        try (var tar = new TarArchiveOutputStream(Files.newOutputStream(archive))) {
+            var entry = new TarArchiveEntry("context/docs/collection/page.md");
+            entry.setSize(5);
+            tar.putArchiveEntry(entry);
+            tar.write("quote".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            tar.closeArchiveEntry();
+        }
+        try (var session = sessions.register("token", archive, "out")) {
+            var request = new MockHttpServletRequest();
+            request.setQueryString("area=docs");
+            request.addParameter("area", "docs");
+            var response = new MockHttpServletResponse();
+            controller.workspace(session.id(), "Bearer token", request, response);
+            assertThat(response.getContentType()).isEqualTo("application/x-tar");
+            try (var tar = new org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
+                    new java.io.ByteArrayInputStream(response.getContentAsByteArray()))) {
+                assertThat(tar.getNextEntry().getName()).isEqualTo("context/docs/collection/page.md");
+                assertThat(new String(tar.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8))
+                        .isEqualTo("quote");
+            }
+            request.addParameter("repo", "7");
+            assertThatThrownBy(() ->
+                            controller.workspace(session.id(), "Bearer token", request, new MockHttpServletResponse()))
+                    .isInstanceOf(ResponseStatusException.class);
+            request.removeParameter("repo");
+            request.addParameter("area", "chat");
+            assertThatThrownBy(() ->
+                            controller.workspace(session.id(), "Bearer token", request, new MockHttpServletResponse()))
+                    .isInstanceOf(ResponseStatusException.class);
+            assertThatThrownBy(() ->
+                            controller.workspace(session.id(), "Bearer other", request, new MockHttpServletResponse()))
+                    .isInstanceOf(ResponseStatusException.class);
+        }
+    }
+
+    @Test
     void shouldAdvertiseAndTransferOnlyTheAuthenticatedRuntimeWorkspace() throws Exception {
         var archive = Files.writeString(temporary.resolve("input.tar"), "trusted input");
         try (var session = sessions.register("token", archive, "out")) {
@@ -36,7 +74,7 @@ class SandboxWorkspaceControllerTest {
             assertThat(controller.capabilities(session.id(), "Bearer token").protocolVersion())
                     .isEqualTo(3);
             assertThat(controller.capabilities(session.id(), "Bearer token").workspaceByteBudget())
-                    .isEqualTo(Files.size(archive));
+                    .isEqualTo(SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET);
             assertThatThrownBy(() -> controller.workspace(session.id(), "Bearer other", request, response))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,

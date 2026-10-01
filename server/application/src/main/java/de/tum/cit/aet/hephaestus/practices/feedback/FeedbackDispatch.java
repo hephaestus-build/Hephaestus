@@ -94,6 +94,33 @@ public class FeedbackDispatch {
     @Column(name = "write_started", nullable = false)
     private Boolean writeStarted;
 
+    /**
+     * When a provider write of this package, summary or inline, may first have begun; what an unconfirmed write is
+     * timed from. It says nothing about which stage began: {@link #writeStarted} is the summary's fact and
+     * {@link #inlineWriteStarted} the inline notes'.
+     */
+    @Column(name = "write_started_at")
+    private @Nullable Instant writeStartedAt;
+
+    /**
+     * Whether an inline note of this package may have been requested from the provider: set before the first inline
+     * request leaves. Null on a dispatch recorded before this was tracked, where it is unknown.
+     */
+    @Column(name = "inline_write_started")
+    private @Nullable Boolean inlineWriteStarted;
+
+    /**
+     * Whether an inline write may have begun. An untracked older dispatch may have, unless its package names no
+     * inline notes at all; the rule {@code FeedbackDispatchRepository.INLINE_WRITE_MAY_HAVE_STARTED} reads the same.
+     */
+    public boolean inlineWriteMayHaveStarted() {
+        if (inlineWriteStarted != null) {
+            return inlineWriteStarted;
+        }
+        JsonNode notes = packageContent.get("diffNotes");
+        return notes == null || !notes.isArray() || !notes.isEmpty();
+    }
+
     @Column(name = "delivered_external_ref", length = 255)
     private @Nullable String deliveredExternalRef;
 

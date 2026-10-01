@@ -580,10 +580,10 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
         }
     }
 
-    // XP Filtering Integration Tests
+    // Activity filter persistence
 
     @Nested
-    class XpFilteringIntegrationTests {
+    class ActivityFilterPersistenceTests {
 
         @Test
         @WithAdminUser

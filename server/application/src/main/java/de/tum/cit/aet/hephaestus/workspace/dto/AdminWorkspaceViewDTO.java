@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.workspace.Workspace.WorkspaceStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
@@ -16,7 +17,7 @@ public record AdminWorkspaceViewDTO(
         @NonNull Long id,
         @NonNull String workspaceSlug,
         @NonNull String displayName,
-        @NonNull String status,
+        @NonNull WorkspaceStatus status,
         @NonNull String accountLogin,
         @Nullable IdentityProviderType providerType,
         @Nullable String ownerLogin,

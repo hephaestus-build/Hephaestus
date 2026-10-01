@@ -7,6 +7,7 @@
 //   hello handshake       → MentorChatService#verifyProtocol
 //   event → UI chunks     → PiEventToUiChunkTranslator
 //   fetch_context replies → MentorChatService#handleFetchContext
+//   link_observation      → ConversationalDeliveryReconciler#admits
 
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 
@@ -37,17 +38,22 @@ export const FETCH_CONTEXT_ALLOWED = new Set([
 	"inputs/context/current_thread_history.json",
 	"inputs/context/outline_docs.json",
 ]);
-// One authored pull request by artifactId, read on demand; mirrors MergeReadinessContentSource.ITEM_KEY.
+// One authored pull request by artifactId, in any stored state, read on demand; mirrors MergeReadinessContentSource.ITEM_KEY.
 const MERGE_READINESS_ITEM = /^inputs\/context\/merge_readiness\/\d{1,18}\.json$/u;
+// One listed observation's evidence by its canonical id; mirrors ObservationHistoryContentSource.DETAIL_KEY.
+const OBSERVATION_DETAIL =
+	/^inputs\/context\/observations_history\/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}\.json$/u;
 
 export function isFetchContextKey(key: string): boolean {
-	return FETCH_CONTEXT_ALLOWED.has(key) || MERGE_READINESS_ITEM.test(key);
+	return (
+		FETCH_CONTEXT_ALLOWED.has(key) || MERGE_READINESS_ITEM.test(key) || OBSERVATION_DETAIL.test(key)
+	);
 }
 
 /**
  * JSON-RPC 2.0 §4 restricts an id to String, Number or Null. Java always sends a Number (an
  * `AtomicLong` counter) and the runner echoes back whatever it received; the runner's own
- * `fetch_context` callbacks use a String id, which Java echoes back unchanged in turn.
+ * callbacks (`fetch_context`, `link_observation`) use a String id, which Java echoes back unchanged in turn.
  */
 export type JsonRpcId = string | number | null;
 
@@ -78,8 +84,17 @@ export interface ThreadScopedParams {
 	threadId: string;
 }
 
+export interface OpenThreadParams extends ThreadScopedParams {
+	/**
+	 * The thread's saved Pi session JSONL, sent on every open because a sandbox is not created for one
+	 * thread. The runner restores it only when it holds no session of its own for the thread.
+	 */
+	session?: string;
+}
+
 export interface PromptParams extends ThreadScopedParams {
 	text: string;
+	currentEvidence?: string;
 }
 
 /**
@@ -90,7 +105,7 @@ export interface PromptParams extends ThreadScopedParams {
  */
 export interface MentorRequestParams {
 	hello: EmptyParams;
-	open_thread: ThreadScopedParams;
+	open_thread: OpenThreadParams;
 	prompt: PromptParams;
 	steer: PromptParams;
 	abort: ThreadScopedParams;
@@ -248,7 +263,7 @@ export interface MentorEventNotification {
 }
 
 //
-// ─── runner → Java: the fetch_context callback ────────────────────────────────────────────────
+// ─── runner → Java: server callbacks ──────────────────────────────────────────────────────────
 //
 
 export interface FetchContextParams {
@@ -259,7 +274,7 @@ export interface FetchContextParams {
 
 /**
  * A request in the reverse direction: the runner asks Java for a context document while a Pi tool
- * call is in flight. The id is a string (`fc-<uuid>`), which Java echoes back untouched.
+ * call is in flight. The id is a string (`cb-<uuid>`), which Java echoes back untouched.
  */
 export interface FetchContextRequest {
 	jsonrpc: typeof JSONRPC_VERSION;
@@ -283,11 +298,37 @@ export interface FetchContextSuccessResponse {
 	result: FetchContextResult;
 }
 
-export interface FetchContextErrorResponse {
+export interface LinkObservationParams {
+	threadId: string;
+	observationId: string;
+}
+
+/**
+ * Asked while a `link_observation` tool call is in flight: may the reply show the developer feedback about this
+ * observation? The tool reports success and emits its `link_observation` event only after a success response.
+ */
+export interface LinkObservationRequest {
+	jsonrpc: typeof JSONRPC_VERSION;
+	id: string;
+	method: "link_observation";
+	params: LinkObservationParams;
+}
+
+export interface LinkObservationSuccessResponse {
+	jsonrpc: typeof JSONRPC_VERSION;
+	id: JsonRpcId;
+	result: { observationId: string };
+}
+
+/** Java's answer when it refuses or fails a callback. */
+export interface ServerCallbackErrorResponse {
 	jsonrpc: typeof JSONRPC_VERSION;
 	id: JsonRpcId;
 	error: JsonRpcError;
 }
+
+/** A callback the runner sends Java. */
+export type ServerCallbackRequest = FetchContextRequest | LinkObservationRequest;
 
 //
 // ─── frame unions ─────────────────────────────────────────────────────────────────────────────
@@ -298,7 +339,7 @@ export type MentorOutboundFrame =
 	| JsonRpcSuccessResponse
 	| JsonRpcErrorResponse
 	| MentorEventNotification
-	| FetchContextRequest;
+	| ServerCallbackRequest;
 
 /**
  * Everything the runner reads from stdin. Java never sends batches; the runner rejects top-level
@@ -307,4 +348,5 @@ export type MentorOutboundFrame =
 export type MentorInboundFrame =
 	| MentorRequest
 	| FetchContextSuccessResponse
-	| FetchContextErrorResponse;
+	| LinkObservationSuccessResponse
+	| ServerCallbackErrorResponse;

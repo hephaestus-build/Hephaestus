@@ -13,6 +13,18 @@ export const springPageParams = {
 		lastPage.last === true ? undefined : (lastPage.number ?? 0) + 1,
 };
 
+/** A server slice: one page and whether another follows, with no total to count. */
+export interface SlicePage {
+	page?: number;
+	hasNext?: boolean;
+}
+
+export const slicePageParams = {
+	initialPageParam: 0,
+	getNextPageParam: (lastPage: SlicePage) =>
+		lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined,
+};
+
 /**
  * The generated client assembles its infinite query options behind a `@ts-ignore`, and what comes out
  * picks the `useInfiniteQuery` overload that declares `data` always defined. It is not — every

@@ -87,11 +87,11 @@ public final class ClasspathArtifactSourceCatalogRegistry implements ArtifactSou
     }
 
     private static String catalogResource(SourceContractVersion version) {
-        return "contracts/artifact-source/" + version.value() + "/catalog.json";
+        return "contracts/source-use/" + version.value() + "/catalog.json";
     }
 
     private static String useDecisionsResource(SourceContractVersion version) {
-        return "contracts/artifact-source/" + version.value() + "/source-use-decisions.json";
+        return "contracts/source-use/" + version.value() + "/source-use-decisions.json";
     }
 
     @Override

@@ -67,7 +67,7 @@ final class PracticeTraceDeriver {
             PracticeOutput output) {
         // Newest first: when several occurrences match, the most recent one is the answer somebody wants.
         List<SignalOccurrence> matched = occurrences.stream()
-                .filter(occurrence -> practice.watches().contains(occurrence.signal()))
+                .filter(occurrence -> watches(practice, occurrence))
                 .sorted(Comparator.comparing(SignalOccurrence::occurredAt).reversed())
                 .toList();
         SignalOccurrence latest = matched.isEmpty() ? null : matched.getFirst();
@@ -81,7 +81,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.REVIEWED,
-                    "Assessed on this artifact.",
+                    "Reviewed on this work.",
                     occasion,
                     output.latestObservedAt(),
                     output.latestReviewId(),
@@ -122,7 +122,19 @@ final class PracticeTraceDeriver {
                 return entry(
                         practice,
                         PracticeTraceOutcome.REVIEWED,
-                        "Assessed on this artifact; nothing to report.",
+                        "Reviewed on this work; nothing to report.",
+                        occurrence,
+                        review.decidedAt(),
+                        occurrence.reviewId(),
+                        output);
+            }
+            // SKIPPED, not NOT_ASSESSABLE: the practice itself declares it is not reviewed automatically. A
+            // policy stop, not a capture failure, and nothing somebody could fix by capturing more.
+            if (readiness.limitation() != null) {
+                return entry(
+                        practice,
+                        PracticeTraceOutcome.SKIPPED,
+                        readiness.limitation(),
                         occurrence,
                         review.decidedAt(),
                         occurrence.reviewId(),
@@ -157,7 +169,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.TURNED_OFF,
-                    "This workspace turned the practice off, so it is not measured here.",
+                    "This workspace turned the practice off, so it is not reviewed here.",
                     latest,
                     null,
                     null,
@@ -171,20 +183,13 @@ final class PracticeTraceDeriver {
 
         // 5. Nothing it watches can happen here at all.
         if (practice.dormancyReason() != null) {
-            return entry(
-                    practice,
-                    PracticeTraceOutcome.DORMANT,
-                    capitalize(practice.dormancyReason()),
-                    null,
-                    null,
-                    null,
-                    output);
+            return entry(practice, PracticeTraceOutcome.DORMANT, practice.dormancyReason(), null, null, null, output);
         }
 
         return entry(
                 practice,
                 PracticeTraceOutcome.NOT_OCCASIONED,
-                "Nothing this practice watches has happened to this artifact.",
+                "Nothing this practice watches for has happened to this work.",
                 null,
                 null,
                 null,
@@ -203,7 +208,7 @@ final class PracticeTraceDeriver {
                     entry(
                             practice,
                             PracticeTraceOutcome.RUNNING,
-                            "A review of this artifact is under way.",
+                            "A review of this work is under way.",
                             occurrence,
                             null,
                             occurrence.reviewId(),
@@ -225,7 +230,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        reasonCopy(occurrence.stateReason(), "Recorded and waiting to be re-offered."),
+                        reasonCopy(occurrence.stateReason(), "Recorded and waiting to be tried again."),
                         occurrence,
                         null,
                         null,
@@ -243,7 +248,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.LAPSED,
-                        reasonCopy(occurrence.stateReason(), "Retired unreviewed after waiting too long."),
+                        reasonCopy(occurrence.stateReason(), "Expired unreviewed after waiting too long."),
                         occurrence,
                         null,
                         null,
@@ -271,7 +276,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.NOT_ASSESSABLE,
-                    "The review could not read the evidence it needed, so nothing was measured.",
+                    "The review could not read the evidence it needed, so it recorded no observations.",
                     occurrence,
                     review.decidedAt(),
                     occurrence.reviewId(),
@@ -281,7 +286,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.SKIPPED,
-                    "A review ran on this artifact and did not record what it decided about this practice.",
+                    "A review ran on this work and did not record what it decided about this practice.",
                     occurrence,
                     review.decidedAt(),
                     occurrence.reviewId(),
@@ -297,6 +302,11 @@ final class PracticeTraceDeriver {
                 output);
     }
 
+    private static boolean watches(TracedPractice practice, SignalOccurrence occurrence) {
+        return practice.watches().stream()
+                .anyMatch(watched -> watched.signal().equals(occurrence.signal().signal()));
+    }
+
     private static PracticeTraceEntryDTO entry(
             TracedPractice practice,
             PracticeTraceOutcome outcome,
@@ -308,6 +318,8 @@ final class PracticeTraceDeriver {
         return new PracticeTraceEntryDTO(
                 practice.slug(),
                 practice.name(),
+                practice.groupSlug(),
+                practice.groupName(),
                 practice.autonomy(),
                 outcome,
                 explanation,
@@ -321,11 +333,10 @@ final class PracticeTraceDeriver {
                 output.withheldReasons());
     }
 
+    /** The refusal, then each blocker in its own sentence as the lookup wrote it. */
     private static String notAssessable(PracticeReadinessOutcome readiness) {
-        if (readiness.blockers().isEmpty()) {
-            return "The review could not read what this practice needs.";
-        }
-        return "The review could not read what this practice needs: " + String.join("; ", readiness.blockers()) + ".";
+        String refusal = "The review could not read the evidence this practice needs.";
+        return readiness.blockers().isEmpty() ? refusal : refusal + " " + String.join(" ", readiness.blockers());
     }
 
     /**
@@ -334,17 +345,5 @@ final class PracticeTraceDeriver {
      */
     private static String reasonCopy(@Nullable SignalStateReason reason, String fallback) {
         return reason == null ? fallback : reason.describe();
-    }
-
-    /**
-     * Sentence-cases a reason built elsewhere. {@code Character.toUpperCase} rather than
-     * {@code String.toUpperCase}, which is locale-sensitive (the Turkish dotless i) and banned by
-     * {@code LocaleSafetyArchTest}.
-     */
-    private static String capitalize(String sentence) {
-        if (sentence.isEmpty()) {
-            return sentence;
-        }
-        return Character.toUpperCase(sentence.charAt(0)) + sentence.substring(1);
     }
 }

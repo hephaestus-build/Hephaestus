@@ -94,6 +94,7 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
         for (PullRequest pr : prs) {
             ObjectNode node = prArr.addObject();
             node.put("artifactId", pr.getId());
+            node.put("resource", MergeReadinessContentSource.resourceOf(pr.getId()));
             node.put("number", pr.getNumber());
             node.put("title", pr.getTitle());
             if (pr.getHtmlUrl() != null) {

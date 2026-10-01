@@ -22,6 +22,7 @@ import {
 } from "./pi-agent-sandbox.ts";
 import { CHANGE_ROOT } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
+import { folderCitationIndex } from "./pi-folder-index.ts";
 import {
 	ASSESSMENT_STATUS_VALUES,
 	ASSESSMENT_STATUS_DESCRIPTIONS,
@@ -40,6 +41,7 @@ import {
 	isRecord,
 	type NormalizedCitation,
 	type NormalizedObservation,
+	type Outcome,
 	normalizeObservation,
 	resolveQuote,
 	validateEvidenceSources,
@@ -224,13 +226,9 @@ interface TaskEnvelope {
 	jobId: unknown;
 	workspaceId: unknown;
 	paths: ReturnType<typeof taskPaths>;
-	task: {
-		kind: string;
-		prompt: string;
-		// Only ever logged, so they are carried exactly as written rather than validated into a shape.
-		repositoryFullName: unknown;
-		pullRequestNumber: unknown;
-	};
+	prompt: string;
+	repositoryFullName: unknown;
+	pullRequestNumber: unknown;
 }
 
 /** How much feedback this run may compose, per lane. */
@@ -258,6 +256,7 @@ interface AdmittedCitation {
 interface AdmittedObservation {
 	id: string;
 	practiceSlug: string;
+	outcome: Outcome | null;
 	citations: AdmittedCitation[];
 	[key: string]: unknown;
 }
@@ -271,6 +270,7 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 		isRecord(value) &&
 		typeof value.id === "string" &&
 		typeof value.practiceSlug === "string" &&
+		(value.outcome === "POSITIVE" || value.outcome === "NEGATIVE" || value.outcome === null) &&
 		Array.isArray(value.citations) &&
 		value.citations.every(isAdmittedCitation)
 	);
@@ -281,7 +281,6 @@ const EVIDENCE_TOOLS = ["read", "grep", "find", "ls"] as const;
 const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "write", "edit", "bash"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
 const ENVELOPE_MISMATCH_EXIT = 42;
-const SUPPORTED_KIND = "practice_review";
 const TASK_PATH = `${CWD}/task.json`;
 const taskEnvelope = readTaskEnvelope();
 const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
@@ -338,33 +337,6 @@ setTimeout(() => {
 
 mkdirSync(OUTPUT, { recursive: true });
 
-/** Citation ownership comes from the captured manifest; fail closed when it is unreadable. */
-function readManifest(): {
-	availableSourceKinds: Set<string>;
-	artifactSources: Map<string, string>;
-} {
-	const manifest = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
-	if (!isRecord(manifest) || !Array.isArray(manifest.sources)) {
-		throw new Error("Task manifest: expected a sources array");
-	}
-	const availableSourceKinds = new Set<string>();
-	const artifactSources = new Map<string, string>();
-	for (const source of jsonArray(manifest.sources)) {
-		if (!isRecord(source) || typeof source.kind !== "string" || !isRecord(source.state)) {
-			throw new Error("Task manifest: every source needs a string kind and a state");
-		}
-		if (source.state.availability === "AVAILABLE") {
-			availableSourceKinds.add(source.kind);
-		}
-		for (const artifact of jsonArray(source.artifacts)) {
-			if (isRecord(artifact) && typeof artifact.path === "string") {
-				artifactSources.set(artifact.path, source.kind);
-			}
-		}
-	}
-	return { availableSourceKinds, artifactSources };
-}
-
 /** Snapshot the eligible practices once for the whole review. */
 function readPracticeIndex(): PracticeIndexEntry[] {
 	const index = parseJson(readFileSync(INPUT_PATHS.practiceIndex, "utf8"));
@@ -389,7 +361,9 @@ function readPracticeIndex(): PracticeIndexEntry[] {
 	});
 }
 
-const { availableSourceKinds, artifactSources } = readManifest();
+const { availableSourceKinds, artifactSources } = folderCitationIndex(
+	parseJson(readFileSync(INPUT_PATHS.manifest, "utf8")),
+);
 const availableSourceKindValues = [...availableSourceKinds].toSorted();
 const stagedArtifactPaths = [...artifactSources.keys()].toSorted();
 const practiceIndex = readPracticeIndex();
@@ -849,8 +823,8 @@ const BINARY = Symbol("binary");
 function citedContent(citation: NormalizedCitation): string | typeof BINARY | null {
 	if (citation.sourceKind === "scm.repository.tree") {
 		return citation.revision === undefined
-			? readCheckoutFile(citation.path)
-			: readRevisionFile(citation.path, citation.revision);
+			? readCheckoutFile(citation.path, citationRepository(citation))
+			: readRevisionFile(citation.path, citation.revision, citationRepository(citation));
 	}
 	if (citation.sourceKind === "scm.pull-request.diff") {
 		return readFileSync(`${CWD}/${CHANGE_ROOT}/diff.patch`, "utf8");
@@ -885,26 +859,35 @@ function asText(bytes: Buffer): string | typeof BINARY {
 	return bytes.subarray(0, 8000).includes(0) ? BINARY : bytes.toString("utf8");
 }
 
+/** The artifact index, not the task's primary checkout, determines which repository a citation reads. */
+function citationRepository(citation: NormalizedCitation): string {
+	const match = /^repos\/(?<repository>[A-Za-z0-9_-]+)\/\.git\/HEAD$/u.exec(citation.artifactPath);
+	if (!match?.groups || typeof match.groups.repository !== "string") {
+		throw new Error("Repository citation requires a captured repository HEAD");
+	}
+	return nodePath.resolve(CWD, "repos", match.groups.repository);
+}
+
 /** The blob at a repository-relative path in a revision of the checkout's history, or null. */
-function readRevisionFile(path: string, revision: string): string | typeof BINARY | null {
+function readRevisionFile(
+	path: string,
+	revision: string,
+	repository: string,
+): string | typeof BINARY | null {
 	if (path.startsWith("/") || path.split("/").includes("..")) {
 		return null;
 	}
-	const child = spawnSync(
-		"git",
-		["-C", INPUT_PATHS.repositoryRoot, "--no-pager", "show", `${revision}:${path}`],
-		{
-			maxBuffer: 64 * 1024 * 1024,
-			env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
-		},
-	);
+	const child = spawnSync("git", ["-C", repository, "--no-pager", "show", `${revision}:${path}`], {
+		maxBuffer: 64 * 1024 * 1024,
+		env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_OPTIONAL_LOCKS: "0" },
+	});
 	return child.status === 0 ? asText(child.stdout) : null;
 }
 
 /** The file at a repository-relative path in the checkout, or null when there is none. */
-function readCheckoutFile(path: string): string | typeof BINARY | null {
-	const file = nodePath.resolve(INPUT_PATHS.repositoryRoot, path);
-	if (!file.startsWith(`${INPUT_PATHS.repositoryRoot}/`)) {
+function readCheckoutFile(path: string, repository: string): string | typeof BINARY | null {
+	const file = nodePath.resolve(repository, path);
+	if (!file.startsWith(`${repository}/`)) {
 		return null;
 	}
 	try {
@@ -1311,21 +1294,13 @@ function readTaskEnvelope(): TaskEnvelope {
 		);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
-	const task: Record<string, unknown> = isRecord(envelope.task) ? envelope.task : {};
-	if (task.kind !== SUPPORTED_KIND) {
-		console.error(
-			`[pi-runner] Unknown task kind: got "${logValue(task.kind)}", expected "${SUPPORTED_KIND}". ` +
-				`This runner only handles practice_review tasks.`,
-		);
-		process.exit(ENVELOPE_MISMATCH_EXIT);
-	}
-	if (typeof task.prompt !== "string" || task.prompt.trim() === "") {
-		console.error(`[pi-runner] task.prompt is missing or blank in ${TASK_PATH}`);
+	if (typeof envelope.prompt !== "string" || envelope.prompt.trim() === "") {
+		console.error(`[pi-runner] prompt is missing or blank in ${TASK_PATH}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
 	}
 	let paths: ReturnType<typeof taskPaths>;
 	try {
-		paths = taskPaths(envelope.paths);
+		paths = taskPaths(envelope);
 	} catch (error) {
 		console.error(`[pi-runner] ${errorText(error)}`);
 		process.exit(ENVELOPE_MISMATCH_EXIT);
@@ -1335,21 +1310,18 @@ function readTaskEnvelope(): TaskEnvelope {
 		schemaVersion: SUPPORTED_SCHEMA_VERSION,
 		jobId: envelope.jobId,
 		workspaceId: envelope.workspaceId,
-		task: {
-			kind: SUPPORTED_KIND,
-			prompt: task.prompt,
-			repositoryFullName: task.repositoryFullName,
-			pullRequestNumber: task.pullRequestNumber,
-		},
+		prompt: envelope.prompt,
+		repositoryFullName: envelope.repositoryFullName,
+		pullRequestNumber: envelope.pullRequestNumber,
 	};
 }
 
-const prompt = taskEnvelope.task.prompt.trim();
+const prompt = taskEnvelope.prompt.trim();
 console.error(
-	`[pi-runner] Task envelope loaded: kind=${taskEnvelope.task.kind}, ` +
+	`[pi-runner] Task envelope loaded: ` +
 		`jobId=${logValue(taskEnvelope.jobId)}, workspaceId=${logValue(taskEnvelope.workspaceId)}, ` +
-		`repository=${logValue(taskEnvelope.task.repositoryFullName ?? "?")}, ` +
-		`prNumber=${logValue(taskEnvelope.task.pullRequestNumber ?? "?")}`,
+		`repository=${logValue(taskEnvelope.repositoryFullName ?? "?")}, ` +
+		`prNumber=${logValue(taskEnvelope.pullRequestNumber ?? "?")}`,
 );
 
 const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;
@@ -1709,18 +1681,6 @@ function buildFeedbackTool(
 		const delivers = unit.action !== "WITHHOLD";
 		if (delivers && usedPerChannel[unit.channel] >= bounds.maxUnits) {
 			return skipped(`${unit.channel} cap of ${bounds.maxUnits} reached; skipped.`);
-		}
-		// WITHHOLD requires a NEGATIVE observation; otherwise there is nothing to withhold.
-		if (
-			!delivers &&
-			!observations.some(
-				(observation) =>
-					observation.practiceSlug === unit.practiceSlug && observation.outcome === "NEGATIVE",
-			)
-		) {
-			return skipped(
-				`${unit.practiceSlug} has no NEGATIVE observation in this run, so there is nothing to withhold; skipped.`,
-			);
 		}
 		const rejection = validateUnit(unit, observationsById, preparedTargets, placementKinds);
 		if (rejection !== null) {
@@ -2222,7 +2182,9 @@ function validateUnit(
 	const evidenceError = validateFeedbackEvidence(
 		unit.practiceSlug,
 		unit.basedOn,
-		new Map([...observationsById].map(([id, observation]) => [id, observation.practiceSlug])),
+		observationsById,
+		unit.channel,
+		unit.action,
 	);
 	if (evidenceError !== null) {
 		return evidenceError;

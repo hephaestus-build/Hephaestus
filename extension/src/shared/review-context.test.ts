@@ -6,7 +6,6 @@ import {
 	reviewActivity,
 	type ReadyContext,
 	refreshInterval,
-	SETTLING_REFRESH_MS,
 	VISIBLE_REFRESH_MS,
 } from "~/shared/review-context";
 
@@ -53,11 +52,11 @@ function ready(
 		trace: {
 			artifactId: 1,
 			artifactKind: "scm.pull_request",
-			title: "t",
+			reviewedWork: { id: "1", kind: "scm.pull_request", label: "!1", title: "t" },
 			practices,
 			signals,
 		},
-		links: { trace: "https://heph.example.test/w/team/reviews/scm.pull_request/1" },
+		links: { trace: "https://heph.example.test/w/team/feedback/scm.pull_request/1" },
 		pageUrl: "https://gitlab.example.test/team/app/-/merge_requests/1",
 		view: "overview",
 		fetchedAt: new Date(NOW).toISOString(),
@@ -66,17 +65,9 @@ function ready(
 
 describe("isSettling", () => {
 	it("is quiet for settled work", () => {
-		const context = ready([
-			signal({ occurredAt: "2026-09-01T00:00:00Z", reviewId: "old", reviewState: "COMPLETED" }),
-		]);
+		const context = ready([signal({ occurredAt: "2026-09-01T00:00:00Z", reviewId: "old" })]);
 		expect(isSettling(context)).toBe(false);
 		expect(refreshInterval(context)).toBe(VISIBLE_REFRESH_MS);
-	});
-
-	it("watches a review in progress on work whose practices already read Reviewed", () => {
-		const context = ready([signal({ reviewId: "new", reviewState: "IN_PROGRESS" })]);
-		expect(isSettling(context)).toBe(true);
-		expect(refreshInterval(context)).toBe(SETTLING_REFRESH_MS);
 	});
 
 	it("watches an occurrence that is queued or deferred", () => {
@@ -90,21 +81,8 @@ describe("isSettling", () => {
 });
 
 describe("reviewActivity", () => {
-	it("reports a queued or running review while its practice keeps its earlier results", () => {
-		const context = ready([
-			signal({ id: "earlier", reviewId: "old", reviewState: "COMPLETED" }),
-			signal({ id: "requested", reviewId: "new", reviewState: "IN_PROGRESS" }),
-		]);
-		expect(reviewActivity(context)).toBe("queued-or-running");
-	});
-
-	it("reads nothing into a trigger whose review has ended", () => {
-		expect(
-			reviewActivity(ready([signal({ reviewId: "new", reviewState: "COMPLETED" })])),
-		).toBeUndefined();
-		expect(
-			reviewActivity(ready([signal({ reviewId: "new", reviewState: "FAILED" })])),
-		).toBeUndefined();
+	it("does not infer run progress from a recorded trigger", () => {
+		expect(reviewActivity(ready([signal({ reviewId: "new" })]))).toBeUndefined();
 	});
 
 	it("does not turn gate waiting or a deferred occasion into a queued review", () => {

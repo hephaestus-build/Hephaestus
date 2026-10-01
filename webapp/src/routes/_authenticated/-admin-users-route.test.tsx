@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import { currentUser } from "@/mocks/fixtures/auth";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
@@ -38,8 +39,11 @@ describe("instance users route", () => {
 				return stepUpRefusal();
 			}),
 			// The instance also offers GitHub, but this account has only ever signed in with GitLab.
-			http.get("*/user/identities", () =>
-				HttpResponse.json([{ id: 2, providerType: "GITLAB", username: "ada" }]),
+			http.get("*/user", () =>
+				HttpResponse.json({
+					...currentUser,
+					linkedProviders: [{ type: "GITLAB", serverUrl: "https://gitlab.lrz.de" }],
+				}),
 			),
 		);
 
@@ -55,7 +59,7 @@ describe("instance users route", () => {
 		expect(screen.queryByRole("button", { name: "Continue with GitHub" })).toBeNull();
 
 		// The ask replaces the confirmation it came from rather than stacking on top of it.
-		expect(screen.queryByText("Grant application admin?")).toBeNull();
+		expect(screen.queryByText("Grant instance admin?")).toBeNull();
 
 		await user.click(screen.getByRole("button", { name: "Close" }));
 		await waitFor(() =>
@@ -80,7 +84,10 @@ describe("instance users route", () => {
 		server.use(
 			http.patch("*/admin/users/:id", () =>
 				HttpResponse.json(
-					{ status: 409, detail: "The last application admin cannot be demoted." },
+					{
+						status: 409,
+						detail: "You can't revoke the last admin. Grant admin to another account first.",
+					},
 					{ status: 409 },
 				),
 			),
@@ -91,7 +98,9 @@ describe("instance users route", () => {
 		await user.click(await screen.findByRole("button", { name: "Grant admin" }));
 
 		const refusal = await screen.findByRole("alert");
-		expect(refusal.textContent).toBe("The last application admin cannot be demoted.");
+		expect(refusal.textContent).toBe(
+			"You can't revoke the last admin. Grant admin to another account first.",
+		);
 		expect(screen.queryByRole("dialog", { name: "Confirm access" })).toBeNull();
 	});
 });

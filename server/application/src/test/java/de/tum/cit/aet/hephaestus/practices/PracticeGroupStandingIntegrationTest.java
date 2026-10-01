@@ -41,7 +41,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
     private static final String STANDINGS_URI = "/workspaces/{workspaceSlug}/practice-groups/standings";
 
     private static final String DIFF_EVIDENCE_JSON =
-            "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"inputs/context/diff.patch\","
+            "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"context/diff.patch\","
                     + "\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":42,\"quote\":\"example\","
                     + "\"quoteRedacted\":false}]}";
 

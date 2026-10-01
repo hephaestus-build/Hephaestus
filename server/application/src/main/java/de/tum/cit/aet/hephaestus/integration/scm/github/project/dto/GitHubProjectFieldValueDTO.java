@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.project.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GraphQlConnectionOverflowDetector;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHBot;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHLabel;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMannequin;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMilestone;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2Field;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2FieldConfiguration;
@@ -224,6 +226,10 @@ public record GitHubProjectFieldValueDTO(
             return user.getLogin();
         } else if (reviewer instanceof GHTeam team) {
             return team.getName();
+        } else if (reviewer instanceof GHBot bot) {
+            return bot.getLogin();
+        } else if (reviewer instanceof GHMannequin mannequin) {
+            return mannequin.getLogin();
         }
         return null;
     }

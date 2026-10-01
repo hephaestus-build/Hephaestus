@@ -2,7 +2,7 @@
 
 A Chrome MV3 extension (WXT, React 19, Tailwind 4) that puts a practice review report into the page
 of the pull request, merge request or issue open in the current tab, and previews one row of a
-repository's list on request. Desktop Chrome only. The architecture record is ADR 0046; operator and
+repository's list on request. Desktop Chrome only. The architecture record is ADR 0049; operator and
 user docs are `docs/admin/browser-extension.mdx` and `docs/user/browser-extension.mdx`.
 
 ## Where things live
@@ -65,7 +65,7 @@ the type check on its own. Lint holds tests to the web app's Vitest policy: narr
 - **Only the reader's own records, and no feedback text.** Everyone, admins included, sees the
   comments Hephaestus recorded posting on the work for them (`getOwnDeliveredWorkFeedback`) — counted
   once per provider comment, linked only to an anchor on this work's own pages — and, once the report
-  is open, their own observations. No feedback body is ever read or rendered; the comment is read on
+  is open, their own observations and named own-review trace. No feedback body is ever read or rendered; the comment is read on
   the provider. The provider's comment handles stay in the worker. Every developer's records, the
   review's delivery and its runs are the web app's, one **Review details** link away for an admin.
 - **A generation guards everything shown.** Sign-in, sign-out, a rejected refresh, an instance change

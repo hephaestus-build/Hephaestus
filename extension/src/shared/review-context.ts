@@ -22,7 +22,7 @@ export interface ReadyContext {
 	work: ReviewedWorkRef;
 	canRequestReview: boolean;
 	canInspectReviewDetails: boolean;
-	/** `null` when the trace endpoint answered 404: nothing has been recorded about this work. */
+	/** `null` when no own review trace is available; other reviews may exist. */
 	trace: ArtifactTrace | null;
 	links: { trace: string; reviewDetails?: string };
 	/** The page this answers for, canonical: a view shows it only while its tab shows the same. */
@@ -111,23 +111,14 @@ export type ReviewContextStatus = ReviewContext["status"];
 export const SETTLING_REFRESH_MS = 10_000;
 export const VISIBLE_REFRESH_MS = 60_000;
 
-/**
- * What the server says is happening to a review of this work right now, from the trace's
- * authoritative states only: a review an occurrence started whose run is still in progress (the
- * server folds queued and running together), or an occurrence it is holding back to see whether the
- * work keeps changing. The run state is read from the occurrence, not the practice: a practice with
- * results keeps reading Reviewed while a newer review of the same work runs.
- */
-export type ReviewActivity = "queued-or-running" | "deferred" | "pending";
+/** The named own review's recorded decision states, never another developer's run activity. */
+export type ReviewActivity = "deferred" | "pending";
 
 export function reviewActivity(context: ReviewContext): ReviewActivity | undefined {
 	if (context.status !== "ready") {
 		return undefined;
 	}
 	const signals = context.trace?.signals ?? [];
-	if (signals.some((signal) => signal.reviewState === "IN_PROGRESS")) {
-		return "queued-or-running";
-	}
 	const practices = context.trace?.practices ?? [];
 	if (signals.some((signal) => signal.state === "PENDING")) {
 		return "pending";

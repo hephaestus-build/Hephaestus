@@ -115,13 +115,13 @@ The bot token scope set stays minimal — every scope maps to a feature the code
 
 | Scope | Feature |
 | --- | --- |
-| `chat:write` | Mentor DM replies and admin/leaderboard-channel announcements |
+| `chat:write` | Mentor DM replies and monitored-channel announcements |
 | `assistant:write` | The DM "Thinking…" streaming status and suggested prompts on the Agent messaging surface |
 | `im:history` | Receiving the DM `message` events that drive a mentor turn |
 | `channels:history` / `groups:history` | Reading messages in workspace-admin-consented monitored channels (public / private) |
 | `channels:read` / `groups:read` | Channel directory listing for the admin channel picker and periodic channel-metadata refresh |
 | `channels:join` | Letting an admin add a public channel to monitoring directly from the picker |
-| `users:read` | Resolving a Slack user to a workspace member for mentor identity and digest delivery |
+| `users:read` | Resolving a Slack user to a workspace member for mentor identity |
 
 The user token scope set is only for Sign in with Slack account linking:
 
@@ -214,7 +214,7 @@ A lapsed key reports `accepted=false` and the mirror stops refreshing until it i
 
 Hephaestus can connect to GitHub using either a **Personal Access Token (PAT)** or a **GitHub App**. The full setup — mode comparison, required GitHub App permissions, the webhook event list, and manual webhook creation (GitHub has **no** auto-registration, unlike GitLab) — lives in [GitHub Integration](./github-integration).
 
-Environment variables for GitHub App mode: `GH_APP_ID`, `GH_APP_PRIVATE_KEY` (or `GH_APP_PRIVATE_KEY_LOCATION`), `GH_APP_INSTALLATION_URL`. If not provided (`GH_APP_ID=0`, the default), workspaces use PATs configured through the UI.
+Environment variables for GitHub App mode: `GH_APP_ID`, `GH_APP_PRIVATE_KEY` (or `GH_APP_PRIVATE_KEY_LOCATION`), `GH_APP_INSTALLATION_URL`, `GH_APP_CLIENT_ID`, `GH_APP_CLIENT_SECRET`. If not provided (`GH_APP_ID=0`, the default), workspaces use PATs configured through the UI.
 
 ### GitLab rollout bundle
 
@@ -229,7 +229,9 @@ GitLab login, GitLab workspaces, webhook auto-registration, and practice review 
 | `GITLAB_DEFAULT_SERVER_URL` | The one GitLab instance workspaces are created on, synced from and checked out from (not login). Falls back to `GITLAB_OAUTH_BASE_URL`. Give the application server and every worker the same value |
 | `GITLAB_ENABLED` | Enables GitLab on the application server and every worker; the webhook receiver does not read it. A worker without it cannot check out a merge request: each GitLab review it claims fails preparation with `SCM Git preparation is unavailable` and ends with insufficient evidence |
 | `GITLAB_WORKSPACE_CREATION` | Enables GitLab workspace creation in the UI and API |
-| `WEBHOOK_SECRET` | Shared secret used for GitLab webhook verification and auto-registration. One instance-wide value: GitHub webhooks are verified against the same secret. Hooks Hephaestus creates on GitLab carry it as their secret token (`X-Gitlab-Token`); it does not add a signing token to them. A hook you give a signing token yourself (GitLab 19.0 and later) is verified by its signature alone, so this value must then be that `whsec_…` signing token |
+| `WEBHOOK_SECRET` | Instance-wide secret for GitHub webhook verification and operator-created GitLab hooks on the shared `POST /webhooks/gitlab` endpoint (`X-Gitlab-Token`). Group hooks Hephaestus registers use the connection endpoint and a signed route credential instead; see `WEBHOOK_ROUTING_SECRET` below. A hook you give a signing token yourself (GitLab 19.0 and later) is verified by its signature alone, so this value must then be that `whsec_…` signing token |
+| `WEBHOOK_ROUTING_SECRET` | Signs the token of each GitLab group hook Hephaestus registers, so a hook can only ever deliver for the one GitLab connection it was registered for. At least 32 characters, different from `WEBHOOK_SECRET` and from every encryption key; give the application server and the webhook receiver the same value. Without it no GitLab group hook is registered |
+| `WEBHOOK_ROUTING_PREVIOUS_SECRET` | Only while rotating `WEBHOOK_ROUTING_SECRET`: the value it had before. Hooks signed with it keep delivering until the next registration replaces them with hooks signed with the new value; then remove it |
 | `WEBHOOK_EXTERNAL_URL` | Public webhook base URL registered on GitLab. The reference Compose files deliberately leave it unset so auto-registration derives it from the application host URL; add it to the `application-server` service's `environment:` block if you need to override that. |
 
 The login provider is instance-agnostic: gitlab.com works out of the box, and any self-hosted GitLab works by pointing `GITLAB_OAUTH_BASE_URL` at it. Create the GitLab OAuth application on that instance with these settings:
@@ -248,6 +250,29 @@ a subscription on upgrade: for a workspace connected before pipeline events were
 Hephaestus register it again on the next sync. Until then the head pipeline's state reaches
 Hephaestus only through the scheduled sync.
 
+GitLab before 18.6 sends merge request events without each reviewer's review state. On those
+versions, where a reviewer's review stands — approved, changes requested, or asked to review again —
+reaches Hephaestus on the scheduled sync (`MONITORING_SYNC_CRON`), not when GitLab reports the event.
+
+GitLab tokens are inspected daily at **03:00 UTC** on the `server` runtime role, independently of
+repository sync and webhook registration. A token within `hephaestus.webhook.token-rotation.threshold-days`
+(default 7 days) is self-rotated with the configured validity (default 90 days). The token needs the
+GitLab `api` or `self_rotate` scope and an instance version that supports self-rotation. The old token
+is revoked immediately; do not share a token that Hephaestus rotates with other applications.
+Rotation is serialized with token replacement and is never automatically retried after an uncertain
+response. Replace the token if the provider rotated it but its response was lost.
+
+If rotation fails or is not permitted, workspace owners and administrators who opted into
+**Workspace alerts** receive one email for the recorded problem. A token refused by GitLab records a
+separate credential problem and sends one alert. Rotation or replacement clears the problem and
+sends the recovery email. Repeated checks do not send duplicate alerts for the same problem revision.
+The GitLab connection page shows the observed expiry date, **no expiry**, or an unknown expiry until
+inspection succeeds; it never shows the token. Replace a refused or expiring token there.
+
+GitHub App installation tokens renew automatically and need no expiry action. **GitHub personal
+access token expiry is not tracked** in 1.0; administrators must track and replace those tokens.
+Slack revocation alerts and Outline expiry information are unchanged.
+
 ### Practice review
 
 Practice review has its own page: **[Practice Review](./practice-review)** covers the deployment
@@ -256,10 +281,17 @@ sweeps, the agent queue-health metrics and retention, and the checklist for a wo
 
 Two facts belong here because they are deployment topology rather than feature configuration. The Docker
 sandbox is activated by the **worker runtime role** (`hephaestus.runtime.worker.enabled`), not by
-`AGENT_ENABLED`: keep that capability and Docker access on the application server, because interactive
-mentor sandboxes are request-affine and run there, and add a dedicated `application-worker` for queued
-review capacity. And `NATS_ENABLED` gates webhook-driven sync consumption and must stay on for that; it is
+`AGENT_ENABLED`: only `application-worker` runs sandboxes and holds the Docker socket, for queued
+reviews and Heph sessions alike, and `application-server` turns the worker role off and reaches them
+through connected workers. And `NATS_ENABLED` gates webhook-driven sync consumption and must stay on for that; it is
 not part of the practice-review bundle.
+
+Heph starts a developer's sandbox when they open Heph in the webapp or open the Hephaestus app in Slack,
+so their first message rarely waits for one, and keeps it warm for `hephaestus.mentor.idle-ttl-seconds`
+(default `900`) after its last frame; the Traefik sticky cookie's `maxAge` in `docker/compose.app.yaml`
+follows that value. Size the application server for `hephaestus.mentor.max-sessions-total` idle runners
+of about 165 MB each. [Runtime Roles](./runtime-roles#interactive-mentor-turns) has the details and when a
+prepare does nothing.
 
 ### Rollout tiers
 
@@ -275,7 +307,7 @@ Staging and production both use the production compose files. The difference sho
 
 ### Instance-wide LLM settings
 
-The mentor's interactive sandbox uses the application-server replica's LLM proxy; a queued practice review uses the proxy beside the worker that claimed it. That proxy is the only path a sandbox has to a provider key, which is never injected directly. There is no separate intelligence service to configure.
+Every sandbox, a Heph session's or a queued practice review's, uses the LLM proxy on the worker that runs it. That proxy is the only path a sandbox has to a provider key, which is never injected directly. There is no separate intelligence service to configure.
 
 **No provider, model, price, or credential is ever set through the environment.** All of that is
 runtime catalog data entered in the admin UI, and it is documented in full — field by field, with
@@ -289,6 +321,13 @@ Three instance-wide LLM knobs *are* env vars, because they are deploy-time facts
 | `HEPHAESTUS_LLM_DISPLAY_CURRENCY` | *(empty)* | Currency to show spend in **alongside** USD. Empty turns the second currency off entirely. `EUR` is the only supported value, and anything else — including a perfectly well-formed code such as `GBP` — fails startup naming what is accepted, so a currency this instance cannot convert to can never hide as a missing feature. |
 | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` | `false` | Whether `http://localhost` provider base URLs may be saved and dialled. **Never set this in production** — it is an SSRF hole that lets a workspace admin aim a "provider" at host-local services. The private/link-local/CGNAT check is unconditional and this flag does not relax it. |
 | `HEPHAESTUS_LLM_FX_DAILY_URL` | ECB daily reference feed | Override only on an air-gapped instance mirroring the ECB file internally. |
+
+Heph turns run on connected workers, for web chat and Slack DMs. The application server keeps
+admission, budget checks, thread persistence and context; with its worker role disabled it creates
+no Docker client. Configure the worker hub URL and registration token before serving conversations.
+There is no local fallback: without spare mentor capacity, Heph reports “Heph is busy” and the user
+can retry. [Runtime roles](./runtime-roles.mdx#interactive-mentor-turns) owns session placement, drain
+and runtime-readiness details.
 
 The proxy resolves the upstream base URL, auth header, and key per model from whichever connection it is bound to, so nothing needs to be pinned at the process level. On a split-pod deployment the worker pod resolves providers from the same catalog as the app pod — no LLM credential passthrough between pods. Warm mentor sandboxes are reused only while their complete non-secret runtime identity still matches; changing the bound model/route, image, prompt/runtime files, or limits replaces the sandbox before the next prompt. Per-turn context is refreshed inside a compatible warm sandbox rather than forcing a restart.
 
@@ -319,7 +358,7 @@ Rather than a policy knob, the guard is structural: a model cannot be enabled at
 declares its price or marks it **No metered API cost**, so a correctly administered instance does not
 reach an UNVERIFIABLE month in the first place.
 
-**Alerting hook:** there is no built-in push notification when a workspace crosses its cap — wire your own alert off the Micrometer counters the budget service already emits: `llm.budget.exhausted` (incremented once per usage event whose confirmed contribution pushes a workspace's month-to-date spend across the **instance** cap — the purse you fund, so the one you are alerted on) and `llm.budget.blocked` (tagged `surface` by admission point, including `agent_job` and `mentor`; the agent-job tag also carries `cap`, naming which purse refused the work). Each EXHAUSTED transition also logs a WARN, visible in Sentry if configured.
+**Alerting hook:** there is no built-in push notification when a workspace crosses its cap — use the private endpoint and example rules in [Scrape metrics](./observability.mdx#scrape-metrics) to alert on the Micrometer counters the budget service emits: `llm.budget.exhausted` (incremented once per usage event whose confirmed contribution pushes a workspace's month-to-date spend across the **instance** cap — the purse you fund, so the one you are alerted on) and `llm.budget.blocked` (tagged `surface` by admission point, including `agent_job` and `mentor`; the agent-job tag also carries `cap`, naming which purse refused the work). Each EXHAUSTED transition also logs a WARN, visible in Sentry if configured.
 
 Reasoning tokens are retained as telemetry when the compatible endpoint reports them. They are not
 priced separately: OpenAI-compatible usage includes reasoning tokens in billable output tokens, so a
@@ -517,7 +556,6 @@ for the authority and [elevated-access audit policy](/contributor/instance-admin
 
 - Monitor services with the central Prometheus/Loki stack; ensure trace IDs appear in logs.
 - Schedule regular backups for PostgreSQL (it holds auth state — accounts, identity links, sessions — in addition to application data).
-- Review weekly leaderboard Slack posts to ensure the automation is active.
 - A preview deployment only represents the GitLab practice-review rollout if it is wired with the same GitLab IdP, sandbox, git-checkout, and agent-job-queue settings. Verify a rollout on staging, not on a preview.
 
 ## Support

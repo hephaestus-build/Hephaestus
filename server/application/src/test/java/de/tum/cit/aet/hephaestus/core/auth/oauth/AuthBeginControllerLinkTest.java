@@ -12,7 +12,10 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.view.RedirectView;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Pins secure account-linking at the begin endpoint: link mode binds the CURRENT account from a
@@ -108,12 +112,35 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
         when(identityLinkAuthentication.resolveAuthenticatedAccountId(any()))
                 .thenThrow(new StepUpRequiredException(java.time.Duration.ofMinutes(5)));
         MockHttpServletResponse res = new MockHttpServletResponse();
+        String onboarding = "/w/intro/onboarding?returnTo=%2Fw%2Fintro%2Factivity&step=accounts";
 
-        RedirectView view = controller.begin("github", null, "/settings", "link", new MockHttpServletRequest(), res);
+        RedirectView view = controller.begin("github", null, onboarding, "link", new MockHttpServletRequest(), res);
 
-        assertThat(view.getUrl()).isEqualTo("/auth/error?code=step_up_required");
+        var page = UriComponentsBuilder.fromUriString(Objects.requireNonNull(view.getUrl()))
+                .build();
+        assertThat(page.getPath()).isEqualTo("/auth/error");
+        assertThat(page.getQueryParams().getFirst("code")).isEqualTo("step_up_required");
+        assertThat(URLDecoder.decode(
+                        Objects.requireNonNull(page.getQueryParams().getFirst("returnTo")), StandardCharsets.UTF_8))
+                .isEqualTo(onboarding);
         // No dance was started, so no intent may survive to be redeemed by a later callback.
         assertThat(readIntent(res)).isNull();
+    }
+
+    @Test
+    void link_withStaleSignIn_dropsADestinationOffThisSite() {
+        when(identityLinkAuthentication.resolveAuthenticatedAccountId(any()))
+                .thenThrow(new StepUpRequiredException(java.time.Duration.ofMinutes(5)));
+
+        RedirectView view = controller.begin(
+                "github",
+                null,
+                "https://evil.example/settings",
+                "link",
+                new MockHttpServletRequest(),
+                new MockHttpServletResponse());
+
+        assertThat(view.getUrl()).isEqualTo("/auth/error?code=step_up_required");
     }
 
     @Test

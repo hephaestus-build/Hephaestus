@@ -150,6 +150,7 @@ public class IntegrationNatsConsumer {
     private final IntegrationPoisonHandler poisonHandler;
     private final IntegrationConsumerStats stats;
     private final ConnectionActivityRecorder activityRecorder;
+    private final List<RouteAdmission> routeAdmissions;
 
     public IntegrationNatsConsumer(
             NatsConnectionProperties connectionProperties,
@@ -158,7 +159,8 @@ public class IntegrationNatsConsumer {
             IntegrationMessageDispatcher dispatcher,
             IntegrationPoisonHandler poisonHandler,
             IntegrationConsumerStats stats,
-            ConnectionActivityRecorder activityRecorder) {
+            ConnectionActivityRecorder activityRecorder,
+            List<RouteAdmission> routeAdmissions) {
         this.connectionProperties = connectionProperties;
         this.consumerProperties = consumerProperties;
         this.subscriptionProvider = subscriptionProvider;
@@ -166,6 +168,7 @@ public class IntegrationNatsConsumer {
         this.poisonHandler = poisonHandler;
         this.stats = stats;
         this.activityRecorder = activityRecorder;
+        this.routeAdmissions = List.copyOf(routeAdmissions);
     }
 
     // Lifecycle
@@ -850,7 +853,16 @@ public class IntegrationNatsConsumer {
                 return;
             }
             IntegrationMessageHandler resolvedHandler = handler.get();
-            resolvedHandler.onMessage(msg);
+            Optional<RouteAdmission> admission = routeAdmissions.stream()
+                    .filter(candidate -> candidate.owns(subject))
+                    .findFirst();
+            if (admission.isEmpty()) {
+                resolvedHandler.onMessage(msg);
+            } else if (!admission.get().admit(scopeId, msg, () -> resolvedHandler.onMessage(msg))) {
+                log.info("Skipped message: reason=routeNotAdmitted, subject={}", sanitizeForLog(subject));
+                msg.ack();
+                return;
+            }
             msg.ack();
             stats.recordDispatch(Instant.now());
             if (scopeId != null) {

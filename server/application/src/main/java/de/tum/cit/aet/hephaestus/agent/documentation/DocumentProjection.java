@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -13,7 +12,10 @@ import org.jspecify.annotations.Nullable;
  * size-cap-evicted document is returned as a marker rather than dropped, so a link to it still resolves.
  */
 public interface DocumentProjection {
-    /** Live ahead of tombstoned, capped so a large workspace never floods the context. */
+    /** Reuses the mirror owner's active-connection and approved-origin check. */
+    boolean workspaceReadable(long workspaceId);
+
+    /** Every permitted record in the workspace, including tombstones and evicted-body markers. */
     List<ProjectedDocument> documentsForWorkspace(long workspaceId);
 
     /** Each reference may be a document id or URL. */
@@ -35,13 +37,6 @@ public interface DocumentProjection {
      * @param queryText free text describing what is relevant (websearch syntax; {@code OR}-joined terms)
      */
     List<ProjectedDocument> searchDocuments(long workspaceId, String queryText, int limit);
-
-    /**
-     * Pulls documentation references — ids, slugs, links — out of free text. What counts as a reference is
-     * the implementation's vendor knowledge; the consumer stays vendor-blind and feeds the result into
-     * {@link #documentsByReference}.
-     */
-    Set<String> extractReferences(@Nullable String text);
 
     /**
      * The agent-facing view of one mirrored document. {@code bodyMarkdown} is {@code null} when the
@@ -73,7 +68,9 @@ public interface DocumentProjection {
             @Nullable Long updatedByMemberId,
             List<Collaborator> collaborators,
             boolean archived,
-            @Nullable String collectionName) {
+            @Nullable String collectionName,
+            @Nullable Instant syncedAt,
+            @Nullable String sourceId) {
         /** One document editor: provider-native subject, display name if known, resolved member id if linked. */
         public record Collaborator(
                 String subject,
@@ -99,6 +96,8 @@ public interface DocumentProjection {
                     null,
                     List.of(),
                     false,
+                    null,
+                    null,
                     null);
         }
     }

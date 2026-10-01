@@ -1,21 +1,26 @@
-import { ArrowRightIcon, LayersIcon } from "lucide-react";
+import { ArrowRightIcon, ChevronRightIcon, HistoryIcon } from "lucide-react";
+
+import { cn } from "cn";
 
 import type { ReviewRunRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
+import { statusToneClass } from "@/components/common/status-def";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { countsTogether } from "@/components/practice-vocabulary/feedback-text";
+import { REVIEW_RUN_STATE_DEFS } from "@/components/practice-vocabulary/review-run-state-defs";
 import type { StandingCounts } from "@/components/practice-vocabulary/standing-counts";
 import { StandingSummaryBox } from "@/components/practice-vocabulary/StandingSummaryBox";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { asDate, formatDayTime } from "@/lib/dates";
 
-import { ALL_PRACTICE_GROUPS_LEVEL } from "./practice-profile-search";
+import { ALL_PRACTICE_GROUPS_LEVEL, REVIEWS_LEVEL } from "./practice-profile-search";
 
 export interface PracticeProfilePageHeaderProps {
 	/**
-	 * The chip beside the title: when the latest review ran and on what; omitted while no review has
-	 * run.
+	 * The newest review of the reader's work, which the chip beside the title describes and which
+	 * opens the reviews of their work; absent while none has run, when the chip says so instead.
 	 */
 	latestRun?: ReviewRunRef;
 	/** How many practices sit at each standing; the ring and the legend are drawn from these. */
@@ -51,7 +56,7 @@ export function PracticeProfilePageHeader({
 					{isLoading ? (
 						<Skeleton className="h-5 w-64 rounded-full" />
 					) : (
-						latestRun && <LatestRunChip run={latestRun} />
+						<LatestReviewChip run={latestRun} />
 					)}
 				</div>
 				<p className="max-w-2xl text-sm text-muted-foreground">{INTRO}</p>
@@ -84,30 +89,74 @@ export function PracticeProfilePageHeader({
 	);
 }
 
-function LatestRunChip({ run }: { run: ReviewRunRef }) {
-	const at = asDate(run.at);
-	const { label, url } = run.reviewedWork;
-	return (
-		<div className="flex max-w-full">
-			<Badge variant="outline" className="max-w-full">
-				<LayersIcon className="text-muted-foreground" aria-hidden />
-				<span className="font-semibold">Latest run</span>
-				{at && (
-					<time dateTime={at.toISOString()} className="font-normal text-muted-foreground">
-						{formatDayTime(at)}
-					</time>
-				)}
-				<span className="text-border" aria-hidden>
-					·
-				</span>
-				<span className="min-w-0 truncate font-normal text-muted-foreground">
-					after{" "}
-					<InlineLink href={url} external>
-						{label}
-					</InlineLink>
-				</span>
+const RUNNING = REVIEW_RUN_STATE_DEFS.IN_PROGRESS;
+
+interface LatestReviewChipProps {
+	/** The newest review of the reader's work; absent until one has run. */
+	run?: ReviewRunRef;
+}
+
+/**
+ * What the newest review did, and the way into the reviews of the reader's work. The work is not
+ * linked here: a link inside the chip would be a control inside a control. A review still going
+ * says so in words; its icon stands still, as every status icon does.
+ */
+function LatestReviewChip({ run }: LatestReviewChipProps) {
+	if (run === undefined) {
+		return (
+			<Badge variant="muted">
+				<HistoryIcon aria-hidden />
+				No review yet
 			</Badge>
-		</div>
+		);
+	}
+	const at = asDate(run.at);
+	const { label } = run.reviewedWork;
+	const running = run.status === "IN_PROGRESS";
+	const Icon = running ? RUNNING.icon : HistoryIcon;
+	const iconTone = running ? statusToneClass(RUNNING.badgeVariant) : "text-muted-foreground";
+
+	const words = running ? (
+		<>
+			<span className="font-semibold">Review running</span>
+			<ClauseDot />
+			<span className="min-w-0 truncate font-normal text-muted-foreground">on {label}</span>
+		</>
+	) : (
+		<>
+			<span className="font-semibold">Latest review</span>
+			{at && (
+				<time dateTime={at.toISOString()} className="font-normal text-muted-foreground">
+					{formatDayTime(at)}
+				</time>
+			)}
+			<ClauseDot />
+			<span className="min-w-0 truncate font-normal text-muted-foreground">
+				{run.status === "FAILED" ? "stopped before it finished" : `after ${label}`}
+			</span>
+		</>
+	);
+
+	return (
+		<DetailStackLink
+			entry={REVIEWS_LEVEL}
+			className={cn(
+				buttonVariants({ variant: "outline", size: "xs", shape: "pill" }),
+				"max-w-full font-normal",
+			)}
+		>
+			<Icon className={iconTone} aria-hidden />
+			{words}
+			<ChevronRightIcon data-icon="inline-end" aria-hidden />
+		</DetailStackLink>
+	);
+}
+
+function ClauseDot() {
+	return (
+		<span className="text-border" aria-hidden>
+			·
+		</span>
 	);
 }
 

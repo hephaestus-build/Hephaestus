@@ -41,13 +41,12 @@ public record RepositoryInfoDTO(
         @Nullable @Schema(description = "Labels defined in the repository")
         List<LabelInfoDTO> labels,
         /**
-         * Whether contributions from this repository are hidden from leaderboard calculations.
+         * Whether activity in this repository is left out of a team's activity.
          * <p>
          * <b>Note:</b> This field is scope-specific business logic and should be moved
          * to a workspace-specific DTO during ETL extraction.
          */
-        @NonNull
-        @Schema(description = "Whether contributions from this repository are hidden from leaderboard calculations")
+        @NonNull @Schema(description = "Whether activity in this repository is left out of a team's activity")
         Boolean hiddenFromContributions) {
     @Nullable
     public static RepositoryInfoDTO fromRepository(@Nullable Repository repository) {

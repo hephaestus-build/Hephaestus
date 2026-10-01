@@ -13,7 +13,7 @@ Hephaestus ships **one JAR** that boots in any of three runtime roles. The same 
 | Worker | `hephaestus.runtime.worker.enabled` | `true` |
 | Webhook | `hephaestus.runtime.webhook.enabled` | `true` |
 
-All three default-on means a JAR started with no profile overlay boots a working monolith.
+All three default-on boots the monolith role set. Heph also requires a connected worker control channel, even when server and worker roles share that JVM; it has no direct Docker fallback.
 
 ## Boot log
 
@@ -43,6 +43,11 @@ Split the worker out when:
 
 - LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
 - You want to scale practice-review throughput independently of webhook ingestion.
+
+The shipped Compose stacks, the reference deployment and the single-host install alike, are split:
+`application-server` turns the worker role off and has no Docker socket, and `application-worker` runs
+every sandbox and is the only container given the socket. The `gate:env` check fails a container that
+mounts the socket without the worker role.
 
 Split the webhook receiver out when:
 
@@ -115,8 +120,8 @@ gate alone.
 
 There is no `hephaestus.sandbox.enabled`, and an arch test forbids introducing one: the Docker
 sandbox *is* the worker capability, so it follows `hephaestus.runtime.worker.enabled`. Reading the
-worker row down the **Server** column: a server pod carries the worker role too, so it opens the
-sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
+worker row down the **Server** column: a server pod that keeps the worker role, as a monolith does,
+opens the sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
 webhook role turns the worker role off, so it opens no gateway — the three `sandbox.gateway` rows
 read `—` in that column. Git needs no such row: it runs in-process through JGit in whichever role
 does the work, against that container's own mirrors under `hephaestus.fabric.root`. Commit ingestion
@@ -157,16 +162,50 @@ deployment silently does half its job. They do **not** share a gate:
 `application-server` (submission + recovery) and `application-worker` (execution). A pod you never set
 it on claims nothing and spends nothing.
 
-Interactive mentor turns are different from queued practice-review jobs: the HTTP/SSE request and
-its reusable sandbox live on the **application-server replica that accepted the request**. Keep the
-worker capability and Docker access enabled on application-server even in a split deployment. A
-dedicated `application-worker` adds queue capacity but does not receive mentor HTTP turns; when
-`AGENT_ENABLED=true`, every worker-capable replica may claim queued practice jobs.
-`AGENT_ENABLED=false` may disable practice jobs without disabling mentor's sandbox or LLM proxy.
-The compose topology keeps sticky workspace affinity so consecutive turns can reuse the same warm
-sandbox. A change to its model, upstream route, image, prompt/runtime files, or security limits
-closes that sandbox and creates a compatible replacement instead of silently reusing stale runtime
-state; per-turn context is refreshed through the runner callback without restarting it.
+## Interactive mentor turns
+
+Interactive mentor turns run their sandboxes on **connected workers**, for both web chat and Slack
+DMs. The application server keeps HTTP/SSE, Slack delivery, admission, budget checks, thread
+persistence and `fetch_context`. It needs no Docker client when
+`hephaestus.runtime.worker.enabled=false`. A worker with spare mentor capacity owns each live
+session; there is no in-process fallback. `AGENT_ENABLED` gates queued practice reviews, not Heph.
+The authenticated worker hub relays session commands and runner frames. A session's proxy route and
+turn billing binding are sent to its worker; provider keys are resolved there, never sent to the
+sandbox. PostgreSQL remains the billing record.
+
+When no worker can admit a new session, Heph says **“Heph is busy. Please try again.”** A drain rejects
+new sessions and ends existing streams. After idle eviction, a drain or a worker restart, the next
+turn opens a session on an available worker and restores the saved `session_jsonl`. Sticky server
+affinity retains the live placement; changing the model, route, image, runtime inputs or limits
+replaces the session instead of reusing an incompatible runtime.
+
+Each developer has at most one live Heph sandbox per workspace on its selected worker. Starting one is several
+seconds of work — a job network, volumes, the workspace initializer, the runtime container, and the
+runner loading its SDK — so it is started **before** the first message where Hephaestus can see one
+coming:
+
+- **Opening Heph** in the webapp, or coming back to its browser tab, calls
+  `POST /api/workspaces/{slug}/mentor/sandbox`. The server answers `202` at once and starts the sandbox
+  in the background; it sends no prompt, calls no model and writes no thread.
+- **Opening the Hephaestus app in Slack** (`app_home_opened`, either tab) does the same for a linked
+  developer.
+
+Preparing does nothing when the sandbox is already warm, when a turn is using it, when the developer
+has no Heph model or their budget is spent, or when `hephaestus.mentor.max-sessions-per-user` or
+`hephaestus.mentor.max-sessions-total` is reached. A turn that arrives while a prepare is still
+starting the sandbox waits for it rather than starting a second one.
+
+A sandbox stays warm for `hephaestus.mentor.idle-ttl-seconds` (default `900`) after its last frame.
+Each idle runner holds about 165 MB, so a longer TTL keeps more memory in use between messages; the
+session caps, not the TTL, bound the total. The Traefik sticky cookie's `maxAge` in
+`docker/compose.app.yaml` follows the TTL — change both together. A worker restart or deploy ends its
+Heph sessions; the next message restores the saved thread on an available worker.
+`mentor_turn_first_token_seconds{sandbox="cold"}` counts the turns that waited
+([Observability](./observability.mdx#heph-turn-metrics)).
+
+Attachment and a prepare `202` indicate transport or acceptance, not SDK readiness.
+`mentor_turn_runtime_ready_seconds` measures from turn acceptance until `open_thread` confirms that
+the runtime is usable. First-token and whole-turn timers measure different boundaries.
 
 ## Worker pod env vars
 

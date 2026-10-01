@@ -74,6 +74,10 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
         lenient().when(uriSpec.uri(anyString(), any(Object.class))).thenReturn((RequestHeadersSpec) headersSpec);
         when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+        org.mockito.Mockito.lenient()
+                .doReturn(headersSpec)
+                .when(headersSpec)
+                .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
         when(headersSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.bodyToMono(any(Class.class))).thenReturn(Mono.justOrEmpty(response));
         lenient().when(responseSpec.bodyToFlux(any(Class.class))).thenReturn(Flux.empty());
@@ -89,6 +93,10 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
         when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
         lenient().when(uriSpec.uri(anyString(), any(Object.class))).thenReturn((RequestHeadersSpec) headersSpec);
         when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+        org.mockito.Mockito.lenient()
+                .doReturn(headersSpec)
+                .when(headersSpec)
+                .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
         when(headersSpec.retrieve()).thenReturn(responseSpec);
         lenient().when(responseSpec.bodyToMono(any(Class.class))).thenReturn(Mono.error(exception));
         lenient().when(responseSpec.bodyToFlux(any(Class.class))).thenReturn(Flux.error(exception));
@@ -171,6 +179,10 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
             when(mockWebClient.get()).thenReturn((RequestHeadersUriSpec) uriSpec);
             when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
             when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToFlux(eq(GitLabPreflightService.GitLabGroupListItem.class)))
                     .thenReturn(Flux.empty());
@@ -190,6 +202,10 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
             when(mockWebClient.get()).thenReturn((RequestHeadersUriSpec) uriSpec);
             when(uriSpec.uri(anyString())).thenReturn((RequestHeadersSpec) headersSpec);
             when(headersSpec.header(anyString(), anyString())).thenReturn((RequestHeadersSpec) headersSpec);
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
 
             var group1 = new GitLabPreflightService.GitLabGroupListItem(

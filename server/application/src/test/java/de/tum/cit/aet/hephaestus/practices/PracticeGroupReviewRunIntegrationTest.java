@@ -12,11 +12,13 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -43,6 +45,9 @@ import tools.jackson.databind.ObjectMapper;
  */
 class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
+    @Autowired
+    private ObservationInvalidationRepository invalidationRepository;
+
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final String REVIEW_RUNS_URI = "/workspaces/{workspaceSlug}/practice-groups/{groupSlug}/review-runs";
 
@@ -51,7 +56,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
      * the only way a developer's own observation is withheld from them for its evidence rather than its age.
      */
     private static final String UNKNOWN_SOURCE_EVIDENCE_JSON =
-            "{\"citations\":[{\"sourceKind\":\"scm.repository.secrets\",\"artifactPath\":\"inputs/context/secrets.txt\","
+            "{\"citations\":[{\"sourceKind\":\"scm.repository.secrets\",\"artifactPath\":\"context/secrets.txt\","
                     + "\"path\":\"secrets.txt\",\"startLine\":1,\"endLine\":1,\"quote\":\"example\","
                     + "\"quoteRedacted\":false}]}";
 
@@ -134,6 +139,64 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 .expectStatus()
                 .isOk()
                 .expectBody();
+    }
+
+    /**
+     * The page a comment on the work links to reads the same runs by the work instead of the group: every group,
+     * an ungrouped practice included, and nothing from other work.
+     */
+    @Test
+    @WithUser
+    void shouldListEveryGroupsObservationsOfOneWorkWhenReadByTheWork() {
+        Practice ungrouped = persistPractice(workspace, null, "commit-discipline", "Commit discipline", null);
+        UUID grouped =
+                observe("No testing notes", OMISSION_GAP, Severity.MAJOR, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        UUID loose = observe(
+                ungrouped,
+                agentJob,
+                ArtifactKinds.PULL_REQUEST.value(),
+                1L,
+                developer,
+                "Commits mix two changes",
+                OMISSION_GAP,
+                Severity.MINOR,
+                Instant.now(),
+                DIFF_EVIDENCE_JSON,
+                null);
+        AgentJob otherReview = persistAgentJob(workspace);
+        observe(
+                practice,
+                otherReview,
+                ArtifactKinds.PULL_REQUEST.value(),
+                2L,
+                developer,
+                "Other work",
+                OMISSION_GAP,
+                Severity.MAJOR,
+                Instant.now(),
+                DIFF_EVIDENCE_JSON,
+                null);
+
+        webTestClient
+                .get()
+                .uri(
+                        "/workspaces/{workspaceSlug}/practices/reviewed-work/{artifactKind}/{artifactId}/review-runs",
+                        workspace.getWorkspaceSlug(),
+                        ArtifactKinds.PULL_REQUEST.value(),
+                        1L)
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content.length()")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].reviewId")
+                .isEqualTo(agentJob.getId().toString())
+                .jsonPath("$.content[0].observations[*].id")
+                .value(ids -> org.assertj.core.api.Assertions.assertThat(ids)
+                        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                        .containsExactlyInAnyOrder(grouped.toString(), loose.toString()));
     }
 
     @Test
@@ -304,6 +367,29 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 .isEqualTo(1)
                 .jsonPath("$.content[0].observations[0].claimCurrentness")
                 .isEqualTo("STALE");
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("an invalidated observation stays in history, labelled with the admin's reason")
+    void shouldLabelAnInvalidatedObservationInsteadOfDroppingIt() {
+        UUID wrong =
+                observe("Closed issue #1 already", DEMONSTRATED_STRENGTH, null, ArtifactKinds.PULL_REQUEST.value(), 1L);
+        invalidationRepository.save(new ObservationInvalidation(
+                observationRepository
+                        .findByIdAndWorkspaceId(wrong, workspace.getId())
+                        .orElseThrow(),
+                1L,
+                "Issue #1 was still open",
+                Instant.now()));
+
+        getHistory()
+                .jsonPath("$.content[0].observations[0].id")
+                .isEqualTo(wrong.toString())
+                .jsonPath("$.content[0].observations[0].invalidationReason")
+                .isEqualTo("Issue #1 was still open")
+                .jsonPath("$.content[0].observations[0].invalidatedAt")
+                .exists();
     }
 
     @Test

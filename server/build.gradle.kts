@@ -33,6 +33,8 @@ val javaVersion = file("../.java-version").readText().trim().toInt()
 val bootVersion = libs.versions.spring.boot.get()
 val managedOverrides =
     mapOf(
+        "jackson-bom.version" to libs.versions.jackson.get(),
+        "jackson-2-bom.version" to libs.versions.jackson2.get(),
         "netty.version" to libs.versions.netty.get(),
         "tomcat.version" to libs.versions.tomcat.get(),
         "spring-modulith.version" to libs.versions.spring.modulith.get(),

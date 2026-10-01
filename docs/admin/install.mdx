@@ -15,7 +15,8 @@ The stack you get:
 | --- | --- |
 | `reverse-proxy` | Traefik — TLS via Let's Encrypt, routes `/`, `/api`, `/webhooks` |
 | `webapp` | React SPA served by nginx |
-| `application-server` | Spring Boot API + in-process job worker |
+| `application-server` | Spring Boot API |
+| `application-worker` | Same image, worker profile — runs the AI sandboxes; the only service given the Docker socket |
 | `webhook-server` | Same image, webhook profile — keeps receiving events while the app restarts |
 | `postgres` | PostgreSQL 18 + pg_partman (custom image — vanilla `postgres:18` is **not** a drop-in) |
 | `nats-server` | NATS JetStream event buffer |
@@ -45,12 +46,23 @@ Each release is qualified on both matrix cells before publication.
 Only the listed native hosts and the unmodified self-hosted Compose topology are supported. All other
 hosts, runtimes, and topologies are outside release qualification.
 
-- **4 vCPUs, 8 GB RAM, 40 GB SSD** is the conservative recommended starting point. Absolute floor:
-  2 vCPUs / **8 GB RAM** — the two JVMs
-  ship with container memory limits of 5 GB (`application-server`) and 2 GB (`webhook-server`), so a
-  smaller host does not swap, it OOM-kills. On a host below that, lower both limits before the first
-  start: set `APPLICATION_SERVER_MEM_LIMIT` and `WEBHOOK_SERVER_MEM_LIMIT` in `.env` (each JVM sizes
-  its heap from its own limit, so lowering the limit lowers the heap with it).
+- **4 vCPUs, 16 GB RAM, 40 GB SSD** is a conservative starting point for planning, with one
+  concurrent review sandbox; it is a budget, not a measured requirement. It covers these memory limits,
+  which are ceilings rather than reservations:
+
+  | Container | Memory limit | Setting |
+  | --- | --- | --- |
+  | `application-server` | 5 GB | `APPLICATION_SERVER_MEM_LIMIT` |
+  | `application-worker` | 3 GB | `APPLICATION_WORKER_MEM_LIMIT` |
+  | `webhook-server` | 2 GB | `WEBHOOK_SERVER_MEM_LIMIT` |
+  | each concurrent review sandbox | 4 GiB | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (default 1) |
+
+  PostgreSQL, NATS, Traefik and the webapp have no limit. A limit caps a container and reserves
+  nothing; each JVM sizes its heap from its own limit and can grow toward it. What the host must hold
+  is what all containers and sandboxes use at the same time, plus the operating system and some
+  headroom. When that demand exceeds the host's memory, the host swaps where swap is configured, and
+  the kernel can kill a container or a sandbox. To plan for less memory, lower the limits in `.env`
+  before the first start.
 - These are deployment limits, not a claim that every workload fits. Before raising webhook volume,
   mentor concurrency, or `SANDBOX_MAX_CONCURRENT`, reproduce the release's
   [Compose capacity qualification](https://github.com/hephaestus-build/Hephaestus/tree/main/load-tests) on
@@ -59,9 +71,10 @@ hosts, runtimes, and topologies are outside release qualification.
 - **AI practice review adds real memory**: each concurrent review sandbox may use up to
   4 GiB. The default caps it at 1 concurrent sandbox; raise
   `SANDBOX_MAX_CONCURRENT` only with RAM to match.
-- Container defaults are 4 CPUs / 512 PIDs for the application server and 2 CPUs / 256 PIDs for
-  the webhook server. Override them with the corresponding `APPLICATION_SERVER_*` or
-  `WEBHOOK_SERVER_*` limit variables. Keep PID limits on roles with Docker access.
+- Container defaults are 4 CPUs / 512 PIDs for the application server and the worker, and 2 CPUs /
+  256 PIDs for the webhook server. Override them with the corresponding `APPLICATION_SERVER_*`,
+  `APPLICATION_WORKER_*` or `WEBHOOK_SERVER_*` limit variables. Keep the worker's PID limit: it is the
+  role with Docker access.
 - `HIKARI_MAXIMUM_POOL_SIZE` defaults to 20. Provision at least that value multiplied by the total JVM
   replica count, plus capacity for migrations and operator access.
 - A host in the supported matrix, plus `git` and `openssl`.
@@ -95,7 +108,8 @@ cd docker/self-host
 `setup.sh` creates or updates `.env` with mode `0600` and generates the database password, both
 encryption keys — `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` and
 `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` — the OAuth state-cookie key, the webhook secret,
-and the message-broker credentials. It does not replace non-empty values and never prints a secret.
+the GitLab routing secret, the message-broker credentials, and the token the worker registers with.
+It does not replace non-empty values and never prints a secret.
 Changing either encryption key on an existing installation makes everything encrypted under the old
 one unreadable.
 
@@ -126,6 +140,9 @@ credential key only with the [credential-key rotation procedure](./credential-ke
 The other generated values also have lifecycle consequences: changing the database password does not
 update an initialized PostgreSQL volume, rotating the state-cookie key invalidates OAuth flows already
 in progress, and rotating the webhook secret requires the same change at every configured provider.
+The GitLab routing secret is never entered anywhere; rotate it as the
+[production setup](./production-setup#gitlab-rollout-bundle) describes, or GitLab group hooks stop
+delivering until they are registered again.
 Back up `.env` with the database as described in [Backup & Restore](./backup-restore).
 
 ### Serving more than one hostname
@@ -240,7 +257,7 @@ in `.env` and `docker compose up -d`. Each has its variable reference in
 | Add-on | What it gives you | Where |
 | --- | --- | --- |
 | GitLab | GitLab login, workspaces, and sync (webhooks auto-register here) | [GitLab bundle](./production-setup#gitlab-rollout-bundle) |
-| Slack | Mentor in Slack, channel ingestion, digests | [Slack app setup](./production-setup#slack-app-configuration) |
+| Slack | Mentor in Slack, channel ingestion | [Slack app setup](./production-setup#slack-app-configuration) |
 | Outline | Wiki as a content source for reviews | [Outline integration](./production-setup#outline-integration) |
 | AI practice review | Automated PR feedback from the coding agent | [Practice review](./practice-review#deployment) |
 | An AI provider | The model everything AI runs on — required by the row above | [Connect an AI Provider](./ai-providers) |

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import jakarta.persistence.LockModeType;
 import jakarta.persistence.QueryHint;
 import java.time.Instant;
 import java.util.List;
@@ -10,6 +11,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
@@ -20,9 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Holds only domain-agnostic queries for the integration.scm domain. Scope-filtered queries (those that
  * join with RepositoryToMonitor or other consuming-module entities) belong in the consuming packages
- * (leaderboard, profile, practices, ...) to keep architecture boundaries clean.
- *
- * @see de.tum.cit.aet.hephaestus.profile.ProfilePullRequestQueryRepository
+ * (activity, practices, ...) to keep architecture boundaries clean.
  */
 @Repository
 @WorkspaceAgnostic("Pull requests scoped through repository_id -> repository.workspace_id")
@@ -39,6 +39,27 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
         """)
     Optional<PullRequest> findByRepositoryIdAndNumber(
             @Param("repositoryId") long repositoryId, @Param("number") int number);
+
+    /**
+     * The pull request, with its row locked until the transaction ends. A webhook or a sync compares what it read
+     * against the stored review requests before it replaces them, so this must be the transaction's first read of the
+     * pull request: a query hands back an instance the transaction already loaded without reading it again. A
+     * concurrent writer then commits before the read, not between the read and the replacement. Once the pull request
+     * exists, {@link #upsertCore}'s {@code ON CONFLICT DO UPDATE} takes the same lock, so a writer that finds nothing
+     * here still compares under it. The wait is at most one sync transaction: a page of pull requests on GitHub, one
+     * merge request on GitLab.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM PullRequest p WHERE p.repository.id = :repositoryId AND p.number = :number")
+    Optional<PullRequest> findForUpdateByRepositoryIdAndNumber(
+            @Param("repositoryId") long repositoryId, @Param("number") int number);
+
+    /**
+     * Takes the lock {@link #findForUpdateByRepositoryIdAndNumber} and {@link #upsertCore} take, without loading the
+     * entity, so the transaction's next read of the pull request sees what the last writer committed.
+     */
+    @Query(value = "SELECT id FROM issue WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
+    Optional<Long> lockById(@Param("id") long id);
 
     /** Pull request by id with assignees eagerly fetched, for access after the Hibernate session closes. */
     @Query("""
@@ -135,12 +156,33 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
             + "WHERE p.id = :id AND i.repository = p.repository ORDER BY i.number")
     List<Issue> findClosingIssuesById(@Param("id") Long id);
 
+    @Query("SELECT DISTINCT i.id FROM PullRequest p JOIN p.closingIssues i "
+            + "WHERE p.id = :id AND i.repository = p.repository ORDER BY i.id")
+    List<Long> findClosingIssueIdsById(@Param("id") Long id);
+
+    @Query("SELECT DISTINCT p.id FROM PullRequest p JOIN p.closingIssues i "
+            + "WHERE i.id = :issueId AND i.repository = p.repository "
+            + "AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue$State.MERGED "
+            + "ORDER BY p.id")
+    List<Long> findMergedClosingPullRequestIdsByIssueId(@Param("issueId") Long issueId);
+
     /** How many rows {@link #findClosingIssuesById} would return, without loading them. */
     @Query("SELECT COUNT(i) FROM PullRequest p JOIN p.closingIssues i WHERE p.id = :id AND i.repository = p.repository")
     long countClosingIssuesById(@Param("id") Long id);
 
     /** The pull requests whose head is {@code headRefOid}: the ones a check on that commit is about. */
     List<PullRequest> findAllByRepository_IdAndHeadRefOid(Long repositoryId, String headRefOid);
+
+    /**
+     * {@link #findAllByRepository_IdAndHeadRefOid} with each row locked, in id order, as
+     * {@link #findForUpdateByRepositoryIdAndNumber} locks one: for a writer that compares a dated check observation
+     * with the stored one.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+            "SELECT p FROM PullRequest p WHERE p.repository.id = :repositoryId AND p.headRefOid = :headRefOid ORDER BY p.id")
+    List<PullRequest> findAllForUpdateByRepositoryIdAndHeadRefOid(
+            @Param("repositoryId") long repositoryId, @Param("headRefOid") String headRefOid);
 
     /**
      * Repository-wide pull-request inventory ordered newest-first by number, for the cross-artifact

@@ -2,10 +2,10 @@ package de.tum.cit.aet.hephaestus.practices.trace;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.PracticeCoverageOutcome;
@@ -21,14 +21,16 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class PracticeTraceDeriverTest extends BaseUnitTest {
 
-    private static final SignalName READY = ScmSignals.PULL_REQUEST_READY;
-    private static final SignalName MERGED = ScmSignals.PULL_REQUEST_MERGED;
+    private static final PracticeSignalDTO READY =
+            new PracticeSignalDTO(ScmSignals.PULL_REQUEST_READY, "Marked ready for review");
+    private static final PracticeSignalDTO MERGED = new PracticeSignalDTO(ScmSignals.PULL_REQUEST_MERGED, "Merged");
     private static final Instant AT = Instant.parse("2026-08-07T14:02:00Z");
     private static final UUID RUN = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID OCCURRENCE = UUID.fromString("22222222-2222-2222-2222-222222222222");
@@ -69,7 +71,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     ReviewRunState.COMPLETED,
                     false,
                     AT,
-                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)),
                     Map.of("slug", PracticeCoverageOutcome.EVALUATED));
             var entry = only(
                     practice(PracticeAutonomy.AUTOMATIC, READY),
@@ -89,7 +91,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     ReviewRunState.IN_PROGRESS,
                     false,
                     AT,
-                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)),
                     Map.of());
 
             var entry = only(
@@ -109,7 +111,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     ReviewRunState.FAILED,
                     false,
                     AT,
-                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)),
                     Map.of());
 
             var entry = only(
@@ -154,11 +156,45 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                             completed(Map.of(
                                     "slug",
                                     new PracticeReadinessOutcome(
-                                            false, List.of("scm.pull-request.diff was captured only in part"), null)))),
+                                            false,
+                                            List.of(
+                                                    "Only part of “Code changes” was captured.",
+                                                    "“Review threads” was not captured."),
+                                            null,
+                                            null)))),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_ASSESSABLE);
-            assertThat(entry.explanation()).contains("scm.pull-request.diff was captured only in part");
+            assertThat(entry.explanation())
+                    .isEqualTo("The review could not read the evidence this practice needs. "
+                            + "Only part of “Code changes” was captured. “Review threads” was not captured.");
+        }
+
+        /**
+         * A practice that declares it is not reviewed automatically was stopped by policy, and nothing was
+         * missing: calling it not assessable would send somebody to fix a capture that worked.
+         */
+        @Test
+        void rendersADeclaredLimitationAsSkippedAndNeverAsMissingEvidence() {
+            var entry = only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(triggered(READY, RUN)),
+                    Map.of(
+                            RUN,
+                            completed(Map.of(
+                                    "slug",
+                                    new PracticeReadinessOutcome(
+                                            false,
+                                            List.of(),
+                                            "This practice needs human review, so it is not reviewed automatically.",
+                                            null)))),
+                    Map.of());
+
+            assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.SKIPPED);
+            assertThat(entry.explanation())
+                    .isEqualTo("This practice needs human review, so it is not reviewed automatically.")
+                    .doesNotContain("could not read", "captured");
+            assertThat(entry.reviewId()).isEqualTo(RUN);
         }
 
         @Test
@@ -173,6 +209,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                                     new PracticeReadinessOutcome(
                                             false,
                                             List.of(),
+                                            null,
                                             "the change touches no dependency manifest or lockfile")))),
                     Map.of());
 
@@ -205,7 +242,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     ReviewRunState.COMPLETED,
                     false,
                     AT,
-                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)),
+                    Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)),
                     Map.of("slug", PracticeCoverageOutcome.NOT_REACHED));
 
             var entry = only(
@@ -223,7 +260,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
             var entry = only(
                     practice(PracticeAutonomy.AUTOMATIC, READY),
                     List.of(triggered(READY, RUN)),
-                    Map.of(RUN, completed(Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null)))),
+                    Map.of(RUN, completed(Map.of("slug", new PracticeReadinessOutcome(true, List.of(), null, null)))),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_REACHED);
@@ -236,7 +273,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
             var entry = only(
                     practice(PracticeAutonomy.AUTOMATIC, READY),
                     List.of(triggered(READY, RUN)),
-                    Map.of(RUN, completed(Map.of("other", new PracticeReadinessOutcome(true, List.of(), null)))),
+                    Map.of(RUN, completed(Map.of("other", new PracticeReadinessOutcome(true, List.of(), null, null)))),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.SKIPPED);
@@ -269,7 +306,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.PENDING);
-            assertThat(entry.explanation()).contains("budget refills");
+            assertThat(entry.explanation()).isEqualTo(SignalStateReason.BUDGET_EXHAUSTED.describe());
             assertThat(entry.occasionedBy()).isEqualTo(READY);
             assertThat(entry.occasionedById())
                     .as("a row must be able to point at the occurrence it rests on, not merely name the signal")
@@ -285,7 +322,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.SKIPPED);
-            assertThat(entry.explanation()).contains("branches and repositories");
+            assertThat(entry.explanation()).isEqualTo(SignalStateReason.OUT_OF_REVIEW_SCOPE.describe());
         }
 
         @Test
@@ -357,13 +394,16 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     1L,
                     "slug",
                     "A practice",
+                    null,
+                    null,
                     PracticeAutonomy.AUTOMATIC,
                     List.of(READY),
-                    "no connected integration raises [scm.pull_request.ready]; connect one of [GITHUB]");
+                    "Nothing connected to this workspace reports the moments this practice watches for.");
             var entry = only(practice, List.of(), Map.of(), Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.DORMANT);
-            assertThat(entry.explanation()).startsWith("No connected integration raises");
+            assertThat(entry.explanation())
+                    .isEqualTo("Nothing connected to this workspace reports the moments this practice watches for.");
         }
 
         @Test
@@ -375,10 +415,70 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
     }
 
     @Test
+    @DisplayName("every explanation a practice can get is written in words, never in identifiers")
+    void shouldExplainEveryOutcomeWithoutARawIdentifier() {
+        List<PracticeTraceEntryDTO> entries = new java.util.ArrayList<>();
+        for (SignalStateReason reason : SignalStateReason.values()) {
+            entries.add(only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(refused(READY, reason.resultingState(), reason)),
+                    Map.of(),
+                    Map.of()));
+        }
+        for (SignalState state : SignalState.values()) {
+            entries.add(only(
+                    practice(PracticeAutonomy.AUTOMATIC, READY),
+                    List.of(refused(READY, state, null)),
+                    Map.of(),
+                    Map.of()));
+        }
+        entries.add(only(practice(PracticeAutonomy.AUTOMATIC, MERGED), List.of(), Map.of(), Map.of()));
+        entries.add(only(practice(PracticeAutonomy.OFF, READY), List.of(), Map.of(), Map.of()));
+        entries.add(only(
+                practice(PracticeAutonomy.AUTOMATIC, READY),
+                List.of(triggered(READY, RUN)),
+                Map.of(RUN, completed()),
+                Map.of(1L, new PracticeOutput(1, 0, List.of(), RUN, AT))));
+        entries.add(only(
+                practice(PracticeAutonomy.AUTOMATIC, READY),
+                List.of(triggered(READY, RUN)),
+                Map.of(RUN, completed()),
+                Map.of()));
+        entries.add(only(
+                practice(PracticeAutonomy.AUTOMATIC, READY),
+                List.of(triggered(READY, RUN)),
+                Map.of(RUN, new ReviewOutcome(ReviewRunState.IN_PROGRESS, false, null, Map.of(), Map.of())),
+                Map.of()));
+
+        assertThat(entries)
+                .allSatisfy(entry -> assertThat(entry.explanation())
+                        .doesNotContain("scm.", "artifact", "ledger", "signal", "binding", "gate", "measur", "_"));
+    }
+
+    @Test
+    void shouldCarryEachWatchedSignalAndTheOccasionWithTheWordsAReaderSees() {
+        var entry = only(
+                practice(PracticeAutonomy.AUTOMATIC, READY, MERGED),
+                List.of(refused(READY, SignalState.PENDING, SignalStateReason.BUDGET_EXHAUSTED)),
+                Map.of(),
+                Map.of());
+
+        assertThat(entry.watches())
+                .extracting(PracticeSignalDTO::displayName)
+                .containsExactly("Marked ready for review", "Merged");
+        assertThat(entry.occasionedBy())
+                .isNotNull()
+                .extracting(PracticeSignalDTO::displayName)
+                .isEqualTo("Marked ready for review");
+    }
+
+    @Test
     void ordersInformativeAnswersFirst() {
-        var reviewed = new TracedPractice(1L, "b-reviewed", "B", PracticeAutonomy.AUTOMATIC, List.of(READY), null);
-        var quiet = new TracedPractice(2L, "a-quiet", "A", PracticeAutonomy.AUTOMATIC, List.of(MERGED), null);
-        var off = new TracedPractice(3L, "c-off", "C", PracticeAutonomy.OFF, List.of(READY), null);
+        var reviewed =
+                new TracedPractice(1L, "b-reviewed", "B", null, null, PracticeAutonomy.AUTOMATIC, List.of(READY), null);
+        var quiet =
+                new TracedPractice(2L, "a-quiet", "A", null, null, PracticeAutonomy.AUTOMATIC, List.of(MERGED), null);
+        var off = new TracedPractice(3L, "c-off", "C", null, null, PracticeAutonomy.OFF, List.of(READY), null);
 
         var entries = PracticeTraceDeriver.derive(
                 List.of(quiet, off, reviewed),
@@ -402,15 +502,16 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
         return entries.getFirst();
     }
 
-    private static TracedPractice practice(PracticeAutonomy autonomy, SignalName... watches) {
-        return new TracedPractice(1L, "slug", "A practice", autonomy, List.of(watches), null);
+    private static TracedPractice practice(PracticeAutonomy autonomy, PracticeSignalDTO... watches) {
+        return new TracedPractice(1L, "slug", "A practice", null, null, autonomy, List.of(watches), null);
     }
 
-    private static SignalOccurrence triggered(SignalName signal, UUID reviewId) {
+    private static SignalOccurrence triggered(PracticeSignalDTO signal, UUID reviewId) {
         return new SignalOccurrence(OCCURRENCE, signal, AT, SignalState.TRIGGERED, null, reviewId);
     }
 
-    private static SignalOccurrence refused(SignalName signal, SignalState state, SignalStateReason reason) {
+    private static SignalOccurrence refused(
+            PracticeSignalDTO signal, SignalState state, @Nullable SignalStateReason reason) {
         return new SignalOccurrence(OCCURRENCE, signal, AT, state, reason, null);
     }
 

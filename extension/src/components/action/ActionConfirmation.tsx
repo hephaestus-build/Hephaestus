@@ -33,7 +33,7 @@ function WorkCard({ preview }: { preview: ActionPreview }) {
 			<dt className="text-muted-foreground">Work</dt>
 			<dd className="min-w-0 break-words">
 				<span className="font-medium">
-					{work.repositoryName === undefined ? "" : `${work.repositoryName} `}
+					{work.container === undefined ? "" : `${work.container} `}
 					{work.label}
 				</span>
 				{work.title === undefined ? null : (
@@ -56,7 +56,7 @@ function outcomeText(outcome: ActionOutcome): { title: string; body: string; don
 	return outcome.status === "SUBMITTED"
 		? {
 				title: "Review requested",
-				body: "It runs in the background. The practice review on the page shows it once it is queued or running.",
+				body: "It runs in the background. Its results appear here when your review is recorded.",
 				done: true,
 			}
 		: {

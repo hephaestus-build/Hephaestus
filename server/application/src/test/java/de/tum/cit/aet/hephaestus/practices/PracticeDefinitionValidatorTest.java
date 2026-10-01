@@ -42,7 +42,9 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
         assertThatThrownBy(() -> validator.validate(definition(
                         SignalName.of("scm.pull_request.rebased"), null, List.of(need(DIFF)), languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Choose signals declared for the selected work type");
+                .hasMessage("One of the chosen moments is not one this kind of work offers. "
+                        + "Choose from the moments listed for it.")
+                .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
     @Test
@@ -53,7 +55,30 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         List.of(need(new SourceKind("scm.pull-request.unknown"))),
                         languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unknown source");
+                .hasMessage("scm.pull-request.unknown is not an evidence source Hephaestus knows. Choose from the "
+                        + "sources listed under “Reads” in “When this practice is reviewed”.");
+    }
+
+    @Test
+    void rejectsAPersonTheWorkTypeDoesNotRecordInTheEditorsOwnLabel() {
+        assertThatThrownBy(() -> validator.validate(new PracticeDefinition(
+                        "Focused review",
+                        List.of(new PracticeBinding(
+                                List.of(ScmSignals.ISSUE_OPENED),
+                                List.of(need(new SourceKind("scm.issue.core"))),
+                                false,
+                                de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.MERGER,
+                                null)),
+                        "Assess the review",
+                        null,
+                        languageModel(),
+                        null,
+                        null,
+                        null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("This kind of work does not record “Whoever merged it”, so a review of it cannot be about "
+                        + "them. Choose from the people listed under “Person this practice judges”.")
+                .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
     @Test
@@ -61,7 +86,9 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
         assertThatThrownBy(() -> validator.validate(definition(
                         ScmSignals.PULL_REQUEST_OPENED, null, List.of(need(FOR_ANOTHER_KIND)), languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Evidence source is not available for the selected work type");
+                .hasMessage("“Issue details” is not available for this kind of work. Turn it off, or choose "
+                        + "evidence this kind of work has.")
+                .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
     /**
@@ -117,8 +144,9 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
         assertThatThrownBy(() -> validator.validate(
                         definition(ScmSignals.PULL_REQUEST_MANUAL_REVIEW, null, List.of(need(DIFF)), languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("not an occasion to choose")
-                .hasMessageContaining("scm.pull_request.manual_review");
+                .hasMessageStartingWith("Remove “Review requested by hand”.")
+                .hasMessageContaining("not a moment to choose")
+                .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
     /**
@@ -137,7 +165,8 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                                         new SourceKind("scm.linked-work-items"), EvidenceStance.EXHAUSTIVE)),
                         languageModel())))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("can never be captured completely");
+                .hasMessageStartingWith("“Linked work items” can never be captured completely")
+                .satisfies(PracticeDefinitionValidatorTest::namesNoIdentifier);
     }
 
     @Test
@@ -188,7 +217,8 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> validator.validate(definition))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("must not use detector result labels");
+                .hasMessage("Why it matters is guidance for people. Remove the review result label “" + label
+                        + "” and say it in plain words.");
     }
 
     /**
@@ -235,7 +265,9 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         null,
                         null)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("could never be decided about it");
+                // The gate is typed as JSON, so the source is named by its label and the id together.
+                .hasMessageStartingWith("This kind of work has no “Code changes” (scm.pull-request.diff), so a "
+                        + "condition that reads it could never be decided.");
     }
 
     @Test
@@ -315,5 +347,10 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 PracticeInsufficientEvidenceAction.SKIP_AUTOMATED_REVIEW,
                 List.of(),
                 new PracticeEvidenceLimitation("HUMAN_CONTEXT", "A person must review this practice."));
+    }
+
+    /** A message the practice editor shows names sources, moments and roles in words, never by identifier. */
+    private static void namesNoIdentifier(Throwable thrown) {
+        assertThat(thrown.getMessage()).doesNotContain("scm.", "artifact", "signal", "binding", "_");
     }
 }

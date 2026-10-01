@@ -1,61 +1,31 @@
-import { Label } from "@/components/ui/label";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@/components/ui/select";
-import { artifactKindPluralLabel } from "@/lib/artifact-kinds";
-
-/** Base UI treats "" as "no selection", so the "everything" choice needs a value of its own. */
-const ALL_KINDS = "__all";
+import { SelectFilter } from "@/components/common/SelectFilter";
+import { ARTIFACT_KIND_VALUES, artifactKindLabel } from "@/lib/artifact-kinds";
+import { hasText } from "@/lib/text";
 
 export interface TraceKindFilterProps {
-	/** Every kind on offer, the active one included, in the order they are shown. */
-	kinds: string[];
-	/** The kind being filtered for, or `undefined` for all work. */
+	/** The kinds of the work the list shows now, offered beside the ones this build knows. */
+	seen: string[];
+	/**
+	 * The kind being filtered for, or `undefined` for all work. A free string rather than one this
+	 * build knows: the server derives kinds from whichever integrations are registered, so an unknown
+	 * one costs a 400 the list reports, where a narrowed one would quietly ignore the reader's filter.
+	 */
 	value: string | undefined;
 	onChange: (kind: string | undefined) => void;
 }
 
-/**
- * The one control on the review-activity list: which kind of work to show.
- *
- * The {@link ALL_KINDS} sentinel never leaves this file — it stands for "no filter", and a URL
- * carrying it would filter for a kind nothing ever has.
- */
-export function TraceKindFilter({ kinds, value, onChange }: TraceKindFilterProps) {
-	const items = [
-		{ value: ALL_KINDS, label: "All work" },
-		...kinds.map((kind) => ({ value: kind, label: artifactKindPluralLabel(kind) })),
-	];
-
+/** Which kind of work to show, on every list that narrows by one. */
+export function TraceKindFilter({ seen, value, onChange }: TraceKindFilterProps) {
+	// No endpoint enumerates the kinds, so the choices are the ones this build knows plus any the
+	// list shows — and always the active filter, so a filter arriving by link can be seen and cleared.
+	const kinds = new Set([...ARTIFACT_KIND_VALUES, ...seen, ...(hasText(value) ? [value] : [])]);
 	return (
-		<div className="flex min-w-0 items-center gap-2">
-			<Label
-				id="trace-artifact-kind-label"
-				htmlFor="trace-artifact-kind"
-				className="shrink-0 text-muted-foreground"
-			>
-				Show
-			</Label>
-			<Select
-				items={items}
-				value={value ?? ALL_KINDS}
-				onValueChange={(next) => onChange(next === ALL_KINDS ? undefined : String(next))}
-			>
-				<SelectTrigger id="trace-artifact-kind" className="w-56 max-w-full">
-					<SelectValue placeholder="All work" />
-				</SelectTrigger>
-				<SelectContent aria-labelledby="trace-artifact-kind-label">
-					{items.map((kind) => (
-						<SelectItem key={kind.value} value={kind.value}>
-							{kind.label}
-						</SelectItem>
-					))}
-				</SelectContent>
-			</Select>
-		</div>
+		<SelectFilter
+			label="Show"
+			allLabel="All work"
+			options={[...kinds].map((kind) => ({ value: kind, label: artifactKindLabel(kind, 2) }))}
+			value={value}
+			onChange={onChange}
+		/>
 	);
 }

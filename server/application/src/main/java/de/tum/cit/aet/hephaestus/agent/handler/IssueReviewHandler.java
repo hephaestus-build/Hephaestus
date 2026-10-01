@@ -163,7 +163,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                         EnumSet.of(FeedbackCompositionInputs.InContextPlacementKind.ARTIFACT)));
         log.info(
                 "Issue context preparation complete: {} files, issueNumber={}, jobId={}",
-                inputs.files().size(),
+                inputs.filesOnDisk().size(),
                 metadata.path("issue_number").asInt(),
                 job.getId());
         return inputs;
@@ -175,7 +175,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         }
         int issueNumber = requireInt(metadata, "issue_number");
         String repoName = requireText(metadata, "repository_full_name");
-        Task task = new Task.PracticeReview(buildPrompt(issueNumber, repoName, job), issueNumber, repoName);
+        Task task = new Task(buildPrompt(issueNumber, repoName, job), issueNumber, repoName);
         return TaskEnvelope.of(job.getId(), job.getWorkspace().getId(), task);
     }
 
@@ -184,8 +184,13 @@ public class IssueReviewHandler implements JobTypeHandler {
                 + " in "
                 + repoName
                 + ". This is an ISSUE, not a pull request — there is no code diff. Read the issue context files "
-                + "(inputs/context/metadata.json, inputs/context/comments.json, and "
-                + "inputs/context/project_inventory.json for cross-artifact checks like duplicate/overlapping issues), then "
+                + "("
+                + SandboxLayout.CONTEXT_PREFIX
+                + "metadata.json, "
+                + SandboxLayout.CONTEXT_PREFIX
+                + "comments.json, and "
+                + SandboxLayout.CONTEXT_PREFIX
+                + "project_inventory.json for cross-artifact checks like duplicate/overlapping issues), then "
                 + "evaluate each practice in inputs/practices/ against the issue and persist every justified observation via the "
                 + "report_observation tool. Evidence citations should reference the issue thread/metadata, not source files. "
                 + "Follow "

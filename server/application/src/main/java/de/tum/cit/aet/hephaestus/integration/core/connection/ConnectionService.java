@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionCredentialsReplacedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionStrategy;
@@ -9,6 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,6 +40,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class ConnectionService {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectionService.class);
+
+    @PersistenceContext
+    private @Nullable EntityManager entityManager;
 
     private final ConnectionRepository connectionRepository;
     private final ConnectionAuditRepository auditRepository;
@@ -129,7 +135,7 @@ public class ConnectionService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<ConnectionConfig.SlackConfig> findSlackNotificationConfig(long workspaceId) {
+    public Optional<ConnectionConfig.SlackConfig> findSlackConfig(long workspaceId) {
         return connectionRepository
                 .findActive(workspaceId, IntegrationKind.SLACK)
                 .map(Connection::getConfig)
@@ -287,14 +293,23 @@ public class ConnectionService {
     @Transactional
     public Optional<BearerTokenReplacement> rotateBearerToken(
             long workspaceId, IntegrationKind kind, BearerToken bundle) {
-        return connectionRepository.findActive(workspaceId, kind).map(c -> {
+        return connectionRepository.findActive(workspaceId, kind).flatMap(c -> {
             if (c.getConfig() instanceof ConnectionConfig.GitHubAppConfig) {
                 throw new ConnectionModeConflictException("The GitHub connection of workspace " + workspaceId
                         + " is an App installation, which runs on no stored token; there is nothing to replace.");
             }
+            connectionRepository.acquireLifecycleLock(c.getId(), workspaceId);
+            Objects.requireNonNull(entityManager).refresh(c);
+            if (c.getState() != IntegrationState.ACTIVE || c.getConfig() instanceof ConnectionConfig.GitHubAppConfig) {
+                return Optional.empty();
+            }
             boolean replacedExisting = c.hasCredentials();
             c.setCredentials(bundle, credentialConverter);
-            return new BearerTokenReplacement(connectionRepository.save(c), replacedExisting);
+            if (c.getConfig() instanceof ConnectionConfig.GitLabConfig cfg) {
+                c.setConfig(cfg.withTokenMetadata(null));
+            }
+            eventPublisher.publishEvent(new ConnectionCredentialsReplacedEvent(c.getId(), workspaceId, kind));
+            return Optional.of(new BearerTokenReplacement(connectionRepository.save(c), replacedExisting));
         });
     }
 
@@ -612,9 +627,10 @@ public class ConnectionService {
 
     /**
      * Guarded revival of a terminal UNINSTALLED row — the kind-specific reconnect flows the
-     * {@link IntegrationState} javadoc reserves. Two doors only: a completed Slack OAuth round-trip,
-     * and an admin-driven inline re-connect ({@code INITIATE}) whose strategy just re-validated
-     * fresh credentials against the vendor. Both preserve the vendor natural key
+     * {@link IntegrationState} javadoc reserves. Two doors only: a completed Slack or GitHub OAuth
+     * round-trip, whose strategy just proved the team or installation belongs to the person
+     * connecting, and an admin-driven inline re-connect ({@code INITIATE}) whose strategy just
+     * re-validated fresh credentials against the vendor. Both preserve the vendor natural key
      * {@code (workspace, kind, instance_key)} instead of colliding with the unique constraint.
      */
     private static boolean isGuardedReconnect(
@@ -622,7 +638,8 @@ public class ConnectionService {
         if (current != IntegrationState.UNINSTALLED || request.next() != IntegrationState.ACTIVE) {
             return false;
         }
-        if (connection.getKind() == IntegrationKind.SLACK && "OAUTH_COMPLETE".equals(request.eventType())) {
+        if ((connection.getKind() == IntegrationKind.SLACK || connection.getKind() == IntegrationKind.GITHUB)
+                && "OAUTH_COMPLETE".equals(request.eventType())) {
             return true;
         }
         return "INITIATE".equals(request.eventType());

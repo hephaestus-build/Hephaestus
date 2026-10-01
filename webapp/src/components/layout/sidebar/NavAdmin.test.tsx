@@ -15,8 +15,6 @@ import { NavAdmin } from "./NavAdmin";
 const PATHS = [
 	"w/$workspaceSlug/admin/settings",
 	"w/$workspaceSlug/admin/practices",
-	"w/$workspaceSlug/admin/practices/new",
-	"w/$workspaceSlug/admin/practices/$practiceSlug",
 	"w/$workspaceSlug/admin/practices/review",
 	"w/$workspaceSlug/admin/practices/reviews",
 	"w/$workspaceSlug/admin/integrations",
@@ -56,9 +54,7 @@ describe("NavAdmin", () => {
 
 	it.each([
 		["/w/acme/admin/practices", "Practice setup"],
-		["/w/acme/admin/practices/new", "Practice setup"],
-		["/w/acme/admin/practices/clean-code", "Practice setup"],
-		["/w/acme/admin/practices/review", "Review"],
+		["/w/acme/admin/practices/review", "Review settings"],
 		// Both directions, because the two paths differ by one trailing character and a matcher that
 		// compared strings rather than whole segments would light both entries up on either.
 		["/w/acme/admin/practices/reviews", "Practice reviews"],
@@ -74,11 +70,11 @@ describe("NavAdmin", () => {
 	it("keeps the active section visible when its children are collapsed", async () => {
 		renderNavigation("/w/acme/admin/practices/review");
 
-		await screen.findByRole("link", { name: "Review" });
+		await screen.findByRole("link", { name: "Review settings" });
 		const practices = screen.getByRole("button", { name: "Practices" });
 		fireEvent.click(practices);
 
-		await waitFor(() => expect(screen.queryByRole("link", { name: "Review" })).toBeNull());
+		await waitFor(() => expect(screen.queryByRole("link", { name: "Review settings" })).toBeNull());
 		expect(Object.hasOwn(practices.dataset, "active")).toBe(true);
 	});
 
@@ -87,10 +83,12 @@ describe("NavAdmin", () => {
 		await screen.findByRole("link", { name: "Practice setup" });
 		const submenu = within(screen.getByRole("list", { name: "Practices" }));
 
-		submenu.getByRole("link", { name: "Practice setup" });
-		submenu.getByRole("link", { name: "Review" });
-		submenu.getByRole("link", { name: "Practice reviews" });
-		expect(submenu.getAllByRole("link")).toHaveLength(3);
+		// Operations first: what the reviews need from an admin is the visit that recurs.
+		expect(submenu.getAllByRole("link").map((link) => link.textContent)).toStrictEqual([
+			"Practice reviews",
+			"Practice setup",
+			"Review settings",
+		]);
 	});
 
 	it("keeps sections expandable on mobile when the desktop sidebar is collapsed", async () => {

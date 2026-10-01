@@ -32,11 +32,7 @@ function listItem(
 		createdAt: "2026-01-01T00:00:00Z",
 		displayName: `Workspace ${slug}`,
 		id: slug.length,
-		leaderboardEnabled: false,
-		leaguesEnabled: false,
-		mentorEnabled: false,
 		practicesEnabled: true,
-		progressionEnabled: false,
 		providerType,
 		status: "ACTIVE",
 		workspaceSlug: slug,
@@ -53,13 +49,9 @@ function workspace(slug: string, serverUrl: string | undefined): Workspace {
 		hasSlackToken: false,
 		id: slug.length,
 		isPubliclyViewable: false,
-		leaderboardEnabled: false,
-		leaguesEnabled: false,
-		mentorEnabled: false,
 		practiceReviewAutoTriggerEnabled: true,
 		practiceReviewManualTriggerEnabled: true,
 		practicesEnabled: true,
-		progressionEnabled: false,
 		providerType: "GITLAB",
 		serverUrl,
 		status: "ACTIVE",
@@ -70,7 +62,7 @@ function workspace(slug: string, serverUrl: string | undefined): Workspace {
 
 function dto(id: string, kind = "scm.pull_request"): ReviewContextDTO {
 	return {
-		work: { id, kind, label: `!${id}`, title: "Add login", repositoryName: "team/app" },
+		work: { id, kind, label: `!${id}`, title: "Add login", container: "team/app" },
 		canRequestReview: true,
 		canInspectReviewDetails: false,
 	};
@@ -79,7 +71,7 @@ function dto(id: string, kind = "scm.pull_request"): ReviewContextDTO {
 const TRACE: ArtifactTrace = {
 	artifactId: 4009,
 	artifactKind: "scm.pull_request",
-	title: "Add login",
+	reviewedWork: { id: "4009", kind: "scm.pull_request", label: "!4", title: "Add login" },
 	practices: [],
 	signals: [],
 };
@@ -195,11 +187,11 @@ describe("resolveContext", () => {
 	it("links into the web app, not the API", async () => {
 		const { env } = environment({ url: MR, resolved: { team: dto("4009") } });
 		await expect(resolveContext(env, 1)).resolves.toMatchObject({
-			links: { trace: "https://heph.example.test/w/team/reviews/scm.pull_request/4009" },
+			links: { trace: "https://heph.example.test/w/team/feedback/scm.pull_request/4009" },
 		});
 	});
 
-	it("treats a trace 404 as nothing recorded, not as an error", async () => {
+	it("keeps own records readable when their review trace is unavailable", async () => {
 		const { env, trace } = environment({ url: MR, resolved: { team: dto("4009") } });
 		trace.mockResolvedValue(null);
 		await expect(resolveContext(env, 1)).resolves.toMatchObject({ status: "ready", trace: null });

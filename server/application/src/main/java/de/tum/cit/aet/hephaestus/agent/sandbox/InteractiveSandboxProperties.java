@@ -9,27 +9,29 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Resource tuning for the interactive (mentor) sandbox. Bound from {@code hephaestus.mentor.*}.
  *
- * @param idleTtlSeconds default 300 s (5 min). A mentor runner is ~165 MB RSS; evicting idle
- *     users sooner is the highest-leverage fleet-level memory lever because the per-container
- *     floor is dominated by Pi SDK imports that we cannot slim (transitive imports through
- *     {@code core/resource-loader} always pull in the interactive theme + highlight.js).
- *     UX cost: a user who walks away for &gt;5 min pays a ~1 s cold-start on the next message.
- *     Override via {@code hephaestus.mentor.idle-ttl-seconds} for soak / capacity tests.
+ * @param idleTtlSeconds default 900 s (15 min) since the last frame. A mentor runner is ~165 MB RSS,
+ *     a floor dominated by Pi SDK imports that we cannot slim (transitive imports through
+ *     {@code core/resource-loader} always pull in the interactive theme + highlight.js), so the TTL
+ *     trades idle memory for warm turns; the session caps, not the TTL, bound the total. A message
+ *     after it pays a full cold start — job network, volumes, workspace initializer, runtime
+ *     container, {@code runner_ready} and the SDK import; opening Heph starts that ahead of the
+ *     message. The Traefik sticky-cookie {@code maxAge} in
+ *     {@code docker/compose.app.yaml} follows this value.
  * @param graceTimeoutSeconds SIGTERM → SIGKILL grace. Capped at 25 s: the registry's
  *     {@code @PreDestroy} adds a 5-second slop, and Spring's default
  *     {@code spring.lifecycle.timeout-per-shutdown-phase} is 30 s. A grace beyond 25 s would
  *     overshoot the phase and leak containers on shutdown.
  * @param sendQueueCapacity bounded writer queue. {@code send()} rejects when full — the only
  *     honest backpressure signal to upstream callers (a timeout alone allows unbounded queueing).
- * @param maxFrameChars upper bound on a single stdout-line length (chars, not bytes — a UTF-8
- *     encoded character can be up to 4 bytes, so the on-wire memory ceiling is roughly 4× this).
- *     A longer line is treated as a stream-level fault and the session terminates {@code ERROR}.
- *     Without this bound a hostile runner could OOM the app-server.
+ * @param maxFrameChars gateway runner-frame budget in UTF-8 bytes. The legacy property name is
+ *     retained, but the gateway and worker relay enforce bytes. Capped at 1 MiB so a runner frame
+ *     and its hub envelope fit the control transport's 2 MiB limit. An oversized frame terminates
+ *     the session instead of consuming unbounded memory.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.mentor")
 public record InteractiveSandboxProperties(
-        @DefaultValue("300") @Min(1) int idleTtlSeconds,
+        @DefaultValue("900") @Min(1) int idleTtlSeconds,
         @DefaultValue("25") @Min(1) @Max(25) int graceTimeoutSeconds,
         @DefaultValue("30") @Min(1) int reapIntervalSeconds,
         @DefaultValue("512") @Min(16) int ringBufferFrames,
@@ -39,4 +41,8 @@ public record InteractiveSandboxProperties(
         @DefaultValue("30") @Min(1) int attachFirstFrameTimeoutSeconds,
         @DefaultValue("3") @Min(1) int maxSessionsPerUser,
         @DefaultValue("50") @Min(1) int maxSessionsTotal,
-        @DefaultValue("1048576") @Min(1024) int maxFrameChars) {}
+
+        @DefaultValue("1048576") @Min(1024) @Max(MAX_FRAME_BYTES)
+        int maxFrameChars) {
+    public static final int MAX_FRAME_BYTES = 1024 * 1024;
+}

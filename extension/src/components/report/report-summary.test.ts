@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PracticeTraceEntry } from "~/api/types.gen";
-import { blocksRequest, reviewedAt, summarizeReport } from "~/components/report/report-summary";
+import { reviewedAt, summarizeReport } from "~/components/report/report-summary";
 import type { ReadyContext, WorkFeedback } from "~/shared/review-context";
 
 const NOW = "2026-09-26T12:00:00Z";
@@ -32,7 +32,7 @@ const ready: ReadyContext = {
 	trace: {
 		artifactId: 1,
 		artifactKind: "scm.issue",
-		title: "Issue",
+		reviewedWork: { id: "1", kind: "scm.issue", label: "#1", title: "Issue" },
 		signals: [],
 		practices: [
 			practice({ decidedAt: "2026-09-26T09:00:00Z" }),
@@ -87,16 +87,16 @@ describe("report summary", () => {
 		expect(summary.text).not.toMatch(/clean|all good|no problems/iu);
 	});
 
-	it("names a missing trace as no review recorded, and only then", () => {
+	it("does not treat an unavailable own trace as never reviewed", () => {
 		expect(summarize(feedback(0), { trace: null }).text).toBe(
-			"No recorded comments for you · no review recorded",
+			"No recorded comments for you · review status unavailable",
 		);
 		expect(
 			summarize(feedback(0), {
 				trace: {
 					artifactId: 1,
 					artifactKind: "scm.issue",
-					title: "Issue",
+					reviewedWork: { id: "1", kind: "scm.issue", label: "#1", title: "Issue" },
 					signals: [],
 					practices: [],
 				},
@@ -104,19 +104,8 @@ describe("report summary", () => {
 		).toBe("No recorded comments for you");
 	});
 
-	it("puts authoritative activity first and blocks a request only while a review is active", () => {
-		const running = summarizeReport({
-			state: ready,
-			activity: "queued-or-running",
-			feedback: { status: "ready", data: feedback(1) },
-		});
-		expect(running).toMatchObject({
-			text: "Review queued or running · 1 comment for you · reviewed 1 hr. ago",
-			tone: "progress",
-		});
-		expect(running.action).toBeUndefined();
+	it("keeps a review request available while a recorded decision is pending or deferred", () => {
 		for (const activity of ["pending", "deferred"] as const) {
-			expect(blocksRequest(activity)).toBe(false);
 			expect(
 				summarizeReport({
 					state: ready,
@@ -150,7 +139,12 @@ describe("report summary", () => {
 
 	it("names a review that could not finish for a practice on the line itself", () => {
 		const failed = practice({ practiceSlug: "tests", outcome: "FAILED", decidedAt: undefined });
-		const trace = { artifactId: 1, artifactKind: "scm.issue", title: "Issue", signals: [] };
+		const trace = {
+			artifactId: 1,
+			artifactKind: "scm.issue",
+			reviewedWork: { id: "1", kind: "scm.issue", label: "#1", title: "Issue" },
+			signals: [],
+		};
 		expect(
 			summarize(feedback(1), {
 				trace: { ...trace, practices: [practice({ decidedAt: "2026-09-26T11:00:00Z" }), failed] },

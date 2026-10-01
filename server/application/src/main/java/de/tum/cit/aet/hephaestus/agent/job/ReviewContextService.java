@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workurl.ReviewedWorkUrls;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workurl.ReviewedWorkUrls.Page;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workurl.ReviewedWorkUrls.WorkAddress;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.workspace.CurrentAccountUsers;
 import de.tum.cit.aet.hephaestus.workspace.authorization.WorkspaceAccessService;
@@ -88,7 +88,7 @@ class ReviewContextService {
                 .filter(found -> found.getDeletedAt() == null)
                 .orElseThrow(ReviewContextService::noWork);
 
-        var target = new ReviewRunTargetLookup.Target(
+        var target = new ReviewRunLookup.Target(
                 address.kind(),
                 work.getId(),
                 provider,

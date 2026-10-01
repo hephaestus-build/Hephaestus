@@ -29,7 +29,8 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
             new WebhookProperties.Publish(Duration.ofSeconds(9), 5, Duration.ofMillis(200)),
             WebhookPropertiesFixture.stream(),
             new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
-            new WebhookProperties.Http(MAX));
+            new WebhookProperties.Http(MAX),
+            new WebhookProperties.Routing(null, null));
 
     private final MeterRegistry meters = new SimpleMeterRegistry();
     private final WebhookPayloadSizeFilter filter = new WebhookPayloadSizeFilter(properties, meters);

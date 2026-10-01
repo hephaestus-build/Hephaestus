@@ -5,13 +5,10 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Classifies GitLab users by login pattern.
- * <p>
- * GitLab group and project access tokens materialise as users with deterministic
- * logins of the form {@code group_<id>_bot_<hash>} or {@code project_<id>_bot_<hash>}
- * (hex-encoded). These are service identities, not humans — marking them as
- * {@link User.Type#BOT} so that downstream filters (team rosters, league points,
- * leaderboard) can exclude them uniformly.
+ * The account type of a GitLab user. GitLab's own {@code bot} flag decides it: service accounts are bots whatever their
+ * username. Without the flag the type is unknown and a stored one stays; only a user seen for the first time needs a
+ * guess, and the deterministic logins GitLab gives group and project access tokens, {@code group_<id>_bot_<hash>} or
+ * {@code project_<id>_bot_<hash>}, are then taken for bots. No username shows that an account is human.
  */
 public final class GitLabUserClassifier {
 
@@ -19,11 +16,17 @@ public final class GitLabUserClassifier {
 
     private GitLabUserClassifier() {}
 
-    public static boolean isBot(@Nullable String login) {
-        return login != null && BOT_LOGIN_PATTERN.matcher(login).matches();
+    /** The type GitLab states, or {@code null} when the read did not carry its {@code bot} flag. */
+    public static @Nullable String nativeType(@Nullable Boolean bot) {
+        return bot == null ? null : (bot ? User.Type.BOT : User.Type.USER).name();
     }
 
-    public static User.Type classify(@Nullable String login) {
-        return isBot(login) ? User.Type.BOT : User.Type.USER;
+    /** The type to record for a user seen for the first time: GitLab's, or else a guess from the login. */
+    public static String insertionType(@Nullable String login, @Nullable Boolean bot) {
+        String stated = nativeType(bot);
+        if (stated != null) {
+            return stated;
+        }
+        return (login != null && BOT_LOGIN_PATTERN.matcher(login).matches() ? User.Type.BOT : User.Type.USER).name();
     }
 }

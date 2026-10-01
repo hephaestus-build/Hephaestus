@@ -168,7 +168,8 @@ public class DockerSandboxAdapter implements SandboxManager {
 
             boolean allowInternet =
                     spec.networkPolicy() != null && spec.networkPolicy().internetAccess();
-            networkId = networkManager.createJobNetwork(jobId, allowInternet);
+            Map<String, String> labels = securityPolicy.buildLabels(jobId);
+            networkId = networkManager.createJobNetwork(jobId, allowInternet, labels);
 
             // Null when the app-server runs on the host rather than in Docker.
             String appServerIp = networkManager.connectAppServer(networkId);
@@ -177,8 +178,8 @@ public class DockerSandboxAdapter implements SandboxManager {
                 // host.docker.internal is reachable only from a non-internal network.
                 if (!allowInternet) {
                     throw new SandboxException(
-                            "Practice reviews run on an internal network; run the app server in Docker "
-                                    + "or set SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID");
+                            "Practice reviews run on an internal network, which only a worker running in a Docker "
+                                    + "container under its default hostname can join");
                 }
                 appServerIp = "host.docker.internal";
                 extraHosts = List.of("host.docker.internal:host-gateway");
@@ -190,7 +191,6 @@ public class DockerSandboxAdapter implements SandboxManager {
             if (!spec.outputPath().equals(SandboxLayout.OUTPUT_PATH)) {
                 throw new SandboxException("Sandbox results must use the runtime output directory");
             }
-            Map<String, String> labels = securityPolicy.buildLabels(jobId);
             attempt = launcher.open(
                     jobId,
                     spec.networkPolicy(),

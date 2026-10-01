@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.ForceReconnect;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameEnvelope;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionCommand;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerHello;
 import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerWelcome;
@@ -55,6 +57,7 @@ public class WorkerControlClient {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerControlClient.class);
     private static final int OUTBOUND_QUEUE_CAPACITY = 1024;
+    private static final int QUEUE_BYTE_BUDGET = 8 * 1024 * 1024;
     private static final int INBOUND_QUEUE_CAPACITY = 1024;
     private static final Duration MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration MAX_BACKOFF = Duration.ofSeconds(30);
@@ -68,8 +71,12 @@ public class WorkerControlClient {
     private final Counter sendDropped;
     private final Counter reconnects;
 
-    private final LinkedBlockingQueue<FrameEnvelope> outbound = new LinkedBlockingQueue<>(OUTBOUND_QUEUE_CAPACITY);
-    private final LinkedBlockingQueue<WorkerControlFrame> inbound = new LinkedBlockingQueue<>(INBOUND_QUEUE_CAPACITY);
+    private final LinkedBlockingQueue<QueuedFrame> outbound = new LinkedBlockingQueue<>(OUTBOUND_QUEUE_CAPACITY);
+    private final LinkedBlockingQueue<InboundFrame> inbound = new LinkedBlockingQueue<>(INBOUND_QUEUE_CAPACITY);
+    private final java.util.concurrent.atomic.AtomicInteger outboundBytes =
+            new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicInteger inboundBytes =
+            new java.util.concurrent.atomic.AtomicInteger();
     private final AtomicReference<@Nullable WebSocket> webSocket = new AtomicReference<>();
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final AtomicReference<Instant> lastInboundAt = new AtomicReference<>(Instant.EPOCH);
@@ -89,6 +96,13 @@ public class WorkerControlClient {
     private volatile @Nullable BiConsumer<UUID, String> cancelHandler;
 
     private volatile String controlSessionId = "";
+    private volatile java.util.function.Consumer<MentorSessionCommand> mentorHandler = ignored -> {};
+    private volatile Runnable mentorDisconnectHandler = () -> {};
+
+    public void setMentorHandlers(java.util.function.Consumer<MentorSessionCommand> handler, Runnable disconnected) {
+        mentorHandler = handler;
+        mentorDisconnectHandler = disconnected;
+    }
 
     public WorkerControlClient(
             WorkerProperties properties, FrameCodec codec, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
@@ -146,7 +160,14 @@ public class WorkerControlClient {
     }
 
     private boolean enqueue(WorkerControlFrame frame) {
-        if (outbound.offer(FrameEnvelope.of(frame))) return true;
+        String json = codec.encode(FrameEnvelope.of(frame));
+        int bytes = json.getBytes(StandardCharsets.UTF_8).length;
+        if (!reserveBytes(outboundBytes, bytes)) {
+            sendDropped.increment();
+            return false;
+        }
+        if (outbound.offer(new QueuedFrame(json, bytes))) return true;
+        outboundBytes.addAndGet(-bytes);
         sendDropped.increment();
         return false;
     }
@@ -174,7 +195,7 @@ public class WorkerControlClient {
 
     private void runOutboundLoop() {
         while (running.get()) {
-            FrameEnvelope envelope;
+            QueuedFrame envelope;
             try {
                 envelope = outbound.take();
             } catch (InterruptedException e) {
@@ -183,30 +204,37 @@ public class WorkerControlClient {
             }
             WebSocket ws = webSocket.get();
             if (ws == null || !connected.get()) {
+                outboundBytes.addAndGet(-envelope.bytes());
                 sendDropped.increment();
                 continue;
             }
             try {
-                String json = codec.encode(envelope);
+                String json = envelope.json();
                 ws.sendText(json, true).toCompletableFuture().get(10, TimeUnit.SECONDS);
                 framesSent.increment();
             } catch (Exception e) {
                 log.warn("send failed: {} — closing connection", e.getClass().getSimpleName());
-                forceReconnect("send-failure");
+                if (webSocket.compareAndSet(ws, null)) {
+                    onTransportLost();
+                    ws.abort();
+                }
+            } finally {
+                outboundBytes.addAndGet(-envelope.bytes());
             }
         }
     }
 
     private void runInboundLoop() {
         while (running.get()) {
-            WorkerControlFrame frame;
+            InboundFrame frame;
             try {
                 frame = inbound.take();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
             }
-            handleInbound(frame);
+            inboundBytes.addAndGet(-frame.bytes());
+            if (webSocket.get() == frame.source()) handleInbound(frame.frame());
         }
     }
 
@@ -234,6 +262,8 @@ public class WorkerControlClient {
                     forceReconnect("server-requested:" + r.reason());
                 }
                 case CancelJob c -> handleCancelJob(c);
+                case MentorSessionCommand command -> mentorHandler.accept(command);
+                case MentorSessionEvent event -> warnSourceMismatch(event);
                 // Empty on purpose. Arrival is the whole signal — see Heartbeat — and the transport
                 // stamped lastInboundAt before dispatch, so there is nothing left to do here.
                 case Heartbeat ignored -> {}
@@ -409,6 +439,11 @@ public class WorkerControlClient {
 
     private void onTransportLost() {
         connected.set(false);
+        QueuedFrame queued;
+        while ((queued = outbound.poll()) != null) outboundBytes.addAndGet(-queued.bytes());
+        InboundFrame received;
+        while ((received = inbound.poll()) != null) inboundBytes.addAndGet(-received.bytes());
+        mentorDisconnectHandler.run();
     }
 
     private static String httpBaseFrom(URI wsUri) {
@@ -429,6 +464,18 @@ public class WorkerControlClient {
         }
     }
 
+    private static boolean reserveBytes(java.util.concurrent.atomic.AtomicInteger counter, int bytes) {
+        while (true) {
+            int current = counter.get();
+            if (bytes > QUEUE_BYTE_BUDGET - current) return false;
+            if (counter.compareAndSet(current, current + bytes)) return true;
+        }
+    }
+
+    private record QueuedFrame(String json, int bytes) {}
+
+    private record InboundFrame(WorkerControlFrame frame, int bytes, WebSocket source) {}
+
     /** JDK {@link WebSocket.Listener} that buffers inbound text into the dispatch queue. */
     private final class Listener implements WebSocket.Listener {
 
@@ -441,6 +488,12 @@ public class WorkerControlClient {
 
         @Override
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+            if (WorkerControlClient.this.webSocket.get() != webSocket) return CompletableFuture.completedFuture(null);
+            if (partial.length() + data.length() > FrameCodec.MAX_FRAME_BYTES) {
+                partial.setLength(0);
+                forceReconnect("oversized-frame");
+                return CompletableFuture.completedFuture(null);
+            }
             partial.append(data);
             webSocket.request(1);
             if (last) {
@@ -450,13 +503,16 @@ public class WorkerControlClient {
                 lastInboundAt.set(Instant.now());
                 try {
                     FrameEnvelope envelope = codec.decode(json);
-                    if (!inbound.offer(envelope.payload())) {
-                        log.warn(
-                                "Inbound queue full; dropping {}",
-                                envelope.payload().getClass().getSimpleName());
+                    int bytes = json.getBytes(StandardCharsets.UTF_8).length;
+                    if (!reserveBytes(inboundBytes, bytes)) {
+                        forceReconnect("inbound-overflow");
+                    } else if (!inbound.offer(new InboundFrame(envelope.payload(), bytes, webSocket))) {
+                        inboundBytes.addAndGet(-bytes);
+                        forceReconnect("inbound-overflow");
                     }
                 } catch (RuntimeException e) {
                     log.warn("Inbound frame decode failed: {}", e.getClass().getSimpleName());
+                    forceReconnect("invalid-frame");
                 }
             }
             return CompletableFuture.completedFuture(null);
@@ -465,14 +521,14 @@ public class WorkerControlClient {
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
             log.info("Worker control channel closed: code={}, reason={}", statusCode, reason);
-            onTransportLost();
+            if (WorkerControlClient.this.webSocket.compareAndSet(webSocket, null)) onTransportLost();
             return CompletableFuture.completedFuture(null);
         }
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
             log.warn("Worker control channel error: {}", error.getClass().getSimpleName());
-            onTransportLost();
+            if (WorkerControlClient.this.webSocket.compareAndSet(webSocket, null)) onTransportLost();
         }
     }
 }

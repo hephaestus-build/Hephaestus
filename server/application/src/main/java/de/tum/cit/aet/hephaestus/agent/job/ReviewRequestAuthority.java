@@ -6,8 +6,10 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -53,10 +55,30 @@ public class ReviewRequestAuthority {
      */
     public Optional<User> standingOf(long workspaceId, Issue artifact, Collection<User> candidates) {
         return candidates.stream()
-                .filter(candidate -> candidate != null && candidate.getId() != null)
-                .filter(candidate ->
-                        isActorOn(artifact, candidate.getId()) || isWorkspaceAdmin(workspaceId, candidate.getId()))
+                .filter(candidate -> hasStanding(workspaceId, artifact, candidate.getId()))
                 .findFirst();
+    }
+
+    /** An identity the mirror has synced but never persisted has no id, and so no standing. */
+    private boolean hasStanding(long workspaceId, Issue artifact, @Nullable Long candidateId) {
+        return candidateId != null && (isActorOn(artifact, candidateId) || isWorkspaceAdmin(workspaceId, candidateId));
+    }
+
+    /**
+     * Whether any of these identities administers the workspace, which gives standing on every artifact it owns.
+     * One membership read per identity.
+     */
+    public boolean anyAdmin(long workspaceId, Collection<User> requesters) {
+        return ids(requesters).anyMatch(id -> isWorkspaceAdmin(workspaceId, id));
+    }
+
+    /**
+     * Whether any of these identities wrote the artifact or is assigned to it.
+     *
+     * @param artifact the artifact, with its author and assignees already fetched
+     */
+    public boolean isActorOn(Issue artifact, Collection<User> requesters) {
+        return ids(requesters).anyMatch(id -> isActorOn(artifact, id));
     }
 
     private boolean isActorOn(Issue artifact, Long requesterId) {
@@ -66,6 +88,11 @@ public class ReviewRequestAuthority {
         }
         Set<User> assignees = artifact.getAssignees();
         return assignees != null && assignees.stream().anyMatch(a -> requesterId.equals(a.getId()));
+    }
+
+    /** An identity the mirror has synced but never persisted has no id to compare or look up. */
+    private static Stream<Long> ids(Collection<User> users) {
+        return users.stream().map(User::getId).filter(Objects::nonNull);
     }
 
     public boolean isWorkspaceAdmin(long workspaceId, Long requesterId) {

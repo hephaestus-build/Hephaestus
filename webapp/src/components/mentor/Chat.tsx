@@ -1,5 +1,7 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { AlertCircle, RotateCcw } from "lucide-react";
+import { AlertCircle, ArrowDown, RotateCcw } from "lucide-react";
+
+import { AnimatePresence, motion } from "motion/react";
 
 import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
@@ -15,6 +17,7 @@ export interface ChatProps {
 	messages: ChatMessage[];
 	votes?: ChatMessageVote[];
 	status: UseChatHelpers<ChatMessage>["status"];
+	errorMessage?: string;
 	readonly?: boolean;
 	isAtBottom?: boolean;
 	scrollToBottom?: () => void;
@@ -34,6 +37,7 @@ export function Chat({
 	messages,
 	votes,
 	status,
+	errorMessage,
 	readonly = false,
 	isAtBottom: parentIsAtBottom = true,
 	scrollToBottom: parentScrollToBottom,
@@ -52,6 +56,17 @@ export function Chat({
 
 	const actualIsAtBottom = parentScrollToBottom ? parentIsAtBottom : isAtBottom;
 	const actualScrollToBottom = parentScrollToBottom ?? scrollToBottom;
+
+	// The live error is gone once the conversation is reopened, but a reply saved as interrupted can still
+	// be tried again.
+	const isBusy = status === "error" && errorMessage === "Heph is busy. Please try again.";
+	const lastMessage = messages.at(-1);
+	const canRetry =
+		status === "error" ||
+		(onReload !== undefined &&
+			status === "ready" &&
+			lastMessage?.role === "assistant" &&
+			lastMessage.metadata?.status === "interrupted");
 
 	return (
 		<div className={cn("relative h-full", className)}>
@@ -72,13 +87,42 @@ export function Chat({
 				/>
 
 				<div className="relative z-10 -mt-20 flex w-full flex-col items-center gap-2 bg-gradient-to-t from-muted from-60% to-transparent px-4 pt-8 pb-2 dark:from-background/30">
-					{status === "error" && (
+					<AnimatePresence>
+						{!actualIsAtBottom && !readonly && (
+							<motion.div
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{ opacity: 0, y: 10 }}
+								transition={{ type: "spring", stiffness: 300, damping: 20 }}
+								className="absolute -top-4 left-1/2 z-[95] -translate-x-1/2 rounded-full backdrop-blur-sm"
+							>
+								<Button
+									aria-label="Scroll to latest message"
+									shape="pill"
+									className="border-border/50 bg-background/80 shadow-lg hover:bg-background/90 dark:bg-background/80 dark:hover:bg-background/90"
+									size="icon"
+									variant="outline"
+									onClick={(event) => {
+										event.preventDefault();
+										actualScrollToBottom();
+									}}
+								>
+									<ArrowDown />
+								</Button>
+							</motion.div>
+						)}
+					</AnimatePresence>
+					{canRetry && (
 						<div className="mb-2 w-full max-w-3xl">
-							<Alert variant="destructive">
+							<Alert variant={isBusy ? "warning" : "destructive"}>
 								<AlertCircle className="size-4" />
-								<AlertTitle>Something went wrong</AlertTitle>
+								<AlertTitle>{isBusy ? "Heph is busy" : "Something went wrong"}</AlertTitle>
 								<AlertDescription className="flex items-center justify-between gap-4">
-									<span>An error occurred while generating the response. Please try again.</span>
+									<span>
+										{isBusy
+											? "Please try again in a moment."
+											: "An error occurred while generating the response. Please try again."}
+									</span>
 									{onReload && (
 										<Button variant="outline" size="sm" onClick={onReload} className="shrink-0">
 											<RotateCcw className="size-4" />
@@ -99,9 +143,7 @@ export function Chat({
 								onSubmit={onMessageSubmit}
 								placeholder={inputPlaceholder}
 								readonly={readonly}
-								isAtBottom={actualIsAtBottom}
 								scrollToBottom={actualScrollToBottom}
-								isCurrentVersion
 								className="bg-background dark:bg-muted"
 							/>
 						</div>

@@ -8,20 +8,33 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.ObservationResolutionProjection;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Suppresses repeat delivery when the developer has already rejected feedback about the same observation. */
+/**
+ * Holds back feedback about an observation the developer has disputed or called not applicable, so a later review
+ * of the same work does not say it again.
+ *
+ * <p>The developer answers feedback, and the feedback is bound to observations. Within one review, only the
+ * observations the answered feedback was written from count: two observations there may share a place and still be
+ * two behaviours. A later review records new observations, so there the answer carries to the same claim — the
+ * same practice, piece of work, developer and place ({@code recurrence_key}), with the same presence and assessment.
+ * When several answers speak for one observation, the newest wins, so withdrawing a dispute or marking the feedback
+ * addressed lets the claim through again.
+ */
 @Component
 class FeedbackResponseSuppressionFilter {
 
@@ -35,17 +48,14 @@ class FeedbackResponseSuppressionFilter {
     private final ObservationRepository observationRepository;
     private final ReactionRepository reactionRepository;
     private final FeedbackLedgerRecorder feedbackLedgerRecorder;
-    private final PracticeReviewProperties reviewProperties;
 
     FeedbackResponseSuppressionFilter(
             ObservationRepository observationRepository,
             ReactionRepository reactionRepository,
-            FeedbackLedgerRecorder feedbackLedgerRecorder,
-            PracticeReviewProperties reviewProperties) {
+            FeedbackLedgerRecorder feedbackLedgerRecorder) {
         this.observationRepository = observationRepository;
         this.reactionRepository = reactionRepository;
         this.feedbackLedgerRecorder = feedbackLedgerRecorder;
-        this.reviewProperties = reviewProperties;
     }
 
     record SuppressionDecision(List<ValidatedObservation> deliverable, int suppressedCount) {}
@@ -54,34 +64,24 @@ class FeedbackResponseSuppressionFilter {
     // persisted observations. recordSuppressed writes in its own REQUIRES_NEW tx, so readOnly does not bind it.
     @Transactional(readOnly = true)
     public SuppressionDecision evaluate(AgentJob job, List<ValidatedObservation> scopedObservations) {
-        if (!reviewProperties.reactionSuppression()) {
-            return new SuppressionDecision(scopedObservations, 0);
-        }
-        List<Observation> persisted = observationRepository.findByAgentJobId(
-                job.getId(), job.getWorkspace().getId());
+        long workspaceId = job.getWorkspace().getId();
+        List<Observation> persisted = observationRepository.findByAgentJobId(job.getId(), workspaceId);
         if (persisted.isEmpty()) {
             return new SuppressionDecision(scopedObservations, 0);
         }
 
-        Observation any = persisted.get(0);
-        long aboutUserId = any.getAboutUserId();
-
-        // Keep occurrences distinct when several observations share a recurrence locus.
         Map<String, Observation> persistedByOccurrence = new HashMap<>();
-        Set<UUID> observationIds = new HashSet<>();
-        for (Observation f : persisted) {
-            persistedByOccurrence.put(f.getOccurrenceKey(), f);
-            observationIds.add(f.getId());
+        for (Observation observation : persisted) {
+            persistedByOccurrence.put(observation.getOccurrenceKey(), observation);
         }
-        if (observationIds.isEmpty()) {
-            return new SuppressionDecision(scopedObservations, 0);
-        }
-        Map<UUID, FeedbackResolution> actionByKey = new HashMap<>();
-        for (var row : reactionRepository.findCurrentResolutionByObservationIds(
-                observationIds, aboutUserId, job.getWorkspace().getId())) {
-            actionByKey.put(row.getObservationId(), FeedbackResolution.valueOf(row.getResolution()));
-        }
-        if (actionByKey.isEmpty()) {
+        String[] recurrenceKeys = persisted.stream()
+                .map(Observation::getRecurrenceKey)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toArray(String[]::new);
+        List<ObservationResolutionProjection> answers = reactionRepository.findCurrentResolutions(
+                workspaceId, persisted.stream().map(Observation::getId).toList(), recurrenceKeys);
+        if (answers.isEmpty()) {
             return new SuppressionDecision(scopedObservations, 0);
         }
 
@@ -94,7 +94,9 @@ class FeedbackResponseSuppressionFilter {
                 deliverable.add(vf);
                 continue;
             }
-            FeedbackResolution action = actionByKey.get(pf.getId());
+            FeedbackResolution action = standingAnswer(pf, answers)
+                    .map(answer -> FeedbackResolution.valueOf(answer.getResolution()))
+                    .orElse(null);
             boolean unsuppressableSecret = vf.outcome() == Outcome.NEGATIVE
                     && vf.evidence() != null
                     && SECRET_SCANNER.equals(vf.evidence().path("detector").asString());
@@ -118,6 +120,28 @@ class FeedbackResponseSuppressionFilter {
                     scopedObservations.size());
         }
         return new SuppressionDecision(deliverable, suppressed);
+    }
+
+    /** The newest answer that speaks for {@code observation}: on its own feedback, or on the same claim earlier. */
+    private static Optional<ObservationResolutionProjection> standingAnswer(
+            Observation observation, List<ObservationResolutionProjection> answers) {
+        return answers.stream()
+                .filter(answer -> answer.getObservationId().equals(observation.getId())
+                        || sameClaimInAnEarlierReview(observation, answer))
+                .max(Comparator.comparing(ObservationResolutionProjection::getRespondedAt));
+    }
+
+    private static boolean sameClaimInAnEarlierReview(Observation observation, ObservationResolutionProjection answer) {
+        UUID jobId = observation.getAgentJobId();
+        return !answer.getAgentJobId().equals(jobId)
+                && observation.getRecurrenceKey() != null
+                && observation.getRecurrenceKey().equals(answer.getRecurrenceKey())
+                && Objects.equals(nameOf(observation.getPresence()), answer.getPresence())
+                && Objects.equals(nameOf(observation.getAssessment()), answer.getAssessment());
+    }
+
+    private static @Nullable String nameOf(@Nullable Enum<?> value) {
+        return value == null ? null : value.name();
     }
 
     private static FeedbackSuppressionReason reasonFor(FeedbackResolution action) {

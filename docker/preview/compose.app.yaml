@@ -267,8 +267,9 @@ services:
       # to resolve. Agents are off (AGENT_ENABLED below), but the pin guard is built regardless.
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: "false"
       # Read by the static thc binary the health-checker buildpack installs at /workspace/health-check.
+      MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       THC_PORT: "8080"
-      THC_PATH: /actuator/health/liveness
+      THC_PATH: /livez
       HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"
       HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false"
       # prod runs forward-headers=native, so ProxyTrustGuard aborts the boot unless this is set.
@@ -332,9 +333,9 @@ services:
       MONITORING_RUN_ON_STARTUP: "false"
       MONITORING_SYNC_CRON: "-"
       MONITORING_BACKFILL_ENABLED: "false"
-      LEADERBOARD_NOTIFICATION_ENABLED: "false"
       SENTRY_DSN: ""
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET to at least 32 printable ASCII characters}
+      WEBHOOK_ROUTING_SECRET: ${WEBHOOK_ROUTING_SECRET:?Set WEBHOOK_ROUTING_SECRET to at least 32 printable ASCII characters, different from WEBHOOK_SECRET}
       WEBHOOK_EXTERNAL_URL: ""
     # Joined to reach staging's broker; this stack's own database and SPA stay on Coolify's
     # per-preview network.

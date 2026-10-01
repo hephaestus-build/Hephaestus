@@ -242,6 +242,8 @@ export function PracticeFeedbackCard({
 	// that asked for it and not on a pressed button in the other row.
 	const [lastPressed, setLastPressed] = useState<"rating" | "answer">("rating");
 	const resolved = state === "resolved";
+	// No work can tick a closed card, so it draws no count towards the threshold.
+	const closed = state === "closed";
 	const answerable = isOpenFeedback(state) || resolvedBy === "DEVELOPER";
 	const BandIcon = FEEDBACK_STATE_DEFS[isOpenFeedback(state) ? "open" : state].icon;
 	const GroupIcon = group?.icon ?? PackageIcon;
@@ -255,6 +257,63 @@ export function PracticeFeedbackCard({
 	// gave way to a newer piece.
 	const knownWork = [...evidenceRefs, ...cleanWork.map((clean) => clean.ref)];
 	const WorkIcon = reviewedWorkIcon(stripLabel.kind, stripLabel.provider);
+	const header = (
+		<div className="flex flex-wrap items-center justify-between gap-4">
+			<div className="flex flex-wrap items-center gap-3 text-sm">
+				<PracticePill
+					name={practiceName}
+					onOpen={onOpenPractice && (() => onOpenPractice(practiceSlug))}
+				/>
+				<span className="text-muted-foreground">in</span>
+				<GroupName
+					name={group?.name ?? "Unassigned"}
+					icon={GroupIcon}
+					pill={groupPill}
+					onOpen={group && onOpenGroup && (() => onOpenGroup(group.slug))}
+				/>
+			</div>
+			<StatusBadge
+				def={FEEDBACK_STATE_DEFS[state]}
+				className={FEEDBACK_STATE_DEFS[state].className}
+			/>
+		</div>
+	);
+
+	if (state === "withdrawn") {
+		// What it said was taken back as wrong, so none of it is shown: not its words, its evidence, a
+		// next step, a meter that could read as progress, or buttons to answer it.
+		return (
+			<article
+				ref={ref}
+				aria-labelledby={headingId}
+				tabIndex={-1}
+				className={cn(
+					FOCUS_RING,
+					"flex flex-col overflow-hidden rounded-xl border bg-background",
+					className,
+				)}
+			>
+				<div className="flex flex-col gap-4 p-4">
+					{header}
+					<div className="flex flex-col gap-2.5">
+						<h3 id={headingId} className="max-w-3xl text-lg font-semibold">
+							This feedback was withdrawn
+						</h3>
+						<p className="max-w-3xl text-sm text-muted-foreground">
+							A workspace admin took it back because what it said was wrong. It says nothing about
+							how your work stands on this practice.
+						</p>
+					</div>
+				</div>
+				<div className="flex flex-wrap items-center gap-3 border-t p-4">
+					<span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+						<ClockIcon className="size-4 shrink-0" aria-hidden />
+						<time dateTime={timestamp.toISOString()}>{formatTimestamp(timestamp, state)}</time>
+					</span>
+				</div>
+			</article>
+		);
+	}
 
 	return (
 		<article
@@ -272,25 +331,7 @@ export function PracticeFeedbackCard({
 			)}
 		>
 			<div className="flex flex-col gap-4 p-4">
-				<div className="flex flex-wrap items-center justify-between gap-4">
-					<div className="flex flex-wrap items-center gap-3 text-sm">
-						<PracticePill
-							name={practiceName}
-							onOpen={onOpenPractice && (() => onOpenPractice(practiceSlug))}
-						/>
-						<span className="text-muted-foreground">in</span>
-						<GroupName
-							name={group?.name ?? "Unassigned"}
-							icon={GroupIcon}
-							pill={groupPill}
-							onOpen={group && onOpenGroup && (() => onOpenGroup(group.slug))}
-						/>
-					</div>
-					<StatusBadge
-						def={FEEDBACK_STATE_DEFS[state]}
-						className={FEEDBACK_STATE_DEFS[state].className}
-					/>
-				</div>
+				{header}
 
 				<div className="flex flex-col gap-2.5">
 					<h3 id={headingId} className="max-w-3xl text-lg font-semibold">
@@ -340,28 +381,30 @@ export function PracticeFeedbackCard({
 					</p>
 				</div>
 				{/* A count toward a threshold is a meter, not task progress (APG meter pattern). */}
-				<Meter.Root
-					value={cleanCount}
-					max={cleanNeeded}
-					aria-label="Clean work in a row"
-					getAriaValueText={() => cleanLabel}
-					className="col-start-2 flex flex-col items-start gap-1.5 sm:col-start-3 sm:items-end sm:pt-0.5"
-				>
-					<Meter.Track className="inline-flex gap-1">
-						{Array.from({ length: cleanNeeded }, (_, index) => (
-							<span
-								key={index}
-								className={cn(
-									"h-2 w-6 rounded-full",
-									index < cleanCount ? "bg-success" : "bg-border",
-								)}
-							/>
-						))}
-					</Meter.Track>
-					<Meter.Value className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-						{() => cleanLabel}
-					</Meter.Value>
-				</Meter.Root>
+				{!closed && (
+					<Meter.Root
+						value={cleanCount}
+						max={cleanNeeded}
+						aria-label="Clean work in a row"
+						getAriaValueText={() => cleanLabel}
+						className="col-start-2 flex flex-col items-start gap-1.5 sm:col-start-3 sm:items-end sm:pt-0.5"
+					>
+						<Meter.Track className="inline-flex gap-1">
+							{Array.from({ length: cleanNeeded }, (_, index) => (
+								<span
+									key={index}
+									className={cn(
+										"h-2 w-6 rounded-full",
+										index < cleanCount ? "bg-success" : "bg-border",
+									)}
+								/>
+							))}
+						</Meter.Track>
+						<Meter.Value className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+							{() => cleanLabel}
+						</Meter.Value>
+					</Meter.Root>
+				)}
 				{/* The other way to close the card, under the clean work that ticks it by itself. */}
 				{onResolve && answerable && (
 					<div className="col-start-2 flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -456,6 +499,11 @@ export function PracticeFeedbackCard({
 						placeholder="One or two sentences on what is off"
 						required
 						reasons={NOT_HELPFUL_REASONS}
+						audience={(reason) =>
+							reason === "not-accurate"
+								? "Not accurate disputes this card: workspace admins read your sentence, not the card, and can correct its observations or withdraw it."
+								: undefined
+						}
 						isPending={isPending}
 						onSend={onSendComment}
 						onSkip={onSkipComment}

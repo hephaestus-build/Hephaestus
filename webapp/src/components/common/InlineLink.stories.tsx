@@ -78,3 +78,24 @@ export const NoAddress: Story = {
 		}
 	},
 };
+
+/**
+ * A figure that opens the rows it counts carries a faint underline at rest, so a row of figures
+ * shows which ones open; a figure with no list to open stays a plain word.
+ */
+export const Count: Story = {
+	args: { tone: "count", href: "/w/demo/admin/practices/reviews/runs", children: "2 failed" },
+	render: (args) => (
+		<p className="max-w-md text-sm text-muted-foreground">
+			<InlineLink {...args} /> ·{" "}
+			<InlineLink tone="count" href="">
+				1 cancelled
+			</InlineLink>
+		</p>
+	),
+	play: async ({ canvas }) => {
+		const link = canvas.getByRole("link", { name: "2 failed" });
+		await expect(getComputedStyle(link).textDecorationLine).toBe("underline");
+		await expect(getComputedStyle(canvas.getByText("1 cancelled")).textDecorationLine).toBe("none");
+	},
+};

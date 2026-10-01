@@ -6,15 +6,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
-import de.tum.cit.aet.hephaestus.agent.context.ContextManifestBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
@@ -27,7 +29,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
@@ -50,6 +51,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -99,7 +101,11 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 objectMapper,
                 practiceCatalogInjector,
                 new PracticeReviewPreparation(
-                        workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter, gitRepositoryManager),
+                        workspaceContextBuilder,
+                        practiceCatalogInjector,
+                        taskEnvelopeWriter,
+                        gitRepositoryManager,
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer()),
                 resultParser,
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
@@ -109,9 +115,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                                 de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
                         org.mockito.Mockito.mock(
                                 de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.class),
-                        org.mockito.Mockito.mock(FeedbackLedgerRecorder.class),
-                        new de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties(
-                                false, 15, 5, false, null)),
+                        org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
                 InContextDeliveryGateFixtures.gate(
                         practiceRepository,
                         org.mockito.Mockito.mock(
@@ -201,7 +205,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 .put("defectDetector", true);
         ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
                 snapshot, "scm.pull-request.diff", "a".repeat(40) + ":" + "b".repeat(40));
-        EvidenceSnapshotFixtures.artifact(diff, PullRequestContentSource.CHANGE_FILE, CHANGE_SHA);
+        EvidenceSnapshotFixtures.artifact(snapshot, diff, PullRequestContentSource.CHANGE_FILE, CHANGE_SHA);
         return snapshot;
     }
 
@@ -209,7 +213,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     private ObjectNode admittedPracticeSnapshotWithoutChange() {
         ObjectNode snapshot = admittedPracticeSnapshot();
         for (JsonNode source : snapshot.withObject("manifest").withArray("sources")) {
-            EvidenceSnapshotFixtures.unavailable((ObjectNode) source);
+            EvidenceSnapshotFixtures.unavailable(snapshot, (ObjectNode) source);
         }
         return snapshot;
     }
@@ -239,7 +243,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         lenient()
                 .when(workspaceContextBuilder.prepare(
                         any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
-                .thenReturn(prepared(Map.of("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8))));
+                .thenReturn(prepared(Map.of("context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8))));
         lenient()
                 .when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                 .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
@@ -249,13 +253,13 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     }
 
     private PreparedEvidence prepared(Map<String, byte[]> files) {
-        return new PreparedEvidence(files, org.mockito.Mockito.mock(ArtifactSourceManifest.class));
+        return new PreparedEvidence(files, org.mockito.Mockito.mock(JobFolderIndex.class));
     }
 
     /** Every practice asked is ready, recorded the way the readiness check records it. */
-    private ContextManifestBuilder.PreparedAutomatedReviewReadiness readiness(List<Practice> practices) {
+    private JobFolderIndexBuilder.PreparedAutomatedReviewReadiness readiness(List<Practice> practices) {
         Instant now = Instant.parse("2026-08-03T10:00:00Z");
-        return new ContextManifestBuilder.PreparedAutomatedReviewReadiness(
+        return new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                 practices,
                 new AutomatedReviewReadinessReport(
                         de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry.CURRENT_VERSION,
@@ -327,6 +331,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                             false,
                             null,
                             200L,
+                            true,
                             456L,
                             null,
                             123L));
@@ -351,6 +356,49 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     @Nested
     class PrepareInputs {
 
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+        void shouldStageGeneratedPathPolicyWithUnmodifiedEvidenceForMixedAndGeneratedOnlyChanges(
+                boolean generatedOnly) {
+            stubDefaults();
+            var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey(WORKSPACE_ID, 123L);
+            var preparer = mock(de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer.class);
+            when(preparer.prepare(any()))
+                    .thenReturn(
+                            new de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer
+                                    .PreparedReview(key, "head", "base"));
+            byte[] raw = "{\"title\":\"Original evidence\"}".getBytes(StandardCharsets.UTF_8);
+            when(workspaceContextBuilder.prepare(
+                            any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
+                    .thenAnswer(invocation -> {
+                        ContextRequest.PracticeReviewRequest request = invocation.getArgument(0);
+                        request.preparation().prepare(preparer, request.job());
+                        return prepared(Map.of("inputs/context/metadata.json", raw));
+                    });
+            when(gitRepositoryManager.changedPaths(key, "base", "head"))
+                    .thenReturn(
+                            generatedOnly
+                                    ? Set.of("generated/client.ts")
+                                    : Set.of("generated/client.ts", "src/service.ts"));
+            var metadata = sampleJobMetadata();
+            metadata.putArray("generated_path_patterns").add("generated/**");
+            var files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(metadata)));
+            var policy = objectMapper.readTree(
+                    files.get(de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO.INPUT_PATH));
+            assertThat(policy.path("patterns").get(0).asString()).isEqualTo("generated/**");
+            assertThat(policy.path("paths")).hasSize(1);
+            assertThat(policy.path("paths").get(0).asString()).isEqualTo("generated/client.ts");
+            assertThat(files.get("inputs/context/metadata.json")).isEqualTo(raw);
+            assertThat(new String(
+                            files.get(SandboxLayout.PRACTICES_PREFIX + "pr-description-quality.md"),
+                            StandardCharsets.UTF_8))
+                    .contains(
+                            "Repository generated-path policy",
+                            "NOT_APPLICABLE",
+                            "excludes-generated-and-build-artifacts");
+        }
+
         @Test
         void delegatesToWorkspaceContextBuilder() {
             stubDefaults();
@@ -374,8 +422,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         void stagesTheRequestThatTurnsFeedbackCompositionOn() {
             stubDefaults();
 
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files)
                     .as("a live review composes feedback, so the request must reach the sandbox")
@@ -393,30 +441,32 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             byte[] metadataBytes = "{\"pr_number\":42}".getBytes(StandardCharsets.UTF_8);
             when(workspaceContextBuilder.prepare(
                             any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
-                    .thenReturn(prepared(Map.of("inputs/context/metadata.json", metadataBytes)));
+                    .thenReturn(prepared(Map.of("context/metadata.json", metadataBytes)));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                     .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
             when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
                     .thenReturn(samplePractices());
 
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
-            assertThat(files.get("inputs/context/metadata.json")).isEqualTo(metadataBytes);
+            assertThat(files.get("context/metadata.json")).isEqualTo(metadataBytes);
         }
 
         @Test
         void writesTaskJsonEnvelope() throws Exception {
             stubDefaults();
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files).containsKey("task.json");
             JsonNode envelope = objectMapper.readTree(files.get("task.json"));
-            assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(2);
+            assertThat(envelope.get("schemaVersion").asInt()).isEqualTo(3);
             assertThat(envelope.get("workspaceId").asLong()).isEqualTo(WORKSPACE_ID);
-            JsonNode task = envelope.get("task");
-            assertThat(task.get("kind").asString()).isEqualTo("practice_review");
+            JsonNode task = envelope;
+            assertThat(task.has("kind")).isFalse();
+            assertThat(task.has("task")).isFalse();
+            assertThat(task.has("paths")).isFalse();
             assertThat(task.get("pullRequestNumber").asInt()).isEqualTo(42);
             assertThat(task.get("repositoryFullName").asString()).isEqualTo("owner/repo");
             assertThat(task.get("prompt").asString()).contains("Review merge request #42");
@@ -425,8 +475,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void injectsPracticeCatalog() {
             stubDefaults();
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files).containsKey("inputs/practices/index.json");
             assertThat(files).doesNotContainKey("inputs/practices/all-criteria.md");
@@ -438,8 +488,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void doesNotWriteLegacyPromptFile() {
             stubDefaults();
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
             assertThat(files).doesNotContainKey(".prompt");
         }
 
@@ -476,21 +526,21 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void preservesProviderOrder() {
             var providerFiles = new LinkedHashMap<String, byte[]>();
-            providerFiles.put("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
-            providerFiles.put("inputs/context/change.json", "{}".getBytes(StandardCharsets.UTF_8));
-            providerFiles.put("inputs/context/comments.json", "[]".getBytes(StandardCharsets.UTF_8));
+            providerFiles.put("context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
+            providerFiles.put("context/change.json", "{}".getBytes(StandardCharsets.UTF_8));
+            providerFiles.put("context/comments.json", "[]".getBytes(StandardCharsets.UTF_8));
             when(workspaceContextBuilder.prepare(any(), any())).thenReturn(prepared(providerFiles));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
                     .thenAnswer(invocation -> readiness(invocation.getArgument(1)));
             when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
                     .thenReturn(samplePractices());
 
-            Map<String, byte[]> files =
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())).files();
+            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
             var keys = files.keySet().iterator();
-            assertThat(keys.next()).isEqualTo("inputs/context/metadata.json");
-            assertThat(keys.next()).isEqualTo("inputs/context/change.json");
-            assertThat(keys.next()).isEqualTo("inputs/context/comments.json");
+            assertThat(keys.next()).isEqualTo("context/metadata.json");
+            assertThat(keys.next()).isEqualTo("context/change.json");
+            assertThat(keys.next()).isEqualTo("context/comments.json");
         }
     }
 
@@ -931,7 +981,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     "evidence": {
                       "citations": [{
                         "sourceKind": "scm.pull-request.diff",
-                        "artifactPath": "inputs/context/change.json",
+                        "artifactPath": "context/change.json",
                         "path": "Sources/Auth.swift",
                         "side": "NEW",
                         "startLine": 1,

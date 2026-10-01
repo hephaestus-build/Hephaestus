@@ -60,6 +60,8 @@ const DELIBERATELY_OMITTED = new Set([
 	"OUTLINE_OAUTH_CLIENT_SECRET",
 	"OUTLINE_OAUTH_DISPLAY_NAME",
 	"GH_APP_INSTALLATION_URL",
+	"GH_APP_CLIENT_ID",
+	"GH_APP_CLIENT_SECRET",
 	// GitHub App authentication is disabled, so no private key is mounted.
 	"GH_APP_PRIVATE_KEY_LOCATION",
 	// The agent sandbox is off, so nothing reads its runtime, limits or image override.
@@ -73,11 +75,13 @@ const DELIBERATELY_OMITTED = new Set([
 	"HEPHAESTUS_LLM_FX_DAILY_URL",
 	// A preview is torn down long before any spend-ledger row reaches the retention window.
 	"HEPHAESTUS_LLM_USAGE_RETENTION",
+	// A preview runs with GitLab and the webhook receiver off, so it neither registers nor accepts GitLab hooks and
+	// has no hook signed with a previous routing key; the current key stays required by the readiness check.
+	"WEBHOOK_ROUTING_PREVIOUS_SECRET",
 	"SANDBOX_API_MAX_REQUEST_BYTES",
 	"SANDBOX_API_PORT",
 	"SANDBOX_API_REQUESTS_PER_MINUTE",
 	"SANDBOX_CPUS",
-	"SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID",
 	"SANDBOX_DOCKER_CERT_PATH",
 	"SANDBOX_DOCKER_OWNER",
 	"SANDBOX_DOCKER_CONTAINER_RUNTIME",
@@ -86,9 +90,7 @@ const DELIBERATELY_OMITTED = new Set([
 	"SANDBOX_MAX_CONCURRENT",
 	"SANDBOX_MEMORY_BYTES",
 	"HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN",
-	// Sync and the leaderboard schedule are disabled outright, so their tuning knobs are inert.
-	"LEADERBOARD_SCHEDULE_DAY",
-	"LEADERBOARD_SCHEDULE_TIME",
+	// Sync is disabled outright, so its tuning knobs are inert.
 	"MONITORING_BACKFILL_BATCH_SIZE",
 	"MONITORING_BACKFILL_INTERVAL_SECONDS",
 	"MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD",
@@ -191,6 +193,7 @@ const RENDER_ENV: Record<string, string> = {
 	HEPHAESTUS_AUTH_STATE_COOKIE_KEY: "ci-not-a-real-state-cookie-key",
 	HEPHAESTUS_SECURITY_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
 	WEBHOOK_SECRET: "ci-not-a-real-webhook-secret-0123456789",
+	WEBHOOK_ROUTING_SECRET: "ci-not-a-real-routing-secret-0123456789",
 	HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: "0123456789abcdef0123456789abcdef",
 	NATS_USERNAME: "ci-not-a-real-nats-user",
 	NATS_PASSWORD: "ci-not-a-real-nats-password",
@@ -209,7 +212,11 @@ const ALLOWED_CAPABILITIES: Record<string, readonly string[]> = {
 
 /** Values the server refuses to start without: it validates them before the context is built, so an
  * empty one here is a preview that restart-loops rather than a preview that misbehaves quietly. */
-const REQUIRED_NON_EMPTY = ["HEPHAESTUS_TRUSTED_PROXIES", "WEBHOOK_SECRET"];
+const REQUIRED_NON_EMPTY = [
+	"HEPHAESTUS_TRUSTED_PROXIES",
+	"WEBHOOK_SECRET",
+	"WEBHOOK_ROUTING_SECRET",
+];
 
 /**
  * Switches that keep a preview from reaching anything outside itself. A rename or a typo would not
@@ -225,7 +232,6 @@ export const REQUIRED_SWITCHES: Record<string, string> = {
 	HEPHAESTUS_INTEGRATION_SLACK_ENABLED: "false",
 	HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false",
 	HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false",
-	LEADERBOARD_NOTIFICATION_ENABLED: "false",
 	MONITORING_BACKFILL_ENABLED: "false",
 	MONITORING_RUN_ON_STARTUP: "false",
 	MONITORING_SYNC_CRON: "-",

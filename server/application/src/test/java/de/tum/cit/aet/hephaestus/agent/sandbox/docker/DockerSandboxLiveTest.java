@@ -64,8 +64,7 @@ class DockerSandboxLiveTest {
     void setUp() throws Exception {
         gateway = new LiveSandboxGateway();
         SandboxProperties properties = new SandboxProperties(5, 10, 60, null);
-        var dockerProperties = new DockerSandboxProperties(
-                "unix:///var/run/docker.sock", false, null, null, gateway.containerId(), "default");
+        var dockerProperties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
 
         // Wrapped exactly as DockerSandboxConfiguration wraps it, so the archive tests below exercise the
         // real Apache transport this application ships rather than docker-java's default ownership.
@@ -79,7 +78,7 @@ class DockerSandboxLiveTest {
         dockerWaitExecutor = Executors.newCachedThreadPool();
         containerManager =
                 new SandboxContainerManager(dockerOps, image -> {}, properties, "default", dockerWaitExecutor);
-        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties);
+        networkManager = new SandboxNetworkManager(dockerOps, dockerProperties, new SandboxCreator(dockerOps));
         workspaceManager = new SandboxWorkspaceManager();
         securityPolicy = new ContainerSecurityPolicy(dockerProperties, null);
 

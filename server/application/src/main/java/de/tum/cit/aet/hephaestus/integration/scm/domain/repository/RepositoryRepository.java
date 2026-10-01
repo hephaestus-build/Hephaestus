@@ -16,15 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>This repository contains only domain-agnostic queries for the integration.scm domain.
  * Scope-filtered queries (those that join with RepositoryToMonitor or other consuming module
- * entities) belong in the consuming packages (leaderboard, profile, etc.) to maintain
+ * entities) belong in the consuming packages (activity, practices, etc.) to maintain
  * clean architecture boundaries.
  *
  * <p>Workspace-agnostic by design: provider-domain lookups (by native ID, full name) run
  * during sync flows that resolve the workspace later via {@code repository_to_monitor}
  * joins or {@code WorkspaceContext}. Direct entity load/save SQL is allowed by the
  * PK-only DML carve-out in {@code WorkspaceStatementInspector}.
- *
- * @see de.tum.cit.aet.hephaestus.profile.ProfileRepositoryQueryRepository
  */
 @org.springframework.stereotype.Repository
 @WorkspaceAgnostic("Provider-domain lookups by native ID / full name; workspace resolved downstream")
@@ -117,6 +115,22 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
         ORDER BY r.nameWithOwner
         """)
     List<Repository> findAllByWorkspaceMonitors(@Param("workspaceId") Long workspaceId);
+
+    /**
+     * The repositories on {@code providerId} at the workspace's monitored paths. A monitor names a path, and another
+     * instance can host the same path, so a caller that writes on the workspace's behalf passes the provider of its
+     * active connection.
+     */
+    @Query("""
+        SELECT r FROM Repository r JOIN FETCH r.provider p
+        WHERE p.id = :providerId
+        AND r.nameWithOwner IN (
+            SELECT m.nameWithOwner FROM RepositoryToMonitor m WHERE m.workspace.id = :workspaceId
+        )
+        ORDER BY r.nameWithOwner
+        """)
+    List<Repository> findAllByWorkspaceMonitorsOnProvider(
+            @Param("workspaceId") Long workspaceId, @Param("providerId") Long providerId);
 
     @Transactional
     @Modifying

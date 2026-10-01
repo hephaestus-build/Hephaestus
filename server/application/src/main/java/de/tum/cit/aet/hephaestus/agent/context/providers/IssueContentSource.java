@@ -4,7 +4,6 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
-import de.tum.cit.aet.hephaestus.agent.context.EvidenceLimits;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -29,7 +28,7 @@ import java.util.Objects;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -51,7 +50,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 public class IssueContentSource implements EvidenceSource, ReviewContextBuilder {
 
-    private static final SourceKind CORE = new SourceKind("scm.issue.core");
+    public static final SourceKind CORE = new SourceKind("scm.issue.core");
     private static final SourceKind COMMENTS = new SourceKind("scm.issue.comments");
 
     /** Checked by the integration framework against every descriptor that calls itself reviewable. */
@@ -73,9 +72,8 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
     private static final Logger log = LoggerFactory.getLogger(IssueContentSource.class);
 
     /** Cap the thread included in context; most recent kept on truncation. */
-    static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
-
     private final ObjectMapper objectMapper;
+
     private final IssueRepository issueRepository;
     private final IssueCommentRepository issueCommentRepository;
 
@@ -216,13 +214,9 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
     }
 
     private CommentCapture recentComments(long issueId) {
-        List<IssueComment> comments = new ArrayList<>(
-                issueCommentRepository.findRecentByIssueIdWithAuthor(issueId, PageRequest.of(0, MAX_COMMENTS + 1)));
-        if (comments.size() > MAX_COMMENTS + 1) {
-            comments = new ArrayList<>(comments.subList(0, MAX_COMMENTS + 1));
-        }
-        boolean complete = comments.size() <= MAX_COMMENTS;
-        if (!complete) comments.remove(comments.size() - 1);
+        List<IssueComment> comments =
+                new ArrayList<>(issueCommentRepository.findRecentByIssueIdWithAuthor(issueId, Pageable.unpaged()));
+        boolean complete = true;
         comments.sort(
                 Comparator.comparing(IssueComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
         return new CommentCapture(List.copyOf(comments), complete);

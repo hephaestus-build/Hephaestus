@@ -5,13 +5,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
+import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackThreadKey;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.FeedbackWithdrawalService;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -20,19 +37,23 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
@@ -56,6 +77,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
 
     private static final long RECIPIENT = 4242L;
     private static final String PRACTICE = "ships-tests-with-the-change";
+    private static final long WORK = 9_009L;
 
     @Autowired
     private FeedbackSupersession supersession;
@@ -71,6 +93,33 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private PracticeRepository practiceRepository;
+
+    @Autowired
+    private ObservationRepository observationRepository;
+
+    @Autowired
+    private FeedbackObservationRepository feedbackObservationRepository;
+
+    @Autowired
+    private ObservationInvalidationRepository invalidationRepository;
+
+    @Autowired
+    private FeedbackPlacementRepository placementRepository;
+
+    @Autowired
+    private FeedbackWithdrawalService withdrawalService;
+
+    @Autowired
+    private FeedbackWithdrawalRepository withdrawalRepository;
+
+    @Autowired
+    private AccountRepository accountRepository;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private Workspace workspace;
     private String threadKey;
@@ -235,6 +284,59 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
         assertThat(state(read)).isEqualTo(FeedbackDeliveryState.SUPERSEDED);
     }
 
+    /**
+     * A withdrawal holds the card's row lock when a run comes to retire it. The run must wait for it and then judge
+     * the card by the committed withdrawal, not by a snapshot from before its wait: the card stays read and
+     * withdrawn, and the run's new card is written on its own.
+     */
+    @Test
+    @DisplayName("a run waiting on an uncommitted withdrawal does not retire the card once it commits")
+    void aReplacementWaitingOnAWithdrawalLeavesTheWithdrawnCardInPlace() throws Exception {
+        UUID read = queuedCard("The card they opened").getId();
+        assertThat(feedbackRepository.markInAppDelivered(workspace.getId(), List.of(read), Instant.now()))
+                .isEqualTo(1);
+        long admin = Objects.requireNonNull(
+                accountRepository.save(new Account("Withdrawing admin")).getId());
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch commit = new CountDownLatch(1);
+        AtomicInteger withdrawalBackend = new AtomicInteger();
+
+        CompletableFuture<Void> withdrawal =
+                CompletableFuture.runAsync(() -> transactionTemplate.executeWithoutResult(status -> {
+                    withdrawalService.setWithdrawn(workspace.getId(), read, admin, true, "About older issues");
+                    withdrawalBackend.set(
+                            Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
+                    locked.countDown();
+                    try {
+                        assertThat(commit.await(PATIENCE_SECONDS, TimeUnit.SECONDS))
+                                .isTrue();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(e);
+                    }
+                }));
+        assertThat(locked.await(PATIENCE_SECONDS, TimeUnit.SECONDS)).isTrue();
+
+        CompletableFuture<FeedbackSupersession.Outcome> replacement = CompletableFuture.supplyAsync(
+                () -> transactionTemplate.execute(status -> supersession.replaceOpen(workspace.getId(), read)));
+        Awaitility.await().atMost(PATIENCE_SECONDS, TimeUnit.SECONDS).until(() -> {
+            jdbc.execute("SELECT pg_stat_clear_snapshot()");
+            return Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS (SELECT FROM pg_stat_activity WHERE ? = ANY(pg_blocking_pids(pid)))",
+                    Boolean.class,
+                    withdrawalBackend.get()));
+        });
+        assertThat(replacement).isNotDone();
+        commit.countDown();
+        withdrawal.get(PATIENCE_SECONDS, TimeUnit.SECONDS);
+
+        FeedbackSupersession.Outcome outcome = replacement.get(PATIENCE_SECONDS, TimeUnit.SECONDS);
+        assertThat(outcome.retiredSomething()).isFalse();
+        assertThat(outcome.replacesId()).isNull();
+        assertThat(state(read)).isEqualTo(FeedbackDeliveryState.DELIVERED);
+        assertThat(withdrawalRepository.findActive(workspace.getId(), read)).isPresent();
+    }
+
     /** A card another run already retired, or that was withheld, is not claimed twice and not followed. */
     @Test
     @DisplayName("a retired or withheld in-app card is neither claimed again nor followed")
@@ -283,6 +385,175 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
 
         assertThat(outcome.disposition()).isEqualTo(FeedbackSupersession.Disposition.NEW);
         assertThat(outcome.replacesId()).isNull();
+    }
+
+    /**
+     * What a new note on the work is compared with: the note the work shows last to this person, and nothing
+     * written for anyone else, anywhere else, or never delivered.
+     */
+    @Test
+    @DisplayName("the note last delivered on the work is read for one person in one workspace only")
+    void readsOnlyTheNoteLastDeliveredOnThisWorkToThisPerson() {
+        Workspace elsewhere = workspaceRepository.save(
+                WorkspaceTestFixtures.activeWorkspace("supersede-" + SLUG_SEQUENCE.incrementAndGet()));
+        Instant base = Instant.now().minusSeconds(600);
+        note(workspace, RECIPIENT, WORK, FeedbackChannel.IN_CONTEXT, FeedbackDeliveryState.DELIVERED, "first", base);
+        note(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.SUPERSEDED,
+                "gone",
+                base.plusSeconds(10));
+        note(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.SUPPRESSED,
+                "held",
+                base.plusSeconds(20));
+        note(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_APP,
+                FeedbackDeliveryState.DELIVERED,
+                "card",
+                base.plusSeconds(30));
+        note(
+                workspace,
+                RECIPIENT + 1,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "theirs",
+                base.plusSeconds(40));
+        note(
+                elsewhere,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "other tenant",
+                base.plusSeconds(50));
+        note(
+                workspace,
+                RECIPIENT,
+                WORK + 1,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "other work",
+                base.plusSeconds(60));
+
+        assertThat(feedbackRepository.findLatestDeliveredNote(workspace.getId(), RECIPIENT, "scm.issue", WORK))
+                .contains("first");
+
+        note(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "second",
+                base.plusSeconds(70));
+
+        assertThat(feedbackRepository.findLatestDeliveredNote(workspace.getId(), RECIPIENT, "scm.issue", WORK))
+                .contains("second");
+    }
+
+    /**
+     * A correction edits the posted note in place and keeps its stored words, so those words stop being what the work
+     * shows until the posted copy is settled back after a restore; meanwhile nothing is compared, not an older note.
+     */
+    @Test
+    @DisplayName("a corrected note is not compared until its posted copy shows the original again")
+    void comparesNoNoteWhileTheLatestOneCarriesACorrection() {
+        Instant base = Instant.now().minusSeconds(600);
+        note(workspace, RECIPIENT, WORK, FeedbackChannel.IN_CONTEXT, FeedbackDeliveryState.DELIVERED, "first", base);
+        UUID latest = note(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "second",
+                base.plusSeconds(10));
+        ObservationInvalidation invalidation = invalidationRepository.save(
+                new ObservationInvalidation(citedBy(latest), 1L, "Wrong when made", Instant.now()));
+
+        assertThat(latestNote()).as("corrected on the work").isEmpty();
+
+        invalidation.restore(1L, "Right after all", Instant.now());
+        invalidationRepository.save(invalidation);
+
+        assertThat(latestNote())
+                .as("restored, but the posted copy is not settled back yet")
+                .isEmpty();
+
+        ObservationInvalidation restored =
+                invalidationRepository.findById(invalidation.getId()).orElseThrow();
+        assertThat(invalidationRepository.settleProviderCopy(
+                        workspace.getId(), restored.getId(), restored.getRestoredAt(), "UPDATED"))
+                .isEqualTo(1);
+
+        assertThat(latestNote()).contains("second");
+    }
+
+    /**
+     * An approved note is created when it is proposed and posted when it is approved, so what the work shows last is
+     * the summary whose posting was recorded last. A package whose line notes failed still posted its summary, and a
+     * unit with only line notes posted none.
+     */
+    @Test
+    @DisplayName("the note compared is the summary posted last, never one merely written last")
+    void comparesTheSummaryPostedLast() {
+        Instant base = Instant.now().minusSeconds(600);
+        UUID approved = unit(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "approved",
+                base);
+        note(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "automatic",
+                base.plusSeconds(10));
+        posted(approved, PlacementType.SUMMARY);
+
+        assertThat(latestNote()).contains("approved");
+
+        UUID partial = unit(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.PARTIALLY_FAILED,
+                "partial",
+                base.plusSeconds(20));
+        posted(partial, PlacementType.SUMMARY);
+        UUID lineNotesOnly = unit(
+                workspace,
+                RECIPIENT,
+                WORK,
+                FeedbackChannel.IN_CONTEXT,
+                FeedbackDeliveryState.DELIVERED,
+                "line notes",
+                base.plusSeconds(30));
+        posted(lineNotesOnly, PlacementType.INLINE);
+
+        assertThat(latestNote()).contains("partial");
+    }
+
+    private java.util.Optional<String> latestNote() {
+        return feedbackRepository.findLatestDeliveredNote(workspace.getId(), RECIPIENT, "scm.issue", WORK);
     }
 
     /**
@@ -347,5 +618,111 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
                 .findByIdAndWorkspaceId(id, workspace.getId())
                 .orElseThrow()
                 .getDeliveryState();
+    }
+
+    /** A note recorded as its dispatch records it: a delivered summary comes with its confirmed placement. */
+    private UUID note(
+            Workspace in,
+            long recipient,
+            long artifactId,
+            FeedbackChannel channel,
+            FeedbackDeliveryState state,
+            String body,
+            Instant createdAt) {
+        UUID id = unit(in, recipient, artifactId, channel, state, body, createdAt);
+        if (channel == FeedbackChannel.IN_CONTEXT && state == FeedbackDeliveryState.DELIVERED) {
+            posted(id, PlacementType.SUMMARY);
+        }
+        return id;
+    }
+
+    private UUID unit(
+            Workspace in,
+            long recipient,
+            long artifactId,
+            FeedbackChannel channel,
+            FeedbackDeliveryState state,
+            String body,
+            Instant createdAt) {
+        AgentJob job = new AgentJob();
+        job.setWorkspace(in);
+        job.setJobType(AgentJobType.ISSUE_REVIEW);
+        job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+        job = agentJobRepository.save(job);
+        return feedbackRepository
+                .save(Feedback.builder()
+                        .agentJobId(job.getId())
+                        .workspaceId(in.getId())
+                        .artifactKind(ArtifactKinds.ISSUE)
+                        .artifactId(artifactId)
+                        .recipientUserId(recipient)
+                        .aboutUserId(recipient)
+                        .channel(channel)
+                        .position(0)
+                        .deliveryState(state)
+                        .body(body)
+                        .source(FeedbackSource.AGENT)
+                        .createdAt(createdAt)
+                        .build())
+                .getId();
+    }
+
+    /** The placement the ledger records once the provider confirmed the comment, at the moment it records it. */
+    private void posted(UUID feedbackId, PlacementType type) {
+        boolean inline = type == PlacementType.INLINE;
+        transactionTemplate.executeWithoutResult(status ->
+                placementRepository.insertProviderPlacementIfAbsent(new FeedbackPlacementRepository.ProviderPlacement(
+                        UUID.randomUUID(),
+                        feedbackId,
+                        type.name(),
+                        inline ? "LINE" : null,
+                        inline ? "src/App.java" : null,
+                        inline ? 3 : null,
+                        inline ? 3 : null,
+                        inline ? "NEW" : null,
+                        "comment-" + feedbackId,
+                        null)));
+    }
+
+    /** One observation behind {@code feedbackId}, as delivery binds what a note was written from. */
+    private Observation citedBy(UUID feedbackId) {
+        Practice practice = new Practice();
+        practice.setWorkspace(workspace);
+        practice.setSlug("cited-" + SLUG_SEQUENCE.incrementAndGet());
+        practice.setName("Cited practice");
+        practice.setCriteria("Criteria");
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
+        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        practice = practiceRepository.saveAndFlush(practice);
+        AgentJob job = new AgentJob();
+        job.setWorkspace(workspace);
+        job.setJobType(AgentJobType.ISSUE_REVIEW);
+        job.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
+        job = agentJobRepository.save(job);
+        UUID id = UUID.randomUUID();
+        observationRepository.insertIfAbsent(
+                id,
+                "cited-" + id,
+                job.getId(),
+                workspace.getId(),
+                practice.getId(),
+                null,
+                ArtifactKinds.ISSUE.value(),
+                WORK,
+                RECIPIENT,
+                "Six parts and nothing to check off",
+                "ASSESSED",
+                "ABSENT",
+                "GOOD",
+                "MAJOR",
+                null,
+                null,
+                null,
+                Instant.now(),
+                "LIVE");
+        feedbackObservationRepository.insertIfAbsent(feedbackId, id, EvidenceRole.PRIMARY.name(), 0);
+        return observationRepository
+                .findByIdAndWorkspaceId(id, workspace.getId())
+                .orElseThrow();
     }
 }

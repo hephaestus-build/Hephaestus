@@ -28,12 +28,26 @@ code {
 	   the panel lands before the backdrop. */
 	--ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
 	--ease-drawer-panel: cubic-bezier(0.45, 1.005, 0, 1.005);
+	/* GitHub brand-only tokens (used by GitHubSignInButton) */
+	--color-github-white: var(--bgColor-white);
+	--color-github-white-foreground: var(--fgColor-white);
+	--color-github-black: var(--bgColor-black);
+	--color-github-black-foreground: var(--fgColor-black);
+	/* GitLab brand-only token (used by GitLabSignInButton). Source: design.gitlab.com */
+	--color-gitlab-orange: #fc6d26;
+}
 
-	/* * Provider-aware semantic colors.
-	* Default values use @primer/primitives (GitHub) which handles light/dark via data-color-mode.
-	 * GitLab overrides are defined below via [data-provider="gitlab"] selectors.
-	 * Brand-only tokens (github-white, github-black) remain for GitHubSignInButton.
-	 */
+/*
+ * Provider-aware semantic colors.
+ * Default values use @primer/primitives (GitHub), which handles light/dark via data-color-mode on
+ * the root element. GitLab overrides are defined below via [data-provider="gitlab"] selectors.
+ *
+ * Not `inline`, unlike the block above: a utility such as `text-provider-done-foreground` has to
+ * read `var(--color-provider-done-foreground)` where it is used, so that a `[data-provider]` scope
+ * can repaint it. Inlined, every utility carries Primer's value and a GitLab workspace sees
+ * GitHub's colours on everything but what reads the variable directly.
+ */
+@theme {
 	--color-provider-foreground: var(--fgColor-default);
 	--color-provider-background: var(--bgColor-default);
 	--color-provider-muted: var(--bgColor-muted);
@@ -68,15 +82,6 @@ code {
 	--color-provider-upsell-foreground: var(--fgColor-upsell);
 	--color-provider-sponsors: var(--bgColor-sponsors);
 	--color-provider-sponsors-foreground: var(--fgColor-sponsors);
-
-	/* GitHub brand-only tokens (used by GitHubSignInButton) */
-	--color-github-white: var(--bgColor-white);
-	--color-github-white-foreground: var(--fgColor-white);
-	--color-github-black: var(--bgColor-black);
-	--color-github-black-foreground: var(--fgColor-black);
-
-	/* GitLab brand-only token (used by GitLabSignInButton). Source: design.gitlab.com */
-	--color-gitlab-orange: #fc6d26;
 }
 
 /*

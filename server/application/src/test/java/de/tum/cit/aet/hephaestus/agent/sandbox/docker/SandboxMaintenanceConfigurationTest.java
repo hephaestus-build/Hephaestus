@@ -53,6 +53,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                             containers,
                             networks,
                             org.mockito.Mockito.mock(SandboxVolumeManager.class),
+                            mock(SandboxCreator.class),
                             meters,
                             Clock.systemUTC()))
             .withBean(
@@ -62,7 +63,8 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                             containers,
                             new InteractiveSandboxMetrics(meters),
                             watchdog,
-                            meters));
+                            meters,
+                            mock(SandboxCreator.class)));
 
     @AfterEach
     void closeMeters() {

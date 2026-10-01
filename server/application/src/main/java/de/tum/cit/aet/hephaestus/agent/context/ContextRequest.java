@@ -44,14 +44,7 @@ public sealed interface ContextRequest
         }
     }
 
-    /**
-     * Build the materialised docs.document review context: one written document — its prose, its
-     * collection, who wrote it and when it last moved. NO diff, NO code, NO repository clone; the
-     * subject is the document itself rather than a change that happens to mention one, which is what
-     * separates this from the linked-document evidence a pull-request review reads. Carries the
-     * {@link AgentJob} the practice runner executes; the document is identified by
-     * {@code docs_document_id} in the job metadata, which is the mirror row the signal ledger recorded.
-     */
+    /** Primary document review, identified by {@code docs_document_id} in the job metadata. */
     record DocumentReviewRequest(AgentJob job) implements ContextRequest {
         public DocumentReviewRequest {
             Objects.requireNonNull(job, "job must not be null");
@@ -60,7 +53,7 @@ public sealed interface ContextRequest
 
     /**
      * Build the materialised mentor-chat context: user activity, workspace context, practice
-     * catalog, findings history. There is no {@link AgentJob} — mentor chat is synchronous
+     * catalog and observation history. There is no {@link AgentJob} — mentor chat is synchronous
      * and runs against a long-lived interactive sandbox keyed by {@code (workspaceId, developerId)}.
      *
      * @param workspaceId   workspace scoping for every content source's queries
@@ -89,14 +82,7 @@ public sealed interface ContextRequest
         }
     }
 
-    /**
-     * Build the materialised conversation-detection context: the ordered human turns of one settled
-     * Slack thread ({@code inputs/context/conversation_thread.json}) plus the workspace-level project
-     * inventory, aggregated across every monitored repository since a conversation isn't anchored to
-     * one. NO diff, NO code, NO repository clone: providers that require a mounted worktree stay
-     * {@code PracticeReviewRequest}-only. Carries the {@link AgentJob} the practice runner executes;
-     * the thread is identified by {@code slack_channel_id} / {@code slack_thread_ts} in the job metadata.
-     */
+    /** Primary Slack thread review, identified by {@code slack_channel_id} and {@code slack_thread_ts}. */
     record ConversationReviewRequest(AgentJob job) implements ContextRequest {
         public ConversationReviewRequest {
             Objects.requireNonNull(job, "job must not be null");

@@ -2,9 +2,20 @@
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
-    <preConditions onFail="HALT" onError="HALT" onFailMessage="PostgreSQL 18 is required.">
+    <preConditions onFail="HALT" onError="HALT" onFailMessage="Database prerequisites failed. PostgreSQL 18 is required. If this database predates v0.77.4, install v0.77.4 and start it once, then follow the baseline synchronization runbook: https://docs.hephaestus.build/admin/liquibase-baseline-runbook.">
         <dbms type="postgresql"/>
         <sqlCheck expectedResult="18">SELECT current_setting('server_version_num')::integer / 10000</sqlCheck>
+        <!-- Global preconditions also run before changeLogSyncToTag; changeset preconditions do not. -->
+        <or>
+            <not>
+                <tableExists tableName="databasechangelog"/>
+            </not>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM databasechangelog</sqlCheck>
+            <changeSetExecuted id="baseline_v0_77_4-tag" author="hephaestus-release"
+                               changeLogFile="db/changelog/0000000000000_baseline_v0_77_4.xml"/>
+            <changeSetExecuted id="1788679885460-1" author="hephaestus"
+                               changeLogFile="db/changelog/1788679885460_changelog.xml"/>
+        </or>
     </preConditions>
     <include file="./changelog/0000000000000_baseline_v0_77_4.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1788884380638_changelog.xml" relativeToChangelogFile="true"/>
@@ -19,5 +30,18 @@
     <include file="./changelog/1789190761030_changelog.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1789038452155_changelog.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1790499575075_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790457231249_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790510734717_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790509990788_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790548011929_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790556139181_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790515665996_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790615595363_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790520303182_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790610365032_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790734604482_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790799789105_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790834705516_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1790834567188_changelog.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1790424890516_changelog.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -2,8 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -71,6 +73,30 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     /** What these runs wrote about themselves: the composed next steps live in {@code output}. */
     List<ReviewRunNarrativeRow> findReviewRunNarrativesByWorkspaceIdAndIdIn(Long workspaceId, Collection<UUID> ids);
 
+    /**
+     * What these runs record about themselves; {@code output} holds the coverage ledger, and the target columns
+     * address the summary comment on the work's page. A projection, so a listing does not load each run's
+     * whole entity.
+     */
+    @Query("SELECT j.id AS id, j.jobType AS jobType, j.integrationKind AS integrationKind, j.metadata AS metadata, "
+            + "j.status AS status, j.practiceTriggerMode AS triggerMode, j.output AS output, "
+            + "j.deliveryCommentId AS deliveryCommentId FROM AgentJob j "
+            + "WHERE j.workspace.id = :workspaceId AND j.id IN :ids")
+    List<ReviewRunFactsRow> findReviewRunFacts(
+            @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    interface ReviewRunFactsRow extends ReviewRunTargetRow {
+        AgentJobStatus getStatus();
+
+        TriggerMode getTriggerMode();
+
+        @Nullable
+        JsonNode getOutput();
+
+        @Nullable
+        String getDeliveryCommentId();
+    }
+
     interface ReviewRunNarrativeRow {
         UUID getId();
 
@@ -94,30 +120,61 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     }
 
     /**
-     * One page of review runs, narrowed by any combination of status and a {@code createdAt} window.
+     * One page of review runs narrowed by {@code filter}.
      *
-     * <p>Every filter is independently optional; a null one drops out of the predicate. The window is
-     * inclusive at {@code from} and exclusive at {@code to}, the same half-open convention the
-     * observation and feedback listings use, so a day picked in both surfaces means the same day.
-     *
-     * <p>The one query replaced a pair of overloads that differed only in the status clause — a third
-     * and fourth filter would have needed four. {@code CAST(:from AS Instant)} is what lets Hibernate
-     * type a null bound; see {@code AuthEventRepository#findForAdmin}, which is allowlisted out of the
-     * parameter-count arch rule for exactly this reason.
+     * <p>The window is inclusive at {@code from} and exclusive at {@code to}, the same half-open convention the
+     * observation and feedback listings use, so a day picked in both surfaces means the same day; a null bound drops
+     * out of the predicate. The bounds are bound on their own rather than read from {@code filter}: {@code CAST(:from
+     * AS Instant)} types a null bound only when Hibernate sees an {@code Instant} parameter. A run whose results have
+     * no processing status yet matches only when the filter leaves result processing open.
      */
-    @Query("SELECT j.id AS id, j.status AS status, j.jobType AS jobType, j.integrationKind AS integrationKind, "
-            + "j.metadata AS metadata, j.createdAt AS createdAt FROM AgentJob j "
+    @Query("SELECT j.id AS id, j.status AS status, j.deliveryStatus AS deliveryStatus, j.jobType AS jobType, "
+            + "j.integrationKind AS integrationKind, j.metadata AS metadata, j.createdAt AS createdAt FROM AgentJob j "
             + "WHERE j.workspace.id = :workspaceId AND j.purpose = :purpose "
-            + "AND (:status IS NULL OR j.status = :status) "
+            + "AND j.status IN :#{#filter.statuses()} "
+            + "AND (:#{#filter.anyResultProcessing()} = TRUE "
+            + "OR j.deliveryStatus IN :#{#filter.resultProcessingStates()}) "
             + "AND (CAST(:from AS Instant) IS NULL OR j.createdAt >= :from) "
             + "AND (CAST(:to AS Instant) IS NULL OR j.createdAt < :to)")
     Page<ReviewRunSummaryRow> findReviewRunSummaries(
             @Param("workspaceId") Long workspaceId,
             @Param("purpose") AgentPurpose purpose,
-            @Param("status") @Nullable AgentJobStatus status,
+            @Param("filter") ReviewRunFilterParams filter,
             @Param("from") @Nullable Instant from,
             @Param("to") @Nullable Instant to,
             Pageable pageable);
+
+    /**
+     * Jobs of {@code purpose} created in {@code [from, to)}, the window {@link #findReviewRunSummaries} filters by, by
+     * the time bucket they were created in and their status. Buckets are numbered from 1 as
+     * {@link de.tum.cit.aet.hephaestus.core.time.TimeBuckets#epochSeconds()} describes; a bucket and status without
+     * jobs has no row.
+     */
+    @Query(value = """
+        SELECT width_bucket(extract(epoch from j.created_at), CAST(:starts AS bigint[])) AS "bucket",
+               j.status AS "status",
+               COUNT(*) AS "count"
+        FROM agent_job j
+        WHERE j.workspace_id = :workspaceId
+          AND j.purpose = :#{#purpose.name()}
+          AND j.created_at >= :from
+          AND j.created_at < :to
+        GROUP BY 1, 2
+        """, nativeQuery = true)
+    List<StatusBucketCount> countByBucketAndStatus(
+            @Param("workspaceId") Long workspaceId,
+            @Param("purpose") AgentPurpose purpose,
+            @Param("from") Instant from,
+            @Param("to") Instant to,
+            @Param("starts") Long[] starts);
+
+    interface StatusBucketCount {
+        Integer getBucket();
+
+        AgentJobStatus getStatus();
+
+        Long getCount();
+    }
 
     @Query("SELECT j FROM AgentJob j JOIN FETCH j.workspace WHERE j.id = :id AND j.workspace.id = :workspaceId")
     Optional<AgentJob> findByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
@@ -160,6 +217,85 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
         """, nativeQuery = true)
     List<EvidenceContractVersionRow> findEvidenceContractVersions(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    /**
+     * What each run captured of the work it reviewed: the artifact it was about, its source contract, its
+     * {@code reviewedWork}, and for a run from before that was recorded, the archived description digest and pinned
+     * change range the jsonpaths select.
+     * Extracted in SQL for the reason {@link #findEvidenceContractVersion} gives; a run outside this workspace yields
+     * no row.
+     */
+    @Query(value = """
+        SELECT j.id AS "id",
+               j.job_type AS "jobType",
+               j.status AS "status",
+               COALESCE(j.metadata ->> 'pull_request_id', j.metadata ->> 'issue_id') AS "reviewedArtifactId",
+               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion",
+               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'capturedAt') AS "capturedAt",
+               CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork",
+               jsonb_path_query_first(j.evidence_snapshot, CAST(:descriptionPath AS jsonpath)) #>> '{}'
+                   AS "descriptionSha256",
+               jsonb_path_query_first(j.evidence_snapshot, CAST(:changePath AS jsonpath)) #>> '{}' AS "changeRange"
+        FROM agent_job j
+        WHERE j.id IN :ids
+          AND j.workspace_id = :workspaceId
+        """, nativeQuery = true)
+    List<ReviewedWorkRow> findReviewedWork(
+            @Param("workspaceId") Long workspaceId,
+            @Param("ids") Collection<UUID> ids,
+            @Param("descriptionPath") String descriptionPath,
+            @Param("changePath") String changePath);
+
+    /** The staged identity and source contract for material repair admission. */
+    @Query(value = """
+        SELECT j.id AS "id", CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork",
+               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion",
+               CAST(j.evidence_snapshot -> 'manifest' AS text) AS "manifest"
+        FROM agent_job j
+        WHERE j.id IN :ids AND j.workspace_id = :workspaceId
+        """, nativeQuery = true)
+    List<CapturedReviewedWorkRow> findCapturedReviewedWork(
+            @Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    public interface CapturedReviewedWorkRow {
+        UUID getId();
+
+        @Nullable
+        String getContractVersion();
+
+        @Nullable
+        String getReviewedWork();
+
+        @Nullable
+        String getManifest();
+    }
+
+    interface ReviewedWorkRow {
+        UUID getId();
+
+        AgentJobStatus getStatus();
+
+        @Nullable
+        String getJobType();
+
+        @Nullable
+        String getReviewedArtifactId();
+
+        @Nullable
+        String getContractVersion();
+
+        @Nullable
+        String getCapturedAt();
+
+        @Nullable
+        String getReviewedWork();
+
+        @Nullable
+        String getDescriptionSha256();
+
+        @Nullable
+        String getChangeRange();
+    }
 
     interface EvidenceContractVersionRow {
         UUID getId();
@@ -255,6 +391,24 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT j FROM AgentJob j LEFT JOIN FETCH j.workspace WHERE j.id = :id")
     Optional<AgentJob> findByIdWithWorkspaceForUpdate(@Param("id") UUID id);
+
+    /** Keeps source-use and readiness verdicts, not the uncited workspace inventory, after its lifetime. */
+    @org.springframework.transaction.annotation.Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE agent_job j SET evidence_snapshot = jsonb_set(
+              jsonb_set(jsonb_set(j.evidence_snapshot, '{manifest,artifacts}', '[]'::jsonb), '{manifest,refusals}', '[]'::jsonb),
+              '{manifest,sources}', (SELECT COALESCE(jsonb_agg(jsonb_set(source, '{artifacts}', '[]'::jsonb)), '[]'::jsonb)
+                FROM jsonb_array_elements(j.evidence_snapshot #> '{manifest,sources}') source))
+            WHERE j.id = :jobId AND j.workspace_id = :workspaceId
+              AND j.retry_count = :attempt AND j.worker_id = :workerId
+              AND jsonb_typeof(j.evidence_snapshot #> '{manifest,sources}') = 'array'
+              AND (j.status <> 'RUNNING' OR COALESCE(j.metadata ->> '""" + ObservationAdmissionService.DIGEST_METADATA_KEY + "', '') <> '')", nativeQuery = true)
+    int discardRetiredArtifactInventory(
+            @Param("jobId") UUID jobId,
+            @Param("workspaceId") Long workspaceId,
+            @Param("attempt") int attempt,
+            @Param("workerId") String workerId);
 
     /** @return rows updated (0 or 1); 0 means a concurrent transition won. */
     @WorkspaceAgnostic("ID-based status transition; job ID from workspace-scoped context")
@@ -443,11 +597,13 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
      * Poll-loop candidates, id-only because {@link #findByIdQueuedForUpdateSkipLocked} re-checks and
      * locks each one; a stale read here costs at most a skipped candidate.
      *
-     * <p>Candidates whose {@code (workspace, purpose)} binding is already at its
-     * {@code max_concurrent_jobs} cap are excluded. Without that, one saturated workspace-purpose with
-     * a deep backlog fills every LIMIT window with jobs nobody can claim, and a younger runnable job
-     * elsewhere never reaches the batch. A candidate with no binding row is still fetched — the claim's
-     * admission re-check is the authoritative gate.
+     * <p>Candidates whose slot is already at its {@code max_concurrent_jobs} cap are excluded. A slot is a
+     * {@code (workspace, purpose, AI tier)} binding, the tier being the one the job's snapshot froze and
+     * {@code UNDECLARED} where it names none, as {@link #countRunningByWorkspaceIdAndPurposeAndDataHandlingTier}
+     * and the claim count it. Without the exclusion, one saturated slot with a deep backlog fills every LIMIT
+     * window with jobs nobody can claim, and a younger runnable job elsewhere never reaches the batch. A
+     * candidate whose slot has no binding row is still fetched — the claim's admission re-check is the
+     * authoritative gate.
      */
     @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the @WorkspaceAgnostic job poller")
     @Query(
@@ -457,9 +613,13 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
                     + "AND j.available_at <= now() "
                     + "AND ("
                     + "  (SELECT count(*) FROM agent_job r "
-                    + "     WHERE r.workspace_id = j.workspace_id AND r.purpose = j.purpose AND r.status = 'RUNNING') "
+                    + "     WHERE r.workspace_id = j.workspace_id AND r.purpose = j.purpose AND r.status = 'RUNNING' "
+                    + "       AND COALESCE(r.config_snapshot ->> 'dataHandlingTier', 'UNDECLARED') "
+                    + "         = COALESCE(j.config_snapshot ->> 'dataHandlingTier', 'UNDECLARED')) "
                     + "  < COALESCE((SELECT b.max_concurrent_jobs FROM workspace_agent_binding b "
-                    + "     WHERE b.workspace_id = j.workspace_id AND b.purpose = j.purpose), 2147483647)"
+                    + "     WHERE b.workspace_id = j.workspace_id AND b.purpose = j.purpose "
+                    + "       AND b.data_handling_tier = COALESCE(j.config_snapshot ->> 'dataHandlingTier', 'UNDECLARED')), "
+                    + "     2147483647)"
                     + ") "
                     + "ORDER BY j.available_at ASC, j.id ASC LIMIT :limit",
             nativeQuery = true)
@@ -849,6 +1009,9 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     interface ReviewRunSummaryRow extends ReviewRunTargetRow {
         AgentJobStatus getStatus();
+
+        @Nullable
+        DeliveryStatus getDeliveryStatus();
 
         Instant getCreatedAt();
     }

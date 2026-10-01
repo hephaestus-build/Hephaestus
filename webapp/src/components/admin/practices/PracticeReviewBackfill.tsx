@@ -30,7 +30,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { ARTIFACT_KIND, artifactKindLabel, artifactKindPluralLabel } from "@/lib/artifact-kinds";
+import { ARTIFACT_KIND, artifactKindLabel, artifactKindNoun } from "@/lib/artifact-kinds";
 import { asDate } from "@/lib/dates";
 import { formatCostUsd } from "@/lib/money";
 import { hasText } from "@/lib/text";
@@ -55,7 +55,7 @@ const WORK_KINDS = [ARTIFACT_KIND.pullRequest, ARTIFACT_KIND.issue] as const;
 
 const WORK_KIND_ITEMS = WORK_KINDS.map((kind) => ({
 	value: kind as string,
-	label: artifactKindPluralLabel(kind),
+	label: artifactKindLabel(kind, 2),
 }));
 
 const WINDOWS = [
@@ -75,11 +75,8 @@ const PAUSE_EXPLANATIONS: Record<NonNullable<ReviewBackfillRun["pauseReason"]>, 
 		"Practice reviews are off for this workspace, or the workspace is not active. Nothing has been skipped — the backfill continues once they are back on.",
 };
 
-const nounFor = (artifactKind: string) => artifactKindLabel(artifactKind).toLowerCase();
-
-/** The plural is the vocabulary's, not an appended "s". */
 const countOf = (count: number, artifactKind: string) =>
-	`${count} ${(count === 1 ? artifactKindLabel(artifactKind) : artifactKindPluralLabel(artifactKind)).toLowerCase()}`;
+	`${count} ${artifactKindNoun(artifactKind, count)}`;
 
 /**
  * `fromAt`/`toAt` are typed `Date` but arrive as ISO strings, so they go through `asDate`. Both ends
@@ -180,7 +177,7 @@ function EstimateSection({
 				</h2>
 				<p className="text-sm text-muted-foreground">
 					Reviews normally start when work happens, so anything from before this workspace was set
-					up has never been measured. A backfill measures it once, as it stands today.
+					up has never been reviewed. A backfill reviews it once, as it stands today.
 				</p>
 			</div>
 			<FieldGroup>
@@ -261,8 +258,8 @@ function ConfirmationSection({
 	onConfirm: (runId: string) => void;
 	onCancel: (runId: string) => void;
 }) {
-	const noun = nounFor(run.artifactKind);
-	const plural = artifactKindPluralLabel(run.artifactKind).toLowerCase();
+	const noun = artifactKindNoun(run.artifactKind, 1);
+	const plural = artifactKindNoun(run.artifactKind, 2);
 	// A missing estimate is not an estimate of zero, and zero is a value this can legitimately carry.
 	const cost = run.estimatedCostUsd === undefined ? undefined : formatCostUsd(run.estimatedCostUsd);
 	const nothingToDo = run.estimatedArtifacts === 0;
@@ -297,12 +294,12 @@ function ConfirmationSection({
 				<AlertCircle />
 				<AlertTitle>What a backfill does and does not do</AlertTitle>
 				<AlertDescription>
-					Each {noun} is measured once, as it stands now — there is no record of how it looked while
+					Each {noun} is reviewed once, as it stands now — there is no record of how it looked while
 					it was being worked on. Nothing is posted on the work itself and nobody is notified:
 					commenting on {plural} that are already finished would notify everyone involved about work
-					nobody can act on. The measurements are kept separate from your live trends, because older
-					work has been polished since and comparing the two would invent an improvement nobody
-					made.
+					nobody can act on. The observations it records are kept separate from your live trends,
+					because older work has been polished since and comparing the two would invent an
+					improvement nobody made.
 				</AlertDescription>
 			</Alert>
 
@@ -360,8 +357,10 @@ function ActiveRunSection({
 				<Progress value={percent} aria-label="Backfill progress" />
 				<p className="text-sm text-muted-foreground">
 					{walked} of {countOf(total, run.artifactKind)} looked at — {run.submittedCount} sent for
-					review, {run.passedCount} already measured or outside your review rules.
-					{run.failedCount > 0 ? ` ${run.failedCount} could not be read, and stay unmeasured.` : ""}
+					review, {run.passedCount} already reviewed or outside your review rules.
+					{run.failedCount > 0
+						? ` ${run.failedCount} could not be read, so were not reviewed.`
+						: ""}
 				</p>
 			</div>
 
@@ -397,7 +396,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 						<History />
 					</EmptyMedia>
 					<EmptyTitle>No backfills yet</EmptyTitle>
-					<EmptyDescription>Past work has never been measured in this workspace.</EmptyDescription>
+					<EmptyDescription>Past work has never been reviewed in this workspace.</EmptyDescription>
 				</EmptyHeader>
 			</Empty>
 		);
@@ -408,16 +407,16 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 					<Item key={run.id} variant="outline">
 						<ItemContent>
 							<ItemTitle>
-								{artifactKindPluralLabel(run.artifactKind)}
+								{artifactKindLabel(run.artifactKind, 2)}
 								{": "}
 								{formatWindow(run)}
 							</ItemTitle>
 							<ItemDescription>
 								{run.status === "CANCELLED"
 									? `Stopped after reviewing ${countOf(run.submittedCount, run.artifactKind)}.`
-									: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}; ${run.passedCount} needed no new measurement.${
+									: `Reviewed ${countOf(run.submittedCount, run.artifactKind)}; ${run.passedCount} needed no new observation.${
 											run.failedCount > 0
-												? ` ${run.failedCount} could not be read, and stay unmeasured.`
+												? ` ${run.failedCount} could not be read, so were not reviewed.`
 												: ""
 										}`}
 							</ItemDescription>
@@ -440,7 +439,7 @@ function HistorySection({ runs, isLoading }: { runs: ReviewBackfillRun[]; isLoad
 					Past backfills
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					What has already been measured, and by whose decision.
+					What has already been reviewed, and by whose decision.
 				</p>
 			</div>
 			{history}

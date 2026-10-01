@@ -40,14 +40,14 @@ describe("app chrome on a route with no workspace in the URL", () => {
 		await screen.findByRole("button", { name: /Acme/u }, ROUTE_RENDER_WAIT);
 	});
 
-	it.each(["/settings", "/admin"])("keeps My Profile reachable on %s", async (path) => {
+	it.each(["/settings", "/admin"])("keeps Activity reachable on %s", async (path) => {
 		const user = userEvent.setup();
 		renderRouteAt(path);
 
 		await user.click(await screen.findByRole("button", { name: "Account" }, ROUTE_RENDER_WAIT));
 
-		const profile = await screen.findByRole("menuitem", { name: "My Profile" });
-		expect(profile.getAttribute("aria-disabled")).toBeNull();
-		expect(profile.closest("a")?.getAttribute("href")).toBe("/w/acme/user/ada");
+		const activity = await screen.findByRole("menuitem", { name: "Activity" });
+		expect(activity.getAttribute("aria-disabled")).toBeNull();
+		expect(activity.closest("a")?.getAttribute("href")).toBe("/w/acme/activity");
 	});
 });

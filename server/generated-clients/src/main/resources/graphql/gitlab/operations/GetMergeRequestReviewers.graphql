@@ -10,6 +10,9 @@ query GetMergeRequestReviewers($fullPath: ID!, $iid: String!, $first: Int!, $aft
                     }
                     nodes {
                         ...GitLabUserFields
+                        mergeRequestInteraction {
+                            reviewState
+                        }
                     }
                 }
             }

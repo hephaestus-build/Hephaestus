@@ -1,0 +1,21 @@
+{
+  "type": "compaction_end",
+  "reason": "threshold",
+  "result": {
+    "summary": "## Goal\nThe developer asked about their review history.",
+    "firstKeptEntryId": "a1b2c3d4",
+    "tokensBefore": 115040,
+    "estimatedTokensAfter": 21500,
+    "usage": {
+      "input": 3000,
+      "output": 200,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 3200,
+      "cost": {"input": 0.003, "output": 0.0004, "cacheRead": 0, "cacheWrite": 0, "total": 0.0034}
+    },
+    "details": {"readFiles": [], "modifiedFiles": []}
+  },
+  "aborted": false,
+  "willRetry": false
+}

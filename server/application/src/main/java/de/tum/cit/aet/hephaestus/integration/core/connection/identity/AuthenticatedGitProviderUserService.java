@@ -171,7 +171,8 @@ public class AuthenticatedGitProviderUserService {
                 safeName,
                 safeAvatar,
                 webUrl != null ? webUrl : "",
-                User.Type.USER.name(),
+                // A saved sign-in profile does not say whether the account is a bot: a stored type stays.
+                null,
                 null,
                 null,
                 null);

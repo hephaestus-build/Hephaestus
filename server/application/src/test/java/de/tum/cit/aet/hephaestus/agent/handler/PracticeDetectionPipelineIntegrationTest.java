@@ -56,6 +56,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
@@ -65,6 +66,8 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.Reaction;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
 import de.tum.cit.aet.hephaestus.testconfig.AdmittedReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -93,6 +96,13 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+@org.springframework.test.context.TestPropertySource(
+        properties = {
+            "hephaestus.integration.slack.enabled=true",
+            "hephaestus.integration.slack.signing-secret=test-signing-secret-not-real",
+            "hephaestus.integration.outline.enabled=true",
+            "hephaestus.integration.outline.allowed-origins=https://wiki.example.com"
+        })
 @RecordApplicationEvents
 class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
 
@@ -188,6 +198,9 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private AccountPreferencesQuery accountPreferencesQuery;
 
+    @Autowired
+    private ReactionRepository reactionRepository;
+
     private JobTypeHandler handler;
     private Workspace workspace;
     private AgentJob agentJob;
@@ -226,6 +239,16 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         workspace = WorkspaceTestFixtures.activeWorkspace("pipeline-test");
         workspace.getFeatures().setPracticesEnabled(true);
         workspace = workspaceRepository.save(workspace);
+
+        var scm = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
+                workspace,
+                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
+                "1732",
+                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig(
+                        1732L, workspace.getAccountLogin(), null, java.util.Set.of()));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                scm, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
+        connections.save(scm);
 
         Practice description = createPractice("pr-description-quality", "PR Description Quality");
         Practice errors = createPractice("error-handling", "Error Handling");
@@ -318,13 +341,334 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob.setMetadata(metadata);
         agentJob.setEvidenceSnapshot(evidenceSnapshot(description, errors));
         agentJob = agentJobRepository.save(agentJob);
-        preparedEvidence.add(evidenceFiles.prepare(agentJob, PreparedJobInputs.filesOnly(capturedFiles)));
+        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                evidenceFiles,
+                agentJob,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
         preparedJobIds.add(agentJob.getId());
 
         handler = handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW);
         when(diffNotePoster.reconcileInlineNotes(any(), any()))
                 .thenReturn(new DiffNotePoster.DiffNoteResult(0, 0, List.of()));
         when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(anyLong())).thenReturn(true);
+    }
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder folderBuilder;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository connections;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository outlineDocuments;
+
+    @Autowired
+    private org.springframework.transaction.PlatformTransactionManager transactions;
+
+    @Autowired
+    private ObservationAdmissionService admissionService;
+
+    @org.springframework.test.context.bean.override.mockito.MockitoSpyBean
+    private de.tum.cit.aet.hephaestus.integration.outline.documentation.OutlineDocumentProjector documentProjection;
+
+    @Test
+    void jobFolderVerifiesCrossSourceQuotesAndIncludesFreshlyCommittedPullRequest() throws Exception {
+        setJobOutput(validAgentOutput());
+        var provider = java.util.Objects.requireNonNull(repository.getProvider());
+        var other = new Repository();
+        other.setProvider(provider);
+        other.setNativeId(4002L);
+        other.setName("other-repo");
+        other.setNameWithOwner("org/other-repo");
+        other.setHtmlUrl("https://github.com/org/other-repo");
+        other.setDefaultBranch("main");
+        other = repositoryRepository.save(other);
+        repositoryToMonitorRepository.save(
+                WorkspaceTestFixtures.repositoryMonitor(workspace, other.getNameWithOwner()));
+        long otherId = java.util.Objects.requireNonNull(other.getId());
+        var committedPullRequest = new java.util.concurrent.atomic.AtomicLong();
+        new org.springframework.transaction.support.TransactionTemplate(transactions).executeWithoutResult(status -> {
+            Instant now = Instant.now();
+            pullRequestRepository.upsertCore(
+                    8002L,
+                    java.util.Objects.requireNonNull(provider.getId()),
+                    51,
+                    "Just committed",
+                    "Fresh pull request body",
+                    "OPEN",
+                    null,
+                    "https://github.com/org/other-repo/pull/51",
+                    false,
+                    null,
+                    0,
+                    now,
+                    now,
+                    now,
+                    developer.getId(),
+                    otherId,
+                    null,
+                    null,
+                    false,
+                    false,
+                    1,
+                    1,
+                    0,
+                    1,
+                    null,
+                    null,
+                    null,
+                    "feature/fresh",
+                    "main",
+                    HEAD_SHA,
+                    BASE_SHA,
+                    null,
+                    null);
+            long freshId = java.util.Objects.requireNonNull(pullRequestRepository
+                    .findByRepositoryIdAndNumber(otherId, 51)
+                    .orElseThrow()
+                    .getId());
+            committedPullRequest.set(freshId);
+            jdbcTemplate.update(
+                    "INSERT INTO issue_comment (native_id,provider_id,issue_id,body,html_url,author_association,created_at,updated_at) VALUES (?,?,?,?,?,'MEMBER',now(),now())",
+                    1732001L,
+                    provider.getId(),
+                    prId,
+                    "Other repository comment",
+                    "https://github.com/" + repository.getNameWithOwner() + "/pull/50#issuecomment-1732001");
+        });
+        var slack = new de.tum.cit.aet.hephaestus.integration.slack.SlackConversationTestSupport(jdbcTemplate);
+        slack.seedChannel(workspace.getId(), "C1732", "ACTIVE");
+        slack.seedMessage(workspace.getId(), "C1732", "1704067200.000001", null, "Slack source quote");
+        var outline = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
+                workspace,
+                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.OUTLINE,
+                "https://wiki.example.com",
+                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.OutlineConfig(
+                        "https://wiki.example.com", null, null, java.util.Set.of()));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                outline, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
+        outline = connections.save(outline);
+        var document = new de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument();
+        document.setWorkspaceId(workspace.getId());
+        document.setConnectionId(outline.getId());
+        document.setDocumentId(UUID.randomUUID().toString());
+        document.setCollectionId(UUID.randomUUID().toString());
+        document.setCollectionSlug("engineering");
+        document.setSlug("outside-the-old-cap");
+        document.setTitle("Design");
+        document.setBodyMarkdown("Outline paragraph quote");
+        document.setLastMaterializedAt(Instant.now());
+        outlineDocuments.save(document);
+        for (int n = 0; n < 20; n++) {
+            var extra = new de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument();
+            extra.setWorkspaceId(workspace.getId());
+            extra.setConnectionId(outline.getId());
+            extra.setDocumentId(UUID.randomUUID().toString());
+            extra.setCollectionId(document.getCollectionId());
+            extra.setCollectionSlug("engineering");
+            extra.setSlug("page-" + n);
+            extra.setBodyMarkdown("Permitted page " + n);
+            extra.setLastMaterializedAt(Instant.now());
+            outlineDocuments.save(extra);
+        }
+        var practice = createPractice("folder-context", "Workspace context");
+        practice.setBindings(List.of(de.tum.cit.aet.hephaestus.practices.PracticeBinding.on(
+                ScmSignals.PULL_REQUEST_OPENED,
+                List.of("scm.pull-request.core", "outline.documents", "workspace.project-inventory").stream()
+                        .map(kind -> new de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement(
+                                new de.tum.cit.aet.hephaestus.evidence.SourceKind(kind),
+                                de.tum.cit.aet.hephaestus.practices.EvidenceStance.REQUIRED))
+                        .toList())));
+        practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
+        practice = practiceRepository.saveAndFlush(practice);
+        var next = new AgentJob();
+        next.setWorkspace(workspace);
+        next.setWorkerId("test-worker");
+        next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        next.setStatus(AgentJobStatus.QUEUED);
+        next.setConfigSnapshot(agentJob.getConfigSnapshot());
+        var nextMetadata = (ObjectNode)
+                java.util.Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
+        nextMetadata.remove(ObservationAdmissionService.DIGEST_METADATA_KEY);
+        nextMetadata.put("pull_request_id", committedPullRequest.get());
+        nextMetadata
+                .put("repository_id", otherId)
+                .put("repository_full_name", "org/other-repo")
+                .put("pr_number", 51)
+                .put("commit_sha", HEAD_SHA);
+        next.setMetadata(nextMetadata);
+        next = agentJobRepository.save(next);
+        UUID claimId = next.getId();
+        next = java.util.Objects.requireNonNull(new org.springframework.transaction.support.TransactionTemplate(
+                        transactions)
+                .execute(status -> {
+                    var claimed = agentJobRepository
+                            .findByIdQueuedForUpdateSkipLocked(claimId, Instant.now())
+                            .orElseThrow();
+                    claimed.setStatus(AgentJobStatus.RUNNING);
+                    claimed.setWorkerId("test-worker");
+                    return agentJobRepository.saveAndFlush(claimed);
+                }));
+        org.mockito.Mockito.doAnswer(call -> {
+                    assertThat(jdbcTemplate.queryForObject("SHOW transaction_isolation", String.class))
+                            .isEqualTo("repeatable read");
+                    assertThat(jdbcTemplate.queryForObject("SHOW transaction_read_only", String.class))
+                            .isEqualTo("on");
+                    java.util.concurrent.CompletableFuture.runAsync(() -> slack.seedMessage(
+                                    workspace.getId(),
+                                    "C1732",
+                                    "1704067201.000001",
+                                    null,
+                                    "Committed during rendering"))
+                            .join();
+                    return call.callRealMethod();
+                })
+                .when(documentProjection)
+                .documentsForWorkspace(workspace.getId());
+        var raw = folderBuilder.prepare(
+                new ContextRequest.PracticeReviewRequest(next),
+                de.tum.cit.aet.hephaestus.agent.context.EvidencePlan.compile(List.of(practice)));
+        var index = java.util.Objects.requireNonNull(raw.manifest());
+        assertThat(folderBuilder
+                        .prepareAutomatedReviewReadiness(
+                                index,
+                                List.of(practice),
+                                next.getCreatedAt(),
+                                ignored -> ScmSignals.PULL_REQUEST_OPENED,
+                                raw.files(),
+                                null)
+                        .readyPractices())
+                .containsExactly(practice);
+
+        for (String workspaceSource : List.of("outline.documents", "workspace.project-inventory")) {
+            assertThat(index.sources())
+                    .filteredOn(source -> source.kind().value().equals(workspaceSource))
+                    .singleElement()
+                    .satisfies(source -> assertThat(source.state())
+                            .isInstanceOf(de.tum.cit.aet.hephaestus.evidence.SourceCaptureState.Available.class));
+        }
+
+        assertThat(index.artifacts().stream().filter(a -> a.artifact().path().startsWith("context/docs/")))
+                .hasSize(21);
+        var snapshot = OBJECT_MAPPER.createObjectNode();
+        snapshot.set("manifest", OBJECT_MAPPER.valueToTree(index));
+        snapshot.putArray("practices")
+                .addObject()
+                .put("slug", practice.getSlug())
+                .put(
+                        "revisionId",
+                        java.util.Objects.requireNonNull(
+                                practice.getCurrentRevision().getId()));
+        next.setEvidenceSnapshot(snapshot);
+        next = agentJobRepository.save(next);
+        var prepared = evidenceFiles.prepare(
+                next,
+                new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(
+                        raw.files(), raw.filesOnDisk(), raw.cleanups(), null, raw.directories()),
+                null);
+        preparedEvidence.add(prepared);
+        preparedJobIds.add(next.getId());
+        assertThat(java.nio.file.Files.readString(
+                        prepared.filesOnDisk().get("context/scm/reviewed/pulls/51/record.json")))
+                .contains("Just committed", "synced_at");
+        var comment = OBJECT_MAPPER.readTree(java.nio.file.Files.readAllLines(
+                        prepared.filesOnDisk().get("context/scm/" + repository.getId() + "/pulls/50/comments.jsonl"))
+                .getFirst());
+        assertThat(comment.has("synced_at")).isTrue();
+        assertThat(comment.path("synced_at").isNull()).isTrue();
+        assertThat(java.nio.file.Files.readString(prepared.filesOnDisk().get("INDEX.md")))
+                .contains("context/chat/", "context/docs/", "context/people/");
+        assertThat(java.nio.file.Files.readString(prepared.filesOnDisk().get("context/chat/C1732/2024-01.jsonl")))
+                .doesNotContain("Committed during rendering");
+        var output = OBJECT_MAPPER.createObjectNode();
+        var observation = output.putArray("observations").addObject();
+        observation
+                .put("practiceSlug", practice.getSlug())
+                .put("summary", "Cross-source context")
+                .put("assessmentStatus", "ASSESSED")
+                .put("presence", "PRESENT")
+                .put("assessment", "GOOD")
+                .put("evidenceRationale", "Four independently captured sources support the review.")
+                .putNull("severity");
+        var citations = observation.putObject("evidence").putArray("citations");
+        Map<String, String> quotes = Map.of(
+                "context/scm/" + repository.getId() + "/pulls/50/comments.jsonl",
+                "Other repository comment",
+                "context/chat/C1732/2024-01.jsonl",
+                "Slack source quote",
+                "context/docs/engineering/outside-the-old-cap.md",
+                "Outline paragraph quote",
+                "context/people/" + developer.getId() + "/observations.jsonl",
+                "Good PR description");
+        for (var quote : quotes.entrySet()) {
+            var lines = java.nio.file.Files.readAllLines(prepared.filesOnDisk().get(quote.getKey()));
+            int line = java.util.stream.IntStream.range(0, lines.size())
+                            .filter(n -> lines.get(n).contains(quote.getValue()))
+                            .findFirst()
+                            .orElseThrow()
+                    + 1;
+            var artifact = index.artifacts().stream()
+                    .filter(a -> a.artifact().path().equals(quote.getKey()))
+                    .findFirst()
+                    .orElseThrow();
+            citations
+                    .addObject()
+                    .put("sourceKind", artifact.kind().value())
+                    .put("path", quote.getKey())
+                    .put("artifactPath", quote.getKey())
+                    .put("startLine", line)
+                    .put("endLine", line)
+                    .put("quote", quote.getValue());
+        }
+        assertThat(agentJobRepository.discardRetiredArtifactInventory(
+                        next.getId(), workspace.getId(), 0, "test-worker"))
+                .isZero();
+        admissionService.admit(
+                new ObservationAdmissionService.AdmissionIdentity(next.getId(), workspace.getId(), 0, "test-worker"),
+                output.path("observations"));
+        assertThat(prepared.filesOnDisk().get("INDEX.md")).doesNotExist();
+        var admitted = observationRepository.findByAgentJobId(next.getId(), workspace.getId());
+        assertThat(admitted).hasSize(1);
+        assertThat(admitted.getFirst().getEvidence().path("citations")).hasSize(4);
+        var receipt = agentJobRepository.findById(next.getId()).orElseThrow().getEvidenceSnapshot();
+        assertThat(receipt.path("manifest").path("artifacts")).isEmpty();
+        for (var source : receipt.path("manifest").path("sources"))
+            assertThat(source.path("artifacts")).isEmpty();
+        assertThat(receipt.path("manifest").path("contractVersion").asString()).isEqualTo("1.3.0");
+        assertThat(receipt.path("manifest").path("refusals")).isEmpty();
+        var ended = new AgentJob();
+        ended.setWorkspace(workspace);
+        ended.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        ended.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        ended.setConfigSnapshot(next.getConfigSnapshot());
+        ended.setEvidenceSnapshot(snapshot.deepCopy());
+        ended.setWorkerId("ended-worker");
+        ended.setStatus(AgentJobStatus.FAILED);
+        ended = agentJobRepository.saveAndFlush(ended);
+        assertThat(agentJobRepository.discardRetiredArtifactInventory(
+                        ended.getId(), workspace.getId(), 1, "ended-worker"))
+                .isZero();
+        assertThat(agentJobRepository.discardRetiredArtifactInventory(
+                        ended.getId(), workspace.getId(), 0, "another-worker"))
+                .isZero();
+        assertThat(agentJobRepository
+                        .findById(ended.getId())
+                        .orElseThrow()
+                        .getEvidenceSnapshot()
+                        .path("manifest")
+                        .path("artifacts"))
+                .isNotEmpty();
+        assertThat(agentJobRepository.discardRetiredArtifactInventory(
+                        ended.getId(), workspace.getId(), 0, "ended-worker"))
+                .isOne();
+        assertThat(agentJobRepository
+                        .findById(ended.getId())
+                        .orElseThrow()
+                        .getEvidenceSnapshot()
+                        .path("manifest")
+                        .path("artifacts"))
+                .isEmpty();
     }
 
     private Practice createPractice(String slug, String name) {
@@ -403,7 +747,10 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         next.setMetadata(metadata.deepCopy());
         next.setEvidenceSnapshot(agentJob.getEvidenceSnapshot().deepCopy());
         next = agentJobRepository.save(next);
-        preparedEvidence.add(evidenceFiles.prepare(next, PreparedJobInputs.filesOnly(capturedFiles)));
+        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                evidenceFiles,
+                next,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
         preparedJobIds.add(next.getId());
         return admitAndSetOutput(next, rawOutput);
     }
@@ -411,10 +758,12 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
     private ObjectNode evidenceSnapshot(Practice... practices) {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER);
         addArtifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
-                "inputs/context/metadata.json",
+                "context/metadata.json",
                 "{\"body\":\"Test body\"}");
         addArtifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", BASE_SHA + ":" + HEAD_SHA),
                 PullRequestContentSource.CHANGE_FILE,
                 "{\"base_sha\":\"" + BASE_SHA + "\",\"head_sha\":\"" + HEAD_SHA + "\"}");
@@ -428,10 +777,10 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         return snapshot;
     }
 
-    private void addArtifact(ObjectNode source, String path, String content) {
+    private void addArtifact(ObjectNode snapshot, ObjectNode source, String path, String content) {
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
         capturedFiles.put(path, bytes);
-        EvidenceSnapshotFixtures.artifact(source, path, ProvenanceDigest.sha256Hex(bytes))
+        EvidenceSnapshotFixtures.artifact(snapshot, source, path, ProvenanceDigest.sha256Hex(bytes))
                 .put("mediaType", "application/json")
                 .put("bytes", bytes.length);
     }
@@ -446,7 +795,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                             .putArray("citations")
                             .addObject();
                     citation.put("sourceKind", "scm.pull-request.core");
-                    citation.put("artifactPath", "inputs/context/metadata.json");
+                    citation.put("artifactPath", "context/metadata.json");
                     citation.put("path", "body");
                     citation.put("startLine", 1);
                     citation.put("endLine", 1);
@@ -489,6 +838,80 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                 }
               ]""";
         return observations + "\n}";
+    }
+
+    private List<Feedback> unitsOf(AgentJob job, FeedbackChannel channel) {
+        return feedbackRepository.findAll().stream()
+                .filter(feedback -> feedback.getAgentJobId().equals(job.getId()) && feedback.getChannel() == channel)
+                .toList();
+    }
+
+    private List<@Nullable UUID> boundTo(Feedback feedback) {
+        return jdbcTemplate.queryForList(
+                "SELECT observation_id FROM feedback_observation WHERE feedback_id = ?", UUID.class, feedback.getId());
+    }
+
+    /**
+     * The composer's output as the runner writes it: the job's admitted observations under their persisted
+     * ids, and units whose {@code {practice-slug}} placeholders name the observation of that practice.
+     */
+    private void compose(AgentJob job, String lead, String... units) {
+        ObjectNode output = (ObjectNode) java.util.Objects.requireNonNull(job.getOutput());
+        ObjectNode feedback = (ObjectNode) output.get("feedback");
+        feedback.put("lead", lead);
+        var staged = feedback.putArray("observations");
+        String written = "[" + String.join(",", units) + "]";
+        for (Observation observation : observationRepository.findByAgentJobId(job.getId(), workspace.getId())) {
+            String slug = observation.getPractice().getSlug();
+            staged.addObject()
+                    .put("id", observation.getId().toString())
+                    .put("practiceSlug", slug)
+                    .put("anchorable", false)
+                    .putArray("citations");
+            written = written.replace("{" + slug + "}", observation.getId().toString());
+        }
+        feedback.set("units", OBJECT_MAPPER.readTree(written));
+        agentJobRepository.save(job);
+    }
+
+    private AgentJob reviewOf(
+            Long pullRequestId, int number, String headSha, @Nullable String signal, String rawOutput) {
+        return reviewOf(pullRequestId, number, headSha, signal, rawOutput, List.of());
+    }
+
+    private AgentJob reviewOf(
+            Long pullRequestId,
+            int number,
+            String headSha,
+            @Nullable String signal,
+            String rawOutput,
+            List<String> rechecked) {
+        AgentJob next = new AgentJob();
+        next.setWorkspace(workspace);
+        next.setWorkerId("test-worker");
+        next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        next.setStatus(AgentJobStatus.COMPLETED);
+        next.setConfigSnapshot(agentJob.getConfigSnapshot());
+        ObjectNode metadata = (ObjectNode)
+                java.util.Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
+        metadata.put("pull_request_id", pullRequestId);
+        metadata.put("pr_number", number);
+        metadata.put("commit_sha", headSha);
+        if (signal != null) metadata.put(PracticeCatalogInjector.SIGNAL_METADATA_KEY, signal);
+        if (!rechecked.isEmpty()) {
+            var admitted = metadata.putArray(AgentJob.RECHECKED_PRACTICES_METADATA_KEY);
+            rechecked.forEach(admitted::add);
+        }
+        next.setMetadata(metadata);
+        next.setEvidenceSnapshot(agentJob.getEvidenceSnapshot().deepCopy());
+        next = agentJobRepository.save(next);
+        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                evidenceFiles,
+                next,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        preparedJobIds.add(next.getId());
+        return admitAndSetOutput(next, rawOutput);
     }
 
     @Nested
@@ -626,7 +1049,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
             ObjectNode evidence = OBJECT_MAPPER.createObjectNode();
             ObjectNode citation = evidence.putArray("citations").addObject();
             citation.put("sourceKind", "scm.pull-request.diff");
-            citation.put("artifactPath", "inputs/context/diff.patch");
+            citation.put("artifactPath", "context/diff.patch");
             citation.put("path", "src/App.java");
             citation.put("side", "NEW");
             citation.put("startLine", line);
@@ -683,7 +1106,7 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                    "assessmentStatus": "NOT_APPLICABLE", "presence": null, "assessment": null, "severity": null,
                    "evidenceRationale": "The change touches no error path.",
                    "evidence": {
-                     "citations": [{"sourceKind": "scm.pull-request.core", "artifactPath": "inputs/context/metadata.json",
+                     "citations": [{"sourceKind": "scm.pull-request.core", "artifactPath": "context/metadata.json",
                                     "path": "body", "startLine": 1, "endLine": 1, "quote": "Test body"}],
                      "inapplicability": {"consulted": ["scm.pull-request.core"], "subject": "an error path",
                                          "ruledOutBy": "the change adds no failing call"}}}
@@ -729,6 +1152,105 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     .isZero();
         }
 
+        /** One unchanged lapse, raised on the work and prepared for a conversation, as each review composes it. */
+        private static final String SWALLOWED_ERROR = """
+                {"observations": [
+                  {"practiceSlug": "error-handling", "summary": "Export errors stop at the log",
+                   "assessmentStatus": "ASSESSED", "presence": "ABSENT", "assessment": "GOOD", "severity": "MAJOR",
+                   "evidenceRationale": "The export call logs the failure and returns an empty file."}
+                ]}""";
+
+        @Test
+        void shouldSuppressRepeatedGuidanceWhenARepairRecheckStillRecordsTheSameNegative() {
+            AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
+            compose(first, LEAD, lapseNote(), lapseBrief());
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-first"));
+            handler.deliver(first);
+
+            AgentJob second = reviewOf(
+                    prId,
+                    50,
+                    "pipelinesha",
+                    ScmSignals.PULL_REQUEST_EDITED.value(),
+                    SWALLOWED_ERROR,
+                    List.of("error-handling"));
+            compose(second, LEAD, lapseNote(), lapseBrief());
+            handler.deliver(second);
+
+            verify(commentPoster, times(1)).post(any());
+            assertThat(deliveredBody(first)).contains("Return the export error to the caller");
+            List<UUID> current = observationRepository.findByAgentJobId(second.getId(), workspace.getId()).stream()
+                    .map(Observation::getId)
+                    .toList();
+            assertThat(unitsOf(second, FeedbackChannel.IN_CONTEXT))
+                    .singleElement()
+                    .satisfies(held -> {
+                        assertThat(held.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+                        assertThat(held.getSuppressionReason())
+                                .isEqualTo(FeedbackSuppressionReason.REPEATS_DELIVERED_NOTE);
+                        assertThat(boundTo(held)).containsExactlyElementsOf(current);
+                    });
+            assertThat(unitsOf(first, FeedbackChannel.IN_CHAT))
+                    .as("a note on the work is not echoed into a conversation")
+                    .isEmpty();
+            assertThat(unitsOf(second, FeedbackChannel.IN_CHAT))
+                    .as("the withheld note leaves this review's own brief to its own routing")
+                    .singleElement()
+                    .satisfies(brief -> {
+                        assertThat(brief.getDeliveryState()).isEqualTo(FeedbackDeliveryState.PREPARED);
+                        assertThat(boundTo(brief)).containsExactlyElementsOf(current);
+                    });
+        }
+
+        @Test
+        void shouldReplaceTheCurrentNegativeWithAPositiveFromAnAdmittedRepairReview() {
+            AgentJob first = reviewOf(prId, 50, "pipelinesha", null, SWALLOWED_ERROR);
+            List<Observation> earlier = observationRepository.findByAgentJobId(first.getId(), workspace.getId());
+            String repaired = """
+                    {"observations": [
+                      {"practiceSlug": "error-handling", "summary": "Export errors reach the caller",
+                       "assessmentStatus": "ASSESSED", "presence": "PRESENT", "assessment": "GOOD", "severity": null,
+                       "evidenceRationale": "The caller receives the export failure instead of an empty file."}
+                    ]}""";
+            AgentJob second = reviewOf(
+                    prId,
+                    50,
+                    "pipelinesha",
+                    ScmSignals.PULL_REQUEST_EDITED.value(),
+                    repaired,
+                    List.of("error-handling"));
+            List<Observation> later = observationRepository.findByAgentJobId(second.getId(), workspace.getId());
+            assertThat(later).singleElement().satisfies(row -> {
+                assertThat(row.getAgentJobId()).isEqualTo(second.getId());
+                assertThat(row.getPresence()).isEqualTo(Presence.PRESENT);
+                assertThat(row.getAssessment()).isEqualTo(de.tum.cit.aet.hephaestus.practices.model.Assessment.GOOD);
+            });
+            assertThat(de.tum.cit.aet.hephaestus.practices.observation.LatestRun.perClaim(
+                            observationRepository.findStandingForWork(
+                                    workspace.getId(), ArtifactKinds.PULL_REQUEST, prId, developer.getId())))
+                    .extracting(Observation::getId)
+                    .containsExactly(later.getFirst().getId());
+            assertThat(observationRepository.findById(earlier.getFirst().getId()))
+                    .isPresent();
+        }
+
+        private String lapseNote() {
+            return """
+                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"error-handling",
+                     "basedOn":["{error-handling}"],"title":"Export errors stop at the log",
+                     "nextStep":"Return the export error to the caller","placement":{"kind":"ARTIFACT"}}""";
+        }
+
+        private String lapseBrief() {
+            return """
+                    {"channel":"IN_CHAT","action":"NEW","practiceSlug":"error-handling",
+                     "basedOn":["{error-handling}"],"title":"Where export failures go",
+                     "notes":{"situation":"The export call logs a failure and returns an empty file.",
+                              "capability":"Deciding who should learn that an export failed.",
+                              "evidenceSummary":"The review cites the logging branch of the export call.",
+                              "inConversationSignal":"They name who needs the error and how it reaches them."}}""";
+        }
+
         @Test
         void aDistinctComposedStrengthIsPostedAutomaticallyWithoutTheLead() {
             AgentJob review = reviewOf(prId, 50, "pipelinesha", "scm.pull_request.ready", BOTH_HOLD);
@@ -767,29 +1289,6 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"error-handling",
                      "basedOn":["{error-handling}"],"title":"Tick the issue's done list as it lands",
                      "nextStep":"Tick the done items before merging","placement":{"kind":"ARTIFACT"}}""";
-        }
-
-        /**
-         * The composer's output as the runner writes it: the job's admitted observations under their persisted
-         * ids, and units whose {@code {practice-slug}} placeholders name the observation of that practice.
-         */
-        private void compose(AgentJob job, String lead, String... units) {
-            ObjectNode output = (ObjectNode) java.util.Objects.requireNonNull(job.getOutput());
-            ObjectNode feedback = (ObjectNode) output.get("feedback");
-            feedback.put("lead", lead);
-            var staged = feedback.putArray("observations");
-            String written = "[" + String.join(",", units) + "]";
-            for (Observation observation : observationRepository.findByAgentJobId(job.getId(), workspace.getId())) {
-                String slug = observation.getPractice().getSlug();
-                staged.addObject()
-                        .put("id", observation.getId().toString())
-                        .put("practiceSlug", slug)
-                        .put("anchorable", false)
-                        .putArray("citations");
-                written = written.replace("{" + slug + "}", observation.getId().toString());
-            }
-            feedback.set("units", OBJECT_MAPPER.readTree(written));
-            agentJobRepository.save(job);
         }
 
         private void autonomy(PracticeAutonomy autonomy) {
@@ -851,28 +1350,78 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                     .orElseThrow()
                     .getId();
         }
+    }
 
-        private AgentJob reviewOf(
-                Long pullRequestId, int number, String headSha, @Nullable String signal, String rawOutput) {
-            AgentJob next = new AgentJob();
-            next.setWorkspace(workspace);
-            next.setWorkerId("test-worker");
-            next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
-            next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-            next.setStatus(AgentJobStatus.COMPLETED);
-            next.setConfigSnapshot(agentJob.getConfigSnapshot());
-            ObjectNode metadata = (ObjectNode)
-                    java.util.Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
-            metadata.put("pull_request_id", pullRequestId);
-            metadata.put("pr_number", number);
-            metadata.put("commit_sha", headSha);
-            if (signal != null) metadata.put(PracticeCatalogInjector.SIGNAL_METADATA_KEY, signal);
-            next.setMetadata(metadata);
-            next.setEvidenceSnapshot(agentJob.getEvidenceSnapshot().deepCopy());
-            next = agentJobRepository.save(next);
-            preparedEvidence.add(evidenceFiles.prepare(next, PreparedJobInputs.filesOnly(capturedFiles)));
-            preparedJobIds.add(next.getId());
-            return admitAndSetOutput(next, rawOutput);
+    /**
+     * A developer's dispute holds for the observation it was about: the next review of the same work says nothing
+     * about it, and once the developer withdraws the dispute the observation may be raised again.
+     */
+    @Nested
+    class DisputedFeedback {
+
+        private static final String UNCHECKED_EXPORT = """
+                {"observations": [
+                  {"practiceSlug": "error-handling", "summary": "Export errors stop at the log",
+                   "assessmentStatus": "ASSESSED", "presence": "ABSENT", "assessment": "GOOD", "severity": "MAJOR",
+                   "evidenceRationale": "The export call logs the failure and returns an empty file."}
+                ]}""";
+
+        @Test
+        void shouldWithholdTheSameObservationFromTheNextReviewUntilTheDisputeIsWithdrawn() {
+            AgentJob first = reviewOf(prId, 50, "pipelinesha", null, UNCHECKED_EXPORT);
+            compose(first, "", note("Export errors stop at the log", "Return the export error to the caller"));
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-first"));
+            handler.deliver(first);
+            Feedback delivered = unitsOf(first, FeedbackChannel.IN_CONTEXT).stream()
+                    .filter(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
+                    .findFirst()
+                    .orElseThrow();
+
+            reactionRepository.save(Reaction.builder()
+                    .feedback(delivered)
+                    .reactorUserId(developer.getId())
+                    .resolution(FeedbackResolution.DISPUTED)
+                    .explanation("The caller retries the export and reports the failure.")
+                    .build());
+
+            AgentJob second = reviewOf(prId, 50, "pipelinesha", null, UNCHECKED_EXPORT);
+            compose(second, "", note("The export swallows its failure", "Report the failed export upward"));
+            handler.deliver(second);
+
+            verify(commentPoster, never()).post(argThat(write -> write.job().equals(second)));
+            List<UUID> observedAgain =
+                    observationRepository.findByAgentJobId(second.getId(), workspace.getId()).stream()
+                            .map(Observation::getId)
+                            .toList();
+            assertThat(unitsOf(second, FeedbackChannel.IN_CONTEXT))
+                    .noneMatch(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
+                    .anySatisfy(held -> {
+                        assertThat(held.getDeliveryState()).isEqualTo(FeedbackDeliveryState.SUPPRESSED);
+                        assertThat(held.getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.REACTED_DISPUTED);
+                        assertThat(boundTo(held)).containsExactlyElementsOf(observedAgain);
+                    });
+
+            // Withdrawing the dispute is a response with nothing in it, as the developer's page writes it.
+            reactionRepository.save(Reaction.builder()
+                    .feedback(delivered)
+                    .reactorUserId(developer.getId())
+                    .build());
+
+            AgentJob third = reviewOf(prId, 50, "pipelinesha", null, UNCHECKED_EXPORT);
+            compose(third, "", note("Export failures never reach the caller", "Return the failure to the caller"));
+            when(commentPoster.post(any())).thenReturn(new SummaryHandle("comment-third"));
+            handler.deliver(third);
+
+            verify(commentPoster).post(argThat(write -> write.job().equals(third)));
+            assertThat(unitsOf(third, FeedbackChannel.IN_CONTEXT))
+                    .anyMatch(feedback -> feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED);
+        }
+
+        private String note(String title, String nextStep) {
+            return """
+                    {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"error-handling",
+                     "basedOn":["{error-handling}"],"title":"%s","nextStep":"%s",
+                     "placement":{"kind":"ARTIFACT"}}""".formatted(title, nextStep);
         }
     }
 

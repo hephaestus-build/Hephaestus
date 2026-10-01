@@ -542,12 +542,12 @@ void test("every authored commit is one record row, however many there are", asy
 			assert.deepEqual(first.flags, {
 				bare: false,
 				repeat: false,
-				conjoined: true,
+				joinedClauses: true,
 				cutOff: false,
 				bodyLines: 0,
 				files: 2,
+				moved: 0,
 				paths: "App/Step0.swift, README.md",
-				kinds: "App/, .md",
 			});
 			assert.equal(bare.flags.bare, true);
 		} finally {
@@ -691,6 +691,9 @@ void test("every reviewer comment is one row with the reply, the thread and the 
 			replyExcerpt: "Good idea, done in the next commit — it now turns the field red.",
 			threadResolved: true,
 			resolvedBy: "ada",
+			reviewerLaterNote: "",
+			reviewerApprovedAfter: "",
+			afterHandOff: false,
 			fileInChange: true,
 			changeNearLine: true,
 			commitsAfter: 2,
@@ -704,8 +707,98 @@ void test("every reviewer comment is one row with the reply, the thread and the 
 		assert.equal(result.metrics.botComments, 1);
 		assert.match(
 			result.directions[0] ?? "",
-			/^1 reviewer comment\(s\) \(1 more by bots\); 1 have a later author reply in the thread; 1 have a later authored commit touching the file/u,
+			/^1 reviewer note\(s\) \(1 inline, 0 conversation\), 1 more by bots; 1 have a later author note; 1 have a later authored commit touching the commented file; 0 were posted after the work merged or closed\./u,
 		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a conversation note is a row, with the reviewer's approval, their settling note and the hand-off beside it", async () => {
+	const { root, script, contextDir, changeDir } = await stage(
+		"engaging-with-inline-review-comments",
+		{
+			"comments.json": [
+				{
+					id: 1,
+					thread: 10,
+					path: "App/QuizView.swift",
+					line: 3,
+					body: "Nitpick: it still says Untitled",
+					author: "tutor",
+					created_at: "2026-04-13T12:00:00Z",
+				},
+			],
+			"general_comments.json": {
+				comments: [
+					{
+						author: "tutor",
+						body: "Looks good and works fine! Just two things for next iteration: replace the hardcoded language.",
+						createdAt: "2026-04-13T13:00:00.100Z",
+					},
+					{
+						author: "tutor",
+						body: "Perfect! Thank you for incorporating the changes",
+						createdAt: "2026-04-13T13:05:00Z",
+					},
+					{
+						author: "peer",
+						body: "The composition needs to be flipped.",
+						createdAt: "2026-04-13T16:00:00Z",
+					},
+				],
+			},
+			"review_threads.json": {
+				threads: [
+					{ id: 10, path: "App/QuizView.swift", line: 3, state: "RESOLVED", resolvedBy: "tutor" },
+				],
+				reviewDecisions: [
+					{ state: "APPROVED", author: "tutor", submittedAt: "2026-04-13T13:00:00.250Z" },
+				],
+			},
+		},
+		[
+			{
+				sha: "aaaaaaa1111",
+				message: "update the quiz view",
+				authoredAt: "2026-04-13T12:30:00Z",
+				files: [{ status: "M", path: "App/QuizView.swift" }],
+			},
+		],
+	);
+	try {
+		const result = await script(
+			nodePath.join(root, "repo"),
+			new Map([diffFile("App/QuizView.swift", [3])]),
+			metadata,
+			contextDir,
+			changeDir,
+		);
+		const [nitpick, advice, thanks, afterMerge] = result.hints;
+		assert.ok(nitpick && advice && thanks && afterMerge);
+		// The reviewer's own next note stands beside the resolution of the inline nitpick.
+		assert.match(String(nitpick.flags.reviewerLaterNote), /^Looks good and works fine!/u);
+		assert.equal(
+			nitpick.flags.reviewerApprovedAfter,
+			"3600s later; 1 commit(s) and 0 author note(s) between",
+		);
+		// Advice posted with the reviewer's own approval, nothing between them.
+		assert.equal(advice.pattern, "conversation comment");
+		assert.equal(advice.file, "areas/changed-work/general_comments.json");
+		assert.equal(
+			advice.flags.reviewerApprovedAfter,
+			"0s later; 0 commit(s) and 0 author note(s) between",
+		);
+		assert.equal(advice.flags.afterHandOff, false);
+		assert.equal(advice.flags.authorNotesAfter, 0);
+		// A note posted after the merge is marked as such.
+		assert.equal(afterMerge.flags.by, "peer");
+		assert.equal(afterMerge.flags.afterHandOff, true);
+		assert.equal(afterMerge.flags.reviewerApprovedAfter, "");
+		assert.equal(result.metrics.conversationComments, 3);
+		const directions = result.directions.join(" ");
+		assert.match(directions, /1 were posted after the work merged or closed/u);
+		assert.doesNotMatch(directions, /who clicked it|occasion did not arise/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -746,7 +839,7 @@ void test("a comments file that was not captured is told apart from one with no 
 		const inlineNoOthers = await run(engagingEmpty);
 		assert.match(
 			inlineNoOthers.directions[0] ?? "",
-			/^No inline comment by anyone other than the author among the 0 captured/u,
+			/^No note by anyone other than the author in the captured record \(0 inline comment\(s\), general_comments\.json not captured\)\.$/u,
 		);
 	} finally {
 		for (const staged of [absent, empty, engagingAbsent, engagingEmpty]) {
@@ -796,6 +889,13 @@ void test("the merge practices read the threads and decisions as rows against th
 				},
 				{ state: "APPROVED", author: "ada", submittedAt: "2026-04-13T14:30:00Z" },
 				{ state: "APPROVED", author: "jennifer", submittedAt: "2026-04-13T15:00:00Z" },
+				// A bot whose login looks like anyone's: its approval is recorded but is nobody's review.
+				{
+					state: "APPROVED",
+					author: "heph_introcourse_tutor_e2e",
+					bot: true,
+					submittedAt: "2026-04-13T15:02:00Z",
+				},
 				{ state: "APPROVED", author: "tom", submittedAt: "2026-04-13T16:00:00Z" },
 			],
 		},
@@ -849,8 +949,9 @@ void test("the merge practices read the threads and decisions as rows against th
 			approval.contextDir,
 			approval.changeDir,
 		);
-		assert.equal(decisions.metrics.decisions, 4);
-		// Jennifer's approval at 15:00 is before the 15:06 merge and by someone else; Ada's is the author's, Tom's is after.
+		assert.equal(decisions.metrics.decisions, 5);
+		// Jennifer's approval at 15:00 is before the 15:06 merge and by someone else; Ada's is the author's, the bot's is
+		// no person's, Tom's is after.
 		assert.equal(decisions.metrics.approvalsBeforeMergeByOthers, 1);
 		const rows = decisions.hints.filter((h) => h.pattern === "review decision");
 		assert.deepEqual(
@@ -859,9 +960,11 @@ void test("the merge practices read the threads and decisions as rows against th
 				["jennifer", "CHANGES_REQUESTED", true, false],
 				["ada", "APPROVED", true, true],
 				["jennifer", "APPROVED", true, false],
+				["heph_introcourse_tutor_e2e", "APPROVED", true, false],
 				["tom", "APPROVED", false, false],
 			],
 		);
+		assert.equal(rows[3]?.flags.bot, true);
 		assert.match(
 			rows[0]?.context ?? "",
 			/^jennifer: CHANGES_REQUESTED — Please fix the stock check$/u,
@@ -872,6 +975,7 @@ void test("the merge practices read the threads and decisions as rows against th
 			[
 				["jennifer", "APPROVED"],
 				["ada", "APPROVED"],
+				["heph_introcourse_tutor_e2e", "APPROVED"],
 				["tom", "APPROVED"],
 			],
 		);
@@ -897,5 +1001,106 @@ void test("the merge practices read the threads and decisions as rows against th
 		for (const staged of [threads, approval, noRecord]) {
 			rmSync(staged.root, { recursive: true, force: true });
 		}
+	}
+});
+
+void test("an approval by an account marked bot is kept as a row but counted as no person's approval", async () => {
+	const merged = { ...metadata, is_merged: true };
+	const tutorBot = { author: "heph_introcourse_tutor_e2e", bot: true };
+	const cases = [
+		{
+			name: "bot only",
+			decisions: [{ ...tutorBot, state: "APPROVED", submittedAt: "2026-04-13T15:00:00Z" }],
+			approvals: 0,
+		},
+		{
+			name: "a person's request for changes, then a bot's approval",
+			decisions: [
+				{ state: "CHANGES_REQUESTED", author: "jennifer", submittedAt: "2026-04-13T14:20:00Z" },
+				{ ...tutorBot, state: "APPROVED", submittedAt: "2026-04-13T15:00:00Z" },
+			],
+			approvals: 0,
+		},
+		{
+			name: "a person's approval, then a bot's request for changes",
+			decisions: [
+				{ state: "APPROVED", author: "jennifer", submittedAt: "2026-04-13T14:30:00Z" },
+				{ ...tutorBot, state: "CHANGES_REQUESTED", submittedAt: "2026-04-13T15:00:00Z" },
+			],
+			approvals: 1,
+		},
+	];
+	for (const { name, decisions, approvals } of cases) {
+		const staged = await stage("merges-only-after-approval", {
+			"review_threads.json": { threads: [], reviewDecisions: decisions },
+		});
+		try {
+			const result = await staged.script(
+				nodePath.join(staged.root, "repo"),
+				new Map(),
+				merged,
+				staged.contextDir,
+				staged.changeDir,
+			);
+			assert.equal(result.metrics.approvalsBeforeMergeByOthers, approvals, name);
+			assert.equal(result.metrics.decisionsByBots, 1, name);
+			const botRows = result.hints.filter((h) => h.flags.bot === true);
+			assert.deepEqual(
+				botRows.map((h) => h.pattern),
+				["review decision", "last decision by reviewer"],
+				name,
+			);
+			assert.match(
+				result.directions[0] ?? "",
+				new RegExp(
+					`, ${approvals} of them an undismissed APPROVED before the merge by an account other than the author's that is not marked bot;`,
+					"u",
+				),
+				name,
+			);
+		} finally {
+			rmSync(staged.root, { recursive: true, force: true });
+		}
+	}
+});
+
+void test("unknown approval times establish neither before-merge absence nor a last historical decision", async () => {
+	const staged = await stage("merges-only-after-approval", {
+		"review_threads.json": {
+			threads: [],
+			reviewDecisions: [
+				{ state: "CHANGES_REQUESTED", author: "jennifer", submittedAt: "2026-04-13T14:20:00Z" },
+				{ state: "APPROVED", author: "jennifer" },
+				{ state: "APPROVED", author: "tom", submittedAt: "2026-04-13T15:00:00Z" },
+			],
+		},
+	});
+	try {
+		const result = await staged.script(
+			nodePath.join(staged.root, "repo"),
+			new Map(),
+			{ ...metadata, is_merged: true },
+			staged.contextDir,
+			staged.changeDir,
+		);
+		const unknown = result.hints.find(
+			(h) =>
+				h.pattern === "review decision" &&
+				h.flags.author === "jennifer" &&
+				h.flags.state === "APPROVED",
+		);
+		assert.ok(unknown);
+		assert.equal(Object.hasOwn(unknown.flags, "beforeMerge"), false);
+		assert.equal(result.metrics.unknownDecisionTimes, 1);
+		assert.equal(result.metrics.approvalsBeforeMergeByOthers, 1);
+		assert.deepEqual(
+			result.hints
+				.filter((h) => h.pattern === "last decision by reviewer")
+				.map((h) => h.flags.author),
+			["tom"],
+		);
+		assert.match(result.directions[1] ?? "", /lower bound.*no historical last decision/u);
+	} finally {
+		rmSync(staged.root, { recursive: true, force: true });
 	}
 });

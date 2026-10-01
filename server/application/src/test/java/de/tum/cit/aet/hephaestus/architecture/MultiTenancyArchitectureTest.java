@@ -508,9 +508,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         // nudge)
                                         "ApprovedFeedbackReadyEvent", // carries workspaceId directly
                                         "BotCommand", // BotCommandReceivedEvent carries repositoryId → workspace
-                                        "LeaderboardDigestReadyEvent", // Carries workspaceId for the vendor-publish
-                                        // fan-out
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
+                                        "ConnectionCredentialsReplacedEvent", // Carries workspaceId and connectionId
+                                        // explicitly
                                         "IntegrationAttentionChangedEvent", // Carries an explicit workspaceId and
                                         // connectionId
                                         "ProductFeedbackSubmittedEvent", // Instance-admin fan-out; submission UUID
@@ -519,8 +519,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         // (published from ConnectionService.transition; consumed by vendor adapters).
                                         "Activated",
                                         "Deactivated",
-                                        "WorkspaceScheduleChangedEvent", // Carries workspaceId for leaderboard
-                                        // reschedule
                                         "SyncStateChangedEvent", // Carries workspaceId directly
                                         "RepositoryAboutToBeDeletedEvent", // Carries repositoryId → workspace via FK
                                         "ScmMirrorErasedEvent", // Carries workspaceId directly (SCM disconnect/purge

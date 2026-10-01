@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.core.framework;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactCatalog;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentityResolver;
@@ -46,10 +45,7 @@ public class RegisteredArtifactIdentities implements ArtifactIdentities {
         }
         ArtifactIdentityResolver resolver = byKind.get(kind);
         Map<Long, ArtifactIdentity> resolved = resolver == null ? Map.of() : resolver.resolve(workspaceId, ids);
-        String fallbackLabel = artifacts
-                .descriptorFor(kind)
-                .map(ArtifactDescriptor::displayName)
-                .orElseGet(kind::value);
+        String fallbackLabel = artifacts.kindDisplayName(kind);
         Map<Long, ArtifactIdentity> answer = new HashMap<>(ids.size());
         for (Long id : ids) {
             ArtifactIdentity identity = resolved.get(id);

@@ -3,13 +3,16 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 import de.tum.cit.aet.hephaestus.agent.gateway.GatewayInteractiveChannel;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
+import de.tum.cit.aet.hephaestus.agent.sandbox.FrameRingBuffer;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxRuntimeKey;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.ContainerSecurityPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerVolumeOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxAttemptLauncher;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxEnvBlocklist;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxNetworkManager;
@@ -19,6 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.EvictionReason;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Timer;
@@ -52,6 +56,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
 
     private final InteractiveSandboxProperties properties;
     private final SandboxNetworkManager networkManager;
+    private final SandboxCreator creator;
     private final SandboxWorkspaceManager workspaceManager;
     private final SandboxContainerManager containerManager;
     private final ContainerSecurityPolicy securityPolicy;
@@ -80,8 +85,10 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             int gatewayPort,
             MentorProxyCredentialRegistry mentorProxyCredentialRegistry,
             SandboxGatewaySessions gatewaySessions,
-            DockerVolumeOperations volumeOperations) {
+            DockerVolumeOperations volumeOperations,
+            SandboxCreator creator) {
         this.properties = properties;
+        this.creator = creator;
         this.networkManager = networkManager;
         this.workspaceManager = workspaceManager;
         this.containerManager = containerManager;
@@ -106,8 +113,8 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
     }
 
     private AttachedSandbox attachLocked(InteractiveSandboxSpec spec) {
-        // Per-workspace gating happens upstream in MentorChatController via
-        // WorkspaceFeatures.mentorEnabled — there is no deployment-wide mentor enable flag.
+        // Mentor admission (an enabled Heph model within the member's AI choice) is decided upstream by
+        // MentorChatService before a sandbox is attached.
 
         InteractiveSandboxRuntimeKey runtimeKey = runtimeKey(spec);
         DockerAttachedSandboxAdapter existing = registry.findLive(spec.userId(), spec.workspaceId());
@@ -131,9 +138,18 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
         boolean owned = false;
         boolean registered = false;
         try {
+            // Advisory: registration stays the authority, but a sandbox that cannot register is not worth building.
+            if (!registry.hasCapacity(spec.userId())) {
+                metrics.attachFailureMaxSessions.increment();
+                throw new MentorBusyException();
+            }
             boolean allowInternet =
                     spec.networkPolicy() != null && spec.networkPolicy().internetAccess();
-            networkId = networkManager.createJobNetwork(spec.sessionId(), allowInternet);
+            Map<String, String> labels = new HashMap<>(creator.labels());
+            labels.put(SandboxLabels.OWNER, owner);
+            labels.put(SandboxLabels.KIND, SandboxLabels.KIND_INTERACTIVE);
+            labels.put(SandboxLabels.SESSION_ID, spec.sessionId().toString());
+            networkId = networkManager.createJobNetwork(spec.sessionId(), allowInternet, labels);
             String appServerIp = networkManager.connectAppServer(networkId);
             List<String> extraHosts = List.of();
             if (appServerIp == null) {
@@ -147,13 +163,6 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
 
             SecurityProfile secProfile =
                     spec.securityProfile() != null ? spec.securityProfile() : SecurityProfile.DEFAULT;
-            Map<String, String> labels = Map.of(
-                    SandboxLabels.OWNER,
-                    owner,
-                    SandboxLabels.KIND,
-                    SandboxLabels.KIND_INTERACTIVE,
-                    SandboxLabels.SESSION_ID,
-                    spec.sessionId().toString());
             Map<String, String> runnerEnv = buildRunnerEnvironment(spec, appServerIp);
 
             var attempt = launcher.open(
@@ -221,10 +230,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 }
                 case MAX_SESSIONS_PER_USER, MAX_SESSIONS_TOTAL -> {
                     metrics.attachFailureMaxSessions.increment();
-                    throw new InteractiveSandboxException(
-                            outcome == InteractiveSandboxRegistry.RegistrationOutcome.MAX_SESSIONS_PER_USER
-                                    ? "Per-user session cap exceeded"
-                                    : "Per-replica session cap exceeded");
+                    throw new MentorBusyException();
                 }
                 case REGISTERED -> registered = true;
             }
@@ -250,6 +256,12 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
             }
             MDC.remove(MDC_SESSION_ID);
         }
+    }
+
+    @Override
+    public boolean isWarm(InteractiveSandboxSpec spec) {
+        DockerAttachedSandboxAdapter live = registry.findLive(spec.userId(), spec.workspaceId());
+        return live != null && live.hasRuntimeKey(runtimeKey(spec));
     }
 
     @Override

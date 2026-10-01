@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
@@ -19,8 +20,14 @@ import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -37,7 +44,8 @@ import org.jspecify.annotations.Nullable;
  * <b>PR-specific Relationships:</b>
  * <ul>
  *   <li>{@link #mergedBy} – User who merged the PR (null if open/closed without merge)</li>
- *   <li>{@link #requestedReviewers} – Users requested to review (may not have reviewed yet)</li>
+ *   <li>{@link #requestedReviewers} – Users the provider lists as reviewers, with GitLab's review state</li>
+ *   <li>{@link #requestedTeams} – GitHub teams requested to review</li>
  *   <li>{@link #reviews} – Actual code review submissions</li>
  *   <li>{@link #reviewComments} – Line-level comments on the diff</li>
  *   <li>{@link #reviewThreads} – Threaded conversations on specific code ranges</li>
@@ -77,7 +85,8 @@ public class PullRequest extends Issue {
     /**
      * The review decision state of the pull request.
      * Indicates whether the PR has been approved, changes requested, or review required.
-     * Only available via GraphQL sync; null for webhook-only updates.
+     * Only the GraphQL sync states one; null where it has not, or, on GitLab, where it did not read every reviewer
+     * and approver or a webhook has since changed someone's review (docs/contributor/sync-lifecycle.md).
      */
     @Nullable
     @Enumerated(EnumType.STRING)
@@ -139,14 +148,29 @@ public class PullRequest extends Issue {
     @ToString.Exclude
     private User mergedBy;
 
-    @ManyToMany
-    @JoinTable(
-            name = "pull_request_requested_reviewers",
-            joinColumns = @JoinColumn(name = "pull_request_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id"))
+    @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.ALL, orphanRemoval = true)
     @BatchSize(size = 50)
     @ToString.Exclude
-    private Set<User> requestedReviewers = new HashSet<>();
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private Set<RequestedReviewer> requestedReviewers = new HashSet<>();
+
+    /**
+     * When Hephaestus received what is stored about the reviews: the {@link #requestedReviewers} and
+     * {@link #requestedTeams}, and on GitLab the approvals and review decision ({@link #takesReviewSnapshotAt}); null
+     * until one was stored.
+     */
+    @Nullable
+    @Column(name = "reviewers_observed_at")
+    private Instant reviewersObservedAt;
+
+    /** Teams asked to review; GitHub only. */
+    @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.ALL, orphanRemoval = true)
+    @BatchSize(size = 50)
+    @ToString.Exclude
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private Set<RequestedTeam> requestedTeams = new HashSet<>();
 
     /**
      * The provider's closing candidates for this pull request — GitHub's closing references, GitLab's
@@ -182,6 +206,23 @@ public class PullRequest extends Issue {
     @Nullable
     @Column(name = "head_check_sha", length = 40)
     private String headCheckSha;
+
+    /**
+     * When the provider was asked for, or sent, the stored {@link #headCheckState}: a sync or read by when it asked,
+     * a check webhook by when Hephaestus received it. Null where the observation was not dated, as on GitHub and in
+     * records stored before, so its age is unknown.
+     */
+    @Nullable
+    @Column(name = "head_check_observed_at")
+    private Instant headCheckObservedAt;
+
+    /**
+     * When the provider was last asked for the discussions whose resolution is stored on this pull request's threads: a
+     * read begun earlier records none of it. Null until one was stored.
+     */
+    @Nullable
+    @Column(name = "discussions_observed_at")
+    private Instant discussionsObservedAt;
 
     @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.REMOVE, orphanRemoval = true)
     @BatchSize(size = 50)
@@ -278,27 +319,93 @@ public class PullRequest extends Issue {
         }
     }
 
-    /**
-     * Adds a requested reviewer to this pull request.
-     *
-     * @param reviewer the user to request review from
-     */
-    public void addRequestedReviewer(User reviewer) {
-        if (reviewer != null) {
-            this.requestedReviewers.add(reviewer);
-        }
+    /** The requested reviewers, read-only: {@link #replaceRequestedReviewers} is the one way to change them. */
+    public Set<RequestedReviewer> getRequestedReviewers() {
+        return Collections.unmodifiableSet(requestedReviewers);
+    }
+
+    /** The requested teams, read-only: {@link #replaceRequestedTeams} is the one way to change them. */
+    public Set<RequestedTeam> getRequestedTeams() {
+        return Collections.unmodifiableSet(requestedTeams);
     }
 
     /**
-     * Removes a requested reviewer from this pull request.
+     * Replaces the requested reviewers with the provider's list, received at {@code observedAt}, each with the state
+     * the provider gives them. A reviewer already listed keeps their row, so a state change is an update, not a new
+     * row.
      *
-     * @param reviewer the user to remove from requested reviewers
+     * <p>The review requests, people and teams, are a dated snapshot: a list received before the stored one changes
+     * nothing, so a late or backlogged payload cannot remove, re-add or restate a request, and a list received at the
+     * same instant applies, so a redelivery restates what it said. Instants compare to the microsecond PostgreSQL
+     * stores, so a stored one compares the same before and after it is read back. A writer that races another reads
+     * the pull request through {@link PullRequestRepository#findForUpdateByRepositoryIdAndNumber} first.
+     *
+     * @return whether anything changed
      */
-    public void removeRequestedReviewer(User reviewer) {
-        if (reviewer != null) {
-            this.requestedReviewers.remove(reviewer);
+    public boolean replaceRequestedReviewers(
+            Map<User, RequestedReviewer.@Nullable ReviewState> reviewers, Instant observedAt) {
+        if (!takesReviewSnapshotAt(observedAt)) {
+            return false;
         }
+        Map<Long, RequestedReviewer.@Nullable ReviewState> wanted = new HashMap<>();
+        reviewers.forEach((user, state) -> wanted.put(user.getId(), state));
+        boolean changed = requestedReviewers.removeIf(
+                listed -> !wanted.containsKey(listed.getUser().getId()));
+        Map<Long, RequestedReviewer> listed = new HashMap<>();
+        requestedReviewers.forEach(reviewer -> listed.put(reviewer.getUser().getId(), reviewer));
+        for (Map.Entry<User, RequestedReviewer.@Nullable ReviewState> entry : reviewers.entrySet()) {
+            RequestedReviewer existing = listed.get(entry.getKey().getId());
+            if (existing == null) {
+                requestedReviewers.add(new RequestedReviewer(this, entry.getKey(), entry.getValue()));
+                changed = true;
+            } else if (existing.getReviewState() != entry.getValue()) {
+                existing.setReviewState(entry.getValue());
+                changed = true;
+            }
+        }
+        return changed;
     }
+
+    /**
+     * Replaces the requested teams with the provider's list, received at {@code observedAt} and dated as
+     * {@link #replaceRequestedReviewers} describes.
+     *
+     * @return whether the set changed
+     */
+    public boolean replaceRequestedTeams(Set<Team> teams, Instant observedAt) {
+        if (!takesReviewSnapshotAt(observedAt)) {
+            return false;
+        }
+        Set<Long> wanted = teams.stream().map(Team::getId).collect(Collectors.toSet());
+        boolean changed = requestedTeams.removeIf(
+                request -> !wanted.contains(request.getTeam().getId()));
+        Set<Long> listed = requestedTeams.stream()
+                .map(request -> request.getTeam().getId())
+                .collect(Collectors.toSet());
+        for (Team team : teams) {
+            if (!listed.contains(team.getId())) {
+                requestedTeams.add(new RequestedTeam(this, team));
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Whether what Hephaestus received at {@code observedAt} about the reviews — the review requests, one person's
+     * approval act, or a read of the approvers and the review decision — is not older than what is stored; if so,
+     * dates the stored reviews by it. An approval hook processed after a later read of the same reviews then changes
+     * nothing, and neither does a read begun before a later hook.
+     */
+    public boolean takesReviewSnapshotAt(Instant observedAt) {
+        Instant stored = observedAt.truncatedTo(ChronoUnit.MICROS);
+        if (reviewersObservedAt != null && stored.isBefore(reviewersObservedAt)) {
+            return false;
+        }
+        reviewersObservedAt = stored;
+        return true;
+    }
+
     /**
      * Replaces the closing-issue set with the provider's current statement.
      *
@@ -318,11 +425,40 @@ public class PullRequest extends Issue {
      * state as given; a further observation of the same head only worsens it — one failed suite or
      * cancelled pipeline fails the head whatever the others report, and a success arriving after a
      * failure is another suite's, not the rollup's — until a sync reads the provider's own rollup,
-     * which replaces the state outright.
+     * which replaces the state outright. The observation is not dated, so the stored one's age becomes unknown.
      *
      * @return whether the observation changed anything
      */
     public boolean observeHeadChecks(String sha, CheckState state, boolean rollup) {
+        boolean changed = recordHeadChecks(sha, state, rollup);
+        if (changed) {
+            this.headCheckObservedAt = null;
+        }
+        return changed;
+    }
+
+    /**
+     * Records what the checks said about {@code sha}, as {@link #observeHeadChecks(String, CheckState, boolean)}
+     * does, when the provider was asked or sent it at {@code observedAt}. An observation older than the stored one
+     * changes nothing, whichever commit either is about: a read begun before a pipeline finished, or a delayed
+     * pipeline hook, would otherwise put back a state the provider has since replaced. One at the same instant, to the
+     * microsecond PostgreSQL stores, applies, so a redelivery restates it. A stored observation of unknown age takes
+     * any dated one. A writer reads the pull request through
+     * {@link PullRequestRepository#findForUpdateByRepositoryIdAndNumber} first, so two writers compare in turn.
+     *
+     * @return whether the observation changed anything
+     */
+    public boolean observeHeadChecks(String sha, CheckState state, boolean rollup, Instant observedAt) {
+        Instant stored = observedAt.truncatedTo(ChronoUnit.MICROS);
+        if (headCheckObservedAt != null && stored.isBefore(headCheckObservedAt)) {
+            return false;
+        }
+        boolean changed = recordHeadChecks(sha, state, rollup) || !stored.equals(headCheckObservedAt);
+        this.headCheckObservedAt = stored;
+        return changed;
+    }
+
+    private boolean recordHeadChecks(String sha, CheckState state, boolean rollup) {
         CheckState next = state;
         if (!rollup && sha.equals(this.headCheckSha) && this.headCheckState != null) {
             next = worse(this.headCheckState, state);
@@ -339,10 +475,10 @@ public class PullRequest extends Issue {
         return rank(observed) > rank(recorded) ? observed : recorded;
     }
 
-    /** FAILURE outranks CANCELLED outranks PENDING outranks SUCCESS outranks NONE. */
+    /** FAILURE outranks CANCELLED outranks PENDING outranks SUCCESS outranks an absent or skipped check. */
     private static int rank(CheckState state) {
         return switch (state) {
-            case NONE -> 0;
+            case NONE, NO_PIPELINE, SKIPPED -> 0;
             case SUCCESS -> 1;
             case PENDING -> 2;
             case CANCELLED -> 3;

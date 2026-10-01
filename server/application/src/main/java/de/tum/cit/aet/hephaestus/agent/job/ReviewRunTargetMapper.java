@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewRunTargetRow;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunTargetLookup.Target;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -54,10 +54,9 @@ final class ReviewRunTargetMapper {
                         null,
                         textValue(metadata, "slack_channel_name", null),
                         null);
-            // A document has no number and no repository; its collection is the nearest thing it has to a
-            // container, so it goes in the same slot a conversation's channel does. No URL: the mirror
-            // stores a slug, and the server it hangs off is connection state this mapper cannot reach —
-            // a link built from half of it would be a broken one.
+            // A document has no number; it sits in its collection the way a pull request sits in its
+            // repository. No URL: the mirror stores a slug, and the server it hangs off is connection state
+            // this mapper cannot reach — a link built from half of it would be a broken one.
             case DOCUMENT_REVIEW ->
                 new Target(
                         ArtifactKinds.DOCUMENT,
@@ -65,8 +64,8 @@ final class ReviewRunTargetMapper {
                         integrationKind,
                         null,
                         requiredTextValue(metadata, "title", "Document"),
-                        null,
                         textValue(metadata, "docs_collection_name", null),
+                        null,
                         null);
         };
     }

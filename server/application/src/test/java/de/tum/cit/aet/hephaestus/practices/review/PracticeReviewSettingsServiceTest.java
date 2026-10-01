@@ -45,7 +45,7 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
     private Workspace workspace;
     private WorkspaceContext context;
 
-    private final PracticeReviewProperties reviewProperties = new PracticeReviewProperties(false, 15, 5, false, null);
+    private final PracticeReviewProperties reviewProperties = new PracticeReviewProperties(false, 15, 5, null);
 
     @BeforeEach
     void setUp() {
@@ -54,7 +54,7 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
         workspace = new Workspace();
         workspace.setId(1L);
         workspace.setWorkspaceSlug("ws");
-        context = new WorkspaceContext(1L, "ws", "Ws", AccountType.ORG, null, false, false, Set.of());
+        context = new WorkspaceContext(1L, "ws", "Ws", AccountType.ORG, null, false, Set.of());
         lenient().when(coverageService.scope(workspace)).thenReturn(WorkspaceReviewScope.ALL);
         lenient()
                 .when(coverageService.summary(workspace, 0))
@@ -109,7 +109,7 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
         writesWorkspace();
 
         PracticeReviewSettingsDTO view = service.updatePracticeReview(
-                context, new UpdatePracticeReviewSettingsRequestDTO(null, null, null, null, null, null), tag(0));
+                context, new UpdatePracticeReviewSettingsRequestDTO(null, null, null, null, null, null, null), tag(0));
 
         assertThat(view.revision()).isZero();
         assertThat(view.etag()).isEqualTo("\"1\"");
@@ -134,7 +134,7 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
 
         PracticeReviewSettingsDTO view = service.updatePracticeReview(
                 context,
-                new UpdatePracticeReviewSettingsRequestDTO(null, null, selectedEmpty, null, null, null),
+                new UpdatePracticeReviewSettingsRequestDTO(null, null, selectedEmpty, null, null, null, null),
                 tag(0));
 
         verify(coverageService).replace(workspace, selectedEmpty);
@@ -147,11 +147,13 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
 
         service.updatePracticeReview(
                 context,
-                new UpdatePracticeReviewSettingsRequestDTO(null, null, null, PracticeDeliveryStatus.PAUSED, null, null),
+                new UpdatePracticeReviewSettingsRequestDTO(
+                        null, null, null, PracticeDeliveryStatus.PAUSED, null, null, null),
                 tag(0));
         service.updatePracticeReview(
                 context,
-                new UpdatePracticeReviewSettingsRequestDTO(null, null, null, PracticeDeliveryStatus.ACTIVE, null, null),
+                new UpdatePracticeReviewSettingsRequestDTO(
+                        null, null, null, PracticeDeliveryStatus.ACTIVE, null, null, null),
                 tag(1));
 
         assertThat(workspace.getReviewSettings().getDeliveryStatus()).isEqualTo(PracticeDeliveryStatus.ACTIVE);
@@ -174,11 +176,12 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
 
         service.updatePracticeReview(
                 context,
-                new UpdatePracticeReviewSettingsRequestDTO(null, null, selectedEmpty, null, null, null),
+                new UpdatePracticeReviewSettingsRequestDTO(null, null, selectedEmpty, null, null, null, null),
                 tag(0));
         service.updatePracticeReview(
                 context,
-                new UpdatePracticeReviewSettingsRequestDTO(null, null, WorkspaceReviewScope.ALL, null, null, null),
+                new UpdatePracticeReviewSettingsRequestDTO(
+                        null, null, WorkspaceReviewScope.ALL, null, null, null, null),
                 tag(1));
 
         assertThat(workspace.getReviewSettings().getRolloutRevision()).isEqualTo(2);
@@ -190,7 +193,8 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
 
         service.updatePracticeReview(
                 context,
-                new UpdatePracticeReviewSettingsRequestDTO(null, null, null, null, PracticeAutonomy.AUTOMATIC, null),
+                new UpdatePracticeReviewSettingsRequestDTO(
+                        null, null, null, null, PracticeAutonomy.AUTOMATIC, null, null),
                 tag(0));
 
         assertThat(workspace.getReviewSettings().getRolloutRevision()).isOne();
@@ -207,7 +211,8 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
 
     private static UpdatePracticeReviewSettingsRequestDTO patch(
             @Nullable Boolean deliverToMerged, @Nullable Integer cooldownMinutes) {
-        return new UpdatePracticeReviewSettingsRequestDTO(deliverToMerged, cooldownMinutes, null, null, null, null);
+        return new UpdatePracticeReviewSettingsRequestDTO(
+                deliverToMerged, cooldownMinutes, null, null, null, null, null);
     }
 
     private static EntityTagPrecondition tag(long revision) {

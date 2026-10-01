@@ -1,0 +1,222 @@
+{
+  "object_kind": "merge_request",
+  "event_type": "merge_request",
+  "user": {
+    "id": 18024,
+    "name": "Dietrich, Felix (Timotheus Johannes)",
+    "username": "ga84xah",
+    "avatar_url": "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
+    "email": "[REDACTED]"
+  },
+  "project": {
+    "id": 246765,
+    "name": "demo-repository",
+    "description": "Demo repository for testing GitLab webhooks and generating fixture data",
+    "web_url": "https://gitlab.lrz.de/hephaestustest/demo-repository",
+    "avatar_url": null,
+    "git_ssh_url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+    "git_http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git",
+    "namespace": "HephaestusTest",
+    "visibility_level": 0,
+    "path_with_namespace": "hephaestustest/demo-repository",
+    "default_branch": "main",
+    "ci_config_path": "",
+    "homepage": "https://gitlab.lrz.de/hephaestustest/demo-repository",
+    "url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+    "ssh_url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+    "http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git"
+  },
+  "object_attributes": {
+    "assignee_id": null,
+    "author_id": 18024,
+    "created_at": "2026-01-31 19:03:54 +0100",
+    "description": "This MR implements OAuth2 authentication.\\n\\nCloses #5",
+    "draft": false,
+    "head_pipeline_id": null,
+    "id": 334047,
+    "iid": 2,
+    "last_edited_at": null,
+    "last_edited_by_id": null,
+    "merge_commit_sha": null,
+    "merge_error": null,
+    "merge_params": {
+      "force_remove_source_branch": null
+    },
+    "merge_status": "can_be_merged",
+    "merge_user_id": null,
+    "merge_when_pipeline_succeeds": false,
+    "milestone_id": null,
+    "source_branch": "feature/oauth",
+    "source_project_id": 246765,
+    "state_id": 1,
+    "target_branch": "main",
+    "target_project_id": 246765,
+    "time_estimate": 0,
+    "title": "Implement OAuth authentication",
+    "updated_at": "2026-01-31 19:05:00 +0100",
+    "updated_by_id": 18024,
+    "prepared_at": "2026-01-31 19:03:56 +0100",
+    "assignee_ids": [],
+    "blocking_discussions_resolved": true,
+    "detailed_merge_status": "mergeable",
+    "first_contribution": false,
+    "human_time_change": null,
+    "human_time_estimate": null,
+    "human_total_time_spent": null,
+    "labels": [
+      {
+        "id": 85907,
+        "title": "enhancement",
+        "color": "#a2eeef",
+        "project_id": 246765,
+        "created_at": "2026-01-31 18:46:02 +0100",
+        "updated_at": "2026-01-31 18:46:02 +0100",
+        "template": false,
+        "description": "New feature or request",
+        "type": "ProjectLabel",
+        "group_id": null
+      }
+    ],
+    "last_commit": {
+      "id": "11499a581bf88090fa5e0abbf6d73e10e6fb56a7",
+      "message": "Add authentication module",
+      "title": "Add authentication module",
+      "timestamp": "2026-01-31T19:03:52+01:00",
+      "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/commit/11499a581bf88090fa5e0abbf6d73e10e6fb56a7",
+      "author": {
+        "name": "Dietrich, Felix (Timotheus Johannes)",
+        "email": "felixtj.dietrich@tum.de"
+      }
+    },
+    "reviewer_ids": [],
+    "source": {
+      "id": 246765,
+      "name": "demo-repository",
+      "description": "Demo repository for testing GitLab webhooks and generating fixture data",
+      "web_url": "https://gitlab.lrz.de/hephaestustest/demo-repository",
+      "avatar_url": null,
+      "git_ssh_url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+      "git_http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git",
+      "namespace": "HephaestusTest",
+      "visibility_level": 0,
+      "path_with_namespace": "hephaestustest/demo-repository",
+      "default_branch": "main",
+      "ci_config_path": "",
+      "homepage": "https://gitlab.lrz.de/hephaestustest/demo-repository",
+      "url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+      "ssh_url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+      "http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git"
+    },
+    "state": "opened",
+    "system": false,
+    "target": {
+      "id": 246765,
+      "name": "demo-repository",
+      "description": "Demo repository for testing GitLab webhooks and generating fixture data",
+      "web_url": "https://gitlab.lrz.de/hephaestustest/demo-repository",
+      "avatar_url": null,
+      "git_ssh_url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+      "git_http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git",
+      "namespace": "HephaestusTest",
+      "visibility_level": 0,
+      "path_with_namespace": "hephaestustest/demo-repository",
+      "default_branch": "main",
+      "ci_config_path": "",
+      "homepage": "https://gitlab.lrz.de/hephaestustest/demo-repository",
+      "url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+      "ssh_url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+      "http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git"
+    },
+    "time_change": 0,
+    "total_time_spent": 0,
+    "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/merge_requests/2",
+    "work_in_progress": false,
+    "approval_rules": [],
+    "action": "update"
+  },
+  "labels": [
+    {
+      "id": 85907,
+      "title": "enhancement",
+      "color": "#a2eeef",
+      "project_id": 246765,
+      "created_at": "2026-01-31 18:46:02 +0100",
+      "updated_at": "2026-01-31 18:46:02 +0100",
+      "template": false,
+      "description": "New feature or request",
+      "type": "ProjectLabel",
+      "group_id": null
+    }
+  ],
+  "changes": {
+    "updated_at": {
+      "previous": "2026-01-31 19:04:04 +0100",
+      "current": "2026-01-31 19:05:00 +0100"
+    },
+    "assignees": {
+      "previous": [],
+      "current": [
+        {
+          "id": 18024,
+          "name": "Dietrich, Felix (Timotheus Johannes)",
+          "username": "ga84xah",
+          "avatar_url": "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
+          "email": "[REDACTED]"
+        }
+      ]
+    }
+  },
+  "repository": {
+    "name": "demo-repository",
+    "url": "git@gitlab.lrz.de:hephaestustest/demo-repository.git",
+    "description": "Demo repository for testing GitLab webhooks and generating fixture data",
+    "homepage": "https://gitlab.lrz.de/hephaestustest/demo-repository"
+  },
+  "assignees": [
+    {
+      "id": 18024,
+      "name": "Dietrich, Felix (Timotheus Johannes)",
+      "username": "ga84xah",
+      "avatar_url": "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
+      "email": "[REDACTED]"
+    }
+  ],
+  "reviewers": [
+    {
+      "id": 6,
+      "name": "User1",
+      "username": "user1",
+      "state": "approved",
+      "re_requested": false,
+      "avatar_url": "https://www.gravatar.com/avatar/user1?s=80&d=identicon",
+      "email": "[REDACTED]"
+    },
+    {
+      "id": 25,
+      "name": "Sidney Jones",
+      "username": "sjones",
+      "state": "requested_changes",
+      "re_requested": false,
+      "avatar_url": "https://www.gravatar.com/avatar/sjones?s=80&d=identicon",
+      "email": "[REDACTED]"
+    },
+    {
+      "id": 7,
+      "name": "User2",
+      "username": "user2",
+      "state": "reviewed",
+      "re_requested": false,
+      "avatar_url": "https://www.gravatar.com/avatar/user2?s=80&d=identicon",
+      "email": "[REDACTED]"
+    },
+    {
+      "id": 8,
+      "name": "User3",
+      "username": "user3",
+      "state": "unreviewed",
+      "re_requested": false,
+      "avatar_url": "https://www.gravatar.com/avatar/user3?s=80&d=identicon",
+      "email": "[REDACTED]"
+    }
+  ]
+}

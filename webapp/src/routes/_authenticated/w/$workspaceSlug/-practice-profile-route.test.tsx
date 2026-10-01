@@ -1,9 +1,13 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { InAppFeedback } from "@/api/types.gen";
-import type { Wire } from "@/lib/dates";
+import type { InAppFeedback, ProfileReviewRun } from "@/api/types.gen";
+import { rangeStart } from "@/components/activity/activity-range";
+import { ACTIVE_REVIEW_POLL_MS } from "@/components/admin/practice-reviews/review-search";
+import { artifactTrace } from "@/components/practice-trace/fixtures";
+import { formatDayTime, type Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { clearUserView } from "@/runtime/user-view/session";
@@ -15,6 +19,11 @@ import {
 	packagingGroup,
 	practiceStandings,
 } from "@/stories/practice-profile-story-mock-data";
+import {
+	openProfileReviewRun,
+	profileReviewRuns,
+} from "@/stories/profile-review-runs-story-mock-data";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
 
@@ -22,6 +31,9 @@ import { storeUserView } from "@/test/user-view";
 vi.setConfig({ testTimeout: ROUTE_RENDER_WAIT.timeout });
 
 const PAGE = "/w/acme/practice-profile";
+
+/** Long enough for a response to render once the route is up, short of the test's own timeout. */
+const SETTLE_WAIT = { timeout: 5000 } as const;
 
 const [first] = practiceStandings;
 if (!first) {
@@ -38,7 +50,17 @@ const observation = {
 };
 const run = { ...detailRun, observations: [observation] };
 
+/** The review before the open one, on the same merge request. */
+const [, earlierOnSameWork] = profileReviewRuns;
+if (earlierOnSameWork?.reviewedWork !== openProfileReviewRun.reviewedWork) {
+	throw new Error("The fixtures carry a second review of the open review's work");
+}
+
+/** The `reviewId` each read of the work's review activity carried, newest last. */
+let tracedReviewIds: (string | null)[] = [];
+
 beforeEach(() => {
+	tracedReviewIds = [];
 	server.use(
 		// The surface exists only where practices review the work, and the shared fixture has them
 		// off, so every case below has to say that this workspace reviews.
@@ -65,14 +87,33 @@ beforeEach(() => {
 		http.get("*/workspaces/:workspaceSlug/practice-groups/:groupSlug/review-runs", () =>
 			HttpResponse.json({ content: [run], hasNext: false, page: 0, size: 10 }),
 		),
+		http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs", () =>
+			HttpResponse.json({ content: profileReviewRuns, hasNext: false, page: 0, size: 10 }),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs/:reviewId", () =>
+			HttpResponse.json({ run: openProfileReviewRun, observations: [observation] }),
+		),
+		http.get(
+			"*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId",
+			({ request }) => {
+				tracedReviewIds.push(new URL(request.url).searchParams.get("reviewId"));
+				return HttpResponse.json(artifactTrace);
+			},
+		),
 	);
 });
+
+/** The open review's row link, named for its work and its time. */
+const openReviewRowName = `Open review of ${openProfileReviewRun.reviewedWork.label}, ${formatDayTime(openProfileReviewRun.reviewedAt)}`;
 
 async function renderProfile(path = PAGE) {
 	const { router } = renderRouteAtWithRouter(path);
 	await screen.findByRole("heading", { level: 1, name: "Practice profile" }, ROUTE_RENDER_WAIT);
 	return router;
 }
+
+const openReviewsChip = async () =>
+	screen.findByRole("link", { name: /^Latest review/u }, ROUTE_RENDER_WAIT);
 
 const group = `practice-group:${packagingGroup.slug}`;
 const practiceEntry = `practice:${practice.slug}`;
@@ -121,9 +162,12 @@ describe("practice profile route", () => {
 		);
 		const { router } = renderRouteAtWithRouter(PAGE);
 
-		// With practices off the page does not exist here, so the reader lands on the workspace home
-		// rather than on a profile with nothing to be about.
-		await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme"), ROUTE_RENDER_WAIT);
+		// With practices off the page does not exist here, so the reader lands on the workspace home,
+		// which is Activity for such a workspace, rather than on a profile with nothing to be about.
+		await waitFor(
+			() => expect(router.state.location.pathname).toBe("/w/acme/activity"),
+			ROUTE_RENDER_WAIT,
+		);
 		// Reading the cards is what delivers them: a reader who is sent away must never have their
 		// unread feedback marked delivered on the way out.
 		expect(inApp).not.toHaveBeenCalled();
@@ -162,6 +206,238 @@ describe("practice profile route", () => {
 		expect(router.history).toHaveLength(entries + 3);
 		router.history.back();
 		await waitFor(() => expect(detail()).toStrictEqual(["practice-groups:all", group]));
+	});
+
+	it("opens every review of the reader's work from the chip, then one review over it", async () => {
+		const router = await renderProfile();
+		const detail = () => router.state.location.search.detail;
+
+		fireEvent.click(await openReviewsChip());
+		await waitFor(() => expect(detail()).toStrictEqual(["reviews:all"]));
+		await screen.findByRole("heading", { name: "Reviews of your work" }, ROUTE_RENDER_WAIT);
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: openReviewRowName }, ROUTE_RENDER_WAIT),
+		);
+		await waitFor(() =>
+			expect(detail()).toStrictEqual(["reviews:all", `review:${openProfileReviewRun.reviewId}`]),
+		);
+		await screen.findByRole("tab", { name: /^Every practice/u }, ROUTE_RENDER_WAIT);
+		// A quiet practice's reason comes only from the activity, asked for this review.
+		await screen.findByText(
+			"The review ended before reaching this practice.",
+			undefined,
+			ROUTE_RENDER_WAIT,
+		);
+		// The row under the level and the head over it.
+		await waitFor(() => expect(screen.getAllByText("2nd review")).toHaveLength(2));
+		await waitFor(() => expect(tracedReviewIds).toContain(openProfileReviewRun.reviewId));
+
+		// One level per history entry, so Back closes exactly one and then the drawer.
+		router.history.back();
+		await waitFor(() => expect(detail()).toStrictEqual(["reviews:all"]));
+		router.history.back();
+		await waitFor(() => expect(detail()).toBeUndefined());
+	});
+
+	it("turns the chosen timeframe into the since the reviews list asks for", async () => {
+		// Fixed at noon, so the day the bound is counted from cannot turn during the test.
+		const noon = new Date(2026, 8, 22, 12, 0);
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(noon);
+		try {
+			const asked: (string | null)[] = [];
+			server.use(
+				http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs", ({ request }) => {
+					asked.push(new URL(request.url).searchParams.get("since"));
+					return HttpResponse.json({
+						content: profileReviewRuns,
+						hasNext: false,
+						page: 0,
+						size: 10,
+					});
+				}),
+			);
+			const router = await renderProfile();
+
+			fireEvent.click(await openReviewsChip());
+			await screen.findByRole("heading", { name: "Reviews of your work" }, ROUTE_RENDER_WAIT);
+			await waitFor(() => expect(asked[0]).toBeNull());
+
+			const user = userEvent.setup();
+			await user.click(screen.getByRole("combobox", { name: "Timeframe" }));
+			await user.click(await screen.findByRole("option", { name: "Last 30 days" }));
+
+			await waitFor(() => expect(router.state.location.search.reviewSince).toBe("30d"));
+			await waitFor(() =>
+				expect(asked.at(-1)).toBe(rangeStart(noon.getTime(), "30d").toISOString()),
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("says why a review asked for from a row was refused", async () => {
+		server.use(
+			http.post("*/workspaces/:workspaceSlug/practices/review-requests", () =>
+				HttpResponse.json({
+					status: "REFUSED",
+					reason: "REQUEST_COOLDOWN_ACTIVE",
+					reasonDescription: "A review of this was already asked for a moment ago.",
+				}),
+			),
+		);
+		await renderProfile();
+		fireEvent.click(await openReviewsChip());
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Review this now: #890" }, ROUTE_RENDER_WAIT),
+		);
+
+		await screen.findByText("No review was started", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("A review of this was already asked for a moment ago.");
+	});
+
+	it("says a refusal on the review it was asked from, on no other review of the work, and not again on a later visit", async () => {
+		server.use(
+			http.post("*/workspaces/:workspaceSlug/practices/review-requests", () =>
+				HttpResponse.json({
+					status: "REFUSED",
+					reason: "REQUEST_COOLDOWN_ACTIVE",
+					reasonDescription: "A review of this was already asked for a moment ago.",
+				}),
+			),
+			http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs/:reviewId", ({ params }) =>
+				HttpResponse.json({
+					run: profileReviewRuns.find((candidate) => candidate.reviewId === params.reviewId),
+					observations: [],
+				}),
+			),
+		);
+		// The page is inert under the drawer, so the head's own button is what says it has rendered.
+		const { router } = renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(
+				JSON.stringify(["reviews:all", `review:${openProfileReviewRun.reviewId}`]),
+			)}`,
+		);
+
+		fireEvent.click(
+			await screen.findByRole("button", { name: "Review this now" }, ROUTE_RENDER_WAIT),
+		);
+		await screen.findByText("A review of this was already asked for a moment ago.");
+
+		// Another review of the same work, opened by its address.
+		router.history.push(
+			`${PAGE}?detail=${encodeURIComponent(
+				JSON.stringify(["reviews:all", `review:${earlierOnSameWork.reviewId}`]),
+			)}`,
+		);
+		await waitFor(() => expect(tracedReviewIds).toContain(earlierOnSameWork.reviewId));
+		await screen.findByRole("tab", { name: /^Every practice/u }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText("No review was started")).toBeNull();
+
+		// Back on the review it was asked from, the refusal was answered on the earlier visit.
+		router.history.back();
+		await waitFor(() =>
+			expect(router.state.location.search.detail).toStrictEqual([
+				"reviews:all",
+				`review:${openProfileReviewRun.reviewId}`,
+			]),
+		);
+		await screen.findByRole("tab", { name: /^Every practice/u }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByText("No review was started")).toBeNull();
+	});
+
+	it("reads the work's review activity and the list once more when the open review stops running", async () => {
+		// Only the polls are faked, and the clock moves only when the test moves it: every interval
+		// armed while the page loads is armed at the same instant, and the waits stay on real time.
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		try {
+			let status: NonNullable<ProfileReviewRun["status"]> = "IN_PROGRESS";
+			// Every read of the activity is this review's; the first is held until the test answers it.
+			let activityReads = 0;
+			let listReads = 0;
+			const firstActivity = deferred();
+			const held = [firstActivity.promise];
+			server.use(
+				http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs", () => {
+					listReads += 1;
+					return HttpResponse.json({
+						content: profileReviewRuns,
+						hasNext: false,
+						page: 0,
+						size: 10,
+					});
+				}),
+				http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs/:reviewId", () =>
+					HttpResponse.json({
+						run: { ...openProfileReviewRun, status },
+						observations: [observation],
+					}),
+				),
+				http.get(
+					"*/workspaces/:workspaceSlug/practices/trace/:artifactKind/:artifactId",
+					async ({ request }) => {
+						tracedReviewIds.push(new URL(request.url).searchParams.get("reviewId"));
+						activityReads += 1;
+						await held.shift();
+						return HttpResponse.json(artifactTrace);
+					},
+				),
+			);
+			renderRouteAtWithRouter(
+				`${PAGE}?detail=${encodeURIComponent(
+					JSON.stringify(["reviews:all", `review:${openProfileReviewRun.reviewId}`]),
+				)}`,
+			);
+			await vi.waitFor(() => {
+				screen.getByText("Running");
+				expect(activityReads).toBe(1);
+				expect(listReads).toBe(1);
+			}, ROUTE_RENDER_WAIT);
+
+			// The activity answers half a poll late, which re-arms its poll there: the review's next poll
+			// then falls while the activity's does not, so no poll of the activity can pass for the
+			// read the review stopping asks for.
+			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS / 2);
+			firstActivity.resolve();
+			await vi.waitFor(
+				() => screen.getByText("The review ended before reaching this practice."),
+				ROUTE_RENDER_WAIT,
+			);
+
+			status = "COMPLETED";
+			await vi.advanceTimersByTimeAsync(ACTIVE_REVIEW_POLL_MS / 2);
+			await vi.waitFor(() => {
+				expect(screen.queryByText("Running")).toBeNull();
+				expect(activityReads).toBe(2);
+				expect(listReads).toBe(2);
+			}, SETTLE_WAIT);
+
+			// A finished review's activity no longer polls.
+			await vi.advanceTimersByTimeAsync(3 * ACTIVE_REVIEW_POLL_MS);
+			expect(activityReads).toBe(2);
+			expect(new Set(tracedReviewIds)).toStrictEqual(new Set([openProfileReviewRun.reviewId]));
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("shows a review that is not the reader's as not found, without asking again", async () => {
+		let reads = 0;
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practice-profile/review-runs/:reviewId", () => {
+				reads += 1;
+				return HttpResponse.json({ status: 404, title: "Not Found" }, { status: 404 });
+			}),
+		);
+		renderRouteAtWithRouter(
+			`${PAGE}?detail=${encodeURIComponent(JSON.stringify(["review:gone"]))}`,
+		);
+
+		await screen.findByText("Could not load this review", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText(/may have been deleted or moved/u);
+		expect(reads).toBe(1);
 	});
 
 	it("opens and closes an observation without writing the URL, so leaving the level takes one step", async () => {
@@ -307,6 +583,15 @@ describe("practice profile in a user view", () => {
 			answers: 1,
 			observationResponse: 1,
 		});
+	});
+
+	it("offers an administrator viewing as the developer no review to start", async () => {
+		storeUserView({ workspaceSlug: "acme", login: "ada", name: "Ada" });
+		await renderProfile();
+		fireEvent.click(await openReviewsChip());
+
+		await screen.findByRole("button", { name: openReviewRowName }, ROUTE_RENDER_WAIT);
+		expect(screen.queryAllByRole("button", { name: /^Review .* now$/u })).toHaveLength(0);
 	});
 
 	it("offers an administrator viewing as the developer none of them", async () => {

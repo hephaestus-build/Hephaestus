@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentProperties;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
-import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -50,10 +49,6 @@ public class MentorChatController {
             WorkspaceContext workspaceContext,
             @Valid @RequestBody MentorChatRequestBody body,
             HttpServletResponse response) {
-        if (!workspaceContext.mentorEnabled()) {
-            throw new EntityNotFoundException("Mentor chat", workspaceContext.slug());
-        }
-
         // Set protocol header before any SseEmitter#send — the first send commits the response.
         applyProtocolHeaders(response);
 
@@ -73,8 +68,10 @@ public class MentorChatController {
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT_MS);
         UUID threadId = body.id() != null ? body.id() : UUID.randomUUID();
         UUID clientUserMessageId = extractMessageId(body.message());
+        // A regenerate that names no reply is the SDK resending a prompt nothing answered; it is an ordinary submit.
+        UUID retryOf = MentorChatRequestBody.REGENERATE.equals(body.trigger()) ? body.messageId() : null;
         MentorTurnRequest serviceRequest =
-                MentorTurnRequest.web(workspaceContext.id(), threadId, userMessage, clientUserMessageId);
+                MentorTurnRequest.web(workspaceContext.id(), threadId, userMessage, clientUserMessageId, retryOf);
         mentorChatStarter.start(serviceRequest, emitter);
         return emitter;
     }

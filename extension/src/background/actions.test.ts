@@ -41,7 +41,7 @@ function harness() {
 		trace: vi.fn<ActionApi["trace"]>(async () => ({
 			artifactId: 16,
 			artifactKind: "scm.pull_request",
-			title: "Fixture",
+			reviewedWork: { ...WORK, title: "Fixture" },
 			practices: [],
 			signals: [
 				{

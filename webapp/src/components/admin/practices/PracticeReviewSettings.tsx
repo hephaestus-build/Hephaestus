@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { GeneratedPathsSettings } from "./GeneratedPathsSettings";
 import {
 	PracticeReviewCoverageSettings,
 	type PracticeReviewCoverageSettingsProps,
@@ -72,6 +73,12 @@ export function PracticeReviewSettings({
 				onSave={async (scope, sourceEtag) => policy.onUpdate({ reviewScope: scope }, sourceEtag)}
 				repositories={coverage.repositories}
 				people={coverage.people}
+			/>
+			<GeneratedPathsSettings
+				settings={policy.settings}
+				repositories={coverage.repositories}
+				isSaving={policy.isSaving}
+				onSave={policy.onUpdate}
 			/>
 			<FeedbackDeliverySection policy={policy} />
 		</div>

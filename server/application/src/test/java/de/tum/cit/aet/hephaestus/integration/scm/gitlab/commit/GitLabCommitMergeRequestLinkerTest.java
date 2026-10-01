@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -99,7 +100,9 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
                 graphQlClientProvider,
                 responseHandler,
                 gitLabProperties,
-                eventPublisher);
+                eventPublisher,
+                mock(),
+                new PassThroughTransactionTemplate());
 
         repository = new Repository();
         repository.setId(REPO_ID);

@@ -4,11 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.Map;
 import java.util.UUID;
@@ -24,6 +32,15 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     @Autowired
     private AgentJobRepository agentJobRepository;
+
+    @Autowired
+    private RepositoryRepository repositoryRepository;
+
+    @Autowired
+    private RepositoryToMonitorRepository repositoryToMonitorRepository;
+
+    @Autowired
+    private PullRequestRepository pullRequestRepository;
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -157,6 +174,75 @@ class AgentJobControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(result.status()).isEqualTo(AgentJobStatus.COMPLETED);
         assertThat(result.jobType()).isEqualTo(AgentJobType.PULL_REQUEST_REVIEW);
         assertThat(result.model()).isEqualTo("gpt-5.4-mini");
+    }
+
+    /** The run recorded the title the pull request had then; the mirror holds the one it has now. */
+    @Test
+    @WithAdminUser
+    void shouldNameThePullRequestByItsCurrentTitleWhenItWasRenamedAfterTheReview() {
+        Workspace workspace = setupWorkspace();
+        long pullRequestId = persistMonitoredPullRequest(workspace, "Renamed after its review");
+        AgentJob job = createJob(workspace, AgentJobStatus.COMPLETED);
+        job.setIntegrationKind(IntegrationKind.GITHUB);
+        job.setMetadata(OBJECT_MAPPER.valueToTree(Map.of(
+                "pull_request_id",
+                pullRequestId,
+                "pr_number",
+                42,
+                "title",
+                "Title when reviewed",
+                "repository_full_name",
+                "job-org/api",
+                "pr_url",
+                "https://github.com/job-org/api/pull/42")));
+        agentJobRepository.save(job);
+
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/agents/jobs", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[?(@.id=='" + job.getId() + "')].target.title")
+                .isEqualTo("Renamed after its review")
+                .jsonPath("$.content[?(@.id=='" + job.getId() + "')].target.reviewedWork.title")
+                .isEqualTo("Renamed after its review");
+        webTestClient
+                .get()
+                .uri("/workspaces/{slug}/agents/jobs/{id}", workspace.getWorkspaceSlug(), job.getId())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.target.title")
+                .isEqualTo("Renamed after its review");
+    }
+
+    private long persistMonitoredPullRequest(Workspace workspace, String title) {
+        Repository repository = new Repository();
+        repository.setNativeId(9301L);
+        repository.setProvider(ensureGitHubProvider());
+        repository.setName("api");
+        repository.setNameWithOwner("job-org/api");
+        repository.setHtmlUrl("https://github.com/job-org/api");
+        repository.setDefaultBranch("main");
+        repository = repositoryRepository.save(repository);
+        RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        repositoryToMonitorRepository.save(monitor);
+        PullRequest pullRequest = new PullRequest();
+        pullRequest.setNativeId(9302L);
+        pullRequest.setProvider(ensureGitHubProvider());
+        pullRequest.setNumber(42);
+        pullRequest.setTitle(title);
+        pullRequest.setState(Issue.State.OPEN);
+        pullRequest.setHtmlUrl("https://github.com/job-org/api/pull/42");
+        pullRequest.setRepository(repository);
+        return pullRequestRepository.save(pullRequest).getId();
     }
 
     @Test

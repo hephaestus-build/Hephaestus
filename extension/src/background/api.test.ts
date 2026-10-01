@@ -66,6 +66,17 @@ function json(body: unknown, status = 200): Response {
 	return Response.json(body, { status });
 }
 
+function ownReviewResponse(
+	run: { reviewId: string; reviewedWork: { kind: string; id: string } },
+	trace: unknown,
+	status = 200,
+) {
+	return async (request: Request) =>
+		new URL(request.url).pathname.endsWith("/review-runs")
+			? json({ content: [run] })
+			: json(trace, status);
+}
+
 function recordFetch(respond: (request: Request) => Promise<Response>) {
 	const sent: Sent[] = [];
 	vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -221,6 +232,99 @@ describe("the report's calls", () => {
 			sort: "SEVERITY",
 			size: "25",
 		});
+	});
+
+	it("names the newest own review for this work instead of requesting an aggregate trace", async () => {
+		const reviewId = "0b7c1a52-0d3e-4c55-8a0b-1d2e3f4a5b6c";
+		const answer = {
+			artifactKind: "scm.pull_request",
+			artifactId: 16,
+			reviewedWork: { kind: "scm.pull_request", id: "16", label: "#1" },
+			signals: [],
+			practices: [],
+		};
+		const { built, requests } = await api(
+			ownReviewResponse({ reviewId, reviewedWork: answer.reviewedWork }, answer),
+		);
+		await expect(built.trace("team", "scm.pull_request", 16)).resolves.toStrictEqual(answer);
+		const urls = requests.map((request) => new URL(request.url));
+		expect(urls.map((url) => url.pathname)).toStrictEqual([
+			"/api/workspaces/team/practices/reviewed-work/scm.pull_request/16/review-runs",
+			"/api/workspaces/team/practices/trace/scm.pull_request/16/own",
+		]);
+		expect(Object.fromEntries(required(urls[0], "own review request").searchParams)).toStrictEqual({
+			size: "1",
+		});
+		expect(Object.fromEntries(required(urls[1], "named trace request").searchParams)).toStrictEqual(
+			{ reviewId },
+		);
+	});
+
+	it("does not request an aggregate trace when the reader has no own review", async () => {
+		const { built, requests } = await api(async () => json({ content: [] }));
+		await expect(built.trace("team", "scm.issue", 16)).resolves.toBeNull();
+		expect(requests).toHaveLength(1);
+	});
+
+	it("keeps a missing named trace unavailable and a refused own-run read an error", async () => {
+		const missing = await api(
+			ownReviewResponse(
+				{
+					reviewId: "0b7c1a52-0d3e-4c55-8a0b-1d2e3f4a5b6c",
+					reviewedWork: { kind: "scm.issue", id: "16" },
+				},
+				{ title: "Not found" },
+				404,
+			),
+		);
+		await expect(missing.built.trace("team", "scm.issue", 16)).resolves.toBeNull();
+		const refused = await api(async () => json({ title: "Forbidden" }, 403));
+		await expect(refused.built.trace("team", "scm.issue", 16)).rejects.toMatchObject({
+			code: "server",
+		});
+		expect(refused.requests).toHaveLength(1);
+	});
+
+	it("refuses an own run returned for different work before asking for its trace", async () => {
+		const { built, requests } = await api(async () =>
+			json({
+				content: [
+					{
+						reviewId: "7d5e0c3a-1b2c-4d3e-8f40-000000000002",
+						reviewedWork: { kind: "scm.issue", id: "99" },
+					},
+				],
+			}),
+		);
+		await expect(built.trace("team", "scm.issue", 16)).rejects.toMatchObject({ code: "server" });
+		expect(requests).toHaveLength(1);
+	});
+
+	it("discovers a newly recorded own run on the next read", async () => {
+		const run = {
+			reviewId: "0b7c1a52-0d3e-4c55-8a0b-1d2e3f4a5b6c",
+			reviewedWork: { kind: "scm.issue", id: "16", label: "#1" },
+		};
+		const { built, requests } = await api(
+			ownReviewResponse(run, {
+				artifactKind: "scm.issue",
+				artifactId: 16,
+				reviewedWork: run.reviewedWork,
+				signals: [],
+				practices: [],
+			}),
+		);
+		await built.trace("team", "scm.issue", 16);
+		run.reviewId = "7d5e0c3a-1b2c-4d3e-8f40-000000000002";
+		await built.trace("team", "scm.issue", 16);
+		expect(
+			requests
+				.filter((request) => new URL(request.url).pathname.includes("/trace/"))
+				.map((request) => new URL(request.url).searchParams.get("reviewId")),
+		).toStrictEqual([
+			"0b7c1a52-0d3e-4c55-8a0b-1d2e3f4a5b6c",
+			"7d5e0c3a-1b2c-4d3e-8f40-000000000002",
+		]);
 	});
 
 	it("posts one review request, and returns a refusal as the server's answer", async () => {

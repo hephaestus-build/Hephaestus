@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -24,6 +25,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -74,20 +77,17 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                 workspaceResolver,
                 signalOptions,
                 coverageService,
-                new AutomatedReviewFence(java.util.Map.of()));
-        when(coverageService.admits(
-                        any(Workspace.class),
-                        nullable(String.class),
-                        nullable(String.class),
-                        nullable(ReviewSubject.class)))
-                .thenReturn(true);
-        when(coverageService.admits(
+                new AutomatedReviewFence(java.util.Map.of()),
+                mock(ObservationRepository.class),
+                mock(ObservationVisibilityPolicy.class),
+                mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class));
+        when(coverageService.assess(
                         any(Workspace.class),
                         nullable(String.class),
                         nullable(String.class),
                         nullable(ReviewSubject.class),
                         org.mockito.ArgumentMatchers.anyBoolean()))
-                .thenReturn(true);
+                .thenReturn(coverage(true, true, ReviewSubjectStatus.RESOLVED_LINKED_HUMAN));
         when(coverageService.assessRepositoryless(any(Workspace.class), any(ReviewSubject.class)))
                 .thenReturn(new PracticeReviewCoverageService.CoverageAssessment(
                         de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode.ALL_MONITORED,
@@ -100,6 +100,19 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
     }
 
     // Helpers
+
+    private static PracticeReviewCoverageService.CoverageAssessment coverage(
+            boolean repositoryMatched, boolean branchMatched, ReviewSubjectStatus subjectStatus) {
+        boolean personMatched = subjectStatus == ReviewSubjectStatus.RESOLVED_LINKED_HUMAN;
+        return new PracticeReviewCoverageService.CoverageAssessment(
+                de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode.SELECTED,
+                de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode.ALL_ELIGIBLE,
+                subjectStatus,
+                repositoryMatched,
+                branchMatched,
+                personMatched,
+                repositoryMatched && branchMatched && personMatched);
+    }
 
     private PullRequest createPullRequest() {
         PullRequest pr = new PullRequest();
@@ -158,6 +171,36 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
         when(practiceDetectionReadiness.hasRunnableAgent(WORKSPACE_ID)).thenReturn(true);
         when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(practices));
         return workspace;
+    }
+
+    @Test
+    void shouldRefuseBotReviewerBeforeMembershipOrPracticeLookup() {
+        PullRequest pr = createPullRequest();
+        Workspace workspace = createWorkspace();
+        when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
+        var decision = (GateDecision.Skip) gate.evaluate(
+                pr,
+                de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals.PULL_REQUEST_REVIEWED,
+                TriggerMode.AUTO,
+                de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject.reviewer(8L, false));
+        assertThat(decision.resolvedSignalReason()).isEqualTo(SignalStateReason.BOT_REVIEWER);
+        assertThat(decision.resolvedSignalReason().describe()).contains("reviewer is a bot");
+        verifyNoInteractions(coverageService, practiceRepository);
+    }
+
+    @Test
+    void shouldRefuseBotAuthorEvenWhenAdministrativeReviewBypassesCoverage() {
+        PullRequest pr = createPullRequest();
+        var author = new de.tum.cit.aet.hephaestus.integration.scm.domain.user.User();
+        author.setId(8L);
+        author.setType(de.tum.cit.aet.hephaestus.integration.scm.domain.user.User.Type.BOT);
+        pr.setAuthor(author);
+        Workspace workspace = createWorkspace();
+        when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
+        var decision = (GateDecision.Skip) gate.evaluateAdministrative(pr, SIGNAL);
+        assertThat(decision.resolvedSignalReason()).isEqualTo(SignalStateReason.BOT_AUTHOR);
+        assertThat(decision.resolvedSignalReason().describe()).contains("author is a bot");
+        verifyNoInteractions(coverageService, practiceRepository);
     }
 
     /**
@@ -391,12 +434,13 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             Workspace workspace = createWorkspace();
             workspace.getFeatures().setPracticesEnabled(false);
             when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
-            when(coverageService.admits(
+            when(coverageService.assess(
                             any(Workspace.class),
                             nullable(String.class),
                             nullable(String.class),
-                            nullable(ReviewSubject.class)))
-                    .thenReturn(false);
+                            nullable(ReviewSubject.class),
+                            org.mockito.ArgumentMatchers.anyBoolean()))
+                    .thenReturn(coverage(true, false, ReviewSubjectStatus.RESOLVED_LINKED_HUMAN));
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -671,8 +715,8 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             pr.setBaseRefName("develop");
             Workspace workspace = createWorkspace();
             when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
-            when(coverageService.admits(workspace, "ls1intum/Hephaestus", "develop", pr.reviewSubject()))
-                    .thenReturn(false);
+            when(coverageService.assess(workspace, "ls1intum/Hephaestus", "develop", pr.reviewSubject(), true))
+                    .thenReturn(coverage(true, false, ReviewSubjectStatus.RESOLVED_LINKED_HUMAN));
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -685,6 +729,64 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             assertThat(skip.resolvedSignalReason().isRetryable()).isFalse();
         }
 
+        /**
+         * An author the roster has not admitted yet, such as a student who reaches a GitLab subgroup through its
+         * parent group before the next member sync, waits rather than being passed over for good: the work is
+         * offered again once they are a member.
+         */
+        @Test
+        void waitsForAnAuthorWhoIsNotAMemberYetOnAScopedBranch() {
+            PullRequest pr = createPullRequest();
+            pr.setBaseRefName("main");
+            Workspace workspace = createWorkspace();
+            when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
+            when(coverageService.assess(workspace, "ls1intum/Hephaestus", "main", pr.reviewSubject(), true))
+                    .thenReturn(coverage(true, true, ReviewSubjectStatus.UNLINKED));
+
+            GateDecision.Skip skip = (GateDecision.Skip) gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
+
+            assertThat(skip.resolvedSignalReason()).isEqualTo(SignalStateReason.SUBJECT_UNLINKED);
+            assertThat(skip.resolvedSignalReason().isRetryable()).isTrue();
+        }
+
+        @Test
+        void refusesForGoodWhenTheBranchIsOutsideTheScopeWhoeverTheAuthorIs() {
+            PullRequest pr = createPullRequest();
+            pr.setBaseRefName("develop");
+            Workspace workspace = createWorkspace();
+            when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
+            when(coverageService.assess(workspace, "ls1intum/Hephaestus", "develop", pr.reviewSubject(), true))
+                    .thenReturn(coverage(true, false, ReviewSubjectStatus.UNLINKED));
+
+            GateDecision.Skip skip = (GateDecision.Skip) gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
+
+            assertThat(skip.resolvedSignalReason()).isEqualTo(SignalStateReason.OUT_OF_REVIEW_SCOPE);
+        }
+
+        @Test
+        void refusesForGoodAMemberTheSelectionLeavesOutAndABot() {
+            PullRequest pr = createPullRequest();
+            pr.setBaseRefName("main");
+            Workspace workspace = createWorkspace();
+            when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
+            PracticeReviewCoverageService.CoverageAssessment unselected =
+                    new PracticeReviewCoverageService.CoverageAssessment(
+                            de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode.ALL_MONITORED,
+                            de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode.SELECTED,
+                            ReviewSubjectStatus.RESOLVED_LINKED_HUMAN,
+                            true,
+                            true,
+                            false,
+                            false);
+            when(coverageService.assess(workspace, "ls1intum/Hephaestus", "main", pr.reviewSubject(), true))
+                    .thenReturn(unselected, coverage(true, true, ReviewSubjectStatus.NON_HUMAN));
+
+            assertThat(((GateDecision.Skip) gate.evaluate(pr, SIGNAL, TriggerMode.AUTO)).resolvedSignalReason())
+                    .isEqualTo(SignalStateReason.OUT_OF_REVIEW_SCOPE);
+            assertThat(((GateDecision.Skip) gate.evaluate(pr, SIGNAL, TriggerMode.AUTO)).resolvedSignalReason())
+                    .isEqualTo(SignalStateReason.BOT_AUTHOR);
+        }
+
         @Test
         void anAdministrativeEvaluationMayRunOutsideCoverage() {
             PullRequest pr = createPullRequest();
@@ -692,11 +794,10 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             Workspace workspace = createWorkspace();
             when(practiceDetectionReadiness.hasRunnableAgent(WORKSPACE_ID)).thenReturn(true);
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(createPractice(SIGNAL)));
-            when(coverageService.admits(workspace, "ls1intum/Hephaestus", "develop", pr.reviewSubject()))
-                    .thenReturn(false);
 
             assertThat(gate.evaluatePullRequestAdministrative(pr, workspace, SIGNAL))
                     .isInstanceOf(GateDecision.Detect.class);
+            org.mockito.Mockito.verifyNoInteractions(workspaceResolver, coverageService);
         }
 
         /** Cheap enough to sit ahead of every query — no catalogue read happens for out-of-scope work. */
@@ -706,8 +807,8 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             pr.setBaseRefName("develop");
             Workspace workspace = createWorkspace();
             when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
-            when(coverageService.admits(workspace, "ls1intum/Hephaestus", "develop", pr.reviewSubject()))
-                    .thenReturn(false);
+            when(coverageService.assess(workspace, "ls1intum/Hephaestus", "develop", pr.reviewSubject(), true))
+                    .thenReturn(coverage(true, false, ReviewSubjectStatus.RESOLVED_LINKED_HUMAN));
 
             gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -721,8 +822,8 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             pr.setBaseRefName("main");
             Workspace workspace = createWorkspace();
             when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
-            when(coverageService.admits(workspace, "ls1intum/Hephaestus", "main", pr.reviewSubject()))
-                    .thenReturn(false);
+            when(coverageService.assess(workspace, "ls1intum/Hephaestus", "main", pr.reviewSubject(), true))
+                    .thenReturn(coverage(false, false, ReviewSubjectStatus.RESOLVED_LINKED_HUMAN));
 
             assertThat(gate.evaluate(pr, SIGNAL, TriggerMode.AUTO)).isInstanceOf(GateDecision.Skip.class);
         }
@@ -734,12 +835,12 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             ReviewSubject reviewer = new ReviewSubject(99L, true);
             Workspace workspace = createWorkspace();
             when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
-            when(coverageService.admits(workspace, "ls1intum/Hephaestus", "main", reviewer))
-                    .thenReturn(false);
+            when(coverageService.assess(workspace, "ls1intum/Hephaestus", "main", reviewer, true))
+                    .thenReturn(coverage(true, false, ReviewSubjectStatus.RESOLVED_LINKED_HUMAN));
 
             assertThat(gate.evaluate(pr, SIGNAL, TriggerMode.AUTO, reviewer)).isInstanceOf(GateDecision.Skip.class);
-            verify(coverageService).admits(workspace, "ls1intum/Hephaestus", "main", reviewer);
-            verify(coverageService, never()).admits(workspace, "ls1intum/Hephaestus", "main", pr.reviewSubject());
+            verify(coverageService).assess(workspace, "ls1intum/Hephaestus", "main", reviewer, true);
+            verify(coverageService, never()).assess(workspace, "ls1intum/Hephaestus", "main", pr.reviewSubject(), true);
         }
 
         /**
@@ -909,7 +1010,10 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                                             .withdrawnFor(reason),
                                     null,
                                     null,
-                                    null))));
+                                    null))),
+                    mock(ObservationRepository.class),
+                    mock(ObservationVisibilityPolicy.class),
+                    mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class));
             PullRequest pr = createPullRequest();
             Practice adopted = createPractice(SIGNAL);
             adopted.setSlug("withdrawn");

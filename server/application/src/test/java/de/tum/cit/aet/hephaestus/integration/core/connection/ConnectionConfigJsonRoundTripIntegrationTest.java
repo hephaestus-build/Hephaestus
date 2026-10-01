@@ -85,7 +85,8 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                 1234L,
                 5678L,
                 ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                Set.of("merge_requests"));
+                Set.of("merge_requests"),
+                null);
         Long id = persistAndClear(IntegrationKind.GITLAB, "https://gitlab.example.com", original);
 
         Connection reloaded = connectionRepository.findById(id).orElseThrow();
@@ -103,7 +104,12 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
     @Test
     void gitLabConfig_whsec_roundTrips() {
         ConnectionConfig.GitLabConfig original = new ConnectionConfig.GitLabConfig(
-                "https://gitlab.example.com", null, null, ConnectionConfig.GitLabConfig.SigningMode.WHSEC, Set.of());
+                "https://gitlab.example.com",
+                null,
+                null,
+                ConnectionConfig.GitLabConfig.SigningMode.WHSEC,
+                Set.of(),
+                null);
         Long id = persistAndClear(IntegrationKind.GITLAB, "https://gitlab.example.com/whsec", original);
 
         Connection reloaded = connectionRepository.findById(id).orElseThrow();
@@ -113,8 +119,8 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void slackConfig_roundTrips() {
-        ConnectionConfig.SlackConfig original = new ConnectionConfig.SlackConfig(
-                "T123", "Acme Slack", "C456", "Engineering", /* retentionDays */ null, Set.of("leaderboard"));
+        ConnectionConfig.SlackConfig original =
+                new ConnectionConfig.SlackConfig("T123", "Acme Slack", /* retentionDays */ null, Set.of("messages"));
         Long id = persistAndClear(IntegrationKind.SLACK, "T123", original);
 
         Connection reloaded = connectionRepository.findById(id).orElseThrow();
@@ -122,11 +128,32 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         ConnectionConfig.SlackConfig cfg = (ConnectionConfig.SlackConfig) reloaded.getConfig();
         assertThat(cfg.teamId()).isEqualTo("T123");
         assertThat(cfg.teamName()).isEqualTo("Acme Slack");
-        assertThat(cfg.notificationChannelId()).isEqualTo("C456");
-        assertThat(cfg.teamLabel()).isEqualTo("Engineering");
-        assertThat(cfg.enabledStreams()).containsExactly("leaderboard");
+        assertThat(cfg.enabledStreams()).containsExactly("messages");
 
         assertDiscriminator(id, "SLACK");
+    }
+
+    /** A stored Slack config may carry {@code notificationChannelId} and {@code teamLabel}, which are unmapped. */
+    @Test
+    void shouldReadASlackConfigWhenItCarriesUnmappedKeys() {
+        Long id = persistAndClear(
+                IntegrationKind.SLACK,
+                "T456",
+                new ConnectionConfig.SlackConfig("T456", "Legacy Slack", 14, Set.of("messages")));
+        entityManager
+                .createNativeQuery("UPDATE connection SET config = config || "
+                        + "'{\"notificationChannelId\":\"C123\",\"teamLabel\":\"Platform\"}'::jsonb "
+                        + "WHERE id = :id AND workspace_id = :wsId")
+                .setParameter("id", id)
+                .setParameter("wsId", workspace.getId())
+                .executeUpdate();
+        entityManager.clear();
+
+        ConnectionConfig.SlackConfig cfg = (ConnectionConfig.SlackConfig)
+                connectionRepository.findById(id).orElseThrow().getConfig();
+        assertThat(cfg.teamId()).isEqualTo("T456");
+        assertThat(cfg.retentionDays()).isEqualTo(14);
+        assertThat(cfg.enabledStreams()).containsExactly("messages");
     }
 
     /**

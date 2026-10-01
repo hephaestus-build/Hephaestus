@@ -243,7 +243,9 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
                 99L,
                 List.of(),
                 false,
-                "Engineering");
+                "Engineering",
+                null,
+                null);
     }
 
     private static ProjectedDocument tombstone() {

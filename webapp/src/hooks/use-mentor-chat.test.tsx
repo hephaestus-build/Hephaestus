@@ -541,7 +541,7 @@ describe("useMentorChat", () => {
 			expect(posted.url).toBe("http://localhost:8080/workspaces/test-workspace/mentor/chat");
 			// Only the newest message travels; the server rebuilds context from the thread id.
 			await expect(posted.text()).resolves.toBe(
-				JSON.stringify({ id: "thread-1", message: latest }),
+				JSON.stringify({ id: "thread-1", message: latest, trigger: "submit-message" }),
 			);
 			expect(posted.credentials).toBe("include");
 			expect(posted.headers.get("X-XSRF-TOKEN")).toBe("mock-csrf");

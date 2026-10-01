@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import java.util.List;
 import java.util.Map;
@@ -247,6 +248,7 @@ public class GitLabNoteSyncService {
                 authorName = null,
                 authorAvatarUrl = null,
                 authorWebUrl = null;
+        Boolean authorBot = null;
         Map<String, Object> authorMap = (Map<String, Object>) node.get("author");
         if (authorMap != null) {
             authorGlobalId = (String) authorMap.get("id");
@@ -254,6 +256,7 @@ public class GitLabNoteSyncService {
             authorName = (String) authorMap.get("name");
             authorAvatarUrl = (String) authorMap.get("avatarUrl");
             authorWebUrl = (String) authorMap.get("webUrl");
+            authorBot = GitLabUserLookup.botOf(authorMap);
         }
 
         var syncData = new GitLabIssueCommentProcessor.SyncNoteData(
@@ -265,6 +268,7 @@ public class GitLabNoteSyncService {
                 authorName,
                 authorAvatarUrl,
                 authorWebUrl,
+                authorBot,
                 createdAt,
                 updatedAt);
 

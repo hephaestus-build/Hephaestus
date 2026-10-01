@@ -6,6 +6,16 @@ public enum CheckState {
     FAILURE,
     PENDING,
     CANCELLED,
-    /** The provider reported no check for the head: none configured, or every one skipped. */
+    /**
+     * The provider reported no check state for the head: GitHub's empty status-check rollup. A GitLab record stored
+     * before {@link #NO_PIPELINE} and {@link #SKIPPED} existed holds it for either of those, so it does not say which.
+     */
     NONE,
+    /**
+     * GitLab reported that the head has no pipeline. It says nothing about whether CI is configured: a workflow rule
+     * can keep a configured pipeline from being created.
+     */
+    NO_PIPELINE,
+    /** GitLab reported the head's pipeline as skipped: neither a pass nor a failure. */
+    SKIPPED,
 }

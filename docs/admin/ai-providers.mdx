@@ -34,12 +34,13 @@ until it can be paid for:
 3. Add a model under that connection, with its upstream model id.
 4. Declare the model's price, or mark it **No metered API cost**.
 5. Enable the connection, then the model. Share it: public to all workspaces, or granted to a list.
-6. A workspace admin binds it to a purpose — **practice reviews**, **mentor** — on their own
+6. A workspace admin binds it to a purpose — **Practice reviews**, **Heph** — on their own
    **AI models** page. Nothing runs until this step.
 
-For Heph, the workspace admin also turns on **Chat with Heph** in the workspace's settings. That is
-the whole access path: there is no per-account grant to make before inviting a cohort, and each
-member's [AI choice](#data-handling-and-members-ai-choices) decides whether Heph answers them.
+For Heph, binding a model to the **Heph** purpose is the whole access path: Heph is offered to every
+member of the workspace once a Heph row on **AI models** is ready, and turning every Heph row off stops
+it. There is no separate workspace switch and no per-account grant to make before inviting a cohort;
+each member's [AI choice](#data-handling-and-members-ai-choices) decides whether Heph answers them.
 An instance admin who is not a member can administer a workspace but does not get Heph there.
 
 Attempting to skip a stage returns HTTP 400 with a specific message rather than a generic
@@ -324,7 +325,7 @@ enabling it, and wait until every runtime role has been upgraded before assignin
    data handling isn't declared yet. Declare it first, or assign it to Members who haven't
    chosen.* A model whose declaration later loosens no longer matches its row, reads **Not ready**
    and stops serving until you reassign it. Nothing is substituted. Existing grants, price
-   declarations, funding sources, feature switches and budgets still apply, and **Max concurrent
+   declarations, funding sources, the practice-review switch and budgets still apply, and **Max concurrent
    runs** applies independently to each row.
 3. Optionally require Slack or Outline account links under **Member onboarding**. A required link
    needs an active integration and an enabled account-linking provider for the same server. Slack

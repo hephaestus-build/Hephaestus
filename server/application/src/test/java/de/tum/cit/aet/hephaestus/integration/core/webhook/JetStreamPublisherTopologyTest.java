@@ -37,7 +37,8 @@ class JetStreamPublisherTopologyTest {
             new WebhookProperties.Publish(Duration.ofSeconds(2), 3, Duration.ofMillis(10)),
             WebhookPropertiesFixture.stream(),
             new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
-            new WebhookProperties.Http(26_214_400L));
+            new WebhookProperties.Http(26_214_400L),
+            new WebhookProperties.Routing(null, null));
 
     private ApplicationContextRunner baseRunner() {
         return new ApplicationContextRunner()

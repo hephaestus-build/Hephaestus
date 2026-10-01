@@ -18,7 +18,7 @@ class PreviousInAppFeedbackTest {
     void shouldStartAfterThePreparationWhenTheOpenCardIsInsideTheWindow() {
         Instant preparedAt = WINDOW_START.plus(Duration.ofDays(3));
 
-        assertThat(new Previous(UUID.randomUUID(), preparedAt, null).nextEvidenceSince(WINDOW_START))
+        assertThat(new Previous(UUID.randomUUID(), preparedAt, null, false).nextEvidenceSince(WINDOW_START))
                 .isEqualTo(preparedAt);
     }
 
@@ -26,7 +26,7 @@ class PreviousInAppFeedbackTest {
     void shouldStartWhereTheCardClosedWhenItClosed() {
         Instant closedAt = WINDOW_START.plus(Duration.ofDays(5));
 
-        assertThat(new Previous(UUID.randomUUID(), WINDOW_START.plus(Duration.ofDays(1)), closedAt)
+        assertThat(new Previous(UUID.randomUUID(), WINDOW_START.plus(Duration.ofDays(1)), closedAt, false)
                         .nextEvidenceSince(WINDOW_START))
                 .isEqualTo(closedAt);
     }
@@ -35,10 +35,19 @@ class PreviousInAppFeedbackTest {
     void shouldStartAtTheWindowWhenTheCardIsOlderThanTheWindow() {
         Instant preparedAt = WINDOW_START.minus(Duration.ofDays(100));
 
-        assertThat(new Previous(UUID.randomUUID(), preparedAt, null).nextEvidenceSince(WINDOW_START))
+        assertThat(new Previous(UUID.randomUUID(), preparedAt, null, false).nextEvidenceSince(WINDOW_START))
                 .isEqualTo(WINDOW_START);
-        assertThat(new Previous(UUID.randomUUID(), preparedAt, preparedAt.plus(Duration.ofDays(1)))
+        assertThat(new Previous(UUID.randomUUID(), preparedAt, preparedAt.plus(Duration.ofDays(1)), false)
                         .nextEvidenceSince(WINDOW_START))
                 .isEqualTo(WINDOW_START);
+    }
+
+    @Test
+    void aWithdrawnCardIsNothingToReplaceAndStillMarksWhereTheNextCardsEvidenceStarts() {
+        Instant preparedAt = WINDOW_START.plus(Duration.ofDays(2));
+        Previous withdrawn = new Previous(UUID.randomUUID(), preparedAt, null, true);
+
+        assertThat(withdrawn.isOpen()).isFalse();
+        assertThat(withdrawn.nextEvidenceSince(WINDOW_START)).isEqualTo(preparedAt);
     }
 }

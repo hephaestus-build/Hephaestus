@@ -53,7 +53,7 @@ export const Default: Story = {
 		await expect(tabs.map((tab) => tab.textContent)).toStrictEqual([
 			"Newest 2",
 			"Open 6",
-			"Resolved 3",
+			"Resolved and closed 3",
 			"All 9",
 		]);
 		await expect(canvas.getByRole("tab", { name: /^Newest/u })).toHaveAttribute(
@@ -194,12 +194,12 @@ export const ColdStart: Story = {
 			canvas.getByText("Feedback appears once the same shortcoming keeps showing up on your work."),
 		).toBeVisible();
 		await expect(canvas.queryByRole("article")).toBeNull();
-		await expect(canvas.queryByText("Latest run")).toBeNull();
+		await expect(canvas.queryByText("Latest review")).toBeNull();
 		await expect(canvas.queryByRole("img", { name: HEPH_LABEL })).toBeNull();
 	},
 };
 
-/** The Resolved tab says what would move a card here, rather than repeating the other tabs. */
+/** "Resolved and closed" says what would move a card here, rather than repeating the other tabs. */
 export const NothingResolvedYet: Story = {
 	args: {
 		overview: empty,
@@ -208,9 +208,11 @@ export const NothingResolvedYet: Story = {
 		feedbackTab: "resolved",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No resolved feedback yet.")).toBeVisible();
+		await expect(canvas.getByText("No resolved or closed feedback yet.")).toBeVisible();
 		await expect(
-			canvas.getByText("A card moves here once the work resolves it or you mark it as addressed."),
+			canvas.getByText(
+				"A card moves here once the work resolves it, you mark it as addressed, or its practice's review rules change.",
+			),
 		).toBeVisible();
 	},
 };

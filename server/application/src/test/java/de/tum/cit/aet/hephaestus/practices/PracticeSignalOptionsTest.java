@@ -32,6 +32,7 @@ class PracticeSignalOptionsTest extends BaseUnitTest {
                         ScmSignals.PULL_REQUEST_OPENED,
                         ScmSignals.PULL_REQUEST_READY,
                         ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+                        ScmSignals.PULL_REQUEST_EDITED,
                         ScmSignals.PULL_REQUEST_REVIEWED,
                         ScmSignals.PULL_REQUEST_MERGED,
                         ScmSignals.PULL_REQUEST_CLOSED);
@@ -106,6 +107,23 @@ class PracticeSignalOptionsTest extends BaseUnitTest {
         assertThat(options.producedByIngestion(ChatSignals.CONVERSATION_THREAD_SETTLED))
                 .isFalse();
         assertThat(options.producedByIngestion(ScmSignals.PULL_REQUEST_MERGED)).isTrue();
+    }
+
+    @Test
+    void keepsTheLinkedIssueRepairOccasionInternalWhileDeclaringItsProviderProvenance() {
+        assertThat(options.isInternalRepair(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED))
+                .isTrue();
+        assertThat(options.isInternalRepair(ScmSignals.PULL_REQUEST_MERGED)).isFalse();
+        assertThat(options.isInternalRepair(ScmSignals.PULL_REQUEST_MANUAL_REVIEW))
+                .isFalse();
+        assertThat(options.isInternalRepair(ChatSignals.CONVERSATION_THREAD_SETTLED))
+                .isFalse();
+        assertThat(options.isInternalRepair(SignalName.of("scm.pull_request.undeclared")))
+                .isFalse();
+        assertThat(options.producedByIngestion(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED))
+                .isTrue();
+        assertThat(options.eligibleFor(ArtifactKinds.PULL_REQUEST))
+                .doesNotContain(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED);
     }
 
     @Test

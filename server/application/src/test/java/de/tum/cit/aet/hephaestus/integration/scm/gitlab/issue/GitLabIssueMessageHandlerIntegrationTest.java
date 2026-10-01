@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organizatio
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.dto.GitLabIssueEventDTO;
@@ -192,6 +193,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                             "opened",
                             false,
                             FIXTURE_ISSUE_HTML_URL,
+                            null,
                             null,
                             null,
                             null,
@@ -479,6 +481,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                     null,
                     null,
                     null,
+                    null,
                     0,
                     labels.stream()
                             .map(name -> new GitLabIssueProcessor.SyncLabelData(null, name, FIXTURE_LABEL_COLOR))
@@ -676,6 +679,36 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
             assertThat(issueRepository.count()).isEqualTo(1);
         }
+    }
+
+    /** GitLab leaves {@code assignees} out of an issue hook when there are none. */
+    @Test
+    void shouldUnassignEveryoneWhenTheHookLeavesTheAssigneesOut() throws Exception {
+        handler.handleEvent(loadPayload("issue.open"));
+        transactionTemplate.executeWithoutResult(status -> {
+            Issue issue = issueRepository
+                    .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                    .orElseThrow();
+            User assignee = new User();
+            assignee.setNativeId(990_101L);
+            assignee.setLogin("former-assignee");
+            assignee.setName("Former Assignee");
+            assignee.setAvatarUrl("");
+            assignee.setHtmlUrl("https://gitlab.lrz.de/former-assignee");
+            assignee.setType(User.Type.USER);
+            assignee.setProvider(savedProvider);
+            issue.getAssignees().add(userRepository.save(assignee));
+            issueRepository.save(issue);
+        });
+
+        handler.handleEvent(loadPayload("issue.update"));
+
+        Boolean assigned = transactionTemplate.execute(status -> !issueRepository
+                .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                .orElseThrow()
+                .getAssignees()
+                .isEmpty());
+        assertThat(assigned).isFalse();
     }
 
     // Helpers

@@ -82,7 +82,7 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
                 .jsonPath("$[0].standing")
                 .isEqualTo("DEVELOPING");
         read(token, "/workspaces/actor-github/practice-profile/overview")
-                .jsonPath("$.latestRun.jobId")
+                .jsonPath("$.latestRun.reviewId")
                 .isEqualTo(run.getId().toString());
 
         // Slack and Outline attribute through the same account view.
@@ -161,7 +161,8 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractPracticeReviewInteg
                         null,
                         null,
                         ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of()));
+                        Set.of(),
+                        null));
         Practice practice = persistPractice(workspace, null, "lrz-practice", "LRZ practice", null);
         AgentJob run = persistPullRequestReview(workspace, 3, NOW.minus(Duration.ofDays(1)));
         UUID observation = observe(

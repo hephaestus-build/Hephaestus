@@ -56,7 +56,7 @@ class CredentialReaderTest extends BaseUnitTest {
                 workspace,
                 IntegrationKind.SLACK,
                 "T0974LHQU7K",
-                new ConnectionConfig.SlackConfig("T0974LHQU7K", "hephaestus-test", null, null, null, Set.of()));
+                new ConnectionConfig.SlackConfig("T0974LHQU7K", "hephaestus-test", null, Set.of()));
         ReflectionTestUtils.setField(connection, "id", 55L);
     }
 

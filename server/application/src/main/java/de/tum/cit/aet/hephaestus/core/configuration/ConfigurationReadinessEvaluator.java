@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
@@ -134,6 +135,17 @@ public final class ConfigurationReadinessEvaluator {
                 server || webhook,
                 this::validWebhookSecret,
                 "A webhook secret of at least 32 printable ASCII characters is required.",
+                "webhooks");
+        add(
+                facts,
+                "webhook.routing-secret",
+                "hephaestus.webhook.routing.secret",
+                roles(RuntimeRole.SERVER, RuntimeRole.WEBHOOK),
+                ConfigurationRequirement.REQUIRED,
+                server || webhook,
+                value -> validWebhookSecret(value) && !Objects.equals(value, property("hephaestus.webhook.secret")),
+                "A routing secret of at least 32 printable ASCII characters, different from the webhook secret, is "
+                        + "required to register and verify GitLab group hooks.",
                 "webhooks");
         add(
                 facts,

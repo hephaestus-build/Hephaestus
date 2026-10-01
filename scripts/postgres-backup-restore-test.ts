@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { hephBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
+
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
 const targetImage = values["target-image"];
 if (targetImage !== undefined && targetImage.trim() === "") {
@@ -122,10 +124,7 @@ try {
 		"CREATE TABLE restore_qualification(id bigint PRIMARY KEY, value text NOT NULL); INSERT INTO restore_qualification VALUES (1, 'preserved')",
 	);
 	sql(source, "UPDATE instance_settings SET silent_mode_engaged = FALSE WHERE id = 1");
-	sql(
-		source,
-		"INSERT INTO workspace(account_login, account_type, display_name, is_publicly_viewable, slug, status, mentor_enabled) VALUES ('restore-probe', 'USER', 'Restore probe', FALSE, 'restore-probe', 'ACTIVE', TRUE)",
-	);
+	sql(source, seedRestoreProbe);
 	sql(source, "CALL partman.run_maintenance_proc()");
 	const sourceFingerprint = fingerprint(source);
 	const partmanConfig = sql(
@@ -227,7 +226,7 @@ try {
 	}
 	const restoredPolicy = sql(
 		target,
-		"SELECT practice_delivery_status || ':' || practice_rollout_revision || ':' || mentor_enabled || ':' || practice_review_auto_trigger_enabled || ':' || practice_review_manual_trigger_enabled FROM workspace WHERE slug = 'restore-probe'",
+		`SELECT practice_delivery_status || ':' || practice_rollout_revision || ':' || practice_review_auto_trigger_enabled || ':' || practice_review_manual_trigger_enabled || ':' || ${hephBindingsEnabled} FROM workspace WHERE slug = 'restore-probe'`,
 	);
 	if (restoredPolicy !== "PAUSED:1:false:false:false") {
 		throw new Error(`restored workspace did not pause all feedback paths: ${restoredPolicy}`);

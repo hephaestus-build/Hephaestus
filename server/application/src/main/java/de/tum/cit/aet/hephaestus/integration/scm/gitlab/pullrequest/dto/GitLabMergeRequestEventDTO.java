@@ -25,7 +25,28 @@ public record GitLabMergeRequestEventDTO(
         @JsonProperty("object_attributes") @Nullable ObjectAttributes objectAttributes,
         @Nullable List<GitLabWebhookLabel> labels,
         @Nullable List<GitLabWebhookUser> assignees,
-        @Nullable List<GitLabWebhookUser> reviewers) {
+        @Nullable List<GitLabMergeRequestReviewerDTO> reviewers) {
+
+    /**
+     * The assignees now. GitLab leaves the key out of every merge request hook when there are none, so an absent
+     * list is an empty one.
+     *
+     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L28">GitLab's issuable hook data builder</a>
+     */
+    public List<GitLabWebhookUser> currentAssignees() {
+        return assignees == null ? List.of() : assignees;
+    }
+
+    /**
+     * The reviewers now, each with their review state. GitLab leaves the key out of every merge request hook when
+     * there are none, so an absent list is an empty one: the last reviewer was removed.
+     *
+     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/lib/gitlab/data_builder/issuable.rb#L30-31">GitLab's issuable hook data builder</a>
+     */
+    public List<GitLabMergeRequestReviewerDTO> currentReviewers() {
+        return reviewers == null ? List.of() : reviewers;
+    }
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ObjectAttributes(
             @Nullable Long id,
@@ -48,7 +69,22 @@ public record GitLabMergeRequestEventDTO(
             @JsonProperty("last_commit") @Nullable LastCommit lastCommit,
             @JsonProperty("merge_commit_sha") @Nullable String mergeCommitSha,
             // The head before this update; GitLab sends it only when the update pushed commits.
-            @Nullable String oldrev) {}
+            @Nullable String oldrev,
+            // True when GitLab itself acted, such as resetting approvals after a push; the hook's user did not.
+            @Nullable Boolean system,
+            // What GitLab did, sent only with system: approvals_reset_on_push or code_owner_approvals_reset_on_push.
+            @JsonProperty("system_action") @Nullable String systemAction) {
+
+        /**
+         * Whether GitLab sent this hook for its own act rather than its user's.
+         *
+         * @see <a href="https://docs.gitlab.com/user/project/integrations/webhook_events/#system-initiated-merge-request-events">GitLab
+         *     system-initiated merge request events</a>
+         */
+        public boolean isSystemInitiated() {
+            return Boolean.TRUE.equals(system);
+        }
+    }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record LastCommit(

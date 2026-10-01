@@ -55,7 +55,14 @@ const meta = {
 					onClose={(depth) => setStack(stack.slice(0, depth))}
 				>
 					{(entry, level) => (
-						<PracticeFormLevel nested={level.nested} creating={entry.kind === "practice-new"}>
+						<PracticeFormLevel
+							nested={level.nested}
+							path={{
+								behind: [{ label: "Practice setup", depth: 0 }],
+								onClose: (depth) => setStack(stack.slice(0, depth)),
+							}}
+							creating={entry.kind === "practice-new"}
+						>
 							<PracticeForm {...args} />
 						</PracticeFormLevel>
 					)}

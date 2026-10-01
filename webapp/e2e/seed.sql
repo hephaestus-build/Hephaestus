@@ -1,10 +1,9 @@
 BEGIN;
 
 INSERT INTO workspace (id, account_login, account_type, created_at, display_name, is_publicly_viewable, slug, status,
-  practices_enabled, leaderboard_enabled, progression_enabled, leagues_enabled,
-  practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled, mentor_enabled)
+  practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
 VALUES (1, 'hephaestustest', 'ORG', now(), 'E2E Practice Review', false, 'e2e', 'ACTIVE',
-  true, false, false, false, true, true, true)
+  true, true, true)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO llm_connection (id, slug, display_name, base_url, api_protocol, auth_mode, enabled, created_at)
@@ -39,8 +38,8 @@ FROM account a
 JOIN identity_provider p ON p.type = 'GITHUB' AND p.server_url = 'https://github.com'
 WHERE a.primary_email = 'e2e@dev.invalid'
 ON CONFLICT (id) DO NOTHING;
-INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at)
-VALUES (1, 900001, 'ADMIN', 0, false, now())
+INSERT INTO workspace_membership (workspace_id, user_id, role, hidden, created_at)
+VALUES (1, 900001, 'ADMIN', false, now())
 ON CONFLICT DO NOTHING;
 
 SELECT setval(pg_get_serial_sequence('llm_connection', 'id'), 10, true);

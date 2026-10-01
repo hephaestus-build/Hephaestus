@@ -53,8 +53,8 @@ class WorkspaceContextTest {
 
     @Test
     void shouldCheckIfUserHasSpecificRole() {
-        WorkspaceContext context = new WorkspaceContext(
-                1L, "test", "Test", AccountType.ORG, null, false, false, Set.of(WorkspaceRole.MEMBER));
+        WorkspaceContext context =
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, null, false, Set.of(WorkspaceRole.MEMBER));
 
         assertTrue(context.hasRole(WorkspaceRole.MEMBER));
         assertFalse(context.hasRole(WorkspaceRole.OWNER));
@@ -63,11 +63,11 @@ class WorkspaceContextTest {
 
     @Test
     void shouldCheckIfUserHasAnyMembership() {
-        WorkspaceContext withRoles = new WorkspaceContext(
-                1L, "test", "Test", AccountType.ORG, null, false, false, Set.of(WorkspaceRole.MEMBER));
+        WorkspaceContext withRoles =
+                new WorkspaceContext(1L, "test", "Test", AccountType.ORG, null, false, Set.of(WorkspaceRole.MEMBER));
 
         WorkspaceContext withoutRoles =
-                new WorkspaceContext(2L, "test2", "Test2", AccountType.USER, null, false, false, Set.of());
+                new WorkspaceContext(2L, "test2", "Test2", AccountType.USER, null, false, Set.of());
 
         assertTrue(withRoles.hasMembership());
         assertFalse(withoutRoles.hasMembership());
@@ -91,7 +91,7 @@ class WorkspaceContextTest {
     void shouldSupportMultipleRoles() {
         Set<WorkspaceRole> roles = Set.of(WorkspaceRole.OWNER, WorkspaceRole.ADMIN, WorkspaceRole.MEMBER);
 
-        WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, null, false, false, roles);
+        WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, null, false, roles);
 
         assertTrue(context.hasRole(WorkspaceRole.OWNER));
         assertTrue(context.hasRole(WorkspaceRole.ADMIN));
@@ -102,7 +102,7 @@ class WorkspaceContextTest {
     @Test
     void shouldBeImmutableRecord() {
         Set<WorkspaceRole> roles = Set.of(WorkspaceRole.OWNER);
-        WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 100L, false, false, roles);
+        WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 100L, false, roles);
 
         // Act - Try to get roles and verify they're the same set
         Set<WorkspaceRole> retrievedRoles = context.roles();

@@ -31,7 +31,7 @@ export const pullRequest = (number: number): ReviewedWorkRef => ({
 	provider: "GITHUB",
 	label: `#${number}`,
 	url: `${PULL_REQUESTS}${number}`,
-	repositoryName: "HephaestusTest/practice-validation",
+	container: "HephaestusTest/practice-validation",
 });
 
 export const issue = (number: number): ReviewedWorkRef => ({
@@ -40,7 +40,7 @@ export const issue = (number: number): ReviewedWorkRef => ({
 	provider: "GITHUB",
 	label: `#${number}`,
 	url: `${ISSUES}${number}`,
-	repositoryName: "HephaestusTest/MaxTestRepo",
+	container: "HephaestusTest/MaxTestRepo",
 });
 
 /** A Slack channel by name, "#releases"; the name is its id as well. */
@@ -421,7 +421,7 @@ const REVIEWING_CHANGES: ProfileChange[] = [
  * none of its practices did, so it is a bullet of its own.
  */
 export const SHARED_TRANSITION_OVERVIEW: PracticeProfileOverview = {
-	latestRun: { jobId: "run-2026-09-09", at: LATEST_RUN_AT, reviewedWork: pullRequest(22) },
+	latestRun: { reviewId: "run-2026-09-09", at: LATEST_RUN_AT, reviewedWork: pullRequest(22) },
 	window: { since: new Date("2026-09-02T09:00:00"), until: LATEST_RUN_AT },
 	holdingUp: [],
 	changes: [
@@ -487,7 +487,7 @@ export const SHARED_TRANSITION_OVERVIEW: PracticeProfileOverview = {
 
 /** The overview the stories show: one run, eleven changes, one of them a group moving. */
 export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
-	latestRun: { jobId: "run-2026-09-09", at: LATEST_RUN_AT, reviewedWork: pullRequest(22) },
+	latestRun: { reviewId: "run-2026-09-09", at: LATEST_RUN_AT, reviewedWork: pullRequest(22) },
 	window: { since: new Date("2026-09-02T09:00:00"), until: LATEST_RUN_AT },
 	holdingUp: [
 		{

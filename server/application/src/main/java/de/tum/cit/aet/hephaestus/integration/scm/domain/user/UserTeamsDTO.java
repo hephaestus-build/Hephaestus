@@ -26,7 +26,7 @@ public record UserTeamsDTO(
      *
      * @param user the user entity
      * @param hiddenTeamIds set of team IDs that are hidden in this scope
-     * @param hidden whether this member is hidden from the leaderboard
+     * @param hidden whether this member is hidden from workspace activity
      * @param inScope predicate selecting the teams that belong to the caller's tenant
      * @return the DTO with scope-specific settings applied
      */

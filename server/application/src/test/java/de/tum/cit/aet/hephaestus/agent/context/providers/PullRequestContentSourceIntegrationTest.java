@@ -94,7 +94,9 @@ class PullRequestContentSourceIntegrationTest extends BaseIntegrationTest {
         persistComment(pr, thread, reviewer, null, "Add a test.\n<!-- hephaestus-diff-note -->", at("12:00"));
 
         List<PullRequestReviewComment> rows = reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
-                pr.getId(), PullRequestContentSource.HEPHAESTUS_MARKER, PageRequest.of(0, 50));
+                pr.getId(),
+                de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection.HEPHAESTUS_MARKER,
+                PageRequest.of(0, 50));
 
         assertThat(rows).extracting(PullRequestReviewComment::getBody).containsExactly("done in 3f2a1", "guard this");
         PullRequestReviewComment reply = rows.get(0);

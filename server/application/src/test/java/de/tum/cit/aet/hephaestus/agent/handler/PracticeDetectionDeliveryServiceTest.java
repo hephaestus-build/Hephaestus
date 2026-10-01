@@ -124,6 +124,9 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     @Captor
     private ArgumentCaptor<PracticeDetectionCompletedEvent> eventCaptor;
 
+    @Mock
+    private de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess citedSourceAccess;
+
     private PracticeDetectionDeliveryService service;
 
     /** A regular file the attempt's checkout holds at one revision. */
@@ -140,19 +143,28 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        lenient()
+                .when(citedSourceAccess.permitsReviewResult(any()))
+                .thenAnswer(invocation -> memberAiPolicy.allowsResult(invocation.getArgument(0)));
         service = new PracticeDetectionDeliveryService(
                 practiceRevisionRepository,
                 observationRepository,
-                reviewTargets,
-                conversationSourceLiveness,
-                documentProjection,
+                new ReviewResultTargetResolver(reviewTargets, conversationSourceLiveness, documentProjection),
                 eventPublisher,
                 objectMapper,
                 cas,
                 sourceCatalogs,
                 historicalGit,
-                memberAiPolicy,
-                new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()));
+                new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
+                new LinkedIssueRepairAdmissionService(
+                        org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class),
+                        observationRepository,
+                        org.mockito.Mockito.mock(
+                                de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.class),
+                        org.mockito.Mockito.mock(
+                                de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.class)),
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions.class),
+                citedSourceAccess);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
 
@@ -177,15 +189,17 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         testJob.setMetadata(metadata);
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper);
         EvidenceSnapshotFixtures.artifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", BASE + ":" + HEAD),
                 PullRequestContentSource.CHANGE_FILE,
                 "a".repeat(64));
         ObjectNode tree = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.repository.tree", HEAD + ":" + TREE);
-        EvidenceSnapshotFixtures.artifact(tree, HEAD_PATH, HEAD_DIGEST);
-        EvidenceSnapshotFixtures.artifact(tree, REFS_PATH, REFS_DIGEST);
+        EvidenceSnapshotFixtures.artifact(snapshot, tree, HEAD_PATH, HEAD_DIGEST);
+        EvidenceSnapshotFixtures.artifact(snapshot, tree, REFS_PATH, REFS_DIGEST);
         EvidenceSnapshotFixtures.artifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
-                "inputs/context/pull_request.json",
+                "context/pull_request.json",
                 "b".repeat(64));
         EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 11L);
         testJob.setEvidenceSnapshot(snapshot);
@@ -688,7 +702,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @DisplayName("a change citation names the pinned change, not some other artifact")
         void rejectsAChangeCitationOfAnotherArtifact() {
             var observation = validObservation("pr-description-quality", Presence.PRESENT);
-            firstCitation(observation).put("artifactPath", "inputs/context/pull_request.json");
+            firstCitation(observation).put("artifactPath", "context/pull_request.json");
 
             assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
                     .isInstanceOf(JobDeliveryException.class)
@@ -700,7 +714,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @DisplayName("a change can only be quoted from a checkout the run captured")
         void rejectsAChangeCitationWithoutACapturedCheckout() {
             ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot());
-            EvidenceSnapshotFixtures.unavailable((ObjectNode)
+            EvidenceSnapshotFixtures.unavailable(snapshot, (ObjectNode)
                     snapshot.withObject("manifest").withArray("sources").get(1));
 
             assertThatThrownBy(() -> publishVerified(
@@ -743,7 +757,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ObjectNode citation = firstCitation(observation);
             citation.put("sourceKind", "scm.pull-request.core");
-            citation.put("artifactPath", "inputs/context/pull_request.json");
+            citation.put("artifactPath", "context/pull_request.json");
             citation.put("path", "pull_request.json");
 
             assertThatThrownBy(() -> publishVerified(testJob, List.of(observation)))
@@ -758,7 +772,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ObjectNode citation = firstCitation(observation);
             citation.put("sourceKind", "scm.pull-request.core");
-            citation.put("artifactPath", "inputs/context/pull_request.json");
+            citation.put("artifactPath", "context/pull_request.json");
             citation.put("path", "pull_request.json");
             citation.put("revision", HEAD);
             citation.remove("side");
@@ -784,7 +798,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
             ObjectNode nonCode = firstCitation(observation);
             nonCode.put("sourceKind", "scm.pull-request.core");
-            nonCode.put("artifactPath", "inputs/context/pull_request.json");
+            nonCode.put("artifactPath", "context/pull_request.json");
             nonCode.put("path", "pull_request.json");
             nonCode.remove("side");
 
@@ -800,7 +814,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ObjectNode citation = firstCitation(observation);
             citation.put("sourceKind", "scm.pull-request.comments");
-            citation.put("artifactPath", "inputs/context/comments.json");
+            citation.put("artifactPath", "context/comments.json");
             citation.put("path", "comments.json");
             citation.remove("side");
 
@@ -822,16 +836,14 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                     (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                     "workspace.project-inventory",
                     null);
-            inventory
-                    .withArray("artifacts")
-                    .addObject()
-                    .put("path", "inputs/context/project_inventory.json")
-                    .put("mediaType", "application/json")
-                    .put("bytes", 0)
-                    .put("sha256", "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc");
+            EvidenceSnapshotFixtures.artifact(
+                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    inventory,
+                    "context/project_inventory.json",
+                    "c".repeat(64));
             when(cas.containsUtf8AtLines(
                             testJob,
-                            "inputs/context/project_inventory.json",
+                            "context/project_inventory.json",
                             "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
                             "\"title\":\"Same migration\"",
                             1,
@@ -840,7 +852,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation observation = validObservation("pr-description-quality", Presence.PRESENT);
             ObjectNode citation = firstCitation(observation);
             citation.put("sourceKind", "workspace.project-inventory");
-            citation.put("artifactPath", "inputs/context/project_inventory.json");
+            citation.put("artifactPath", "context/project_inventory.json");
             citation.put("path", "project_inventory.json");
             citation.put("startLine", 1);
             citation.put("endLine", 1);
@@ -909,7 +921,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             ValidatedObservation unstaged = validObservation("pr-scope", Presence.PRESENT);
             ObjectNode citation = firstCitation(unstaged);
             citation.put("sourceKind", "scm.pull-request.comments");
-            citation.put("artifactPath", "inputs/context/comments.json");
+            citation.put("artifactPath", "context/comments.json");
             citation.put("path", "comments.json");
             citation.remove("side");
 
@@ -945,10 +957,12 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a change whose capture failed cannot be quoted, however the checkout looks")
         void rejectsACitationToAnUnavailableSource() {
-            EvidenceSnapshotFixtures.unavailable((ObjectNode) testJob.getEvidenceSnapshot()
-                    .path("manifest")
-                    .path("sources")
-                    .get(0));
+            EvidenceSnapshotFixtures.unavailable(
+                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    (ObjectNode) testJob.getEvidenceSnapshot()
+                            .path("manifest")
+                            .path("sources")
+                            .get(0));
 
             assertThatThrownBy(() -> publishVerified(
                             testJob, List.of(validObservation("pr-description-quality", Presence.PRESENT))))
@@ -1202,6 +1216,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
 
         private void stageHistory(String body) {
             EvidenceSnapshotFixtures.artifact(
+                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                     EvidenceSnapshotFixtures.availableSource(
                             (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                             "hephaestus.observation-history",
@@ -1390,7 +1405,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("about_user_id", 789L);
             testJob.setMetadata(metadata);
 
-            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "resolveTarget", testJob, metadata))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of()))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no longer authorized");
             verify(conversationSourceLiveness).isDeliverableThread(1L, 77L, "C123", "1700000000.100000", 789L);

@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.BaseGitLabProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
@@ -22,7 +21,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLab
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiffNoteWebhookProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +42,6 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
     private final GitLabMergeRequestProcessor mergeRequestProcessor;
     private final GitLabWebhookContextResolver contextResolver;
     private final PullRequestRepository pullRequestRepository;
-    private final UserRepository userRepository;
     private final GitLabUserService userService;
     private final GitLabReviewReconciler reviewReconciler;
     private final ApplicationEventPublisher eventPublisher;
@@ -55,7 +52,6 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
             GitLabMergeRequestProcessor mergeRequestProcessor,
             GitLabWebhookContextResolver contextResolver,
             PullRequestRepository pullRequestRepository,
-            UserRepository userRepository,
             GitLabUserService userService,
             GitLabReviewReconciler reviewReconciler,
             NatsMessageDeserializer deserializer,
@@ -74,7 +70,6 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
         this.userService = userService;
         this.reviewReconciler = reviewReconciler;
         this.pullRequestRepository = pullRequestRepository;
-        this.userRepository = userRepository;
         this.eventPublisher = eventPublisher;
     }
 
@@ -166,10 +161,6 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
                 } else {
                     issueCommentProcessor.processMergeRequestNote(event, context);
                 }
-                // Detect "Request changes" signal: GitLab's batch review with "Request changes"
-                // does NOT fire an MR webhook (GitLab bug #517909). Instead, the note events
-                // carry merge_request.detailed_merge_status = "requested_changes".
-                detectRequestedChanges(event, context);
             }
             case "Commit" ->
                 log.debug(
@@ -192,12 +183,9 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
     }
 
     /**
-     * Detects the "Request changes" signal from MR note events.
-     *
-     * <p>GitLab's "Request changes" (Premium, GA 17.3) fires NO dedicated webhook.
-     * However, note events from the batch review carry the updated
-     * {@code merge_request.detailed_merge_status}. When this transitions to
-     * {@code "requested_changes"}, we create a CHANGES_REQUESTED review for the note author.
+     * Records the review decision a system note names its author for. A note's embedded
+     * {@code merge_request.detailed_merge_status} is the merge request's, not its author's: GitLab reports
+     * {@code requested_changes} there on every note while anyone's request for changes stands.
      */
     private void recordReviewDecision(GitLabNoteEventDTO event) {
         var note = Objects.requireNonNull(event.objectAttributes());
@@ -229,49 +217,13 @@ public class GitLabNoteMessageHandler extends AbstractIntegrationMessageHandler<
             return;
         }
         // The same GID the GraphQL sync gives the note, so a later sync finds the row this made.
-        reviewReconciler.recordSystemNote(
+        if (reviewReconciler.recordSystemNote(
                 pullRequest,
                 author,
                 new GitLabReviewReconciler.SystemNote(note.note(), at, "gid://gitlab/Note/" + note.id(), true),
-                pullRequest.getProvider(),
-                new HashSet<>());
-    }
-
-    private void detectRequestedChanges(GitLabNoteEventDTO event, ProcessingContext context) {
-        var mr = event.mergeRequest();
-        if (mr == null || mr.iid() == null || mr.detailedMergeStatus() == null) return;
-
-        if (!"requested_changes".equals(mr.detailedMergeStatus())) return;
-
-        // The note author is the person who requested changes
-        if (event.user() == null || event.user().id() == null) return;
-
-        // Don't create CHANGES_REQUESTED for the MR author commenting on their own PR
-        var repository = context.repository();
-        if (repository == null) return;
-        var pullRequest = pullRequestRepository
-                .findByRepositoryIdAndNumber(repository.getId(), mr.iid())
-                .orElse(null);
-        if (pullRequest == null) return;
-
-        // Self-review guard: skip if reviewer == MR author
-        if (pullRequest.getAuthor() != null
-                && pullRequest.getAuthor().getNativeId() != null
-                && pullRequest
-                        .getAuthor()
-                        .getNativeId()
-                        .equals(event.user().id().longValue())) {
-            return;
+                pullRequest.getProvider())) {
+            mergeRequestProcessor.forgetReviewReadiness(pullRequest);
         }
-
-        Long providerId = context.providerId();
-        if (providerId == null) return;
-        User reviewer = userRepository
-                .findByNativeIdAndProviderId(event.user().id(), providerId)
-                .orElse(null);
-        if (reviewer == null) return;
-
-        mergeRequestProcessor.processRequestedChangesFromNote(pullRequest, reviewer, context);
     }
 
     private void handleBotCommand(GitLabNoteEventDTO event, ProcessingContext context, String safeProjectPath) {

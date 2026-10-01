@@ -105,8 +105,6 @@ class IntegrationCutoverPinsTest extends HephaestusArchitectureTest {
                 "gitProviderMode",
                 "slackToken",
                 "slackSigningSecret",
-                "leaderboardNotificationTeam",
-                "leaderboardNotificationChannelId",
                 "installationLinkedAt",
                 "gitlabGroupId",
                 "gitlabWebhookId",

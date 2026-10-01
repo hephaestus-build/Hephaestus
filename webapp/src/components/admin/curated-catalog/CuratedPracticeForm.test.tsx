@@ -129,7 +129,7 @@ describe("CuratedPracticeForm", () => {
 		);
 		expect(
 			screen.getByRole("combobox", { name: "Person this practice judges" }).textContent,
-		).toContain("reviewer");
+		).toContain("Reviewer");
 	});
 
 	it("marks a catalog gate removal as deliberate", async () => {
@@ -513,7 +513,7 @@ describe("CuratedPracticeForm", () => {
 		await renderForm({ bindings: [{ ...mockPullRequestBinding, subject: "REVIEWER" }] }, onSubmit);
 		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
 		const subject = screen.getByRole("combobox", { name: "Person this practice judges" });
-		expect(subject.textContent).toContain("reviewer (not available for this work)");
+		expect(subject.textContent).toContain("Reviewer (not available for this work)");
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onSubmit).not.toHaveBeenCalled();
 		expect(subject.getAttribute("aria-invalid")).toBe("true");

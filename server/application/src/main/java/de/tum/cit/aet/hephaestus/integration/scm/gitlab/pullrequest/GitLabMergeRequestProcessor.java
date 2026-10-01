@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
+import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
+
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
@@ -13,8 +15,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.MilestoneRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.MergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.RequestedReviewer;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -27,9 +32,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstan
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestReviewerDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -109,19 +116,228 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
+     * The version of merge request {@code iid} stored when a webhook's transaction ends: what a read made after it,
+     * outside that transaction, still has to describe. Empty when nothing is stored.
+     */
+    @Transactional(readOnly = true)
+    public Optional<StoredVersion> storedVersion(Repository repository, int iid) {
+        return pullRequestRepository
+                .findByRepositoryIdAndNumber(repository.getId(), iid)
+                .map(pr -> new StoredVersion(pr.getHeadRefOid(), pr.getUpdatedAt()));
+    }
+
+    /** A stored merge request's head and GitLab {@code updated_at}, as {@link #storedVersion} captured them. */
+    public record StoredVersion(
+            @Nullable String head, @Nullable Instant updatedAt) {}
+
+    /**
      * Replaces what the record says a merge request closes with GitLab's current statement, read from
      * the closes-issues route after a webhook: the sync compares {@code updatedAt} against the value
-     * that webhook stored, so it would not read the links for this change.
+     * that webhook stored, so it would not read the links for this change. A statement read for {@code readFor}
+     * changes nothing once another event or a sync stored a newer version, which reads the links itself.
      */
     @Transactional
-    public void replaceClosingIssues(Repository repository, int iid, List<Integer> closingIssueNumbers) {
+    public void replaceClosingIssues(
+            Repository repository, int iid, List<Integer> closingIssueNumbers, StoredVersion readFor) {
         pullRequestRepository
-                .findByRepositoryIdAndNumber(repository.getId(), iid)
+                .findForUpdateByRepositoryIdAndNumber(repository.getId(), iid)
+                .filter(pr -> Objects.equals(pr.getHeadRefOid(), readFor.head())
+                        && Objects.equals(pr.getUpdatedAt(), readFor.updatedAt()))
                 .ifPresent(pr -> {
                     if (pr.replaceClosingIssues(resolveLocalIssues(repository, closingIssueNumbers))) {
                         pullRequestRepository.save(pr);
                     }
                 });
+    }
+
+    /**
+     * Records what GitLab said about merging merge request {@code iid}, read after a webhook with the read begun at
+     * {@code requestedAt}, where it still describes what is stored. Runs after the read, in its own transaction, with
+     * the merge request's row locked; the caller checks first that the delivery may still write.
+     *
+     * <p>Nothing is recorded unless GitLab's answer is about this repository's project and this merge request, both
+     * still open, at the head stored now, and not at a version older than the stored one: a push stored meanwhile is
+     * read again after its own event, and the answer never moves the head. The head pipeline is recorded as observed
+     * ({@link GitLabHeadPipeline}) under its own clock. The reviewers, approvals, review decision, mergeability and
+     * merge status — which follow the approvals — are recorded together, only when no hook or read received after
+     * {@code requestedAt} is stored ({@link PullRequest#takesReviewSnapshotAt}); mergeability and approvals stay unknown
+     * while GitLab is still settling them ({@link #isSettling}), and the approvals come only from a whole list.
+     *
+     * @return whether the facts were recorded
+     */
+    @Transactional
+    public boolean applyReadiness(
+            Repository repository,
+            int iid,
+            GitLabMergeRequestReadinessReader.Facts facts,
+            Instant requestedAt,
+            ProcessingContext context) {
+        PullRequest pr = pullRequestRepository
+                .findForUpdateByRepositoryIdAndNumber(repository.getId(), iid)
+                .orElse(null);
+        if (pr == null) {
+            return false;
+        }
+        String reason = readinessMismatch(repository, pr, facts, Issue.State.OPEN);
+        if (reason != null) {
+            log.debug("Skipped merge request readiness: prId={}, reason={}", pr.getId(), reason);
+            return false;
+        }
+        Long providerId = Objects.requireNonNull(repository.getProvider().getId());
+        boolean settling = isSettling(facts.detailedMergeStatus());
+        facts.headPipeline().observeOn(pr, requestedAt);
+        if (pr.takesReviewSnapshotAt(requestedAt)) {
+            ProcessingContext read = context.withObservedAt(requestedAt);
+            updateSyncReviewers(facts.reviewers(), pr, providerId, read);
+            recordReviewSnapshot(
+                    pr,
+                    reviewDecision(facts.detailedMergeStatus(), facts.approved(), facts.reviewers(), facts.approvers()),
+                    settling ? null : facts.mergeable(),
+                    mapDetailedMergeStatus(facts.detailedMergeStatus()));
+            pr = pullRequestRepository.save(pr);
+            if (!settling) {
+                reconcileApprovals(facts.approvers(), pr, providerId, read);
+            }
+        } else {
+            log.debug("Kept reviews stored after the readiness read began: prId={}", pr.getId());
+            pullRequestRepository.save(pr);
+        }
+        return true;
+    }
+
+    /** Why GitLab's answer does not describe the stored merge request, or {@code null} when it does. */
+    private static @Nullable String readinessMismatch(
+            Repository repository,
+            PullRequest pr,
+            GitLabMergeRequestReadinessReader.Facts facts,
+            Issue.State expected) {
+        if (facts.projectNativeId() != repository.getNativeId()) {
+            return "otherProject";
+        }
+        if (facts.mergeRequestNativeId() != pr.getNativeId()) {
+            return "otherMergeRequest";
+        }
+        if (pr.getState() != expected || convertState(facts.state()) != expected) {
+            return "not" + expected;
+        }
+        if (!facts.headSha().equals(pr.getHeadRefOid())) {
+            return "otherHead";
+        }
+        if (pr.getUpdatedAt() != null && facts.updatedAt().isBefore(pr.getUpdatedAt())) {
+            return "olderVersion";
+        }
+        return null;
+    }
+
+    /**
+     * Why GitLab's report of a merge is not about the merge of {@code pr}, or {@code null} when it is: this merge
+     * request, merged in GitLab and as stored, at the stored head, with the stored merge commit where both know one.
+     * No version is compared. A merged merge request's title or description can still change, but who merged it, when
+     * and into which commit are facts of the completed merge that do not; so they hold whatever version GitLab dated
+     * its report with. GitLab's GraphQL dates to the second what its webhooks date to the millisecond, so the report
+     * of a merge is dated before the merge hook it follows.
+     */
+    private static @Nullable String mergeMismatch(
+            PullRequest pr,
+            long mergeRequestNativeId,
+            @Nullable String state,
+            @Nullable String head,
+            @Nullable String commit) {
+        if (mergeRequestNativeId != pr.getNativeId()) {
+            return "otherMergeRequest";
+        }
+        if (pr.getState() != Issue.State.MERGED || convertState(state) != Issue.State.MERGED) {
+            return "notMerged";
+        }
+        if (head == null || !head.equals(pr.getHeadRefOid())) {
+            return "otherHead";
+        }
+        if (commit != null && pr.getMergeCommitSha() != null && !commit.equals(pr.getMergeCommitSha())) {
+            return "otherMergeCommit";
+        }
+        return null;
+    }
+
+    /**
+     * Records what is unknown about the merge of {@code pr} from GitLab's report of it, which {@link #mergeMismatch}
+     * accepted: a merger, merge commit or merge time already stored stays, and one GitLab does not name stays unknown.
+     *
+     * @return whether anything was recorded
+     */
+    private boolean fillUnknownMerge(
+            PullRequest pr,
+            @Nullable SyncUserData merger,
+            @Nullable Instant mergedAt,
+            @Nullable String commit,
+            Long providerId) {
+        boolean changed = false;
+        if (pr.getMergedBy() == null && merger != null) {
+            User user = findOrCreateUser(
+                    new GitLabUserLookup(
+                            merger.globalId(),
+                            merger.username(),
+                            merger.name(),
+                            merger.avatarUrl(),
+                            merger.webUrl(),
+                            merger.publicEmail(),
+                            merger.bot()),
+                    providerId);
+            if (user != null) {
+                pr.setMergedBy(user);
+                changed = true;
+            }
+        }
+        if (pr.getMergeCommitSha() == null && commit != null) {
+            pr.setMergeCommitSha(commit);
+            changed = true;
+        }
+        if (pr.getMergedAt() == null && mergedAt != null) {
+            pr.setMergedAt(mergedAt);
+            if (pr.getClosedAt() == null) {
+                pr.setClosedAt(mergedAt);
+            }
+            changed = true;
+        }
+        if (changed) {
+            pullRequestRepository.save(pr);
+            log.debug("Recorded merge facts from GitLab: prId={}", pr.getId());
+        }
+        return changed;
+    }
+
+    /**
+     * Records who merged merge request {@code iid}, when, and the merge commit, read from GitLab after its merge hook
+     * where the hook named none of them. Runs after the read, in its own transaction, with the merge request's row
+     * locked; the caller checks first that the delivery may still write.
+     *
+     * <p>Nothing is recorded unless GitLab's answer is about this repository's project and the stored merge
+     * ({@link #mergeMismatch}); its version is not compared. Only what is unknown is filled in, and only with what
+     * GitLab named: a merger or commit already stored stays, and one GitLab does not name stays unknown.
+     *
+     * @return whether anything was recorded
+     */
+    @Transactional
+    public boolean applyTerminalFacts(Repository repository, int iid, GitLabMergeRequestReadinessReader.Facts facts) {
+        PullRequest pr = pullRequestRepository
+                .findForUpdateByRepositoryIdAndNumber(repository.getId(), iid)
+                .orElse(null);
+        if (pr == null) {
+            return false;
+        }
+        GitLabMergeRequestReadinessReader.Merge merge = facts.merge();
+        String reason = facts.projectNativeId() != repository.getNativeId()
+                ? "otherProject"
+                : mergeMismatch(pr, facts.mergeRequestNativeId(), facts.state(), facts.headSha(), merge.commitSha());
+        if (reason != null) {
+            log.debug("Skipped merge facts: prId={}, reason={}", pr.getId(), reason);
+            return false;
+        }
+        return fillUnknownMerge(
+                pr,
+                merge.user(),
+                merge.mergedAt(),
+                merge.commitSha(),
+                Objects.requireNonNull(repository.getProvider().getId()));
     }
 
     private Set<Issue> resolveLocalIssues(Repository repository, List<Integer> numbers) {
@@ -148,7 +364,12 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable String name,
             @Nullable String avatarUrl,
             @Nullable String webUrl,
-            @Nullable String publicEmail) {}
+            @Nullable String publicEmail,
+            @Nullable Boolean bot) {}
+
+    /** A reviewer in sync data, with GitLab's {@code MergeRequestReviewState} for them when it gave one. */
+    public record SyncReviewerData(
+            SyncUserData user, @Nullable String reviewState) {}
 
     public record SyncMergeRequestData(
             @Nullable String globalId,
@@ -159,7 +380,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             boolean draft,
             @Nullable Boolean mergeable,
             @Nullable String detailedMergeStatus,
-            boolean approved,
+            /** GitLab's {@code approved}; null where the read did not capture it. */
+            @Nullable Boolean approved,
             @Nullable String webUrl,
             @Nullable String createdAt,
             @Nullable String updatedAt,
@@ -182,21 +404,21 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable String authorAvatarUrl,
             @Nullable String authorWebUrl,
             @Nullable String authorPublicEmail,
+            @Nullable Boolean authorBot,
             @Nullable String mergeUserGlobalId,
             @Nullable String mergeUserUsername,
             @Nullable String mergeUserName,
             @Nullable String mergeUserAvatarUrl,
             @Nullable String mergeUserWebUrl,
             @Nullable String mergeUserPublicEmail,
+            @Nullable Boolean mergeUserBot,
             @Nullable List<SyncLabelData> syncLabels,
             @Nullable List<SyncUserData> syncAssignees,
-            @Nullable List<SyncUserData> syncReviewers,
+            @Nullable List<SyncReviewerData> syncReviewers,
             @Nullable List<SyncUserData> syncApprovers,
             @Nullable List<SyncUserData> syncParticipants,
             @Nullable Integer milestoneIid,
-            /** GitLab's own {@code PipelineStatusEnum} name for the head pipeline; null when the MR has none. */
-            @Nullable String headPipelineStatus,
-            @Nullable String headPipelineSha,
+            GitLabHeadPipeline headPipeline,
             /**
              * The iids of GitLab's closing candidates for the MR, from the REST closes-issues route;
              * null when this sync did not read them, which leaves the stored set alone.
@@ -208,8 +430,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     /**
      * Process a GitLab merge request webhook event (open/update).
      * <p>
-     * Returns the existing entity unchanged if the webhook is stale (event's
-     * {@code updatedAt} is not newer than the stored value). This allows callers
+     * Returns the existing entity if the webhook is stale (event's {@code updatedAt}
+     * is not newer than the stored value), changing at most its reviewers. This allows callers
      * to still publish lifecycle events while preventing stale data from
      * overwriting newer sync data or M:N relationships.
      * <p>
@@ -243,18 +465,28 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         boolean isNew = true;
         Boolean wasDraft = null;
         String previousHead = null;
+        String previousTitle = null;
+        String previousBody = null;
         if (attrs.iid() != null) {
-            Optional<PullRequest> existingOpt = pullRequestRepository.findByRepositoryIdAndNumber(
+            Optional<PullRequest> existingOpt = pullRequestRepository.findForUpdateByRepositoryIdAndNumber(
                     Objects.requireNonNull(context.repository()).getId(), attrs.iid());
             if (existingOpt.isPresent()) {
                 isNew = false;
                 PullRequest existing = existingOpt.get();
                 wasDraft = existing.isDraft();
                 previousHead = existing.getHeadRefOid();
+                previousTitle = existing.getTitle();
+                previousBody = existing.getBody();
                 Instant eventUpdatedAt = parseGitLabTimestamp(attrs.updatedAt());
                 if (existing.getUpdatedAt() != null
                         && eventUpdatedAt != null
                         && !eventUpdatedAt.isAfter(existing.getUpdatedAt())) {
+                    // The reviewer list still applies unless the payload is older, as sync-lifecycle.md § Reviewer
+                    // lists are dated snapshots explains.
+                    if (!eventUpdatedAt.isBefore(existing.getUpdatedAt())
+                            && updateRequestedReviewers(event.currentReviewers(), existing, context)) {
+                        existing = pullRequestRepository.save(existing);
+                    }
                     log.debug(
                             "Skipped stale MR webhook: nativeId={}, existingUpdatedAt={}, eventUpdatedAt={}",
                             attrs.id(),
@@ -271,7 +503,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 attrs.milestoneId(),
                 Objects.requireNonNull(Objects.requireNonNull(context.repository())
                         .getProvider()
-                        .getId()));
+                        .getId()),
+                Objects.requireNonNull(context.repository()));
 
         String headRefOid = attrs.lastCommit() != null ? attrs.lastCommit().id() : null;
 
@@ -290,19 +523,30 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 attrs.updatedAt(),
                 attrs.closedAt(),
                 attrs.mergedAt(),
+                attrs.mergeCommitSha(),
                 author,
                 mergedBy,
                 milestoneId,
                 Objects.requireNonNull(context.repository()),
                 context,
-                isNew);
+                isNew,
+                previousTitle,
+                previousBody);
 
         if (pr == null) return null;
 
         boolean changed = updateLabels(event.labels(), pr.getLabels(), Objects.requireNonNull(context.repository()));
-        changed |= updateAssignees(event.assignees(), pr.getAssignees(), Objects.requireNonNull(context.providerId()));
-        changed |= updateRequestedReviewers(
-                event.reviewers(), pr.getRequestedReviewers(), Objects.requireNonNull(context.providerId()));
+        changed |= updateAssignees(
+                event.currentAssignees(), pr.getAssignees(), Objects.requireNonNull(context.providerId()));
+        changed |= updateRequestedReviewers(event.currentReviewers(), pr, context);
+        // GitLab names the previous head only when the update pushed commits, and not always then, so a
+        // moved head counts too; a sync that stored the new head first still leaves oldrev to say so.
+        boolean pushed = !isNew
+                && headRefOid != null
+                && (attrs.oldrev() != null || (previousHead != null && !previousHead.equals(headRefOid)));
+        if (pushed) {
+            changed |= forgetReadiness(pr);
+        }
         if (changed) {
             pr = pullRequestRepository.save(pr);
         }
@@ -311,11 +555,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         // request opened ready is: raising Ready as well would review the same head twice.
         var prData = ScmEventPayload.PullRequestData.from(pr);
         var eventCtx = EventContext.from(context);
-        // GitLab names the previous head only when the update pushed commits, and not always then, so a
-        // moved head counts too; a sync that stored the new head first still leaves oldrev to say so.
-        boolean pushed = !isNew
-                && headRefOid != null
-                && (attrs.oldrev() != null || (previousHead != null && !previousHead.equals(headRefOid)));
         if (pushed) {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(prData, eventCtx));
             log.debug("Merge request received new commits: prId={}, iid={}", pr.getId(), attrs.iid());
@@ -366,36 +605,80 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Process a merged event.
+     * Process a merged event: stores the merge and announces the close. The merge is offered for review by
+     * {@link #offerMerge}, after the read that follows the hook.
      */
     @Transactional
     @Nullable
     public PullRequest processMerged(GitLabMergeRequestEventDTO event, ProcessingContext context) {
         Issue.State before = getExistingState(event, context);
         PullRequest pr = processInternal(event, context);
-        if (pr != null && before != Issue.State.MERGED) {
-            var prData = ScmEventPayload.PullRequestData.from(pr);
-            if (before != Issue.State.CLOSED) {
-                eventPublisher.publishEvent(
-                        new ScmDomainEvent.PullRequestClosed(prData, true, EventContext.from(context)));
-            }
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestMerged(prData, EventContext.from(context)));
+        // Only the close is announced here. The merge itself, the occasion a review is judged on, is offered by
+        // offerMerge once the read after this hook has had its chance to record who merged.
+        if (pr != null
+                && pr.getState() == Issue.State.MERGED
+                && before != Issue.State.CLOSED
+                && before != Issue.State.MERGED) {
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(
+                    ScmEventPayload.PullRequestData.from(pr), true, EventContext.from(context)));
             log.debug("Merged merge request: prId={}", pr.getId());
         }
         return pr;
     }
 
     /**
-     * Process an approval event.
+     * Offers the merge of merge request {@code iid} for review, as a merge hook received in {@code context} reported
+     * it: after the hook was stored and the read after it recorded what it could, successful or not, in the caller's
+     * transaction under the delivery's still-active route. The merge request is read with its row locked and offered
+     * only while it is stored as merged, also when a sync stored it so first — that sync only recorded the merge, and
+     * this delivery is what may review it; the signal ledger settles a redelivery. A merger still unknown then holds
+     * the review pending rather than running it without them.
      *
-     * <p>Creates a new APPROVED review or updates an existing review (e.g., from
-     * CHANGES_REQUESTED after a previous unapproval) to APPROVED state.
+     * @return whether the merge was offered
+     */
+    @Transactional
+    public boolean offerMerge(Repository repository, int iid, ProcessingContext context) {
+        PullRequest pr = pullRequestRepository
+                .findForUpdateByRepositoryIdAndNumber(repository.getId(), iid)
+                .orElse(null);
+        if (pr == null || pr.getState() != Issue.State.MERGED) {
+            return false;
+        }
+        eventPublisher.publishEvent(new ScmDomainEvent.PullRequestMerged(
+                ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
+        return true;
+    }
+
+    /**
+     * Process an {@code approved} or {@code approval} event: the hook's user approved. GitLab sends {@code approved}
+     * when the approval meets the merge request's approval rules and {@code approval} when approvals are still missing
+     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/execute_approval_hooks_service.rb">execute_approval_hooks_service.rb</a>),
+     * so both are the same act by one person.
+     *
+     * <p>Creates a new APPROVED review or gives a dismissed one again, anchored to the head the hook names. The hook does not date the approval;
+     * its receipt time is used only for ingestion ordering. It applies only to the merge request as stored now ({@link #actsOnStoredHead}) and
+     * only where no later read of the reviews is stored ({@link PullRequest#takesReviewSnapshotAt}); otherwise it
+     * changes nothing and announces nothing.
      */
     @Transactional
     @Nullable
     public PullRequest processApproved(GitLabMergeRequestEventDTO event, ProcessingContext context) {
         PullRequest pr = processInternal(event, context);
         if (pr == null || event.user() == null) return pr;
+        if (!actsOnStoredHead(event, pr)) {
+            log.debug("Skipped approval of another head than the stored one: prId={}", pr.getId());
+            return pr;
+        }
+        // An approval is recorded for the head the hook names, never for one assumed from the stored merge request.
+        String approvedCommit = namedHead(event);
+        if (approvedCommit == null) {
+            log.debug("Skipped approval that names no head: prId={}", pr.getId());
+            return pr;
+        }
+        if (!pr.takesReviewSnapshotAt(context.observedAt())) {
+            log.debug("Skipped approval older than the stored reviews: prId={}", pr.getId());
+            return pr;
+        }
 
         User approver = findOrCreateUser(event.user(), Objects.requireNonNull(context.providerId()));
         if (approver == null) return pr;
@@ -403,15 +686,22 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         long approvalNativeId = generateApprovalNativeId(pr.getNativeId(), approver.getNativeId());
         var existingReview = reviewRepository.findByNativeIdAndProviderId(
                 approvalNativeId, Objects.requireNonNull(context.providerId()));
+        Instant approvedAt = context.observedAt();
 
         if (existingReview.isPresent()) {
-            // Re-approval: update existing review (may be DISMISSED from unapproval or CHANGES_REQUESTED)
+            // Re-approval: the approval row was dismissed by an unapproval, or it approves another head. GitLab's reset
+            // on a push dismisses no one, so an approval of the new head finds the earlier head's approval standing.
             PullRequestReview review = existingReview.get();
-            if (review.getState() != PullRequestReview.State.APPROVED) {
+            if (review.getState() != PullRequestReview.State.APPROVED
+                    || review.isDismissed()
+                    || !approvedCommit.equals(review.getCommitId())) {
                 review.setState(PullRequestReview.State.APPROVED);
-                review.setSubmittedAt(Instant.now());
-                review.setUpdatedAt(Instant.now());
+                review.setDismissed(false);
+                review.setSubmittedAt(null);
+                review.setUpdatedAt(approvedAt);
+                review.setCommitId(approvedCommit);
                 reviewRepository.save(review);
+                forgetReviewReadiness(pr);
 
                 ScmEventPayload.ReviewData.from(review)
                         .ifPresent(reviewData -> eventPublisher.publishEvent(
@@ -421,8 +711,13 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         } else {
             // First approval: create new review
             PullRequestReview review = createApprovalReview(approvalNativeId, pr, approver);
+            review.setSubmittedAt(null);
+            review.setCreatedAt(approvedAt);
+            review.setUpdatedAt(approvedAt);
+            review.setCommitId(approvedCommit);
             reviewRepository.save(review);
             pr.addReview(review);
+            forgetReviewReadiness(pr);
 
             ScmEventPayload.ReviewData.from(review)
                     .ifPresent(reviewData -> eventPublisher.publishEvent(
@@ -434,24 +729,81 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Process an unapproval event.
+     * Whether one person's approval act, or GitLab's reset, in {@code event} is about the merge request as stored now:
+     * the version it describes, GitLab's {@code updated_at}, is not older than the stored one, and the head it names is
+     * the stored head. A hook delayed past a later event still arrives after it, so when it came says nothing about
+     * either: a stored newer version was written by an event whose readiness read, or by a sync, that read the approvals
+     * after this act, and an act on another head is not about this one. A version equal to the stored one applies. A
+     * hook whose version cannot be read does not apply over a stored one; one that names no head is judged by its
+     * version alone. {@link #processInternal} returning the stored merge request says neither: it returns it for an
+     * older event too.
+     */
+    private static boolean actsOnStoredHead(GitLabMergeRequestEventDTO event, PullRequest pr) {
+        var attrs = event.objectAttributes();
+        if (attrs == null) {
+            return false;
+        }
+        Instant eventUpdatedAt = parseGitLabTimestamp(attrs.updatedAt());
+        Instant storedUpdatedAt = pr.getUpdatedAt();
+        if (storedUpdatedAt != null && (eventUpdatedAt == null || eventUpdatedAt.isBefore(storedUpdatedAt))) {
+            return false;
+        }
+        var lastCommit = attrs.lastCommit();
+        return lastCommit == null
+                || lastCommit.id().isBlank()
+                || lastCommit.id().equals(pr.getHeadRefOid());
+    }
+
+    /** The head {@code event} names, or {@code null} when it names none. */
+    private static @Nullable String namedHead(GitLabMergeRequestEventDTO event) {
+        var attrs = event.objectAttributes();
+        return attrs != null
+                        && attrs.lastCommit() != null
+                        && !attrs.lastCommit().id().isBlank()
+                ? attrs.lastCommit().id()
+                : null;
+    }
+
+    /**
+     * Process an {@code unapproved} or {@code unapproval} event: the hook's user withdrew their approval. GitLab sends
+     * {@code unapproved} when the merge request stops meeting its approval rules and {@code unapproval} otherwise
+     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/remove_approval_service.rb">remove_approval_service.rb</a>).
      *
-     * <p>Dismisses the existing approval review. Unapproval means "I retract my approval"
-     * — it does NOT mean "I request changes." These are distinct actions in GitLab:
-     * <ul>
-     *   <li><b>Unapproval</b> ({@code unapproved} webhook): revokes an existing approval.
-     *       Fires when the user clicks "Revoke approval" or when the system auto-revokes
-     *       after new commits. The review transitions to DISMISSED.</li>
-     *   <li><b>Request changes</b> (detected via note {@code detailed_merge_status}):
-     *       explicitly blocks the MR. Handled by
-     *       {@link #processRequestedChangesFromNote}.</li>
-     * </ul>
+     * <p>Dismisses the existing approval review. Withdrawing an approval is not a request for changes: that is its
+     * own system note, recorded by
+     * {@link de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreview.GitLabReviewReconciler}.
+     *
+     * <p>GitLab sends the same actions, marked {@code system}, when it resets approvals itself after a push: all of
+     * them ({@code approvals_reset_on_push}) or only Code Owners' ({@code code_owner_approvals_reset_on_push}). Its user
+     * is whoever pushed, not someone withdrawing an approval, and the hook does not say whose approvals went. So a reset
+     * leaves the review decision unknown and dismisses no one; the readiness read after the event reconciles the
+     * approvals with GitLab's whole approver list.
      */
     @Transactional
     @Nullable
     public PullRequest processUnapproved(GitLabMergeRequestEventDTO event, ProcessingContext context) {
         PullRequest pr = processInternal(event, context);
-        if (pr == null || event.user() == null) return pr;
+        if (pr == null) return pr;
+        if (!actsOnStoredHead(event, pr)) {
+            log.debug("Skipped unapproval of another head than the stored one: prId={}", pr.getId());
+            return pr;
+        }
+        var attrs = event.objectAttributes();
+        if (attrs != null && attrs.isSystemInitiated()) {
+            if (pr.takesReviewSnapshotAt(context.observedAt())) {
+                forgetReviewReadiness(pr);
+            }
+            log.info(
+                    "GitLab reset approvals: prId={}, systemAction={}",
+                    pr.getId(),
+                    sanitizeForLog(attrs.systemAction()));
+            return pr;
+        }
+        if (event.user() == null) return pr;
+        if (!pr.takesReviewSnapshotAt(context.observedAt())) {
+            log.debug("Skipped unapproval older than the stored reviews: prId={}", pr.getId());
+            return pr;
+        }
 
         User approver = findOrCreateUser(event.user(), Objects.requireNonNull(context.providerId()));
         if (approver == null) return pr;
@@ -469,8 +821,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                     }
                     review.setState(PullRequestReview.State.DISMISSED);
                     review.setDismissed(true);
-                    review.setUpdatedAt(Instant.now());
+                    review.setUpdatedAt(context.observedAt());
                     reviewRepository.save(review);
+                    forgetReviewReadiness(pr);
 
                     ScmEventPayload.ReviewData.from(review)
                             .ifPresent(reviewData -> eventPublisher.publishEvent(
@@ -482,62 +835,55 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Updates an existing review to CHANGES_REQUESTED when detected from a note event.
-     *
-     * <p>GitLab's "Request changes" feature (Premium, GA 17.3) does NOT fire a dedicated
-     * MR webhook. Instead, note events from the batch review carry
-     * {@code merge_request.detailed_merge_status = "requested_changes"}.
-     * This method is called from the note handler when that signal is detected.
-     *
-     * <p><b>Important:</b> This method only UPDATES existing reviews — it does NOT create
-     * new ones. The {@code detailed_merge_status} is an MR-level status that persists on
-     * ALL subsequent note events (not just notes from the reviewer who requested changes).
-     * Creating new reviews from this signal would cause false positives: any commenter on
-     * an MR with active change requests would be falsely attributed. New CHANGES_REQUESTED
-     * reviews without a prior approval are created by the GraphQL sync path instead.
-     *
-     * @param pr the pull request
-     * @param reviewer the user who requested changes (note author)
-     * @param context the processing context
+     * Leaves the merge request's review decision unknown once a webhook changed where one person's review stands, with
+     * the mergeability and merge status GitLab derives from the approvals. The hook names that one act; what every
+     * reviewer's acts now add up to is the readiness read's or the sync's to read ({@link #reviewDecision}), so what is
+     * stored would otherwise outlive the act that changed it, also when that read fails. Runs in the caller's
+     * transaction.
      */
-    @Transactional
-    public void processRequestedChangesFromNote(PullRequest pr, User reviewer, ProcessingContext context) {
-        if (pr.getNativeId() == null || reviewer.getNativeId() == null) return;
-
-        long approvalNativeId = generateApprovalNativeId(pr.getNativeId(), reviewer.getNativeId());
-        var existingReview = reviewRepository.findByNativeIdAndProviderId(
-                approvalNativeId, Objects.requireNonNull(context.providerId()));
-
-        if (existingReview.isEmpty()) {
-            // No existing review for this reviewer — cannot safely attribute from note signal.
-            // The sync path will create the review with correct attribution.
-            log.debug(
-                    "No existing review to update from note signal, deferring to sync: prId={}, reviewer={}",
-                    pr.getId(),
-                    reviewer.getLogin());
-            return;
+    public void forgetReviewReadiness(PullRequest pr) {
+        if (forgetReadiness(pr)) {
+            pullRequestRepository.save(pr);
         }
+    }
 
-        PullRequestReview review = existingReview.get();
-        if (review.getState() == PullRequestReview.State.CHANGES_REQUESTED) {
-            log.debug(
-                    "Review already CHANGES_REQUESTED from note signal: prId={}, reviewer={}",
-                    pr.getId(),
-                    reviewer.getLogin());
-            return;
-        }
-        review.setState(PullRequestReview.State.CHANGES_REQUESTED);
-        review.setSubmittedAt(Instant.now());
-        review.setUpdatedAt(Instant.now());
-        reviewRepository.save(review);
+    /**
+     * Records one read's review decision with the mergeability and merge status GitLab computed from the same approvals:
+     * the caller has accepted the read as the newest about the reviews ({@link PullRequest#takesReviewSnapshotAt}).
+     *
+     * @param mergeStateStatus the {@link MergeStateStatus} name, as {@link #mapDetailedMergeStatus} gives it
+     * @return whether anything changed
+     */
+    private static boolean recordReviewSnapshot(
+            PullRequest pr,
+            @Nullable ReviewDecision decision,
+            @Nullable Boolean mergeable,
+            @Nullable String mergeStateStatus) {
+        MergeStateStatus status = mergeStateStatus == null ? null : MergeStateStatus.valueOf(mergeStateStatus);
+        boolean changed = pr.getReviewDecision() != decision
+                || !Objects.equals(pr.getMergeable(), mergeable)
+                || pr.getMergeStateStatus() != status;
+        pr.setReviewDecision(decision);
+        pr.setMergeable(mergeable);
+        pr.setMergeStateStatus(status);
+        return changed;
+    }
 
-        ScmEventPayload.ReviewData.from(review)
-                .ifPresent(reviewData -> eventPublisher.publishEvent(
-                        new ScmDomainEvent.ReviewSubmitted(reviewData, EventContext.from(context))));
-        log.info(
-                "Updated review to CHANGES_REQUESTED (from note signal): prId={}, reviewer={}",
-                pr.getId(),
-                reviewer.getLogin());
+    /**
+     * Leaves what GitLab said about merging unknown: the review decision, and the mergeability and merge status that
+     * follow the approvals. For new commits, or an approval, withdrawal or reset of approvals. The approvals themselves
+     * stay as recorded — a project can keep them across a push, and a reset does not say whose went; the readiness
+     * read after the event, or the next sync, says which still stand.
+     *
+     * @return whether anything changed
+     */
+    private static boolean forgetReadiness(PullRequest pr) {
+        boolean changed =
+                pr.getReviewDecision() != null || pr.getMergeable() != null || pr.getMergeStateStatus() != null;
+        pr.setReviewDecision(null);
+        pr.setMergeable(null);
+        pr.setMergeStateStatus(null);
+        return changed;
     }
 
     // Sync Processing
@@ -551,7 +897,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             return null;
         }
         return pullRequestRepository
-                .findByRepositoryIdAndNumber(
+                .findForUpdateByRepositoryIdAndNumber(
                         Objects.requireNonNull(context.repository()).getId(),
                         event.objectAttributes().iid())
                 .map(PullRequest::getState)
@@ -560,10 +906,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
     /**
      * Process a GitLab merge request from GraphQL sync.
+     *
+     * @param context the sync of {@code context.repository()}, observed when it asked for the page the merge request
+     *     came from
      */
     @Transactional
     @Nullable
-    public PullRequest processFromSync(SyncMergeRequestData data, Repository repository, @Nullable Long scopeId) {
+    public PullRequest processFromSync(SyncMergeRequestData data, ProcessingContext context) {
+        Repository repository = Objects.requireNonNull(context.repository());
         if (data.globalId() == null || data.iid() == null || data.title() == null || data.state() == null) {
             log.warn("Skipped merge request processing: reason=missingRequiredData");
             return null;
@@ -586,11 +936,56 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         Long providerId = Objects.requireNonNull(repository.getProvider().getId());
 
+        // Locked before the users below, in the order the webhook path takes the same locks.
         Optional<PullRequest> existingOpt =
-                pullRequestRepository.findByRepositoryIdAndNumber(repository.getId(), mrNumber);
+                pullRequestRepository.findForUpdateByRepositoryIdAndNumber(repository.getId(), mrNumber);
         boolean isNew = existingOpt.isEmpty();
+        // A page that describes an older version than the one stored changes nothing: a later webhook or read stored
+        // it, and the page's head, checks and approvals would take it back.
+        Instant fetchedUpdatedAt = parseGitLabTimestamp(data.updatedAt());
+        if (existingOpt.isPresent() && fetchedUpdatedAt == null) {
+            // A page that did not capture the version cannot be ordered against the stored merge request.
+            log.debug("Skipped merge request read without its version: iid={}", data.iid());
+            return existingOpt.get();
+        }
+        if (existingOpt.isPresent()
+                && existingOpt.get().getUpdatedAt() != null
+                && fetchedUpdatedAt != null
+                && fetchedUpdatedAt.isBefore(existingOpt.get().getUpdatedAt())) {
+            PullRequest stored = existingOpt.get();
+            // Nothing that can still change, such as the title or description, is taken from an older page; only the
+            // facts of the completed merge it reports, when it is the stored merge, fill what is unknown (see
+            // mergeMismatch).
+            if (mergeMismatch(stored, nativeId, data.state(), data.diffHeadSha(), data.mergeCommitSha()) == null) {
+                fillUnknownMerge(
+                        stored,
+                        data.mergeUserGlobalId() == null
+                                ? null
+                                : new SyncUserData(
+                                        data.mergeUserGlobalId(),
+                                        data.mergeUserUsername(),
+                                        data.mergeUserName(),
+                                        data.mergeUserAvatarUrl(),
+                                        data.mergeUserWebUrl(),
+                                        data.mergeUserPublicEmail(),
+                                        data.mergeUserBot()),
+                        parseGitLabTimestamp(data.mergedAt()),
+                        data.mergeCommitSha(),
+                        providerId);
+            }
+            log.debug(
+                    "Skipped merge request older than the stored one: iid={}, storedUpdatedAt={}, readUpdatedAt={}",
+                    data.iid(),
+                    stored.getUpdatedAt(),
+                    fetchedUpdatedAt);
+            return stored;
+        }
         // Read before the upsert below overwrites the row; it's the only place the prior draft state survives.
         Boolean wasDraft = existingOpt.map(PullRequest::isDraft).orElse(null);
+        Issue.State previousState = existingOpt.map(PullRequest::getState).orElse(null);
+        String previousTitle = existingOpt.map(PullRequest::getTitle).orElse(null);
+        String previousBody = existingOpt.map(PullRequest::getBody).orElse(null);
+        String previousHead = existingOpt.map(PullRequest::getHeadRefOid).orElse(null);
 
         User author = findOrCreateUser(
                 new GitLabUserLookup(
@@ -599,7 +994,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                         data.authorName(),
                         data.authorAvatarUrl(),
                         data.authorWebUrl(),
-                        data.authorPublicEmail()),
+                        data.authorPublicEmail(),
+                        data.authorBot()),
                 providerId);
 
         User mergeUser = findOrCreateUser(
@@ -609,7 +1005,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                         data.mergeUserName(),
                         data.mergeUserAvatarUrl(),
                         data.mergeUserWebUrl(),
-                        data.mergeUserPublicEmail()),
+                        data.mergeUserPublicEmail(),
+                        data.mergeUserBot()),
                 providerId);
 
         // Identity harvest: seed User rows for anyone who has interacted with the MR so later
@@ -624,14 +1021,17 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                                 participant.name(),
                                 participant.avatarUrl(),
                                 participant.webUrl(),
-                                participant.publicEmail()),
+                                participant.publicEmail(),
+                                participant.bot()),
                         providerId);
             }
         }
 
         Issue.State mrState = convertState(data.state());
         boolean isMerged = "merged".equalsIgnoreCase(data.state());
-        String reviewDecision = deriveReviewDecision(data.approved(), data.detailedMergeStatus());
+        ReviewDecision reviewDecision =
+                reviewDecision(data.detailedMergeStatus(), data.approved(), data.syncReviewers(), data.syncApprovers());
+        boolean settling = isSettling(data.detailedMergeStatus());
         String mergeStateStatus = mapDetailedMergeStatus(data.detailedMergeStatus());
 
         // Resolve milestone by iid + repository (milestones are synced before MRs)
@@ -645,7 +1045,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         Instant now = Instant.now();
         // GitLab returns closedAt=null for merged MRs; fall back to mergedAt so closed_at
-        // reflects the true terminal timestamp (needed for leaderboard issue-state windows).
+        // reflects the true terminal timestamp (needed for activity time windows).
         Instant closedAtTimestamp = parseGitLabTimestamp(data.closedAt());
         Instant mergedAtTimestamp = parseGitLabTimestamp(data.mergedAt());
         if (closedAtTimestamp == null && isMerged) {
@@ -665,7 +1065,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 data.commentsCount(),
                 now,
                 parseGitLabTimestamp(data.createdAt()),
-                parseGitLabTimestamp(data.updatedAt()),
+                fetchedUpdatedAt,
                 author != null ? author.getId() : null,
                 repository.getId(),
                 milestoneId,
@@ -676,9 +1076,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 data.additions(),
                 data.deletions(),
                 data.fileCount(),
-                reviewDecision,
-                mergeStateStatus,
-                data.mergeable(),
+                null, // reviewDecision: set below, as upsertCore keeps a stored one where it is given none
+                null, // mergeStateStatus: recorded with the review snapshot below, as upsertCore keeps a stored one
+                null, // mergeable: likewise
                 data.sourceBranch(),
                 data.targetBranch(),
                 data.diffHeadSha(),
@@ -693,14 +1093,29 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         pr.setProvider(repository.getProvider());
 
-        boolean changed = updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
+        // The decision, the approvals and the mergeability and merge status that follow them are part of what was read
+        // about the reviews at context.observedAt(): what a hook or read received after the page was asked for stored
+        // stands. Where it does and the page moved the head, what is stored describes the old head and is unknown now.
+        // What holds for a head — the decision, mergeability, approvals and a missing pipeline — needs the page to have
+        // captured which head, and which version, it read: the upsert keeps a stored head where the page gives none, so
+        // they would otherwise land on a head the page did not read. A pipeline the page names with its SHA stands on
+        // its own.
+        boolean headCaptured = fetchedUpdatedAt != null
+                && data.diffHeadSha() != null
+                && !data.diffHeadSha().isBlank();
+        boolean headMoved = headCaptured && previousHead != null && !previousHead.equals(pr.getHeadRefOid());
+        boolean reviewsCurrent = headCaptured && pr.takesReviewSnapshotAt(context.observedAt());
+        boolean changed = false;
+        if (reviewsCurrent) {
+            changed |= recordReviewSnapshot(pr, reviewDecision, settling ? null : data.mergeable(), mergeStateStatus);
+        } else if (headMoved) {
+            changed |= forgetReadiness(pr);
+        }
+        changed |= updateSyncLabels(data.syncLabels(), pr.getLabels(), repository);
         changed |= updateSyncAssignees(data.syncAssignees(), pr.getAssignees(), providerId);
-        changed |= updateSyncReviewers(data.syncReviewers(), pr.getRequestedReviewers(), providerId);
-        // The head pipeline is read on every sync: a head with none has no checks, for that head.
-        if (data.diffHeadSha() != null || data.headPipelineSha() != null) {
-            String checkedSha = data.headPipelineSha() != null ? data.headPipelineSha() : data.diffHeadSha();
-            changed |= pr.observeHeadChecks(
-                    Objects.requireNonNull(checkedSha), mapPipelineStatus(data.headPipelineStatus()), true);
+        changed |= updateSyncReviewers(data.syncReviewers(), pr, providerId, context);
+        if (headCaptured || data.headPipeline().kind() == GitLabHeadPipeline.Kind.REPORTED) {
+            changed |= data.headPipeline().observeOn(pr, context.observedAt());
         }
         if (data.closingIssueNumbers() != null) {
             changed |= pr.replaceClosingIssues(resolveLocalIssues(repository, data.closingIssueNumbers()));
@@ -709,11 +1124,12 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             pr = pullRequestRepository.save(pr);
         }
 
-        // Reconcile approvals (needs ctx for activity event emission)
-        ProcessingContext ctx = ProcessingContext.forSync(scopeId, repository);
-        reconcileApprovals(data.syncApprovers(), pr, providerId, ctx);
+        // Approvers GitLab is still recomputing after a push are not a settled list.
+        if (reviewsCurrent && !settling) {
+            reconcileApprovals(data.syncApprovers(), pr, providerId, context);
+        }
         var prData = ScmEventPayload.PullRequestData.from(pr);
-        var eventCtx = EventContext.from(ctx);
+        var eventCtx = EventContext.from(context);
 
         if (isNew) {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestCreated(prData, eventCtx));
@@ -729,7 +1145,16 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
             log.debug("Created merge request from sync: nativeId={}, iid={}", nativeId, data.iid());
         } else {
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(prData, Set.of(), eventCtx));
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(
+                    prData, authoredChanges(previousTitle, previousBody, pr), eventCtx));
+            // A merge the webhook missed is recorded as the sync found it, so a later delivery of it can still
+            // claim it; a sync records it without starting a review.
+            if (isMerged && previousState != Issue.State.MERGED) {
+                if (previousState != Issue.State.CLOSED) {
+                    eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(prData, true, eventCtx));
+                }
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestMerged(prData, eventCtx));
+            }
             log.debug("Updated merge request from sync: nativeId={}, iid={}", nativeId, data.iid());
         }
 
@@ -789,12 +1214,13 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     @Nullable
-    private Long resolveWebhookMilestoneId(@Nullable Long gitlabMilestoneId, Long providerId) {
+    private Long resolveWebhookMilestoneId(@Nullable Long gitlabMilestoneId, Long providerId, Repository repository) {
         if (gitlabMilestoneId == null) {
             return null;
         }
         return milestoneRepository
                 .findByNativeIdAndProviderId(gitlabMilestoneId, providerId)
+                .filter(milestone -> milestone.getRepository().getId().equals(repository.getId()))
                 .map(Milestone::getId)
                 .orElse(null);
     }
@@ -815,12 +1241,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             @Nullable String updatedAt,
             @Nullable String closedAt,
             @Nullable String mergedAt,
+            @Nullable String mergeCommitSha,
             @Nullable User author,
             @Nullable User mergedBy,
             @Nullable Long milestoneId,
             Repository repository,
             ProcessingContext context,
-            boolean isNew) {
+            boolean isNew,
+            @Nullable String previousTitle,
+            @Nullable String previousBody) {
         if (rawId == null || iid == null) {
             log.warn("Skipped MR processing: reason=missingIdOrIid");
             return null;
@@ -873,7 +1302,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 headRefOid,
                 null, // baseRefOid — not in webhook, null preserves existing
                 mergedBy != null ? mergedBy.getId() : null,
-                null // mergeCommitSha — not in webhook, null preserves existing
+                mergeCommitSha // the hook's merge_commit_sha; null, as before a merge, keeps the stored one
                 );
 
         PullRequest pr = pullRequestRepository
@@ -889,11 +1318,29 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             log.debug("Created merge request: nativeId={}, iid={}", nativeId, mrNumber);
         } else {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(
-                    ScmEventPayload.PullRequestData.from(pr), Set.of(), EventContext.from(context)));
+                    ScmEventPayload.PullRequestData.from(pr),
+                    authoredChanges(previousTitle, previousBody, pr),
+                    EventContext.from(context)));
             log.debug("Updated merge request: nativeId={}, iid={}", nativeId, mrNumber);
         }
 
         return pr;
+    }
+
+    /**
+     * The authored fields this write changed, read off the stored row before and after it. GitLab's own
+     * {@code changes} object is not used: it may be empty, and a sync carries none at all.
+     */
+    private static Set<String> authoredChanges(
+            @Nullable String previousTitle, @Nullable String previousBody, PullRequest pr) {
+        Set<String> changed = new HashSet<>();
+        if (!Objects.equals(previousTitle, pr.getTitle())) {
+            changed.add("title");
+        }
+        if (!Objects.equals(previousBody, pr.getBody())) {
+            changed.add("body");
+        }
+        return changed;
     }
 
     private static Issue.State convertState(@Nullable String state) {
@@ -911,21 +1358,49 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * Derives the PR review decision from GitLab's binary approval flag plus detailed merge status.
+     * The merge request's review decision from what its reviewers did, or none where the sync did not read that whole.
      *
-     * <p>GitLab's {@code approved} field is binary and cannot express CHANGES_REQUESTED. The
-     * {@code detailed_merge_status == "requested_changes"} signal (Premium, GA 17.3) surfaces
-     * active change requests on the MR, so we lift it into the three-state model that the
-     * leaderboard/profile UI expects.
+     * <p>A standing request for changes decides it, over any approval: GitLab's {@code REQUESTED_CHANGES} merge status
+     * where the project blocks merging on one (Premium), and a reviewer's {@code REQUESTED_CHANGES} review state on any
+     * tier. Otherwise it is approved only when someone approved and GitLab's {@code approved} says the approval rules
+     * are met: that flag alone is also true when a project requires no approval and nobody gave one
+     * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/models/approval_state.rb">approval_state.rb</a>).
+     * A reviewer or approver list GitLab did not return whole could hide either, so it leaves the decision unknown, as
+     * does an {@code approved} it did not return and a status GitLab is still settling ({@link #isSettling}).
+     * {@code approvalsRequired} is not read: GitLab's Community Edition schema has no such field.
      */
-    private static String deriveReviewDecision(boolean approved, @Nullable String detailedStatus) {
-        if (approved) {
-            return "APPROVED";
+    private static @Nullable ReviewDecision reviewDecision(
+            @Nullable String detailedMergeStatus,
+            @Nullable Boolean approved,
+            @Nullable List<SyncReviewerData> reviewers,
+            @Nullable List<SyncUserData> approvers) {
+        if (isSettling(detailedMergeStatus)) {
+            return null;
         }
-        if (detailedStatus != null && "requested_changes".equalsIgnoreCase(detailedStatus)) {
-            return "CHANGES_REQUESTED";
+        boolean changesRequested = "REQUESTED_CHANGES".equalsIgnoreCase(detailedMergeStatus)
+                || (reviewers != null
+                        && reviewers.stream()
+                                .anyMatch(reviewer -> "REQUESTED_CHANGES".equalsIgnoreCase(reviewer.reviewState())));
+        if (changesRequested) {
+            return ReviewDecision.CHANGES_REQUESTED;
         }
-        return "REVIEW_REQUIRED";
+        if (reviewers == null || approvers == null || approved == null) {
+            return null;
+        }
+        return approved && !approvers.isEmpty() ? ReviewDecision.APPROVED : ReviewDecision.REVIEW_REQUIRED;
+    }
+
+    /**
+     * Whether GitLab is still working out the merge request's status after a change: {@code checking} while it
+     * computes mergeability, {@code approvals_syncing} while it recomputes approvals after a push. Neither its
+     * mergeability nor its approvals are settled then.
+     *
+     * @see <a href="https://docs.gitlab.com/api/merge_request_approvals/#prevent-approval-resets-in-automated-merge-requests">GitLab
+     *     merge request approvals API</a>
+     */
+    static boolean isSettling(@Nullable String detailedMergeStatus) {
+        return "checking".equalsIgnoreCase(detailedMergeStatus)
+                || "approvals_syncing".equalsIgnoreCase(detailedMergeStatus);
     }
 
     @Nullable
@@ -943,18 +1418,16 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     /**
-     * GitLab's pipeline status as one {@link CheckState}: a pipeline that has not finished is pending
-     * whatever stage it is in, a skipped one and no pipeline at all say nothing about the head.
+     * The status of a pipeline GitLab reported as one {@link CheckState}: a pipeline that has not finished is pending
+     * whatever stage it is in. A head with no pipeline has no status to map: {@link GitLabHeadPipeline} tells it apart
+     * from a pipeline that was not read.
      */
-    public static CheckState mapPipelineStatus(@Nullable String status) {
-        if (status == null) {
-            return CheckState.NONE;
-        }
+    public static CheckState mapPipelineStatus(String status) {
         return switch (status.toUpperCase(Locale.ROOT)) {
             case "SUCCESS" -> CheckState.SUCCESS;
             case "FAILED" -> CheckState.FAILURE;
             case "CANCELED", "CANCELING" -> CheckState.CANCELLED;
-            case "SKIPPED" -> CheckState.NONE;
+            case "SKIPPED" -> CheckState.SKIPPED;
             default -> CheckState.PENDING;
         };
     }
@@ -986,31 +1459,13 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         review.setProvider(pr.getProvider());
         review.setState(PullRequestReview.State.APPROVED);
         review.setHtmlUrl(pr.getHtmlUrl() + "#approvals");
-        // GitLab GraphQL exposes approvedBy as a plain UserCore connection without a
-        // per-user approvedAt timestamp, so we use the MR-level merged/updated time
-        // (deterministic — not Instant.now()) as the best-effort approval instant.
-        Instant approvalInstant = resolveApprovalInstant(pr);
-        review.setSubmittedAt(approvalInstant);
-        review.setCreatedAt(approvalInstant);
-        review.setUpdatedAt(approvalInstant);
+        // approvedBy names who currently approves; it does not date their approval.
         // Anchor the approval to the MR head commit so downstream consumers have a
         // commit SHA. Falls back to mergeCommitSha when the head is unavailable.
         review.setCommitId(resolveApprovalCommit(pr));
         review.setAuthor(approver);
         review.setPullRequest(pr);
         return review;
-    }
-
-    /**
-     * Best-effort approval timestamp for a GitLab MR: prefers {@code mergedAt},
-     * falls back to {@code updatedAt}, then {@code createdAt}, then
-     * {@link Instant#EPOCH} as a final deterministic fallback.
-     */
-    private static Instant resolveApprovalInstant(PullRequest pr) {
-        if (pr.getMergedAt() != null) return pr.getMergedAt();
-        if (pr.getUpdatedAt() != null) return pr.getUpdatedAt();
-        if (pr.getCreatedAt() != null) return pr.getCreatedAt();
-        return Instant.EPOCH;
     }
 
     /**
@@ -1052,7 +1507,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             approver.name(),
                             approver.avatarUrl(),
                             approver.webUrl(),
-                            approver.publicEmail()),
+                            approver.publicEmail(),
+                            approver.bot()),
                     providerId);
             if (user == null) continue;
 
@@ -1062,12 +1518,17 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
             PullRequestReview existingReview = existingReviewsByNativeId.get(approvalNativeId);
             if (existingReview != null) {
                 boolean changed = false;
-                // Review exists - update to APPROVED if it was CHANGES_REQUESTED
-                if (existingReview.getState() != PullRequestReview.State.APPROVED) {
-                    Instant approvalInstant = resolveApprovalInstant(pr);
+                // GitLab lists them as approving again: an approval given anew after it was withdrawn or reset, which
+                // approves the head GitLab reports now. One that stayed approved keeps the commit it was given for.
+                if (existingReview.getState() != PullRequestReview.State.APPROVED || existingReview.isDismissed()) {
                     existingReview.setState(PullRequestReview.State.APPROVED);
-                    existingReview.setSubmittedAt(approvalInstant);
-                    existingReview.setUpdatedAt(approvalInstant);
+                    existingReview.setDismissed(false);
+                    existingReview.setSubmittedAt(null);
+                    existingReview.setUpdatedAt(ctx != null ? ctx.observedAt() : Instant.now());
+                    String commit = resolveApprovalCommit(pr);
+                    if (commit != null) {
+                        existingReview.setCommitId(commit);
+                    }
                     changed = true;
                     log.debug(
                             "Updated review to APPROVED from sync: prId={}, reviewerId={}",
@@ -1083,10 +1544,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                         changed = true;
                     }
                 }
-                if (changed) {
+                boolean dateChanged = existingReview.getSubmittedAt() != null;
+                if (dateChanged) {
+                    existingReview.setSubmittedAt(null);
+                }
+                if (changed || dateChanged) {
                     reviewRepository.save(existingReview);
 
-                    if (ctx != null) {
+                    if (changed && ctx != null) {
                         ScmEventPayload.ReviewData.from(existingReview)
                                 .ifPresent(reviewData -> eventPublisher.publishEvent(
                                         new ScmDomainEvent.ReviewSubmitted(reviewData, EventContext.from(ctx))));
@@ -1119,7 +1584,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         for (PullRequestReview stale : staleReviews) {
             stale.setState(PullRequestReview.State.DISMISSED);
             stale.setDismissed(true);
-            stale.setUpdatedAt(Instant.now());
+            stale.setUpdatedAt(ctx != null ? ctx.observedAt() : Instant.now());
             reviewRepository.save(stale);
             log.debug("Dismissed stale review from sync: prId={}, nativeId={}", pr.getId(), stale.getNativeId());
 
@@ -1131,22 +1596,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         }
     }
 
+    /** The payload's reviewer list, dated by when Hephaestus received the webhook. */
     private boolean updateRequestedReviewers(
-            @Nullable List<GitLabWebhookUser> reviewerDtos, Set<User> currentReviewers, Long providerId) {
-        if (reviewerDtos == null) return false;
-
-        Set<User> newReviewers = new HashSet<>();
+            List<GitLabMergeRequestReviewerDTO> reviewerDtos, PullRequest pr, ProcessingContext context) {
+        Map<User, RequestedReviewer.@Nullable ReviewState> reviewers = new HashMap<>();
         for (var dto : reviewerDtos) {
-            User user = findOrCreateUser(dto, providerId);
-            if (user != null) newReviewers.add(user);
+            User user = findOrCreateUser(dto.user(), Objects.requireNonNull(context.providerId()));
+            if (user != null) reviewers.put(user, reviewState(dto.state(), pr, user));
         }
-
-        if (!currentReviewers.equals(newReviewers)) {
-            currentReviewers.clear();
-            currentReviewers.addAll(newReviewers);
-            return true;
-        }
-        return false;
+        return pr.replaceRequestedReviewers(reviewers, context.observedAt());
     }
 
     private boolean updateSyncLabels(
@@ -1180,7 +1638,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             data.name(),
                             data.avatarUrl(),
                             data.webUrl(),
-                            data.publicEmail()),
+                            data.publicEmail(),
+                            data.bot()),
                     providerId);
             if (user != null) newAssignees.add(user);
         }
@@ -1194,11 +1653,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     }
 
     private boolean updateSyncReviewers(
-            @Nullable List<SyncUserData> syncReviewers, Set<User> currentReviewers, Long providerId) {
+            @Nullable List<SyncReviewerData> syncReviewers,
+            PullRequest pr,
+            Long providerId,
+            ProcessingContext context) {
         if (syncReviewers == null) return false;
 
-        Set<User> newReviewers = new HashSet<>();
-        for (SyncUserData data : syncReviewers) {
+        Map<User, RequestedReviewer.@Nullable ReviewState> reviewers = new HashMap<>();
+        for (SyncReviewerData reviewer : syncReviewers) {
+            SyncUserData data = reviewer.user();
             User user = findOrCreateUser(
                     new GitLabUserLookup(
                             data.globalId(),
@@ -1206,16 +1669,29 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             data.name(),
                             data.avatarUrl(),
                             data.webUrl(),
-                            data.publicEmail()),
+                            data.publicEmail(),
+                            data.bot()),
                     providerId);
-            if (user != null) newReviewers.add(user);
+            if (user != null) reviewers.put(user, reviewState(reviewer.reviewState(), pr, user));
         }
+        return pr.replaceRequestedReviewers(reviewers, context.observedAt());
+    }
 
-        if (!currentReviewers.equals(newReviewers)) {
-            currentReviewers.clear();
-            currentReviewers.addAll(newReviewers);
-            return true;
+    /**
+     * Where GitLab says {@code user}'s review stands. Where it sent no state, the stored one stands: see
+     * {@link GitLabMergeRequestReviewerDTO} for when a hook sends none, and a reviewer who lost access to the merge
+     * request has none in GraphQL. A state Hephaestus does not know clears the stored one.
+     */
+    private static RequestedReviewer.@Nullable ReviewState reviewState(
+            @Nullable String sent, PullRequest pr, User user) {
+        if (sent != null) {
+            return GitLabMergeRequestReviewerDTO.reviewState(sent);
         }
-        return false;
+        for (RequestedReviewer listed : pr.getRequestedReviewers()) {
+            if (listed.getUser().getId().equals(user.getId())) {
+                return listed.getReviewState();
+            }
+        }
+        return null;
     }
 }

@@ -82,11 +82,13 @@ The job queue exposes its own signals — alert off these rather than reading ap
   `state`. Alert on sustained `UNCERTAIN` or `FAILED` outcomes. `UNCERTAIN` means delivery is not yet
   confirmed; `FAILED` is terminal after the retry limit or an unrecoverable dispatch record.
 
-Query `/actuator/health/readiness` for aggregate readiness. An authorized response includes the
+Query `/actuator/health/readiness` on the [management listener](./observability.mdx#scrape-metrics)
+for aggregate readiness, or `/readyz` on the application port. An authorized response includes the
 **`practiceReview`** component. An enabled review worker reports `OUT_OF_SERVICE` with
 `GIT_CHECKOUT_DISABLED` when repository checkout is disabled, or `SOURCE_AUTHORIZATION_EXPIRED` when an
 automated-review source authorization has expired. Missing model bindings are workspace-specific and remain
-visible in **Review activity** and the refusal counter; they do not remove the worker from service.
+visible on the work under **Practices → Practice reviews → Work** and in the refusal counter; they do not
+remove the worker from service.
 
 Gauges are sampled periodically; timers and counters are recorded when the corresponding event occurs.
 Metric names in the instrumented code are the source of truth for dashboards and alerts.
@@ -135,6 +137,13 @@ dispatch searches the reviewed work's comments for its marker:
 - **Search inconclusive** — the dispatch stays `UNCERTAIN` and retries later.
 - **Search complete, nothing found** — the dispatch creates the summary only if no earlier attempt closed its
   write fence.
+
+A summary with no inline comments whose visible text matches, word for word, the summary whose posting was
+recorded last on the same work for the same person is withheld as `REPEATS_DELIVERED_NOTE` instead of being
+created. Nothing is compared, and the new summary is created, while that earlier summary carries a correction or
+awaits the restore of its original text.
+The check compares against the delivered ledger only, after delivery policy allows the write, so two reviews
+of the same work whose summaries are both still being dispatched can each post one.
 
 The write fence closes after delivery policy allows the write and before the provider adapter runs its own
 preparation: its rate-limit check, resolving the pull request, merge request or issue, and then the create

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.manifest;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Capability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -47,6 +48,12 @@ public class GitLabManifest implements IntegrationManifest {
         return "GitLab";
     }
 
+    /** A merge hook often names no merger; the read after it, or a sync, does. */
+    @Override
+    public Set<ActorRole> rolesNamedAfterTheOccasion() {
+        return Set.of(ActorRole.MERGER);
+    }
+
     @Override
     public Set<Capability> declaredCapabilities() {
         EnumSet<Capability> capabilities = EnumSet.of(Capability.WEBHOOK_INGEST);
@@ -72,6 +79,8 @@ public class GitLabManifest implements IntegrationManifest {
                                 ScmSignals.PULL_REQUEST_OPENED,
                                 ScmSignals.PULL_REQUEST_READY,
                                 ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+                                ScmSignals.PULL_REQUEST_EDITED,
+                                ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED,
                                 ScmSignals.PULL_REQUEST_REVIEWED,
                                 ScmSignals.PULL_REQUEST_MERGED,
                                 ScmSignals.PULL_REQUEST_CLOSED),

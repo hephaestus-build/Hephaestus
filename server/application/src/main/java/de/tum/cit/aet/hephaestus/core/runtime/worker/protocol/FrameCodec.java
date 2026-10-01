@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.runtime.worker.protocol;
 
 import java.io.Serial;
+import java.nio.charset.StandardCharsets;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -10,8 +11,8 @@ import tools.jackson.databind.ObjectMapper;
  */
 public final class FrameCodec {
 
-    /** 256 KiB; mentor stdin/stdout is split into separate frames so the cap is per-frame. */
-    public static final int MAX_FRAME_BYTES = 256 * 1024;
+    /** Includes the session command envelope around a gateway frame of up to 1 MiB. */
+    public static final int MAX_FRAME_BYTES = 2 * 1024 * 1024;
 
     private final ObjectMapper objectMapper;
 
@@ -22,7 +23,7 @@ public final class FrameCodec {
     public String encode(FrameEnvelope envelope) {
         try {
             String json = objectMapper.writeValueAsString(envelope);
-            if (json.length() > MAX_FRAME_BYTES) {
+            if (json.getBytes(StandardCharsets.UTF_8).length > MAX_FRAME_BYTES) {
                 throw new FrameCodecException(
                         "encoded frame exceeds " + MAX_FRAME_BYTES + " bytes (got " + json.length() + ")");
             }
@@ -36,7 +37,7 @@ public final class FrameCodec {
         if (json == null) {
             throw new FrameCodecException("input must not be null");
         }
-        if (json.length() > MAX_FRAME_BYTES) {
+        if (json.getBytes(StandardCharsets.UTF_8).length > MAX_FRAME_BYTES) {
             throw new FrameCodecException(
                     "incoming frame exceeds " + MAX_FRAME_BYTES + " bytes (got " + json.length() + ")");
         }

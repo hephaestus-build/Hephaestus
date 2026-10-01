@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.domain.signal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentity;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactIdentityResolver;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import java.util.Collection;
 import java.util.HashMap;
@@ -38,10 +39,17 @@ public class DocumentIdentityResolver implements ArtifactIdentityResolver {
         }
         Map<Long, ArtifactIdentity> resolved = new HashMap<>();
         for (var label : documents.findLabels(workspaceId, artifactIds)) {
-            String title = label.getTitle() == null || label.getTitle().isBlank() ? "Document" : label.getTitle();
+            String title = label.getTitle();
             resolved.put(
                     label.getId(),
-                    new ArtifactIdentity(kind(), label.getId(), null, title, label.getCollectionSlug(), null));
+                    new ArtifactIdentity(
+                            kind(),
+                            label.getId(),
+                            IntegrationKind.OUTLINE,
+                            null,
+                            title == null || title.isBlank() ? "Document" : title,
+                            label.getCollectionName(),
+                            null));
         }
         return Map.copyOf(resolved);
     }

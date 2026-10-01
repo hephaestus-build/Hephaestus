@@ -68,6 +68,17 @@ export const ConflictingUpdate: Story = {
 	},
 };
 
+/** Delivery choices read as sentences on both sides, never as the object the wire carries. */
+export const DeliveryInWords: Story = {
+	play: async () => {
+		await expect(
+			screen.getByText("Feedback stays in the summary, not on a changed line."),
+		).toBeVisible();
+		await expect(screen.getAllByText("No special delivery rules.").length).toBeGreaterThan(0);
+		await expect(screen.queryByText(/summaryOnly/u)).not.toBeInTheDocument();
+	},
+};
+
 export const RecoveredBase: Story = {
 	args: { proposal: { ...proposal, baseSource: "CURRENT_DEFINITION" } },
 	play: async () => {

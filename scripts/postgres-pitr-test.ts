@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { hephBindingsEnabled, seedRestoreProbe } from "./lib/restore-probe.ts";
+
 const { values } = parseArgs({ options: { "target-image": { type: "string" } } });
 const id = `pgbackrest-pitr-${randomUUID().slice(0, 8)}`;
 const image = values["target-image"] ?? `${id}:18`;
@@ -324,9 +326,7 @@ try {
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "stanza-create");
 	docker("exec", "-u", "postgres", container, "pgbackrest", "--stanza=hephaestus", "check");
 	sql("UPDATE instance_settings SET silent_mode_engaged = FALSE WHERE id = 1");
-	sql(
-		"INSERT INTO workspace(account_login, account_type, display_name, is_publicly_viewable, slug, status, mentor_enabled) VALUES ('restore-probe', 'USER', 'Restore probe', FALSE, 'restore-probe', 'ACTIVE', TRUE)",
-	);
+	sql(seedRestoreProbe);
 	sql(
 		"CREATE TABLE restore_probe(value text PRIMARY KEY); INSERT INTO restore_probe VALUES ('before')",
 	);
@@ -388,7 +388,7 @@ try {
 	}
 	if (
 		sql(
-			"SELECT practice_delivery_status || ':' || mentor_enabled FROM workspace WHERE slug = 'restore-probe'",
+			`SELECT practice_delivery_status || ':' || ${hephBindingsEnabled} FROM workspace WHERE slug = 'restore-probe'`,
 		) !== "PAUSED:false"
 	) {
 		throw new Error("restored workspace did not pause feedback delivery and mentor");

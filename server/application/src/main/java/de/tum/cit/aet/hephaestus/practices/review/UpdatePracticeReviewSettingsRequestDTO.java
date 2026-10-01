@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -43,4 +45,10 @@ public record UpdatePracticeReviewSettingsRequestDTO(
         PracticeAutonomy defaultAutonomy,
 
         @Schema(description = "Fields to reset back to inherit") @Nullable
-        Set<PracticeReviewField> reset) {}
+        Set<PracticeReviewField> reset,
+
+        @Schema(
+                description =
+                        "Patch generated-path patterns per monitored repository. An empty list clears that repository. Null leaves all unchanged.")
+        @Nullable
+        Map<String, List<String>> generatedPaths) {}

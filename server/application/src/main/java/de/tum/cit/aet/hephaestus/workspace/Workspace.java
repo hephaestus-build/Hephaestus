@@ -57,11 +57,8 @@ import org.jspecify.annotations.Nullable;
  * ConnectionService}. Use {@code ConnectionService.findActiveProviderKind(workspaceId)}
  * to classify a workspace at runtime and the typed accessors
  * ({@code findActiveGitHubAppConfig}, {@code findActiveGitLabConfig},
- * {@code findSlackNotificationConfig}, {@code findActiveBearerToken}) to read
- * per-Connection state. The {@link #leaderboardNotificationEnabled} flag is the
- * only notification setting that remains on the workspace — it is a pure UI toggle
- * that controls whether the leaderboard pipeline <em>attempts</em> to deliver via
- * Slack; the credentials and channel id come from the Slack Connection.
+ * {@code findSlackConfig}, {@code findActiveBearerToken}) to read
+ * per-Connection state.
  *
  * <h2>Lifecycle States</h2>
  * Workspaces follow a defined lifecycle managed by {@link WorkspaceLifecycleService}:
@@ -137,8 +134,8 @@ public class Workspace {
     private String displayName;
 
     /**
-     * When {@code true}, unauthenticated users can view public workspace data
-     * (leaderboards, public stats). Defaults to {@code false} for privacy.
+     * When {@code true}, unauthenticated users can read the workspace's public endpoints.
+     * Defaults to {@code false} for privacy.
      */
     @Column(name = "is_publicly_viewable", nullable = false)
     @NotNull(message = "Public viewable flag is required")
@@ -208,46 +205,8 @@ public class Workspace {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    // Leaderboard Schedule
+    // Practice reviews
 
-    /** Day of week for scheduled leaderboard generation (1=Monday, 7=Sunday) */
-    @Column(name = "leaderboard_schedule_day")
-    private @Nullable Integer leaderboardScheduleDay;
-
-    /** Time of day for scheduled leaderboard generation (format: "HH:mm", e.g., "09:00") */
-    @Column(name = "leaderboard_schedule_time", length = 10)
-    private @Nullable String leaderboardScheduleTime;
-
-    /**
-     * Whether the leaderboard pipeline should attempt Slack delivery on each generation.
-     * <p>
-     * Pure UI toggle. The Slack target (team label, channel id) and credentials live on
-     * the workspace's Slack
-     * {@link de.tum.cit.aet.hephaestus.integration.core.connection.Connection Connection} and
-     * are read via
-     * {@link de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService#findSlackNotificationConfig
-     * ConnectionService.findSlackNotificationConfig}.
-     */
-    @Column(name = "leaderboard_notification_enabled")
-    private Boolean leaderboardNotificationEnabled;
-
-    /**
-     * End instant ({@code before} bound) of the most recent leaderboard cycle whose league points
-     * have already been applied. The league-points update accumulates ({@code newPoints = current +
-     * delta}), so it guards on this marker to stay idempotent: a re-run for an already-processed
-     * cycle (lock expiry, manual replay, at-least-once delivery) no-ops instead of double-awarding.
-     */
-    @Column(name = "leaderboard_league_cycle_at")
-    private @Nullable Instant leaderboardLeagueCycleAt;
-
-    // Feature Flags
-
-    /**
-     * Workspace-scoped feature flags controlling which features are enabled.
-     * Defaults all flags to {@code false} for new workspaces.
-     *
-     * @see WorkspaceFeatures
-     */
     @Embedded
     @Valid
     private WorkspaceFeatures features = new WorkspaceFeatures();

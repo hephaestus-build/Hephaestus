@@ -106,9 +106,13 @@ describe("withdrawnMoments", () => {
 		]);
 	});
 
-	it("names a moment nothing on the wire explains by its id, which is at least searchable", () => {
+	it("names a moment nothing on the wire explains in words, never by its id", () => {
 		expect(withdrawnMoments(mockDocumentWorkType, ["docs.document.forked"])).toStrictEqual([
-			{ signal: "docs.document.forked", displayName: "docs.document.forked", recommended: false },
+			{
+				signal: "docs.document.forked",
+				displayName: "A moment this version no longer offers",
+				recommended: false,
+			},
 		]);
 	});
 });

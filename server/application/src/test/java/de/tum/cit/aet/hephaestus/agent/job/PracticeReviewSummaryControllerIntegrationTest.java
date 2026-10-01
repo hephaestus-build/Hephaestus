@@ -3,6 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
@@ -22,6 +27,8 @@ import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
@@ -55,6 +62,15 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private RepositoryRepository repositoryRepository;
+
+    @Autowired
+    private RepositoryToMonitorRepository repositoryToMonitorRepository;
+
+    @Autowired
+    private PullRequestRepository pullRequestRepository;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -146,7 +162,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo("#42")
                 .jsonPath("$.content[0].target.reviewedWork.title")
                 .isEqualTo("Make review output visible")
-                .jsonPath("$.content[0].target.reviewedWork.repositoryName")
+                .jsonPath("$.content[0].target.reviewedWork.container")
                 .isEqualTo("review-summary-org/review-ui")
                 .jsonPath("$.content[0].target.reviewedWork.url")
                 .isEqualTo("https://github.com/review-summary-org/review-ui/pull/42")
@@ -168,6 +184,80 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(1)
                 .jsonPath("$.content[0].feedback.unconfirmed")
                 .isEqualTo(1);
+    }
+
+    /** The review recorded the title the pull request had then; the mirror holds the one it has now. */
+    @Test
+    @WithAdminUser
+    void shouldNameThePullRequestByItsCurrentTitleWhenItWasRenamedAfterTheReview() {
+        long pullRequestId = persistMonitoredPullRequest("Renamed after its review");
+        job.setStatus(AgentJobStatus.COMPLETED);
+        job.setIntegrationKind(IntegrationKind.GITHUB);
+        job.setMetadata(objectMapper.valueToTree(Map.of(
+                "pull_request_id",
+                pullRequestId,
+                "pr_number",
+                42,
+                "title",
+                "Make review output visible",
+                "repository_full_name",
+                "review-summary-org/review-ui",
+                "pr_url",
+                "https://github.com/review-summary-org/review-ui/pull/42")));
+        jobRepository.save(job);
+
+        listReviews("?status=COMPLETED")
+                .jsonPath("$.content[?(@.id=='" + job.getId() + "')].target.title")
+                .isEqualTo("Renamed after its review")
+                .jsonPath("$.content[?(@.id=='" + job.getId() + "')].target.reviewedWork.title")
+                .isEqualTo("Renamed after its review");
+    }
+
+    private long persistMonitoredPullRequest(String title) {
+        Repository repository = new Repository();
+        repository.setNativeId(9311L);
+        repository.setProvider(ensureGitHubProvider());
+        repository.setName("review-ui");
+        repository.setNameWithOwner("review-summary-org/review-ui");
+        repository.setHtmlUrl("https://github.com/review-summary-org/review-ui");
+        repository.setDefaultBranch("main");
+        repository = repositoryRepository.save(repository);
+        RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        repositoryToMonitorRepository.save(monitor);
+        PullRequest pullRequest = new PullRequest();
+        pullRequest.setNativeId(9312L);
+        pullRequest.setProvider(ensureGitHubProvider());
+        pullRequest.setNumber(42);
+        pullRequest.setTitle(title);
+        pullRequest.setState(Issue.State.OPEN);
+        pullRequest.setHtmlUrl("https://github.com/review-summary-org/review-ui/pull/42");
+        pullRequest.setRepository(repository);
+        return pullRequestRepository.save(pullRequest).getId();
+    }
+
+    /** Feedback waiting on an admin, or rejected by one, is still feedback the review produced. */
+    @Test
+    @WithAdminUser
+    void shouldCountFeedbackAwaitingApprovalAndDiscardedWhenTheReviewProducedIt() {
+        job.setStatus(AgentJobStatus.COMPLETED);
+        jobRepository.save(job);
+        persistFeedback(0, FeedbackDeliveryState.AWAITING_APPROVAL, null, "Proposed");
+        persistFeedback(1, FeedbackDeliveryState.AWAITING_APPROVAL, null, "Proposed too");
+        persistFeedback(2, FeedbackDeliveryState.DISCARDED, null, "Rejected");
+
+        listReviews("?status=COMPLETED")
+                .jsonPath("$.content[0].id")
+                .isEqualTo(job.getId().toString())
+                .jsonPath("$.content[0].feedback.awaitingApproval")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].feedback.discarded")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].feedback.prepared")
+                .isEqualTo(0)
+                .jsonPath("$.content[0].feedback.suppressed")
+                .isEqualTo(0);
     }
 
     /** A run that recorded no work names its kind and nothing more, so no surface prints a number that was not there. */
@@ -300,6 +390,57 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .isEqualTo(insideButFailed.getId().toString())
                 .jsonPath("$.content[2].id")
                 .isEqualTo(justBefore.getId().toString());
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldListReviewsInEitherStatusWhenTwoStatusesAreGiven() {
+        Instant at = Instant.parse("2026-03-10T00:00:00Z");
+        AgentJob failed = persistReviewAt(workspace, at, AgentJobStatus.FAILED);
+        AgentJob timedOut = persistReviewAt(workspace, at.plusSeconds(60), AgentJobStatus.TIMED_OUT);
+        persistReviewAt(workspace, at.plusSeconds(120), AgentJobStatus.COMPLETED);
+
+        listReviews("?status=FAILED&status=TIMED_OUT")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(timedOut.getId().toString())
+                .jsonPath("$.content[1].id")
+                .isEqualTo(failed.getId().toString());
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldListOnlyReviewsWhoseResultProcessingFailedWhenFilteredByIt() {
+        Instant at = Instant.parse("2026-03-10T00:00:00Z");
+        AgentJob failed = persistReviewAt(workspace, at, AgentJobStatus.COMPLETED);
+        failed.setDeliveryStatus(DeliveryStatus.FAILED);
+        jobRepository.save(failed);
+        AgentJob pending = persistReviewAt(workspace, at.plusSeconds(60), AgentJobStatus.COMPLETED);
+        pending.setDeliveryStatus(DeliveryStatus.PENDING);
+        jobRepository.save(pending);
+        AgentJob delivered = persistReviewAt(workspace, at.plusSeconds(120), AgentJobStatus.COMPLETED);
+        delivered.setDeliveryStatus(DeliveryStatus.DELIVERED);
+        jobRepository.save(delivered);
+
+        listReviews("?resultProcessing=FAILED")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(failed.getId().toString())
+                .jsonPath("$.content[0].resultProcessing")
+                .isEqualTo("FAILED");
+        listReviews("?resultProcessing=FAILED&resultProcessing=PENDING")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(2);
+        listReviews("?status=QUEUED")
+                .jsonPath("$.page.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].id")
+                .isEqualTo(job.getId().toString())
+                .jsonPath("$.content[0].resultProcessing")
+                .doesNotExist();
+        listReviews("").jsonPath("$.page.totalElements").isEqualTo(4);
     }
 
     /** A backwards window is a mistake, not an empty page — the siblings answer it the same way. */

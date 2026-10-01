@@ -6,6 +6,11 @@ public enum FeedbackSuppressionReason {
     COMPOSER_DEDUPED,
     /** The composer decided, with a reason, that this practice's feedback should not go on the work. */
     COMPOSER_WITHHELD,
+    /**
+     * The note, as it would appear, is word for word the one last delivered on the same work to the same person;
+     * posting it again would say nothing new.
+     */
+    REPEATS_DELIVERED_NOTE,
     REACTED_DISPUTED,
     REACTED_NOT_APPLICABLE,
     CONVERSATION_EXPIRED,
@@ -27,4 +32,6 @@ public enum FeedbackSuppressionReason {
     APPROVAL_NO_LONGER_ELIGIBLE,
     PRACTICE_REQUIRES_APPROVAL,
     BACKFILL_QUIET,
+    /** A workspace admin invalidated an observation this feedback cites. */
+    OBSERVATION_INVALIDATED,
 }

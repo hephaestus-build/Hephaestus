@@ -34,7 +34,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
-    private static final String FILE_KEY = "inputs/context/general_comments.json";
+    private static final String FILE_KEY = "context/general_comments.json";
     private static final Long PR_ID = 456L;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -205,8 +205,8 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void contribute_overCap_keepsNewestAndFlagsTruncated() throws Exception {
-        int total = GeneralReviewCommentContentSource.MAX_COMMENTS + 5;
+    void shouldKeepAllGeneralCommentsAboveTheFormerCaptureLimit() throws Exception {
+        int total = 10_000 + 5;
         List<IssueComment> comments = new ArrayList<>();
         Instant base = Instant.parse("2025-06-01T00:00:00Z");
         for (int i = 0; i < total; i++) {
@@ -220,14 +220,11 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("truncated").asBoolean()).isTrue();
+        assertThat(out.get("truncated").asBoolean()).isFalse();
         JsonNode bodies = out.get("comments");
-        assertThat(bodies).hasSize(GeneralReviewCommentContentSource.MAX_COMMENTS);
-        assertThat(bodies.get(0).get("body").asString()).isEqualTo("comment-5");
+        assertThat(bodies).hasSize(total);
+        assertThat(bodies.get(0).get("body").asString()).isEqualTo("comment-0");
         assertThat(bodies.get(bodies.size() - 1).get("body").asString()).isEqualTo("comment-" + (total - 1));
-        for (JsonNode c : bodies) {
-            assertThat(c.get("body").asString()).isNotEqualTo("comment-0");
-        }
     }
 
     @Test
@@ -287,21 +284,27 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void contribute_hyphenFormDiffNoteMarker_isNotExcluded() throws Exception {
-        // The hyphen-form diff-note marker is NOT matched by HEPHAESTUS_MARKER (colon form only) — correctly
-        // so, since diff notes are stored as PullRequestReviewComment, which this IssueComment-only provider
-        // never sees.
+    void contribute_diffNotePostedAsAConversationComment_isExcluded() throws Exception {
+        // A diff note whose line falls outside the hunk is posted as a conversation comment and keeps the
+        // diff-note marker; staged, it would read as an unanswered automated finding.
         when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
-                .thenReturn(List.of(comment(
-                        "reviewer-a",
-                        "<!-- hephaestus-diff-note --> human follow-up",
-                        Instant.parse("2025-06-01T10:00:00Z"))));
+                .thenReturn(List.of(
+                        comment(
+                                "group_328643_bot_1",
+                                "**`App/WeatherViewModel.swift:13`**\n\nAdd observation support so the view refreshes."
+                                        + "\n<!-- hephaestus-diff-note -->\n<!-- hephaestus-diff-note-ck=abc -->",
+                                Instant.parse("2025-06-01T09:00:00Z")),
+                        comment(
+                                "reviewer-a",
+                                "could you resolve the merge conflicts",
+                                Instant.parse("2025-06-01T10:00:00Z"))));
 
         Map<String, byte[]> files = new HashMap<>();
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
         assertThat(out.get("comments")).hasSize(1);
+        assertThat(out.get("comments").get(0).get("author").asString()).isEqualTo("reviewer-a");
     }
 
     @Test

@@ -15,5 +15,10 @@ public final class SandboxLabels {
 
     public static final String SESSION_ID = "hephaestus.session-id";
 
+    /** The application container that created an interactive resource, and the start of that container. */
+    public static final String CREATOR_CONTAINER = "hephaestus.creator-container";
+
+    public static final String CREATOR_STARTED_AT = "hephaestus.creator-started-at";
+
     private SandboxLabels() {}
 }

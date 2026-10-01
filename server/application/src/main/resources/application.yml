@@ -197,7 +197,8 @@ management:
             otlp:
                 enabled: false
     server:
-        port: ${MANAGEMENT_PORT:8080}
+        port: ${MANAGEMENT_PORT:9090}
+        address: 127.0.0.1
     endpoints:
         web:
             exposure:
@@ -208,6 +209,7 @@ management:
             show-details: when_authorized
             probes:
                 enabled: true
+                add-additional-paths: true
             # Operational dependencies affect readiness, not process liveness. This group replaces the
             # auto-configured readiness probe, which contains readinessState alone — on the
             # webhook-only container that reduces the probe to "the Spring context started", and both
@@ -372,7 +374,7 @@ hephaestus:
     #     The webhook-server production container deploys with server=false + worker=false
     #     + webhook=true so it runs webhook reception in isolation — restart-independent
     #     from application-server. See ADR 0008.
-    # All three default true → single-JVM monolith (the dev + initial prod topology).
+    # All three default true → single-JVM monolith (the dev topology; the shipped Compose stacks split them).
     runtime:
         server:
             enabled: ${HEPHAESTUS_RUNTIME_SERVER_ENABLED:true}
@@ -471,18 +473,6 @@ hephaestus:
         from-name: ${HEPHAESTUS_EMAIL_FROM_NAME:Hephaestus}
         reply-to: ${HEPHAESTUS_EMAIL_REPLY_TO:}
 
-    leaderboard:
-        schedule:
-            day: 2
-            time: "9:00"
-        notification:
-            # Global on/off for the weekly Slack post; per-workspace channel + team filter
-            # live on the Slack Connection's SlackConfig (set via the connection admin API).
-            enabled: false
-        # PR authors whose assignee-reviewers don't earn points (e.g., AI bots)
-        self-review-author-logins:
-            - Copilot
-
     # PAT-mode bootstrap for local dev. init-default only gates PAT workspace creation;
     # GitHub App installations are always processed regardless. Mode docs + cross-field
     # validation live on WorkspaceProperties (IDE-surfaced via spring-configuration-processor).
@@ -512,9 +502,6 @@ hephaestus:
         contributors:
             # Eviction rate in milliseconds (1 hour)
             evict-rate: 3600000
-        leaderboard-xp:
-            # Eviction rate in milliseconds (60 seconds - leaderboard data is moderately hot)
-            evict-rate: 60000
 
     # ═══════════════════════════════════════════════════════════════════════════
     # FEATURE FLAGS (operational / development toggles)
@@ -544,9 +531,6 @@ hephaestus:
         # catches somebody asking for one review each on twenty colleagues' merge requests. The cooldown
         # above will not: those are twenty different PRs.
         max-requests-per-requester-per-hour: ${PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR:5}
-        # Stop redelivering an observation the developer disputed or marked not-applicable.
-        # Responses apply only to the exact observations bound to the feedback.
-        reaction-suppression: ${PRACTICE_REVIEW_REACTION_SUPPRESSION:false}
         # The sampling temperature of every model call in a practice review; unset means the model's
         # own default. A review classifies work against fixed criteria, so a low value keeps the same
         # work landing in the same cell run after run.
@@ -583,7 +567,6 @@ hephaestus:
             host: ${SANDBOX_DOCKER_HOST:unix:///var/run/docker.sock}
             tls-verify: ${SANDBOX_DOCKER_TLS_VERIFY:false}
             cert-path: ${SANDBOX_DOCKER_CERT_PATH:}
-            app-server-container-id: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:}
             # OCI runtime: null=runc (default), "runsc"=gVisor (recommended for production)
             container-runtime: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:}
             owner: ${SANDBOX_DOCKER_OWNER:default}
@@ -600,7 +583,7 @@ hephaestus:
             pids-limit: ${SANDBOX_PIDS_LIMIT:256}
 
     # Mentor sandbox resource knobs (idleTtlSeconds, maxFrameChars, queue capacities, …) bind
-    # to hephaestus.mentor.* via InteractiveSandboxProperties. Per-workspace enable is in DB.
+    # to hephaestus.mentor.* via InteractiveSandboxProperties. Per-workspace readiness is the Heph model binding.
 
     # Dev-only actuator for manually triggering PR reviews (never enable in production).
     # Layered safety: (1) this flag, (2) not in endpoint exposure list, (3) Spring Security auth.
@@ -679,6 +662,11 @@ hephaestus:
     webhook:
         external-url: ${WEBHOOK_EXTERNAL_URL:${APPLICATION_HOST_URL:}}
         secret: ${WEBHOOK_SECRET:}
+        # Signs each GitLab connection's own hook token; independent of WEBHOOK_SECRET. The previous key stays
+        # accepted while its hooks are replaced during a rotation.
+        routing:
+            secret: ${WEBHOOK_ROUTING_SECRET:}
+            previous-secret: ${WEBHOOK_ROUTING_PREVIOUS_SECRET:}
         token-rotation:
             threshold-days: ${WEBHOOK_TOKEN_ROTATION_THRESHOLD_DAYS:7}
             validity-days: ${WEBHOOK_TOKEN_ROTATION_VALIDITY_DAYS:90}
@@ -772,6 +760,10 @@ hephaestus:
                 privateKey: ${GH_APP_PRIVATE_KEY:}
                 # URL where users install the GitHub App (shown in workspace creation UI)
                 installation-url: ${GH_APP_INSTALLATION_URL:}
+                # The App's own client credentials (not the login OAuth App's). Connecting an installation to a
+                # workspace exchanges the code GitHub returns with them, to prove the admin controls it.
+                client-id: ${GH_APP_CLIENT_ID:}
+                client-secret: ${GH_APP_CLIENT_SECRET:}
             meta:
                 # DEPRECATED: token used to live here; the Hephaestus-contributor
                 # endpoint now reads hephaestus.contributors.github.auth-token instead.

@@ -376,6 +376,7 @@ jobs:
           node ../../scripts/prepare-release-lock.ts "$TAG_NAME"
           docker compose --env-file .env --env-file release-lock.env config --quiet
           docker compose --env-file .env --env-file release-lock.env up -d --wait --wait-timeout 600
+          node ../../scripts/sandbox-isolation-probe.ts --env-file .env --env-file release-lock.env
           # Traefik routes by the hostname the installer answered with: SMOKE_HOSTNAME in
           # scripts/prepare-host-smoke-env.ts, which release-deployment-policy.test.ts holds to this.
           curl --fail --insecure --silent --show-error --max-time 10 --noproxy '*' \

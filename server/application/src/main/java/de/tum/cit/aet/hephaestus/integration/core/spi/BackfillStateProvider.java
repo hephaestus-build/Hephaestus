@@ -59,6 +59,13 @@ public interface BackfillStateProvider {
     void removeSyncTarget(Long syncTargetId);
 
     /**
+     * Folds sync target {@code duplicateSyncTargetId} into {@code keptSyncTargetId}, two targets of one scope for the
+     * same repository: the kept target keeps its own state and takes over any practice review selection the duplicate
+     * carried, and the duplicate is removed. A no-op unless both exist in the same scope.
+     */
+    void mergeSyncTarget(Long keptSyncTargetId, Long duplicateSyncTargetId);
+
+    /**
      * Reconciles a sync target's stable identity against what the provider currently reports for the
      * repository, healing a rename/transfer:
      * <ul>

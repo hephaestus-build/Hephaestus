@@ -24,12 +24,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,6 +55,12 @@ import org.springframework.stereotype.Service;
  *   <li>Discussions where any note has {@code position != null} &rarr; {@link PullRequestReviewThread} + {@link PullRequestReviewComment}</li>
  *   <li>General discussions (no position) &rarr; {@link de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment} (via existing processor)</li>
  * </ul>
+ * <p>
+ * The same read also serves a merge request webhook, which carries no discussion state; GitLab documents such
+ * an event for all threads becoming resolved, and not for every single thread resolved or reopened.
+ * {@link #readThreadResolutions} reads outside any transaction and {@link #applyThreadResolutions} records it. A
+ * thread's stored resolution is as current as the last whole read of the merge request's discussions, from a
+ * webhook or the sync.
  */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -91,7 +98,8 @@ public class GitLabDiscussionSyncService {
 
     /**
      * Syncs all discussions for a merge request, routing diff discussions to review
-     * threads/comments and general discussions to issue comments.
+     * threads/comments and general discussions to issue comments. The threads' resolution is recorded only when every
+     * page was read ({@link #applyThreadResolutions}).
      *
      * @param scopeId the scope ID for rate limiting
      * @param repository the repository entity
@@ -105,121 +113,38 @@ public class GitLabDiscussionSyncService {
         IdentityProvider provider = repository.getProvider();
         Long providerId = Objects.requireNonNull(provider.getId());
 
-        if (providerId == null) {
-            log.warn("Skipping discussion sync: reason=nullProviderId, context={}", safeContext);
-            return 0;
-        }
-
-        // Who withdrew an approval by note in this pass: the only approvals a later note re-gives.
-        Set<Long> unapproved = new HashSet<>();
-        int totalDiffNotes = 0;
-        int totalGeneralNotes = 0;
-        int totalSkipped = 0;
-        String cursor = null;
-        String previousCursor = null;
-        int page = 0;
-
-        try {
-            do {
-                if (page >= GitLabSyncConstants.MAX_PAGINATION_PAGES) {
-                    log.warn("Discussion sync reached max pages: context={}", safeContext);
-                    break;
+        List<ThreadResolution> resolutions = new ArrayList<>();
+        // diff notes, general notes, skipped
+        int[] totals = new int[3];
+        Instant requestedAt = readStart();
+        boolean whole = readDiscussions(scopeId, projectPath, mrIid, safeContext, nodes -> {
+            for (Map<String, Object> discussionNode : nodes) {
+                ThreadResolution resolution = threadResolution(discussionNode);
+                if (resolution != null) {
+                    resolutions.add(resolution);
                 }
-
-                graphQlClientProvider.acquirePermission();
-
                 try {
-                    graphQlClientProvider.waitIfRateLimitLow(scopeId);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    log.warn("Discussion sync interrupted: context={}", safeContext);
-                    break;
+                    int[] result = processDiscussion(discussionNode, pr, repository, provider, providerId, scopeId);
+                    totals[0] += result[0];
+                    totals[1] += result[1];
+                    totals[2] += result[2];
+                } catch (Exception e) {
+                    log.warn(
+                            "Error processing discussion: context={}, id={}", safeContext, discussionNode.get("id"), e);
+                    totals[2]++;
                 }
-
-                int remaining = graphQlClientProvider.getRateLimitRemaining(scopeId);
-                int pageSize = GitLabSyncConstants.adaptPageSize(DISCUSSION_SYNC_PAGE_SIZE, remaining);
-
-                HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
-
-                ClientGraphQlResponse response = client.documentName(GET_MR_DISCUSSIONS_DOCUMENT)
-                        .variable("fullPath", projectPath)
-                        .variable("iid", String.valueOf(mrIid))
-                        .variable("first", pageSize)
-                        .variable("after", cursor)
-                        .execute()
-                        .block(gitLabProperties.graphqlTimeout());
-
-                var handleResult = responseHandler.handle(response, "discussions for " + safeContext, log);
-                if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.RETRY) {
-                    continue;
-                }
-                if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.ABORT) {
-                    graphQlClientProvider.recordFailure(
-                            new GitLabSyncException("Invalid GraphQL response: context=" + safeContext));
-                    break;
-                }
-
-                graphQlClientProvider.recordSuccess();
-
-                String discussionsPath = "project.mergeRequest.discussions";
-
-                @SuppressWarnings("rawtypes")
-                List nodesRaw = Objects.requireNonNull(response)
-                        .field(discussionsPath + ".nodes")
-                        .toEntityList(Map.class);
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> nodes = (List<Map<String, Object>>) nodesRaw;
-
-                if (nodes == null || nodes.isEmpty()) {
-                    break;
-                }
-
-                for (Map<String, Object> discussionNode : nodes) {
-                    try {
-                        int[] result = processDiscussion(
-                                discussionNode, pr, repository, provider, providerId, scopeId, unapproved);
-                        totalDiffNotes += result[0];
-                        totalGeneralNotes += result[1];
-                        totalSkipped += result[2];
-                    } catch (Exception e) {
-                        log.warn(
-                                "Error processing discussion: context={}, id={}",
-                                safeContext,
-                                discussionNode.get("id"),
-                                e);
-                        totalSkipped++;
-                    }
-                }
-
-                // Pagination
-                GitLabPageInfo pageInfo = Objects.requireNonNull(response)
-                        .field(discussionsPath + ".pageInfo")
-                        .toEntity(GitLabPageInfo.class);
-                if (pageInfo == null || !pageInfo.hasNextPage()) {
-                    break;
-                }
-                cursor = pageInfo.endCursor();
-                if (cursor == null) {
-                    log.warn("Discussion pagination cursor null despite hasNextPage=true: context={}", safeContext);
-                    break;
-                }
-                if (responseHandler.isPaginationLoop(cursor, previousCursor, "discussions for " + safeContext, log)) {
-                    break;
-                }
-                previousCursor = cursor;
-                page++;
-
-                try {
-                    Thread.sleep(gitLabProperties.paginationThrottle().toMillis());
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
-            } while (true);
-        } catch (Exception e) {
-            graphQlClientProvider.recordFailure(e);
-            log.error("Discussion sync failed: context={}", safeContext, e);
+            }
+        });
+        if (whole) {
+            try {
+                applyThreadResolutions(repository, mrIid, new DiscussionRead(requestedAt, resolutions), scopeId);
+            } catch (Exception e) {
+                log.warn("Error recording discussion resolution: context={}", safeContext, e);
+            }
         }
+        int totalDiffNotes = totals[0];
+        int totalGeneralNotes = totals[1];
+        int totalSkipped = totals[2];
 
         int totalSynced = totalDiffNotes + totalGeneralNotes;
         if (totalSynced > 0 || totalSkipped > 0) {
@@ -235,100 +160,70 @@ public class GitLabDiscussionSyncService {
     }
 
     /**
-     * Processes a single discussion node, routing to diff thread/comment or general comment.
-     *
-     * @return int[3]: [diffNotes, generalNotes, skipped]
+     * What a read of a diff discussion said: its thread, whose resolution is null where the read did not state it, and
+     * who resolved it.
      */
-    @SuppressWarnings("unchecked")
-    private int[] processDiscussion(
-            Map<String, Object> discussionNode,
-            PullRequest pr,
-            Repository repository,
-            IdentityProvider provider,
-            Long providerId,
-            Long scopeId,
-            Set<Long> unapproved) {
-        String discussionGlobalId = (String) discussionNode.get("id");
-        if (discussionGlobalId == null) {
-            return new int[] {0, 0, 1};
-        }
+    public record ThreadResolution(
+            GitLabPullRequestReviewThreadProcessor.ThreadData thread,
+            @Nullable GitLabUserLookup resolvedBy) {}
 
-        Boolean resolved = (Boolean) discussionNode.get("resolved");
+    /** A whole read of a merge request's diff discussions, begun at {@code requestedAt}. */
+    public record DiscussionRead(Instant requestedAt, List<ThreadResolution> threads) {}
 
-        // Extract notes
-        Map<String, Object> notesMap = (Map<String, Object>) discussionNode.get("notes");
-        if (notesMap == null) {
-            return new int[] {0, 0, 1};
-        }
-
-        List<Map<String, Object>> noteNodes = (List<Map<String, Object>>) notesMap.get("nodes");
-        if (noteNodes == null || noteNodes.isEmpty()) {
-            return new int[] {0, 0, 1};
-        }
-
-        // Detect notes truncation (100-note limit per discussion)
-        Map<String, Object> notesPageInfo = (Map<String, Object>) notesMap.get("pageInfo");
-        if (notesPageInfo != null && Boolean.TRUE.equals(notesPageInfo.get("hasNextPage"))) {
-            log.warn(
-                    "Discussion has more than 100 notes (truncated): discussionId={}, fetchedNotes={}",
-                    discussionGlobalId,
-                    noteNodes.size());
-        }
-
-        // Check if this is a diff discussion (any note has position)
-        boolean isDiffDiscussion = noteNodes.stream().anyMatch(note -> note.get("position") != null);
-
-        if (isDiffDiscussion) {
-            return processDiffDiscussion(
-                    discussionNode,
-                    discussionGlobalId,
-                    resolved != null && resolved,
-                    noteNodes,
-                    pr,
-                    repository,
-                    provider,
-                    providerId,
-                    scopeId);
-        } else {
-            return processGeneralDiscussion(noteNodes, pr, providerId, scopeId, unapproved);
-        }
+    /**
+     * Reads whether each diff discussion of a merge request is resolved, and writes nothing.
+     *
+     * @return the read, or null when GitLab was not read whole to the last page
+     */
+    public @Nullable DiscussionRead readThreadResolutions(Long scopeId, String projectPath, int mrIid) {
+        String safeContext = sanitizeForLog(projectPath) + "!" + mrIid;
+        List<ThreadResolution> read = new ArrayList<>();
+        Instant requestedAt = readStart();
+        boolean whole = readDiscussions(scopeId, projectPath, mrIid, safeContext, nodes -> {
+            for (Map<String, Object> discussionNode : nodes) {
+                ThreadResolution resolution = threadResolution(discussionNode);
+                if (resolution != null) {
+                    read.add(resolution);
+                }
+            }
+        });
+        return whole ? new DiscussionRead(requestedAt, read) : null;
     }
 
     /**
-     * Processes a diff discussion into PullRequestReviewThread + PullRequestReviewComment(s).
+     * Records on the stored threads of merge request {@code iid} the resolution {@code read} found, through
+     * {@link GitLabPullRequestReviewThreadProcessor#applyDiscussionRead}: not where a later read was recorded, and not
+     * for a thread whose resolution the read did not state.
+     */
+    public void applyThreadResolutions(Repository repository, int iid, DiscussionRead read, Long scopeId) {
+        IdentityProvider provider = repository.getProvider();
+        Long providerId = Objects.requireNonNull(provider.getId());
+        List<GitLabPullRequestReviewThreadProcessor.ThreadData> threads = new ArrayList<>();
+        for (ThreadResolution thread : read.threads()) {
+            GitLabUserLookup resolvedBy = thread.resolvedBy();
+            User resolver = Boolean.TRUE.equals(thread.thread().resolved()) && resolvedBy != null
+                    ? issueCommentProcessor.findOrCreateUser(resolvedBy, providerId)
+                    : null;
+            threads.add(thread.thread().withResolvedBy(resolver));
+        }
+        threadProcessor.applyDiscussionRead(repository, iid, read.requestedAt(), threads, provider, scopeId);
+    }
+
+    /** Now, to the microsecond the database stores, so that a read compares with the one recorded exactly. */
+    private static Instant readStart() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    /**
+     * A diff discussion's thread as its node states it: the resolution, and the position of its first note that has
+     * one (a reply can omit its own), with no resolver, which only a transaction may look up.
      */
     @SuppressWarnings("unchecked")
-    private int[] processDiffDiscussion(
-            Map<String, Object> discussionNode,
+    private static GitLabPullRequestReviewThreadProcessor.ThreadData threadData(
             String discussionGlobalId,
-            boolean resolved,
-            List<Map<String, Object>> noteNodes,
-            PullRequest pr,
-            Repository repository,
-            IdentityProvider provider,
-            Long providerId,
-            Long scopeId) {
-        int diffNotes = 0;
-
-        // Resolve the user who resolved the thread
-        User resolvedBy = null;
-        if (resolved) {
-            Map<String, Object> resolvedByMap = (Map<String, Object>) discussionNode.get("resolvedBy");
-            if (resolvedByMap != null) {
-                resolvedBy = issueCommentProcessor.findOrCreateUser(
-                        GitLabUserLookup.of(
-                                (String) resolvedByMap.get("id"),
-                                (String) resolvedByMap.get("username"),
-                                (String) resolvedByMap.get("name"),
-                                (String) resolvedByMap.get("avatarUrl"),
-                                (String) resolvedByMap.get("webUrl")),
-                        providerId);
-            }
-        }
-
-        // Extract position from first note for thread metadata
-        // Pick the earliest note with a non-null position as "root" for thread path/line.
-        // (Some notes in a discussion can be replies without their own position.)
+            @Nullable Boolean resolved,
+            Map<String, Object> discussionNode,
+            List<Map<String, Object>> noteNodes) {
         Map<String, Object> rootNote = findRootDiffNote(noteNodes);
         Map<String, Object> rootPosition = rootNote != null ? (Map<String, Object>) rootNote.get("position") : null;
 
@@ -368,15 +263,11 @@ public class GitLabDiscussionSyncService {
             }
         }
 
-        Instant firstCreatedAt = parseTimestamp((String) noteNodes.get(0).get("createdAt"));
-        Object resolvedAtRaw = discussionNode.get("resolvedAt");
-        Instant resolvedAt = parseTimestamp(resolvedAtRaw == null ? null : resolvedAtRaw.toString());
-
-        // Create/update the thread
-        var threadData = new GitLabPullRequestReviewThreadProcessor.ThreadData(
+        Object resolvedAt = discussionNode.get("resolvedAt");
+        return new GitLabPullRequestReviewThreadProcessor.ThreadData(
                 discussionGlobalId,
                 resolved,
-                resolvedBy,
+                null,
                 filePath,
                 newLine,
                 oldLine,
@@ -384,9 +275,210 @@ public class GitLabDiscussionSyncService {
                 headSha,
                 baseSha,
                 outdated,
-                firstCreatedAt,
-                resolvedAt);
+                parseTimestamp((String) noteNodes.get(0).get("createdAt")),
+                parseTimestamp(resolvedAt == null ? null : resolvedAt.toString()));
+    }
+
+    /** The resolution a diff discussion's node states; null for a discussion that is not on the diff. */
+    @SuppressWarnings("unchecked")
+    private static @Nullable ThreadResolution threadResolution(Map<String, Object> discussionNode) {
+        String id = discussionNode.get("id") instanceof String value ? value : null;
+        Map<String, Object> notes = (Map<String, Object>) discussionNode.get("notes");
+        List<Map<String, Object>> noteNodes = notes == null ? null : (List<Map<String, Object>>) notes.get("nodes");
+        if (id == null || noteNodes == null || noteNodes.stream().noneMatch(note -> note.get("position") != null)) {
+            return null;
+        }
+        Boolean resolved = discussionNode.get("resolved") instanceof Boolean value ? value : null;
+        return new ThreadResolution(
+                threadData(id, resolved, discussionNode, noteNodes),
+                userLookup((Map<String, Object>) discussionNode.get("resolvedBy")));
+    }
+
+    /**
+     * Reads the merge request's discussions page by page, handing each page to {@code onPage}.
+     *
+     * @return whether every page was read whole, to the one that says none follows
+     */
+    private boolean readDiscussions(
+            Long scopeId,
+            String projectPath,
+            int mrIid,
+            String safeContext,
+            Consumer<List<Map<String, Object>>> onPage) {
+        String cursor = null;
+        String previousCursor = null;
+        int page = 0;
+
+        try {
+            do {
+                if (page >= GitLabSyncConstants.MAX_PAGINATION_PAGES) {
+                    log.warn("Discussion sync reached max pages: context={}", safeContext);
+                    return false;
+                }
+
+                graphQlClientProvider.acquirePermission();
+
+                try {
+                    graphQlClientProvider.waitIfRateLimitLow(scopeId);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("Discussion sync interrupted: context={}", safeContext);
+                    return false;
+                }
+
+                int remaining = graphQlClientProvider.getRateLimitRemaining(scopeId);
+                int pageSize = GitLabSyncConstants.adaptPageSize(DISCUSSION_SYNC_PAGE_SIZE, remaining);
+
+                HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
+
+                ClientGraphQlResponse response = client.documentName(GET_MR_DISCUSSIONS_DOCUMENT)
+                        .variable("fullPath", projectPath)
+                        .variable("iid", String.valueOf(mrIid))
+                        .variable("first", pageSize)
+                        .variable("after", cursor)
+                        .execute()
+                        .block(gitLabProperties.graphqlTimeout());
+
+                var handleResult = responseHandler.handle(response, "discussions for " + safeContext, log);
+                if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.RETRY) {
+                    continue;
+                }
+                if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.ABORT) {
+                    graphQlClientProvider.recordFailure(
+                            new GitLabSyncException("Invalid GraphQL response: context=" + safeContext));
+                    return false;
+                }
+
+                graphQlClientProvider.recordSuccess();
+
+                String discussionsPath = "project.mergeRequest.discussions";
+                if (!responseHandler.isWholePage(Objects.requireNonNull(response), discussionsPath)) {
+                    log.warn("Discussion page not whole: context={}, page={}", safeContext, page);
+                    return false;
+                }
+
+                @SuppressWarnings("rawtypes")
+                List nodesRaw = response.field(discussionsPath + ".nodes").toEntityList(Map.class);
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> nodes = (List<Map<String, Object>>) nodesRaw;
+                if (!nodes.isEmpty()) {
+                    onPage.accept(nodes);
+                }
+
+                // Pagination
+                GitLabPageInfo pageInfo = Objects.requireNonNull(
+                        response.field(discussionsPath + ".pageInfo").toEntity(GitLabPageInfo.class));
+                if (!pageInfo.hasNextPage()) {
+                    return true;
+                }
+                cursor = pageInfo.endCursor();
+                if (cursor == null) {
+                    log.warn("Discussion pagination cursor null despite hasNextPage=true: context={}", safeContext);
+                    return false;
+                }
+                if (responseHandler.isPaginationLoop(cursor, previousCursor, "discussions for " + safeContext, log)) {
+                    return false;
+                }
+                previousCursor = cursor;
+                page++;
+
+                try {
+                    Thread.sleep(gitLabProperties.paginationThrottle().toMillis());
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            } while (true);
+        } catch (Exception e) {
+            graphQlClientProvider.recordFailure(e);
+            log.error("Discussion sync failed: context={}", safeContext, e);
+            return false;
+        }
+    }
+
+    /**
+     * Processes a single discussion node, routing to diff thread/comment or general comment.
+     *
+     * @return int[3]: [diffNotes, generalNotes, skipped]
+     */
+    @SuppressWarnings("unchecked")
+    private int[] processDiscussion(
+            Map<String, Object> discussionNode,
+            PullRequest pr,
+            Repository repository,
+            IdentityProvider provider,
+            Long providerId,
+            Long scopeId) {
+        String discussionGlobalId = (String) discussionNode.get("id");
+        if (discussionGlobalId == null) {
+            return new int[] {0, 0, 1};
+        }
+
+        Boolean resolved = (Boolean) discussionNode.get("resolved");
+
+        // Extract notes
+        Map<String, Object> notesMap = (Map<String, Object>) discussionNode.get("notes");
+        if (notesMap == null) {
+            return new int[] {0, 0, 1};
+        }
+
+        List<Map<String, Object>> noteNodes = (List<Map<String, Object>>) notesMap.get("nodes");
+        if (noteNodes == null || noteNodes.isEmpty()) {
+            return new int[] {0, 0, 1};
+        }
+
+        // Detect notes truncation (100-note limit per discussion)
+        Map<String, Object> notesPageInfo = (Map<String, Object>) notesMap.get("pageInfo");
+        if (notesPageInfo != null && Boolean.TRUE.equals(notesPageInfo.get("hasNextPage"))) {
+            log.warn(
+                    "Discussion has more than 100 notes (truncated): discussionId={}, fetchedNotes={}",
+                    discussionGlobalId,
+                    noteNodes.size());
+        }
+
+        // Check if this is a diff discussion (any note has position)
+        boolean isDiffDiscussion = noteNodes.stream().anyMatch(note -> note.get("position") != null);
+
+        if (isDiffDiscussion) {
+            return processDiffDiscussion(
+                    discussionNode,
+                    discussionGlobalId,
+                    resolved,
+                    noteNodes,
+                    pr,
+                    repository,
+                    provider,
+                    providerId,
+                    scopeId);
+        } else {
+            return processGeneralDiscussion(noteNodes, pr, providerId, scopeId);
+        }
+    }
+
+    /**
+     * Processes a diff discussion into PullRequestReviewThread + PullRequestReviewComment(s).
+     */
+    @SuppressWarnings("unchecked")
+    private int[] processDiffDiscussion(
+            Map<String, Object> discussionNode,
+            String discussionGlobalId,
+            @Nullable Boolean resolved,
+            List<Map<String, Object>> noteNodes,
+            PullRequest pr,
+            Repository repository,
+            IdentityProvider provider,
+            Long providerId,
+            Long scopeId) {
+        int diffNotes = 0;
+        Map<String, Object> rootNote = findRootDiffNote(noteNodes);
+        Map<String, Object> rootPosition = rootNote != null ? (Map<String, Object>) rootNote.get("position") : null;
+
+        // The thread for the comments; its resolution is recorded from the whole read (applyThreadResolutions).
+        var threadData = threadData(discussionGlobalId, resolved, discussionNode, noteNodes);
         PullRequestReviewThread thread = threadProcessor.findOrCreateThread(threadData, pr, provider, scopeId);
+        if (thread == null) {
+            return new int[] {0, 0, 1};
+        }
 
         // Pre-compute one synthetic COMMENTED review per (author, discussion) so each note
         // below can attach to the matching review without redundant DB lookups.
@@ -513,9 +605,9 @@ public class GitLabDiscussionSyncService {
             });
         }
 
-        // Emit REVIEW_COMMENTED events during bulk GraphQL sync so the leaderboard's
-        // numberOfComments / numberOfReviewedPRs reflect COMMENTED reviews. Without a
-        // ProcessingContext the review reconciler silently skips event publication.
+        // Emit REVIEW_COMMENTED events during bulk GraphQL sync so the activity ledger records
+        // COMMENTED reviews. Without a ProcessingContext the review reconciler silently skips
+        // event publication.
         ProcessingContext ctx = repository != null ? ProcessingContext.forSync(scopeId, repository) : null;
 
         Map<Long, PullRequestReview> result = new HashMap<>();
@@ -534,14 +626,14 @@ public class GitLabDiscussionSyncService {
      * Processes a general discussion into IssueComment(s) via the existing processor.
      */
     private int[] processGeneralDiscussion(
-            List<Map<String, Object>> noteNodes, PullRequest pr, Long providerId, Long scopeId, Set<Long> unapproved) {
+            List<Map<String, Object>> noteNodes, PullRequest pr, Long providerId, Long scopeId) {
         int generalNotes = 0;
 
         for (Map<String, Object> noteNode : noteNodes) {
             // A system note is not a comment, but the ones that record a review decision are the only
             // place GitLab says who approved, withdrew an approval or requested changes, and when.
             if (Boolean.TRUE.equals(noteNode.get("system"))) {
-                recordReviewDecisionFromSystemNote(noteNode, pr, providerId, unapproved);
+                recordReviewDecisionFromSystemNote(noteNode, pr, providerId);
                 continue;
             }
             if (Boolean.TRUE.equals(noteNode.get("internal"))) {
@@ -567,6 +659,7 @@ public class GitLabDiscussionSyncService {
                         authorMap != null ? (String) authorMap.get("name") : null,
                         authorMap != null ? (String) authorMap.get("avatarUrl") : null,
                         authorMap != null ? (String) authorMap.get("webUrl") : null,
+                        GitLabUserLookup.botOf(authorMap),
                         noteNode.get("createdAt") != null
                                 ? noteNode.get("createdAt").toString()
                                 : null,
@@ -585,12 +678,7 @@ public class GitLabDiscussionSyncService {
         return new int[] {0, generalNotes, 0};
     }
 
-    /**
-     * @param unapproved the authors whose "unapproved" note this pass has already seen; an "approved"
-     *     note by one of them gives the approval again
-     */
-    void recordReviewDecisionFromSystemNote(
-            Map<String, Object> noteNode, PullRequest pr, Long providerId, Set<Long> unapproved) {
+    void recordReviewDecisionFromSystemNote(Map<String, Object> noteNode, PullRequest pr, Long providerId) {
         String body = String.valueOf(noteNode.get("body"));
         String noteGlobalId = (String) noteNode.get("id");
         Instant at = parseTimestamp((String) noteNode.get("createdAt"));
@@ -602,11 +690,7 @@ public class GitLabDiscussionSyncService {
             return;
         }
         reviewReconciler.recordSystemNote(
-                pr,
-                author,
-                new GitLabReviewReconciler.SystemNote(body, at, noteGlobalId, false),
-                pr.getProvider(),
-                unapproved);
+                pr, author, new GitLabReviewReconciler.SystemNote(body, at, noteGlobalId, false), pr.getProvider());
     }
 
     /**
@@ -627,18 +711,21 @@ public class GitLabDiscussionSyncService {
     @SuppressWarnings("unchecked")
     @Nullable
     private User resolveAuthor(Map<String, Object> noteNode, Long providerId) {
-        Map<String, Object> authorMap = (Map<String, Object>) noteNode.get("author");
-        if (authorMap == null) {
+        GitLabUserLookup author = userLookup((Map<String, Object>) noteNode.get("author"));
+        return author == null ? null : issueCommentProcessor.findOrCreateUser(author, providerId);
+    }
+
+    private static @Nullable GitLabUserLookup userLookup(@Nullable Map<String, Object> user) {
+        if (user == null) {
             return null;
         }
-        return issueCommentProcessor.findOrCreateUser(
-                GitLabUserLookup.of(
-                        (String) authorMap.get("id"),
-                        (String) authorMap.get("username"),
-                        (String) authorMap.get("name"),
-                        (String) authorMap.get("avatarUrl"),
-                        (String) authorMap.get("webUrl")),
-                providerId);
+        return GitLabUserLookup.of(
+                (String) user.get("id"),
+                (String) user.get("username"),
+                (String) user.get("name"),
+                (String) user.get("avatarUrl"),
+                (String) user.get("webUrl"),
+                GitLabUserLookup.botOf(user));
     }
 
     @Nullable

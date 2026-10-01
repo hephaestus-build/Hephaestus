@@ -38,10 +38,12 @@ public enum BindingChange {
             }
         }
         if (gateChanged && !declared.contains(APPLIES_WHEN)) {
-            throw new IllegalArgumentException("Changing appliesWhen requires bindingChanges: APPLIES_WHEN");
+            throw new IllegalArgumentException(
+                    "Confirm that you want to change when this practice applies, then save again.");
         }
         if (subjectChanged && !declared.contains(SUBJECT)) {
-            throw new IllegalArgumentException("Changing subject requires bindingChanges: SUBJECT");
+            throw new IllegalArgumentException(
+                    "Confirm that you want to change whose work this practice reviews, then save again.");
         }
     }
 }

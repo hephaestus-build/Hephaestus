@@ -15,6 +15,8 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { hasText } from "@/lib/text";
 
+import { APP_ROLE_LABELS, type AppRole } from "./account-labels";
+
 export interface ChangeRoleDialogProps {
 	/** The user whose role is being changed; `null` keeps the dialog closed. */
 	user: AdminAccountView | null;
@@ -23,11 +25,11 @@ export interface ChangeRoleDialogProps {
 	/** Server refusal (e.g. last-admin 409) shown inline; the dialog stays open so it can be read. */
 	errorMessage?: string;
 	onOpenChange: (open: boolean) => void;
-	onConfirm: (user: AdminAccountView, nextRole: string) => void;
+	onConfirm: (user: AdminAccountView, nextRole: AppRole) => void;
 }
 
 /**
- * Confirms toggling a single account between USER and APP_ADMIN. Granting APP_ADMIN is an
+ * Confirms toggling a single account between User and Instance admin. Granting Instance admin is an
  * elevation, so it is surfaced as a destructive-styled confirmation; revoking is neutral.
  *
  * The API (`UpdateAccountRequest`) only supports `appRole` today — there are
@@ -43,7 +45,7 @@ export function ChangeRoleDialog({
 	onConfirm,
 }: ChangeRoleDialogProps) {
 	const isAdmin = user?.appRole === "APP_ADMIN";
-	const nextRole = isAdmin ? "USER" : "APP_ADMIN";
+	const nextRole: AppRole = isAdmin ? "USER" : "APP_ADMIN";
 	const granting = nextRole === "APP_ADMIN";
 	const name = user?.displayName ?? user?.primaryEmail ?? "this account";
 
@@ -55,18 +57,19 @@ export function ChangeRoleDialog({
 						<Icon className={granting ? "text-destructive" : undefined} aria-hidden />
 					</AlertDialogMedia>
 					<AlertDialogTitle>
-						{granting ? "Grant application admin?" : "Revoke application admin?"}
+						{granting ? "Grant instance admin?" : "Revoke instance admin?"}
 					</AlertDialogTitle>
 					<AlertDialogDescription>
 						{granting ? (
 							<>
-								This gives <strong>{name}</strong> full application-admin access, including managing
-								other users and read-only user views. Continue?
+								<strong>{name}</strong> gets the {APP_ROLE_LABELS[nextRole]} role: full access to
+								administer this instance, including managing other users and read-only user views.
+								Continue?
 							</>
 						) : (
 							<>
-								This removes application-admin access from <strong>{name}</strong>. They will become
-								a regular user.
+								<strong>{name}</strong> goes back to the {APP_ROLE_LABELS[nextRole]} role and loses
+								access to administer this instance.
 							</>
 						)}
 					</AlertDialogDescription>

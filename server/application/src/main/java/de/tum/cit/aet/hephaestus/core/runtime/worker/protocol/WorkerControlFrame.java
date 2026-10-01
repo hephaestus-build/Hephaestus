@@ -12,6 +12,15 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = CapacityReport.class, name = "CapacityReport"),
     @JsonSubTypes.Type(value = ForceReconnect.class, name = "ForceReconnect"),
     @JsonSubTypes.Type(value = CancelJob.class, name = "CancelJob"),
+    @JsonSubTypes.Type(value = MentorSessionCommand.class, name = "MentorSessionCommand"),
+    @JsonSubTypes.Type(value = MentorSessionEvent.class, name = "MentorSessionEvent"),
 })
 public sealed interface WorkerControlFrame
-        permits WorkerHello, WorkerWelcome, Heartbeat, CapacityReport, ForceReconnect, CancelJob {}
+        permits WorkerHello,
+                WorkerWelcome,
+                Heartbeat,
+                CapacityReport,
+                ForceReconnect,
+                CancelJob,
+                MentorSessionCommand,
+                MentorSessionEvent {}

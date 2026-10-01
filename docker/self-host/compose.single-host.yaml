@@ -17,11 +17,6 @@ services:
   # reference files stay untouched (adding profiles there would risk the
   # maintainers' deploy, which runs `up -d --remove-orphans` without profiles).
 
-  # The worker runs in-process inside application-server here (the worker
-  # runtime role defaults to enabled); the reference splits it into its own pod.
-  application-worker:
-    profiles: ["reference-deployment-only"]
-
   # Traefik error page for the maintainers' multi-replica rollouts.
   maintenance:
     profiles: ["reference-deployment-only"]
@@ -81,6 +76,9 @@ services:
         ipv4_address: 172.29.47.2
 
   application-server:
+    # Inherited management listener: internal network only, no host publish or proxy route.
+    expose:
+      - "9090"
     environment:
       # The reference hardcodes root/root for its managed database; require a
       # real password here. DATABASE_USERNAME stays `root` to match the value
@@ -89,19 +87,32 @@ services:
       # Same value the reference builds, but fail fast instead of rendering
       # `https://` and a Host(``) routing rule when APP_HOSTNAME is blank.
       APPLICATION_HOST_URL: https://${APP_HOSTNAME:?Set APP_HOSTNAME in .env}
-      # One concurrent agent sandbox (up to ~4 GiB) suits the recommended 8 GB
-      # host; the reference defaults to 5 across dedicated machines.
-      SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-1}
       # The reference leaves this empty on purpose so its deploy must set the
       # ingress address explicitly (a blank value fails the boot). Here the
       # proxy has a fixed IP, so it can simply be correct by default.
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-172\.29\.47\.2}
+      # Required here: without it the worker cannot register and no sandbox runs.
+      HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:?Run setup.sh or set HEPHAESTUS_WORKER_REGISTRATION_TOKEN in .env}
     ports: !override []
-    # The in-process worker drains running agent jobs on SIGTERM (up to 5m).
-    # The reference's 30s only has to cover HTTP drain on its worker-less pod.
-    stop_grace_period: 6m
+
+  # Runs the AI sandboxes and is the only service given the Docker socket.
+  application-worker:
+    # Inherited management listener: internal network only, no host publish or proxy route.
+    expose:
+      - "9090"
+    environment:
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      APPLICATION_HOST_URL: https://${APP_HOSTNAME:?Set APP_HOSTNAME in .env}
+      HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-172\.29\.47\.2}
+      HEPHAESTUS_WORKER_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:?Run setup.sh or set HEPHAESTUS_WORKER_REGISTRATION_TOKEN in .env}
+      # One concurrent agent sandbox (up to ~4 GiB) by default; size the host from
+      # the install guide. The reference defaults to 5 across dedicated machines.
+      SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-1}
 
   webhook-server:
+    # Inherited management listener: internal network only, no host publish or proxy route.
+    expose:
+      - "9090"
     environment:
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       APPLICATION_HOST_URL: https://${APP_HOSTNAME:?Set APP_HOSTNAME in .env}

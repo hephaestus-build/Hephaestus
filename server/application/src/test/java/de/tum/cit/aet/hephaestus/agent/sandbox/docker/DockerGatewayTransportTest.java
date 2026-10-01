@@ -71,7 +71,8 @@ class DockerGatewayTransportTest extends BaseUnitTest {
     }
 
     private void execution(int initializerExit) throws Exception {
-        when(network.createJobNetwork(jobId, false)).thenReturn("network");
+        when(network.createJobNetwork(jobId, false, Map.of(SandboxLabels.JOB_ID, jobId.toString())))
+                .thenReturn("network");
         when(network.connectAppServer("network")).thenReturn("172.18.0.2");
         when(security.buildHostConfig(any(), any(), any()))
                 .thenReturn(new DockerOperations.HostConfigSpec(

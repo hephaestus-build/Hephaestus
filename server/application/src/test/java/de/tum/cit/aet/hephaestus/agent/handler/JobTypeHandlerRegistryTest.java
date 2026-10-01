@@ -49,7 +49,8 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 workspaceContextBuilder,
                 practiceCatalogInjector,
                 new TaskEnvelopeWriter(objectMapper),
-                gitRepositoryManager);
+                gitRepositoryManager,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer());
     }
 
     private JobTypeHandler prReviewHandler() {

@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.workspace;
 
-import static de.tum.cit.aet.hephaestus.leaderboard.LeaguePointsConstants.POINTS_DEFAULT;
-
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
@@ -15,7 +13,6 @@ import de.tum.cit.aet.hephaestus.workspace.exception.InsufficientWorkspacePermis
 import de.tum.cit.aet.hephaestus.workspace.exception.LastOwnerRemovalException;
 import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -24,13 +21,14 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -41,7 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
  * <li>Creating and removing memberships</li>
  * <li>Updating member roles</li>
  * <li>Syncing GitHub organization members with workspace memberships</li>
- * <li>Managing league points snapshots</li>
  * </ul>
  */
 @Service
@@ -56,85 +53,24 @@ public class WorkspaceMembershipService {
 
     private final ConfigAuditPort configAudit;
     private final WorkspaceAccessService accessService;
+    private final HiddenFormerMemberRepository hiddenFormerMemberRepository;
+    private final WorkspaceActorSelector actorSelector;
 
     public WorkspaceMembershipService(
             WorkspaceMembershipRepository workspaceMembershipRepository,
             WorkspaceRepository workspaceRepository,
             EntityManager entityManager,
             ConfigAuditPort configAudit,
-            WorkspaceAccessService accessService) {
+            WorkspaceAccessService accessService,
+            HiddenFormerMemberRepository hiddenFormerMemberRepository,
+            WorkspaceActorSelector actorSelector) {
         this.workspaceMembershipRepository = workspaceMembershipRepository;
         this.workspaceRepository = workspaceRepository;
         this.entityManager = entityManager;
         this.configAudit = configAudit;
         this.accessService = accessService;
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Map<Long, Integer> getLeaguePointsSnapshot(Collection<User> users, Long workspaceId) {
-        if (users == null || users.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        Set<Long> userIds =
-                users.stream().map(User::getId).filter(Objects::nonNull).collect(Collectors.toSet());
-
-        if (userIds.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
-        if (workspaceId == null) {
-            return userIds.stream().collect(Collectors.toMap(id -> id, id -> POINTS_DEFAULT));
-        }
-
-        Set<Long> existingUserIds =
-                workspaceMembershipRepository.findAllByWorkspace_IdAndUser_IdIn(workspaceId, userIds).stream()
-                        .map(member -> member.getUser().getId())
-                        .collect(Collectors.toSet());
-
-        for (User user : users) {
-            Long userId = user.getId();
-            if (userId == null || existingUserIds.contains(userId)) {
-                continue;
-            }
-            workspaceMembershipRepository.insertIfAbsent(
-                    workspaceId, userId, WorkspaceMembership.WorkspaceRole.MEMBER.name(), POINTS_DEFAULT);
-        }
-
-        Map<Long, Integer> leaguePointsByUserId =
-                workspaceMembershipRepository.findAllByWorkspace_IdAndUser_IdIn(workspaceId, userIds).stream()
-                        .collect(Collectors.toMap(
-                                member -> member.getUser().getId(), WorkspaceMembership::getLeaguePoints));
-
-        for (Long userId : userIds) {
-            leaguePointsByUserId.putIfAbsent(userId, POINTS_DEFAULT);
-        }
-
-        return leaguePointsByUserId;
-    }
-
-    @Transactional
-    public int getCurrentLeaguePoints(Long workspaceId, User user) {
-        if (user == null || user.getId() == null) {
-            return POINTS_DEFAULT;
-        }
-        if (workspaceId == null) {
-            return POINTS_DEFAULT;
-        }
-
-        Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
-        if (workspace == null) {
-            return POINTS_DEFAULT;
-        }
-
-        WorkspaceMembership member = workspaceMembershipRepository
-                .findByWorkspace_IdAndUser_Id(workspaceId, user.getId())
-                .orElseGet(() -> {
-                    WorkspaceMembership created = createMembershipInternal(workspace, user);
-                    created.setLeaguePoints(POINTS_DEFAULT);
-                    return workspaceMembershipRepository.save(created);
-                });
-        return member.getLeaguePoints();
+        this.hiddenFormerMemberRepository = hiddenFormerMemberRepository;
+        this.actorSelector = actorSelector;
     }
 
     @Transactional(readOnly = true)
@@ -153,51 +89,10 @@ public class WorkspaceMembershipService {
                 .map(WorkspaceMembership::getUser);
     }
 
-    @Transactional
-    public void updateLeaguePoints(Long workspaceId, User user, int newPoints) {
-        if (user == null || user.getId() == null) {
-            return;
-        }
-        if (workspaceId == null) {
-            log.debug("Skipped league point update: reason=noWorkspaceConfigured, userLogin={}", user.getLogin());
-            return;
-        }
-
-        Workspace workspace = workspaceRepository.findById(workspaceId).orElse(null);
-        if (workspace == null) {
-            log.debug(
-                    "Skipped league point update: reason=workspaceNotFound, userLogin={}, workspaceId={}",
-                    user.getLogin(),
-                    workspaceId);
-            return;
-        }
-
-        WorkspaceMembership member = workspaceMembershipRepository
-                .findByWorkspace_IdAndUser_Id(workspaceId, user.getId())
-                .orElseGet(() -> createMembershipInternal(workspace, user));
-        member.setLeaguePoints(newPoints);
-        workspaceMembershipRepository.save(member);
-    }
-
-    @Transactional
-    public void resetLeaguePoints(Long workspaceId, int points) {
-        if (workspaceId == null) {
-            log.debug("Skipped league point reset: reason=noWorkspaceConfigured");
-            return;
-        }
-
-        List<WorkspaceMembership> members = workspaceMembershipRepository.findByWorkspace_Id(workspaceId);
-        if (members.isEmpty()) {
-            return;
-        }
-        members.forEach(member -> member.setLeaguePoints(points));
-        workspaceMembershipRepository.saveAll(members);
-    }
-
     /**
-     * Human members of the workspace, team memberships fetched — the roster used to pad zero-activity
-     * leaderboard entries. Scoped by {@code workspace_id}, not by the org-login string, so it cannot
-     * leak members between workspaces that share an {@code account_login}. Empty for a null id.
+     * Human members of the workspace, team memberships fetched — the roster of workspace activity. Scoped by
+     * {@code workspace_id}, not by the org-login string, so it cannot leak members between workspaces that share
+     * an {@code account_login}. Empty for a null id.
      */
     @Transactional(readOnly = true)
     public List<User> getHumanMembersWithTeams(Long workspaceId) {
@@ -213,9 +108,8 @@ public class WorkspaceMembershipService {
      * <p>
      * Uses the race-safe native upsert in
      * {@link WorkspaceMembershipRepository#insertIfAbsent}: if a membership already
-     * exists for the user, it is left untouched (role, league points, hidden flag all
-     * preserved). Only missing memberships are created with role {@code MEMBER} and
-     * default league points.
+     * exists for the user, it is left untouched (role and hidden flag preserved). Only missing
+     * memberships are created, with role {@code MEMBER}.
      * <p>
      * Intended for reconciliation paths that discover users via the team graph or
      * other side channels and must never downgrade existing OWNER/ADMIN roles.
@@ -240,7 +134,10 @@ public class WorkspaceMembershipService {
                 continue;
             }
             inserted += workspaceMembershipRepository.insertIfAbsent(
-                    workspaceId, userId, WorkspaceMembership.WorkspaceRole.MEMBER.name(), POINTS_DEFAULT);
+                    workspaceId,
+                    userId,
+                    WorkspaceMembership.WorkspaceRole.MEMBER.name(),
+                    takeBackHiddenPreference(workspaceId, userId));
         }
 
         if (inserted > 0) {
@@ -292,23 +189,10 @@ public class WorkspaceMembershipService {
                     continue;
                 }
                 WorkspaceMembership member = createMembershipInternal(workspace, user, desiredRole);
-                member.setLeaguePoints(POINTS_DEFAULT);
                 toCreate.add(member);
             } else if (existing.getRole() != desiredRole) {
-                var beforeSync = new WorkspaceAuditSnapshots.RoleSnapshot(
-                        existing.getRole() == null ? null : existing.getRole().name(), existing.isHidden());
-                existing.setRole(desiredRole);
+                changeSyncedRole(existing, desiredRole, workspace.getId(), userId);
                 toUpdate.add(existing);
-                // Recorded with a SYSTEM actor: a role can change without an admin ever touching this
-                // instance, and "when did X become ADMIN" must not answer confidently from the
-                // admin-initiated rows alone. Creates and deletions are deliberately not recorded —
-                // see ConfigAuditEntityType.WORKSPACE_ROLE for that boundary.
-                configAudit.record(ConfigAuditEntry.updated(
-                        ConfigAuditEntityType.WORKSPACE_ROLE,
-                        userId,
-                        workspace.getId(),
-                        beforeSync,
-                        new WorkspaceAuditSnapshots.RoleSnapshot(desiredRole.name(), existing.isHidden())));
             }
         }
 
@@ -317,17 +201,7 @@ public class WorkspaceMembershipService {
             if (memberUserId == null || desiredUserIds.contains(memberUserId)) {
                 continue;
             }
-            // Preserve memberships an admin has explicitly hidden from the leaderboard.
-            // `hidden=true` is a sticky, admin-authored signal that must survive org-sync
-            // churn (transient API gaps, webhook reorder, remove-then-re-add). Deleting
-            // the row would lose that signal on re-creation and silently un-hide the user.
-            if (member.isHidden()) {
-                log.debug(
-                        "Preserved hidden workspace membership during sync: workspaceId={}, userId={}",
-                        workspace.getId(),
-                        memberUserId);
-                continue;
-            }
+            parkHiddenPreference(member, workspace.getId(), memberUserId);
             toDelete.add(member);
         }
 
@@ -339,6 +213,68 @@ public class WorkspaceMembershipService {
         }
         if (!toDelete.isEmpty()) {
             workspaceMembershipRepository.deleteAll(toDelete);
+        }
+    }
+
+    /**
+     * Applies what the provider now grants one person, without reading anyone else: {@code role} creates or updates
+     * their membership, {@code null} removes it. An OWNER is left as is.
+     */
+    @Transactional
+    public void applyProviderGrant(Workspace workspace, Long userId, WorkspaceMembership.@Nullable WorkspaceRole role) {
+        Optional<WorkspaceMembership> existing =
+                workspaceMembershipRepository.findByWorkspace_IdAndUser_Id(workspace.getId(), userId);
+        if (existing.map(member -> member.getRole() == WorkspaceMembership.WorkspaceRole.OWNER)
+                .orElse(false)) {
+            return;
+        }
+        if (role == null) {
+            existing.ifPresent(member -> {
+                parkHiddenPreference(member, workspace.getId(), userId);
+                workspaceMembershipRepository.delete(member);
+            });
+            return;
+        }
+        if (existing.isPresent()) {
+            if (existing.get().getRole() != role) {
+                changeSyncedRole(existing.get(), role, workspace.getId(), userId);
+                workspaceMembershipRepository.save(existing.get());
+            }
+            return;
+        }
+        User user = entityManager.find(User.class, userId);
+        if (user == null) {
+            return;
+        }
+        WorkspaceMembership member = createMembershipInternal(workspace, user, role);
+        workspaceMembershipRepository.save(member);
+    }
+
+    private void changeSyncedRole(
+            WorkspaceMembership existing, WorkspaceMembership.WorkspaceRole role, Long workspaceId, Long userId) {
+        var before = new WorkspaceAuditSnapshots.RoleSnapshot(
+                existing.getRole() == null ? null : existing.getRole().name(), existing.isHidden());
+        existing.setRole(role);
+        // Recorded with a SYSTEM actor: a role can change without an admin ever touching this
+        // instance, and "when did X become ADMIN" must not answer confidently from the
+        // admin-initiated rows alone. Creates and deletions are deliberately not recorded —
+        // see ConfigAuditEntityType.WORKSPACE_ROLE for that boundary.
+        configAudit.record(ConfigAuditEntry.updated(
+                ConfigAuditEntityType.WORKSPACE_ROLE,
+                userId,
+                workspaceId,
+                before,
+                new WorkspaceAuditSnapshots.RoleSnapshot(role.name(), existing.isHidden())));
+    }
+
+    /**
+     * Hiding someone from workspace activity is not a grant: a hidden member the provider no longer grants loses the
+     * workspace like anyone else. The admin-authored preference must survive remove-then-re-add without silently
+     * un-hiding the user, so it is parked and taken back by the next membership created for them.
+     */
+    private void parkHiddenPreference(WorkspaceMembership member, Long workspaceId, Long userId) {
+        if (member.isHidden()) {
+            hiddenFormerMemberRepository.save(new HiddenFormerMember(workspaceId, userId));
         }
     }
 
@@ -369,7 +305,7 @@ public class WorkspaceMembershipService {
         membership.setWorkspace(workspace);
         membership.setUser(userReference);
         membership.setRole(role);
-        membership.setLeaguePoints(POINTS_DEFAULT);
+        membership.setHidden(takeBackHiddenPreference(workspace.getId(), userId));
         membership.setId(new WorkspaceMembership.Id(workspace.getId(), userId));
 
         return workspaceMembershipRepository.save(membership);
@@ -406,7 +342,6 @@ public class WorkspaceMembershipService {
             }
 
             WorkspaceMembership membership = createMembershipInternal(workspace, user, role);
-            membership.setLeaguePoints(POINTS_DEFAULT);
             configAudit.record(ConfigAuditEntry.created(
                     ConfigAuditEntityType.WORKSPACE_ROLE,
                     userId,
@@ -434,18 +369,20 @@ public class WorkspaceMembershipService {
         log.info("Removed membership: userId={}, workspaceId={}", userId, workspaceId);
     }
 
-    private WorkspaceMembership createMembershipInternal(Workspace workspace, User user) {
-        return createMembershipInternal(workspace, user, WorkspaceMembership.WorkspaceRole.MEMBER);
-    }
-
     private WorkspaceMembership createMembershipInternal(
             Workspace workspace, User user, WorkspaceMembership.WorkspaceRole role) {
         WorkspaceMembership member = new WorkspaceMembership();
         member.setWorkspace(workspace);
         member.setUser(user);
         member.setRole(role);
+        member.setHidden(takeBackHiddenPreference(workspace.getId(), user.getId()));
         member.setId(new WorkspaceMembership.Id(workspace.getId(), user.getId()));
         return member;
+    }
+
+    /** Every path that creates a membership asks this, so a returning member keeps being hidden. */
+    private boolean takeBackHiddenPreference(Long workspaceId, Long userId) {
+        return hiddenFormerMemberRepository.deleteByWorkspaceIdAndUserId(workspaceId, userId) > 0;
     }
 
     // Hidden member methods
@@ -466,8 +403,6 @@ public class WorkspaceMembershipService {
         var before = new WorkspaceAuditSnapshots.RoleSnapshot(
                 membership.getRole() == null ? null : membership.getRole().name(), membership.isHidden());
         membership.setHidden(hidden);
-        // Not cosmetic: syncWorkspaceMembers deliberately preserves hidden memberships, so this flag
-        // decides whether a member keeps workspace access after leaving the upstream org.
         configAudit.record(ConfigAuditEntry.updated(
                 ConfigAuditEntityType.WORKSPACE_ROLE,
                 userId,
@@ -533,6 +468,41 @@ public class WorkspaceMembershipService {
         return workspaceMembershipRepository.findAllByWorkspace_Id(workspaceId, pageable);
     }
 
+    /**
+     * The members practice review can take as its subject: linked humans whose identity is on the instance of the
+     * workspace's active connection, since only that identity authors the work it reviews. The account that created
+     * a GitLab workspace through its GitHub identity is a member, but never an author there. Without an active
+     * connection nothing tells which instance that is, and every human member counts. Who is a member at all is the
+     * provider's roster's answer, which reconciliation keeps the membership rows to.
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> practiceReviewEligibleUserIds(Long workspaceId) {
+        Predicate<WorkspaceMembership> eligible = practiceReviewEligibility(workspaceId);
+        return workspaceMembershipRepository.findAllWithUserByWorkspaceId(workspaceId).stream()
+                .filter(eligible)
+                .map(WorkspaceMembership::getUserId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+    }
+
+    /** One member of {@link #practiceReviewEligibleUserIds}, without reading the whole roster. */
+    @Transactional(readOnly = true)
+    public boolean isPracticeReviewEligible(Long workspaceId, Long userId) {
+        return workspaceMembershipRepository
+                .findByWorkspace_IdAndUser_Id(workspaceId, userId)
+                .filter(practiceReviewEligibility(workspaceId))
+                .isPresent();
+    }
+
+    private Predicate<WorkspaceMembership> practiceReviewEligibility(Long workspaceId) {
+        Optional<Long> connectedProvider = actorSelector.connectedProviderId(workspaceId);
+        return membership -> membership.hasHumanUser()
+                && connectedProvider
+                        .map(providerId -> providerId.equals(
+                                membership.getUser().getProvider().getId()))
+                        .orElse(true);
+    }
+
     private Workspace lockForMembershipChange(Long workspaceId) {
         // Serialize manual ownership changes so competing requests cannot remove the final owners.
         return workspaceRepository
@@ -544,7 +514,14 @@ public class WorkspaceMembershipService {
         var context = WorkspaceContextHolder.getContext();
         if (context == null || !workspace.getId().equals(context.id()) || !accessService.canManageRole(role)) {
             throw new InsufficientWorkspacePermissionsException(
-                    workspace.getWorkspaceSlug(), "You cannot manage the " + role + " role");
+                    workspace.getWorkspaceSlug(),
+                    "You cannot manage "
+                            + switch (role) {
+                                case OWNER -> "owners";
+                                case ADMIN -> "admins";
+                                case MEMBER -> "members";
+                            }
+                            + " in this workspace.");
         }
     }
 

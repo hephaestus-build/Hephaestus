@@ -1,41 +1,22 @@
+import { WorkspaceCapabilitiesSettings } from "./WorkspaceCapabilitiesSettings";
 import { WorkspaceDangerZoneSettings } from "./WorkspaceDangerZoneSettings";
-import {
-	WorkspaceFeaturesSettings,
-	type FeatureKey,
-	type FeatureValues,
-} from "./WorkspaceFeaturesSettings";
-import { WorkspaceLeagueSettings } from "./WorkspaceLeagueSettings";
 
 export interface WorkspaceSettingsPageProps {
-	isResettingLeagues: boolean;
-	onResetLeagues: () => void;
-	features: FeatureValues;
-	isSavingFeatures: boolean;
-	onToggleFeature: (feature: FeatureKey, enabled: boolean) => void;
-	workspaceSlug?: string;
+	workspaceSlug: string;
+	practicesEnabled: boolean;
 }
 
 export function WorkspaceSettingsPage({
-	isResettingLeagues,
-	onResetLeagues,
-	features,
-	isSavingFeatures,
-	onToggleFeature,
 	workspaceSlug,
+	practicesEnabled,
 }: WorkspaceSettingsPageProps) {
 	return (
 		<div className="max-w-4xl space-y-10">
-			<WorkspaceFeaturesSettings
-				values={features}
-				isSaving={isSavingFeatures}
-				onToggle={onToggleFeature}
+			<WorkspaceCapabilitiesSettings
+				workspaceSlug={workspaceSlug}
+				practicesEnabled={practicesEnabled}
 			/>
-
-			{features.leaguesEnabled && (
-				<WorkspaceLeagueSettings isResetting={isResettingLeagues} onResetLeagues={onResetLeagues} />
-			)}
-
-			{workspaceSlug != null && <WorkspaceDangerZoneSettings workspaceSlug={workspaceSlug} />}
+			<WorkspaceDangerZoneSettings workspaceSlug={workspaceSlug} />
 		</div>
 	);
 }

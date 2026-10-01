@@ -21,12 +21,15 @@ import {
 	type PracticeGroupDetailSelection,
 	type PracticeProfileDetailLevelKind,
 	type PracticeTab,
+	REVIEWS_OF_YOUR_WORK,
 } from "./practice-profile-search";
 import { PracticeDetailLevel } from "./PracticeDetailLevel";
 import {
 	PracticeGroupDetailLevel,
 	type PracticeGroupDetailLevelProps,
 } from "./PracticeGroupDetailLevel";
+import { ProfileReviewLevel, type ProfileReviewLevelProps } from "./ProfileReviewLevel";
+import { ProfileReviewsLevel, type ProfileReviewsLevelProps } from "./ProfileReviewsLevel";
 
 export type GroupLevelOverview = Pick<
 	PracticeGroupDetailLevelProps,
@@ -76,6 +79,11 @@ export interface PracticeGroupDetailDrawerProps {
 	practiceTab: PracticeTab;
 	/** How many rows the practice level's feed draws while its first page loads. */
 	skeletonRows: number;
+	/** The two review levels; the drawer adds where each sits and which review is open. */
+	reviewRuns: {
+		list: Omit<ProfileReviewsLevelProps, "nested" | "path" | "openReviewId">;
+		open: Omit<ProfileReviewLevelProps, "nested" | "path" | "positionOnWork" | "groups">;
+	};
 	/**
 	 * Writes the selection in place — the tab is a view of the level, not a place — so Escape and
 	 * Back leave the level in one step however many were opened.
@@ -104,6 +112,7 @@ export function PracticeGroupDetailDrawer({
 	ratingProps,
 	practiceTab,
 	skeletonRows,
+	reviewRuns,
 	onSelectionChange,
 }: PracticeGroupDetailDrawerProps) {
 	const groupIndex = detailStack.findIndex((entry) => entry.kind === "practice-group");
@@ -125,9 +134,17 @@ export function PracticeGroupDetailDrawer({
 			case "practice-groups": {
 				return ALL_PRACTICE_GROUPS;
 			}
+			case "reviews": {
+				return REVIEWS_OF_YOUR_WORK;
+			}
+			case "review": {
+				return "Review";
+			}
 		}
 	};
 	const pathAt = levelPathAt(detailStack, { pageLabel: PAGE_LABEL, labelOf, onClose });
+	const openReviewId = openLevelId(detailStack, "review");
+	const { list, open } = reviewRuns;
 
 	return (
 		<DetailDrawerStack stack={detailStack} size="detailWide" onClose={onClose}>
@@ -181,6 +198,29 @@ export function PracticeGroupDetailDrawer({
 									pendingResponses: detail.pendingResponses,
 								}}
 								{...load}
+							/>
+						);
+					}
+					case "reviews": {
+						return (
+							<ProfileReviewsLevel
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								{...list}
+								openReviewId={openReviewId}
+							/>
+						);
+					}
+					case "review": {
+						return (
+							<ProfileReviewLevel
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								{...open}
+								positionOnWork={
+									openReviewId === undefined ? undefined : list.positions?.get(openReviewId)
+								}
+								groups={groups}
 							/>
 						);
 					}

@@ -22,13 +22,10 @@ public record WorkspaceMembershipDTO(
         @Schema(description = "Role of the user in this workspace (OWNER, ADMIN, MEMBER)")
         WorkspaceRole role,
 
-        @Schema(description = "League points earned by the user in this workspace", example = "150")
-        int leaguePoints,
-
         @Schema(description = "Timestamp when the membership was created")
         Instant createdAt,
 
-        @Schema(description = "Whether the member is hidden from the leaderboard")
+        @Schema(description = "Whether the member is left out of workspace activity")
         boolean hidden,
 
         @Schema(description = "Whether this linked human member can be selected for practice-review coverage")
@@ -44,7 +41,6 @@ public record WorkspaceMembershipDTO(
                 user.getLogin(),
                 user.getName(),
                 effectiveRole,
-                membership.getLeaguePoints(),
                 membership.getCreatedAt(),
                 membership.isHidden(),
                 membership.hasHumanUser());

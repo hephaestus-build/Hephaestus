@@ -33,6 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMerge
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabPushEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.PassThroughTransactionTemplate;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
@@ -136,6 +137,7 @@ class GitLabPushMessageHandlerTest extends BaseUnitTest {
                 syncTargetProvider,
                 eventPublisher,
                 commitMergeRequestLinker,
+                mock(GitLabRouteAdmission.class),
                 deserializer,
                 new PassThroughTransactionTemplate());
     }

@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -14,6 +15,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceLinkService;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceActorSelector;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -29,6 +32,7 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Deletion reconciliation for GitLab issues and merge requests — the half of "sync" that upserts
@@ -115,23 +119,38 @@ public class GitLabDeletionSweepService {
      */
     private static final int MAX_RETRY_ATTEMPTS = 5;
 
+    private final SyncTargetProvider syncTargetProvider;
+    private final GitLabNoteReconciliationService noteReconciliation;
     private final IssueRepository issueRepository;
     private final RepositoryRepository repositoryRepository;
     private final GitLabGraphQlClientProvider graphQlClientProvider;
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabProperties gitLabProperties;
+    private final WorkspaceActorSelector actorSelector;
+    private final GitLabWorkspaceLinkService workspaceLinkService;
+    private final TransactionTemplate transactionTemplate;
 
     public GitLabDeletionSweepService(
             IssueRepository issueRepository,
             RepositoryRepository repositoryRepository,
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
-            GitLabProperties gitLabProperties) {
+            GitLabProperties gitLabProperties,
+            WorkspaceActorSelector actorSelector,
+            GitLabWorkspaceLinkService workspaceLinkService,
+            TransactionTemplate transactionTemplate,
+            GitLabNoteReconciliationService noteReconciliation,
+            SyncTargetProvider syncTargetProvider) {
+        this.syncTargetProvider = syncTargetProvider;
+        this.noteReconciliation = noteReconciliation;
         this.issueRepository = issueRepository;
         this.repositoryRepository = repositoryRepository;
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.gitLabProperties = gitLabProperties;
+        this.actorSelector = actorSelector;
+        this.workspaceLinkService = workspaceLinkService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /** Which of the two entity classes a listing/diff pass is operating on. */
@@ -208,11 +227,11 @@ public class GitLabDeletionSweepService {
      * @param skipped                 true when at least one entity class could not be swept because its
      *                                upstream listing was incomplete — the job should report warnings
      */
-    public record SweepOutcome(int issuesTombstoned, int mergeRequestsTombstoned, boolean skipped) {
-        static final SweepOutcome NOTHING = new SweepOutcome(0, 0, false);
+    public record SweepOutcome(int issuesTombstoned, int mergeRequestsTombstoned, int notesRemoved, boolean skipped) {
+        static final SweepOutcome NOTHING = new SweepOutcome(0, 0, 0, false);
 
         public int total() {
-            return issuesTombstoned + mergeRequestsTombstoned;
+            return issuesTombstoned + mergeRequestsTombstoned + notesRemoved;
         }
     }
 
@@ -228,18 +247,33 @@ public class GitLabDeletionSweepService {
      * @param handle  live job handle for progress + cancellation; {@code null} outside a recorded job
      */
     public SweepOutcome sweepScope(Long scopeId, @Nullable SyncExecutionHandle handle) {
-        List<Repository> repositories = repositoryRepository.findAllByWorkspaceMonitors(scopeId);
+        // Only the connected instance's rows: another instance can host a project at the same path, and this
+        // scope's credentials list only its own.
+        List<Repository> repositories = actorSelector
+                .connectedProviderId(scopeId)
+                .map(providerId -> repositoryRepository.findAllByWorkspaceMonitorsOnProvider(scopeId, providerId))
+                .orElseGet(List::of);
         if (repositories.isEmpty()) {
             return SweepOutcome.NOTHING;
         }
 
         int issues = 0;
         int mergeRequests = 0;
+        int notes = 0;
         boolean skipped = false;
         int done = 0;
         int total = repositories.size();
 
+        var unavailableTargets = syncTargetProvider.getSyncTargetsForScope(scopeId).stream()
+                .filter(target -> syncTargetProvider.isRepositoryUnavailable(scopeId, target.id()))
+                .toList();
         for (Repository repository : repositories) {
+            if (unavailableTargets.stream()
+                    .anyMatch(target -> target.repositoryNameWithOwner().equals(repository.getNameWithOwner())
+                            || (target.nativeId() != null && target.nativeId().equals(repository.getNativeId())))) {
+                skipped = true;
+                continue;
+            }
             if (isCancelled(handle)) {
                 log.info(
                         "GitLab deletion sweep cancelled between projects: scopeId={}, projectsSwept={}, projectsRemaining={}",
@@ -273,11 +307,12 @@ public class GitLabDeletionSweepService {
 
             issues += outcome.issuesTombstoned();
             mergeRequests += outcome.mergeRequestsTombstoned();
+            notes += outcome.notesRemoved();
             skipped = skipped || outcome.skipped();
             done++;
         }
 
-        SweepOutcome scopeOutcome = new SweepOutcome(issues, mergeRequests, skipped);
+        SweepOutcome scopeOutcome = new SweepOutcome(issues, mergeRequests, notes, skipped);
         report(handle, done, total, sweepSummary(scopeOutcome), null);
         log.info(
                 "GitLab deletion sweep finished: scopeId={}, projectsSwept={}, issuesTombstoned={}, mergeRequestsTombstoned={}, degraded={}",
@@ -369,8 +404,23 @@ public class GitLabDeletionSweepService {
                         scopeId);
                 continue;
             }
-            int tombstoned = tombstoneMissing(
-                    repository.getId(), entity, localBeforeListing, listing.numbers(), safeProjectPath);
+            // The listing can outlast the monitor, the connection or the group link it was started under, so the
+            // authority to write is checked again in the transaction that writes.
+            UpstreamListing complete = listing;
+            Integer tombstoned =
+                    transactionTemplate.execute(status -> workspaceLinkService.mayWriteRepository(scopeId, repository)
+                            ? tombstoneMissing(
+                                    repository.getId(), entity, localBeforeListing, complete.numbers(), safeProjectPath)
+                            : null);
+            if (tombstoned == null) {
+                skipped = true;
+                log.warn(
+                        "Skipped GitLab deletion sweep, deleted nothing: reason=repositoryNotThisScopes, entity={}, projectPath={}, scopeId={}",
+                        entity.plural,
+                        safeProjectPath,
+                        scopeId);
+                continue;
+            }
             if (entity == SweptEntity.ISSUE) {
                 issuesTombstoned = tombstoned;
             } else {
@@ -378,7 +428,9 @@ public class GitLabDeletionSweepService {
             }
         }
 
-        return new SweepOutcome(issuesTombstoned, mergeRequestsTombstoned, skipped);
+        var noteOutcome = noteReconciliation.reconcileRepository(scopeId, repository, handle);
+        return new SweepOutcome(
+                issuesTombstoned, mergeRequestsTombstoned, noteOutcome.removed(), skipped || noteOutcome.skipped());
     }
 
     /** The live local numbers for one entity class of one repository. */

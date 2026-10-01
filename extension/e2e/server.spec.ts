@@ -29,7 +29,7 @@ import { GITLAB_ISSUE, GITLAB_MR, GITLAB_MR5, GITLAB_MR6 } from "./provider-page
 const QUEUED_JOB = "7d5e0c3a-1b2c-4d3e-8f40-000000000001";
 const FAILED_JOB = "7d5e0c3a-1b2c-4d3e-8f40-000000000002";
 const MR4_WORK_ID = "920010";
-const TRACE_URL = `${WEB_APP_URL}/w/ext-e2e/reviews/scm.pull_request/${MR4_WORK_ID}`;
+const TRACE_URL = `${WEB_APP_URL}/w/ext-e2e/feedback/scm.pull_request/${MR4_WORK_ID}`;
 
 async function expectSafeLink(link: Locator, href: string): Promise<void> {
 	await expect(link).toHaveAttribute("href", href);
@@ -66,7 +66,7 @@ function recordPracticeReads(reads: string[]) {
 	};
 }
 
-const MR5_TRACE = `${WEB_APP_URL}/w/ext-e2e/reviews/scm.pull_request/920012`;
+const MR5_TRACE = `${WEB_APP_URL}/w/ext-e2e/feedback/scm.pull_request/920012`;
 
 test.beforeAll(async () => {
 	if (!(await serverAvailable())) {
@@ -94,7 +94,7 @@ test.describe("signing in", () => {
 		const issue = await context.newPage();
 		await providerTab(issue, GITLAB_ISSUE);
 		const issueFrame = await openInline(issue);
-		await expectWork(issueFrame, `${WEB_APP_URL}/w/ext-e2e/reviews/scm.issue/920011`);
+		await expectWork(issueFrame, `${WEB_APP_URL}/w/ext-e2e/feedback/scm.issue/920011`);
 
 		await stopWorker(context, page);
 		const again = await context.newPage();
@@ -119,15 +119,15 @@ test.describe("inline review activity", () => {
 		const frame = await openInline(page);
 		await expectWork(frame, TRACE_URL);
 		// Every developer's records, delivery and runs are the web app's: one link, for this work.
-		const details = `${WEB_APP_URL}/w/ext-e2e/admin/practices/reviews/targets/pull-request/${MR4_WORK_ID}`;
+		const details = `${WEB_APP_URL}/w/ext-e2e/admin/practices/reviews/work?detail=work%3Apull-request%3A${MR4_WORK_ID}`;
 		await expectSafeLink(frame.getByRole("link", { name: /^Review details/u }), details);
 		await expect(frame.getByRole("button", { name: /Manage/u })).toHaveCount(0);
 		// Only the line opens; nothing inside it opens further.
 		await expect(frame.locator("[aria-expanded]")).toHaveCount(1);
 
-		// A queued run on this work holds a new request back: the line says so and offers none.
-		await expect(line(frame)).toContainText("Review queued or running");
-		await expect(frame.getByRole("button", { name: "Request review…" })).toHaveCount(0);
+		// An admin's panel does not turn another developer's queued run into their own review.
+		await expect(line(frame)).toContainText("review status unavailable");
+		await expect(frame.getByRole("button", { name: "Request review…" })).toBeVisible();
 
 		// On work with nothing running, "Request review…" opens the extension's own window, which
 		// shows what would change and sends nothing until confirmed there; cancelling sends nothing.
@@ -222,7 +222,10 @@ test.describe("inline review activity", () => {
 		const mutations = watchReviewMutations(context);
 		const page = await context.newPage();
 		await providerTab(page, GITLAB_MR);
-		const hold = await holdServer(context, /\/practices\/trace\/scm\.pull_request\/920010$/u);
+		const hold = await holdServer(
+			context,
+			/\/practices\/reviewed-work\/scm\.pull_request\/920010\/review-runs$/u,
+		);
 		await openInline(page);
 		await expect.poll(() => hold.hits.length).toBeGreaterThan(0);
 		await page.evaluate(() => {
@@ -243,7 +246,10 @@ test.describe("inline review activity", () => {
 		await providerTab(page, GITLAB_MR);
 		const old = await openInline(page);
 		await expectWork(old, TRACE_URL);
-		const hold = await holdServer(context, /\/practices\/trace\/scm\.pull_request\/920012$/u);
+		const hold = await holdServer(
+			context,
+			/\/practices\/reviewed-work\/scm\.pull_request\/920012\/review-runs$/u,
+		);
 		await page.evaluate(() => {
 			history.pushState({}, "", "/ext/demo/-/merge_requests/5");
 		});
@@ -268,7 +274,7 @@ test.describe("inline review activity", () => {
 		const issue = await context.newPage();
 		await providerTab(issue, GITLAB_ISSUE);
 		const issueInline = await openInline(issue);
-		await expectWork(issueInline, `${WEB_APP_URL}/w/ext-e2e/reviews/scm.issue/920011`);
+		await expectWork(issueInline, `${WEB_APP_URL}/w/ext-e2e/feedback/scm.issue/920011`);
 		await expect.poll(() => hold.hits.length).toBeGreaterThan(0);
 		await options.bringToFront();
 		await options.getByRole("button", { name: "Sign out", exact: true }).click();
@@ -322,17 +328,17 @@ test.describe("inline review activity", () => {
 		await providerTab(page, "https://gitlab.example.test/ext/choice/-/issues/1");
 		const frame = await openInline(page);
 		await frame.getByRole("radio", { name: "Extension E2E", exact: true }).check();
-		const primaryTrace = `${WEB_APP_URL}/w/ext-e2e/reviews/scm.issue/922010`;
+		const primaryTrace = `${WEB_APP_URL}/w/ext-e2e/feedback/scm.issue/922010`;
 		await expectWork(frame, primaryTrace);
 		const hold = await holdServer(
 			context,
-			/\/workspaces\/ext-e2e-alternate\/practices\/trace\/scm\.issue\/922010$/u,
+			/\/workspaces\/ext-e2e-alternate\/practices\/reviewed-work\/scm\.issue\/922010\/review-runs$/u,
 		);
 		await frame.getByRole("radio", { name: "Extension E2E alternate", exact: true }).click();
 		await expect.poll(() => hold.hits.length).toBeGreaterThan(0);
 		await expect(frame.locator(`a[href="${primaryTrace}"]`)).toHaveCount(0);
 		await hold.release();
-		await expectWork(frame, `${WEB_APP_URL}/w/ext-e2e-alternate/reviews/scm.issue/922010`);
+		await expectWork(frame, `${WEB_APP_URL}/w/ext-e2e-alternate/feedback/scm.issue/922010`);
 		await expect(
 			frame.getByRole("radio", { name: "Extension E2E alternate", exact: true }),
 		).toBeChecked();
@@ -382,7 +388,7 @@ test.describe("a developer who is not an admin", () => {
 		const own = await context.newPage();
 		await providerTab(own, GITLAB_MR6);
 		const ownFrame = await openInline(own);
-		await expectWork(ownFrame, `${WEB_APP_URL}/w/ext-e2e/reviews/scm.pull_request/920013`);
+		await expectWork(ownFrame, `${WEB_APP_URL}/w/ext-e2e/feedback/scm.pull_request/920013`);
 		const observations = ownFrame.getByRole("region", { name: "Your observations" });
 		await expect(observations.getByRole("listitem")).toHaveCount(3);
 		await expect(ownFrame.getByRole("button", { name: "Request review…" }).first()).toBeVisible();

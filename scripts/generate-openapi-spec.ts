@@ -73,6 +73,8 @@ const child = spawn(
 		"-jar",
 		jar,
 		"--spring.profiles.active=specs",
+		// The spec describes the shipped surface, whatever a local server/.env enables.
+		"--hephaestus.dev.trigger-enabled=false",
 		`--server.port=${port}`,
 		`--hephaestus.sandbox.gateway.port=${sandboxPort}`,
 		"--management.server.port=0",

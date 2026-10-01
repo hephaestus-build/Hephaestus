@@ -191,7 +191,6 @@ function ModelsContainer() {
 			bindings={bindingsQuery.data ?? []}
 			availableModels={availableModelsQuery.data ?? []}
 			practicesEnabled={workspaceQuery.data?.practicesEnabled ?? false}
-			mentorEnabled={workspaceQuery.data?.mentorEnabled ?? false}
 			aiChoiceRequired={onboardingSettingsQuery.data?.aiChoiceRequired ?? false}
 			providerPanel={
 				<WorkspaceLlmProviderPanel

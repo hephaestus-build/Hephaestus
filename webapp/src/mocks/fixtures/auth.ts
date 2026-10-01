@@ -120,14 +120,14 @@ export const adminUsers: AdminAccountView[] = [
 		id: 7,
 		displayName: "Ada Lovelace",
 		primaryEmail: "ada@example.com",
-		appRole: "APP_USER",
+		appRole: "USER",
 		status: "ACTIVE",
 	},
 	{
 		id: 99,
 		displayName: "Suspended Sam",
 		primaryEmail: "sam@example.com",
-		appRole: "APP_USER",
+		appRole: "USER",
 		status: "SUSPENDED",
 	},
 ];

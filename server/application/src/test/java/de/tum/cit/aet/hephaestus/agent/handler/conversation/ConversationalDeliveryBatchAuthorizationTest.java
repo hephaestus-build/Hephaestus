@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ConversationConsentGate;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChannel.DeliveryOutcome;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -106,16 +108,16 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
             // No row for runWithoutRow — a run this workspace does not own, or one that recorded no
             // snapshot. The single-row form answered both with an empty Optional.
             return List.of(
-                    new ContractRow(deniedSource.getAgentJobId(), "1.2.0"),
-                    new ContractRow(deliverable.getAgentJobId(), "1.2.0"));
+                    new ContractRow(deniedSource.getAgentJobId(), "1.3.0"),
+                    new ContractRow(deliverable.getAgentJobId(), "1.3.0"));
         });
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.2.0"),
+                        new SourceContractVersion("1.3.0"),
                         new SourceKind(PERMITTED_KIND),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(true);
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.2.0"),
+                        new SourceContractVersion("1.3.0"),
                         new SourceKind(DENIED_KIND),
                         SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(false);
@@ -145,7 +147,17 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
                 feedbackObservations,
                 placements,
                 observations,
-                new ObservationVisibilityPolicy(new EvidenceDeliveryAuthorization(jobs, catalogs)));
+                new ObservationVisibilityPolicy(
+                        new EvidenceDeliveryAuthorization(
+                                jobs,
+                                catalogs,
+                                org.mockito.Mockito.mock(
+                                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                                        call -> call.getMethod().getName().equals("permits")
+                                                ? true
+                                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call))),
+                        mock(ObservationInvalidationRepository.class)),
+                mock(ConversationConsentGate.class));
 
         UUID actedOn =
                 switch (ending) {

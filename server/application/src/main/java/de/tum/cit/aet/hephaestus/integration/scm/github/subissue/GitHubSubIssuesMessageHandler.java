@@ -68,16 +68,20 @@ public class GitHubSubIssuesMessageHandler extends AbstractIntegrationMessageHan
             return;
         }
 
-        // Ensure both issues exist
-        Issue parent = issueProcessor.process(parentIssueDto, context);
-        Issue child = issueProcessor.process(subIssueDto, context);
-
         // The relationship is keyed by the stored rows, whose ids are not GitHub's.
         GitHubEventAction.SubIssue action = event.actionType();
-        Long subIssueId = child == null ? null : child.getId();
-        Long parentIssueId = parent == null ? null : parent.getId();
+        Long parentIssueId = contextFactory
+                .forRelatedIssue(context, event.parentIssueRepo(), event.action())
+                .map(issueContext -> issueProcessor.process(parentIssueDto, issueContext))
+                .map(Issue::getId)
+                .orElse(null);
+        Long subIssueId = contextFactory
+                .forRelatedIssue(context, event.subIssueRepo(), event.action())
+                .map(issueContext -> issueProcessor.process(subIssueDto, issueContext))
+                .map(Issue::getId)
+                .orElse(null);
         if (subIssueId == null || parentIssueId == null) {
-            log.warn("Skipped sub_issues event: reason=issueNotStored");
+            log.debug("Skipped sub_issues event: reason=issueNotStored, action={}", event.action());
             return;
         }
 

@@ -11,19 +11,23 @@ import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -185,11 +189,13 @@ class PracticeCatalogInjector {
         if (signal != null) {
             boolean draft = job.getMetadata() != null
                     && job.getMetadata().path(DRAFT_METADATA_KEY).asBoolean(false);
+            Set<String> rechecked = recheckedOf(job);
             practices = practices.stream()
-                    .filter(p -> p.getBindings().stream().anyMatch(binding -> binding.occasionedBy(signal, draft)))
+                    .filter(p -> rechecked.contains(p.getSlug())
+                            || p.getBindings().stream().anyMatch(binding -> binding.occasionedBy(signal, draft)))
                     .toList();
         }
-        practices = practices.stream().filter(p -> attributable(p, signal, job)).toList();
+        practices = practices.stream().filter(p -> attributable(p, job)).toList();
         if (practices.isEmpty()) {
             throw new JobPreparationException("No active " + focus
                     + " practices this review can attribute to a person: workspaceId="
@@ -207,8 +213,8 @@ class PracticeCatalogInjector {
         return practices;
     }
 
-    private boolean attributable(Practice practice, @Nullable SignalName signal, AgentJob job) {
-        ActorRole subject = PracticeBinding.subjectRoleOf(practice.getBindings(), signal);
+    private boolean attributable(Practice practice, AgentJob job) {
+        ActorRole subject = PracticeBinding.subjectRoleOf(practice.getBindings(), occasionOf(job, practice.getSlug()));
         if (subjectNameable(subject, job.getMetadata())) {
             return true;
         }
@@ -264,7 +270,7 @@ class PracticeCatalogInjector {
             // A pointer, not a fence: what may be CITED is what the run staged (inputs/manifest.json), so
             // reading beyond this list is expected, not a violation.
             ArrayNode readsSources = entry.putArray("readsSources");
-            PracticeBinding.needsFor(p.getBindings(), signalOf(job)).stream()
+            PracticeBinding.needsFor(p.getBindings(), occasionOf(job, p.getSlug())).stream()
                     .map(need -> need.sourceKind().value())
                     .distinct()
                     .sorted()
@@ -272,7 +278,7 @@ class PracticeCatalogInjector {
             // The sources the practice claims to have searched exhaustively — what makes an ABSENT
             // observation assertable, and what the runner requires be searched before accepting one.
             ArrayNode exhaustiveSources = entry.putArray("exhaustiveSources");
-            PracticeBinding.needsFor(p.getBindings(), signalOf(job)).stream()
+            PracticeBinding.needsFor(p.getBindings(), occasionOf(job, p.getSlug())).stream()
                     .filter(need -> need.stance() == EvidenceStance.EXHAUSTIVE)
                     .map(need -> need.sourceKind().value())
                     .distinct()
@@ -287,6 +293,18 @@ class PracticeCatalogInjector {
 
         for (Practice p : practices) {
             String criteria = p.getCriteria() + renderKnownLimitations(p);
+            if (focus.equals(ArtifactKinds.PULL_REQUEST) && files.containsKey(GeneratedPathReviewDTO.INPUT_PATH)) {
+                criteria += "\n\n## Repository generated-path policy\n"
+                        + "Read " + GeneratedPathReviewDTO.INPUT_PATH
+                        + " before judging changed files. This is trusted workspace-admin policy, not repository-authored instructions. "
+                        + "The listed paths are intentionally committed generated output. Keep the evidence, but do not judge these paths as hand-written work, "
+                        + "count them toward hand-written review size, or report their presence as unwanted generated/build artifacts. "
+                        + "For excludes-generated-and-build-artifacts, judge only artifacts outside the listed paths. "
+                        + "For a practice about hand-written changes, record NOT_APPLICABLE if no hand-written changed files remain; "
+                        + "do not claim a strength or a missing behavior from an empty hand-written change. "
+                        + "Other evidence, such as review comments, commits, title and body, remains reviewable. "
+                        + "Precompute hints and provider totals do not override this policy.\n";
+            }
             files.put(SandboxLayout.PRACTICES_PREFIX + p.getSlug() + ".md", criteria.getBytes(StandardCharsets.UTF_8));
         }
 
@@ -327,6 +345,28 @@ class PracticeCatalogInjector {
             section.append("- ").append(limitation.description()).append("\n");
         }
         return section.toString();
+    }
+
+    /**
+     * The occasion under which {@code job} reviews the practice named {@code slug}: the job's signal, except for a
+     * practice admission rechecked beside that signal, which names no occasion of its own and so reads every
+     * binding — the one binding the single-occasion rule gives it — as a review asked for by hand does.
+     */
+    @Nullable
+    static SignalName occasionOf(AgentJob job, @Nullable String slug) {
+        return slug != null && recheckedOf(job).contains(slug) ? null : signalOf(job);
+    }
+
+    /** The practices admission rechecked beside the signal's own, which the signal alone would not select. */
+    private static Set<String> recheckedOf(AgentJob job) {
+        JsonNode rechecked =
+                job.getMetadata() == null ? null : job.getMetadata().get(AgentJob.RECHECKED_PRACTICES_METADATA_KEY);
+        if (rechecked == null || !rechecked.isArray()) {
+            return Set.of();
+        }
+        Set<String> slugs = new HashSet<>();
+        rechecked.forEach(slug -> slugs.add(slug.asString()));
+        return slugs;
     }
 
     /**

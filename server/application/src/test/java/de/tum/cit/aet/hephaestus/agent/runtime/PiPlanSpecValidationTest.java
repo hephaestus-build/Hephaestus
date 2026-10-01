@@ -32,15 +32,15 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
                 "");
     }
 
+    @Test
+    void allowlistedPathAccepted() {
+        assertThatNoException().isThrownBy(() -> specWith(Map.of(SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH, BYTES)));
+    }
+
     @ParameterizedTest
-    @ValueSource(
-            strings = {
-                "inputs/context/diff.patch", // CONTEXT_PREFIX
-                "agent/mentor/system.md", // MENTOR_SYSTEM_PROMPT_PATH
-                ".sessions/abc-123.jsonl", // SESSIONS_DIR_PREFIX
-            })
-    void allowlistedPathsAccepted(String path) {
-        assertThatNoException().isThrownBy(() -> specWith(Map.of(path, BYTES)));
+    @ValueSource(strings = {"context/diff.patch", ".sessions/abc-123.jsonl"})
+    void perTurnPathsRejected(String path) {
+        assertThatThrownBy(() -> specWith(Map.of(path, BYTES))).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
@@ -194,17 +194,9 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
     }
 
     @Test
-    void prefixEqualToKeyAccepted() {
-        // Boundary: a key that is EXACTLY an allowed prefix (the startsWith edge) must be accepted.
-        assertThatNoException().isThrownBy(() -> specWith(Map.of("inputs/context/", BYTES)));
-    }
-
-    @Test
-    void prefixedTraversalAcceptedHere_normalizationDelegatedToWorkspaceManager() {
-        // PiPlanSpec only checks allowlist membership via String.startsWith — it does NOT path-normalize, so a
-        // key that startsWith an allowed prefix yet contains "../" traversal is ACCEPTED at THIS layer. The
-        // traversal defense lives one layer down in SandboxWorkspaceManager.injectFiles. This test pins that
-        // seam so a future refactor that tightens PiPlanSpec (or loosens the manager) does not silently lose it.
-        assertThatNoException().isThrownBy(() -> specWith(Map.of("inputs/context/../../../etc/passwd", BYTES)));
+    void traversalRejected() {
+        // Only exact paths pass, so a key that merely starts like one never reaches the workspace manager.
+        assertThatThrownBy(() -> specWith(Map.of("agent/mentor/system.md/../../../etc/passwd", BYTES)))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

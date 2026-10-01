@@ -432,6 +432,43 @@ function buildStageCopySources(dockerfile: string): string[] {
 }
 
 void describe("CI contract", () => {
+	void test("every Dockerfile build refreshes its isolated OS-package stage", async () => {
+		const reusable = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const build = namedStep(reusable, ["jobs", "build"], "Build and push (Dockerfile)");
+		assert.equal(build.getIn(["with", "no-cache-filters"]), "os-packages");
+		assert.match(String(build.getIn(["with", "cache-from"])), /cache-main-/u);
+		assert.match(String(build.getIn(["with", "cache-to"])), /mode=max/u);
+
+		const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+		const jobs = caller.get("jobs");
+		assert.ok(isMap(jobs));
+		const dockerfiles = new Set(await posixGlob("{docker,webapp}/**/Dockerfile"));
+		assert.ok(dockerfiles.size > 0);
+		for (const entry of jobs.items) {
+			assert.ok(isMap(entry.value));
+			const file = entry.value.getIn(["with", "docker-file"]);
+			if (typeof file !== "string") {
+				continue;
+			}
+			dockerfiles.delete(file.replace(/^\.\//u, ""));
+			const dockerfile = await readFile(file, "utf8");
+			const stages = dockerfile.split(/^FROM /mu);
+			const packages = stages.find((stage) => /^.* AS os-packages$/mu.test(stage));
+			assert.ok(packages !== undefined, `${file} must have the stage named by no-cache-filters`);
+			assert.match(packages, /^RUN .*?(?:apt-get|apk)/msu);
+			assert.doesNotMatch(packages, /^COPY |^ARG SOURCE_COMMIT/mu);
+			if (packages.includes("apt-get")) {
+				assert.match(packages, /apt-get update -o APT::Update::Error-Mode=any/u);
+			}
+			for (const stage of stages.filter((candidate) => candidate !== packages)) {
+				assert.doesNotMatch(stage, /\b(?:apt-get|apk) (?:update|upgrade|install|add)\b/u);
+			}
+		}
+		assert.deepEqual([...dockerfiles], [], "every Dockerfile must use the shared build workflow");
+	});
+
 	void test("the webapp image copies every file its Vite config reads", async () => {
 		const reads = await filesReadByConfig("webapp/vite.config.ts");
 		assert.ok(
@@ -975,7 +1012,7 @@ void describe("CI contract", () => {
 			assert.equal((e2e.match(/actions\/download-artifact@/gu) ?? []).length, 1);
 			assert.match(e2e, /name: Upload diagnostics\s+if: always\(\)/u);
 			assert.match(e2e, /e2e-server\.log/u);
-			assert.match(e2e, /http:\/\/localhost:8080\/actuator\/health\/readiness/u);
+			assert.match(e2e, /http:\/\/localhost:8080\/readyz/u);
 			assert.doesNotMatch(e2e, /actuator\/health\/liveness/u);
 		}
 		// The browser suites need the JAR, so either one's paths must start the package job.
@@ -1531,6 +1568,9 @@ void describe("CI contract", () => {
 			smoke,
 			/APPLICATION_DIGEST: \$\{\{ needs\.application-server-image\.outputs\.manifest-digest \}\}/u,
 		);
+		// The worker pulls and checks this commit's own agent image, never a placeholder.
+		assert.match(smoke, /scripts\/resolve-release-images\.ts "\$HEAD_SHA"/u);
+		assert.match(smoke, /AGENT_PI_DIGEST: \$\{\{ steps\.images\.outputs\.agent-pi-digest \}\}/u);
 		// The reduced topology an operator's first boot has to get through: no edge, no webapp. The
 		// service list runs onto a continuation line, so the command is rejoined before it is read.
 		const boot = /up -d --wait --wait-timeout \d+ (?<services>[^\n]+)/u.exec(
@@ -1539,9 +1579,17 @@ void describe("CI contract", () => {
 		assert.ok(boot, "the boot smoke must start the installation and wait for it to be ready");
 		assert.deepEqual(String(boot.groups?.services).trim().split(/\s+/u).toSorted(), [
 			"application-server",
+			"application-worker",
 			"nats-server",
 			"postgres",
 		]);
+		// ADR 0041's isolation probe runs against both booted installations.
+		for (const booted of [
+			smoke,
+			job(await readFile(".github/workflows/release.yml", "utf8"), "supported-host-smoke"),
+		]) {
+			assert.match(booted, /scripts\/sandbox-isolation-probe\.ts/u);
+		}
 		// The installer an operator runs, filled in by the one script both smoke jobs call.
 		assert.match(smoke, /scripts\/prepare-host-smoke-env\.ts/u);
 		assert.match(
@@ -1684,7 +1732,29 @@ void describe("CI contract", () => {
 		assert.match(scan, /IMAGE_REF:.*@\$\{\{/u);
 		assert.doesNotMatch(scan, /github\.(?:run_id|run_attempt)/u);
 		assert.match(scan, /linux\/amd64/u);
-		assert.doesNotMatch(scan, /linux\/arm64/u);
+		assert.match(scan, /linux\/arm64/u);
+		const workflow = parseDocument(reusable);
+		assert.equal(workflow.getIn(["jobs", "scan", "strategy", "fail-fast"]), false);
+		assert.equal(
+			workflow.getIn(["jobs", "scan", "strategy", "matrix", "platform"]),
+			`\${{ fromJSON(inputs.single-arch && '["linux/amd64"]' || '["linux/amd64","linux/arm64"]') }}`,
+		);
+		const enforce = namedStep(
+			workflow,
+			["jobs", "scan"],
+			"Enforce the release vulnerability policy",
+		);
+		assert.match(
+			String(enforce.get("run")),
+			/check-release-vulnerabilities\.ts "\$IMAGE" "\$SCAN_PLATFORM"/u,
+		);
+		assert.equal(
+			namedStep(workflow, ["jobs", "scan"], "Upload the vulnerability policy result").getIn([
+				"with",
+				"name",
+			]),
+			`vulnerability-policy-\${{ steps.subject.outputs.report-stem }}`,
+		);
 		// A gate that cannot say what it rejected is not finished.
 		assert.match(scan, /uses: actions\/upload-artifact@/u);
 		assert.match(scan, /uses: \.\/\.github\/actions\/download-trivy-db/u);
@@ -3076,15 +3146,7 @@ void test("Stories enforces visual evidence independently of preview publication
 		`\${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) || startsWith(github.head_ref || github.ref_name, 'dependabot/') || startsWith(github.head_ref || github.ref_name, 'renovate/') }}`,
 	);
 	const chromatic = namedStep(workflow, jobPath, "Chromatic visual testing");
-	assert.equal(
-		chromatic.get("if"),
-		"success() && env.CHROMATIC_POLICY_SKIP != 'true' && steps.visual_policy.outputs.paused != 'true'",
-	);
-	assert.equal(workflow.getIn([...jobPath, "env", "CHROMATIC_PAUSED_UNTIL"]), "2026-09-30");
-	assert.equal(
-		namedStep(workflow, jobPath, "Clear previous Chromatic evidence").get("id"),
-		"visual_policy",
-	);
+	assert.equal(chromatic.get("if"), "success() && env.CHROMATIC_POLICY_SKIP != 'true'");
 	assert.equal(
 		namedStep(workflow, jobPath, "Deploy public Storybook preview").get("if"),
 		"success() && github.event_name == 'pull_request' && env.CHROMATIC_POLICY_SKIP != 'true'",
@@ -3095,7 +3157,6 @@ void test("Stories enforces visual evidence independently of preview publication
 	assert.equal(chromatic.getIn(["with", "skip"]), false);
 	const report = namedStep(workflow, jobPath, "Report Chromatic visual coverage");
 	assert.equal(report.get("if"), "always()");
-	assert.equal(report.get("continue-on-error"), true);
 	assert.equal(report.get("run"), "node scripts/report-chromatic.ts");
 	assert.equal(report.getIn(["env", "CHROMATIC_OUTCOME"]), `\${{ steps.chromatic.outcome }}`);
 	for (const [name, output] of Object.entries({
@@ -3115,7 +3176,8 @@ void test("Stories enforces visual evidence independently of preview publication
 	}
 	const gate = namedStep(workflow, jobPath, "Evaluate stories checks");
 	assert.equal(gate.get("if"), "always()");
-	assert.equal(gate.getIn(["env", "CHROMATIC"]), `\${{ steps.visual_coverage.outcome }}`);
+	// Visual coverage is reported, never gating.
+	assert.equal(gate.getIn(["env", "CHROMATIC"]), undefined);
 });
 
 void test("global styles and assets retain full-snapshot invalidation", async () => {
@@ -3141,22 +3203,16 @@ void test("global styles and assets retain full-snapshot invalidation", async ()
 });
 
 void test(
-	"Stories final verdict rejects every incomplete or failed leg",
+	"Stories final verdict follows the interaction tests, not visual coverage",
 	{ skip: !bashRunsRunnerSteps() },
 	async () => {
 		const workflow = parseDocument(
 			await readFile(".github/workflows/ci-quality-gates.yml", "utf8"),
 		);
 		const command = runScript(workflow, ["jobs", "webapp-stories"], "Evaluate stories checks");
-		for (const stories of ["success", "failure", "skipped"]) {
-			for (const coverage of ["success", "failure", "skipped", "cancelled", ""]) {
-				const result = await runStep(command, { STORYBOOK_TESTS: stories, CHROMATIC: coverage });
-				assert.equal(
-					result.failed,
-					stories !== "success" || coverage !== "success",
-					result.diagnosis,
-				);
-			}
+		for (const stories of ["success", "failure", "skipped", "cancelled", ""]) {
+			const result = await runStep(command, { STORYBOOK_TESTS: stories });
+			assert.equal(result.failed, stories !== "success", result.diagnosis);
 		}
 	},
 );
@@ -3248,4 +3304,46 @@ await test("extension unit and browser stories retain separate reports through t
 		assert.ok(condition.includes("inputs.leg == 'extension'"));
 		assert.ok(condition.includes("!cancelled()"));
 	}
+});
+void test("workflows do not comment on hard-coded issue numbers", async () => {
+	const hardCodedComment =
+		/\bgh(?:\s+(?:--repo|-R)\s+\S+)?\s+issue\s+comment(?:\s+(?:--repo|-R|--body|-b|--body-file|-F)\s+(?:"[^"]*"|'[^']*'|\S+))*\s+["']?#?\d+\b/u;
+	for (const command of [
+		"gh issue comment 1369 --body text",
+		'gh issue comment "1369"',
+		"gh issue comment '#1369'",
+		"gh issue comment --repo owner/repo 1369",
+		'gh issue comment --body "failure needs triage" 1369',
+		"gh --repo owner/repo issue comment 1369",
+	]) {
+		assert.match(command, hardCodedComment);
+	}
+	assert.doesNotMatch('gh issue comment "$issue" --body text', hardCodedComment);
+	for (const [file, source] of await workflowSources()) {
+		assert.doesNotMatch(
+			source.replaceAll(/\\\r?\n/gu, " "),
+			hardCodedComment,
+			`${file} must resolve its tracking issue dynamically`,
+		);
+	}
+});
+
+void test("supported-release failures use the shared tracking issue reporter", async () => {
+	const workflow = parseDocument(
+		await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
+	);
+	const notification = namedStep(
+		workflow,
+		["jobs", "rescan"],
+		"Notify vulnerability response tracking",
+	);
+	assert.equal(notification.get("if"), "failure()");
+	assert.equal(
+		notification.get("run"),
+		"node scripts/report-vulnerability-drift.ts reports --release-failure",
+	);
+	assert.equal(notification.getIn(["env", "GH_TOKEN"]), `\${{ secrets.GITHUB_TOKEN }}`);
+	assert.equal(workflow.getIn(["permissions", "issues"]), "write");
+	assert.equal(workflow.getIn(["concurrency", "group"]), "rescan-supported-release");
+	assert.equal(workflow.getIn(["concurrency", "cancel-in-progress"]), false);
 });

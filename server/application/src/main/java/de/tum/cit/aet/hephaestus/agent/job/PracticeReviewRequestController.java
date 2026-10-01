@@ -125,14 +125,15 @@ public class PracticeReviewRequestController {
         }
         // A kind that exists but has no front door here: a chat thread or document is reviewed on the
         // occasion its source produces, with nothing for a person to point at and ask about.
-        throw new IllegalArgumentException("Reviews cannot be asked for on artifacts of kind " + kind.value());
+        throw new IllegalArgumentException(
+                "A review can be asked for only on a pull or merge request or an issue, not on this kind of work.");
     }
 
     private static ArtifactKind parseKind(String raw) {
         try {
             return ArtifactKind.of(raw);
         } catch (IllegalArgumentException malformed) {
-            throw new IllegalArgumentException("Not an artifact kind: " + raw, malformed);
+            throw new IllegalArgumentException("This is not a kind of work Hephaestus knows.", malformed);
         }
     }
 

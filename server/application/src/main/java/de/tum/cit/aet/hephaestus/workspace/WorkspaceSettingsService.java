@@ -5,146 +5,28 @@ import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditPort;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.BearerTokenReplacement;
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.audit.WorkspaceAuditSnapshots;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceFeaturesRequestDTO;
-import de.tum.cit.aet.hephaestus.workspace.events.WorkspaceScheduleChangedEvent;
 import java.time.Clock;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.Optional;
-import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
 public class WorkspaceSettingsService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkspaceSettingsService.class);
-    private static final Pattern SLACK_CHANNEL_ID_PATTERN = Pattern.compile("^[CG][A-Z0-9]{8,}$");
 
     private final WorkspaceRepository workspaceRepository;
     private final ConfigAuditPort configAudit;
     private final ConnectionService connectionService;
-    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
-
-    /**
-     * Update the leaderboard schedule for a workspace.
-     *
-     * @param workspaceId the workspace ID
-     * @param day the day of week (1=Monday, 7=Sunday)
-     * @param time the time in HH:mm format
-     * @return the updated workspace
-     */
-    @Transactional
-    public Workspace updateSchedule(Long workspaceId, Integer day, String time) {
-        return updateScheduleInTransaction(workspaceId, day, time);
-    }
-
-    private Workspace updateScheduleInTransaction(Long workspaceId, Integer day, String time) {
-        Workspace workspace = requireWorkspace(workspaceId);
-
-        if (day != null) {
-            if (day < 1 || day > 7) {
-                throw new IllegalArgumentException("Day must be between 1 (Monday) and 7 (Sunday)");
-            }
-            workspace.setLeaderboardScheduleDay(day);
-        }
-
-        if (time != null) {
-            validateTimeFormat(time);
-            workspace.setLeaderboardScheduleTime(time);
-        }
-
-        Workspace saved = workspaceRepository.save(workspace);
-        log.info("Updated workspace schedule: workspaceId={}, day={}, time={}", workspaceId, day, time);
-        // Re-register the per-workspace leaderboard cron at the new cadence without a restart.
-        eventPublisher.publishEvent(new WorkspaceScheduleChangedEvent(workspaceId));
-        return saved;
-    }
-
-    /**
-     * Update notification settings for a workspace.
-     *
-     * <p>{@code enabled} stays on {@link Workspace#leaderboardNotificationEnabled} (a UI
-     * toggle, not a Slack-side configuration). {@code team} and {@code channelId} are now
-     * persisted on the Slack {@link ConnectionConfig.SlackConfig} via
-     * {@link ConnectionService#updateConfig} — caller must have already provisioned a
-     * Slack Connection (typically via the Slack OAuth callback). PATCH semantics: null
-     * fields are not touched.
-     *
-     * @param workspaceId the workspace ID
-     * @param enabled whether notifications are enabled
-     * @param team the team identifier to notify (treated as the human-readable team label)
-     * @param channelId the Slack channel ID
-     * @return the updated workspace
-     */
-    @Transactional
-    public Workspace updateNotifications(
-            Long workspaceId, @Nullable Boolean enabled, @Nullable String team, @Nullable String channelId) {
-        return updateNotificationsInTransaction(workspaceId, enabled, team, channelId);
-    }
-
-    private Workspace updateNotificationsInTransaction(
-            Long workspaceId, @Nullable Boolean enabled, @Nullable String team, @Nullable String channelId) {
-        Workspace workspace = requireWorkspace(workspaceId);
-
-        if (enabled != null) {
-            workspace.setLeaderboardNotificationEnabled(enabled);
-            workspace = workspaceRepository.save(workspace);
-        }
-
-        if (channelId != null) {
-            validateSlackChannelId(channelId);
-        }
-
-        if (team != null || channelId != null) {
-            Optional<?> updated = connectionService.updateConfig(workspaceId, IntegrationKind.SLACK, cfg -> {
-                ConnectionConfig.SlackConfig slack = (ConnectionConfig.SlackConfig) cfg;
-                return new ConnectionConfig.SlackConfig(
-                        slack.teamId(),
-                        slack.teamName(),
-                        channelId != null ? channelId : slack.notificationChannelId(),
-                        team != null ? team : slack.teamLabel(),
-                        slack.retentionDays(),
-                        slack.enabledStreams());
-            });
-            if (updated.isEmpty()) {
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "No active Slack Connection — reconnect via the admin panel before changing channel/team.");
-            }
-        }
-
-        log.info("Updated workspace notifications: workspaceId={}, enabled={}", workspaceId, enabled);
-        return workspace;
-    }
-
-    /** Updates the weekly digest schedule and notification settings atomically. */
-    @Transactional
-    public Workspace updateLeaderboardDigest(
-            Long workspaceId,
-            Integer day,
-            String time,
-            Boolean enabled,
-            @Nullable String team,
-            @Nullable String channelId) {
-        updateScheduleInTransaction(workspaceId, day, time);
-        return updateNotificationsInTransaction(workspaceId, enabled, team, channelId);
-    }
 
     /**
      * Update the personal access token for a workspace. Rotates the bearer credential on
@@ -204,7 +86,7 @@ public class WorkspaceSettingsService {
     }
 
     /**
-     * Update workspace feature flags.
+     * Turn practice reviews and their triggers on or off.
      * Null fields in the request DTO are ignored (PATCH semantics).
      *
      * @param workspaceId the workspace ID
@@ -224,12 +106,11 @@ public class WorkspaceSettingsService {
                 WorkspaceAuditSnapshots.FeaturesSnapshot.of(workspace.getFeatures())));
 
         log.info(
-                "Updated workspace features: workspaceId={}, practices={}, leaderboard={}, progression={}, leagues={}",
+                "Updated workspace features: workspaceId={}, practices={}, autoTrigger={}, manualTrigger={}",
                 workspaceId,
                 request.practicesEnabled(),
-                request.leaderboardEnabled(),
-                request.progressionEnabled(),
-                request.leaguesEnabled());
+                request.practiceReviewAutoTriggerEnabled(),
+                request.practiceReviewManualTriggerEnabled());
         return workspaceRepository.save(workspace);
     }
 
@@ -237,20 +118,5 @@ public class WorkspaceSettingsService {
         return workspaceRepository
                 .findById(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId.toString()));
-    }
-
-    private void validateTimeFormat(String time) {
-        try {
-            // Called for the exception, not the value: DateTimeFormatter offers no isValid() predicate.
-            LocalTime.parse(time, DateTimeFormatter.ofPattern("HH:mm")); // NOPMD
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Invalid time format. Expected HH:mm", e);
-        }
-    }
-
-    private void validateSlackChannelId(String channelId) {
-        if (!SLACK_CHANNEL_ID_PATTERN.matcher(channelId).matches()) {
-            throw new IllegalArgumentException("Invalid Slack channel ID format");
-        }
     }
 }

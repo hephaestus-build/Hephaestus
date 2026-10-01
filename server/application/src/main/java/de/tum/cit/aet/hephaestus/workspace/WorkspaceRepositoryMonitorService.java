@@ -3,6 +3,9 @@ package de.tum.cit.aet.hephaestus.workspace;
 import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
@@ -21,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryAlreadyMonitoredException;
 import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryManagementNotAllowedException;
+import de.tum.cit.aet.hephaestus.workspace.exception.RepositoryProviderNotConnectedException;
 import io.micrometer.common.util.StringUtils;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -39,6 +43,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Manages monitored repositories within workspaces. All methods take workspace
@@ -75,6 +80,8 @@ public class WorkspaceRepositoryMonitorService {
     private final ApplicationEventPublisher eventPublisher;
 
     private final ConnectionService connectionService;
+    private final ConnectionRepository connectionRepository;
+    private final TransactionTemplate transactionTemplate;
 
     public WorkspaceRepositoryMonitorService(
             NatsConnectionProperties natsProperties,
@@ -86,10 +93,12 @@ public class WorkspaceRepositoryMonitorService {
             WorkspaceScopeFilter workspaceScopeFilter,
             GitRepositoryManager gitRepositoryManager,
             ConnectionService connectionService,
+            ConnectionRepository connectionRepository,
             List<InstallationSuspensionTracker> suspensionTrackerList,
             List<InstallationRepositoryEnumerator> installationEnumeratorList,
             List<WorkspaceDataSyncTrigger> dataSyncTriggerList,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            TransactionTemplate transactionTemplate) {
         this.natsProperties = natsProperties;
         this.workspaceRepository = workspaceRepository;
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
@@ -99,7 +108,9 @@ public class WorkspaceRepositoryMonitorService {
         this.workspaceScopeFilter = workspaceScopeFilter;
         this.gitRepositoryManager = gitRepositoryManager;
         this.connectionService = connectionService;
+        this.connectionRepository = connectionRepository;
         this.eventPublisher = eventPublisher;
+        this.transactionTemplate = transactionTemplate;
 
         Map<IntegrationKind, InstallationSuspensionTracker> suspensionMap = new EnumMap<>(IntegrationKind.class);
         for (InstallationSuspensionTracker t : suspensionTrackerList) {
@@ -153,6 +164,14 @@ public class WorkspaceRepositoryMonitorService {
             throw new RepositoryManagementNotAllowedException(slug);
         }
 
+        IntegrationKind kind = connectionService
+                .findActiveProviderKind(workspace.getId())
+                .orElseThrow(() -> new RepositoryProviderNotConnectedException(slug));
+        if (kind == IntegrationKind.GITLAB) {
+            addGitLabRepositoryToMonitor(workspace, nameWithOwner);
+            return;
+        }
+
         if (workspace.getRepositoriesToMonitor().stream()
                 .anyMatch(r -> r.getNameWithOwner().equals(nameWithOwner))) {
             log.debug(
@@ -162,18 +181,11 @@ public class WorkspaceRepositoryMonitorService {
             throw new RepositoryAlreadyMonitoredException(nameWithOwner);
         }
 
-        // For GitLab PAT workspaces, the repo may not be synced yet — allow adding by name.
-        if (connectionService
-                .findActiveProviderKind(workspace.getId())
-                .map(kind -> kind != IntegrationKind.GITLAB)
-                .orElse(true)) {
-            var repository = findRepository(nameWithOwner);
-            if (repository.isEmpty()) {
-                log.debug(
-                        "Skipped repository monitor addition: reason=repositoryNotFound, nameWithOwner={}",
-                        LoggingUtils.sanitizeForLog(nameWithOwner));
-                throw new EntityNotFoundException("Repository", nameWithOwner);
-            }
+        if (findRepository(nameWithOwner).isEmpty()) {
+            log.debug(
+                    "Skipped repository monitor addition: reason=repositoryNotFound, nameWithOwner={}",
+                    LoggingUtils.sanitizeForLog(nameWithOwner));
+            throw new EntityNotFoundException("Repository", nameWithOwner);
         }
 
         log.info(
@@ -185,7 +197,55 @@ public class WorkspaceRepositoryMonitorService {
         repositoryToMonitor.setNameWithOwner(nameWithOwner);
         repositoryToMonitor.setNativeId(resolveNativeId(nameWithOwner));
         repositoryToMonitor.setWorkspace(workspace);
-        persistRepositoryMonitor(workspace, repositoryToMonitor);
+        persistRepositoryMonitor(workspace, repositoryToMonitor, false);
+    }
+
+    /**
+     * Adds a GitLab project by name. The check and the write happen in one transaction holding the connection's
+     * lifecycle lock, which disconnect and {@code GitLabRepositoryMonitors} also take, and a project already stored for
+     * the connection's instance is recognised by its id, so a project the workspace monitors under another path is not
+     * monitored twice. A name GitLab has not reported yet is monitored without an id until GitLab reports it at that
+     * path. Only the scope consumer refresh and the sync run after the commit.
+     */
+    private void addGitLabRepositoryToMonitor(Workspace workspace, String nameWithOwner) {
+        Long workspaceId = workspace.getId();
+        RepositoryToMonitor monitor = transactionTemplate.execute(status -> {
+            ConnectionConfig config = connectionRepository
+                    .lockActiveConfig(workspaceId, IntegrationKind.GITLAB)
+                    .orElseThrow(() -> new RepositoryProviderNotConnectedException(workspace.getWorkspaceSlug()));
+            Optional<String> origin = config instanceof ConnectionConfig.GitLabConfig gitLab
+                    ? ScmOrigin.of(gitLab.serverUrl())
+                    : Optional.empty();
+            Long nativeId = gitProviderRepository.findAllByType(IdentityProviderType.GITLAB).stream()
+                    .filter(provider -> origin.isPresent()
+                            && ScmOrigin.of(provider.getServerUrl()).equals(origin))
+                    .findFirst()
+                    .flatMap(provider -> repositoryRepository.findByNameWithOwnerAndProviderId(
+                            nameWithOwner, Objects.requireNonNull(provider.getId())))
+                    .map(Repository::getNativeId)
+                    .orElse(null);
+            if (repositoryToMonitorRepository.existsByWorkspaceIdAndNameWithOwner(workspaceId, nameWithOwner)
+                    || (nativeId != null
+                            && !repositoryToMonitorRepository
+                                    .findByWorkspaceIdAndNativeId(workspaceId, nativeId)
+                                    .isEmpty())) {
+                throw new RepositoryAlreadyMonitoredException(nameWithOwner);
+            }
+            Workspace owner = workspaceRepository
+                    .findById(workspaceId)
+                    .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
+            RepositoryToMonitor created = new RepositoryToMonitor();
+            created.setNameWithOwner(nameWithOwner);
+            created.setNativeId(nativeId);
+            created.setWorkspace(owner);
+            owner.getRepositoriesToMonitor().add(created);
+            return repositoryToMonitorRepository.saveAndFlush(created);
+        });
+        log.info(
+                "Added repository to monitor: nameWithOwner={}, workspaceId={}",
+                LoggingUtils.sanitizeForLog(nameWithOwner),
+                workspaceId);
+        announceRepositoryMonitor(workspace, Objects.requireNonNull(monitor), false);
     }
 
     public void addRepositoryToMonitor(WorkspaceContext workspaceContext, String nameWithOwner)
@@ -497,10 +557,6 @@ public class WorkspaceRepositoryMonitorService {
         });
     }
 
-    private void persistRepositoryMonitor(Workspace workspace, RepositoryToMonitor monitor) {
-        persistRepositoryMonitor(workspace, monitor, false);
-    }
-
     /**
      * Persist a repository monitor and optionally trigger immediate sync.
      *
@@ -512,6 +568,14 @@ public class WorkspaceRepositoryMonitorService {
         repositoryToMonitorRepository.saveAndFlush(monitor);
         workspace.getRepositoriesToMonitor().add(monitor);
         workspaceRepository.save(workspace);
+        announceRepositoryMonitor(workspace, monitor, deferSync);
+    }
+
+    /**
+     * Refreshes the scope consumer for a stored monitor and starts its sync unless {@code deferSync}; persists neither
+     * the monitor nor its workspace.
+     */
+    private void announceRepositoryMonitor(Workspace workspace, RepositoryToMonitor monitor, boolean deferSync) {
         boolean repositoryAllowed = workspaceScopeFilter.isRepositoryAllowed(monitor);
         if (shouldUseNats(workspace) && repositoryAllowed) {
             // Update workspace consumer to include new repository subjects

@@ -81,7 +81,7 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
                 connectionService,
                 new SlackSyncProperties("0 0 4 * * *", 10, 15, Duration.ZERO, true, 5, true),
                 CLOCK);
-        lenient().when(connectionService.findSlackNotificationConfig(WS)).thenReturn(Optional.empty());
+        lenient().when(connectionService.findSlackConfig(WS)).thenReturn(Optional.empty());
         lenient()
                 .when(monitoredChannelRepository.findConsentState(WS, CHANNEL))
                 .thenReturn(Optional.of(ConsentState.ACTIVE));

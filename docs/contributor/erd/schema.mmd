@@ -55,7 +55,6 @@ erDiagram
         BIGINT repository_id FK
         VARCHAR(32) target_type
         BIGINT target_id
-        DOUBLE xp "NOT NULL"
         TIMESTAMPTZ ingested_at "NOT NULL"
     }
 
@@ -497,6 +496,8 @@ erDiagram
         TIMESTAMPTZ projection_expires_at
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at "NOT NULL"
+        TIMESTAMPTZ write_started_at
+        BOOLEAN inline_write_started
         TEXT delivered_external_url
     }
 
@@ -520,6 +521,18 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         UUID chat_message_id FK
         TEXT posted_comment_url
+    }
+
+    FeedbackWithdrawal {
+        UUID id PK
+        UUID feedback_id FK "NOT NULL"
+        VARCHAR(500) reason "NOT NULL"
+        VARCHAR(500) restoration_reason
+        TIMESTAMPTZ restored_at
+        BIGINT restored_by_account_id FK
+        TIMESTAMPTZ withdrawn_at "NOT NULL"
+        BIGINT withdrawn_by_account_id FK "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
     }
 
     FxRate {
@@ -649,6 +662,9 @@ erDiagram
         VARCHAR(16) head_check_state
         UUID review_snapshot_id
         VARCHAR(128) review_snapshot_digest
+        TIMESTAMPTZ reviewers_observed_at
+        TIMESTAMPTZ head_check_observed_at
+        TIMESTAMPTZ discussions_observed_at
     }
 
     IssueAssignee {
@@ -873,7 +889,7 @@ erDiagram
     }
 
     Observation {
-        UUID id PK
+        UUID id PK,UK
         VARCHAR(255) occurrence_key UK "NOT NULL"
         UUID agent_job_id FK "NOT NULL"
         BIGINT practice_id FK "NOT NULL"
@@ -890,9 +906,23 @@ erDiagram
         BIGINT practice_revision_id FK
         VARCHAR(8) assessment
         VARCHAR(16) origin "NOT NULL"
-        BIGINT workspace_id FK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
         VARCHAR(16) assessment_status "NOT NULL"
         TIMESTAMPTZ superseded_at
+    }
+
+    ObservationInvalidation {
+        UUID id PK
+        TIMESTAMPTZ invalidated_at "NOT NULL"
+        BIGINT invalidated_by_account_id FK "NOT NULL"
+        UUID observation_id FK "NOT NULL"
+        VARCHAR(16) provider_copy "NOT NULL"
+        TIMESTAMPTZ provider_copy_retry_at "NOT NULL"
+        VARCHAR(500) reason "NOT NULL"
+        VARCHAR(500) restoration_reason
+        TIMESTAMPTZ restored_at
+        BIGINT restored_by_account_id FK
+        BIGINT workspace_id FK "NOT NULL"
     }
 
     Organization {
@@ -1215,6 +1245,12 @@ erDiagram
     PullRequestRequestedReviewer {
         BIGINT pull_request_id PK,FK
         BIGINT user_id PK,FK
+        VARCHAR(32) review_state
+    }
+
+    PullRequestRequestedTeam {
+        BIGINT pull_request_id PK,FK
+        BIGINT team_id PK,FK
     }
 
     PullRequestReview {
@@ -1344,6 +1380,9 @@ erDiagram
         BIGINT native_id
         VARCHAR(2048) historical_backfill_sync_error
         VARCHAR(2048) recent_sync_error
+        JSONB generated_paths "NOT NULL"
+        TIMESTAMPTZ unavailable_retry_at
+        TIMESTAMPTZ unavailable_since
     }
 
     ReviewBackfillRun {
@@ -1546,9 +1585,6 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         VARCHAR(120) display_name "NOT NULL"
         BOOLEAN is_publicly_viewable "NOT NULL"
-        BOOLEAN leaderboard_notification_enabled
-        INTEGER leaderboard_schedule_day
-        VARCHAR(10) leaderboard_schedule_time
         VARCHAR(64) slug UK "NOT NULL"
         VARCHAR(20) status "NOT NULL"
         TIMESTAMPTZ updated_at
@@ -1558,13 +1594,8 @@ erDiagram
         TIMESTAMPTZ issue_types_synced_at
         TIMESTAMPTZ issue_dependencies_synced_at
         BOOLEAN practices_enabled "NOT NULL"
-        BOOLEAN leaderboard_enabled "NOT NULL"
-        BOOLEAN progression_enabled "NOT NULL"
-        BOOLEAN leagues_enabled "NOT NULL"
         BOOLEAN practice_review_auto_trigger_enabled "NOT NULL"
         BOOLEAN practice_review_manual_trigger_enabled "NOT NULL"
-        BOOLEAN mentor_enabled "NOT NULL"
-        TIMESTAMPTZ leaderboard_league_cycle_at
         BOOLEAN practice_skip_drafts
         BOOLEAN practice_deliver_to_merged
         INTEGER practice_cooldown_minutes
@@ -1591,6 +1622,11 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
         VARCHAR(24) data_handling_tier UK "NOT NULL"
+    }
+
+    WorkspaceHiddenFormerMember {
+        BIGINT user_id PK,FK
+        BIGINT workspace_id PK,FK
     }
 
     WorkspaceLlmConnection {
@@ -1644,7 +1680,6 @@ erDiagram
 
     WorkspaceMembership {
         TIMESTAMPTZ created_at "NOT NULL"
-        INTEGER league_points "NOT NULL"
         VARCHAR(16) role "NOT NULL"
         BIGINT user_id PK,FK
         BIGINT workspace_id PK,FK
@@ -1755,6 +1790,9 @@ erDiagram
     Workspace ||--o{ FeedbackDispatch : has
     Feedback ||--o{ FeedbackPlacement : has
     ChatMessage ||--o{ FeedbackPlacement : has
+    Feedback ||--o{ FeedbackWithdrawal : references
+    Account ||--o{ FeedbackWithdrawal : restored_by_account_id
+    Account ||--o{ FeedbackWithdrawal : withdrawn_by_account_id
     User ||--o{ GitCommit : authored_by
     User ||--o{ GitCommit : references
     Repository ||--o{ GitCommit : has
@@ -1790,6 +1828,9 @@ erDiagram
     AgentJob ||--o{ Observation : has
     User ||--o{ Observation : has
     Workspace ||--o{ Observation : has
+    Observation ||--o{ ObservationInvalidation : has
+    Account ||--o{ ObservationInvalidation : invalidated_by_account_id
+    Account ||--o{ ObservationInvalidation : restored_by_account_id
     IdentityProvider ||--o{ Organization : references
     Connection ||--o{ OutlineCollection : has
     Workspace ||--o{ OutlineCollection : has
@@ -1896,12 +1937,16 @@ erDiagram
     Issue }o--o{ PullRequestClosingIssue : references
     Issue }o--o{ PullRequestRequestedReviewer : reviewed
     User }o--o{ PullRequestRequestedReviewer : reviewed
+    Issue }o--o{ PullRequestRequestedTeam : references
+    Team }o--o{ PullRequestRequestedTeam : has
     Repository }o--o{ RepositoryCollaborator : has
     User }o--o{ RepositoryCollaborator : has
     User }o--o{ TeamMembership : belongs_to
     Team }o--o{ TeamMembership : belongs_to
     Team }o--o{ TeamRepositoryPermission : has
     Repository }o--o{ TeamRepositoryPermission : has
+    User }o--o{ WorkspaceHiddenFormerMember : belongs_to
+    Workspace }o--o{ WorkspaceHiddenFormerMember : belongs_to
     Label }o--o{ WorkspaceTeamLabelFilter : labeled
     Team }o--o{ WorkspaceTeamLabelFilter : labeled
     Workspace }o--o{ WorkspaceTeamLabelFilter : labeled

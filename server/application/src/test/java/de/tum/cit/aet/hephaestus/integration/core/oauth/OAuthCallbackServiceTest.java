@@ -24,10 +24,12 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.lang.reflect.Field;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.assertj.core.api.Assertions;
+import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Tag("unit")
@@ -218,6 +221,27 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void complete_firstSlackConnect_takesTheProviderDefaults() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
+        when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        when(credentialBundleConverter.encrypt(any(), any())).thenReturn(new byte[] {0x02, 4, 5, 6});
+
+        service.completeConnection(pending, slackCompletion(), "alice");
+
+        assertThat(pending.getConfig()).isEqualTo(new ConnectionConfig.SlackConfig("T1", "Acme", null, Set.of()));
+    }
+
+    private static ConnectFinalization.Completed slackCompletion() {
+        return new ConnectFinalization.Completed(
+                "T1",
+                new BearerToken("new-token", null),
+                "Acme",
+                new ConnectionConfig.SlackConfig("T1", "Acme", null, Set.of()));
+    }
+
+    @Test
     void complete_slackTeamPreviouslyUninstalledInSameWorkspace_reusesConnectionAndDeletesPending() {
         Connection stalePending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         Connection uninstalled = newConnection(8L, 42L, IntegrationKind.SLACK, "T1", IntegrationState.UNINSTALLED);
@@ -274,12 +298,118 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         verify(connectionService).transition(eq(pending), any(TransitionRequest.class));
     }
 
+    @Test
+    void shouldConnectAVerifiedGitHubInstallationWithItsConfigAndNoStoredCredential() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.GITHUB, null, IntegrationState.PENDING);
+        when(connectionRepository.findAllByKindAndInstanceKeyAndStateIn(
+                        IntegrationKind.GITHUB, "4242", HOLDING_AN_INSTALLATION))
+                .thenReturn(List.of());
+        when(connectionRepository.findByWorkspaceIdAndKindAndInstanceKey(42L, IntegrationKind.GITHUB, "4242"))
+                .thenReturn(Optional.empty());
+        when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        Connection result = service.completeConnection(pending, verifiedInstallation(4242L), "5");
+
+        assertThat(result.getInstanceKey()).isEqualTo("4242");
+        assertThat(result.getDisplayName()).isEqualTo("acme");
+        assertThat(result.getConfig()).isEqualTo(new ConnectionConfig.GitHubAppConfig(4242L, "acme", null, Set.of()));
+        assertThat(result.getCredentialsEncrypted()).isNull();
+    }
+
+    @Test
+    void shouldNameTheHoldingWorkspaceToItsAdministratorWhenAGitHubInstallationIsConnectedElsewhere() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.GITHUB, null, IntegrationState.PENDING);
+        when(connectionRepository.findAllByKindAndInstanceKeyAndStateIn(
+                        IntegrationKind.GITHUB, "4242", HOLDING_AN_INSTALLATION))
+                .thenReturn(List.of(heldBy(43L, IntegrationState.ACTIVE)));
+        when(membershipQuery.isAdministrator(43L, 5L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), "5"))
+                .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
+                .hasMessage("This GitHub App installation is already connected to the Hephaestus workspace"
+                        + " \"Acme Engineering\" (acme-eng). Disconnect GitHub there before connecting it here.");
+        verify(connectionRepository, never()).save(any());
+        verify(connectionService, never()).transition(any(), any());
+    }
+
+    @Test
+    void shouldNotNameTheHoldingWorkspaceToSomeoneWhoDoesNotAdministerIt() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.GITHUB, null, IntegrationState.PENDING);
+        when(connectionRepository.findAllByKindAndInstanceKeyAndStateIn(
+                        IntegrationKind.GITHUB, "4242", HOLDING_AN_INSTALLATION))
+                .thenReturn(List.of(heldBy(43L, IntegrationState.SUSPENDED)));
+
+        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), "5"))
+                .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
+                .hasMessage("This GitHub App installation is already connected to another Hephaestus workspace."
+                        + " An administrator of that workspace must disconnect GitHub there first.");
+    }
+
+    @Test
+    void shouldRefuseAGitHubInstallationThatAConcurrentConnectBoundFirst() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.GITHUB, null, IntegrationState.PENDING);
+        when(connectionRepository.findAllByKindAndInstanceKeyAndStateIn(
+                        IntegrationKind.GITHUB, "4242", HOLDING_AN_INSTALLATION))
+                .thenReturn(List.of())
+                .thenReturn(List.of(heldBy(43L, IntegrationState.ACTIVE)));
+        when(connectionRepository.findByWorkspaceIdAndKindAndInstanceKey(42L, IntegrationKind.GITHUB, "4242"))
+                .thenReturn(Optional.empty());
+        DataIntegrityViolationException violation = new DataIntegrityViolationException(
+                "duplicate key",
+                new ConstraintViolationException(
+                        "duplicate key", new SQLException("duplicate key"), "uq_connection_one_github_installation"));
+        when(connectionRepository.save(any(Connection.class))).thenThrow(violation);
+
+        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), "5"))
+                .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
+                .hasCause(violation)
+                .hasMessageContaining("another Hephaestus workspace");
+    }
+
+    @Test
+    void shouldRethrowAViolationOfAnotherConstraintWhenConnectingGitHub() {
+        Connection pending = newConnection(7L, 42L, IntegrationKind.GITHUB, null, IntegrationState.PENDING);
+        when(connectionRepository.findAllByKindAndInstanceKeyAndStateIn(
+                        IntegrationKind.GITHUB, "4242", HOLDING_AN_INSTALLATION))
+                .thenReturn(List.of());
+        when(connectionRepository.findByWorkspaceIdAndKindAndInstanceKey(42L, IntegrationKind.GITHUB, "4242"))
+                .thenReturn(Optional.empty());
+        DataIntegrityViolationException violation = new DataIntegrityViolationException(
+                "duplicate key",
+                new ConstraintViolationException(
+                        "duplicate key", new SQLException("duplicate key"), "uq_connection_one_active_slack_per_team"));
+        when(connectionRepository.save(any(Connection.class))).thenThrow(violation);
+
+        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), "5"))
+                .isSameAs(violation);
+    }
+
     // helpers
 
     private void givenActiveSlackTeam(Connection... active) {
-        when(connectionRepository.findAllByKindAndInstanceKeyInAndState(
-                        IntegrationKind.SLACK, List.of("T1"), IntegrationState.ACTIVE))
+        when(connectionRepository.findAllByKindAndInstanceKeyAndStateIn(
+                        IntegrationKind.SLACK, "T1", Set.of(IntegrationState.ACTIVE)))
                 .thenReturn(List.of(active));
+    }
+
+    private static final Set<IntegrationState> HOLDING_AN_INSTALLATION =
+            Set.of(IntegrationState.PENDING, IntegrationState.ACTIVE, IntegrationState.SUSPENDED);
+
+    private static ConnectFinalization.Completed verifiedInstallation(long installationId) {
+        return new ConnectFinalization.Completed(
+                Long.toString(installationId),
+                null,
+                "acme",
+                new ConnectionConfig.GitHubAppConfig(installationId, "acme", null, Set.of()));
+    }
+
+    private static Connection heldBy(long workspaceId, IntegrationState state) {
+        Connection holder = newConnection(90L, workspaceId, IntegrationKind.GITHUB, "4242", state);
+        holder.getWorkspace().setDisplayName("Acme Engineering");
+        holder.getWorkspace().setWorkspaceSlug("acme-eng");
+        return holder;
     }
 
     private static Connection newConnection(
@@ -295,8 +425,9 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                                 null,
                                 null,
                                 ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                                Set.of());
-                    case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, null, null, Set.of());
+                                Set.of(),
+                                null);
+                    case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
                     case OUTLINE ->
                         new ConnectionConfig.OutlineConfig(
                                 "https://app.getoutline.com", null, null, java.util.Set.of());

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.observation.reaction;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -86,31 +87,88 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
         UUID getFeedbackId();
     }
 
-    /** Current resolution for each requested observation. The caller passes at least one observation ID. */
+    /**
+     * The developer's standing answer on feedback about each requested observation, and on feedback about any
+     * earlier observation that shares one of {@code recurrenceKeys} — the same practice, piece of work, developer
+     * and place. One row per piece of feedback whose newest response carries a resolution; the reactor is the
+     * observation's developer, who is the feedback's recipient. Which of these rows speaks for an observation is
+     * the caller's decision: this only finds them. The caller passes at least one observation ID.
+     */
     @Query(value = """
-        SELECT DISTINCT ON (o.id) o.id AS "observationId", r.action AS "resolution"
-        FROM feedback fb
-        JOIN feedback_observation fo ON fo.feedback_id = fb.id
-        JOIN observation o ON o.id = fo.observation_id
+        SELECT o.id AS "observationId", o.agent_job_id AS "agentJobId", o.recurrence_key AS "recurrenceKey",
+               o.presence AS "presence", o.assessment AS "assessment",
+               r.action AS "resolution", r.created_at AS "respondedAt"
+        FROM observation o
+        JOIN feedback_observation fo ON fo.observation_id = o.id
+        JOIN feedback fb ON fb.id = fo.feedback_id AND fb.workspace_id = o.workspace_id
         JOIN LATERAL (
             SELECT response.action, response.created_at, response.id
             FROM reaction response
-            WHERE response.feedback_id = fb.id AND response.reactor_user_id = :reactorUserId
+            WHERE response.feedback_id = fb.id AND response.reactor_user_id = o.about_user_id
             ORDER BY response.created_at DESC, response.id DESC LIMIT 1
         ) r ON r.action IS NOT NULL
-        WHERE o.id IN (:observationIds)
-          AND fb.workspace_id = :workspaceId
-        ORDER BY o.id, r.created_at DESC, r.id DESC
+        WHERE o.workspace_id = :workspaceId
+          AND (o.id IN (:observationIds) OR o.recurrence_key = ANY(CAST(:recurrenceKeys AS text[])))
         """, nativeQuery = true)
-    List<ObservationResolutionProjection> findCurrentResolutionByObservationIds(
+    List<ObservationResolutionProjection> findCurrentResolutions(
+            @Param("workspaceId") Long workspaceId,
             @Param("observationIds") Collection<UUID> observationIds,
-            @Param("reactorUserId") Long reactorUserId,
-            @Param("workspaceId") Long workspaceId);
+            @Param("recurrenceKeys") String[] recurrenceKeys);
 
     interface ObservationResolutionProjection {
         UUID getObservationId();
 
+        UUID getAgentJobId();
+
+        @Nullable
+        String getRecurrenceKey();
+
+        @Nullable
+        String getPresence();
+
+        @Nullable
+        String getAssessment();
+
         String getResolution();
+
+        Instant getRespondedAt();
+    }
+
+    /**
+     * The disputes standing on feedback written from one observation, newest first: each piece's recipient disputes
+     * it with the explanation their newest response carries.
+     */
+    @Query(value = """
+        SELECT fb.id AS "feedbackId", fb.channel AS "channel", latest.explanation AS "explanation",
+               latest.created_at AS "disputedAt"
+        FROM feedback_observation fo
+        JOIN feedback fb ON fb.id = fo.feedback_id AND fb.workspace_id = :workspaceId
+        """ + ObservationRepository.STANDING_DISPUTE + """
+        WHERE fo.observation_id = :observationId
+        ORDER BY latest.created_at DESC, fb.id
+        """, nativeQuery = true)
+    List<StandingDisputeRow> findStandingDisputesOfObservation(
+            @Param("workspaceId") Long workspaceId, @Param("observationId") UUID observationId);
+
+    /** The dispute standing on one piece of feedback, if its recipient disputes it now. */
+    @Query(value = """
+        SELECT fb.id AS "feedbackId", fb.channel AS "channel", latest.explanation AS "explanation",
+               latest.created_at AS "disputedAt"
+        FROM feedback fb
+        """ + ObservationRepository.STANDING_DISPUTE + """
+        WHERE fb.id = :feedbackId AND fb.workspace_id = :workspaceId
+        """, nativeQuery = true)
+    Optional<StandingDisputeRow> findStandingDispute(
+            @Param("workspaceId") Long workspaceId, @Param("feedbackId") UUID feedbackId);
+
+    interface StandingDisputeRow {
+        UUID getFeedbackId();
+
+        String getChannel();
+
+        String getExplanation();
+
+        Instant getDisputedAt();
     }
 
     /**

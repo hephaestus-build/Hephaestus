@@ -110,7 +110,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         User author = resolveWebhookAuthor(event, Objects.requireNonNull(context.providerId()));
         Long providerId = Objects.requireNonNull(
                 Objects.requireNonNull(context.repository()).getProvider().getId());
-        Long milestoneId = resolveWebhookMilestoneId(attrs.milestoneId(), providerId);
+        Long milestoneId = resolveWebhookMilestoneId(
+                attrs.milestoneId(), providerId, Objects.requireNonNull(context.repository()));
         Issue.State issueState = convertState(attrs.state());
         // Resolved exactly as the GraphQL sync resolves them: the issue review revision digests both, so a
         // field only one path fills would make a no-op sync look like an edit of the reviewed issue.
@@ -137,8 +138,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
 
         // Update relationships
         boolean changed = updateLabels(event.labels(), issue.getLabels(), Objects.requireNonNull(context.repository()));
-        changed |=
-                updateAssignees(event.assignees(), issue.getAssignees(), Objects.requireNonNull(context.providerId()));
+        changed |= updateAssignees(
+                event.currentAssignees(), issue.getAssignees(), Objects.requireNonNull(context.providerId()));
         if (changed) {
             issue = issueRepository.save(issue);
         }
@@ -230,7 +231,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             @Nullable String username,
             @Nullable String name,
             @Nullable String avatarUrl,
-            @Nullable String webUrl) {}
+            @Nullable String webUrl,
+            @Nullable Boolean bot) {}
 
     /**
      * All data needed to sync a single GitLab issue from GraphQL.
@@ -251,6 +253,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             @Nullable String authorName,
             @Nullable String authorAvatarUrl,
             @Nullable String authorWebUrl,
+            @Nullable Boolean authorBot,
             int commentsCount,
             @Nullable List<SyncLabelData> syncLabels,
             @Nullable List<SyncAssigneeData> syncAssignees,
@@ -307,7 +310,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
                         data.authorUsername(),
                         data.authorName(),
                         data.authorAvatarUrl(),
-                        data.authorWebUrl()),
+                        data.authorWebUrl(),
+                        data.authorBot()),
                 providerId);
 
         // State mapping
@@ -485,12 +489,13 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     }
 
     @Nullable
-    private Long resolveWebhookMilestoneId(@Nullable Long gitlabMilestoneId, Long providerId) {
+    private Long resolveWebhookMilestoneId(@Nullable Long gitlabMilestoneId, Long providerId, Repository repository) {
         if (gitlabMilestoneId == null) {
             return null;
         }
         return milestoneRepository
                 .findByNativeIdAndProviderId(gitlabMilestoneId, providerId)
+                .filter(milestone -> milestone.getRepository().getId().equals(repository.getId()))
                 .map(Milestone::getId)
                 .orElse(null);
     }
@@ -693,7 +698,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         Set<User> newAssignees = new HashSet<>();
         for (SyncAssigneeData data : syncAssignees) {
             User user = findOrCreateUser(
-                    GitLabUserLookup.of(data.globalId(), data.username(), data.name(), data.avatarUrl(), data.webUrl()),
+                    GitLabUserLookup.of(
+                            data.globalId(), data.username(), data.name(), data.avatarUrl(), data.webUrl(), data.bot()),
                     providerId);
             if (user != null) {
                 newAssignees.add(user);

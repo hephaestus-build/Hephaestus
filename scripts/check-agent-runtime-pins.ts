@@ -87,7 +87,9 @@ for (const path of [
 	}
 }
 
-const nodeBase = /^FROM node:\$\{NODE_VERSION\}-slim@sha256:[a-f0-9]{64}$/mu.exec(dockerfile);
+const nodeBase = /^FROM node:\$\{NODE_VERSION\}-slim@sha256:[a-f0-9]{64}(?: AS [\w-]+)?$/mu.exec(
+	dockerfile,
+);
 if (!nodeBase) {
 	problems.push("docker/agents/pi/Dockerfile: Node base must be pinned by a 64-character digest.");
 }

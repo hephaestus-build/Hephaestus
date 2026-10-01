@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
@@ -16,13 +17,17 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
+import de.tum.cit.aet.hephaestus.agent.proxy.MentorTurnMeter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyTokenUsage;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
@@ -144,6 +149,12 @@ class MentorChatServiceTest extends BaseUnitTest {
     @Mock
     MergeReadinessContentSource mergeReadiness;
 
+    @Mock
+    ObservationHistoryContentSource observationHistory;
+
+    @Mock
+    ConversationalDeliveryReconciler conversationalDeliveryReconciler;
+
     private MentorTurnLock turnLock;
     private PiEventToUiChunkTranslator translator;
     private ScheduledExecutorService scheduler;
@@ -152,6 +163,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     private MentorProxyCredentialRegistry proxyCredentialRegistry;
     private String sessionToken;
     private MentorChatService service;
+    private MentorSandboxPreparer preparer;
     private RecordingEmitter emitter;
     private io.micrometer.core.instrument.simple.SimpleMeterRegistry meterRegistry;
     private MemberAiPreferences.Decision aiDecision = new MemberAiPreferences.Decision(false, null);
@@ -166,6 +178,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         sandbox = new FakeSandbox();
         sandbox.onClose = () -> closedUnderSandboxLock.add(turnLock.activeSandboxKeys() > 0);
         proxyCredentialRegistry = new MentorProxyCredentialRegistry();
+        sandbox.credentials = proxyCredentialRegistry;
         sessionToken = proxyCredentialRegistry.mint(
                 sandbox.identity().sessionId(),
                 new MentorProxyCredentialRegistry.Route(
@@ -179,6 +192,15 @@ class MentorChatServiceTest extends BaseUnitTest {
 
         meterRegistry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
         service = serviceWithExecutor(turnExec);
+        preparer = new MentorSandboxPreparer(
+                sandboxServiceProvider(interactiveSandboxService),
+                turnLock,
+                memberAiRouting,
+                llmAdmissionService,
+                llmBudgetService,
+                mentorPiAdapter,
+                proxyCredentialRegistry,
+                new MentorChatExecutorConfig.MentorTurnExecutor(turnExec));
 
         when(llmBudgetService.decide(WORKSPACE_ID)).thenReturn(LlmBudgetDecision.ALLOWED);
 
@@ -229,10 +251,9 @@ class MentorChatServiceTest extends BaseUnitTest {
         });
         when(workspaceContextBuilder.build(any())).thenReturn(new LinkedHashMap<>());
         when(interactiveSandboxService.attach(any())).thenReturn(sandbox);
-        when(mentorPiAdapter.buildSandboxSpec(any(), any(), any(), any())).thenReturn(stubSpec());
-        when(persistence.complete(any(), any(), any())).thenReturn(true);
-        when(persistence.augmentFinishWithCost(any(UIMessageChunk.Finish.class), any()))
-                .thenAnswer(inv -> inv.getArgument(0, UIMessageChunk.Finish.class));
+        when(mentorPiAdapter.buildSandboxSpec(any(), any())).thenAnswer(inv -> stubSpec());
+        when(persistence.complete(any(), any(), any()))
+                .thenAnswer(inv -> Optional.ofNullable(inv.getArgument(2, UIMessageChunk.Finish.class)));
     }
 
     private MentorChatService serviceWithExecutor(ExecutorService executor) {
@@ -256,7 +277,9 @@ class MentorChatServiceTest extends BaseUnitTest {
                 proxyCredentialRegistry,
                 memberAiRouting,
                 (workspaceId, developerId) -> aiDecision,
-                mergeReadiness);
+                mergeReadiness,
+                observationHistory,
+                conversationalDeliveryReconciler);
     }
 
     @Test
@@ -292,6 +315,16 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void capacityRefusalIsBusyAndDoesNotRetryAnAttach() {
+        when(interactiveSandboxService.attach(any()))
+                .thenThrow(new de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException());
+        runTurnSync();
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        assertThat(emitter.rawData).anySatisfy(raw -> assertThat(raw).contains("Heph is busy"));
+        verify(interactiveSandboxService, times(1)).attach(any());
+    }
+
+    @Test
     void runTurn_happyPath_emitsStartThenChunksThenFinish() throws Exception {
         scheduleHappyPathResponses(sandbox).run();
 
@@ -318,14 +351,161 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(turnLock.activeKeys()).isZero();
         assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
         assertThat(meterRegistry.timer("mentor.turn.duration").count()).isEqualTo(1L);
+        assertThat(meterRegistry
+                        .timer("mentor.turn.first_token", "sandbox", "cold")
+                        .count())
+                .isEqualTo(1L);
+        assertThat(meterRegistry
+                        .timer("mentor.turn.first_token", "sandbox", "warm")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    void shouldSendNoWarmingStatusWhenTheSandboxIsWarm() {
+        when(interactiveSandboxService.isWarm(any())).thenReturn(true);
+        scheduleHappyPathResponses(sandbox).run();
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes())
+                .doesNotContain("data-mentor-status", "error")
+                .contains("finish");
+        assertThat(meterRegistry
+                        .timer("mentor.turn.first_token", "sandbox", "warm")
+                        .count())
+                .isEqualTo(1L);
+        assertThat(meterRegistry
+                        .timer("mentor.turn.first_token", "sandbox", "cold")
+                        .count())
+                .isZero();
+    }
+
+    @Test
+    void shouldSendTheSavedSessionWithOpenThreadSoAnyWarmSandboxContinuesTheThread() {
+        when(interactiveSandboxService.isWarm(any())).thenReturn(true);
+        when(chatThreadRepository.findSessionJsonl(THREAD_ID))
+                .thenReturn(Optional.of("{\"type\":\"session\"}\n".getBytes(StandardCharsets.UTF_8)));
+        scheduleHappyPathResponses(sandbox).run();
+
+        runTurnSync();
+
+        JsonNode open = sandbox.sentFrames().stream()
+                .filter(frame -> "open_thread".equals(frame.path("method").asString("")))
+                .findFirst()
+                .orElseThrow();
+        assertThat(open.path("params").path("session").asString()).isEqualTo("{\"type\":\"session\"}\n");
+        verify(chatThreadRepository, never()).clearSessionJsonl(any());
+    }
+
+    @Test
+    void shouldStartTheSandboxOnceWhenAPrepareIsFollowedByATurn() {
+        AtomicBoolean warm = new AtomicBoolean(false);
+        List<UUID> created = new CopyOnWriteArrayList<>();
+        when(interactiveSandboxService.isWarm(any())).thenAnswer(inv -> warm.get());
+        when(interactiveSandboxService.attach(any())).thenAnswer(inv -> {
+            if (!warm.getAndSet(true)) {
+                created.add(inv.getArgument(0, InteractiveSandboxSpec.class).sessionId());
+            }
+            return sandbox;
+        });
+        scheduleHappyPathResponses(sandbox).run();
+
+        preparer.prepare(WORKSPACE_ID, USER_ID);
+        runTurnSync();
+
+        assertThat(created).hasSize(1);
+        assertThat(emitter.recordedTypes())
+                .doesNotContain("data-mentor-status", "error")
+                .contains("finish");
+        assertThat(meterRegistry
+                        .timer("mentor.turn.first_token", "sandbox", "warm")
+                        .count())
+                .isEqualTo(1L);
+        // Prepare starts no thread and sends the runner nothing.
+        verify(persistence, times(1)).ensureThread(anyLong(), any(), any(), any(), any());
+        assertThat(sandbox.methodsSent()).containsOnlyOnce("hello", "open_thread", "prompt");
+        assertThat(meterRegistry.timer("mentor.turn.runtime_ready").count()).isEqualTo(1L);
+    }
+
+    @Test
+    @Timeout(5)
+    @SuppressWarnings("try")
+    void shouldPrepareNothingAndReturnAtOnceWhileATurnHoldsTheSandbox() throws InterruptedException {
+        try (var turnHolds = turnLock.acquireSandboxLock(new MentorTurnLock.SandboxKey(WORKSPACE_ID, USER_ID))) {
+            // From another thread, as a turn would be: the lock is reentrant for the thread that holds it.
+            Thread.ofVirtual()
+                    .start(() -> preparer.prepare(WORKSPACE_ID, USER_ID))
+                    .join();
+        }
+
+        verify(interactiveSandboxService, never()).attach(any());
+        verify(llmAdmissionService, never()).admit(any(WorkspaceAgentBinding.class));
+        assertThat(turnLock.activeSandboxKeys()).isZero();
+    }
+
+    @Test
+    void shouldPrepareNothingWhereATurnCouldNotRun() {
+        when(memberAiRouting.binding(eq(WORKSPACE_ID), eq(AgentPurpose.MENTOR), any()))
+                .thenReturn(Optional.empty());
+        preparer.prepare(WORKSPACE_ID, USER_ID);
+
+        verify(mentorPiAdapter, never()).buildSandboxSpec(any(), any());
+        verify(interactiveSandboxService, never()).attach(any());
+    }
+
+    @Test
+    void shouldPrepareNothingForADeveloperOverBudget() {
+        when(llmBudgetService.decide(WORKSPACE_ID))
+                .thenReturn(new LlmBudgetDecision(LlmBudgetBlockReason.EXHAUSTED, LlmBudgetBlockReason.NONE));
+        preparer.prepare(WORKSPACE_ID, USER_ID);
+
+        verify(mentorPiAdapter, never()).buildSandboxSpec(any(), any());
+        verify(interactiveSandboxService, never()).attach(any());
+    }
+
+    @Test
+    void shouldPrepareNothingAndRevokeTheUnusedCredentialWhenTheSandboxIsWarm() {
+        InteractiveSandboxSpec spec = stubSpec();
+        String token = proxyCredentialRegistry.mint(
+                spec.sessionId(),
+                new MentorProxyCredentialRegistry.Route(
+                        "openai-responses",
+                        "https://upstream.example.com/v1",
+                        FundingSource.INSTANCE,
+                        1L,
+                        2L,
+                        WORKSPACE_ID));
+        when(mentorPiAdapter.buildSandboxSpec(any(), any())).thenReturn(spec);
+        when(interactiveSandboxService.isWarm(spec)).thenReturn(true);
+
+        preparer.prepare(WORKSPACE_ID, USER_ID);
+
+        verify(interactiveSandboxService, never()).attach(any());
+        assertThat(proxyCredentialRegistry.validate(token)).isEmpty();
+    }
+
+    @Test
+    void shouldSwallowAFailedPrepareSoTheNextTurnStartsTheSandboxItself() {
+        when(interactiveSandboxService.attach(any()))
+                .thenThrow(new InteractiveSandboxException("Mentor session cap reached"));
+
+        preparer.prepare(WORKSPACE_ID, USER_ID);
+
+        verify(interactiveSandboxService).attach(any());
+        assertThat(turnLock.activeSandboxKeys()).isZero();
+        assertThat(meterRegistry.counter("mentor.turn.started").count()).isZero();
     }
 
     @Test
     void shouldInterruptInsteadOfFinalisingWhenAStreamedDeltaWasLost() {
+        when(conversationalDeliveryReconciler.admits(WORKSPACE_ID, USER_ID, OBSERVATION_ID))
+                .thenReturn(true);
         scheduleResponses(sandbox, prompt -> {
             sandbox.push(assistantStart());
             // ". The C" never arrived; Pi's final message still carries it.
             sandbox.push(textDelta("it"));
+            sandbox.push(linkObservationCallback("lo-1", OBSERVATION_ID));
             sandbox.push(event(
                     "link_observation",
                     n -> n.put("observationId", OBSERVATION_ID.toString()).put("text", "Name the trade-off.")));
@@ -353,6 +533,43 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
     }
 
+    @Test
+    void shouldKeepTheCheckpointOfACompactedTurnTheWatchdogEnds() {
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(textDelta("Looking"));
+            sandbox.push(event("compaction_start", n -> n.put("reason", "threshold")));
+            sandbox.push(event(
+                    "compaction_end",
+                    n -> n.put("reason", "threshold")
+                            .put("aborted", false)
+                            .putObject("result")
+                            .put("summary", "## Goal")));
+            sandbox.push(event("session_persisted", n -> n.put("jsonl", "{\"type\":\"compaction\"}\n")));
+            sandbox.push(event("turn_watchdog_fired", n -> {}));
+            sandbox.push(event("agent_end", n -> n.putArray("messages")));
+            // Nothing after the failure is the turn's any longer.
+            sandbox.push(event("session_persisted", n -> n.put("jsonl", "{\"type\":\"late\"}\n")));
+        });
+
+        runTurnSync();
+
+        assertThat(emitter.recordedTypes())
+                .containsSubsequence("text-end", "error")
+                .doesNotContain("finish");
+        verify(persistence, never()).complete(any(), any(), any());
+        verify(persistence, never()).recordDelivery(any(), any());
+        var interrupted =
+                ArgumentCaptor.forClass(de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState.class);
+        verify(persistence).interrupt(any(), interrupted.capture(), any());
+        assertThat(new String(
+                        java.util.Objects.requireNonNull(interrupted.getValue().observedSessionJsonl()),
+                        StandardCharsets.UTF_8))
+                .isEqualTo("{\"type\":\"compaction\"}\n");
+        // Its calls are billed from the proxy's record, which counts every summary call.
+        assertThat(interrupted.getValue().compactionAttempted()).isTrue();
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"hello", "open_thread"})
     void shouldRunTheNextTurnOnAFreshSandboxWhenTheStreamIsLostBeforeThePrompt(String lostDuring) throws Exception {
@@ -373,6 +590,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
         assertThat(sandbox.promptTexts()).isEmpty();
         assertThat(closedUnderSandboxLock).containsExactly(true);
+        assertThat(meterRegistry.timer("mentor.turn.runtime_ready").count()).isZero();
 
         emitter = new RecordingEmitter();
         scheduleHappyPathResponses(fresh).run();
@@ -387,7 +605,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         List<String> seenAtCommit = new CopyOnWriteArrayList<>();
         when(persistence.complete(any(), any(), any())).thenAnswer(inv -> {
             seenAtCommit.addAll(emitter.recordedTypes());
-            return true;
+            return Optional.ofNullable(inv.getArgument(2, UIMessageChunk.Finish.class));
         });
         scheduleHappyPathResponses(sandbox).run();
 
@@ -408,7 +626,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                     .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("database down"));
         } else {
             // Another writer, such as the in-flight reaper, already settled the row.
-            when(persistence.complete(any(), any(), any())).thenReturn(false);
+            when(persistence.complete(any(), any(), any())).thenReturn(Optional.empty());
         }
         scheduleHappyPathResponses(sandbox).run();
 
@@ -442,6 +660,45 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAnswerTheStoredPromptWhenAFailedReplyIsTriedAgain() {
+        UUID prompt = UUID.randomUUID();
+        UUID failedReply = UUID.randomUUID();
+        when(chatThreadRepository.findByIdAndWorkspaceId(THREAD_ID, WORKSPACE_ID))
+                .thenReturn(Optional.of(new ChatThread()));
+        when(persistence.persistRetry(any(), eq(prompt), eq(failedReply), any(), any()))
+                .thenAnswer(inv -> {
+                    MentorLlmConfig admitted = inv.getArgument(4, MentorLlmConfig.class);
+                    return new MentorTurnPersistence.RetryAdmission(
+                            new MentorTurnPersistence.TurnPersistenceCookie(
+                                    THREAD_ID,
+                                    prompt,
+                                    inv.getArgument(3, UUID.class),
+                                    Instant.now(),
+                                    admitted.upstreamModelId(),
+                                    Objects.requireNonNull(admitted.priceSnapshot())),
+                            "Plan issue 12");
+                });
+        scheduleHappyPathResponses(sandbox).run();
+
+        service.start(MentorTurnRequest.web(WORKSPACE_ID, THREAD_ID, "a different copy", prompt, failedReply), emitter);
+
+        assertThat(sandbox.promptTexts()).containsExactly("Plan issue 12");
+        verify(persistence, never()).persistInFlight(any(), any(), any(), any(), any());
+        assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
+    }
+
+    @Test
+    void shouldOpenNoThreadForARetryThisWorkspaceHasNoThreadFor() {
+        service.start(
+                MentorTurnRequest.web(WORKSPACE_ID, THREAD_ID, "hello mentor", UUID.randomUUID(), UUID.randomUUID()),
+                emitter);
+
+        assertThat(String.join("", emitter.rawData)).contains(MentorRetryRejectedException.NOT_RETRYABLE);
+        verify(persistence, never()).ensureThread(anyLong(), any(), any(), any(), any());
+        verify(persistence, never()).persistRetry(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void shouldInterruptTheTurnWhenItsInStreamErrorCannotBeWritten() {
         User developer = userRepository.getCurrentUserElseThrow();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
@@ -457,7 +714,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         });
 
         service.run(
-                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB, null),
                 channel,
                 USER_ID);
 
@@ -490,7 +747,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                     sandbox.onLost.run();
                     throw new org.springframework.dao.DataAccessResourceFailureException("database down");
                 })
-                .thenReturn(true);
+                .thenAnswer(inv -> Optional.ofNullable(inv.getArgument(2, UIMessageChunk.Finish.class)));
         scheduleHappyPathResponses(sandbox).run();
 
         runTurnSync();
@@ -510,7 +767,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     void shouldFinishButDiscardTheRunnerWhenTheStreamIsLostBeforeTheReplyIsCommitted() {
         when(persistence.complete(any(), any(), any())).thenAnswer(inv -> {
             sandbox.onLost.run();
-            return true;
+            return Optional.ofNullable(inv.getArgument(2, UIMessageChunk.Finish.class));
         });
         scheduleHappyPathResponses(sandbox).run();
 
@@ -543,7 +800,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         });
 
         service.run(
-                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB, null),
                 channel,
                 USER_ID);
         dispatcher.get().join(5_000);
@@ -667,7 +924,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         scheduleHappyPathResponses(sandbox).run();
 
         service.run(
-                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB),
+                new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, "hello mentor", null, ThreadSurface.WEB, null),
                 channel,
                 USER_ID);
 
@@ -793,7 +1050,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void runTurn_fetchContextServesCanonicalKeysAndOnePullRequestByArtifactId() {
+    void runTurn_fetchContextServesCanonicalKeysAndOneItemByCanonicalId() {
         Map<String, byte[]> context = new LinkedHashMap<>();
         context.put(
                 "inputs/context/recent_authored_work.json",
@@ -802,6 +1059,10 @@ class MentorChatServiceTest extends BaseUnitTest {
         ObjectNode inspected = mapper.createObjectNode();
         inspected.putArray("pullRequests").addObject().put("number", 6);
         when(mergeReadiness.inspect(WORKSPACE_ID, USER_ID, 42L)).thenReturn(inspected);
+        UUID observationId = UUID.fromString("0b7e1c9a-3f5d-4a8e-9c21-6d4f8e2a1b3c");
+        ObjectNode observation = mapper.createObjectNode();
+        observation.putObject("observation").put("id", observationId.toString());
+        when(observationHistory.inspect(WORKSPACE_ID, USER_ID, observationId)).thenReturn(observation);
 
         sandbox.onSend = frame -> {
             String method = frame.path("method").asString("");
@@ -815,6 +1076,13 @@ class MentorChatServiceTest extends BaseUnitTest {
                     sandbox.push(fetchContextCallback("fc-good", "inputs/context/recent_authored_work.json"));
                     sandbox.push(fetchContextCallback("fc-mr", "inputs/context/merge_readiness/42.json"));
                     sandbox.push(fetchContextCallback("fc-escape", "inputs/context/merge_readiness/../user.json"));
+                    sandbox.push(fetchContextCallback(
+                            "fc-observation", "inputs/context/observations_history/" + observationId + ".json"));
+                    sandbox.push(fetchContextCallback(
+                            "fc-uppercase",
+                            "inputs/context/observations_history/"
+                                    + observationId.toString().toUpperCase(java.util.Locale.ROOT)
+                                    + ".json"));
                     sandbox.push(event("agent_end", n -> n.putArray("messages")));
                     sandbox.push(jsonRpcResult(id, mapper.createObjectNode()));
                 }
@@ -851,6 +1119,59 @@ class MentorChatServiceTest extends BaseUnitTest {
                         .path("message")
                         .asString())
                 .contains("fetch_context path not allowed");
+        assertThat(sandbox.sentFrameWithId("fc-observation")
+                        .path("result")
+                        .path("content")
+                        .path("observation")
+                        .path("id")
+                        .asString())
+                .isEqualTo(observationId.toString());
+        assertThat(sandbox.sentFrameWithId("fc-uppercase")
+                        .path("error")
+                        .path("message")
+                        .asString())
+                .contains("fetch_context path not allowed");
+    }
+
+    @Test
+    void shouldRefuseALinkBeforeAnythingIsShownAndShowAndStoreOnlyTheOneTheServerAdmits() {
+        UUID invented = UUID.fromString("3ec24178-667e-4735-b818-681684324c6f");
+        when(conversationalDeliveryReconciler.admits(WORKSPACE_ID, USER_ID, OBSERVATION_ID))
+                .thenReturn(true);
+        scheduleResponses(sandbox, prompt -> {
+            sandbox.push(assistantStart());
+            sandbox.push(linkObservationCallback("lo-invented", invented));
+            sandbox.push(linkObservationCallback("lo-owned", OBSERVATION_ID));
+            sandbox.push(event(
+                    "link_observation",
+                    n -> n.put("observationId", OBSERVATION_ID.toString()).put("text", "Name the trade-off.")));
+            sandbox.push(textDelta("What made you choose it?"));
+            sandbox.push(assistantEnd("What made you choose it?"));
+            sandbox.push(event("turn_end", n -> {}));
+            sandbox.push(event("agent_end", n -> n.putArray("messages")));
+            sandbox.push(jsonRpcResult(prompt.path("id").asLong(), mapper.createObjectNode()));
+        });
+
+        runTurnSync();
+
+        assertThat(sandbox.sentFrameWithId("lo-invented")
+                        .path("error")
+                        .path("message")
+                        .asString())
+                .isEqualTo(MentorRunnerClient.LINK_REFUSED);
+        assertThat(sandbox.sentFrameWithId("lo-owned")
+                        .path("result")
+                        .path("observationId")
+                        .asString())
+                .isEqualTo(OBSERVATION_ID.toString());
+        assertThat(String.join("", emitter.rawData))
+                .contains(OBSERVATION_ID.toString())
+                .doesNotContain(invented.toString());
+        var completed = ArgumentCaptor.forClass(de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState.class);
+        verify(persistence).complete(any(), completed.capture(), any(UIMessageChunk.Finish.class));
+        assertThat(UIMessageChunk.DataObservation.shownObservationIds(
+                        completed.getValue().partsSnapshot()))
+                .containsExactly(OBSERVATION_ID);
     }
 
     @Test
@@ -1334,7 +1655,7 @@ class MentorChatServiceTest extends BaseUnitTest {
     }
 
     private void runTurnSync(String message, ThreadSurface surface) {
-        service.start(new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, message, null, surface), emitter);
+        service.start(new MentorTurnRequest(WORKSPACE_ID, THREAD_ID, message, null, surface, null), emitter);
     }
 
     private static ObjectProvider<InteractiveSandboxService> sandboxServiceProvider(InteractiveSandboxService svc) {
@@ -1537,6 +1858,15 @@ class MentorChatServiceTest extends BaseUnitTest {
         return frame;
     }
 
+    private ObjectNode linkObservationCallback(String id, UUID observationId) {
+        ObjectNode frame = mapper.createObjectNode();
+        frame.put("jsonrpc", "2.0");
+        frame.put("id", id);
+        frame.put("method", "link_observation");
+        frame.putObject("params").put("threadId", THREAD_ID.toString()).put("observationId", observationId.toString());
+        return frame;
+    }
+
     private ObjectNode fetchContextCallback(String id, String path) {
         ObjectNode frame = mapper.createObjectNode();
         frame.put("jsonrpc", "2.0");
@@ -1613,6 +1943,25 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     static final class FakeSandbox implements AttachedSandbox {
 
+        @Nullable
+        MentorProxyCredentialRegistry credentials;
+
+        @Nullable
+        MentorTurnMeter meter;
+
+        @Override
+        public void bindTurn(UUID turnId, @Nullable LlmPriceSnapshot price) {
+            if (credentials != null) {
+                meter = new MentorTurnMeter(turnId, price);
+                credentials.bindTurn(sessionId, meter);
+            }
+        }
+
+        @Override
+        public void unbindTurn(UUID turnId) {
+            if (credentials != null && meter != null) credentials.unbindTurn(sessionId, meter);
+        }
+
         private final UUID sessionId = UUID.randomUUID();
         private final LinkedBlockingDeque<JsonNode> sent = new LinkedBlockingDeque<>();
         private final CopyOnWriteArrayList<Consumer<JsonNode>> listeners = new CopyOnWriteArrayList<>();
@@ -1637,7 +1986,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         }
 
         @Override
-        public Disposable subscribe(Consumer<JsonNode> listener) {
+        public Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost) {
             listeners.add(listener);
             onSubscribe.run();
             return () -> listeners.remove(listener);
@@ -1646,17 +1995,7 @@ class MentorChatServiceTest extends BaseUnitTest {
         @Override
         public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
             this.onLost = onLost;
-            return subscribe(listener);
-        }
-
-        @Override
-        public Instant lastActivityAt() {
-            return Instant.now();
-        }
-
-        @Override
-        public Duration idleFor() {
-            return Duration.ZERO;
+            return subscribe(listener, onLost);
         }
 
         volatile Runnable onClose = () -> {};
@@ -1672,6 +2011,10 @@ class MentorChatServiceTest extends BaseUnitTest {
             for (Consumer<JsonNode> l : new ArrayList<>(listeners)) {
                 l.accept(frame);
             }
+        }
+
+        List<JsonNode> sentFrames() {
+            return List.copyOf(sent);
         }
 
         List<String> methodsSent() {

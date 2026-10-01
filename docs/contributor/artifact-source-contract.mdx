@@ -7,12 +7,24 @@ description: Versioned evidence sources, explicit absence states, per-binding ev
 
 # Artifact-source contract
 
-Hephaestus may review work against a practice only from evidence with explicit semantics. Contract `1.2.0` defines the
-logical source catalog, its capture states, and how well each source must be captured. A capture manifest records
+Hephaestus may review work against a practice only from evidence with explicit semantics. Contract `1.3.0` defines the
+logical source catalog, its capture states, and how well each source must be captured. A folder index records
 what was supplied to one run; it does not prove that a practice is empirically observable.
 
 > If any required evidence clause is unsatisfied, refuse the review and create no observation.
 > A source failure is never `NOT_APPLICABLE`, a strength, or evidence that desired behaviour is absent.
+
+## One frozen job folder
+
+The worker renders permitted database records in one read-only repeatable-read transaction. Integration-owned
+projections and history visibility checks remain the authorization boundary. `INDEX.md` describes the folder;
+`INDEX.json` holds primary reviewed-work readiness facts separately from all rendered artifact digests and typed
+area, repository and record refusals. Another repository's records cannot make a missing primary source ready.
+The [workspace ABI](./agent/workspace-abi.mdx) owns paths, quote coordinates, transfer budget and retention.
+
+The capped review capture path is removed. The evaluation benchmark
+[#1436](https://github.com/hephaestus-build/Hephaestus/issues/1436) explicitly does not gate 1.0;
+this change makes no before-and-after quality claim. Heph 1.x remains a separate, purpose-bound runtime.
 
 ## Contract boundary
 
@@ -23,10 +35,10 @@ The contract separates three identities:
 2. **Practice binding:** the occasion a review runs on and the evidence that review *requires* before it may
    run at all. A source declares the artifact kinds it applies to, so the catalog constrains which sources a
    binding may name.
-3. **Capture manifest:** the state, provenance facts, and materialized artifacts for one invocation.
+3. **Folder index:** the state, provenance facts, and materialized artifacts for one invocation.
 
-A binding's `needs` decide **readiness**, not staging. Every source the catalog says applies to the artifact
-kind is captured and staged for every review of that kind, whether or not a practice named it: relevance is a
+A binding's `needs` decide **readiness**, not staging. Every source permitted for the workspace and purpose
+is rendered for every review, whether or not a practice named it: relevance is a
 question for the practice criteria and the reviewing model, not a reason to withhold data from it. A binding
 that names a source with a refusing stance still refuses the review when that source did not arrive, and an
 `EXHAUSTIVE` stance still fences what the review may assert an absence over. Neither cuts the sandbox down.
@@ -94,11 +106,11 @@ Each catalog source references separate source-use decisions whose purposes are 
 requires `OPERATOR_EVIDENCE_REVIEW`. Processor, region, transfer, and model-egress controls remain separate
 deployment obligations. A source allowed in an internal mirror is not thereby allowed in an external model request.
 
-## Source catalog (`1.2.0`)
+## Source catalog (`1.3.0`)
 
-The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/artifact-source/1.2.0/catalog.json),
+The machine-readable [catalog](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/1.3.0/catalog.json),
 its adjacent JSON Schemas, and the checks in
-[`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-artifact-source-contracts.ts)
+[`gate:contracts`](https://github.com/hephaestus-build/Hephaestus/blob/main/scripts/validate-source-use-contracts.ts)
 jointly define conformance. Schema validation alone is insufficient because standard JSON Schema `uniqueItems`
 compares whole values rather than a selected identity property, so the script also rejects duplicate source
 kinds and holds each schema's pinned `catalogDigest` to the catalog's actual hash. The cross-resource rules
@@ -117,9 +129,9 @@ The constraints with direct authoring consequences are:
   copy that has since drifted as demonstrably current.
 - A `LOSSY_DERIVATION` cannot satisfy `COMPLETE`. It is a bounded summary of its subject rather than the
   subject, so it cannot answer "is all of it here?" — which is exactly what an author asserting an absence is
-  asking. Outline documents and linked work items are both retrieved by heuristics that cannot establish they
-  found everything, and neither reports `COMPLETE`.
-- Three `1.2.0` sources cannot be logically empty — the pull-request, issue, and document core records.
+  asking. Linked-work number extraction cannot establish that it found every relationship. Outline renders every
+  permitted mirrored document and can report `COMPLETE` for that mirror scope, not upstream currentness.
+- Three sources cannot be logically empty — the pull-request, issue, and document core records.
   Every other source may be validly empty.
 - Two cannot be partial: the pull-request diff and the document core record. An available diff is
   additionally pinned. Its `requiredQuality` is `COMPLETE`: a verified empty range is available evidence.
@@ -127,8 +139,9 @@ The constraints with direct authoring consequences are:
   applicability nor an outcome. Missing, failed or incomplete required captures remain unready.
 
 `ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, minimized product
-scope. It is not controller or DPO approval and cannot cover an expanded source, purpose, audience, processor,
-retention policy, or collection scope. It is also the only basis the contract can express, and the only outcome:
+scope. Contract `1.3.0` records explicit maintainer engineering approval of the wider permitted workspace
+scope in [#1732](https://github.com/hephaestus-build/Hephaestus/issues/1732). It is not controller or DPO approval.
+A later expansion of source, purpose, audience, processor, retention policy or collection scope needs its own decision. It is also the only basis the contract can express, and the only outcome:
 a use nobody approved carries no decision rather than a recorded refusal, so no entry here can read as a
 controller sign-off. The controller's own record remains separate. Approval is the gate that runtime
 configuration cannot waive: a source whose decision is missing or expired is never read, whatever the
@@ -138,16 +151,15 @@ default deployment reviews pull requests, issues and conversations without furth
 class does not gate collection — it records what treatment a source needs.
 
 Changing a source's meaning, selection scope, limit, mapping, identity policy, required capture quality,
-dependency, or normalization requires a new contract version. Contract `1.2.0` expands
-`scm.repository.tree` from a `.git`-free tree to a checkout with the Git history reachable from the
+dependency, or normalization requires a new contract version. Contract `1.2.0` introduced a checkout with the Git history reachable from the
 reviewed commit and the mirrored branches and tags, under the source's governance and retention
-policies. The reviewed commit and tree identify the checkout; the manifest additionally digests the
-`inputs/sources/scm/repo/.git/HEAD` and captured-refs witnesses, which pin the exported refs — those can change between two
+policies. The reviewed commit and tree identify the checkout; the folder index additionally digests the
+`repos/reviewed/.git/HEAD` and captured-refs witnesses, which pin the exported refs — those can change between two
 captures of the same commit.
 
 ## Capture state
 
-Source absence is separate from quality so the manifest does not collapse unavailable, partial, and empty evidence
+Source absence is separate from quality so the folder index does not collapse unavailable, partial, and empty evidence
 into one state.
 
 ### Availability
@@ -163,7 +175,7 @@ into one state.
 A non-available source contains no artifacts or source identifiers, and carries a typed
 `SourceAbsenceReason` saying *why* — `GOVERNANCE_NOT_EFFECTIVE`, `NO_PROVIDER`, `NO_WORKING_COPY`,
 `CONSENT_NOT_ACTIVE`, and the rest. Safe, typed reason codes may be role-filtered; free-form exception text
-must not enter the manifest.
+must not enter the folder index.
 
 ### Available-source dimensions
 
@@ -176,7 +188,7 @@ Only `AVAILABLE` has:
 - artifacts.
 
 Capture facts hold only what could not be known before the capture ran. Everything derivable from the
-catalog the manifest pins by digest — selection scope, limits, required capture quality, the states a source
+catalog the folder index pins by digest — selection scope, limits, required capture quality, the states a source
 may report — is read from the catalog, never copied into the capture.
 
 Logical content is independent of serialized bytes: a JSON file containing `[]` represents an `EMPTY` source.
@@ -192,7 +204,7 @@ system cannot substantiate, so `IdentityPolicy` records only the honest half —
 anchored to something immutable at all.
 
 A readiness report names the contract version, the catalog digest it was interpreted under, the artifact
-kind, the manifest's capture time, and one decision per practice. A manifest captured under a contract
+kind, the folder index's capture time, and one decision per practice. A folder index captured under a contract
 version the runtime no longer ships is *unreplayable* rather than invalid: the recorded result stands, and
 only the ability to re-derive it is unavailable.
 
@@ -221,7 +233,7 @@ declared kind contradicts its own signals cannot be resolved. All signals in the
 one artifact kind.
 
 A signal that names a hand-requested review is refused: such a review already covers every practice on that
-work type whatever state the work is in, so it is a door rather than an occasion an author opts into.
+kind of work whatever state the work is in, so it is a door rather than an occasion an author opts into.
 
 Each entry in `needs` names a source and the stance the practice takes towards it:
 
@@ -250,7 +262,7 @@ quiet `NOT_APPLICABLE`.
     }
   ],
   "automatedReviewPolicy": {
-    "sourceContractVersion": "1.2.0",
+    "sourceContractVersion": "1.3.0",
     "automatedReview": {
       "mode": "LANGUAGE_MODEL",
       "evidenceSufficiency": "SUFFICIENT_WHEN_REQUIREMENTS_MET"
@@ -333,9 +345,10 @@ in [When a workspace goes quiet](/admin/practice-review#when-a-workspace-goes-qu
 
 - **Review coverage**, checked first. The repository/base-branch axis and the person axis are intersected,
   and both must admit the work. A repository or base branch outside the selection, a selected list left
-  empty, or an author who is not a member of the workspace is refused with terminal `OUT_OF_REVIEW_SCOPE`.
-  Work with no identifiable author is refused with retryable `SUBJECT_UNLINKED` instead, because an
-  identity can still arrive later.
+  empty, a member the person selection leaves out, or a bot author is refused with terminal
+  `OUT_OF_REVIEW_SCOPE`. Work with no identifiable author, or whose author is not a member the workspace
+  reviews, is refused with retryable `SUBJECT_UNLINKED` instead, because an identity or a membership can still
+  arrive with the next link or member sync.
 - **Practice autonomy.** A practice at `OFF` admits no review; `HUMAN_APPROVAL` and `AUTOMATIC` both run it
   and differ only in whether a person must authorize release onto the work. When every practice bound to a signal sits at
   `OFF`, the signal is refused with retryable `PRACTICE_AUTONOMY_OFF`, so turning a practice back on lets
@@ -350,7 +363,7 @@ concern — they decide whether evidence is collected at all.
 
 `scope-one-reviewable-change` is bound to `scm.pull_request.opened` and `scm.pull_request.ready`, and that
 binding requires `scm.pull-request.core` and `scm.pull-request.diff` and reads `scm.repository.tree`
-contextually. The diff's contract demands a complete, non-empty capture. If the diff cannot be read, or the
+contextually. The diff's contract demands a complete capture, including a verified empty range. If the diff cannot be read, or the
 pinned commit is gone from the mirror, readiness refuses the practice and no observation is created. The
 runtime makes no claim that the change is focused, sprawling, or `NOT_APPLICABLE`. No stance can demand
 a currentness the pull-request record cannot demonstrate; nothing available could substantiate one.
@@ -365,7 +378,7 @@ practice taking an `EXHAUSTIVE` stance is refused by a partial one.
 ## Runtime behavior
 
 The runtime resolves exact practice revisions before capture and then stages **every governed source the
-catalog declares for the artifact kind under review** — all of them, on every review. There is no per-run
+purpose permits in the workspace** — all of them, on every review. There is no per-run
 source selection: practice bindings decide which practices may run, never which sources are captured, so a
 source listed as anything other than `AVAILABLE` always says why in a typed reason code and never because
 no practice asked for it. Bindings enter afterwards, in the readiness check. Readiness is evaluated per
@@ -376,31 +389,31 @@ One invocation may contain the governed union needed by several practices. The m
 union; this runtime uses an attribution boundary rather than process isolation. The practice index lists each
 practice's admissible logical source kinds. Every model-authored observation must cite an exact quote and artifact path.
 The sandbox and server independently verify that the source is declared and available, the path belongs to that
-source in the pinned manifest, and the quote occurs in the digest-addressed artifact. Delivery fails atomically on
+source in the pinned folder index, and the quote occurs in the digest-addressed artifact. Delivery fails atomically on
 any mismatch.
 This proves traceable grounding, not model causality; evaluations requiring non-interference must still run
 practices in isolated evidence views.
 
 A quote of code is verified against the captured repository, whichever of its two sources it names. A
-repository citation names `scm.repository.tree`, the captured `inputs/sources/scm/repo/.git/HEAD` witness as its
+repository citation names `scm.repository.tree`, the captured `repos/reviewed/.git/HEAD` witness as its
 `artifactPath`, a repository-relative `path`, the exact quote and line range, and optionally a
 `revision` — a full commit id from the captured history; omitted, it means the reviewed commit. A change
-citation names `scm.pull-request.diff`, the pinned `inputs/context/change.json` as its `artifactPath`, the
+citation names `scm.pull-request.diff`, the pinned `context/change.json` as its `artifactPath`, the
 `OLD` or `NEW` side, and the same path, quote and lines; its revision is the side's commit of the pinned
 range, and a path the change does not touch withholds the observation. The server never stages a diff:
 the container derives `work/change/diff.patch` from the checkout with `git`, and the line annotations it
 carries are the coordinates a change citation names. The
 server answers every code citation of a review by opening, with JGit, the snapshot it pins by the
-`inputs/sources/scm/repo/.git/HEAD` and captured-refs digests: an object the snapshot never captured, a path that does not exist at that revision, or a
+`repos/reviewed/.git/HEAD` and captured-refs digests: an object the snapshot never captured, a path that does not exist at that revision, or a
 quote that does not match those lines, withholds that observation and records
 `QUOTE_LOCATION_MISMATCH` against the citation. Shell output is not an artifact — a
 quote is verified against the Git object, never against what a command printed — and only
 `scm.repository.tree` citations may select a revision, only `scm.pull-request.diff` citations a side.
 
 The internal readiness report records whether each practice is ready or skipped, and it is the one document
-that stays server-side: it is persisted to `agent_job.review_readiness` and never staged. The **manifest is
+that stays server-side: it is persisted to `agent_job.review_readiness` and never staged. The **folder index is
 not internal** — the same bytes persisted to `agent_job.evidence_snapshot` are staged into the sandbox at
-`inputs/manifest.json`, carrying every absence reason code including `GOVERNANCE_NOT_EFFECTIVE`,
+`INDEX.json`, carrying every absence reason code including `GOVERNANCE_NOT_EFFECTIVE`,
 `CONSENT_NOT_ACTIVE`, and `CONTENT_EVICTED`. There is no redacted model-facing variant. Treat a reason code
 you add to a capture state as model-visible, and put anything that must not be as a readiness decision
 instead.
@@ -420,8 +433,22 @@ Historical records keep their original contract and practice revision. Currentne
 
 Semantic currentness, automated-review-validation status, governance eligibility, and replayability remain separate.
 Observation and review APIs expose `claimCurrentness` as `CURRENT`, `STALE`, or `UNVERIFIABLE` by comparing the
-evaluated practice revision's review-rule fingerprint with the current revision's fingerprint. Presentation-only
-edits retain semantic currentness; rows without comparable versioned fingerprints are `UNVERIFIABLE`.
+evaluated practice revision's review-rule fingerprint with the current revision's fingerprint, and as `STALE` once the
+observation carries a superseded marker. `IssueObservationSuperseder` sets that marker on an issue's observations in
+the transaction that records a change to its reviewable content, before and independently of any new review.
+Presentation-only edits retain semantic currentness; rows without comparable versioned fingerprints are
+`UNVERIFIABLE`. Neither value says whether a later review ran, and pull request work is never compared.
+
+Whether what a review read differs from the stored work is a separate fact. A pull request or issue review records
+`reviewedWork` in `agent_job.evidence_snapshot` beside the folder index: the artifact it is bound to, a content digest of
+the staged title and description, the pinned head of a pull request, and the folder index's capture time — all taken from
+the staged bytes, never from the work read again. The mentor compares it with the stored work on the workspace's
+connected instance, only where the core source may be used in conversation and the capture is bound to the same
+artifact, and reports the fields it could check. A difference says the fields differ, not when the work changed: a
+queued review can pin a head the mirror has already moved past.
+A match is with the synchronized mirror over those fields alone, not with the provider, and not with comments,
+checks, approvals, linked work or behaviour. Reviews captured before `reviewedWork` existed can show only that the
+archived description or pinned head differs; they never establish that a title is unchanged.
 
 ## Adding or changing a source
 

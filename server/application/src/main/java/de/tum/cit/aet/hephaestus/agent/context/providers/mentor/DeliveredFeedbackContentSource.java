@@ -13,8 +13,8 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.RecipientFeedbackRow;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
@@ -48,6 +47,7 @@ public class DeliveredFeedbackContentSource implements ContentSource {
     private final UserRepository userRepository;
     private final FeedbackRepository feedbackRepository;
     private final FeedbackObservationRepository feedbackObservationRepository;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
     private final ConversationConsentGate conversationConsentGate;
     private final ObservationVisibilityPolicy visibilityPolicy;
     private final ObjectMapper objectMapper;
@@ -116,14 +116,18 @@ public class DeliveredFeedbackContentSource implements ContentSource {
         ArrayNode states = root.putArray("feedbackStates");
         for (Usable usable : sample) {
             RecipientFeedbackRow row = usable.row();
-            String body = deliveredText(row);
+            // A withdrawn card keeps its record but not its words: an admin took them back as wrong.
+            String body = usable.withdrawn() ? null : deliveredText(row);
             if (body != null) {
                 describe(delivered.addObject(), row).put("body", body);
             }
-            describe(states.addObject(), row)
+            ObjectNode state = describe(states.addObject(), row)
                     .put("status", status(row))
-                    .put("evidenceCurrentness", usable.evidence().name())
+                    .put("recordedClaimCurrentness", usable.evidence().name())
                     .put("createdAt", row.getCreatedAt().toString());
+            if (usable.withdrawn()) {
+                state.put("withdrawn", true);
+            }
         }
         return root;
     }
@@ -158,8 +162,11 @@ public class DeliveredFeedbackContentSource implements ContentSource {
         }
     }
 
-    /** A row this conversation may use, and whether every review behind it is still current. */
-    private record Usable(RecipientFeedbackRow row, ReviewClaimCurrentness evidence) {}
+    /**
+     * A row this conversation may use, whether every review behind it is still current, and whether a workspace
+     * admin withdrew it from the practice page.
+     */
+    private record Usable(RecipientFeedbackRow row, ReviewClaimCurrentness evidence, boolean withdrawn) {}
 
     /**
      * The rows whose every bound observation may still be shown to the developer, as on their practice page, and
@@ -178,22 +185,7 @@ public class DeliveredFeedbackContentSource implements ContentSource {
                         .map(FeedbackObservationVisibility::getObservation)
                         .toList(),
                 SourceUsePurpose.CONVERSATIONAL_MENTORING);
-        Map<UUID, Boolean> permitted = bindings.stream()
-                .collect(Collectors.toMap(
-                        FeedbackObservationVisibility::getFeedbackId,
-                        binding -> visible.contains(binding.getObservation().getId()),
-                        Boolean::logicalAnd));
-        Set<UUID> stale = bindings.stream()
-                .filter(binding -> {
-                    Observation observation = binding.getObservation();
-                    return ReviewClaimCurrentness.of(
-                                    observation.getPracticeRevision(),
-                                    observation.getPractice(),
-                                    observation.getSupersededAt())
-                            != ReviewClaimCurrentness.CURRENT;
-                })
-                .map(FeedbackObservationVisibility::getFeedbackId)
-                .collect(Collectors.toSet());
+        Map<UUID, ReviewClaimCurrentness> shown = FeedbackObservationVisibility.shown(bindings, visible);
         Set<Long> activeThreadIds = conversationConsentGate.activeThreadIds(
                 workspaceId,
                 rows.stream()
@@ -201,13 +193,13 @@ public class DeliveredFeedbackContentSource implements ContentSource {
                         .map(RecipientFeedbackRow::getArtifactId)
                         .filter(Objects::nonNull)
                         .toList());
+        Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(workspaceId, shown.keySet());
         return rows.stream()
-                .filter(row -> permitted.getOrDefault(row.getId(), false))
+                .filter(row -> shown.containsKey(row.getId()))
                 .filter(row -> !ArtifactKinds.CONVERSATION_THREAD.equals(row.getArtifactKind())
                         || (row.getArtifactId() != null && activeThreadIds.contains(row.getArtifactId())))
                 .map(row -> new Usable(
-                        row,
-                        stale.contains(row.getId()) ? ReviewClaimCurrentness.STALE : ReviewClaimCurrentness.CURRENT))
+                        row, Objects.requireNonNull(shown.get(row.getId())), withdrawn.contains(row.getId())))
                 .toList();
     }
 

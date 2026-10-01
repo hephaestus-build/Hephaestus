@@ -32,8 +32,12 @@ public interface ReviewOutcomeLookup {
     }
 
     /**
-     * @param blockers      already-rendered phrases naming what could not be read, so no consumer has to
+     * @param blockers      already-rendered sentences naming what could not be read, so no consumer has to
      *                      learn the evidence vocabulary to explain a refusal
+     * @param limitation    set when the practice itself declares it is not reviewed automatically — a
+     *                      sentence saying so. A policy stop, not a capture failure: nothing was missing,
+     *                      and reporting it as missing evidence would send somebody to fix a capture that
+     *                      worked
      * @param notApplicable set when the run read the evidence and the thing this practice judges was not
      *                      in the work — the practice author's own sentence for it. Distinct from a
      *                      blocker, and never both: a blocker is a fact about our instrument, this is a
@@ -43,6 +47,7 @@ public interface ReviewOutcomeLookup {
     record PracticeReadinessOutcome(
             boolean ready,
             @NonNull List<String> blockers,
+            @Nullable String limitation,
             @Nullable String notApplicable) {}
 
     /**

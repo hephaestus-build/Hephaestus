@@ -10,6 +10,7 @@ const inventory = await readInventory(
 );
 const commit = "c".repeat(40);
 const applicationDigest = `sha256:${"1".repeat(64)}`;
+const agentDigest = `sha256:${"2".repeat(64)}`;
 
 await test("a render sets every image a commit deploy would pin, to a name no registry serves", async () => {
 	const rendered = smokeLockImages(inventory);
@@ -20,11 +21,15 @@ await test("a render sets every image a commit deploy would pin, to a name no re
 	}
 });
 
-await test("a boot runs this run's own application server and database beside the upstream pins", () => {
-	const booted = smokeLockImages(inventory, { commit, applicationDigest });
+await test("a boot runs this run's own application server, agent image and database beside the upstream pins", () => {
+	const booted = smokeLockImages(inventory, { commit, applicationDigest, agentDigest });
 	assert.equal(
 		booted.HEPHAESTUS_IMAGE_APPLICATION_SERVER,
 		`ghcr.io/hephaestus-build/application-server@${applicationDigest}`,
+	);
+	assert.equal(
+		booted.HEPHAESTUS_IMAGE_AGENT_PI,
+		`ghcr.io/hephaestus-build/agent-pi@${agentDigest}`,
 	);
 	assert.equal(booted.HEPHAESTUS_IMAGE_POSTGRES, `ghcr.io/hephaestus-build/postgres:${commit}`);
 	for (const upstream of inventory.upstream) {
@@ -36,25 +41,31 @@ await test("a boot runs this run's own application server and database beside th
 		}
 	}
 	// The edge and the webapp are rendered but never started, so nothing has to exist for them.
-	for (const name of ["WEBAPP", "AGENT_PI", "NGINX", "TRAEFIK"]) {
+	for (const name of ["WEBAPP", "NGINX", "TRAEFIK"]) {
 		assert.match(String(booted[`HEPHAESTUS_IMAGE_${name}`]), /^example\.invalid\//u);
 	}
 });
 
 await test("a booted build is named whole or not at all", () => {
 	assert.equal(bootedBuild({}), undefined);
-	assert.deepEqual(bootedBuild({ HEAD_SHA: commit, APPLICATION_DIGEST: applicationDigest }), {
-		commit,
-		applicationDigest,
-	});
+	const whole = {
+		HEAD_SHA: commit,
+		APPLICATION_DIGEST: applicationDigest,
+		AGENT_PI_DIGEST: agentDigest,
+	};
+	assert.deepEqual(bootedBuild(whole), { commit, applicationDigest, agentDigest });
 	assert.throws(() => bootedBuild({ HEAD_SHA: commit }), /together/u);
-	assert.throws(() => bootedBuild({ APPLICATION_DIGEST: applicationDigest }), /together/u);
 	assert.throws(
-		() => bootedBuild({ HEAD_SHA: "main", APPLICATION_DIGEST: applicationDigest }),
-		/full commit SHA/u,
+		() => bootedBuild({ HEAD_SHA: commit, APPLICATION_DIGEST: applicationDigest }),
+		/together/u,
+	);
+	assert.throws(() => bootedBuild({ ...whole, HEAD_SHA: "main" }), /full commit SHA/u);
+	assert.throws(
+		() => bootedBuild({ ...whole, APPLICATION_DIGEST: "latest" }),
+		/invalid application image digest/u,
 	);
 	assert.throws(
-		() => bootedBuild({ HEAD_SHA: commit, APPLICATION_DIGEST: "latest" }),
-		/invalid application image digest/u,
+		() => bootedBuild({ ...whole, AGENT_PI_DIGEST: "latest" }),
+		/invalid agent image digest/u,
 	);
 });

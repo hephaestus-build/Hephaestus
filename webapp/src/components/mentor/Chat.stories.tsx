@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import type { ChatMessageVote } from "@/api/types.gen";
 import type { ChatMessage } from "@/lib/types";
@@ -339,5 +339,42 @@ export const ErrorState: Story = {
 		messages: CONVERSATION_MESSAGES.slice(0, 3),
 		status: "error",
 		onReload: fn(),
+	},
+};
+
+export const Busy: Story = {
+	args: {
+		...ErrorState.args,
+		errorMessage: "Heph is busy. Please try again.",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Heph is busy", { exact: true })).toBeVisible();
+		await expect(canvas.getByText("Please try again in a moment.")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Try again" })).toBeEnabled();
+	},
+};
+
+export const BusyDark: Story = {
+	...Busy,
+	globals: { theme: "dark" },
+};
+
+const INTERRUPTED_REPLY: ChatMessage = {
+	id: "msg-interrupted",
+	role: "assistant",
+	parts: [],
+	metadata: { status: "interrupted" },
+};
+
+/** A reply saved as interrupted can be tried again when the conversation is reopened. */
+export const InterruptedReplyReopened: Story = {
+	args: {
+		messages: [...CONVERSATION_MESSAGES.slice(0, 1), INTERRUPTED_REPLY],
+		status: "ready",
+		onReload: fn(),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("button", { name: "Try again" })).toBeVisible();
+		await expect(canvas.getByText(/interrupted before it finished/u)).toBeVisible();
 	},
 };

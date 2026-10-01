@@ -92,7 +92,7 @@ public class WorkspaceMembershipController {
     public ResponseEntity<WorkspaceMembershipDTO> updateMemberVisibility(
             WorkspaceContext context,
             @PathVariable Long userId,
-            @Parameter(description = "Whether to exclude the member from leaderboard rankings") @RequestParam
+            @Parameter(description = "Whether to leave the member out of workspace activity") @RequestParam
                     boolean hidden) {
         WorkspaceMembership membership =
                 workspaceMembershipService.updateMemberVisibility(context.id(), userId, hidden);

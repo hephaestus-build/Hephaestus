@@ -26,12 +26,15 @@ public record ReviewedWorkRefDTO(
 
         @Nullable
         @Schema(
-                description =
-                        "The work's own title: a pull request's, an issue's or a document's; a conversation thread has none")
+                description = "The work's own title where the label does not already say it: a pull request's or an"
+                        + " issue's; a conversation thread has none and a document's is its label")
         String title,
 
         @Nullable @Schema(description = "The work's page at its provider, when the provider exposes one")
         String url,
 
-        @Nullable @Schema(description = "Repository the work belongs to, for pull requests and issues")
-        String repositoryName) {}
+        @Nullable
+        @Schema(
+                description = "Where the work sits, by name: a pull request's or an issue's repository, a document's"
+                        + " collection; a conversation's channel is its label")
+        String container) {}

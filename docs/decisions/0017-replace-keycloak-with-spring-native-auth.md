@@ -1,6 +1,6 @@
 # ADR 0017: Replace Keycloak with Spring-native auth (BFF cookie-JWT + `Connection`-backed workspace IdPs)
 
-**Status:** Accepted (amended — Stage B-2 login model; read-only user views; data model corrected against the schema; installed clients by [ADR 0045](0045-installed-clients-sign-in-with-a-pkce-handoff.md))
+**Status:** Accepted (amended — Stage B-2 login model; read-only user views; data model corrected against the schema; installed clients by [ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md))
 **Date:** 2026-05-28
 **Authors:** Felix T.J. Dietrich
 **Supersedes (Stage A):** [ADR 0016](0016-unified-identity-keycloak-as-truth.md)
@@ -181,4 +181,4 @@ ends installed-client sessions too. The cookie session, its CSRF rules and the s
 lookup in `RevocationAwareJwtDecoder` are unchanged. The rejection of Spring Authorization Server
 stands for first-party installed clients; the escape hatch for third-party clients above is unchanged.
 Decision and rejected alternatives:
-[ADR 0045](0045-installed-clients-sign-in-with-a-pkce-handoff.md).
+[ADR 0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md).

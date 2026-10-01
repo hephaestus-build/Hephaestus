@@ -64,7 +64,14 @@ const meta = {
 					onClose={(depth) => setStack(stack.slice(0, depth))}
 				>
 					{(entry, level) => (
-						<CuratedFormLevel kind={entry.kind} nested={level.nested}>
+						<CuratedFormLevel
+							kind={entry.kind}
+							nested={level.nested}
+							path={{
+								behind: [{ label: "Practice catalog", depth: 0 }],
+								onClose: (depth) => setStack(stack.slice(0, depth)),
+							}}
+						>
 							<CuratedPracticeForm {...args} />
 						</CuratedFormLevel>
 					)}
@@ -123,7 +130,7 @@ export const ScopedReviewerEdit: Story = {
 		await settledDrawerPanel();
 		await expect(
 			screen.getByRole("combobox", { name: "Person this practice judges" }),
-		).toHaveTextContent("reviewer");
+		).toHaveTextContent("Reviewer");
 		await expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveValue(
 			JSON.stringify(scopedGate, null, 2),
 		);

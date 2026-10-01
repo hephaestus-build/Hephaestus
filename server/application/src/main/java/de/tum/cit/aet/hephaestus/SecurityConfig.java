@@ -20,6 +20,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.EndpointRequest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -48,6 +49,7 @@ import org.springframework.security.web.authentication.session.NullAuthenticated
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.AndRequestMatcher;
 import org.springframework.security.web.util.matcher.OrRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
@@ -139,6 +141,27 @@ public class SecurityConfig {
         return authenticationConverter;
     }
 
+    /** Metrics are anonymous only on the separate management listener, never on an application connector. */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE + 2)
+    SecurityFilterChain prometheusSecurityFilterChain(HttpSecurity http, Environment environment) throws Exception {
+        RequestMatcher managementListener = request -> {
+            int managementPort = environment.getProperty("local.management.port", Integer.class, -1);
+            int applicationPort = environment.getProperty("local.server.port", Integer.class, -1);
+            return managementPort != applicationPort && request.getLocalPort() == managementPort;
+        };
+        http.securityMatcher("/actuator/prometheus", "/actuator/prometheus/**")
+                .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(csrf -> csrf.disable())
+                .authorizeHttpRequests(requests -> requests.requestMatchers(new AndRequestMatcher(
+                                managementListener,
+                                EndpointRequest.to("prometheus").withHttpMethod(HttpMethod.GET)))
+                        .permitAll()
+                        .anyRequest()
+                        .denyAll());
+        return http.build();
+    }
+
     /**
      * Dedicated filter chain for the worker control channel (POST exchange + WSS upgrade) and
      * webhook ingress + actuator probes. These paths carry their own auth — worker JWT signed
@@ -152,18 +175,21 @@ public class SecurityConfig {
      * boot without the resource-server JWT decoder configured.
      */
     @Bean
-    @Order(Ordered.HIGHEST_PRECEDENCE + 2)
+    @Order(Ordered.HIGHEST_PRECEDENCE + 4)
     SecurityFilterChain workerHubSecurityFilterChain(HttpSecurity http) throws Exception {
         // Only paths whose auth lives at the controller / handshake layer go on this chain.
-        // Other actuator endpoints (metrics, prometheus, loggers, heapdump, …) must NOT be
-        // matched here — they fall through to the OAuth2 chain.
+        // Prometheus has its own listener-restricted chain. Other actuator endpoints
+        // (metrics, loggers, heapdump, …) fall through to the OAuth2 chain.
         http.securityMatcher(
                         "/api/workers/**",
                         "/actuator/health",
                         "/actuator/health/**",
                         "/actuator/info",
+                        "/livez",
+                        "/readyz",
                         "/webhooks/github",
                         "/webhooks/gitlab",
+                        "/webhooks/gitlab/connections/**",
                         "/webhooks/slack",
                         "/webhooks/slack/interactivity",
                         "/webhooks/outline",

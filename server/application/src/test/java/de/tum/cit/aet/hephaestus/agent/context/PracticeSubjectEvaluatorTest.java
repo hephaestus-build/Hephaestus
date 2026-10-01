@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.PracticeSubjectCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
@@ -38,8 +37,8 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
 
     private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final SourceKind THREADS = new SourceKind("scm.review-threads");
-    private static final String CHANGE_PATH = "inputs/context/change.json";
-    private static final String THREADS_PATH = "inputs/context/review_threads.json";
+    private static final String CHANGE_PATH = "context/change.json";
+    private static final String THREADS_PATH = "context/review_threads.json";
 
     /** Two files, neither a dependency manifest nor a test. */
     private static final ReviewChange TWO_FILE_CHANGE =
@@ -306,7 +305,7 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
 
         @Test
         void shouldApplyEveryPracticeThatDeclaresNoSubject() {
-            ArtifactSourceManifest manifest =
+            JobFolderIndex manifest =
                     manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY));
 
             assertThat(evaluator.evaluate(null, manifest, Map.of(), TWO_FILE_CHANGE))
@@ -379,13 +378,13 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
     }
 
     private PracticeSubjectCheck evaluate(
-            PracticeSubject subject, ArtifactSourceManifest manifest, @Nullable ReviewChange change) {
+            PracticeSubject subject, JobFolderIndex manifest, @Nullable ReviewChange change) {
         return evaluate(subject, manifest, Map.of(), change);
     }
 
     private PracticeSubjectCheck evaluate(
             PracticeSubject subject,
-            ArtifactSourceManifest manifest,
+            JobFolderIndex manifest,
             Map<String, byte[]> staged,
             @Nullable ReviewChange change) {
         PracticeSubjectCheck check = evaluator.evaluate(subject, manifest, staged, change);
@@ -441,9 +440,9 @@ class PracticeSubjectEvaluatorTest extends BaseUnitTest {
         return "0".repeat(64);
     }
 
-    private static ArtifactSourceManifest manifestWith(SourceCapture... captures) {
-        return new ArtifactSourceManifest(
-                new SourceContractVersion("1.2.0"),
+    private static JobFolderIndex manifestWith(SourceCapture... captures) {
+        return new JobFolderIndex(
+                new SourceContractVersion("1.3.0"),
                 "0".repeat(64),
                 "scm.pull_request",
                 Instant.EPOCH,

@@ -2,12 +2,17 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeCoverageLedger;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewOutcomeRow;
+import de.tum.cit.aet.hephaestus.core.UnknownVocabulary;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceContract;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -21,6 +26,7 @@ import tools.jackson.databind.JsonNode;
 class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
 
     private final AgentJobRepository repository;
+    private final ArtifactSourceCatalogRegistry sources;
 
     @Override
     @Transactional(readOnly = true)
@@ -35,12 +41,12 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
         return Map.copyOf(outcomes);
     }
 
-    private static ReviewOutcome toOutcome(ReviewOutcomeRow row) {
+    private ReviewOutcome toOutcome(ReviewOutcomeRow row) {
         boolean refusedEvidence = row.getStatus() == AgentJobStatus.COMPLETED
                 && row.getOutput() != null
                 && ReviewRunOutcome.fromJobOutput(row.getOutput()) == ReviewRunOutcome.INSUFFICIENT_EVIDENCE;
         return new ReviewOutcome(
-                state(row.getStatus()),
+                AgentJobReviewRunStates.of(row.getStatus()),
                 refusedEvidence,
                 row.getCompletedAt(),
                 readiness(row.getReviewReadiness()),
@@ -65,19 +71,7 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
         return Map.copyOf(bySlug);
     }
 
-    /**
-     * A timed-out run and a cancelled one are both "it did not finish" to a reader; keeping the
-     * distinction here would put a vocabulary on the wire that no surface renders.
-     */
-    private static ReviewRunState state(AgentJobStatus status) {
-        return switch (status) {
-            case QUEUED, RUNNING -> ReviewRunState.IN_PROGRESS;
-            case COMPLETED -> ReviewRunState.COMPLETED;
-            case FAILED, TIMED_OUT, CANCELLED -> ReviewRunState.FAILED;
-        };
-    }
-
-    private static Map<String, PracticeReadinessOutcome> readiness(@Nullable JsonNode report) {
+    private Map<String, PracticeReadinessOutcome> readiness(@Nullable JsonNode report) {
         if (report == null || !report.path("decisions").isArray()) {
             return Map.of();
         }
@@ -90,7 +84,10 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
             bySlug.put(
                     slug,
                     new PracticeReadinessOutcome(
-                            decision.path("ready").asBoolean(false), blockers(decision), notApplicable(decision)));
+                            decision.path("ready").asBoolean(false),
+                            blockers(decision),
+                            limitation(decision),
+                            notApplicable(decision)));
         }
         return Map.copyOf(bySlug);
     }
@@ -112,38 +109,69 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
         return sentence == null || sentence.isBlank() ? null : sentence;
     }
 
-    /** What could not be read, in words, so no consumer has to learn the evidence vocabulary. */
-    private static List<String> blockers(JsonNode decision) {
-        List<String> blockers = new ArrayList<>();
+    /**
+     * The practice's own declaration that it is not reviewed automatically, as a sentence, or null. Each
+     * choice is named in the words the practice editor gives it — Guidance only, Human review needed.
+     */
+    static @Nullable String limitation(JsonNode decision) {
         for (JsonNode reason : decision.path("reasonCodes")) {
             String code = reason.asString(null);
             if ("NO_AUTOMATED_REVIEW".equals(code)) {
-                blockers.add("this practice declares no automated review");
-            } else if ("DECLARED_EVIDENCE_INSUFFICIENT".equals(code)) {
-                blockers.add("this practice declares its evidence insufficient for an automated claim");
+                return "This practice is guidance only, so it is not reviewed automatically.";
+            }
+            if ("DECLARED_EVIDENCE_INSUFFICIENT".equals(code)) {
+                return "This practice needs human review, so it is not reviewed automatically.";
             }
         }
+        return null;
+    }
+
+    /**
+     * What could not be read, one sentence each, so no consumer has to learn the evidence vocabulary: a
+     * source is named in quotes by the catalogue's display name, never by its kind, and the sentence reads
+     * right whether that name is singular or plural ("Code changes").
+     */
+    List<String> blockers(JsonNode decision) {
+        List<String> blockers = new ArrayList<>();
         for (JsonNode check : decision.path("sourceChecks")) {
             if (check.path("meetsRequirements").asBoolean(true)) {
                 continue;
             }
-            String source = check.path("sourceKind").asString("a required source");
+            String source = sourceName(check.path("sourceKind").asString(null));
             for (JsonNode reason : check.path("reasonCodes")) {
-                blockers.add(source + " " + sourceProblem(reason.asString(null)));
+                blockers.add(sourceProblem(reason.asString(null), source));
             }
         }
         return List.copyOf(blockers);
     }
 
-    private static String sourceProblem(@Nullable String code) {
-        if (code == null) {
-            return "could not be read";
+    /** The source's quoted display name, or a generic phrase, written as it reads mid-sentence. */
+    private String sourceName(@Nullable String kind) {
+        if (kind == null || kind.isBlank()) {
+            return "a required source";
         }
-        return switch (code) {
-            case "SOURCE_NOT_AVAILABLE" -> "was not captured";
-            case "SOURCE_INCOMPLETE" -> "was captured only in part";
-            case "SOURCE_EMPTY" -> "was captured empty";
-            default -> "could not be read";
-        };
+        try {
+            Optional<String> declared =
+                    sources.current().source(new SourceKind(kind)).map(ArtifactSourceContract::displayName);
+            if (declared.isPresent()) {
+                return "“" + declared.get() + "”";
+            }
+        } catch (IllegalArgumentException malformed) {
+            // Not a source kind at all; named generically below like one the catalogue no longer declares.
+        }
+        return UnknownVocabulary.label("source kind", kind, "a required source");
+    }
+
+    private static String sourceProblem(@Nullable String code, String source) {
+        String sentence =
+                switch (code == null ? "" : code) {
+                    case "SOURCE_NOT_AVAILABLE" -> source + " was not captured.";
+                    case "SOURCE_INCOMPLETE" -> "Only part of " + source + " was captured.";
+                    case "SOURCE_EMPTY" -> "Nothing was captured from " + source + ".";
+                    default -> source + " could not be read.";
+                };
+        // Character.toUpperCase rather than String.toUpperCase, which is locale-sensitive and banned by
+        // LocaleSafetyArchTest; a quoted name starts with a quotation mark and is left as it is.
+        return Character.toUpperCase(sentence.charAt(0)) + sentence.substring(1);
     }
 }

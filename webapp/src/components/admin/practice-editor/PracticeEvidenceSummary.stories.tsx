@@ -66,9 +66,33 @@ export const ScopedReviewer: Story = {
 		],
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("reviewer")).toBeVisible();
+		await expect(canvas.getByText("Reviewer")).toBeVisible();
 		await expect(canvas.getByText("Changed path matches **/*.swift")).toBeVisible();
 		await expect(canvas.getByText("Otherwise skip: the change has no Swift code")).toBeVisible();
+	},
+};
+
+/**
+ * A gate on evidence being present, and a moment this version no longer offers: both in words, never
+ * by the source's or the moment's wire name.
+ */
+export const GatedOnEvidence: Story = {
+	args: {
+		bindings: [
+			{
+				...mockPullRequestBinding,
+				signals: [...mockPullRequestBinding.signals, "scm.pull_request.labeled"],
+				appliesWhen: {
+					absentSays: "nobody has left a review thread yet",
+					anyOf: [{ evidenceHasItems: "scm.review-threads" }],
+				},
+			},
+		],
+	},
+	play: async ({ canvas, canvasElement }) => {
+		await expect(canvas.getByText("Evidence present: Review threads and decisions")).toBeVisible();
+		await expect(canvas.getByText("A moment this version no longer offers")).toBeVisible();
+		await expect(canvasElement).not.toHaveTextContent(/scm\./u);
 	},
 };
 

@@ -22,8 +22,6 @@ class NoDocumentationMirrorTest extends BaseUnitTest {
         assertThat(projection.documentsByReference(1L, List.of("doc-1", "https://wiki.example.com/doc/x")))
                 .isEmpty();
         assertThat(projection.searchDocuments(1L, "runbook", 10)).isEmpty();
-        assertThat(projection.extractReferences("see https://wiki.example.com/doc/onboarding-a1b2c3"))
-                .isEmpty();
     }
 
     @Test

@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackTar
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -37,7 +38,8 @@ class DiffNotePosterTest extends BaseUnitTest {
 
     private final PullRequestCommentPoster commentPoster = mock(PullRequestCommentPoster.class);
     private final PracticeFeedbackCommentFormatter commentFormatter = new PracticeFeedbackCommentFormatter(
-            new ApplicationProperties(null, new ApplicationProperties.Webapp("https://hephaestus.example")));
+            new ApplicationProperties(null, new ApplicationProperties.Webapp("https://hephaestus.example")),
+            teamWorkspace());
 
     private AgentJob gitlabJob() {
         AgentJob job = TestEntities.agentJob();
@@ -45,6 +47,10 @@ class DiffNotePosterTest extends BaseUnitTest {
         ws.setId(1L);
         job.setWorkspace(ws);
         job.setIntegrationKind(IntegrationKind.GITLAB);
+        job.setJobType(de.tum.cit.aet.hephaestus.agent.AgentJobType.PULL_REQUEST_REVIEW);
+        job.setMetadata(tools.jackson.databind.node.JsonNodeFactory.instance
+                .objectNode()
+                .put("pull_request_id", 42L));
         return job;
     }
 
@@ -110,7 +116,9 @@ class DiffNotePosterTest extends BaseUnitTest {
         assertThat(anchor.filePath()).isEqualTo("src/A.java");
         assertThat(anchor.newLineNumber()).isEqualTo(14);
         assertThat(f.body())
-                .contains("<sub>AI-generated &middot; React with 👍 or 👎, or reply, to give feedback.</sub>")
+                .contains("<sub>AI-generated &middot; Answer or dispute it in"
+                        + " [Hephaestus](https://hephaestus.example/w/team/feedback/scm.pull_request/42).</sub>")
+                .doesNotContain("React with")
                 .doesNotContain("Why you're seeing this");
         assertThat(anchor.startLine()).isEqualTo(10);
         assertThat(f.deliveryKey()).isEqualTo("ck-multi");
@@ -210,5 +218,13 @@ class DiffNotePosterTest extends BaseUnitTest {
         assertThat(result.failed()).isZero();
         verify(commentPoster).buildTarget(any(), captor.capture(), eq(1L));
         assertThat(captor.getValue()).isEqualTo(IntegrationKind.GITLAB);
+    }
+
+    /** Every workspace is "team": what the footer's link needs of the workspace. */
+    private static WorkspaceSummaryQuery teamWorkspace() {
+        WorkspaceSummaryQuery workspaces = org.mockito.Mockito.mock(WorkspaceSummaryQuery.class);
+        org.mockito.Mockito.when(workspaces.findById(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(java.util.Optional.of(new WorkspaceSummaryQuery.WorkspaceSummary(1L, "team", "Team")));
+        return workspaces;
     }
 }

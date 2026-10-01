@@ -17,6 +17,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -53,6 +54,9 @@ public class GitlabSummaryChannel implements SummaryChannel {
                     + "due|remove_due_date|weight|epic|copy_metadata|move|confidential|shrug|tableflip)\\b)",
             Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
+    /** The global id this channel records for the note a summary is posted as. */
+    private static final String NOTE_GLOBAL_ID_PREFIX = "gid://gitlab/Note/";
+
     private final GitLabGraphQlClientProvider gitLabProvider;
     private final GitlabMrResolver mrResolver;
     private final OutboundEgressGuard egressGuard;
@@ -67,6 +71,15 @@ public class GitlabSummaryChannel implements SummaryChannel {
     @Override
     public IntegrationKind kind() {
         return IntegrationKind.GITLAB;
+    }
+
+    /** A note's anchor takes its number, what follows the prefix of its global id. */
+    @Override
+    public @Nullable String summaryCommentUrl(String workUrl, String commentId) {
+        if (!commentId.startsWith(NOTE_GLOBAL_ID_PREFIX) || commentId.length() == NOTE_GLOBAL_ID_PREFIX.length()) {
+            return null;
+        }
+        return workUrl + "#note_" + commentId.substring(NOTE_GLOBAL_ID_PREFIX.length());
     }
 
     @Override

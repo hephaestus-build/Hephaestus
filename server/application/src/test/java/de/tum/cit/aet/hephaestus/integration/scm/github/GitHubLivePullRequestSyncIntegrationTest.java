@@ -66,7 +66,7 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
 
         // 4. Sync repository first
         repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider)
+                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
                 .orElseThrow();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
@@ -97,7 +97,7 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
 
         // 2. Sync repository first
         repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider)
+                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
                 .orElseThrow();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
@@ -164,7 +164,7 @@ class GitHubLivePullRequestSyncIntegrationTest extends AbstractGitHubLiveSyncInt
 
         // 4. Sync repository first
         repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider)
+                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
                 .orElseThrow();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();

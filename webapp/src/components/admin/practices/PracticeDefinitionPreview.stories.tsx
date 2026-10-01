@@ -80,7 +80,7 @@ export const ScopedReviewer: Story = {
 	},
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Review scope and evidence" }));
-		await expect(canvas.getByText("reviewer")).toBeVisible();
+		await expect(canvas.getByText("Reviewer")).toBeVisible();
 		await expect(canvas.getByText("Changed path matches **/*.swift")).toBeVisible();
 	},
 };

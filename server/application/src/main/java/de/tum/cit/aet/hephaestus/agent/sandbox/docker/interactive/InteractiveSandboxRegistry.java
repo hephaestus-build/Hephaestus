@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxContainerManager;
+import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxLabels;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandboxState;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.EvictionReason;
@@ -36,6 +37,7 @@ public class InteractiveSandboxRegistry {
 
     private final InteractiveSandboxProperties properties;
     private final SandboxContainerManager containerManager;
+    private final SandboxCreator creator;
     private final InteractiveSandboxMetrics metrics;
     private final StdinWriteWatchdog watchdog;
 
@@ -48,9 +50,11 @@ public class InteractiveSandboxRegistry {
             SandboxContainerManager containerManager,
             InteractiveSandboxMetrics metrics,
             StdinWriteWatchdog watchdog,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            SandboxCreator creator) {
         this.properties = properties;
         this.containerManager = containerManager;
+        this.creator = creator;
         this.metrics = metrics;
         this.watchdog = watchdog;
         Gauge.builder(AgentMetrics.MENTOR_SESSION_ACTIVE, sessions, ConcurrentHashMap::size)
@@ -119,6 +123,13 @@ public class InteractiveSandboxRegistry {
         return RegistrationOutcome.REGISTERED;
     }
 
+    /** Whether one more sandbox for this user fits under both caps now; {@link #tryRegister} decides for good. */
+    boolean hasCapacity(String userId) {
+        AtomicInteger userCount = sessionsPerUser.get(userId);
+        return (userCount == null || userCount.get() < properties.maxSessionsPerUser())
+                && sessions.size() < properties.maxSessionsTotal();
+    }
+
     /** Identity-based remove avoids races with re-register. */
     void onSandboxClosed(DockerAttachedSandboxAdapter sandbox) {
         var id = sandbox.identity();
@@ -163,13 +174,18 @@ public class InteractiveSandboxRegistry {
         }
     }
 
-    /** After a restart the in-memory registry is gone; any {@code KIND=interactive} container is orphan. */
+    /**
+     * After a restart the in-memory registry is gone, so an interactive container whose recorded creator
+     * is gone — this process in an earlier start, or another that has stopped — is orphaned. Any other is
+     * kept: a creator that runs owns it, and an unknown creator is not evidence that it ended.
+     */
     public void onStartup() {
         try {
             List<DockerOperations.ContainerInfo> managed = containerManager.listManagedContainers();
             int removed = 0;
             for (DockerOperations.ContainerInfo c : managed) {
-                if (SandboxLabels.KIND_INTERACTIVE.equals(c.labels().get(SandboxLabels.KIND))) {
+                if (SandboxLabels.KIND_INTERACTIVE.equals(c.labels().get(SandboxLabels.KIND))
+                        && creator.liveness(c.labels()) == SandboxCreator.Liveness.GONE) {
                     try {
                         containerManager.forceRemove(c.id());
                         removed++;

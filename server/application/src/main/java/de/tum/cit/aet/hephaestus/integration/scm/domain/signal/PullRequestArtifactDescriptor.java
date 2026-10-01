@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.signal;
 
+import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.GITHUB_ISSUES;
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.GITHUB_PULL_REQUEST;
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.GITHUB_PULL_REQUEST_REVIEW;
+import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.GITLAB_ISSUE;
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.GITLAB_MERGE_REQUEST;
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.GITLAB_NOTE;
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.declare;
+import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.declareInternal;
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.declareManualRequest;
 import static de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmEventSources.declareRecommended;
 
@@ -44,6 +47,14 @@ public class PullRequestArtifactDescriptor implements ArtifactDescriptor {
                     ScmSignals.PULL_REQUEST_SYNCHRONIZED,
                     "New commits pushed",
                     Set.of(GITHUB_PULL_REQUEST, GITLAB_MERGE_REQUEST)),
+            declare(
+                    ScmSignals.PULL_REQUEST_EDITED,
+                    "Title or description edited",
+                    Set.of(GITHUB_PULL_REQUEST, GITLAB_MERGE_REQUEST)),
+            declareInternal(
+                    ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED,
+                    "Linked issue outcome updated",
+                    Set.of(GITHUB_ISSUES, GITLAB_ISSUE)),
             // GitHub has a dedicated review event; GitLab splits the same fact across an approval on the
             // merge request and a review note.
             declare(

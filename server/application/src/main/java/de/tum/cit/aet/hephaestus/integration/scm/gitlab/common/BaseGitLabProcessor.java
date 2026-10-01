@@ -179,11 +179,7 @@ public abstract class BaseGitLabProcessor {
      * Updates assignees collection from webhook user list.
      */
     protected boolean updateAssignees(
-            @Nullable List<GitLabWebhookUser> assigneeDtos, Set<User> currentAssignees, Long providerId) {
-        if (assigneeDtos == null) {
-            return false;
-        }
-
+            List<GitLabWebhookUser> assigneeDtos, Set<User> currentAssignees, Long providerId) {
         Set<User> newAssignees = new HashSet<>();
         for (GitLabWebhookUser dto : assigneeDtos) {
             User assignee = findOrCreateUser(dto, providerId);

@@ -5,8 +5,6 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewOutcome;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewOutcomeLookup.ReviewRunState;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.UUID;
@@ -19,10 +17,10 @@ public record TracedSignalDTO(
         @NonNull @Schema(description = "This occurrence's own identity; what a practice's occasionedById points at")
         UUID id,
 
-        @NonNull @Schema(description = "Signal name, e.g. scm.pull_request.ready")
+        @NonNull @Schema(description = "Signal name, for matching and linking; never printed")
         SignalName signal,
 
-        @NonNull @Schema(description = "Human label for the signal, from the artifact kind's descriptor")
+        @NonNull @Schema(description = "What to print for the signal, from the artifact kind's descriptor")
         String displayName,
 
         @NonNull
@@ -42,27 +40,27 @@ public record TracedSignalDTO(
         @Schema(description = "Why it ended in that state; null once it triggered a review") @Nullable
         SignalStateReason stateReason,
 
-        @Schema(description = "The review this occurrence started, when it started one") @Nullable
-        UUID reviewId,
-
         @Schema(
-                description = "Where that review's run stands now, which a practice's own outcome does not "
-                        + "say once an earlier review of this work has results; null when no linked run is available")
+                description = "That reason as one sentence for a reader. Render it verbatim: it is written next to "
+                        + "the reason it explains, so every surface that explains a silence says the same thing")
         @Nullable
-        ReviewRunState reviewState) {
-    public static TracedSignalDTO from(
-            ArtifactSignal signal, @Nullable String displayName, @Nullable ReviewOutcome review) {
-        SignalName name = SignalName.of(signal.getSignalName());
+        String stateReasonDescription,
+
+        @Schema(description = "The review this occurrence started, when it started one") @Nullable
+        UUID reviewId) {
+    /** @param displayName the signal's words, already resolved; this record never falls back to the name */
+    public static TracedSignalDTO from(ArtifactSignal signal, String displayName) {
+        SignalStateReason reason = signal.getStateReason();
         return new TracedSignalDTO(
                 signal.getId(),
-                name,
-                displayName == null || displayName.isBlank() ? name.value() : displayName,
+                SignalName.of(signal.getSignalName()),
+                displayName,
                 signal.getRevision(),
                 signal.getOccurredAt(),
                 signal.getDiscoveredVia(),
                 signal.getState(),
-                signal.getStateReason(),
-                signal.getJobId(),
-                review == null ? null : review.state());
+                reason,
+                reason == null ? null : reason.describe(),
+                signal.getJobId());
     }
 }

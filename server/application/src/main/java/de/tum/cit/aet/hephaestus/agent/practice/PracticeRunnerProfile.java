@@ -21,6 +21,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-observation-normalize.ts",
             "pi-practice-coverage.ts",
             "pi-review-brief.ts",
+            "pi-folder-index.ts",
             "pi-review-turns.ts",
             "pi-runner-output.ts",
             "pi-runner-usage.ts",

@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
@@ -34,7 +35,11 @@ import org.slf4j.LoggerFactory;
  * DockerClient}, translating {@link DockerException} to {@link SandboxException}.
  */
 public class DockerClientOperations
-        implements DockerContainerOperations, DockerNetworkOperations, DockerImageOperations, DockerVolumeOperations {
+        implements DockerContainerOperations,
+                DockerInspectOperations,
+                DockerNetworkOperations,
+                DockerImageOperations,
+                DockerVolumeOperations {
 
     private static final Logger log = LoggerFactory.getLogger(DockerClientOperations.class);
     private static final int LOG_COLLECTION_TIMEOUT_SECONDS = 30;
@@ -140,7 +145,7 @@ public class DockerClientOperations
     }
 
     @Override
-    public String createNetwork(String name, boolean internal) {
+    public String createNetwork(String name, boolean internal, Map<String, String> labels) {
         try {
             CreateNetworkResponse response = dockerClient
                     .createNetworkCmd()
@@ -151,6 +156,7 @@ public class DockerClientOperations
                     .withOptions(
                             internal ? Map.of("com.docker.network.bridge.gateway_mode_ipv4", "isolated") : Map.of())
                     .withCheckDuplicate(true)
+                    .withLabels(labels)
                     .exec();
             log.debug("Created Docker network: name={}, id={}, internal={}", name, response.getId(), internal);
             return response.getId();
@@ -409,10 +415,63 @@ public class DockerClientOperations
             List<Network> networks =
                     dockerClient.listNetworksCmd().withNameFilter(namePrefix).exec();
             return networks.stream()
-                    .map(n -> new DockerOperations.NetworkInfo(n.getId(), n.getName()))
+                    .map(n -> new DockerOperations.NetworkInfo(
+                            n.getId(),
+                            n.getName(),
+                            n.getCreated() != null ? n.getCreated().toInstant() : null,
+                            n.getLabels() != null ? n.getLabels() : Map.of()))
                     .toList();
         } catch (DockerException e) {
             throw new SandboxInfrastructureException("Failed to list networks with prefix: " + namePrefix, e);
+        }
+    }
+
+    @Override
+    public List<DockerOperations.NetworkEndpoint> inspectEndpoints(String networkId) {
+        try {
+            Map<String, Network.ContainerNetworkConfig> containers = dockerClient
+                    .inspectNetworkCmd()
+                    .withNetworkId(networkId)
+                    .exec()
+                    .getContainers();
+            if (containers == null) {
+                return List.of();
+            }
+            return containers.entrySet().stream()
+                    .map(e -> new DockerOperations.NetworkEndpoint(
+                            e.getKey(), Objects.toString(e.getValue().getName(), "")))
+                    .toList();
+        } catch (NotFoundException e) {
+            return List.of();
+        } catch (DockerException e) {
+            throw new SandboxInfrastructureException("Failed to inspect network: " + networkId, e);
+        }
+    }
+
+    @Override
+    public Optional<DockerOperations.ContainerIdentity> inspectContainerIdentity(String idOrName) {
+        try {
+            var container = dockerClient.inspectContainerCmd(idOrName).exec();
+            var state = container.getState();
+            Boolean running = state != null ? state.getRunning() : null;
+            String startedAt = state != null ? state.getStartedAt() : null;
+            // Only a stated stop, or a start time, is evidence about a run; a partial answer is none.
+            if (container.getId() == null
+                    || running == null
+                    || (running && (startedAt == null || startedAt.isBlank()))) {
+                throw new SandboxInfrastructureException("Incomplete state for container: " + idOrName);
+            }
+            return Optional.of(new DockerOperations.ContainerIdentity(
+                    container.getId(),
+                    running,
+                    Objects.toString(startedAt, ""),
+                    container.getConfig() != null
+                            ? Objects.toString(container.getConfig().getHostName(), "")
+                            : ""));
+        } catch (NotFoundException e) {
+            return Optional.empty();
+        } catch (DockerException e) {
+            throw new SandboxInfrastructureException("Failed to inspect container: " + idOrName, e);
         }
     }
 

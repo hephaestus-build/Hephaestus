@@ -31,12 +31,144 @@ export type AccountRef = {
   id: number;
 };
 
+/**
+ * How often one kind of activity happened on a piece of work
+ */
+export type ActivityAction = {
+  /**
+   * How often it was done
+   */
+  count: number;
+  /**
+   * What was done
+   */
+  kind: 'PULL_REQUEST_OPENED' | 'PULL_REQUEST_MERGED' | 'PULL_REQUEST_CLOSED' | 'REVIEW_APPROVED' | 'REVIEW_CHANGES_REQUESTED' | 'REVIEW_COMMENTED' | 'COMMENTED' | 'CODE_COMMENTED' | 'ISSUE_OPENED' | 'ISSUE_CLOSED';
+};
+
+/**
+ * Activity in one time bucket of a range
+ */
+export type ActivityBucket = {
+  /**
+   * When the bucket starts: midnight of its day, of its week's Monday or of its month's first day, in the requested time zone. The first bucket may start before the range.
+   */
+  start: string;
+  /**
+   * The activity in the bucket that falls within the range
+   */
+  summary: ActivitySummary;
+};
+
+/**
+ * Activity in a time range, in total and over time
+ */
+export type ActivityOverview = {
+  /**
+   * How long each bucket is
+   */
+  bucket: TimeBucketSize;
+  /**
+   * Every bucket the range touches, oldest first, including those without activity
+   */
+  buckets: Array<ActivityBucket>;
+  /**
+   * The activity in the range; the buckets' summaries add up to it
+   */
+  summary: ActivitySummary;
+};
+
+/**
+ * Counts of activity in a time range. Each count is the sum of that kind's counts in the work list for the same scope and range.
+ */
+export type ActivitySummary = {
+  /**
+   * Reviews that approved
+   */
+  approvals: number;
+  /**
+   * Reviews that requested changes
+   */
+  changeRequests: number;
+  /**
+   * Comments on lines of code
+   */
+  codeComments: number;
+  /**
+   * Reviews that only commented
+   */
+  commentReviews: number;
+  /**
+   * Comments in pull request and issue conversations
+   */
+  comments: number;
+  /**
+   * Issues closed; a closed issue counts for its author
+   */
+  issuesClosed: number;
+  /**
+   * Issues opened
+   */
+  issuesOpened: number;
+  /**
+   * Pull requests closed without merging
+   */
+  pullRequestsClosed: number;
+  /**
+   * Pull requests merged; a merge counts for the pull request's author
+   */
+  pullRequestsMerged: number;
+  /**
+   * Pull requests opened
+   */
+  pullRequestsOpened: number;
+};
+
+/**
+ * The activity on one pull request or issue in a time range
+ */
+export type ActivityWork = {
+  /**
+   * Each kind of activity that happened on it, in a fixed order of kinds
+   */
+  actions: Array<ActivityAction>;
+  /**
+   * Identifier of the group: work:<id of the pull request or issue>, or event:<id of the activity> for activity whose pull request or issue is not known
+   */
+  id: string;
+  /**
+   * When the latest of this activity happened
+   */
+  lastOccurredAt: string;
+  /**
+   * Everyone this activity counts for, by name
+   */
+  people: Array<UserInfo>;
+  /**
+   * The pull request or issue; null when it, or the review or comment the activity was, is no longer known or was deleted upstream
+   */
+  work?: WorkItem;
+};
+
+/**
+ * One page of activity grouped by the pull request or issue it happened on, latest first
+ */
+export type ActivityWorkPage = {
+  /**
+   * The work on this page, by its latest activity, newest first
+   */
+  content: Array<ActivityWork>;
+  /**
+   * Opaque cursor that fetches the next page when passed back as cursor; absent on the last page
+   */
+  nextCursor?: string;
+};
+
 export type AdminAccountView = {
-  appRole?: string;
+  appRole: 'USER' | 'APP_ADMIN';
   displayName?: string;
   id?: number;
   primaryEmail?: string;
-  status?: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'DELETING' | 'DELETED';
 };
 
 /**
@@ -115,7 +247,7 @@ export type AdminWorkspaceView = {
   memberCount: number;
   ownerLogin?: string;
   providerType?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
-  status: string;
+  status: 'ACTIVE' | 'SUSPENDED' | 'PURGED';
   workspaceSlug: string;
 };
 
@@ -203,6 +335,10 @@ export type AgentJob = {
    * Container exit code
    */
   exitCode?: number;
+  /**
+   * Frozen generated-path policy and changed paths marked generated; available on review detail after evidence capture
+   */
+  generatedPaths?: GeneratedPathReview;
   /**
    * Why a QUEUED job is waiting rather than eligible, when the reason is one an admin can undo. BUDGET = the payer is over its monthly LLM cap and the job resumes by itself once the cap is raised or the month rolls over. Absent means no such hold — a future availableAt is then an ordinary retry backoff.
    */
@@ -298,29 +434,17 @@ export type ArtifactTrace = {
   artifactId: number;
   artifactKind: string;
   /**
-   * Repository, collection or channel it sits in
-   */
-  container?: string;
-  /**
-   * The number the provider shows, for kinds that have one
-   */
-  number?: number;
-  /**
    * Every practice this workspace runs against this kind of work, the ones with something to report first, then the rest; ties broken by practice name
    */
   practices: Array<PracticeTraceEntry>;
   /**
+   * The work as every surface names it: its provider, the label the provider writes ("#1423", "!1423"), its title, where it sits and where to open it; the link is absent for deleted work
+   */
+  reviewedWork: ReviewedWorkRef;
+  /**
    * Everything recorded about this artifact, oldest first
    */
   signals: Array<TracedSignal>;
-  /**
-   * The label a person recognises; the kind's display name when the mirror cannot name it
-   */
-  title: string;
-  /**
-   * Where to open it upstream; absent for a deleted or unlinkable artifact
-   */
-  url?: string;
 };
 
 /**
@@ -725,6 +849,7 @@ export type ConnectionAuditEntry = {
  *  object.
  */
 export type ConnectionDetail = {
+  attentionProblem?: 'CREDENTIAL_EXPIRING' | 'CREDENTIAL_REVOKED' | 'PROVIDER_SUSPENDED';
   capabilities?: Array<'WEBHOOK_INGEST' | 'TOKEN_REFRESH' | 'FEEDBACK_DELIVERY' | 'INLINE_FEEDBACK' | 'APPROVAL_WORKFLOW' | 'SCOPE_CHANGES'>;
   config?: {
     [key: string]: unknown;
@@ -738,6 +863,8 @@ export type ConnectionDetail = {
   kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
   state?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
   stateReason?: string;
+  tokenExpiresAt?: string;
+  tokenExpiryCheckedAt?: string;
   updatedAt?: string;
 };
 
@@ -1475,7 +1602,7 @@ export type DeliveryPolicyTrace = {
   admittedRevision: number;
   allowed: boolean;
   checks: Array<DeliveryPolicyTraceCheck>;
-  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  decisiveReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
   evaluatedAt: string;
   evaluatedRevision?: number;
   facts: DeliveryPolicyFactsSnapshot;
@@ -1662,6 +1789,19 @@ export type FeedbackApproval = {
   rejectionReason?: 'INCORRECT' | 'MISSING_CONTEXT' | 'UNHELPFUL' | 'DUPLICATE' | 'INAPPROPRIATE_PLACEMENT' | 'OTHER';
 };
 
+/**
+ * A developer's standing dispute of feedback written for them. The explanation is theirs, written to the workspace's administrators; the feedback's own text stays as private as its channel keeps it.
+ */
+export type FeedbackDispute = {
+  channel: 'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP';
+  disputedAt: string;
+  /**
+   * Why the developer thinks the feedback is wrong, in their words
+   */
+  explanation: string;
+  feedbackId: string;
+};
+
 export type FeedbackItem = {
   account?: FeedbackAccountRef;
   appVersion?: string;
@@ -1740,6 +1880,28 @@ export type FeedbackTriage = {
 };
 
 /**
+ * One withdrawal of a card from a developer's practice page, and its restoration if any
+ */
+export type FeedbackWithdrawal = {
+  id: string;
+  reason: string;
+  /**
+   * Why it was restored; null while the withdrawal is in force
+   */
+  restorationReason?: string;
+  restoredAt?: string;
+  /**
+   * Who restored it; null while in force or once that account is erased
+   */
+  restoredBy?: string;
+  withdrawnAt: string;
+  /**
+   * Who withdrew it; null once that account is erased
+   */
+  withdrawnBy?: string;
+};
+
+/**
  * The workspace a record was submitted from; absent for instance-level submissions.
  */
 export type FeedbackWorkspaceRef = {
@@ -1781,6 +1943,17 @@ export type FxRateInfo = {
    * Who published the rate, so a disclosure can name it instead of saying "a reference rate". ECB = the European Central Bank's daily euro foreign-exchange reference rates.
    */
   source: 'ECB';
+};
+
+/**
+ * Generated-path policy used by this review, not the repository's current settings
+ */
+export type GeneratedPathReview = {
+  /**
+   * Changed paths marked generated, including both names of a rename
+   */
+  paths: Array<string>;
+  patterns: Array<string>;
 };
 
 /**
@@ -1999,9 +2172,9 @@ export type InAppEvidence = {
  */
 export type InAppFeedback = {
   /**
-   * The message, as Markdown, without the headline and the next step
+   * The message, as Markdown, without the headline and the next step; null once a workspace admin withdrew it
    */
-  body: string;
+  body?: string;
   /**
    * Clean pieces of work in a row on the practice that resolve this feedback
    */
@@ -2064,6 +2237,10 @@ export type InAppFeedback = {
    * Why this practice matters, in the developer's framing
    */
   whyItMatters?: string;
+  /**
+   * When a workspace admin withdrew it because what it said was wrong; the card then carries only its practice, whose name is the headline, and no message, next step, evidence, progress or closure
+   */
+  withdrawnAt?: string;
 };
 
 /**
@@ -2187,85 +2364,6 @@ export type LatestRelease = {
   publishedAt: string;
   schemaMigrations?: boolean;
   version: string;
-};
-
-/**
- * A ranked entry in the leaderboard (individual or team)
- */
-export type LeaderboardEntry = {
-  /**
-   * Count of review approvals
-   */
-  numberOfApprovals: number;
-  /**
-   * Count of change requests submitted
-   */
-  numberOfChangeRequests: number;
-  /**
-   * Count of issues closed in the timeframe
-   */
-  numberOfClosedIssues: number;
-  /**
-   * Count of authored pull requests closed without merge in the timeframe
-   */
-  numberOfClosedPullRequests: number;
-  /**
-   * Count of scored inline feedback comments on pull requests authored by someone else
-   */
-  numberOfCodeComments: number;
-  /**
-   * Count of comment-only review submissions
-   */
-  numberOfComments: number;
-  /**
-   * Count of authored pull requests merged in the timeframe
-   */
-  numberOfMergedPullRequests: number;
-  /**
-   * Count of authored pull requests opened in the timeframe that are still open
-   */
-  numberOfOpenPullRequests: number;
-  /**
-   * Count of issues opened in the timeframe
-   */
-  numberOfOpenedIssues: number;
-  /**
-   * Count of visible-only discussion replies and inline thread replies on the contributor's own pull requests
-   */
-  numberOfOwnReplies: number;
-  /**
-   * Count of distinct PRs reviewed
-   */
-  numberOfReviewedPRs: number;
-  /**
-   * Count of reviews with unknown/unrecognized state
-   */
-  numberOfUnknowns: number;
-  /**
-   * Position in the leaderboard (1-based)
-   */
-  rank: number;
-  /**
-   * Sample of reviewed PRs for display
-   */
-  reviewedPullRequests: Array<PullRequestInfo>;
-  /**
-   * Total XP score for the timeframe
-   */
-  score: number;
-  /**
-   * Team info (populated in TEAM mode, null in INDIVIDUAL mode)
-   */
-  team?: TeamInfo;
-  /**
-   * User info (populated in INDIVIDUAL mode, null in TEAM mode)
-   */
-  user?: UserInfo;
-};
-
-export type LeagueChange = {
-  leaguePointsChange: number;
-  login: string;
 };
 
 /**
@@ -2550,6 +2648,20 @@ export type LoginProviderView = {
   updatedAt: string;
 };
 
+/**
+ * One member and their activity in a time range
+ */
+export type MemberActivity = {
+  /**
+   * The member's activity
+   */
+  summary: ActivitySummary;
+  /**
+   * The member
+   */
+  user: UserInfo;
+};
+
 export type MemberAiChoiceRequest = {
   choice: 'NO_AI' | 'IN_HOUSE_ONLY' | 'CLOUD';
 };
@@ -2593,7 +2705,7 @@ export type ObservationDetail = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2613,6 +2725,14 @@ export type ObservationDetail = {
    * Observation ID
    */
   id: string;
+  /**
+   * When a workspace admin marked this observation as incorrect; null while it stands. An invalidated observation counts toward nothing current.
+   */
+  invalidatedAt?: string;
+  /**
+   * The admin's reason for the invalidation; null while the observation stands
+   */
+  invalidationReason?: string;
   /**
    * The next step the review wrote about this observation, whether or not the feedback carrying it was delivered (null when it wrote none)
    */
@@ -2676,6 +2796,32 @@ export type ObservationEvidence = {
 };
 
 /**
+ * One correction of an observation by a workspace admin, and its restoration if any
+ */
+export type ObservationInvalidation = {
+  id: string;
+  invalidatedAt: string;
+  /**
+   * Who invalidated it; null once that account is erased
+   */
+  invalidatedBy?: string;
+  /**
+   * What became of the comments Hephaestus had already posted on the provider
+   */
+  providerCopy: 'PENDING' | 'NONE' | 'UPDATED' | 'INLINE_REMAINS' | 'UNRESOLVED';
+  reason: string;
+  /**
+   * Why it was restored; null while the invalidation is in force
+   */
+  restorationReason?: string;
+  restoredAt?: string;
+  /**
+   * Who restored it; null while in force or once that account is erased
+   */
+  restoredBy?: string;
+};
+
+/**
  * Practice observation summary for list views
  */
 export type ObservationList = {
@@ -2693,7 +2839,7 @@ export type ObservationList = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2732,6 +2878,28 @@ export type ObservationList = {
    * Observation summary
    */
   summary: string;
+};
+
+/**
+ * What is open for one member right now
+ */
+export type OpenWork = {
+  /**
+   * Open issues assigned to this member
+   */
+  issues: WorkItemList;
+  /**
+   * Open pull requests this member authored, drafts included
+   */
+  pullRequests: WorkItemList;
+  /**
+   * Open pull requests by other people that ask this member for a review; drafts are excluded
+   */
+  reviewRequests: WorkItemList;
+  /**
+   * Open pull requests by other people that ask one of this member's teams for a review, and not this member: not asking them directly, and not yet approved or sent back by them. Drafts are excluded. GitHub only; GitLab has no team reviewers, so a GitLab workspace lists none.
+   */
+  teamReviewRequests: WorkItemList;
 };
 
 export type OptionCount = {
@@ -3494,14 +3662,6 @@ export type PracticeGroupTrend = {
 };
 
 /**
- * The signal a person raises by asking for a review of this work type by hand
- */
-export type PracticeManualReviewSignal = {
-  displayName: string;
-  signal: string;
-};
-
-/**
  * What held, what changed and which work was reviewed over a window of the developer's reviews
  */
 export type PracticeProfileOverview = {
@@ -3548,6 +3708,52 @@ export type PracticeReleaseProposal = {
   slug: string;
 };
 
+/**
+ * Practice reviews, observations and feedback in one time bucket of a range
+ */
+export type PracticeReviewBucket = {
+  /**
+   * Feedback created in the bucket within the range, in any delivery state
+   */
+  feedback: number;
+  /**
+   * Observations recorded in the bucket within the range
+   */
+  observations: number;
+  /**
+   * Practice reviews created in the bucket within the range, in any status
+   */
+  reviews: number;
+  /**
+   * When the bucket starts: midnight of its day, of its week's Monday or of its month's first day, in the requested time zone. The first bucket may start before the range.
+   */
+  start: string;
+};
+
+/**
+ * What practice reviews recorded for one practice in a time range
+ */
+export type PracticeReviewCounts = {
+  /**
+   * Feedback created in the range that is bound to an observation of this practice, whenever that observation was recorded; one piece of feedback bound to several practices counts for each
+   */
+  feedback: ReviewFeedbackCounts;
+  /**
+   * Practice group; null when the practice is Unassigned
+   */
+  group?: ReviewPracticeGroup;
+  /**
+   * Observations of this practice recorded in the range
+   */
+  observations: ReviewObservationCounts;
+  /**
+   * Of those observations, the ones an admin has marked incorrect and not restored
+   */
+  observationsInvalidated: number;
+  practiceName: string;
+  practiceSlug: string;
+};
+
 export type PracticeReviewCoveragePreview = {
   /**
    * Effective coverage before the proposed change
@@ -3591,6 +3797,48 @@ export type PracticeReviewCoverageSummary = {
 };
 
 /**
+ * Practice reviews, observations and feedback in a time range, in total, over time and by practice
+ */
+export type PracticeReviewOverview = {
+  /**
+   * How long each bucket is
+   */
+  bucket: TimeBucketSize;
+  /**
+   * Every bucket the range touches, oldest first, including empty ones
+   */
+  buckets: Array<PracticeReviewBucket>;
+  /**
+   * Feedback created in the range
+   */
+  feedback: ReviewFeedbackCounts;
+  /**
+   * Inclusive lower bound of the range counted, with its default filled in
+   */
+  from: string;
+  /**
+   * Observations recorded in the range
+   */
+  observations: ReviewObservationCounts;
+  /**
+   * Of those observations, the ones an admin has marked incorrect and not restored
+   */
+  observationsInvalidated: number;
+  /**
+   * Each practice with an observation recorded in the range or feedback created in the range on one of its observations, the most observed first, then by name
+   */
+  practices: Array<PracticeReviewCounts>;
+  /**
+   * Practice reviews created in the range
+   */
+  reviews: ReviewRunCounts;
+  /**
+   * Exclusive upper bound of the range counted, with its default filled in
+   */
+  to: string;
+};
+
+/**
  * A workspace's practice-review policy: effective values plus raw overrides
  */
 export type PracticeReviewSettings = {
@@ -3628,6 +3876,12 @@ export type PracticeReviewSettings = {
    */
   etag: string;
   /**
+   * Repository-root Ant-style generated-path patterns, keyed by monitored repository name
+   */
+  generatedPaths: {
+    [key: string]: Array<string>;
+  };
+  /**
    * Explicit all-or-selected repository and person coverage. Selected-empty means nobody.
    */
   reviewScope: WorkspaceReviewScope;
@@ -3635,6 +3889,20 @@ export type PracticeReviewSettings = {
    * Monotonic rollout revision carried by automatically admitted review jobs
    */
   revision: number;
+};
+
+/**
+ * A signal and the words a reader sees for it
+ */
+export type PracticeSignal = {
+  /**
+   * What to print for the signal
+   */
+  displayName: string;
+  /**
+   * Signal name, for matching and linking; never printed
+   */
+  signal: string;
 };
 
 /**
@@ -3795,13 +4063,21 @@ export type PracticeTraceEntry = {
    */
   explanation: string;
   /**
+   * That group's name, as the workspace spells it; null when the practice has no group
+   */
+  groupName?: string;
+  /**
+   * Slug of the practice group this practice sits in; null for a practice the workspace files in no group
+   */
+  groupSlug?: string;
+  /**
    * Measurements this practice produced on this artifact
    */
   observationCount: number;
   /**
-   * The occurrence this answer is about; null when nothing it watches happened
+   * The signal of the occurrence this answer is about, with its display name; null when nothing it watches happened
    */
-  occasionedBy?: string;
+  occasionedBy?: PracticeSignal;
   /**
    * That occurrence's id in this trace's signals list. The name alone cannot identify it — the same signal recurs on every revision — so this is what a link should follow.
    */
@@ -3814,13 +4090,13 @@ export type PracticeTraceEntry = {
    */
   reviewId?: string;
   /**
-   * The signals this practice watches
+   * The signals this practice watches, each with its display name
    */
-  watches: Array<string>;
+  watches: Array<PracticeSignal>;
   /**
    * Why prepared feedback was withheld. Non-empty with observations present means we measured and deliberately said nothing.
    */
-  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+  withheldReasons: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED'>;
 };
 
 export type PracticeTrend = {
@@ -3842,7 +4118,7 @@ export type PracticeWorkTypeDefinitionOptions = {
   /**
    * How a person asks for a review of this work type by hand, or absent where the work type admits no such request. Not an occasion to bind to: such a request reviews every practice on the work type whatever state the work is in.
    */
-  manualReviewSignal?: PracticeManualReviewSignal;
+  manualReviewSignal?: PracticeSignal;
   /**
    * Evidence a new binding on this work type starts with when the author says nothing
    */
@@ -3887,116 +4163,6 @@ export type ProblemDetail = {
   status?: number;
   title?: string;
   type?: string;
-};
-
-/**
- * User profile header: identity, league standing, contribution surface, XP
- */
-export type Profile = {
-  /**
-   * Repositories the user has contributed to
-   */
-  contributedRepositories: Array<RepositoryInfo>;
-  /**
-   * Timestamp of the user's first contribution
-   */
-  firstContribution?: string;
-  /**
-   * Basic information about the user
-   */
-  userInfo: UserInfo;
-  /**
-   * XP progress information for the users' profile
-   */
-  xpRecord: ProfileXpRecord;
-};
-
-/**
- * Configurable activity monitor data for a contributor profile
- */
-export type ProfileActivityMonitor = {
-  /**
-   * Aggregated activity stats after applying monitor filters
-   */
-  activityStats: ProfileActivityStats;
-  /**
-   * Open pull requests authored in the selected timeframe, after repository filters and limit
-   */
-  authoredPullRequests: Array<PullRequestInfo>;
-  /**
-   * Repositories with monitor-relevant activity in the selected timeframe
-   */
-  repositories: Array<RepositoryInfo>;
-  /**
-   * Review activity entries after applying monitor filters and limit
-   */
-  reviewActivity: Array<ProfileReviewActivity>;
-  /**
-   * Total open authored pull requests after filters, before limit
-   */
-  totalAuthoredPullRequestCount: number;
-  /**
-   * Total review activity entries after filters, before limit
-   */
-  totalReviewActivityCount: number;
-};
-
-/**
- * Aggregated activity statistics with XP scores for a user profile
- */
-export type ProfileActivityStats = {
-  /**
-   * Number of approvals given
-   */
-  numberOfApprovals: number;
-  /**
-   * Number of change requests submitted
-   */
-  numberOfChangeRequests: number;
-  /**
-   * Number of issues closed in the timeframe
-   */
-  numberOfClosedIssues: number;
-  /**
-   * Number of authored pull requests closed without merge in the timeframe
-   */
-  numberOfClosedPullRequests: number;
-  /**
-   * Number of scored inline feedback comments on pull requests authored by someone else
-   */
-  numberOfCodeComments: number;
-  /**
-   * Number of comment-only review submissions
-   */
-  numberOfComments: number;
-  /**
-   * Number of authored pull requests merged in the timeframe
-   */
-  numberOfMergedPullRequests: number;
-  /**
-   * Number of authored pull requests opened in the timeframe that are still open
-   */
-  numberOfOpenPullRequests: number;
-  /**
-   * Number of issues opened in the timeframe
-   */
-  numberOfOpenedIssues: number;
-  /**
-   * Number of visible-only discussion replies and inline thread replies on the user's own pull requests
-   */
-  numberOfOwnReplies: number;
-  /**
-   * Number of distinct pull requests reviewed
-   */
-  numberOfReviewedPRs: number;
-  /**
-   * Number of reviews with unknown state
-   */
-  numberOfUnknowns: number;
-  /**
-   * Total XP score
-   */
-  score: number;
 };
 
 /**
@@ -4046,183 +4212,71 @@ export type ProfileChange = {
 };
 
 /**
- * A scored review activity entry with XP score for profile display
+ * One review run on the developer's own work, with what it found about them
  */
-export type ProfileReviewActivity = {
+export type ProfileReviewRun = {
   /**
-   * Author of the review
+   * How many pieces of feedback from this run reached this developer
    */
-  author?: UserInfo;
+  feedbackDelivered: number;
   /**
-   * Number of inline code comments in the review
+   * Where the feedback this run left on the work is read, at the provider; absent whenever the comment it landed in cannot be addressed from the work's own page
    */
-  codeComments: number;
+  feedbackUrl?: string;
   /**
-   * URL to the review on the git provider
+   * Whether this reader has standing to ask for a review of this work. False when the kind of work admits no request.
    */
-  htmlUrl: string;
+  mayRequest: boolean;
   /**
-   * Unique identifier of the review
+   * What the run decided about each practice it observed for this developer
    */
-  id: number;
+  practices: ReviewPracticeOutcomes;
   /**
-   * Whether the review was dismissed
+   * How many practices the run measured; absent when it wrote no coverage ledger
    */
-  isDismissed: boolean;
+  practicesEvaluated?: number;
+  reviewId: string;
   /**
-   * Pull request that was reviewed
+   * When the review recorded its newest observation about this developer
    */
-  pullRequest?: PullRequestBaseInfo;
+  reviewedAt: string;
   /**
-   * XP score earned for this review
+   * The piece of work the run reviewed
    */
-  score: number;
+  reviewedWork: ReviewedWorkRef;
   /**
-   * State of the review (APPROVED, CHANGES_REQUESTED, COMMENTED, etc.)
+   * Every practice counted in practices.toImprove, once each, in order of practice name
    */
-  state: 'COMMENTED' | 'APPROVED' | 'CHANGES_REQUESTED' | 'PENDING' | 'DISMISSED' | 'UNKNOWN';
+  slippedPractices: Array<SlippedPractice>;
   /**
-   * Timestamp when the review was submitted
+   * Where the review stands; absent when the review itself is no longer on record
    */
-  submittedAt: string;
+  status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  /**
+   * What occasioned the review: MANUAL is one a person asked for; absent when the review itself is no longer on record
+   */
+  triggerMode?: 'AUTO' | 'MANUAL';
 };
 
 /**
- * User's XP and Level progress details
+ * One review run on the developer's own work and what it observed about them
  */
-export type ProfileXpRecord = {
+export type ProfileReviewRunDetail = {
   /**
-   * Current calculated level
+   * Every visible observation the run made about this developer
    */
-  currentLevel: number;
-  /**
-   * XP accumulated in the current level
-   */
-  currentLevelXP: number;
-  /**
-   * Overall total XP accumulated
-   */
-  totalXP: number;
-  /**
-   * XP needed to reach the next level
-   */
-  xpNeeded: number;
+  observations: Array<ObservationDetail>;
+  run: ProfileReviewRun;
 };
 
 /**
- * Basic information about a pull request
+ * A page of the developer's own review runs, newest first
  */
-export type PullRequestBaseInfo = {
-  /**
-   * URL to the pull request on the git provider
-   */
-  htmlUrl?: string;
-  /**
-   * Unique identifier of the pull request
-   */
-  id: number;
-  /**
-   * Whether the pull request is in draft mode
-   */
-  isDraft: boolean;
-  /**
-   * Whether the pull request has been merged
-   */
-  isMerged: boolean;
-  /**
-   * Pull request number within the repository
-   */
-  number: number;
-  /**
-   * Repository the pull request belongs to
-   */
-  repository?: RepositoryInfo;
-  /**
-   * Current state of the pull request (OPEN, CLOSED, MERGED)
-   */
-  state: 'OPEN' | 'CLOSED' | 'MERGED';
-  /**
-   * Title of the pull request
-   */
-  title: string;
-};
-
-/**
- * Detailed information about a pull request
- */
-export type PullRequestInfo = {
-  /**
-   * Number of lines added
-   */
-  additions: number;
-  /**
-   * Users assigned to the pull request
-   */
-  assignees?: Array<UserInfo>;
-  /**
-   * Author of the pull request
-   */
-  author?: UserInfo;
-  /**
-   * Timestamp when the pull request was closed
-   */
-  closedAt?: string;
-  /**
-   * Number of comments on the pull request
-   */
-  commentsCount: number;
-  /**
-   * Timestamp when the pull request was created
-   */
-  createdAt?: string;
-  /**
-   * Number of lines deleted
-   */
-  deletions: number;
-  /**
-   * URL to the pull request on the git provider
-   */
-  htmlUrl?: string;
-  /**
-   * Unique identifier of the pull request
-   */
-  id: number;
-  /**
-   * Whether the pull request is in draft mode
-   */
-  isDraft: boolean;
-  /**
-   * Whether the pull request has been merged
-   */
-  isMerged: boolean;
-  /**
-   * Labels applied to the pull request
-   */
-  labels?: Array<LabelInfo>;
-  /**
-   * Timestamp when the pull request was merged
-   */
-  mergedAt?: string;
-  /**
-   * Pull request number within the repository
-   */
-  number: number;
-  /**
-   * Repository the pull request belongs to
-   */
-  repository?: RepositoryInfo;
-  /**
-   * Current state of the pull request (OPEN, CLOSED, MERGED)
-   */
-  state: 'OPEN' | 'CLOSED' | 'MERGED';
-  /**
-   * Title of the pull request
-   */
-  title: string;
-  /**
-   * Timestamp when the pull request was last updated
-   */
-  updatedAt?: string;
+export type ProfileReviewRunsPage = {
+  content: Array<ProfileReviewRun>;
+  hasNext?: boolean;
+  page?: number;
+  size?: number;
 };
 
 export type Question = {
@@ -4377,7 +4431,7 @@ export type RepositoryInfo = {
    */
   description?: string;
   /**
-   * Whether contributions from this repository are hidden from leaderboard calculations
+   * Whether activity in this repository is left out of a team's activity
    */
   hiddenFromContributions: boolean;
   /**
@@ -4503,7 +4557,7 @@ export type ReviewBoundFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
 };
 
 /**
@@ -4516,7 +4570,7 @@ export type ReviewBoundObservation = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4603,18 +4657,52 @@ export type ReviewFeedback = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
 };
 
 /**
- * Counts of feedback by delivery state
+ * Counts of feedback, one per delivery state
  */
 export type ReviewFeedbackCounts = {
+  /**
+   * AWAITING_APPROVAL: waiting for an admin to approve or reject it
+   */
+  awaitingApproval: number;
+  /**
+   * DELIVERED: delivered where it was meant to appear
+   */
   delivered: number;
+  /**
+   * DISCARDED: an admin rejected it instead of approving it; it is never delivered
+   */
+  discarded: number;
+  /**
+   * FAILED: delivery failed
+   */
   failed: number;
+  /**
+   * PARTIALLY_DELIVERED: some of its placements delivered, the rest still to deliver or suppressed
+   */
+  partiallyDelivered: number;
+  /**
+   * PARTIALLY_FAILED: delivery failed after some of its placements were delivered
+   */
+  partiallyFailed: number;
+  /**
+   * PREPARED: ready to deliver and not delivered yet
+   */
   prepared: number;
+  /**
+   * SUPERSEDED: replaced by newer feedback
+   */
   superseded: number;
+  /**
+   * SUPPRESSED: Hephaestus refused to deliver it, with a suppression reason
+   */
   suppressed: number;
+  /**
+   * UNCONFIRMED: a conversation linked it with no record that it was shown, so it counts as neither delivered nor suppressed
+   */
   unconfirmed: number;
 };
 
@@ -4642,6 +4730,10 @@ export type ReviewFeedbackDetail = {
    */
   deliveryPolicy: Array<DeliveryPolicyTrace>;
   deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED';
+  /**
+   * The developer's standing dispute of this feedback; null while they do not dispute it
+   */
+  dispute?: FeedbackDispute;
   id: string;
   /**
    * Source observations in render order
@@ -4678,41 +4770,15 @@ export type ReviewFeedbackDetail = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
   threadKey?: string;
-};
-
-/**
- * Counts of feedback by delivery state
- */
-export type ReviewFeedbackDisposition = {
   /**
-   * Linked feedback delivered
+   * Every withdrawal of this card from the developer's practice page, newest first; empty when none
    */
-  delivered: number;
-  /**
-   * Linked feedback whose delivery failed
-   */
-  failed: number;
-  /**
-   * Linked feedback awaiting delivery
-   */
-  prepared: number;
-  /**
-   * Linked feedback delivered and later replaced
-   */
-  superseded: number;
-  /**
-   * Linked feedback withheld by policy
-   */
-  suppressed: number;
-  /**
-   * Linked feedback a conversation linked without a record that it was shown
-   */
-  unconfirmed: number;
+  withdrawals: Array<FeedbackWithdrawal>;
 };
 
 /**
@@ -4726,18 +4792,26 @@ export type ReviewObservation = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
+   * When the developer last disputed feedback written from this observation; null while nothing about it is disputed
+   */
+  disputedAt?: string;
+  /**
    * Counts of linked feedback by delivery state
    */
-  feedbackDisposition: ReviewFeedbackDisposition;
+  feedback: ReviewFeedbackCounts;
   /**
    * Practice group; null when the practice is Unassigned
    */
   group?: ReviewPracticeGroup;
   id: string;
+  /**
+   * When a workspace admin invalidated this observation; null while it stands
+   */
+  invalidatedAt?: string;
   observedAt: string;
   /**
    * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
@@ -4793,9 +4867,13 @@ export type ReviewObservationDetail = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * The developer's standing disputes of feedback written from this observation, newest first; empty when nothing about it is disputed
+   */
+  disputes: Array<FeedbackDispute>;
   evidence?: ObservationEvidence;
   evidenceRationale?: string;
   /**
@@ -4807,6 +4885,10 @@ export type ReviewObservationDetail = {
    */
   group?: ReviewPracticeGroup;
   id: string;
+  /**
+   * Every correction by a workspace admin, newest first; the first is in force while it has no restoration
+   */
+  invalidations: Array<ObservationInvalidation>;
   observedAt: string;
   /**
    * Derived from presence and contextual behavior assessment; null unless assessed
@@ -4885,6 +4967,28 @@ export type ReviewPracticeGroup = {
 };
 
 /**
+ * What one run decided about each practice it observed for this developer, one outcome per practice however many observations it recorded about it; an invalidated observation decides nothing
+ */
+export type ReviewPracticeOutcomes = {
+  /**
+   * Practices with a strength observed and no problem
+   */
+  held: number;
+  /**
+   * Practices whose every observation said the practice did not apply to this work
+   */
+  notApplicable: number;
+  /**
+   * Practices with at least one problem observed
+   */
+  toImprove: number;
+  /**
+   * Practices the run looked at and could not settle either way: no strength, no problem, and not only a verdict that the practice did not apply
+   */
+  undecided: number;
+};
+
+/**
  * One exact provider message included in a review awaiting approval
  */
 export type ReviewProposedPlacement = {
@@ -4926,7 +5030,7 @@ export type ReviewRequestOutcome = {
   /**
    * The controlled-vocabulary reason nothing was started; absent when a review was started
    */
-  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'BOT_AUTHOR' | 'BOT_REVIEWER' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * The reason as one sentence for the person who asked. Render it verbatim: it is written next to the reason it explains so that every surface says the same thing, and a re-worded copy is how a screen and a support answer come to disagree.
    */
@@ -4938,18 +5042,34 @@ export type ReviewRequestOutcome = {
 };
 
 /**
+ * Counts of practice reviews by status
+ */
+export type ReviewRunCounts = {
+  cancelled: number;
+  completed: number;
+  failed: number;
+  queued: number;
+  running: number;
+  timedOut: number;
+};
+
+/**
  * One review run on the developer's work
  */
 export type ReviewRunRef = {
   /**
-   * When the run recorded its newest observation
+   * When the review recorded its newest observation about this developer
    */
   at: string;
-  jobId: string;
+  reviewId: string;
   /**
    * The piece of work the run reviewed
    */
   reviewedWork: ReviewedWorkRef;
+  /**
+   * Where the review stands; absent when the review itself is no longer on record
+   */
+  status?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
 };
 
 /**
@@ -4960,6 +5080,10 @@ export type ReviewRunSummary = {
   feedback: ReviewFeedbackCounts;
   id: string;
   observations: ReviewObservationCounts;
+  /**
+   * Result-processing status: null = not applicable, PENDING = awaiting processing, DELIVERED = processing finished, FAILED = processing error. Processing may include delivery; this status alone does not establish feedback publication.
+   */
+  resultProcessing?: 'PENDING' | 'DELIVERED' | 'FAILED';
   status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED';
   target: ReviewRunTarget;
 };
@@ -5050,6 +5174,10 @@ export type ReviewedPractice = {
  */
 export type ReviewedWorkRef = {
   /**
+   * Where the work sits, by name: a pull request's or an issue's repository, a document's collection; a conversation's channel is its label
+   */
+  container?: string;
+  /**
    * Identifier of the work within its kind
    */
   id: string;
@@ -5066,17 +5194,27 @@ export type ReviewedWorkRef = {
    */
   provider?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
   /**
-   * Repository the work belongs to, for pull requests and issues
-   */
-  repositoryName?: string;
-  /**
-   * The work's own title: a pull request's, an issue's or a document's; a conversation thread has none
+   * The work's own title where the label does not already say it: a pull request's or an issue's; a conversation thread has none and a document's is its label
    */
   title?: string;
   /**
    * The work's page at its provider, when the provider exposes one
    */
   url?: string;
+};
+
+/**
+ * Someone reviewing a pull request, and where their review stands
+ */
+export type Reviewer = {
+  /**
+   * REQUESTED while a review is asked of them, otherwise the verdict of their latest review that was not dismissed
+   */
+  state: 'CHANGES_REQUESTED' | 'APPROVED' | 'COMMENTED' | 'REQUESTED';
+  /**
+   * The reviewer
+   */
+  user: UserInfo;
 };
 
 export type RevokeSessionsResult = {
@@ -5229,24 +5367,6 @@ export type SlackMonitoredChannel = {
   slackTeamId: string;
 };
 
-/**
- * Optional body for the Slack test-message probe. When <code>channelId</code> is present and non-blank,
- *  the probe targets that channel (so an admin can validate a typed-but-unsaved channel); otherwise
- *  it falls back to the persisted notification channel.
- */
-export type SlackTestMessageRequest = {
-  channelId?: string;
-};
-
-/**
- * Result of the Slack test-message probe; carries the Slack error code on failure.
- */
-export type SlackTestMessageResponse = {
-  channelId?: string;
-  ok?: boolean;
-  slackError?: string;
-};
-
 export type SlackUserPreferences = {
   workspaces: Array<SlackUserWorkspacePreferences>;
 };
@@ -5260,6 +5380,14 @@ export type SlackUserWorkspacePreferences = {
   slackUserId: string;
   workspaceName: string;
   workspaceSlug: string;
+};
+
+/**
+ * A practice a run recorded a problem about for this developer
+ */
+export type SlippedPractice = {
+  practiceName: string;
+  practiceSlug: string;
 };
 
 export type Sort = {
@@ -5482,7 +5610,7 @@ export type TeamInfo = {
    */
   description?: string;
   /**
-   * Whether the team is hidden from leaderboard display
+   * Whether the team is hidden from workspace activity
    */
   hidden: boolean;
   /**
@@ -5532,6 +5660,20 @@ export type TeamInfo = {
 };
 
 /**
+ * A team, by name
+ */
+export type TeamRef = {
+  /**
+   * Identifier of the team
+   */
+  id: number;
+  /**
+   * Name of the team
+   */
+  name: string;
+};
+
+/**
  * Lightweight summary of a team without member/repository details
  */
 export type TeamSummary = {
@@ -5540,7 +5682,7 @@ export type TeamSummary = {
    */
   description?: string;
   /**
-   * Whether the team is hidden from leaderboard display
+   * Whether the team is hidden from workspace activity
    */
   hidden: boolean;
   /**
@@ -5570,33 +5712,29 @@ export type TeamSummary = {
 };
 
 /**
+ * How long each bucket of a range is: a day for ranges up to 31 days, a week from Monday for ranges up to 184 days, a month for longer ones
+ */
+export type TimeBucketSize = 'DAY' | 'WEEK' | 'MONTH';
+
+/**
  * An artifact this workspace recorded something about, and how much of it turned into review
  */
 export type TracedArtifact = {
   artifactId: number;
   artifactKind: string;
-  /**
-   * Repository, collection or channel it sits in
-   */
-  container?: string;
   lastSignalAt: string;
-  /**
-   * The number the provider shows, for kinds that have one
-   */
-  number?: number;
   /**
    * How many of them started a review
    */
   reviewedSignalCount: number;
   /**
+   * The work as every surface names it: its provider, the label the provider writes ("#1423", "!1423"), its title, where it sits and where to open it; the link is absent for deleted work
+   */
+  reviewedWork: ReviewedWorkRef;
+  /**
    * Occurrences recorded on this artifact
    */
   signalCount: number;
-  title: string;
-  /**
-   * Where to open it upstream; absent for a deleted or unlinkable artifact
-   */
-  url?: string;
 };
 
 /**
@@ -5608,7 +5746,7 @@ export type TracedSignal = {
    */
   discoveredVia: 'EVENT' | 'SYNC' | 'MANUAL' | 'BACKFILL' | 'SWEEP';
   /**
-   * Human label for the signal, from the artifact kind's descriptor
+   * What to print for the signal, from the artifact kind's descriptor
    */
   displayName: string;
   /**
@@ -5624,22 +5762,22 @@ export type TracedSignal = {
    */
   reviewId?: string;
   /**
-   * Where that review's run stands now, which a practice's own outcome does not say once an earlier review of this work has results; null when no linked run is available
-   */
-  reviewState?: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
-  /**
    * Which version of the artifact this occurrence is about; the reason editing a description can be re-measured while the commits stay put
    */
   revision: string;
   /**
-   * Signal name, e.g. scm.pull_request.ready
+   * Signal name, for matching and linking; never printed
    */
   signal: string;
   state: 'RECORDED' | 'DEFERRED' | 'TRIGGERED' | 'SUPPRESSED' | 'PENDING' | 'LAPSED';
   /**
    * Why it ended in that state; null once it triggered a review
    */
-  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'BOT_AUTHOR' | 'BOT_REVIEWER' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  /**
+   * That reason as one sentence for a reader. Render it verbatim: it is written next to the reason it explains, so every surface that explains a silence says the same thing
+   */
+  stateReasonDescription?: string;
 };
 
 export type TrendOpportunity = {
@@ -5705,6 +5843,20 @@ export type UpdateCuratedStatusRequest = {
 };
 
 /**
+ * Withdraw a card from a developer's practice page, or restore it
+ */
+export type UpdateFeedbackWithdrawalRequest = {
+  /**
+   * Why, kept with the withdrawal for the workspace's administrators
+   */
+  reason: string;
+  /**
+   * true withdraws the card; false restores it
+   */
+  withdrawn: boolean;
+};
+
+/**
  * Update instance-wide LLM governance settings (all fields optional)
  */
 export type UpdateInstanceLlmSettingsRequest = {
@@ -5716,32 +5868,6 @@ export type UpdateInstanceLlmSettingsRequest = {
    * Comma/newline-delimited egress host allowlist; blank clears it
    */
   allowedEgressHosts?: string;
-};
-
-/**
- * Request to update the entire weekly leaderboard digest configuration atomically
- */
-export type UpdateLeaderboardDigestRequest = {
-  /**
-   * Slack channel ID for notifications
-   */
-  channelId?: string;
-  /**
-   * Day of week (1=Monday, 7=Sunday)
-   */
-  day: number;
-  /**
-   * Whether leaderboard notifications are enabled
-   */
-  enabled?: boolean;
-  /**
-   * Team name for filtering leaderboard notifications
-   */
-  team?: string;
-  /**
-   * Time in 24-hour format (HH:mm)
-   */
-  time: string;
 };
 
 /**
@@ -5895,6 +6021,20 @@ export type UpdateNotificationPreferences = {
 };
 
 /**
+ * Invalidate an observation that was wrong when recorded, or restore it
+ */
+export type UpdateObservationValidityRequest = {
+  /**
+   * Why, kept with the correction; an invalidation reason is shown to the developer
+   */
+  reason: string;
+  /**
+   * false invalidates the observation; true restores it
+   */
+  valid: boolean;
+};
+
+/**
  * Transition a mirrored Outline collection to a target mirror state (pause / resume)
  */
 export type UpdateOutlineCollectionStateRequest = {
@@ -6014,6 +6154,12 @@ export type UpdatePracticeReviewSettingsRequest = {
    */
   deliveryStatus?: 'ACTIVE' | 'PAUSED';
   /**
+   * Patch generated-path patterns per monitored repository. An empty list clears that repository. Null leaves all unchanged.
+   */
+  generatedPaths?: {
+    [key: string]: Array<string>;
+  };
+  /**
    * Fields to reset back to inherit
    */
   reset?: Array<'SKIP_DRAFTS' | 'DELIVER_TO_MERGED' | 'COOLDOWN_MINUTES' | 'REVIEW_SCOPE' | 'DEFAULT_AUTONOMY'>;
@@ -6028,7 +6174,7 @@ export type UpdatePracticeReviewSettingsRequest = {
  */
 export type UpdateRepositorySettingsRequest = {
   /**
-   * Whether contributions from this repository should be hidden from leaderboard calculations
+   * Whether activity in this repository should be left out of the team's activity
    */
   hiddenFromContributions: boolean;
 };
@@ -6103,27 +6249,15 @@ export type UpdateSyncJobRequest = {
  */
 export type UpdateTeamSettingsRequest = {
   /**
-   * Whether the team should be hidden from the leaderboard
+   * Whether the team should be hidden from workspace activity
    */
   hidden: boolean;
 };
 
 /**
- * Request to update workspace feature flags. Null fields are left unchanged.
+ * Request to turn practice reviews and their triggers on or off. Null fields are left unchanged.
  */
 export type UpdateWorkspaceFeaturesRequest = {
-  /**
-   * Enable the leaderboard ranking page
-   */
-  leaderboardEnabled?: boolean;
-  /**
-   * Enable league tiers and rankings
-   */
-  leaguesEnabled?: boolean;
-  /**
-   * Enable the Pi mentor chat feature
-   */
-  mentorEnabled?: boolean;
   /**
    * Enable automatic practice reviews triggered by PR events
    */
@@ -6136,10 +6270,6 @@ export type UpdateWorkspaceFeaturesRequest = {
    * Enable the practice review feature
    */
   practicesEnabled?: boolean;
-  /**
-   * Enable the league/progression system
-   */
-  progressionEnabled?: boolean;
 };
 
 /**
@@ -6243,24 +6373,6 @@ export type UpdateWorkspaceLlmModelRequest = {
 };
 
 /**
- * Request to update leaderboard notification settings
- */
-export type UpdateWorkspaceNotificationsRequest = {
-  /**
-   * Slack channel ID for notifications
-   */
-  channelId?: string;
-  /**
-   * Whether leaderboard notifications are enabled
-   */
-  enabled?: boolean;
-  /**
-   * Team name for filtering leaderboard notifications
-   */
-  team?: string;
-};
-
-/**
  * Request to update workspace public visibility setting
  */
 export type UpdateWorkspacePublicVisibilityRequest = {
@@ -6268,20 +6380,6 @@ export type UpdateWorkspacePublicVisibilityRequest = {
    * Whether the workspace should be publicly viewable without authentication
    */
   isPubliclyViewable: boolean;
-};
-
-/**
- * Request to update the leaderboard notification schedule
- */
-export type UpdateWorkspaceScheduleRequest = {
-  /**
-   * Day of week (1=Monday, 7=Sunday)
-   */
-  day: number;
-  /**
-   * Time in 24-hour format (HH:mm)
-   */
-  time: string;
 };
 
 /**
@@ -6325,10 +6423,6 @@ export type UserInfo = {
    */
   id: number;
   /**
-   * League points earned by the user in the current scope
-   */
-  leaguePoints?: number;
-  /**
    * Login/username of the user
    */
   login: string;
@@ -6364,6 +6458,86 @@ export type UserViewUser = {
   login: string;
   name?: string;
   userId: number;
+};
+
+/**
+ * A pull request or issue
+ */
+export type WorkItem = {
+  /**
+   * The author
+   */
+  author?: UserInfo;
+  /**
+   * What the checks said about the pull request's current head, when known
+   */
+  checks?: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'CANCELLED' | 'NONE' | 'NO_PIPELINE' | 'SKIPPED';
+  /**
+   * When it was created
+   */
+  createdAt?: string;
+  /**
+   * Link to the pull request or issue on the provider
+   */
+  htmlUrl?: string;
+  /**
+   * Identifier of the pull request or issue
+   */
+  id: number;
+  /**
+   * Whether the pull request is a draft; false for issues
+   */
+  isDraft: boolean;
+  /**
+   * Number within the repository
+   */
+  number: number;
+  /**
+   * The repository
+   */
+  repository?: RepositoryInfo;
+  /**
+   * The member's teams the pull request asks for a review; only team review requests list them
+   */
+  requestedTeams?: Array<TeamRef>;
+  /**
+   * The pull request's review decision, when the provider reported one
+   */
+  reviewDecision?: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED';
+  /**
+   * The pull request's reviewers besides its author, where each review stands; only open work lists them
+   */
+  reviewers?: Array<Reviewer>;
+  /**
+   * Current state
+   */
+  state: 'OPEN' | 'CLOSED' | 'MERGED';
+  /**
+   * Title
+   */
+  title: string;
+  /**
+   * Whether this is a pull request or an issue
+   */
+  type: 'PULL_REQUEST' | 'ISSUE';
+  /**
+   * When it was last updated
+   */
+  updatedAt?: string;
+};
+
+/**
+ * Pull requests or issues, most recently updated first, up to a limit
+ */
+export type WorkItemList = {
+  /**
+   * The work, most recently updated first
+   */
+  content: Array<WorkItem>;
+  /**
+   * Whether more work exists than the list holds
+   */
+  hasMore: boolean;
 };
 
 /**
@@ -6415,38 +6589,6 @@ export type Workspace = {
    */
   kind?: string;
   /**
-   * Whether the leaderboard is enabled
-   */
-  leaderboardEnabled: boolean;
-  /**
-   * Slack channel ID for leaderboard notifications
-   */
-  leaderboardNotificationChannelId?: string;
-  /**
-   * Whether leaderboard notifications are enabled
-   */
-  leaderboardNotificationEnabled?: boolean;
-  /**
-   * Team name for leaderboard notifications
-   */
-  leaderboardNotificationTeam?: string;
-  /**
-   * Day of week for leaderboard notifications (1=Monday, 7=Sunday)
-   */
-  leaderboardScheduleDay?: number;
-  /**
-   * Time for leaderboard notifications in HH:mm format
-   */
-  leaderboardScheduleTime?: string;
-  /**
-   * Whether league tiers and rankings are enabled
-   */
-  leaguesEnabled: boolean;
-  /**
-   * Whether the Pi mentor chat feature is enabled
-   */
-  mentorEnabled: boolean;
-  /**
    * Whether automatic practice reviews triggered by PR events are enabled
    */
   practiceReviewAutoTriggerEnabled: boolean;
@@ -6455,13 +6597,9 @@ export type Workspace = {
    */
   practiceReviewManualTriggerEnabled: boolean;
   /**
-   * Whether the practice review feature is enabled
+   * Whether practice reviews are on
    */
   practicesEnabled: boolean;
-  /**
-   * Whether the league/progression system is enabled
-   */
-  progressionEnabled: boolean;
   /**
    * High-level git provider type for the workspace's SCM connection (null if none bound)
    */
@@ -6526,25 +6664,9 @@ export type WorkspaceListItem = {
    */
   id: number;
   /**
-   * Whether the leaderboard is enabled
-   */
-  leaderboardEnabled: boolean;
-  /**
-   * Whether league tiers and rankings are enabled
-   */
-  leaguesEnabled: boolean;
-  /**
-   * Whether the Pi mentor chat feature is enabled
-   */
-  mentorEnabled: boolean;
-  /**
-   * Whether the practice review feature is enabled
+   * Whether practice reviews are on
    */
   practicesEnabled: boolean;
-  /**
-   * Whether the league/progression system is enabled
-   */
-  progressionEnabled: boolean;
   /**
    * High-level git provider type (GITHUB or GITLAB), or null if no SCM connection bound
    */
@@ -6804,13 +6926,9 @@ export type WorkspaceMembership = {
    */
   eligibleForPracticeReview?: boolean;
   /**
-   * Whether the member is hidden from the leaderboard
+   * Whether the member is left out of workspace activity
    */
   hidden?: boolean;
-  /**
-   * League points earned by the user in this workspace
-   */
-  leaguePoints?: number;
   /**
    * Role of the user in this workspace (OWNER, ADMIN, MEMBER)
    */
@@ -6899,7 +7017,7 @@ export type WorkspaceReviewScope = {
  */
 export type WorkspaceTeamRepositorySettings = {
   /**
-   * Whether contributions from this repository are hidden from leaderboard calculations
+   * Whether activity in this repository is left out of the team's activity
    */
   hiddenFromContributions: boolean;
   /**
@@ -6921,7 +7039,7 @@ export type WorkspaceTeamRepositorySettings = {
  */
 export type WorkspaceTeamSettings = {
   /**
-   * Whether the team is hidden in the leaderboard for this workspace
+   * Whether the team is hidden from workspace activity
    */
   hidden: boolean;
   /**
@@ -6956,7 +7074,7 @@ export type ObservationDetailWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -6976,6 +7094,14 @@ export type ObservationDetailWritable = {
    * Observation ID
    */
   id: string;
+  /**
+   * When a workspace admin marked this observation as incorrect; null while it stands. An invalidated observation counts toward nothing current.
+   */
+  invalidatedAt?: string;
+  /**
+   * The admin's reason for the invalidation; null while the observation stands
+   */
+  invalidationReason?: string;
   /**
    * The next step the review wrote about this observation, whether or not the feedback carrying it was delivered (null when it wrote none)
    */
@@ -7032,7 +7158,7 @@ export type ObservationListWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -7259,6 +7385,17 @@ export type PracticeStandingObservationWritable = {
 };
 
 /**
+ * One review run on the developer's own work and what it observed about them
+ */
+export type ProfileReviewRunDetailWritable = {
+  /**
+   * Every visible observation the run made about this developer
+   */
+  observations: Array<ObservationDetailWritable>;
+  run: ProfileReviewRun;
+};
+
+/**
  * An observation that contributed to a piece of feedback
  */
 export type ReviewBoundObservationWritable = {
@@ -7268,7 +7405,7 @@ export type ReviewBoundObservationWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -7319,6 +7456,10 @@ export type ReviewFeedbackDetailWritable = {
    */
   deliveryPolicy: Array<DeliveryPolicyTrace>;
   deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED';
+  /**
+   * The developer's standing dispute of this feedback; null while they do not dispute it
+   */
+  dispute?: FeedbackDispute;
   id: string;
   /**
    * Source observations in render order
@@ -7355,11 +7496,15 @@ export type ReviewFeedbackDetailWritable = {
   /**
    * Why delivery stopped; set on withheld or terminally partial feedback
    */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET';
+  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
   /**
    * Cross-run continuity key tying successive deliveries together
    */
   threadKey?: string;
+  /**
+   * Every withdrawal of this card from the developer's practice page, newest first; empty when none
+   */
+  withdrawals: Array<FeedbackWithdrawal>;
 };
 
 /**
@@ -7373,18 +7518,26 @@ export type ReviewObservationWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
+   * When the developer last disputed feedback written from this observation; null while nothing about it is disputed
+   */
+  disputedAt?: string;
+  /**
    * Counts of linked feedback by delivery state
    */
-  feedbackDisposition: ReviewFeedbackDisposition;
+  feedback: ReviewFeedbackCounts;
   /**
    * Practice group; null when the practice is Unassigned
    */
   group?: ReviewPracticeGroup;
   id: string;
+  /**
+   * When a workspace admin invalidated this observation; null while it stands
+   */
+  invalidatedAt?: string;
   observedAt: string;
   /**
    * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
@@ -7420,9 +7573,13 @@ export type ReviewObservationDetailWritable = {
   assessment?: 'GOOD' | 'BAD';
   assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
-   * Whether an observation still has current review rules and supporting work snapshot
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
+  /**
+   * The developer's standing disputes of feedback written from this observation, newest first; empty when nothing about it is disputed
+   */
+  disputes: Array<FeedbackDispute>;
   evidence?: ObservationEvidence;
   evidenceRationale?: string;
   /**
@@ -7434,6 +7591,10 @@ export type ReviewObservationDetailWritable = {
    */
   group?: ReviewPracticeGroup;
   id: string;
+  /**
+   * Every correction by a workspace admin, newest first; the first is in force while it has no restoration
+   */
+  invalidations: Array<ObservationInvalidation>;
   observedAt: string;
   practiceName: string;
   /**
@@ -9799,6 +9960,221 @@ export type GetWorkspaceResponses = {
 
 export type GetWorkspaceResponse = GetWorkspaceResponses[keyof GetWorkspaceResponses];
 
+export type ListMemberActivityData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    /**
+     * A team, with its visible sub-teams; omit for everyone
+     */
+    teamId?: number;
+    /**
+     * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
+     */
+    from?: string;
+    /**
+     * Exclusive upper bound; defaults to now
+     */
+    to?: string;
+  };
+  url: '/workspaces/{workspaceSlug}/activity/members';
+};
+
+export type ListMemberActivityErrors = {
+  /**
+   * Invalid range
+   */
+  400: ProblemDetail;
+  /**
+   * The caller is not a member of the workspace
+   */
+  403: ProblemDetail;
+  /**
+   * Team not found
+   */
+  404: ProblemDetail;
+};
+
+export type ListMemberActivityError = ListMemberActivityErrors[keyof ListMemberActivityErrors];
+
+export type ListMemberActivityResponses = {
+  /**
+   * Members listed
+   */
+  200: Array<MemberActivity>;
+};
+
+export type ListMemberActivityResponse = ListMemberActivityResponses[keyof ListMemberActivityResponses];
+
+export type GetOpenWorkData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    /**
+     * The member's login
+     */
+    login: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/activity/members/{login}/open-work';
+};
+
+export type GetOpenWorkErrors = {
+  /**
+   * The caller is not a member of the workspace
+   */
+  403: ProblemDetail;
+  /**
+   * Member not found
+   */
+  404: ProblemDetail;
+};
+
+export type GetOpenWorkError = GetOpenWorkErrors[keyof GetOpenWorkErrors];
+
+export type GetOpenWorkResponses = {
+  /**
+   * Open work listed
+   */
+  200: OpenWork;
+};
+
+export type GetOpenWorkResponse = GetOpenWorkResponses[keyof GetOpenWorkResponses];
+
+export type GetActivitySummaryData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    /**
+     * The member; omit for everyone
+     */
+    login?: string;
+    /**
+     * A team, with its visible sub-teams; omit for the workspace
+     */
+    teamId?: number;
+    /**
+     * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
+     */
+    from?: string;
+    /**
+     * Exclusive upper bound; defaults to now
+     */
+    to?: string;
+    /**
+     * The IANA time zone whose midnights start the buckets, such as Europe/Berlin
+     */
+    zone?: string;
+  };
+  url: '/workspaces/{workspaceSlug}/activity/summary';
+};
+
+export type GetActivitySummaryErrors = {
+  /**
+   * Invalid range or time zone
+   */
+  400: ProblemDetail;
+  /**
+   * The caller is not a member of the workspace
+   */
+  403: ProblemDetail;
+  /**
+   * Member or team not found
+   */
+  404: ProblemDetail;
+};
+
+export type GetActivitySummaryError = GetActivitySummaryErrors[keyof GetActivitySummaryErrors];
+
+export type GetActivitySummaryResponses = {
+  /**
+   * Activity counted
+   */
+  200: ActivityOverview;
+};
+
+export type GetActivitySummaryResponse = GetActivitySummaryResponses[keyof GetActivitySummaryResponses];
+
+export type GetActivityWorkData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    /**
+     * The member; omit for everyone
+     */
+    login?: string;
+    /**
+     * A team, with its visible sub-teams; omit for the workspace
+     */
+    teamId?: number;
+    /**
+     * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
+     */
+    from?: string;
+    /**
+     * Exclusive upper bound; defaults to now
+     */
+    to?: string;
+    /**
+     * Kinds of activity to list (repeatable); omit for every kind
+     */
+    kinds?: Array<'PULL_REQUEST_OPENED' | 'PULL_REQUEST_MERGED' | 'PULL_REQUEST_CLOSED' | 'REVIEW_APPROVED' | 'REVIEW_CHANGES_REQUESTED' | 'REVIEW_COMMENTED' | 'COMMENTED' | 'CODE_COMMENTED' | 'ISSUE_OPENED' | 'ISSUE_CLOSED'>;
+    /**
+     * The previous page's nextCursor; omit for the first page
+     */
+    cursor?: string;
+    /**
+     * Page size from 1 to 100; defaults to 30
+     */
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/activity/work';
+};
+
+export type GetActivityWorkErrors = {
+  /**
+   * Invalid range, kind, cursor or size
+   */
+  400: ProblemDetail;
+  /**
+   * The caller is not a member of the workspace
+   */
+  403: ProblemDetail;
+  /**
+   * Member or team not found
+   */
+  404: ProblemDetail;
+};
+
+export type GetActivityWorkError = GetActivityWorkErrors[keyof GetActivityWorkErrors];
+
+export type GetActivityWorkResponses = {
+  /**
+   * One page of work
+   */
+  200: ActivityWorkPage;
+};
+
+export type GetActivityWorkResponse = GetActivityWorkResponses[keyof GetActivityWorkResponses];
+
 export type ListAgentsData = {
   body?: never;
   path: {
@@ -10124,30 +10500,6 @@ export type GetOutlineTokenStatusResponses = {
 
 export type GetOutlineTokenStatusResponse = GetOutlineTokenStatusResponses[keyof GetOutlineTokenStatusResponses];
 
-export type SendSlackTestMessageData = {
-  /**
-   * optional channel override; when blank, the persisted notification channel is used.
-   */
-  body?: SlackTestMessageRequest;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/connections/slack/test-message';
-};
-
-export type SendSlackTestMessageResponses = {
-  /**
-   * OK
-   */
-  200: SlackTestMessageResponse;
-};
-
-export type SendSlackTestMessageResponse = SendSlackTestMessageResponses[keyof SendSlackTestMessageResponses];
-
 export type GetConnectionSyncStatusData = {
   body?: never;
   path: {
@@ -10390,122 +10742,6 @@ export type UpdateFeaturesResponses = {
 };
 
 export type UpdateFeaturesResponse = UpdateFeaturesResponses[keyof UpdateFeaturesResponses];
-
-export type GetLeaderboardData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-  };
-  query: {
-    /**
-     * start of the time range (inclusive)
-     */
-    after: string;
-    /**
-     * end of the time range (exclusive)
-     */
-    before: string;
-    /**
-     * Team filter to apply in INDIVIDUAL mode; ignored when mode is TEAM.
-     */
-    team: string;
-    /**
-     * Determines the ranking metric. In TEAM mode SCORE uses summed contribution scores; LEAGUE_POINTS uses total league points.
-     */
-    sort: 'SCORE' | 'LEAGUE_POINTS';
-    /**
-     * aggregation mode (INDIVIDUAL or TEAM)
-     */
-    mode: 'INDIVIDUAL' | 'TEAM';
-  };
-  url: '/workspaces/{workspaceSlug}/leaderboard';
-};
-
-export type GetLeaderboardResponses = {
-  /**
-   * ranked list of leaderboard entries
-   */
-  200: Array<LeaderboardEntry>;
-};
-
-export type GetLeaderboardResponse = GetLeaderboardResponses[keyof GetLeaderboardResponses];
-
-export type UpdateLeaderboardDigestData = {
-  body: UpdateLeaderboardDigestRequest;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/leaderboard-digest';
-};
-
-export type UpdateLeaderboardDigestResponses = {
-  /**
-   * Workspace updated
-   */
-  200: Workspace;
-};
-
-export type UpdateLeaderboardDigestResponse = UpdateLeaderboardDigestResponses[keyof UpdateLeaderboardDigestResponses];
-
-export type ComputeUserLeagueStatsData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    /**
-     * the user's GitHub login
-     */
-    login: string;
-  };
-  query: {
-    /**
-     * start of the time range (inclusive)
-     */
-    after: string;
-    /**
-     * end of the time range (exclusive)
-     */
-    before: string;
-  };
-  url: '/workspaces/{workspaceSlug}/leaderboard/users/{login}/league-stats';
-};
-
-export type ComputeUserLeagueStatsResponses = {
-  /**
-   * league change statistics including projected point delta
-   */
-  200: LeagueChange;
-};
-
-export type ComputeUserLeagueStatsResponse = ComputeUserLeagueStatsResponses[keyof ComputeUserLeagueStatsResponses];
-
-export type ResetAndRecalculateLeaguesData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/league/reset';
-};
-
-export type ResetAndRecalculateLeaguesResponses = {
-  /**
-   * OK
-   */
-  200: unknown;
-};
 
 export type WorkspaceListAvailableLlmModelsData = {
   body?: never;
@@ -11031,7 +11267,7 @@ export type UpdateMemberVisibilityData = {
   };
   query: {
     /**
-     * Whether to exclude the member from leaderboard rankings
+     * Whether to leave the member out of workspace activity
      */
     hidden: boolean;
   };
@@ -11046,6 +11282,25 @@ export type UpdateMemberVisibilityResponses = {
 };
 
 export type UpdateMemberVisibilityResponse = UpdateMemberVisibilityResponses[keyof UpdateMemberVisibilityResponses];
+
+export type PrepareMentorSandboxData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/mentor/sandbox';
+};
+
+export type PrepareMentorSandboxResponses = {
+  /**
+   * Accepted; the sandbox starts unless it is already warm or Heph could not answer anyway
+   */
+  202: unknown;
+};
 
 export type ListThreadsData = {
   body?: never;
@@ -11185,27 +11440,6 @@ export type VoteResponses = {
 };
 
 export type VoteResponse = VoteResponses[keyof VoteResponses];
-
-export type UpdateNotificationsData = {
-  body: UpdateWorkspaceNotificationsRequest;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/notifications';
-};
-
-export type UpdateNotificationsResponses = {
-  /**
-   * Workspace updated
-   */
-  200: Workspace;
-};
-
-export type UpdateNotificationsResponse = UpdateNotificationsResponses[keyof UpdateNotificationsResponses];
 
 export type GetMemberOnboardingData = {
   body?: never;
@@ -12029,6 +12263,87 @@ export type GetPracticeProfileOverviewResponses = {
 
 export type GetPracticeProfileOverviewResponse = GetPracticeProfileOverviewResponses[keyof GetPracticeProfileOverviewResponses];
 
+export type ListPracticeProfileReviewRunsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    /**
+     * Zero-based page, at most 100
+     */
+    page?: number;
+    /**
+     * Page size from 1 to 50
+     */
+    size?: number;
+    /**
+     * Restrict to one kind of work, e.g. scm.pull_request
+     */
+    kind?: string;
+    /**
+     * Keep only runs whose newest observation about this developer came after this moment; the bound is exclusive
+     */
+    since?: string;
+  };
+  url: '/workspaces/{workspaceSlug}/practice-profile/review-runs';
+};
+
+export type ListPracticeProfileReviewRunsErrors = {
+  /**
+   * Unknown kind of work or invalid pagination
+   */
+  400: ProblemDetail;
+};
+
+export type ListPracticeProfileReviewRunsError = ListPracticeProfileReviewRunsErrors[keyof ListPracticeProfileReviewRunsErrors];
+
+export type ListPracticeProfileReviewRunsResponses = {
+  /**
+   * Review runs returned
+   */
+  200: ProfileReviewRunsPage;
+};
+
+export type ListPracticeProfileReviewRunsResponse = ListPracticeProfileReviewRunsResponses[keyof ListPracticeProfileReviewRunsResponses];
+
+export type GetPracticeProfileReviewRunData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    /**
+     * The review, as the list names it
+     */
+    reviewId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practice-profile/review-runs/{reviewId}';
+};
+
+export type GetPracticeProfileReviewRunErrors = {
+  /**
+   * No run with anything about the calling developer in this workspace
+   */
+  404: ProblemDetail;
+};
+
+export type GetPracticeProfileReviewRunError = GetPracticeProfileReviewRunErrors[keyof GetPracticeProfileReviewRunErrors];
+
+export type GetPracticeProfileReviewRunResponses = {
+  /**
+   * Review run returned
+   */
+  200: ProfileReviewRunDetail;
+};
+
+export type GetPracticeProfileReviewRunResponse = GetPracticeProfileReviewRunResponses[keyof GetPracticeProfileReviewRunResponses];
+
 export type ListPracticesData = {
   body?: never;
   path: {
@@ -12397,6 +12712,10 @@ export type ReplaceFeedbackResponseErrors = {
    * Delivered feedback not found for the current recipient
    */
   404: unknown;
+  /**
+   * A workspace admin withdrew this feedback
+   */
+  409: unknown;
 };
 
 export type ReplaceFeedbackResponseResponses = {
@@ -12478,28 +12797,6 @@ export type ListObservationsResponses = {
 };
 
 export type ListObservationsResponse = ListObservationsResponses[keyof ListObservationsResponses];
-
-export type GetObservationsForPullRequestData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    prId: number;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/practices/observations/pull-request/{prId}';
-};
-
-export type GetObservationsForPullRequestResponses = {
-  /**
-   * PR observations returned
-   */
-  200: Array<ObservationList>;
-};
-
-export type GetObservationsForPullRequestResponse = GetObservationsForPullRequestResponses[keyof GetObservationsForPullRequestResponses];
 
 export type GetSummaryData = {
   body?: never;
@@ -12842,6 +13139,50 @@ export type ListReviewedPracticesResponses = {
 
 export type ListReviewedPracticesResponse = ListReviewedPracticesResponses[keyof ListReviewedPracticesResponses];
 
+export type ListReviewedWorkReviewRunsData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    /**
+     * Kind of reviewed work, e.g. scm.pull_request
+     */
+    artifactKind: string;
+    artifactId: number;
+  };
+  query?: {
+    /**
+     * Zero-based page, at most 100
+     */
+    page?: number;
+    /**
+     * Page size from 1 to 50
+     */
+    size?: number;
+  };
+  url: '/workspaces/{workspaceSlug}/practices/reviewed-work/{artifactKind}/{artifactId}/review-runs';
+};
+
+export type ListReviewedWorkReviewRunsErrors = {
+  /**
+   * Unknown kind of work or invalid pagination
+   */
+  400: ProblemDetail;
+};
+
+export type ListReviewedWorkReviewRunsError = ListReviewedWorkReviewRunsErrors[keyof ListReviewedWorkReviewRunsErrors];
+
+export type ListReviewedWorkReviewRunsResponses = {
+  /**
+   * Paginated review runs returned
+   */
+  200: PracticeGroupReviewRunsPage;
+};
+
+export type ListReviewedWorkReviewRunsResponse = ListReviewedWorkReviewRunsResponses[keyof ListReviewedWorkReviewRunsResponses];
+
 export type ListPracticeReviewsData = {
   body?: never;
   path: {
@@ -12853,7 +13194,14 @@ export type ListPracticeReviewsData = {
   query?: {
     page?: number;
     size?: number;
-    status?: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED';
+    /**
+     * Statuses to list (repeatable); omit for every status
+     */
+    status?: Array<'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'TIMED_OUT' | 'CANCELLED'>;
+    /**
+     * Result-processing statuses to list (repeatable), such as FAILED for the reviews whose results can be processed again; omit for every review, including those without one
+     */
+    resultProcessing?: Array<'PENDING' | 'DELIVERED' | 'FAILED'>;
     /**
      * Inclusive lower bound on when the review was requested
      */
@@ -12916,8 +13264,12 @@ export type ListPracticeReviewFeedbackData = {
   query?: {
     page?: number;
     size?: number;
+    /**
+     * Sorting strategy. NEWEST and OLDEST order by when the feedback was created; ties by id.
+     */
+    sort?: 'NEWEST' | 'OLDEST';
     deliveryState?: Array<'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED'>;
-    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET'>;
+    suppressionReason?: Array<'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED'>;
     channel?: Array<'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP'>;
     agentJobId?: string;
     /**
@@ -12929,6 +13281,10 @@ export type ListPracticeReviewFeedbackData = {
      */
     artifactId?: number;
     recipientUserId?: number;
+    /**
+     * Practices whose feedback to list (repeatable): feedback bound to an observation of any of them, in any role
+     */
+    practiceSlug?: Array<string>;
     /**
      * Inclusive lower bound
      */
@@ -13034,6 +13390,41 @@ export type DecideFeedbackProposalResponses = {
 
 export type DecideFeedbackProposalResponse = DecideFeedbackProposalResponses[keyof DecideFeedbackProposalResponses];
 
+export type UpdatePracticeReviewFeedbackWithdrawalData = {
+  body: UpdateFeedbackWithdrawalRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    feedbackId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/withdrawal';
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalErrors = {
+  /**
+   * Feedback not found in this workspace
+   */
+  404: ProblemDetail;
+  /**
+   * The feedback is not on a practice page, or is not waiting to be read or shown there
+   */
+  409: ProblemDetail;
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalError = UpdatePracticeReviewFeedbackWithdrawalErrors[keyof UpdatePracticeReviewFeedbackWithdrawalErrors];
+
+export type UpdatePracticeReviewFeedbackWithdrawalResponses = {
+  /**
+   * Feedback detail after the change
+   */
+  200: ReviewFeedbackDetail;
+};
+
+export type UpdatePracticeReviewFeedbackWithdrawalResponse = UpdatePracticeReviewFeedbackWithdrawalResponses[keyof UpdatePracticeReviewFeedbackWithdrawalResponses];
+
 export type ListPracticeReviewObservationsData = {
   body?: never;
   path: {
@@ -13046,7 +13437,7 @@ export type ListPracticeReviewObservationsData = {
     page?: number;
     size?: number;
     /**
-     * Sorting strategy. ACTIONABILITY orders problems from CRITICAL to INFO, then strengths, then not-applicable observations; ties are newest first.
+     * Sorting strategy. ACTIONABILITY orders negative outcomes from CRITICAL to INFO, then positive outcomes, then not-applicable observations; ties are newest first.
      */
     sort?: 'NEWEST' | 'ACTIONABILITY';
     practiceSlug?: Array<string>;
@@ -13054,6 +13445,18 @@ export type ListPracticeReviewObservationsData = {
     assessmentStatus?: Array<'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED'>;
     presence?: Array<'PRESENT' | 'ABSENT'>;
     assessment?: Array<'GOOD' | 'BAD'>;
+    /**
+     * Outcomes to list (repeatable): POSITIVE where a desirable behavior was present or an undesirable one absent, NEGATIVE the other way round. Only assessed observations have an outcome.
+     */
+    outcome?: Array<'POSITIVE' | 'NEGATIVE'>;
+    /**
+     * true for only the observations an admin has marked incorrect and not restored, false for only the others; omit for both
+     */
+    invalidated?: boolean;
+    /**
+     * true for only the observations the developer disputes feedback about, false for only the others; omit for both
+     */
+    disputed?: boolean;
     severity?: Array<'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO'>;
     agentJobId?: string;
     /**
@@ -13129,6 +13532,84 @@ export type GetPracticeReviewObservationResponses = {
 };
 
 export type GetPracticeReviewObservationResponse = GetPracticeReviewObservationResponses[keyof GetPracticeReviewObservationResponses];
+
+export type UpdatePracticeReviewObservationValidityData = {
+  body: UpdateObservationValidityRequest;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    observationId: string;
+  };
+  query?: never;
+  url: '/workspaces/{workspaceSlug}/practices/reviews/observations/{observationId}/validity';
+};
+
+export type UpdatePracticeReviewObservationValidityErrors = {
+  /**
+   * Observation not found in this workspace
+   */
+  404: ProblemDetail;
+  /**
+   * The observation is already in the requested state
+   */
+  409: ProblemDetail;
+};
+
+export type UpdatePracticeReviewObservationValidityError = UpdatePracticeReviewObservationValidityErrors[keyof UpdatePracticeReviewObservationValidityErrors];
+
+export type UpdatePracticeReviewObservationValidityResponses = {
+  /**
+   * Observation detail after the change
+   */
+  200: ReviewObservationDetail;
+};
+
+export type UpdatePracticeReviewObservationValidityResponse = UpdatePracticeReviewObservationValidityResponses[keyof UpdatePracticeReviewObservationValidityResponses];
+
+export type GetPracticeReviewOverviewData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    /**
+     * Inclusive lower bound; defaults to seven days before to. A range spans at most 400 days.
+     */
+    from?: string;
+    /**
+     * Exclusive upper bound; defaults to now
+     */
+    to?: string;
+    /**
+     * The IANA time zone whose midnights start the buckets, such as Europe/Berlin
+     */
+    zone?: string;
+  };
+  url: '/workspaces/{workspaceSlug}/practices/reviews/overview';
+};
+
+export type GetPracticeReviewOverviewErrors = {
+  /**
+   * Invalid range or time zone
+   */
+  400: ProblemDetail;
+};
+
+export type GetPracticeReviewOverviewError = GetPracticeReviewOverviewErrors[keyof GetPracticeReviewOverviewErrors];
+
+export type GetPracticeReviewOverviewResponses = {
+  /**
+   * Practice reviews counted
+   */
+  200: PracticeReviewOverview;
+};
+
+export type GetPracticeReviewOverviewResponse = GetPracticeReviewOverviewResponses[keyof GetPracticeReviewOverviewResponses];
 
 export type ListPracticeStandingsData = {
   body?: never;
@@ -13292,6 +13773,10 @@ export type ListTracedArtifactsErrors = {
    * Unknown artifact kind or invalid pagination
    */
   400: ProblemDetail;
+  /**
+   * Workspace administrator access is required
+   */
+  403: ProblemDetail;
 };
 
 export type ListTracedArtifactsError = ListTracedArtifactsErrors[keyof ListTracedArtifactsErrors];
@@ -13321,13 +13806,18 @@ export type GetArtifactTraceData = {
      */
     artifactId: number;
   };
-  query?: never;
+  query?: {
+    /**
+     * Answer for this review alone: every state, explanation and count is what this review made of the work. Omit it for every review of the work at once, which only a workspace admin may.
+     */
+    reviewId?: string;
+  };
   url: '/workspaces/{workspaceSlug}/practices/trace/{artifactKind}/{artifactId}';
 };
 
 export type GetArtifactTraceErrors = {
   /**
-   * Nothing recorded about this artifact in this workspace
+   * Nothing recorded about this artifact in this workspace, the named review never ran on it, or the caller may not read it
    */
   404: ProblemDetail;
 };
@@ -13342,6 +13832,40 @@ export type GetArtifactTraceResponses = {
 };
 
 export type GetArtifactTraceResponse = GetArtifactTraceResponses[keyof GetArtifactTraceResponses];
+
+export type GetOwnArtifactTraceData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+    artifactKind: string;
+    artifactId: number;
+  };
+  query: {
+    reviewId: string;
+  };
+  url: '/workspaces/{workspaceSlug}/practices/trace/{artifactKind}/{artifactId}/own';
+};
+
+export type GetOwnArtifactTraceErrors = {
+  /**
+   * The caller has no accessible review on this work
+   */
+  404: ProblemDetail;
+};
+
+export type GetOwnArtifactTraceError = GetOwnArtifactTraceErrors[keyof GetOwnArtifactTraceErrors];
+
+export type GetOwnArtifactTraceResponses = {
+  /**
+   * The caller's trace returned
+   */
+  200: ArtifactTrace;
+};
+
+export type GetOwnArtifactTraceResponse = GetOwnArtifactTraceResponses[keyof GetOwnArtifactTraceResponses];
 
 export type DeletePracticeData = {
   body?: never;
@@ -13657,58 +14181,6 @@ export type SubmitProductSurveyResponseResponses = {
   200: unknown;
 };
 
-export type GetUserProfileData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    login: string;
-  };
-  query?: {
-    after?: string;
-    before?: string;
-  };
-  url: '/workspaces/{workspaceSlug}/profile/{login}';
-};
-
-export type GetUserProfileResponses = {
-  /**
-   * OK
-   */
-  200: Profile;
-};
-
-export type GetUserProfileResponse = GetUserProfileResponses[keyof GetUserProfileResponses];
-
-export type GetActivityMonitorData = {
-  body?: never;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-    login: string;
-  };
-  query?: {
-    after?: string;
-    before?: string;
-    repositoryIds?: Array<number>;
-    limit?: number;
-  };
-  url: '/workspaces/{workspaceSlug}/profile/{login}/activity-monitor';
-};
-
-export type GetActivityMonitorResponses = {
-  /**
-   * OK
-   */
-  200: ProfileActivityMonitor;
-};
-
-export type GetActivityMonitorResponse = GetActivityMonitorResponses[keyof GetActivityMonitorResponses];
-
 export type UpdatePublicVisibilityData = {
   body: UpdateWorkspacePublicVisibilityRequest;
   path: {
@@ -13792,27 +14264,6 @@ export type AddRepositoryToMonitorResponses = {
    */
   200: unknown;
 };
-
-export type UpdateScheduleData = {
-  body: UpdateWorkspaceScheduleRequest;
-  path: {
-    /**
-     * Workspace slug
-     */
-    workspaceSlug: string;
-  };
-  query?: never;
-  url: '/workspaces/{workspaceSlug}/schedule';
-};
-
-export type UpdateScheduleResponses = {
-  /**
-   * Workspace updated
-   */
-  200: Workspace;
-};
-
-export type UpdateScheduleResponse = UpdateScheduleResponses[keyof UpdateScheduleResponses];
 
 export type ListSlackChannelsData = {
   body?: never;

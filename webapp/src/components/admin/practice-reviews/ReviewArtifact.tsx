@@ -1,14 +1,13 @@
-import { ExternalLinkIcon } from "lucide-react";
-
 import { cn } from "cn";
 import type { ReviewedWorkRef } from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
-import { artifactKindLabel, artifactKindPluralLabel } from "@/lib/artifact-kinds";
+import { artifactKindNoun } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
 /** The repository and the item, when a repository is recorded: `ls1intum/Hephaestus · #1423`. */
 function qualifiedLabel(reviewedWork: ReviewedWorkRef): string {
-	return [reviewedWork.repositoryName, reviewedWork.label].filter(hasText).join(" · ");
+	return [reviewedWork.container, reviewedWork.label].filter(hasText).join(" · ");
 }
 
 export function reviewArtifactScopeLabel(
@@ -19,13 +18,7 @@ export function reviewArtifactScopeLabel(
 	if (id != null && reviewedWork) {
 		return qualifiedLabel(reviewedWork);
 	}
-	// Lower-cased from the registry rather than spelled out again here: a fifth artifact kind is one
-	// edit to `lib/artifact-kinds.ts` and its ten call sites, and a local copy is the one that would
-	// be missed. Mid-sentence is the only reason the case differs at all.
-	const scope = (
-		id == null ? artifactKindPluralLabel(kind) : artifactKindLabel(kind)
-	).toLowerCase();
-	return `${id == null ? "All" : "One"} ${scope}`;
+	return id == null ? `All ${artifactKindNoun(kind, 2)}` : `One ${artifactKindNoun(kind, 1)}`;
 }
 
 export interface ReviewArtifactProps {
@@ -64,23 +57,13 @@ export function ReviewArtifactLink({ reviewedWork, className }: ReviewArtifactPr
 	}
 	const Icon = reviewedWorkIcon(reviewedWork.kind, reviewedWork.provider);
 	return (
-		<a
+		<InlineLink
 			href={reviewedWork.url}
-			target="_blank"
-			rel="noopener noreferrer"
-			className={cn(
-				"group relative inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-sm",
-				className,
-			)}
+			external
+			className={cn("relative inline-flex max-w-full min-w-0 items-center gap-1.5", className)}
 		>
 			<Icon className="size-3.5 shrink-0" aria-hidden />
-			{/* `group-hover`, not `hover`, so the affordance answers the whole link — and it is on the
-			    label alone, so it can never reach a title rendered beside it. */}
-			<span className="min-w-0 break-words group-hover:underline">
-				{qualifiedLabel(reviewedWork)}
-			</span>
-			<ExternalLinkIcon className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-			<span className="sr-only"> (opens in a new tab)</span>
-		</a>
+			<span className="min-w-0 break-words">{qualifiedLabel(reviewedWork)}</span>
+		</InlineLink>
 	);
 }

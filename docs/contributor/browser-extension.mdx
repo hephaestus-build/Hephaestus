@@ -136,7 +136,7 @@ server's allowlist turns an id into one callback and one CORS origin, which rest
 may return, not which package is running. The controls are PKCE with no client secret, the exact
 redirect, and the one-minute single-use handoff. Which packages users may run is managed distribution,
 outside this design. The
-sign-in handoff is [ADR 0045](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0045-installed-clients-sign-in-with-a-pkce-handoff.md);
+sign-in handoff is [ADR 0048](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0048-installed-clients-sign-in-with-a-pkce-handoff.md);
 the flow is in `docs/auth-architecture.md`.
 
 ### Server surface
@@ -150,15 +150,14 @@ the flow is in `docs/auth-architecture.md`.
   handle and a permalink when one was recorded, and never a body. The worker counts one comment per
   handle, keeps the handles to itself, and links only a permalink that is an anchor on the work's own
   pages. This is what the report shows first.
-- Other reads reuse existing endpoints: the artifact trace, and the reader's own observations filtered
-  by the exact `artifactKind` and `artifactId`, asked for when the report opens. The worker checks
-  every returned record is about the resolved work, and refuses a list that is not. The extension
-  reads no feedback body, no other developer's records and no run: those are the web app's.
-  Each trace occurrence carries its linked review's current coarse `reviewState`, from the existing
-  workspace-scoped lookup. This drives activity and polling even when an earlier review's observations
-  still determine the practice's outcome; timestamps never stand in for a running review.
+- Other reads reuse existing endpoints: the reader's own reviewed-work runs, a trace named by
+  the latest own review id through `getOwnArtifactTrace`, and their observations filtered by the exact `artifactKind` and
+  `artifactId`, asked for when the report opens. The worker checks every returned record is about
+  the resolved work, and refuses a list that is not. Admins use the same own-reader projection.
+  A missing own run or a refused trace is unavailable, not evidence that nobody reviewed the work.
+  The extension reads no feedback body or other developer's records; those are the web app's.
 - Requesting a review uses the existing endpoint, only from the confirmation window; it is the only
-  change the extension makes. Links point to the work's review activity and, for a workspace admin,
+  change the extension makes. Links point to the reader's feedback page and, for a workspace admin,
   its reviewed-work output, where runs are cancelled or retried.
 
 ### Shared vocabulary

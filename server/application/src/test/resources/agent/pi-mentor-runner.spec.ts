@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
 	isFetchContextKey,
@@ -27,12 +28,31 @@ void test("mentor exposes only read and inline-rendering tools", () => {
 	assert.deepEqual(MENTOR_TOOL_NAMES, ["fetch_context", "link_observation"]);
 });
 
-void test("fetch_context admits canonical keys and one pull request by artifactId, nothing else", () => {
+void test("fetch_context admits canonical keys and one item by its canonical id, nothing else", () => {
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness.json"), true);
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness/42.json"), true);
 	assert.equal(isFetchContextKey("merge_readiness.json"), false);
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness/../user.json"), false);
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness/42.json.bak"), false);
+	assert.equal(isFetchContextKey("inputs/context/merge_readiness/!9.json"), false);
+	const observation = "0b7e1c9a-3f5d-4a8e-9c21-6d4f8e2a1b3c";
+	assert.equal(isFetchContextKey(`inputs/context/observations_history/${observation}.json`), true);
+	assert.equal(
+		isFetchContextKey(`inputs/context/observations_history/${observation.toUpperCase()}.json`),
+		false,
+	);
+	assert.equal(
+		isFetchContextKey(
+			`inputs/context/observations_history/${observation.replaceAll("-", "")}.json`,
+		),
+		false,
+	);
+	assert.equal(
+		isFetchContextKey(`inputs/context/observations_history/${observation}.json.bak`),
+		false,
+	);
+	assert.equal(isFetchContextKey("inputs/context/observations_history/../user.json"), false);
+	assert.equal(isFetchContextKey("inputs/context/observations_history/42.json"), false);
 });
 
 const SESSIONS_TMPDIR = mkdtempSync(path.join(tmpdir(), "pi-mentor-runner-spec-"));
@@ -145,6 +165,7 @@ interface RunnerHandle {
 	reader: Reader;
 	send: (request: MentorRequest) => void;
 	diagnose: () => void;
+	stderr: () => string;
 }
 
 function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHandle {
@@ -180,9 +201,17 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 				) {
 					continue;
 				}
+				if (
+					env.MENTOR_RUNNER_STUB_ABORT_REJECTS === "1" &&
+					/^abort during watchdog failed; the runtime takes no further turn: stub: abort failed$/u.test(
+						message,
+					)
+				) {
+					continue;
+				}
 				assert.match(
 					message,
-					/^(?:runtime initialised|shutdown requested — exiting|bound thread [\da-f-]+ → .+\.jsonl|prompt resolved: thread=[\da-f-]+)$/u,
+					/^(?:runtime initialised|shutdown requested — exiting|bound thread [\da-f-]+ → .+\.jsonl|restored session for thread [\da-f-]+|prompt resolved: thread=[\da-f-]+)$/u,
 				);
 			}
 		} catch (error) {
@@ -193,7 +222,13 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 	const send = (request: MentorRequest) => {
 		child.stdin.write(`${JSON.stringify(request)}\n`);
 	};
-	return { child, reader, send, diagnose: () => t.diagnostic(`Runner stderr:\n${stderr}`) };
+	return {
+		child,
+		reader,
+		send,
+		diagnose: () => t.diagnostic(`Runner stderr:\n${stderr}`),
+		stderr: () => stderr,
+	};
 }
 
 async function shutdown({ child, send }: RunnerHandle): Promise<void> {
@@ -244,6 +279,87 @@ void test("hello handshake returns protocolVersion 1", async (t) => {
 		const result = await readResult(runner.reader, "h1");
 		assert.ok("protocolVersion" in result, "hello must answer with a protocolVersion");
 		assert.equal(result.protocolVersion, 1);
+	} catch (error) {
+		runner.diagnose();
+		throw error;
+	} finally {
+		await shutdown(runner);
+	}
+});
+
+void test("a malformed or oversized evidence receipt is refused before a turn starts", async (t) => {
+	const runner = spawnRunner(t);
+	const threadId = "44444444-2222-3333-4444-555555555555";
+	try {
+		await readReady(runner.reader);
+		runner.send({ jsonrpc: "2.0", id: "open", method: "open_thread", params: { threadId } });
+		await readResult(runner.reader, "open");
+		const { stdin } = runner.child;
+		assert.ok(stdin);
+		for (const currentEvidence of [{ wrongType: true }, "x".repeat(40_001)]) {
+			stdin.write(
+				`${JSON.stringify({
+					jsonrpc: "2.0",
+					id: "bad",
+					method: "prompt",
+					params: { threadId, text: "hello", currentEvidence },
+				})}\n`,
+			);
+			const error = await readError(runner.reader, "bad");
+			assert.equal(error.code, -32_600);
+		}
+		runner.send({
+			jsonrpc: "2.0",
+			id: "good",
+			method: "prompt",
+			params: { threadId, text: "hello" },
+		});
+		assert.deepEqual(await readResult(runner.reader, "good"), { accepted: true });
+		await readUntil(runner.reader, (frame) => eventType(frame) === "agent_end");
+	} finally {
+		await shutdown(runner);
+	}
+});
+
+void test("starts the runtime with the process, before any request", async (t) => {
+	const runner = spawnRunner(t);
+	try {
+		await readReady(runner.reader);
+		for (let waited = 0; !runner.stderr().includes("runtime initialised"); waited += 20) {
+			assert.ok(waited < 5000, "the runtime never started without a request");
+			await delay(20);
+		}
+	} catch (error) {
+		runner.diagnose();
+		throw error;
+	} finally {
+		await shutdown(runner);
+	}
+});
+
+void test("open_thread restores a saved session only where the runner holds none", async (t) => {
+	const runner = spawnRunner(t);
+	const threadId = "33333333-4444-5555-6666-777777777777";
+	const sessionPath = path.join(SESSIONS_TMPDIR, `${threadId}.jsonl`);
+	try {
+		await readReady(runner.reader);
+		runner.send({
+			jsonrpc: "2.0",
+			id: "o1",
+			method: "open_thread",
+			params: { threadId, session: '{"type":"session"}\n' },
+		});
+		await readResult(runner.reader, "o1");
+		assert.equal(readFileSync(sessionPath, "utf8"), '{"type":"session"}\n');
+
+		runner.send({
+			jsonrpc: "2.0",
+			id: "o2",
+			method: "open_thread",
+			params: { threadId, session: '{"type":"older"}\n' },
+		});
+		await readResult(runner.reader, "o2");
+		assert.equal(readFileSync(sessionPath, "utf8"), '{"type":"session"}\n');
 	} catch (error) {
 		runner.diagnose();
 		throw error;
@@ -540,6 +656,43 @@ void test("watchdog cross-thread rebind: no event leakage from concurrently-boun
 			[],
 			`thread B received events after thread A rebound: ${summarise(postRebind)}`,
 		);
+	} catch (error) {
+		runner.diagnose();
+		throw error;
+	} finally {
+		await shutdown(runner);
+	}
+});
+
+void test("a timed-out turn whose abort rejects fails once and leaves no runtime for another turn", async (t) => {
+	const threadId = "55555555-5555-5555-5555-555555555555";
+	const runner = spawnRunner(t, {
+		MENTOR_RUNNER_STUB_DELAY_MS: "400",
+		MENTOR_TURN_BUDGET_MS: "50",
+		MENTOR_TURN_GRACE_MS: "30",
+		MENTOR_RUNNER_STUB_ABORT_REJECTS: "1",
+	});
+	try {
+		await readReady(runner.reader);
+		runner.send({ jsonrpc: "2.0", id: "o", method: "open_thread", params: { threadId } });
+		await readResult(runner.reader, "o");
+		runner.send({ jsonrpc: "2.0", id: "p1", method: "prompt", params: { threadId, text: "go" } });
+		await readResult(runner.reader, "p1");
+
+		await readUntil(runner.reader, (f) => eventType(f) === "turn_watchdog_fired");
+		const end = await readUntil(runner.reader, (f) => eventType(f) === "agent_end");
+		assert.ok(isEventNotification(end));
+		assert.deepEqual(end.params.event, { type: "agent_end", messages: [], willRetry: false });
+
+		// A rejected abort proves nothing about Pi having stopped: Java discards a runner answering -32003.
+		runner.send({
+			jsonrpc: "2.0",
+			id: "p2",
+			method: "prompt",
+			params: { threadId, text: "again" },
+		});
+		const refused = await readError(runner.reader, "p2");
+		assert.equal(refused.code, -32_003);
 	} catch (error) {
 		runner.diagnose();
 		throw error;

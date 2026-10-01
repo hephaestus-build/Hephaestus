@@ -21,6 +21,16 @@ public interface InlineFeedbackChannel {
     void clearStaleFeedback(SummaryChannel.FeedbackTarget target, String marker);
 
     /**
+     * The items that already have a note on the target, matched by delivery key, reported as
+     * {@code PRESERVED_EXISTING}, without writing anything. {@code null} when the channel cannot tell, so a caller
+     * that may not post again never reads an unanswered lookup as proof that nothing was posted.
+     */
+    default @Nullable List<DeliveredSignal> findPosted(
+            SummaryChannel.FeedbackTarget target, List<InlineFeedback> feedback, boolean immutablePackage) {
+        return null;
+    }
+
+    /**
      * One piece of feedback to post inline. {@code deliveryKey} carries the exact delivery identity so a retry can be matched
      * back to its placement; it is {@code null} when the caller has no key.
      */

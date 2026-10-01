@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.workspace.adapter;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
@@ -80,6 +81,14 @@ public class WorkspaceNatsSubscriptionProvider implements NatsSubscriptionProvid
         if (organizationLogin != null && !organizationLogin.isBlank()) {
             subjects.add(ConsumerSubjectMath.organizationFilter(streamName, organizationLogin));
         }
+        // Everything the connection's own hook delivers, including projects not monitored yet; admission decides.
+        if (scmKind.get() == IntegrationKind.GITLAB) {
+            connectionService
+                    .findActive(workspace.getId(), IntegrationKind.GITLAB)
+                    .map(Connection::getId)
+                    .ifPresent(connectionId ->
+                            subjects.add(ConsumerSubjectMath.connectionFilter(streamName, connectionId)));
+        }
         if (!subjects.isEmpty()) {
             out.add(new StreamSubscription(streamName, subjects));
         }
@@ -120,7 +129,7 @@ public class WorkspaceNatsSubscriptionProvider implements NatsSubscriptionProvid
             return;
         }
         connectionService
-                .findSlackNotificationConfig(workspace.getId())
+                .findSlackConfig(workspace.getId())
                 .map(ConnectionConfig.SlackConfig::teamId)
                 .filter(teamId -> teamId != null && !teamId.isBlank())
                 .ifPresent(teamId -> out.add(

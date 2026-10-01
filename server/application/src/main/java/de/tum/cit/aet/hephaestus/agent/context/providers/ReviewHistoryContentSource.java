@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.agent.context.StagedArtifactNames;
+import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
@@ -17,26 +18,31 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.FeedbackObservationVisibility;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackWithdrawalRepository;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -44,13 +50,9 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Stages the bounded record of prior observations, delivered feedback and prepared feedback for the
- * developer. Recorded observations retain their own evidence and outcome; a shared practice or file
- * locates work but does not establish that two observations describe the same behavior.
- *
- * <p>Each selected file is written even for an empty history, distinguishing a read empty record from
- * unavailable evidence. History is partial and can guide inspection; current observations must cite
- * the current reviewed work. Developer reactions remain outside the review's evidence context.
+ * Projects visible observations and feedback through the shared currentness, withdrawal and consent checks.
+ * History guides inspection; it does not establish that two observations describe the same behavior.
+ * Developer reactions are not review evidence.
  */
 @Component
 @Order(500)
@@ -65,28 +67,13 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     static final String FEEDBACK_FILE = SandboxLayout.HISTORY_PREFIX + "feedback.json";
     static final String PREPARED_FILE = SandboxLayout.HISTORY_PREFIX + "prepared.json";
 
-    /** Exposure bounds, not cost bounds — they cap how much of a contributor's record can anchor a model. */
-    private static final int LOOKBACK_DAYS = 90;
-
-    private static final int MAX_OBSERVATIONS = 50;
-
-    /**
-     * Caps each practice so repeated observations cannot crowd other practices out of the history.
-     */
-    static final int MAX_OBSERVATIONS_PER_PRACTICE = 3;
-
-    private static final int MAX_FEEDBACK = 30;
-
-    /**
-     * Queued messages staged for supersession. Smaller than the delivered window because it is not a
-     * record: a recipient holding more than this many unread messages has a delivery problem, not a
-     * history to reason over.
-     */
-    private static final int MAX_PREPARED = 20;
-
     private final ObservationRepository observationRepository;
+
     private final FeedbackRepository feedbackRepository;
+    private final FeedbackObservationRepository feedbackObservationRepository;
+    private final FeedbackWithdrawalRepository withdrawalRepository;
     private final ObservationVisibilityPolicy visibilityPolicy;
+    private final ConversationSourceLiveness conversationLiveness;
     private final PullRequestRepository pullRequestRepository;
     private final IssueRepository issueRepository;
     private final StagedArtifactNames artifactNames;
@@ -95,14 +82,20 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     public ReviewHistoryContentSource(
             ObservationRepository observationRepository,
             FeedbackRepository feedbackRepository,
+            FeedbackObservationRepository feedbackObservationRepository,
+            FeedbackWithdrawalRepository withdrawalRepository,
             ObservationVisibilityPolicy visibilityPolicy,
+            ConversationSourceLiveness conversationLiveness,
             PullRequestRepository pullRequestRepository,
             IssueRepository issueRepository,
             StagedArtifactNames artifactNames,
             ObjectMapper objectMapper) {
         this.observationRepository = observationRepository;
         this.feedbackRepository = feedbackRepository;
+        this.feedbackObservationRepository = feedbackObservationRepository;
+        this.withdrawalRepository = withdrawalRepository;
         this.visibilityPolicy = visibilityPolicy;
+        this.conversationLiveness = conversationLiveness;
         this.pullRequestRepository = pullRequestRepository;
         this.issueRepository = issueRepository;
         this.artifactNames = artifactNames;
@@ -120,7 +113,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         return FEEDBACK_FILE.equals(path) || PREPARED_FILE.equals(path) ? FEEDBACK_HISTORY : OBSERVATION_HISTORY;
     }
 
-    /** Owns {@code inputs/history/}, not the per-event {@code inputs/context/} namespace. */
+    /** Owns the normalized {@code inputs/history/} view used by readiness and composition. */
     @Override
     public boolean ownsPath(String path) {
         return path.startsWith(SandboxLayout.HISTORY_PREFIX);
@@ -160,7 +153,6 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             // Unavailable, not empty: there is no person to read a history for, so nothing was read.
             return absent(selectedKinds, new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND));
         }
-        Instant since = Instant.now().minus(LOOKBACK_DAYS, ChronoUnit.DAYS);
 
         // Each kind is queried and reported only when selected — the builder rejects completeness or
         // content-state facts about a source that wasn't asked for.
@@ -173,12 +165,10 @@ public class ReviewHistoryContentSource implements EvidenceSource {
 
         if (selectedKinds.contains(OBSERVATION_HISTORY)) {
             List<Observation> observations =
-                    visibleObservations(workspaceId, subjectUserId, since, sourceJobExcludedFromHistory(job));
+                    visibleObservations(workspaceId, subjectUserId, sourceJobExcludedFromHistory(job));
             observationCount = observations.size();
-            files.put(
-                    OBSERVATIONS_FILE,
-                    serialize(observationsPayload(workspaceId, observations, since), OBSERVATIONS_FILE));
-            completeness.put(OBSERVATION_HISTORY, SourceCompleteness.PARTIAL);
+            files.put(OBSERVATIONS_FILE, serialize(observationsPayload(workspaceId, observations), OBSERVATIONS_FILE));
+            completeness.put(OBSERVATION_HISTORY, SourceCompleteness.COMPLETE);
             // Reported explicitly rather than inferred from file presence: the file is always written,
             // so "there is a file" would wrongly answer NON_EMPTY for a person with no history.
             contentStates.put(
@@ -187,15 +177,23 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         }
 
         if (selectedKinds.contains(FEEDBACK_HISTORY)) {
-            List<Feedback> delivered = feedbackRepository.findRecentDeliveredForRecipient(
-                    workspaceId, subjectUserId, since, PageRequest.of(0, MAX_FEEDBACK));
+            List<Feedback> deliveredRows = feedbackRepository.findDeliveredForPersonHistory(workspaceId, subjectUserId);
+            List<Feedback> queuedRows = feedbackRepository.findPreparedForRecipient(
+                    workspaceId, subjectUserId, org.springframework.data.domain.Pageable.unpaged());
+            Map<UUID, ReviewClaimCurrentness> shown = shownFeedback(workspaceId, deliveredRows, queuedRows);
+            List<Feedback> delivered = deliveredRows.stream()
+                    .filter(f -> shown.containsKey(f.getId()))
+                    .toList();
+            List<Feedback> queued = queuedRows.stream()
+                    .filter(f -> shown.containsKey(f.getId()))
+                    .toList();
+            Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(workspaceId, shown.keySet());
             feedbackCount = delivered.size();
-            files.put(FEEDBACK_FILE, serialize(feedbackPayload(workspaceId, delivered, since), FEEDBACK_FILE));
-            List<Feedback> queued = feedbackRepository.findPreparedForRecipient(
-                    workspaceId, subjectUserId, PageRequest.of(0, MAX_PREPARED));
+            files.put(
+                    FEEDBACK_FILE, serialize(feedbackPayload(workspaceId, delivered, shown, withdrawn), FEEDBACK_FILE));
             preparedCount = queued.size();
-            files.put(PREPARED_FILE, serialize(preparedPayload(workspaceId, queued), PREPARED_FILE));
-            completeness.put(FEEDBACK_HISTORY, SourceCompleteness.PARTIAL);
+            files.put(PREPARED_FILE, serialize(preparedPayload(workspaceId, queued, shown, withdrawn), PREPARED_FILE));
+            completeness.put(FEEDBACK_HISTORY, SourceCompleteness.COMPLETE);
             // Reported off what has been delivered, not off the queue: the kind is "what was said to this
             // person", and a full queue with nothing delivered is still an empty record of having spoken.
             contentStates.put(
@@ -213,26 +211,175 @@ public class ReviewHistoryContentSource implements EvidenceSource {
                 files, Map.copyOf(completeness), Map.of(), Map.of(), Map.of(), Map.copyOf(contentStates));
     }
 
-    private List<Observation> visibleObservations(
-            long workspaceId, Long subjectUserId, Instant since, @Nullable UUID excludedJobId) {
-        List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                subjectUserId,
-                workspaceId,
-                since,
-                List.of(AssessmentStatus.ASSESSED.name()),
-                PageRequest.of(0, MAX_OBSERVATIONS));
-        Set<UUID> visible =
-                visibilityPolicy.permitsAll(workspaceId, recent, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
-        Map<String, Integer> perPractice = new HashMap<>();
-        return recent.stream()
-                .filter(o -> visible.contains(o.getId()))
+    /** Full file projection; both readers use the same visibility and withdrawal checks. */
+    public void renderPersonHistory(
+            long workspaceId,
+            long personId,
+            Set<SourceKind> selectedKinds,
+            UUID excludedJobId,
+            java.util.function.Consumer<ObjectNode> observations,
+            java.util.function.Consumer<ObjectNode> feedback) {
+        if (selectedKinds.contains(OBSERVATION_HISTORY)) {
+            List<Observation> rows = authorizeObservations(
+                    workspaceId, observationRepository.findForPersonHistory(personId, workspaceId), excludedJobId);
+            var items = observationsPayload(workspaceId, rows).path("observations");
+            for (int i = 0; i < rows.size(); i++) {
+                ObjectNode record = (ObjectNode) items.get(i);
+                record.put("id", rows.get(i).getId().toString());
+                record.put("synced_at", rows.get(i).getObservedAt().toString());
+                observations.accept(record);
+            }
+        }
+        if (selectedKinds.contains(FEEDBACK_HISTORY)) {
+            List<Feedback> rows = feedbackRepository.findDeliveredForPersonHistory(workspaceId, personId);
+            Map<UUID, ReviewClaimCurrentness> shown = shownFeedback(workspaceId, rows, List.of());
+            List<Feedback> permitted =
+                    rows.stream().filter(row -> shown.containsKey(row.getId())).toList();
+            Set<UUID> withdrawn = withdrawalRepository.withdrawnAmong(workspaceId, shown.keySet());
+            var items =
+                    feedbackPayload(workspaceId, permitted, shown, withdrawn).path("feedback");
+            for (int i = 0; i < permitted.size(); i++) {
+                ObjectNode record = (ObjectNode) items.get(i);
+                record.put("id", permitted.get(i).getId().toString());
+                record.put("synced_at", permitted.get(i).getCreatedAt().toString());
+                feedback.accept(record);
+            }
+        }
+    }
+
+    /** Admission and later disclosure use the same observation visibility and feedback withdrawal decisions. */
+    public boolean permitsHistoryRecord(long workspaceId, String type, UUID id, SourceUsePurpose purpose) {
+        if (type.equals("observation")) {
+            var row = observationRepository
+                    .findByIdAndWorkspaceId(id, workspaceId)
+                    .orElse(null);
+            return row != null
+                    && !authorizeObservations(workspaceId, List.of(row), null, purpose)
+                            .isEmpty();
+        }
+        if (!type.equals("feedback")) return false;
+        var row = feedbackRepository.findByIdAndWorkspaceId(id, workspaceId).orElse(null);
+        if (row == null
+                || row.getDeliveryState() != FeedbackDeliveryState.DELIVERED
+                || withdrawalRepository.withdrawnAmong(workspaceId, Set.of(id)).contains(id)) return false;
+        return shownFeedback(workspaceId, List.of(row), List.of(), purpose).get(id) == ReviewClaimCurrentness.CURRENT;
+    }
+
+    private List<Observation> visibleObservations(long workspaceId, Long subjectUserId, @Nullable UUID excludedJobId) {
+        return authorizeObservations(
+                workspaceId, observationRepository.findForPersonHistory(subjectUserId, workspaceId), excludedJobId);
+    }
+
+    private List<Observation> authorizeObservations(
+            long workspaceId, List<Observation> recent, @Nullable UUID excludedJobId) {
+        return authorizeObservations(workspaceId, recent, excludedJobId, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+    }
+
+    private List<Observation> authorizeObservations(
+            long workspaceId, List<Observation> recent, @Nullable UUID excludedJobId, SourceUsePurpose purpose) {
+        Set<UUID> visible = visibilityPolicy.permitsAll(workspaceId, recent, purpose);
+        List<Observation> authorized =
+                recent.stream().filter(o -> visible.contains(o.getId())).toList();
+        Set<Long> activeThreads =
+                activeThreads(workspaceId, authorized.stream().map(ReviewHistoryContentSource::referenceOf));
+        return authorized.stream()
+                .filter(o -> live(referenceOf(o), activeThreads))
                 // Composition receives the current observations separately, with durable ids. Counting them
                 // again as history would turn a first occurrence into an apparent recurrence.
                 .filter(o -> excludedJobId == null || !excludedJobId.equals(o.getAgentJobId()))
-                // Newest first, so the ones a practice keeps are its most recent.
-                .filter(o ->
-                        perPractice.merge(o.getPractice().getSlug(), 1, Integer::sum) <= MAX_OBSERVATIONS_PER_PRACTICE)
                 .toList();
+    }
+
+    /**
+     * The feedback this review may read, as the developer's own surfaces decide it: every observation it is
+     * bound to may be shown. A row whose evidence is no longer current keeps its record but not its words, which
+     * describe work as it was and are not evidence about the work as it is.
+     */
+    private Map<UUID, ReviewClaimCurrentness> shownFeedback(
+            long workspaceId, List<Feedback> delivered, List<Feedback> queued) {
+        return shownFeedback(workspaceId, delivered, queued, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+    }
+
+    private Map<UUID, ReviewClaimCurrentness> shownFeedback(
+            long workspaceId, List<Feedback> delivered, List<Feedback> queued, SourceUsePurpose purpose) {
+        List<UUID> ids = Stream.concat(delivered.stream(), queued.stream())
+                .map(Feedback::getId)
+                .toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        List<FeedbackObservationVisibility> bindings =
+                feedbackObservationRepository.findForVisibility(workspaceId, ids);
+        Set<UUID> visible = new HashSet<>(visibilityPolicy.permitsShown(
+                workspaceId,
+                bindings.stream()
+                        .map(FeedbackObservationVisibility::getObservation)
+                        .toList(),
+                purpose));
+        Set<Long> activeThreads = activeThreads(
+                workspaceId,
+                Stream.concat(
+                        Stream.concat(delivered.stream(), queued.stream()).map(ReviewHistoryContentSource::referenceOf),
+                        bindings.stream()
+                                .map(FeedbackObservationVisibility::getObservation)
+                                .map(ReviewHistoryContentSource::referenceOf)));
+        // An observation from a conversation whose channel no longer consents withholds every row it is bound to.
+        bindings.stream()
+                .map(FeedbackObservationVisibility::getObservation)
+                .filter(o -> !live(referenceOf(o), activeThreads))
+                .forEach(o -> visible.remove(o.getId()));
+        Map<UUID, ReviewClaimCurrentness> shown = new HashMap<>(FeedbackObservationVisibility.shown(bindings, visible));
+        Stream.concat(delivered.stream(), queued.stream())
+                .filter(f -> !live(referenceOf(f), activeThreads))
+                .forEach(f -> shown.remove(f.getId()));
+        return shown;
+    }
+
+    private Set<Long> activeThreads(long workspaceId, Stream<StagedArtifactNames.Reference> artifacts) {
+        List<Long> threadIds = artifacts
+                .filter(a -> ArtifactKinds.CONVERSATION_THREAD.equals(a.kind()))
+                .map(StagedArtifactNames.Reference::id)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        return conversationLiveness.activeThreadIds(workspaceId, threadIds);
+    }
+
+    /**
+     * Anything but a conversation stands as it is, unanchored feedback included; a conversation only while its channel
+     * consents, and never without the thread it came from.
+     */
+    private static boolean live(StagedArtifactNames.Reference artifact, Set<Long> activeThreads) {
+        if (!ArtifactKinds.CONVERSATION_THREAD.equals(artifact.kind())) {
+            return true;
+        }
+        Long threadId = artifact.id();
+        return threadId != null && activeThreads.contains(threadId);
+    }
+
+    private static StagedArtifactNames.Reference referenceOf(Observation observation) {
+        return new StagedArtifactNames.Reference(observation.getArtifactKind(), observation.getArtifactId());
+    }
+
+    private static StagedArtifactNames.Reference referenceOf(Feedback feedback) {
+        return new StagedArtifactNames.Reference(feedback.getArtifactKind(), feedback.getArtifactId());
+    }
+
+    /**
+     * The words of a row whose evidence is still current; a stale row is staged without them. So is a row a
+     * workspace admin withdrew: its evidence may be sound while its words are not, so only the fact is staged.
+     */
+    private static void putBody(
+            ObjectNode node, Feedback f, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
+        ReviewClaimCurrentness currentness = Objects.requireNonNull(shown.get(f.getId()));
+        node.put("recordedClaimCurrentness", currentness.name());
+        boolean isWithdrawn = withdrawn.contains(f.getId());
+        if (isWithdrawn) {
+            node.put("withdrawn", true);
+        }
+        if (currentness == ReviewClaimCurrentness.CURRENT && !isWithdrawn) {
+            node.put("body", f.getBody());
+        }
     }
 
     private static @Nullable UUID sourceJobExcludedFromHistory(AgentJob job) {
@@ -257,14 +404,12 @@ public class ReviewHistoryContentSource implements EvidenceSource {
      * opaque string is picking blind — most visibly on the conversation lane, where a run that composed
      * nothing leaves the body null and the slug is all there is to recognise the entry by.
      */
-    private ObjectNode preparedPayload(long workspaceId, List<Feedback> queued) {
+    private ObjectNode preparedPayload(
+            long workspaceId, List<Feedback> queued, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("limit", MAX_PREPARED);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
-                queued.stream()
-                        .map(f -> new StagedArtifactNames.Reference(f.getArtifactKind(), f.getArtifactId()))
-                        .toList());
+                queued.stream().map(ReviewHistoryContentSource::referenceOf).toList());
         Map<UUID, String> practices = queued.isEmpty()
                 ? Map.of()
                 : feedbackRepository
@@ -290,20 +435,17 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             // situation, coaching goal, evidence summary and success signal, and the turn itself is still written live.
             // Null when the run that queued it composed nothing,
             // which leaves only the fact that something is queued.
-            node.put("body", f.getBody());
+            putBody(node, f, shown, withdrawn);
         }
         return root;
     }
 
-    private ObjectNode observationsPayload(long workspaceId, List<Observation> observations, Instant since) {
+    private ObjectNode observationsPayload(long workspaceId, List<Observation> observations) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("since", since.toString());
-        root.put("limit", MAX_OBSERVATIONS);
-        root.put("perPracticeLimit", MAX_OBSERVATIONS_PER_PRACTICE);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
                 observations.stream()
-                        .map(o -> new StagedArtifactNames.Reference(o.getArtifactKind(), o.getArtifactId()))
+                        .map(ReviewHistoryContentSource::referenceOf)
                         .toList());
         ArrayNode items = root.putArray("observations");
         for (Observation o : observations) {
@@ -329,15 +471,12 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         return root;
     }
 
-    private ObjectNode feedbackPayload(long workspaceId, List<Feedback> delivered, Instant since) {
+    private ObjectNode feedbackPayload(
+            long workspaceId, List<Feedback> delivered, Map<UUID, ReviewClaimCurrentness> shown, Set<UUID> withdrawn) {
         ObjectNode root = objectMapper.createObjectNode();
-        root.put("since", since.toString());
-        root.put("limit", MAX_FEEDBACK);
         StagedArtifactNames.Resolved names = artifactNames.resolve(
                 workspaceId,
-                delivered.stream()
-                        .map(f -> new StagedArtifactNames.Reference(f.getArtifactKind(), f.getArtifactId()))
-                        .toList());
+                delivered.stream().map(ReviewHistoryContentSource::referenceOf).toList());
         ArrayNode items = root.putArray("feedback");
         for (Feedback f : delivered) {
             ObjectNode node = items.addObject();
@@ -346,7 +485,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
             node.put(
                     "deliveredAt",
                     f.getDeliveredAt() == null ? null : f.getDeliveredAt().toString());
-            node.put("body", f.getBody());
+            putBody(node, f, shown, withdrawn);
         }
         return root;
     }

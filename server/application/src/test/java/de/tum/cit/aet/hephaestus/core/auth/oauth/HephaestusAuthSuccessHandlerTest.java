@@ -22,12 +22,15 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.http.Cookie;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Assertions;
@@ -46,6 +49,7 @@ import org.springframework.security.oauth2.client.authentication.OAuth2Authentic
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * The ADR-0017 account-status gate in {@link HephaestusAuthSuccessHandler}: a SUSPENDED / DELETING /
@@ -283,7 +287,8 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
 
     @Test
     void linkModeAsksForAFreshSignInWhenTheSessionIsStale() throws Exception {
-        when(authIntentCookie.read(any())).thenReturn(AuthIntentCookie.Intent.link(42L, "/settings"));
+        String onboarding = "/w/intro/onboarding?returnTo=%2Fw%2Fintro%2Factivity&step=accounts";
+        when(authIntentCookie.read(any())).thenReturn(AuthIntentCookie.Intent.link(42L, onboarding));
         when(identityLinkAuthentication.resolveAuthenticatedAccountId(any()))
                 .thenThrow(new StepUpRequiredException(Duration.ofMinutes(5)));
 
@@ -292,7 +297,13 @@ class HephaestusAuthSuccessHandlerTest extends BaseUnitTest {
 
         verify(provisioningService, never()).resolveOrProvision(any(), any(), any(), any());
         assertThat(response.getCookie(COOKIE_NAME)).isNull();
-        assertThat(response.getRedirectedUrl()).isEqualTo("/auth/error?code=step_up_required");
+        var page = UriComponentsBuilder.fromUriString(Objects.requireNonNull(response.getRedirectedUrl()))
+                .build();
+        assertThat(page.getPath()).isEqualTo("/auth/error");
+        assertThat(page.getQueryParams().getFirst("code")).isEqualTo("step_up_required");
+        assertThat(URLDecoder.decode(
+                        Objects.requireNonNull(page.getQueryParams().getFirst("returnTo")), StandardCharsets.UTF_8))
+                .isEqualTo(onboarding);
     }
 
     @Test

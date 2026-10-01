@@ -23,7 +23,7 @@ import org.springframework.web.reactive.function.client.WebClient;
  * immediately revokes the old token and returns a new one.
  *
  * <p><b>Token family security:</b> GitLab tracks token families. If a revoked
- * token is used after rotation, GitLab kills <em>all</em> tokens in the family.
+ * token is used to attempt another rotation, GitLab revokes <em>all</em> tokens in the family.
  * This makes it critical to persist the new token immediately after rotation.
  *
  * @see <a href="https://docs.gitlab.com/ee/api/personal_access_tokens.html#rotate-a-personal-access-token">GitLab PAT Rotation</a>
@@ -86,6 +86,9 @@ public class GitLabTokenRotationClient {
         }
         long id = idValue.longValue();
         String name = (String) Objects.requireNonNull(response).get("name");
+        if (!response.containsKey("expires_at")) {
+            throw new IllegalStateException("GitLab token introspection did not report expiry: scopeId=" + scopeId);
+        }
         String expiresAtStr = (String) Objects.requireNonNull(response).get("expires_at");
         LocalDate expiresAt = expiresAtStr != null ? LocalDate.parse(expiresAtStr) : null;
 

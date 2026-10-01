@@ -10,7 +10,7 @@ import org.jspecify.annotations.Nullable;
 /** Cross-module write API for the activity ledger; callers supply authenticated event context. */
 public interface ActivityRecorder {
     /**
-     * @see de.tum.cit.aet.hephaestus.activity.ActivityEventService#record(Long, ActivityEventType, Instant, User, Repository, ActivityTargetType, Long, double)
+     * @see de.tum.cit.aet.hephaestus.activity.ActivityEventService#record(Long, ActivityEventType, Instant, User, Repository, ActivityTargetType, Long)
      */
     boolean record(
             Long workspaceId,
@@ -19,8 +19,7 @@ public interface ActivityRecorder {
             @Nullable User actor,
             @Nullable Repository repository,
             ActivityTargetType targetType,
-            Long targetId,
-            double xp);
+            Long targetId);
 
     /**
      * @see de.tum.cit.aet.hephaestus.activity.ActivityEventService#recordDeleted(Long, ActivityEventType, Instant, ActivityTargetType, Long)

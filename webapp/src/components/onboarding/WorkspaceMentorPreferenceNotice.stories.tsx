@@ -45,6 +45,17 @@ export const ChoiceRequired: Story = {
 	},
 };
 
+/** Nothing the member chooses brings Heph here, so the notice offers no choice to change. */
+export const NotSetUp: Story = {
+	args: { notice: { reason: "not-set-up" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent(
+			"Heph isn't set up in this workspace yet",
+		);
+		await expect(canvas.queryByRole("link")).not.toBeInTheDocument();
+	},
+};
+
 export const Unavailable: Story = {
 	args: { notice: { reason: "unavailable", choice: "CLOUD" } },
 	play: async ({ canvas }) => {

@@ -13,6 +13,7 @@ const sidebars: SidebarsConfig = {
 			label: "Using Hephaestus",
 			collapsed: false,
 			items: [
+				"activity",
 				"ai-code-review",
 				"practice-profile",
 				"ai-mentor",
@@ -21,11 +22,6 @@ const sidebars: SidebarsConfig = {
 				"browser-extension-privacy",
 				"product-feedback",
 			],
-		},
-		{
-			type: "category",
-			label: "Optional features",
-			items: ["leaderboard"],
 		},
 		{ type: "doc", id: "accessibility", label: "Accessibility" },
 	],

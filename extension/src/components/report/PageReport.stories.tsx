@@ -101,7 +101,7 @@ export const OneHeightInEveryState: Story = {
 			{ state: { status: "not-found", instanceHost: "heph.example.test", workLabel: "!1" } },
 			{ feedback: { status: "ready", data: NO_FEEDBACK } },
 			{ feedback: { status: "error", message: "Could not load." } },
-			{ activity: "queued-or-running" },
+			{ activity: "pending" },
 		];
 		return (
 			<div className="flex flex-col divide-y divide-border">
@@ -194,7 +194,7 @@ export const NoFeedbackForYou: Story = {
 	},
 };
 
-export const NoReviewRecorded: Story = {
+export const ReviewStatusUnavailable: Story = {
 	args: {
 		expanded: true,
 		state: { ...READY_ON_GITHUB, trace: null },
@@ -203,9 +203,9 @@ export const NoReviewRecorded: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { expanded: true })).toHaveAccessibleName(
-			"Practice review No recorded comments for you · no review recorded",
+			"Practice review No recorded comments for you · review status unavailable",
 		);
-		await expect(canvas.getByText("No review recorded.")).toBeVisible();
+		await expect(canvas.getByText("Your review status is unavailable.")).toBeVisible();
 		await expect(canvas.getByText("No observations about your work here.")).toBeVisible();
 	},
 };
@@ -278,14 +278,14 @@ export const ManyObservations: Story = {
 	},
 };
 
-/** The trace cannot tell queued from running; the line says both, and offers no request. */
-export const QueuedOrRunning: Story = {
-	args: { activity: "queued-or-running", expanded: true },
+/** A recorded own-review decision is pending. */
+export const DecisionPending: Story = {
+	args: { activity: "pending", expanded: true },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("button", { expanded: true })).toHaveAccessibleName(
-			/^Practice review Review queued or running · 3 comments for you/u,
+			/^Practice review Review decision pending · 3 comments for you/u,
 		);
-		await expect(canvas.queryByRole("button", { name: "Request review…" })).toBeNull();
+		await expect(canvas.getByRole("button", { name: "Request review…" })).toBeVisible();
 	},
 };
 

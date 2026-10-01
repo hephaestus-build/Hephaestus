@@ -141,7 +141,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     }
 
     private void setupExecution(int exitCode, boolean timedOut, Map<String, byte[]> result) throws Exception {
-        when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+        when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
         when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
         when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
         when(securityPolicy.buildLabels(JOB_ID))
@@ -224,7 +224,11 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             assertThat(result.logs()).isEqualTo("hello\n");
             assertThat(result.duration()).isPositive();
 
-            verify(networkManager).createJobNetwork(JOB_ID, false);
+            verify(networkManager)
+                    .createJobNetwork(
+                            JOB_ID,
+                            false,
+                            Map.of("hephaestus.sandbox-owner", "default", "hephaestus.job-id", JOB_ID.toString()));
             verify(networkManager).connectAppServer(NETWORK_ID);
             verify(containerManager, times(2)).createContainer(any());
             verify(workspaceManager).createInputTar(any(), any(), any());
@@ -413,7 +417,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldCreateInternetNetwork() throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(true))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(true), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
@@ -423,7 +427,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
             sandboxAdapter.execute(createSpec(true));
 
-            verify(networkManager).createJobNetwork(JOB_ID, true);
+            verify(networkManager).createJobNetwork(JOB_ID, true, Map.of("hephaestus.sandbox-owner", "default"));
         }
 
         @Test
@@ -469,7 +473,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldRefuseMissingGatewayPolicy() {
-            when(networkManager.createJobNetwork(JOB_ID, false)).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             var spec = new SandboxSpec(
                     JOB_ID,
@@ -490,7 +494,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldRefuseOutputOutsideTheRuntimeDirectory() {
-            when(networkManager.createJobNetwork(JOB_ID, false)).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             var spec = new SandboxSpec(
                     JOB_ID,
@@ -514,7 +518,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
     class TimeoutHandling {
 
         private void setupTimeoutPath(Map<String, byte[]> result) throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID))
@@ -551,7 +555,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         @CsvSource({"137,true,true", "42,false,false", "43,false,false", "124,false,true"})
         void shouldPreserveTerminalFailureWhenTheSandboxUploadedNoResult(
                 int exitCode, boolean dockerTimedOut, boolean expectedTimedOut) throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
@@ -570,7 +574,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldFailAndCleanUpWhenTheSandboxUploadedNoResultDespiteZeroExit() throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
@@ -589,7 +593,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldThrowOnNetworkFailure() throws Exception {
-            when(networkManager.createJobNetwork(any(), eq(false)))
+            when(networkManager.createJobNetwork(any(), eq(false), any()))
                     .thenThrow(new SandboxException("Network creation failed"));
 
             assertThatThrownBy(() -> sandboxAdapter.execute(createSpec()))
@@ -599,7 +603,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldCleanupOnContainerFailure() throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
@@ -630,7 +634,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldCaptureLogsOnError() throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
@@ -652,7 +656,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldUseDefaultSecurityProfileWhenNull() throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
@@ -685,7 +689,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldThrowWhenCancelRacesNetworkCreation() throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenAnswer(invocation -> {
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenAnswer(invocation -> {
                 sandboxAdapter.cancel(JOB_ID);
                 return NETWORK_ID;
             });
@@ -702,7 +706,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             CountDownLatch cancelDone = new CountDownLatch(1);
             var thrownException = new AtomicReference<Exception>();
 
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
@@ -778,7 +782,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldIncrementTimeoutCounter() throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of());
@@ -800,7 +804,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldIncrementFailureCounter() throws Exception {
-            when(networkManager.createJobNetwork(any(), eq(false))).thenThrow(new SandboxException("boom"));
+            when(networkManager.createJobNetwork(any(), eq(false), any())).thenThrow(new SandboxException("boom"));
 
             try {
                 sandboxAdapter.execute(createSpec());
@@ -815,7 +819,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldIncrementCancelledCounter() throws Exception {
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenAnswer(invocation -> {
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenAnswer(invocation -> {
                 sandboxAdapter.cancel(JOB_ID);
                 return NETWORK_ID;
             });
@@ -838,7 +842,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
 
         @Test
         void shouldRecordDurationAlways() throws Exception {
-            when(networkManager.createJobNetwork(any(), eq(false))).thenThrow(new SandboxException("fail"));
+            when(networkManager.createJobNetwork(any(), eq(false), any())).thenThrow(new SandboxException("fail"));
 
             try {
                 sandboxAdapter.execute(createSpec());
@@ -868,7 +872,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             CountDownLatch inExecution = new CountDownLatch(1);
             CountDownLatch release = new CountDownLatch(1);
 
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenReturn(NETWORK_ID);
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
             when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
             when(securityPolicy.buildHostConfig(any(), any(), any())).thenReturn(DEFAULT_HOST_CONFIG);
             when(securityPolicy.buildLabels(JOB_ID)).thenReturn(Map.of("hephaestus.sandbox-owner", "default"));
@@ -911,7 +915,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             CountDownLatch enteredExecute = new CountDownLatch(1);
             CountDownLatch releaseBlock = new CountDownLatch(1);
 
-            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false))).thenAnswer(inv -> {
+            when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenAnswer(inv -> {
                 enteredExecute.countDown();
                 releaseBlock.await(5, TimeUnit.SECONDS);
                 return NETWORK_ID;

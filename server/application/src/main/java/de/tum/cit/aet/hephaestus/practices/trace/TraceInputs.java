@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.trace;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeSignalDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import java.time.Instant;
@@ -20,6 +20,7 @@ final class TraceInputs {
     private TraceInputs() {}
 
     /**
+     * @param watches        the signals it watches, each with the words a reader sees for it
      * @param dormancyReason why nothing connected here can raise what it watches, or {@code null} when
      *                      something can; the sentence comes straight from {@code DormantBinding}
      */
@@ -27,8 +28,10 @@ final class TraceInputs {
             Long id,
             String slug,
             String name,
+            @Nullable String groupSlug,
+            @Nullable String groupName,
             PracticeAutonomy autonomy,
-            List<SignalName> watches,
+            List<PracticeSignalDTO> watches,
             @Nullable String dormancyReason) {}
 
     /**
@@ -37,7 +40,7 @@ final class TraceInputs {
      */
     record SignalOccurrence(
             UUID id,
-            SignalName signal,
+            PracticeSignalDTO signal,
             Instant occurredAt,
             SignalState state,
             @Nullable SignalStateReason stateReason,

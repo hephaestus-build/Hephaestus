@@ -102,7 +102,6 @@ class IntegrationAttentionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 workspace,
                 IntegrationKind.SLACK,
                 "T" + suffix,
-                new ConnectionConfig.SlackConfig(
-                        "T" + suffix, "Attention test", null, null, null, java.util.Set.of())));
+                new ConnectionConfig.SlackConfig("T" + suffix, "Attention test", null, java.util.Set.of())));
     }
 }

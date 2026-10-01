@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewthread.
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -136,9 +137,16 @@ public class GitLabPullRequestReviewCommentProcessor {
         Long providerId = Objects.requireNonNull(
                 Objects.requireNonNull(context.provider()).getId());
 
-        return commentRepository
-                .findByNativeIdAndProviderId(nativeId, providerId)
-                .map(existing -> updateComment(existing, data, context))
+        Optional<PullRequestReviewComment> existing =
+                commentRepository.findByNativeIdAndProviderId(nativeId, providerId);
+        // A note id is unique on the instance: a diff note stored under another merge request is never moved here.
+        if (existing.map(PullRequestReviewComment::getPullRequest)
+                .filter(parent -> !parent.getId().equals(context.pr().getId()))
+                .isPresent()) {
+            log.warn("Skipped diff note: reason=belongsToAnotherMergeRequest, nativeId={}", nativeId);
+            return null;
+        }
+        return existing.map(comment -> updateComment(comment, data, context))
                 .orElseGet(() -> createComment(nativeId, data, context));
     }
 

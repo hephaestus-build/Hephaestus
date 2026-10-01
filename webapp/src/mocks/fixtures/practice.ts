@@ -9,13 +9,13 @@ import type {
 
 export const mockAuthorDeclaredEvidenceValidation = {
 	status: "AUTHOR_DECLARED",
-	sourceContractVersion: "1.2.0",
+	sourceContractVersion: "1.3.0",
 	policyDigest: "0".repeat(64),
 	reviewRuleFingerprint: `v4:${"0".repeat(64)}`,
 } satisfies PracticeAutomatedReviewValidation;
 
 export const mockPullRequestPolicy = {
-	sourceContractVersion: "1.2.0",
+	sourceContractVersion: "1.3.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -30,7 +30,7 @@ export const mockPullRequestPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockIssuePolicy = {
-	sourceContractVersion: "1.2.0",
+	sourceContractVersion: "1.3.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -46,7 +46,7 @@ const mockIssuePolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockConversationPolicy = {
-	sourceContractVersion: "1.2.0",
+	sourceContractVersion: "1.3.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -62,7 +62,7 @@ const mockConversationPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 const mockDocumentPolicy = {
-	sourceContractVersion: "1.2.0",
+	sourceContractVersion: "1.3.0",
 	automatedReview: {
 		mode: "LANGUAGE_MODEL",
 		evidenceSufficiency: "SUFFICIENT_WHEN_REQUIREMENTS_MET",
@@ -112,14 +112,14 @@ export const mockDocumentBinding = {
 	needs: [{ sourceKind: "docs.document.core", stance: "REQUIRED" }],
 } satisfies PracticeBinding;
 
-/** Shared source options must match contracts/artifact-source/1.2.0/catalog.json; practice.test.ts checks them. */
+/** Shared source options must match contracts/source-use/1.3.0/catalog.json; practice.test.ts checks them. */
 const relatedWorkSource = {
 	sourceKind: "workspace.project-inventory",
 	displayName: "Related workspace work",
 	description:
 		"Other work items in the same workspace, supplied so a change can be read against related work.",
 	selectionScope:
-		"Up to 200 issues and 200 pull requests across at most 25 visible repositories, the work item under review among them. Beyond any of those limits the capture is reported as PARTIAL.",
+		"All permitted issues, pull requests, workspace member profiles and practice definitions. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 	privacyClass: "PERSONAL",
 	requiredQuality: "ANY_CAPTURE",
 	supportsExhaustiveEvidence: true,
@@ -127,13 +127,13 @@ const relatedWorkSource = {
 
 const referencedDocumentsSource = {
 	sourceKind: "outline.documents",
-	displayName: "Referenced Outline documents",
-	description: "Outline documents the reviewed work references.",
+	displayName: "Outline documents",
+	description: "Mirrored documents in permitted workspace Outline collections.",
 	selectionScope:
-		"Only documents referenced by the reviewed work or matched to it, up to 15. Retrieval cannot establish that it found every relevant document, so this source is never reported as COMPLETE.",
+		"Every permitted mirrored Outline document in the workspace. Deleted documents are excluded; an evicted body is an explicit refusal, not an empty document. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 	privacyClass: "PERSONAL",
 	requiredQuality: "ANY_CAPTURE",
-	supportsExhaustiveEvidence: false,
+	supportsExhaustiveEvidence: true,
 } satisfies PracticeEvidenceSourceOption;
 
 const observationHistorySource = {
@@ -142,10 +142,10 @@ const observationHistorySource = {
 	description:
 		"Observations earlier reviews in this workspace recorded about the person whose work is under review, with the practice, presence, assessment and recurrence key each was filed under.",
 	selectionScope:
-		"The most recent 50 observations about this person in this workspace within the last 90 days, after the same visibility rules that govern any other reading of them. A window over a growing record cannot establish that it holds every earlier observation, so this source is never reported as COMPLETE.",
+		"All currently visible prior observations about permitted workspace members, after currentness, withdrawal and consent checks. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 	privacyClass: "PERSONAL",
 	requiredQuality: "ANY_CAPTURE",
-	supportsExhaustiveEvidence: false,
+	supportsExhaustiveEvidence: true,
 } satisfies PracticeEvidenceSourceOption;
 
 const feedbackHistorySource = {
@@ -154,14 +154,14 @@ const feedbackHistorySource = {
 	description:
 		"Feedback earlier reviews already delivered to the person whose work is under review, with the channel it went to and the recurrence keys it spoke to.",
 	selectionScope:
-		"The most recent 30 delivered feedback items for this person in this workspace within the last 90 days. A window over a growing record cannot establish that it holds every earlier delivery, so this source is never reported as COMPLETE.",
+		"All currently visible delivered feedback about permitted workspace members, plus prepared feedback for the reviewed developer, after currentness, withdrawal and consent checks. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 	privacyClass: "PERSONAL",
 	requiredQuality: "ANY_CAPTURE",
-	supportsExhaustiveEvidence: false,
+	supportsExhaustiveEvidence: true,
 } satisfies PracticeEvidenceSourceOption;
 
 export const mockPracticeDefinitionOptions = {
-	sourceContractVersion: "1.2.0",
+	sourceContractVersion: "1.3.0",
 	workTypes: [
 		{
 			artifactKind: "scm.pull_request",
@@ -203,7 +203,7 @@ export const mockPracticeDefinitionOptions = {
 					displayName: "Pull request details",
 					description: "The pull request record: its fields as the provider holds them.",
 					selectionScope:
-						"One pull request selected by the job, with its mirrored fields: number, title, description, branches, state, draft flag, author and the provider's change counts. Its commits are not projected: the review reads them from the captured repository over the pinned range.",
+						"Every permitted pull request in monitored workspace repositories, with its mirrored fields. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
@@ -224,7 +224,7 @@ export const mockPracticeDefinitionOptions = {
 					displayName: "Inline review comments",
 					description: "Review comments left on specific lines of the pull request.",
 					selectionScope:
-						"Up to the 500 most recent inline comments on one pull request, most recent first. Beyond that limit the capture is reported as PARTIAL.",
+						"All permitted inline review comments on workspace pull requests. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: true,
@@ -234,7 +234,8 @@ export const mockPracticeDefinitionOptions = {
 					displayName: "Review threads and decisions",
 					description:
 						"Review conversations on the pull request, whether each was resolved, and each reviewer's decision.",
-					selectionScope: "Every review thread and review decision for one pull request.",
+					selectionScope:
+						"All permitted review threads in workspace pull requests, including resolution state. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: true,
@@ -244,7 +245,8 @@ export const mockPracticeDefinitionOptions = {
 					displayName: "General review comments",
 					description:
 						"Review comments addressing the pull request as a whole rather than a specific line.",
-					selectionScope: "Every general review comment on one pull request.",
+					selectionScope:
+						"All permitted pull-request discussion comments and submitted reviews in the workspace. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: true,
@@ -255,7 +257,7 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"Repository files and reachable Git history, supplied as context for reading the change. Not reviewed on their own.",
 					selectionScope:
-						"All regular, executable, and symbolic-link Git blobs at the reviewed commit, without file-count, total-size, per-file-size, or binary-content exclusions. A self-contained Git repository includes objects reachable from that commit and the local clone's captured branch, tag, and remote-tracking refs, with detached HEAD at the reviewed commit. Upstream configuration, credentials, hooks, replacement refs, and unreachable objects are not exported. Repository text citations identify a repository-relative path and line range, using the captured .git/HEAD artifact as their repository witness. An omitted revision selects the pinned HEAD; historical text identifies a full commit SHA. The manifest records the HEAD and captured-ref witnesses, not one artifact per repository file. Trusted admission verifies reachability from captured refs and the exact quoted location; arbitrary command output is not evidence. Symbolic-link blobs are materialized as regular text files containing the link target and are never followed. Submodules, unsupported file modes, and unsafe paths are excluded from the worktree and reported as PARTIAL. Git LFS pointer files are captured as committed; external LFS objects are not fetched. Shallow clones cannot satisfy this capture.",
+						"Full reachable Git history and a working copy of each permitted repository, copied from the worker's bare mirrors. The reviewed repository is pinned to the job's commit. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "INTERNAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: true,
@@ -266,7 +268,7 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"Issues the pull request refers to by number in its description, branch name or commit subjects, as this repository stores them.",
 					selectionScope:
-						"Issues whose number appears in the description, the branch name, or the commit subjects of the pinned range, with each issue's title, state, body, labels and sub-issue counts. How a reference is worded is not recorded; the review reads that from the same description, branch and commits. A number scan cannot establish that it found every link the work actually has, so this source is never reported as COMPLETE. References to work outside this repository are reported as unresolved rather than as incomplete evidence.",
+						"Every permitted linked work items record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: false,
@@ -299,7 +301,7 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"The issue record: title, description, author, state, labels, and assignees.",
 					selectionScope:
-						"One issue, selected by the job, with its own fields and its description as the provider holds it.",
+						"Every permitted issue in monitored workspace repositories, with its mirrored fields. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
@@ -309,7 +311,7 @@ export const mockPracticeDefinitionOptions = {
 					displayName: "Issue comments",
 					description: "The discussion recorded on the issue.",
 					selectionScope:
-						"Up to the 200 most recent comments on one issue, most recent first. Beyond that limit the capture is reported as PARTIAL.",
+						"All permitted comments on workspace issues. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "ANY_CAPTURE",
 					supportsExhaustiveEvidence: true,
@@ -340,7 +342,7 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"One Slack thread in chronological order, read only from channels whose consent is active.",
 					selectionScope:
-						"One thread, selected by the job, with system and bot messages excluded. A thread whose channel consent is not active, or which no longer exists, is reported as REDACTED or UNAVAILABLE rather than as an empty conversation.",
+						"All retained, non-deleted messages in workspace Slack channels with active consent, excluding opted-out authors. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "SENSITIVE_PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,
@@ -368,7 +370,7 @@ export const mockPracticeDefinitionOptions = {
 					description:
 						"The written document a review is about: its prose, title, collection, author, and upstream timestamps.",
 					selectionScope:
-						"One mirrored document, selected by the job: its body as the wiki holds it, and its title, collection, authors and timestamps beside it. A document removed upstream or evicted from the local mirror is reported as UNAVAILABLE rather than as a document that said nothing.",
+						"The permitted mirrored document selected as the reviewed work, with its current body and metadata. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
 					privacyClass: "PERSONAL",
 					requiredQuality: "COMPLETE",
 					supportsExhaustiveEvidence: true,

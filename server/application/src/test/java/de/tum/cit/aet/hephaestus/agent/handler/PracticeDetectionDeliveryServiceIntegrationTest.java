@@ -127,6 +127,12 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
     private RepositoryRepository repositoryRepository;
 
     @Autowired
+    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository connections;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository monitors;
+
+    @Autowired
     private PullRequestRepository pullRequestRepository;
 
     @Autowired
@@ -206,6 +212,16 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         repo.setHtmlUrl("https://github.com/org/test-repo");
         repo.setDefaultBranch("main");
         repo = repositoryRepository.save(repo);
+        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, repo.getNameWithOwner()));
+        var connection = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
+                workspace,
+                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
+                "1732",
+                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig(
+                        1732L, workspace.getAccountLogin(), null, java.util.Set.of()));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                connection, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
+        connections.save(connection);
 
         Instant now = Instant.now();
         Long providerId = java.util.Objects.requireNonNull(provider.getId());
@@ -280,13 +296,13 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER);
         var diff = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.diff", baseSha + ":" + headSha);
         EvidenceSnapshotFixtures.artifact(
-                        diff, PullRequestContentSource.CHANGE_FILE, ProvenanceDigest.sha256Hex(change))
+                        snapshot, diff, PullRequestContentSource.CHANGE_FILE, ProvenanceDigest.sha256Hex(change))
                 .put("mediaType", "application/json")
                 .put("bytes", change.length);
         var tree = EvidenceSnapshotFixtures.availableSource(snapshot, "scm.repository.tree", headSha + ":" + treeSha);
-        EvidenceSnapshotFixtures.artifact(tree, HEAD_PATH, ProvenanceDigest.sha256Hex(headWitness))
+        EvidenceSnapshotFixtures.artifact(snapshot, tree, HEAD_PATH, ProvenanceDigest.sha256Hex(headWitness))
                 .put("bytes", headWitness.length);
-        EvidenceSnapshotFixtures.artifact(tree, REFS_PATH, ProvenanceDigest.sha256Hex(refsWitness))
+        EvidenceSnapshotFixtures.artifact(snapshot, tree, REFS_PATH, ProvenanceDigest.sha256Hex(refsWitness))
                 .put("bytes", refsWitness.length);
         EvidenceSnapshotFixtures.admittedPractice(
                 snapshot,
@@ -297,9 +313,10 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
                 snapshot,
                 errors.getSlug(),
                 java.util.Objects.requireNonNull(errors.getCurrentRevision().getId()));
-        preparedEvidence.add(evidenceFiles.prepare(
+        preparedEvidence.add(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                evidenceFiles,
                 agentJob,
-                new PreparedJobInputs(
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
                         new PreparedEvidence(
                                 Map.of(PullRequestContentSource.CHANGE_FILE, change),
                                 Map.of(

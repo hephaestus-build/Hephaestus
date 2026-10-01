@@ -4,7 +4,6 @@ import { listPracticeGroupReviewRunsInfiniteOptions } from "@/api/@tanstack/reac
 import type { PracticeStanding } from "@/api/types.gen";
 import {
 	EMPTY_REVIEW_RUN_FEED,
-	nextReviewRunPage,
 	type ReviewRunFeedState,
 	reviewRunFeedState,
 } from "@/components/profile/review-runs";
@@ -12,6 +11,7 @@ import {
 	type FeedbackResponseWrite,
 	useFeedbackResponseWrite,
 } from "@/hooks/use-feedback-response-write";
+import { slicePageParams } from "@/runtime/tanstack-query/spring-page";
 
 /** Review runs per page of the feed; also the skeleton's row count while the first page loads. */
 export const REVIEW_RUN_PAGE_SIZE = 10;
@@ -68,8 +68,7 @@ export function usePracticeGroupDetail({
 			path: { workspaceSlug, groupSlug: feedGroupSlug ?? "" },
 			query: { size: REVIEW_RUN_PAGE_SIZE, practiceSlug },
 		}),
-		initialPageParam: 0,
-		getNextPageParam: nextReviewRunPage,
+		...slicePageParams,
 		enabled: practiceOpen,
 	});
 	const { respond, pendingResponses } = useFeedbackResponseWrite(

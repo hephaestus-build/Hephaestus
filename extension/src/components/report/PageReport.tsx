@@ -55,7 +55,7 @@ export interface PageReportProps {
 function reviewedSentence(context: ReadyContext): string {
 	const reviewed = reviewedAt(context);
 	if (context.trace === null) {
-		return "No review recorded.";
+		return "Your review status is unavailable.";
 	}
 	if (reviewed === undefined) {
 		return "No completed practice review recorded.";
@@ -125,8 +125,8 @@ function Ready({
 	props: PageReportProps;
 	webAppOrigin: string;
 }) {
-	const { feedback, observations, activity, action, stale } = props;
-	const offer = context.canRequestReview && activity !== "queued-or-running";
+	const { feedback, observations, action, stale } = props;
+	const offer = context.canRequestReview;
 	return (
 		<>
 			{stale === undefined ? null : (

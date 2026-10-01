@@ -10,11 +10,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import reactor.core.Disposable;
 import reactor.core.Disposables;
@@ -51,7 +49,6 @@ final class StdioAttachedSandbox implements AttachedSandbox {
     private final Process process;
     private final OutputStream stdin;
     private final CopyOnWriteArrayList<Consumer<JsonNode>> listeners = new CopyOnWriteArrayList<>();
-    private final AtomicReference<Instant> lastActivity = new AtomicReference<>(Instant.now());
     private volatile boolean closed = false;
 
     StdioAttachedSandbox(UUID sessionId, String userId, String workspaceId, Process process) {
@@ -83,14 +80,13 @@ final class StdioAttachedSandbox implements AttachedSandbox {
             stdin.write(payload);
             stdin.write('\n');
             stdin.flush();
-            lastActivity.set(Instant.now());
         } catch (IOException e) {
             throw new InteractiveSandboxException("failed to write frame to runner stdin", e);
         }
     }
 
     @Override
-    public Disposable subscribe(Consumer<JsonNode> listener) {
+    public Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost) {
         if (closed) {
             return Disposables.disposed();
         }
@@ -101,21 +97,7 @@ final class StdioAttachedSandbox implements AttachedSandbox {
     /** Fan-out here never cuts a subscriber off, so {@code onLost} never runs. */
     @Override
     public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
-        return subscribe(listener);
-    }
-
-    @Override
-    public Instant lastActivityAt() {
-        Instant activity = lastActivity.get();
-        if (activity == null) {
-            throw new IllegalStateException("last activity is unavailable");
-        }
-        return activity;
-    }
-
-    @Override
-    public Duration idleFor() {
-        return Duration.between(lastActivityAt(), Instant.now());
+        return subscribe(listener, onLost);
     }
 
     @Override
@@ -150,7 +132,6 @@ final class StdioAttachedSandbox implements AttachedSandbox {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     if (line.isEmpty()) continue;
-                    lastActivity.set(Instant.now());
                     JsonNode frame;
                     try {
                         frame = MAPPER.readTree(line);

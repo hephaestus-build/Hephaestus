@@ -12,11 +12,16 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -25,6 +30,23 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 @ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
 public class SandboxGatewaySessions {
+    public static final long WORKSPACE_BYTE_BUDGET = 512L * 1024 * 1024;
+    private final long workspaceByteBudget;
+
+    @Autowired
+    public SandboxGatewaySessions() {
+        this(WORKSPACE_BYTE_BUDGET);
+    }
+
+    SandboxGatewaySessions(long workspaceByteBudget) {
+        if (workspaceByteBudget <= 0) throw new IllegalArgumentException("Workspace budget must be positive");
+        this.workspaceByteBudget = workspaceByteBudget;
+    }
+
+    public long workspaceByteBudget() {
+        return workspaceByteBudget;
+    }
+
     private static final String BEARER_PREFIX = "Bearer ";
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
 
@@ -60,12 +82,19 @@ public class SandboxGatewaySessions {
         return AgentJob.computeTokenHash(token).getBytes(StandardCharsets.US_ASCII);
     }
 
+    private void requireBudget(long bytes) {
+        if (bytes < 0 || bytes > workspaceByteBudget)
+            throw new WorkspaceBudgetExceededException(bytes, workspaceByteBudget);
+    }
+
     public final class Session implements AutoCloseable {
         private final UUID id;
         private final byte[] tokenHash;
         private final Path inputTar;
         private final String outputRoot;
         private final long inputBytes;
+        private final Map<String, Path> selections = new HashMap<>();
+        private long downloadedBytes;
         private boolean closed;
         private boolean uploading;
         private @Nullable GatewayInteractiveChannel interactive;
@@ -78,6 +107,8 @@ public class SandboxGatewaySessions {
             this.inputTar = inputTar;
             this.outputRoot = outputRoot;
             this.inputBytes = Files.size(inputTar);
+            requireBudget(inputBytes);
+            this.downloadedBytes = inputBytes;
         }
 
         public UUID id() {
@@ -113,6 +144,68 @@ public class SandboxGatewaySessions {
             }
             // A dropped transfer can restart from byte zero from the same staged archive.
             return Files.newInputStream(inputTar);
+        }
+
+        /** Selections can only contain bytes from the permission-checked, frozen initial archive. */
+        public synchronized Download download(String parameter, String value) throws IOException {
+            if (closed) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            String prefix = selectionPrefix(parameter, value);
+            Path selected = selections.get(prefix);
+            if (selected == null) {
+                selected = Files.createTempFile(inputTar.getParent(), "workspace-selection-", ".tar");
+                boolean retained = false;
+                try {
+                    boolean found = false;
+                    try (var input = new TarArchiveInputStream(Files.newInputStream(inputTar));
+                            var output = new TarArchiveOutputStream(Files.newOutputStream(selected))) {
+                        output.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
+                        output.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX);
+                        org.apache.commons.compress.archivers.tar.TarArchiveEntry entry;
+                        while ((entry = input.getNextEntry()) != null) {
+                            if (!entry.getName().startsWith(prefix)) continue;
+                            Path path = Path.of(entry.getName());
+                            if (path.isAbsolute()
+                                    || !path.normalize().equals(path)
+                                    || entry.getName().contains("\\")
+                                    || (!entry.isFile() && !entry.isDirectory())) {
+                                throw new IOException("Unsafe workspace archive entry");
+                            }
+                            requireBudget(downloadedBytes + output.getBytesWritten() + entry.getSize());
+                            output.putArchiveEntry(entry);
+                            input.transferTo(output);
+                            output.closeArchiveEntry();
+                            found |= entry.isFile();
+                        }
+                    }
+                    if (!found) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+                    long bytes = Files.size(selected);
+                    requireBudget(downloadedBytes + bytes);
+                    selections.put(prefix, selected);
+                    downloadedBytes += bytes;
+                    retained = true;
+                } finally {
+                    if (!retained) Files.deleteIfExists(selected);
+                }
+            }
+            return new Download(Files.newInputStream(selected), Files.size(selected));
+        }
+
+        private static String selectionPrefix(String parameter, String value) {
+            if ("area".equals(parameter)
+                    && Set.of("scm", "chat", "docs", "people", "practices").contains(value)) {
+                return "context/" + value + "/";
+            }
+            if ("repo".equals(parameter) && value.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,127}")) {
+                return "repos/" + value + "/";
+            }
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+
+        public record Download(InputStream input, long bytes) implements AutoCloseable {
+            @Override
+            public void close() throws IOException {
+                input.close();
+            }
         }
 
         public record UploadResult(boolean admitted, String etag) {}
@@ -199,7 +292,11 @@ public class SandboxGatewaySessions {
                     interactive.close();
                 }
             } finally {
-                Files.deleteIfExists(inputTar);
+                try {
+                    for (Path selection : selections.values()) Files.deleteIfExists(selection);
+                } finally {
+                    Files.deleteIfExists(inputTar);
+                }
             }
         }
     }

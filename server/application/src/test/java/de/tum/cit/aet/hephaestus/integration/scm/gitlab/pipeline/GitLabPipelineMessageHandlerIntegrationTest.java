@@ -22,9 +22,13 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Checks GitLab pipeline payloads through persisted merge-request head-check state.
@@ -53,6 +57,9 @@ class GitLabPipelineMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private TransactionTemplate transactionTemplate;
 
     private IdentityProvider provider;
     private Repository repository;
@@ -112,6 +119,45 @@ class GitLabPipelineMessageHandlerIntegrationTest extends BaseIntegrationTest {
         PullRequest checked = pullRequestRepository.findById(mr.getId()).orElseThrow();
         assertThat(checked.getHeadCheckState()).isEqualTo(CheckState.FAILURE);
         assertThat(checked.getHeadCheckSha()).isEqualTo(PIPELINE_SHA);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"failed, success, FAILURE", "success, failed, SUCCESS"})
+    void shouldKeepTheLaterPipelineStatusWhenAnEarlierHookIsProcessedAfterIt(
+            String later, String earlier, CheckState kept) throws Exception {
+        PullRequest mr = persistMergeRequest(11);
+        Instant laterAt = Instant.parse("2026-09-30T10:00:05.000001Z");
+
+        receive(pipeline(later), laterAt);
+        receive(pipeline(earlier), laterAt.minusSeconds(4));
+
+        PullRequest checked = pullRequestRepository.findById(mr.getId()).orElseThrow();
+        assertThat(checked.getHeadCheckState()).isEqualTo(kept);
+        assertThat(checked.getHeadCheckObservedAt()).isEqualTo(laterAt);
+    }
+
+    @Test
+    void shouldRecordAPipelineThatPassesOnARetryAfterItFailed() throws Exception {
+        PullRequest mr = persistMergeRequest(11);
+        Instant failedAt = Instant.parse("2026-09-30T10:00:00Z");
+
+        receive(pipeline("failed"), failedAt);
+        receive(pipeline("success"), failedAt.plusSeconds(30));
+
+        assertThat(pullRequestRepository.findById(mr.getId()).orElseThrow().getHeadCheckState())
+                .isEqualTo(CheckState.SUCCESS);
+    }
+
+    private void receive(GitLabPipelineEventDTO event, Instant arrivedAt) {
+        transactionTemplate.executeWithoutResult(status -> handler.handle(event, arrivedAt));
+    }
+
+    /** The recorded pipeline hook with {@code status}. */
+    private GitLabPipelineEventDTO pipeline(String status) throws IOException {
+        ObjectNode payload = (ObjectNode) objectMapper.readTree(
+                new ClassPathResource("gitlab/pipeline.json").getContentAsString(StandardCharsets.UTF_8));
+        ((ObjectNode) payload.get("object_attributes")).put("status", status);
+        return objectMapper.treeToValue(payload, GitLabPipelineEventDTO.class);
     }
 
     private PullRequest persistMergeRequest(int iid) {

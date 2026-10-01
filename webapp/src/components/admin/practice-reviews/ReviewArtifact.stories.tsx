@@ -98,7 +98,7 @@ export const LongTitle: Story = {
 	args: {
 		reviewedWork: {
 			...reviewArtifact.reviewedWork,
-			repositoryName: "hephaestus-administration-and-practice-feedback-platform",
+			container: "hephaestus-administration-and-practice-feedback-platform",
 		},
 	},
 	parameters: {

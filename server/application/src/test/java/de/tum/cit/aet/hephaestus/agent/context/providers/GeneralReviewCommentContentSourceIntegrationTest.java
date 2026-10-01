@@ -43,7 +43,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTest {
 
-    private static final String FILE_KEY = "inputs/context/general_comments.json";
+    private static final String FILE_KEY = "context/general_comments.json";
 
     @Autowired
     private GeneralReviewCommentContentSource source;
@@ -97,11 +97,14 @@ class GeneralReviewCommentContentSourceIntegrationTest extends BaseIntegrationTe
         PullRequest pr = persistPullRequest(11);
         User human = persistUser("reviewer-a");
         persistComment(pr, human, "<!-- hephaestus:practice-review:abc --> 2 gaps to fix", at("09:00"));
+        persistComment(pr, human, "**`App/View.swift:13`** Add a label\n<!-- hephaestus-diff-note -->", at("09:15"));
         persistComment(pr, human, "   ", at("09:30"));
         persistComment(pr, human, "split persistence out so each unit is testable", at("10:00"));
 
         List<IssueComment> rows = issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
-                pr.getId(), GeneralReviewCommentContentSource.HEPHAESTUS_MARKER, PageRequest.of(0, 50));
+                pr.getId(),
+                de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection.HEPHAESTUS_MARKER,
+                PageRequest.of(0, 50));
 
         assertThat(rows)
                 .extracting(IssueComment::getBody)

@@ -16,10 +16,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
+import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -51,7 +53,25 @@ public class OAuthCallbackService {
     /** Marker used in audit rows when the state token didn't carry an actorRef. */
     static final String ACTOR_FALLBACK = "oauth-callback";
 
-    private static final String ONE_ACTIVE_SLACK_CONNECTION_PER_TEAM = "uq_connection_one_active_slack_per_team";
+    /**
+     * The kinds whose instance one workspace holds at a time: the states in which a connection holds it, the unique
+     * index that settles a race the check here cannot, and the words that name it to the person connecting.
+     */
+    private record ExclusiveInstance(Set<IntegrationState> holdingStates, String index, String noun, String provider) {}
+
+    private static final Map<IntegrationKind, ExclusiveInstance> EXCLUSIVE_INSTANCES = Map.of(
+            IntegrationKind.SLACK,
+            new ExclusiveInstance(
+                    Set.of(IntegrationState.ACTIVE),
+                    "uq_connection_one_active_slack_per_team",
+                    "Slack workspace",
+                    "Slack"),
+            IntegrationKind.GITHUB,
+            new ExclusiveInstance(
+                    EnumSet.complementOf(EnumSet.of(IntegrationState.UNINSTALLED)),
+                    "uq_connection_one_github_installation",
+                    "GitHub App installation",
+                    "GitHub"));
 
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
@@ -105,10 +125,10 @@ public class OAuthCallbackService {
      * credential placeholder, and transition PENDING (or ACTIVE on reconnect) → ACTIVE
      * with an audit row attributed to {@code actorRef}.
      *
-     * <p>Throws {@link SlackTeamConnectedElsewhereException} if another workspace holds the Slack
-     * team, and {@link IllegalStateException} if the transition guard rejects the move (e.g. the
-     * Connection was UNINSTALLED between create and finalize). The controller translates both into
-     * HTTP 409.
+     * <p>Throws {@link InstanceConnectedElsewhereException} if another workspace holds the Slack
+     * team or GitHub App installation, and {@link IllegalStateException} if the transition guard
+     * rejects the move (e.g. the Connection was UNINSTALLED between create and finalize). The
+     * controller translates both into HTTP 409.
      */
     public Connection completeConnection(
             Connection pending, ConnectFinalization.Completed completed, @Nullable String actorRef) {
@@ -116,20 +136,21 @@ public class OAuthCallbackService {
             return Objects.requireNonNull(
                     transactionTemplate.execute(status -> complete(pending, completed, actorRef)));
         } catch (DataIntegrityViolationException e) {
-            String teamId = completed.instanceKey();
-            if (teamId == null || !DataIntegrityViolationConstraints.hasName(e, ONE_ACTIVE_SLACK_CONNECTION_PER_TEAM)) {
+            ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(pending.getKind());
+            if (exclusive == null || !DataIntegrityViolationConstraints.hasName(e, exclusive.index())) {
                 throw e;
             }
-            // A concurrent install of the same team committed after this one's ownership check passed.
-            String conflict = connectedElsewhere(pending.getWorkspace().getId(), teamId, actorRef)
+            // A concurrent connect of the same instance committed after this one's ownership check passed.
+            String conflict = connectedElsewhere(
+                            pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), actorRef)
                     .orElseThrow(() -> e);
-            throw new SlackTeamConnectedElsewhereException(conflict, e);
+            throw new InstanceConnectedElsewhereException(conflict, e);
         }
     }
 
     private Connection complete(
             Connection pending, ConnectFinalization.Completed completed, @Nullable String actorRef) {
-        Connection connection = resolveSlackCompletionTarget(pending, completed, actorRef);
+        Connection connection = resolveCompletionTarget(pending, completed, actorRef);
         deleteSupersededPending(pending, connection);
         applyVendorMetadata(connection, completed);
         connection.setCredentials(completed.credentials(), credentialBundleConverter);
@@ -156,49 +177,60 @@ public class OAuthCallbackService {
         return connection;
     }
 
-    private Connection resolveSlackCompletionTarget(
+    /**
+     * The row to complete. A kind whose instance one workspace holds refuses an instance another workspace holds, and
+     * reuses this workspace's own row for it rather than colliding with it on {@code (workspace, kind, instance_key)}.
+     */
+    private Connection resolveCompletionTarget(
             Connection connection, ConnectFinalization.Completed completed, @Nullable String actorRef) {
-        if (connection.getKind() != IntegrationKind.SLACK) {
+        if (!EXCLUSIVE_INSTANCES.containsKey(connection.getKind())) {
             return connection;
         }
         String instanceKey = completed.instanceKey();
-        if (instanceKey == null || instanceKey.isBlank()) {
+        if (instanceKey.isBlank()) {
             return connection;
         }
         long workspaceId = connection.getWorkspace().getId();
-        Optional<String> conflict = connectedElsewhere(workspaceId, instanceKey, actorRef);
+        Optional<String> conflict = connectedElsewhere(connection.getKind(), workspaceId, instanceKey, actorRef);
         if (conflict.isPresent()) {
-            throw new SlackTeamConnectedElsewhereException(conflict.get(), null);
+            throw new InstanceConnectedElsewhereException(conflict.get(), null);
         }
         return connectionRepository
-                .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, IntegrationKind.SLACK, instanceKey)
+                .findByWorkspaceIdAndKindAndInstanceKey(workspaceId, connection.getKind(), instanceKey)
                 .filter(existing -> !Objects.equals(existing.getId(), connection.getId()))
                 .orElse(connection);
     }
 
     /**
-     * Why Slack team {@code teamId} cannot be connected to {@code workspaceId}, if another workspace
-     * holds it ACTIVE. The holder is named only to an administrator of it; the log names it for the operator.
+     * Why {@code instanceKey} cannot be connected to {@code workspaceId}, if another workspace holds it. The holder is
+     * named only to an administrator of it; the log names it for the operator.
      */
-    private Optional<String> connectedElsewhere(long workspaceId, String teamId, @Nullable String actorRef) {
+    private Optional<String> connectedElsewhere(
+            IntegrationKind kind, long workspaceId, String instanceKey, @Nullable String actorRef) {
+        ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(kind);
+        if (exclusive == null) {
+            return Optional.empty();
+        }
         return connectionRepository
-                .findAllByKindAndInstanceKeyInAndState(IntegrationKind.SLACK, List.of(teamId), IntegrationState.ACTIVE)
+                .findAllByKindAndInstanceKeyAndStateIn(kind, instanceKey, exclusive.holdingStates())
                 .stream()
                 .map(Connection::getWorkspace)
                 .filter(owner -> owner.getId() != workspaceId)
                 .findFirst()
                 .map(owner -> {
                     log.warn(
-                            "Rejected Slack install: team={} is ACTIVE in workspace={}, target workspace={}",
-                            sanitizeForLog(teamId),
+                            "Rejected {} connect: instanceKey={} is held by workspace={}, target workspace={}",
+                            kind,
+                            sanitizeForLog(instanceKey),
                             owner.getId(),
                             workspaceId);
                     return administers(owner.getId(), actorRef)
-                            ? "This Slack workspace is already connected to the Hephaestus workspace \""
+                            ? "This " + exclusive.noun() + " is already connected to the Hephaestus workspace \""
                                     + owner.getDisplayName() + "\" (" + owner.getWorkspaceSlug()
-                                    + "). Disconnect Slack there before connecting it here."
-                            : "This Slack workspace is already connected to another Hephaestus workspace."
-                                    + " An administrator of that workspace must disconnect Slack there first.";
+                                    + "). Disconnect " + exclusive.provider() + " there before connecting it here."
+                            : "This " + exclusive.noun() + " is already connected to another Hephaestus workspace."
+                                    + " An administrator of that workspace must disconnect " + exclusive.provider()
+                                    + " there first.";
                 });
     }
 
@@ -238,8 +270,9 @@ public class OAuthCallbackService {
                         null,
                         null,
                         ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        new HashSet<>());
-            case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, null, null, new HashSet<>());
+                        new HashSet<>(),
+                        null);
+            case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, new HashSet<>());
             case OUTLINE -> new ConnectionConfig.OutlineConfig(null, null, null, new HashSet<>());
         };
     }
@@ -255,16 +288,33 @@ public class OAuthCallbackService {
         // hand back a config blob; null leaves the placeholder seeded by
         // findOrCreatePendingConnection in place.
         if (completed.config() != null) {
-            connection.setConfig(completed.config());
+            connection.setConfig(refreshedConfig(connection, completed.config()));
         }
     }
 
-    /** A Slack team can be ACTIVE in only one workspace; the message is safe to show the caller. */
-    static final class SlackTeamConnectedElsewhereException extends RuntimeException {
+    /**
+     * Reauthorizing the Slack team an active or suspended connection already holds refreshes its credential and team
+     * name only: the provider knows nothing of the workspace's retention or streams, so its defaults must not replace
+     * them. An uninstalled row starts over, because disconnecting erased what those settings governed.
+     */
+    private static ConnectionConfig refreshedConfig(Connection connection, ConnectionConfig vendor) {
+        if ((connection.getState() == IntegrationState.ACTIVE || connection.getState() == IntegrationState.SUSPENDED)
+                && vendor instanceof ConnectionConfig.SlackConfig refreshed
+                && connection.getConfig() instanceof ConnectionConfig.SlackConfig current
+                && refreshed.teamId() != null
+                && refreshed.teamId().equals(current.teamId())) {
+            return new ConnectionConfig.SlackConfig(
+                    refreshed.teamId(), refreshed.teamName(), current.retentionDays(), current.enabledStreams());
+        }
+        return vendor;
+    }
+
+    /** A Slack team or GitHub App installation that another workspace holds; the message is safe to show the caller. */
+    static final class InstanceConnectedElsewhereException extends RuntimeException {
 
         private static final long serialVersionUID = 1L;
 
-        SlackTeamConnectedElsewhereException(String message, @Nullable Throwable cause) {
+        InstanceConnectedElsewhereException(String message, @Nullable Throwable cause) {
             super(message, cause);
         }
     }

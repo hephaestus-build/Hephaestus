@@ -77,7 +77,7 @@ this association rather than comparing login names.
 ## Installed clients
 
 An *installed client* — the Chrome extension, later a mobile app — cannot hold the web app's cookie,
-so it signs in to a session of its own. [ADR 0045](decisions/0045-installed-clients-sign-in-with-a-pkce-handoff.md)
+so it signs in to a session of its own. [ADR 0048](decisions/0048-installed-clients-sign-in-with-a-pkce-handoff.md)
 records the decision and the options it rejected; `core.auth.clientsession` implements it.
 
 ```mermaid

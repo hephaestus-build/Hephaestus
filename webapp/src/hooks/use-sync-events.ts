@@ -17,8 +17,8 @@ import {
 import type { ConnectionSummary, IntegrationCatalogEntry } from "@/api/types.gen";
 import environment from "@/environment";
 import { isRecord } from "@/lib/is-record";
-import { queryOperationId } from "@/lib/query-operation-id";
 import { hasText } from "@/lib/text";
+import { invalidateWorkspaceReads } from "@/runtime/tanstack-query/invalidate-workspace-reads";
 
 type SyncEventScope = "job" | "resources" | "connection" | "activity";
 
@@ -157,20 +157,11 @@ export function useSyncEvents(workspaceSlug: string | undefined): boolean {
 		 * because `invalidateQueries` cancels in-flight fetches.
 		 */
 		const resyncIntegrationQueries = () => {
-			const familyIds = integrationQueryFamilyIds(workspaceSlug);
-			void queryClient.invalidateQueries({
-				predicate: ({ queryKey }) => {
-					const id = queryOperationId(queryKey);
-					if (id === undefined || !familyIds.has(id)) {
-						return false;
-					}
-					const [key] = queryKey;
-					if (!isRecord(key) || !isRecord(key.path)) {
-						return false;
-					}
-					return key.path.workspaceSlug === workspaceSlug;
-				},
-			});
+			void invalidateWorkspaceReads(
+				queryClient,
+				workspaceSlug,
+				integrationQueryFamilyIds(workspaceSlug),
+			);
 		};
 
 		const applyHint = ({ scope, connectionId }: SyncEventHint) => {

@@ -1,69 +1,40 @@
-import type { InfiniteData } from "@tanstack/react-query";
-
 import type {
 	FeedbackResponseRequest,
 	ObservationDetail,
 	PracticeGroupReviewRun,
-	PracticeGroupReviewRunsPage,
 } from "@/api/types.gen";
-import { type PanelState, queryLoadState } from "@/components/common/panel-state";
-import { loadedPages } from "@/runtime/tanstack-query/spring-page";
+import type { PanelState } from "@/components/common/panel-state";
+import {
+	type InfiniteQueryLike,
+	infiniteListState,
+	type MorePages,
+} from "@/runtime/tanstack-query/infinite-list";
 
-/** The review-run feed of one practice level, with its paging while earlier runs exist. */
-export type ReviewRunFeedState = PanelState<{
-	runs: PracticeGroupReviewRun[];
-	hasMore: boolean;
-	isLoadingMore: boolean;
-	onLoadMore: () => void;
-}>;
+/**
+ * A feed of reviews, newest first, with its paging while earlier ones exist: a practice level's
+ * reviews on one group, or the reviews of the reader's own work.
+ */
+export type ReviewRunFeedState<TRun = PracticeGroupReviewRun> = PanelState<
+	{ runs: TRun[] } & MorePages
+>;
 
 /**
  * A level with no runs of its own: ready, empty, and with nothing more to load — `hasMore: false`
  * keeps the paging button off screen, so the callback is never reached.
  */
-export const EMPTY_REVIEW_RUN_FEED: ReviewRunFeedState = {
+export const EMPTY_REVIEW_RUN_FEED = {
 	status: "ready",
 	runs: [],
 	hasMore: false,
 	isLoadingMore: false,
 	onLoadMore: () => undefined,
-};
-
-/**
- * How every review-run feed pages: a page says whether another follows and which number it is, and
- * the feed ends where it does not.
- */
-export function nextReviewRunPage(lastPage: PracticeGroupReviewRunsPage): number | undefined {
-	return lastPage.hasNext === true ? (lastPage.page ?? 0) + 1 : undefined;
-}
-
-/** The slice of an infinite query the feed reads, so a hook hands its result in as it is. */
-interface ReviewRunQuery {
-	isError: boolean;
-	error: unknown;
-	isPending: boolean;
-	data: InfiniteData<PracticeGroupReviewRunsPage> | undefined;
-	hasNextPage: boolean;
-	isFetchingNextPage: boolean;
-	refetch: () => unknown;
-	fetchNextPage: () => unknown;
-}
+} satisfies ReviewRunFeedState<never>;
 
 /** One infinite query as the feed's state: failed, loading, or the loaded pages as one list. */
-export function reviewRunFeedState(query: ReviewRunQuery): ReviewRunFeedState {
-	const state = queryLoadState(query);
-	if (state.status !== "ready") {
-		return state;
-	}
-	return {
-		status: "ready",
-		runs: loadedPages(query.data).flatMap((page) => page.content),
-		hasMore: query.hasNextPage,
-		isLoadingMore: query.isFetchingNextPage,
-		onLoadMore: () => {
-			void query.fetchNextPage();
-		},
-	};
+export function reviewRunFeedState<TRun>(
+	query: InfiniteQueryLike<{ content: TRun[] }>,
+): ReviewRunFeedState<TRun> {
+	return infiniteListState(query, (pages) => ({ runs: pages.flatMap((page) => page.content) }));
 }
 
 /**

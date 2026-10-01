@@ -1,0 +1,7 @@
+query GetUsersByIds($ids: [ID!]!, $first: Int!) {
+    users(ids: $ids, first: $first) {
+        nodes {
+            ...GitLabUserFields
+        }
+    }
+}

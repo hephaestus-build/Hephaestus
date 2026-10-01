@@ -37,6 +37,27 @@ export const DELIVERY_PLACE_DEFS: StatusDefs<DeliveryPlace> = {
 };
 
 /**
+ * What an operator is told in place of the text for the places whose text the server withholds from every
+ * operator surface. Absent text there is private, not missing, so it must never read as "nothing was composed";
+ * the conversation lane may also hold no notes at all, which an operator cannot tell apart, so its words allow
+ * for that.
+ */
+export const OPERATOR_WITHHELD_TEXT: Partial<
+	Record<DeliveryPlace, { title: string; detail: string }>
+> = {
+	IN_CHAT: {
+		title: "Notes for the conversation are private",
+		detail:
+			"Any notes prepared for the developer's next conversation with the mentor are private to them and withheld from operators.",
+	},
+	IN_APP: {
+		title: "Text is private to the developer",
+		detail:
+			"The text was written for the developer's own practice pages and is withheld from operators.",
+	},
+};
+
+/**
  * The places worth offering as a filter — now all of them.
  *
  * <p>`IN_APP` was held out while the channel was declared and unwritten, because a filter for it

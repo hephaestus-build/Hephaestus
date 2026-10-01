@@ -13,7 +13,7 @@ public class FabricLayout {
     private final Path root;
 
     public FabricLayout(@Value("${hephaestus.fabric.root:/data/git-repos}") String root) {
-        this.root = Path.of(root);
+        this.root = Path.of(root).toAbsolutePath().normalize();
     }
 
     public Path root() {

@@ -13,6 +13,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationFeedbackPreparedEvent;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -23,6 +25,8 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 
@@ -48,6 +52,9 @@ class SlackConversationNudgeServiceTest extends BaseUnitTest {
     @Mock
     private MentorReadinessQuery mentorReadinessQuery;
 
+    @Mock
+    private MentorTurnRunner mentorTurnRunner;
+
     private SlackConversationNudgeService service;
 
     @BeforeEach
@@ -57,7 +64,8 @@ class SlackConversationNudgeServiceTest extends BaseUnitTest {
                 accountPreferencesQuery,
                 identityResolver,
                 slackMessageService,
-                mentorReadinessQuery);
+                mentorReadinessQuery,
+                mentorTurnRunner);
     }
 
     private static ConversationFeedbackPreparedEvent event(int unitCount) {
@@ -141,6 +149,21 @@ class SlackConversationNudgeServiceTest extends BaseUnitTest {
 
         verify(slackMessageService).sendForWorkspace(eq(WS), eq(SLACK_USER), anyList(), anyString());
         verify(slackMessageService).sendForWorkspace(eq(otherWorkspace), eq(otherSlackUser), anyList(), anyString());
+    }
+
+    @ParameterizedTest
+    @EnumSource(names = {"NO_AI", "UNAVAILABLE"})
+    void shouldInviteOnLaterEventWhenRecipientBecomesEligible(MentorRefusal refusal) {
+        stubAllGuardsPass();
+        when(mentorTurnRunner.refusal(WS, RECIPIENT))
+                .thenReturn(Optional.of(refusal))
+                .thenReturn(Optional.empty());
+
+        service.onConversationFeedbackPrepared(event(2));
+        verifyNoInteractions(slackMessageService);
+
+        service.onConversationFeedbackPrepared(event(1));
+        verify(slackMessageService, times(1)).sendForWorkspace(eq(WS), eq(SLACK_USER), anyList(), anyString());
     }
 
     @Test

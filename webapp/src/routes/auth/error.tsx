@@ -1,11 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 
-import { buttonVariants } from "@/components/ui/button";
+import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { hasText } from "@/lib/text";
+import { useAuth } from "@/runtime/auth/AuthContext";
+import { safeReturnTo } from "@/runtime/auth/guard";
 
 interface ErrorSearch {
 	code?: string;
+	/** Where linking was headed, set by the server on a recent-sign-in refusal. */
+	returnTo?: string;
 }
 
 /** PII-free, friendly copy keyed by the server's auth-failure codes. */
@@ -46,7 +53,7 @@ const ERROR_COPY: Record<string, { title: string; description: string }> = {
 		// read as a rejected identity.
 		title: "Confirm access before linking that account",
 		description:
-			"Linking an identity needs a recent sign-in. Sign in again with an identity already linked to your account, then link from Settings.",
+			"Linking an identity needs a recent sign-in. Confirm access with an identity already linked to your account, then link it again.",
 	},
 	client_not_registered: {
 		// Reached inside the browser extension's sign-in window: the instance does not list that
@@ -76,13 +83,20 @@ export const Route = createFileRoute("/auth/error")({
 	staticData: { surface: "auth" },
 	validateSearch: (search): ErrorSearch => ({
 		code: typeof search.code === "string" ? search.code : undefined,
+		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,
 	}),
 	component: AuthErrorPage,
 });
 
 function AuthErrorPage() {
-	const { code } = Route.useSearch();
+	const { code, returnTo } = Route.useSearch();
 	const { title, description } = describe(code);
+	const { isAuthenticated } = useAuth();
+	const recovery = code === "step_up_required";
+	// Linking always names where it was headed; a refusal from before it did falls back to where linking lives.
+	const destination = safeReturnTo(returnTo) === "/" ? "/settings" : safeReturnTo(returnTo);
+	const [confirming, setConfirming] = useState(false);
+	const confirmAccess = useConfirmAccess(confirming, destination);
 
 	return (
 		<div className="flex min-h-[100dvh] items-center justify-center p-4">
@@ -97,11 +111,32 @@ function AuthErrorPage() {
 					<CardDescription>{description}</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<Link to="/login" className={buttonVariants({ className: "w-full" })}>
-						Back to sign in
-					</Link>
+					{recovery && isAuthenticated ? (
+						// Signing in through /login would bounce straight back to the workspace: this session
+						// is valid, only too old to link with.
+						<Button className="w-full" onClick={() => setConfirming(true)}>
+							Confirm access
+						</Button>
+					) : (
+						<Link
+							to="/login"
+							search={recovery ? { returnTo: destination } : undefined}
+							className={buttonVariants({ className: "w-full" })}
+						>
+							Back to sign in
+						</Link>
+					)}
 				</CardContent>
 			</Card>
+			<ConfirmAccessDialog
+				open={confirming}
+				onOpenChange={setConfirming}
+				providers={confirmAccess.providers}
+				loading={confirmAccess.loading}
+				error={confirmAccess.error}
+				onRetry={confirmAccess.retry}
+				onSignIn={confirmAccess.signIn}
+			/>
 		</div>
 	);
 }

@@ -10,8 +10,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -56,18 +58,21 @@ public class SandboxReconciler {
     private final Timer reconciliationDuration;
     private final Clock clock;
     private final SandboxVolumeManager volumeManager;
+    private final SandboxCreator creator;
 
     public SandboxReconciler(
             AgentJobRepository jobRepository,
             SandboxContainerManager containerManager,
             SandboxNetworkManager networkManager,
             SandboxVolumeManager volumeManager,
+            SandboxCreator creator,
             MeterRegistry meterRegistry,
             Clock clock) {
         this.jobRepository = jobRepository;
         this.containerManager = containerManager;
         this.networkManager = networkManager;
         this.volumeManager = volumeManager;
+        this.creator = creator;
         this.clock = clock;
         this.orphanedContainers = Counter.builder(AgentMetrics.SANDBOX_RECONCILER_ORPHANED)
                 .tag("resource", "container")
@@ -170,7 +175,7 @@ public class SandboxReconciler {
                 }
                 try {
                     UUID jobId = UUID.fromString(jobIdStr);
-                    if (activeJobIds.contains(jobId) || isYoung(container)) {
+                    if (activeJobIds.contains(jobId) || isYoung(container.createdAt())) {
                         inUse.add(jobId);
                         continue;
                     }
@@ -194,9 +199,21 @@ public class SandboxReconciler {
     }
 
     /** The job set is read before the container list, so a sandbox started in between is not in it. */
-    private boolean isYoung(DockerOperations.ContainerInfo container) {
-        return container.createdAt() == null
-                || container.createdAt().isAfter(clock.instant().minus(REAP_GRACE));
+    private boolean isYoung(@Nullable Instant createdAt) {
+        return createdAt == null || createdAt.isAfter(clock.instant().minus(REAP_GRACE));
+    }
+
+    /**
+     * A practice review's network and volumes follow its job, which is neither queued nor running by
+     * now. A mentor sandbox's exist long before, and between, the containers that claim them, and only
+     * the process that created them knows they are wanted, so they go only once that recorded creator
+     * is positively gone. A network with neither record predates them and could be either; it is kept.
+     */
+    private boolean isAbandoned(Map<String, String> labels, @Nullable Instant createdAt) {
+        if (labels.containsKey(SandboxLabels.SESSION_ID)) {
+            return creator.liveness(labels) == SandboxCreator.Liveness.GONE;
+        }
+        return labels.containsKey(SandboxLabels.JOB_ID) && !isYoung(createdAt);
     }
 
     private static Optional<UUID> parseUuid(@Nullable String value) {
@@ -219,11 +236,9 @@ public class SandboxReconciler {
                     continue;
                 }
                 try {
-                    if (java.time.Instant.parse(createdAt)
-                            .isAfter(clock.instant().minus(REAP_GRACE))) {
-                        continue;
+                    if (isAbandoned(volume.labels(), Instant.parse(createdAt))) {
+                        volumeManager.removeVolume(volume.name());
                     }
-                    volumeManager.removeVolume(volume.name());
                 } catch (RuntimeException exception) {
                     log.warn("Could not reconcile attempt volume {}", volume.name(), exception);
                 }
@@ -246,10 +261,17 @@ public class SandboxReconciler {
                 String jobIdStr = name.substring(networkManager.networkPrefix().length());
                 try {
                     UUID jobId = UUID.fromString(jobIdStr);
-                    if (!activeJobIds.contains(jobId) && !inUse.contains(jobId)) {
-                        log.warn("Removing orphaned network: id={}, name={}", network.id(), name);
-                        networkManager.forceRemoveNetwork(network.id(), name);
+                    if (activeJobIds.contains(jobId) || inUse.contains(jobId)) {
+                        continue;
+                    }
+                    if (!isAbandoned(network.labels(), network.createdAt())) {
+                        continue;
+                    }
+                    if (networkManager.removeUnlessInUse(network.id(), name)) {
+                        log.warn("Removed orphaned network: id={}, name={}", network.id(), name);
                         orphanedNetworks.increment();
+                    } else {
+                        log.info("Kept network a sandbox is attached to: id={}, name={}", network.id(), name);
                     }
                 } catch (IllegalArgumentException e) {
                     log.debug("Network {} has non-UUID suffix: {}", name, jobIdStr);

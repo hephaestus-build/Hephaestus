@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerExcepti
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerTimeoutException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +55,7 @@ public final class MentorRunnerClient implements AutoCloseable {
     private final Consumer<JsonNode> onEvent;
     private final Runnable onStreamLost;
     private final Function<FetchContextRequest, JsonNode> fetchContextHandler;
+    private final Predicate<LinkObservationRequest> linkObservationHandler;
     private final ScheduledExecutorService timeoutScheduler;
 
     /**
@@ -88,6 +91,7 @@ public final class MentorRunnerClient implements AutoCloseable {
             Consumer<JsonNode> onEvent,
             Runnable onStreamLost,
             Function<FetchContextRequest, JsonNode> fetchContextHandler,
+            Predicate<LinkObservationRequest> linkObservationHandler,
             ScheduledExecutorService timeoutScheduler,
             UUID boundThreadId) {
         this.sandbox = Objects.requireNonNull(sandbox, "sandbox");
@@ -95,6 +99,7 @@ public final class MentorRunnerClient implements AutoCloseable {
         this.onEvent = Objects.requireNonNull(onEvent, "onEvent");
         this.onStreamLost = Objects.requireNonNull(onStreamLost, "onStreamLost");
         this.fetchContextHandler = Objects.requireNonNull(fetchContextHandler, "fetchContextHandler");
+        this.linkObservationHandler = Objects.requireNonNull(linkObservationHandler, "linkObservationHandler");
         this.timeoutScheduler = Objects.requireNonNull(timeoutScheduler, "timeoutScheduler");
         this.boundThreadId = Objects.requireNonNull(boundThreadId, "boundThreadId");
     }
@@ -114,16 +119,21 @@ public final class MentorRunnerClient implements AutoCloseable {
         return call("hello", objectMapper.createObjectNode(), DEFAULT_CONTROL_TIMEOUT);
     }
 
-    public CompletableFuture<JsonNode> openThread(UUID threadId) {
+    /** {@code session} is the thread's saved Pi session JSONL; the runner restores it unless it holds its own. */
+    public CompletableFuture<JsonNode> openThread(UUID threadId, byte @Nullable [] session) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("threadId", threadId.toString());
+        if (session != null && session.length > 0) {
+            params.put("session", new String(session, StandardCharsets.UTF_8));
+        }
         return call("open_thread", params, DEFAULT_CONTROL_TIMEOUT);
     }
 
-    public CompletableFuture<JsonNode> prompt(UUID threadId, String text) {
+    public CompletableFuture<JsonNode> prompt(UUID threadId, String text, String currentEvidence) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("threadId", threadId.toString());
         params.put("text", text);
+        params.put("currentEvidence", currentEvidence);
         return call("prompt", params, DEFAULT_PROMPT_TIMEOUT);
     }
 
@@ -237,6 +247,8 @@ public final class MentorRunnerClient implements AutoCloseable {
                 handleEvent(frame);
             } else if ("fetch_context".equals(method)) {
                 handleFetchContext(frame);
+            } else if ("link_observation".equals(method)) {
+                handleLinkObservation(frame);
             } else {
                 log.debug("Unknown runner-side method '{}' — ignoring", method);
             }
@@ -294,9 +306,9 @@ public final class MentorRunnerClient implements AutoCloseable {
     }
 
     private void handleFetchContext(JsonNode frame) {
-        // Runner-originated callbacks carry a string id (`fc-<uuid>`); Java-originated calls use
+        // Runner-originated callbacks carry a string id (`cb-<uuid>`); Java-originated calls use
         // numeric ids from REQUEST_IDS. We MUST echo the runner's id back unchanged — the
-        // runner indexes `pendingFetchContexts` by string key, so any coercion (asLong → 0) silently
+        // runner indexes `pendingCallbacks` by string key, so any coercion (asLong → 0) silently
         // breaks correlation and stalls the LLM tool call until the 10s timeout fires.
         JsonNode idNode = frame.get("id");
         JsonNode params = frame.get("params");
@@ -334,6 +346,48 @@ public final class MentorRunnerClient implements AutoCloseable {
         }
     }
 
+    /**
+     * The runner asks before its {@code link_observation} tool reports success or emits the link, so the server, not
+     * the model, decides which observation a reply may show feedback about. A refusal is one message whatever the
+     * reason, so the answer never tells an id that does not exist from one that belongs to someone else.
+     */
+    private void handleLinkObservation(JsonNode frame) {
+        JsonNode idNode = frame.get("id");
+        JsonNode params = frame.path("params");
+        if (!params.path("threadId").isString() || !params.path("observationId").isString()) {
+            sendCallbackError(idNode, -32602, LINK_REFUSED);
+            return;
+        }
+        UUID threadId;
+        UUID observationId;
+        try {
+            threadId = UUID.fromString(params.get("threadId").asString());
+            observationId = UUID.fromString(params.get("observationId").asString());
+        } catch (IllegalArgumentException ex) {
+            sendCallbackError(idNode, -32602, LINK_REFUSED);
+            return;
+        }
+        if (!boundThreadId.equals(threadId)) {
+            return;
+        }
+        try {
+            if (!linkObservationHandler.test(new LinkObservationRequest(threadId, observationId))) {
+                sendCallbackError(idNode, -32602, LINK_REFUSED);
+                return;
+            }
+            ObjectNode response = objectMapper.createObjectNode();
+            response.put("jsonrpc", "2.0");
+            response.set("id", idNode != null ? idNode : objectMapper.nullNode());
+            // Echoed as asked, so the runner can match its own request exactly.
+            response.putObject("result")
+                    .put("observationId", params.get("observationId").asString());
+            sandbox.send(response);
+        } catch (RuntimeException e) {
+            log.warn("link_observation callback failed: {}", e.getMessage(), e);
+            sendCallbackError(idNode, -32000, "link_observation could not be checked; nothing was shown");
+        }
+    }
+
     private void sendCallbackError(@Nullable JsonNode id, int code, String message) {
         try {
             ObjectNode response = objectMapper.createObjectNode();
@@ -344,12 +398,19 @@ public final class MentorRunnerClient implements AutoCloseable {
             error.put("message", message);
             sandbox.send(response);
         } catch (InteractiveSandboxException e) {
-            log.warn("Failed to send fetch_context error response: {}", e.getMessage(), e);
+            log.warn("Failed to send callback error response: {}", e.getMessage(), e);
         }
     }
 
     /** Server-callback request from the runner. */
     public record FetchContextRequest(UUID threadId, String path) {}
+
+    /** The runner's request to show feedback about one observation; the handler answers whether it may. */
+    public record LinkObservationRequest(UUID threadId, UUID observationId) {}
+
+    static final String LINK_REFUSED =
+            "Nothing was shown: that is not an observation of theirs you can give feedback on. Use the id of an item"
+                    + " in prepared_conversation_feedback.json or observations_history.json exactly as written.";
 
     private record PendingCall(CompletableFuture<JsonNode> future, ScheduledFuture<?> timeoutTask, String method) {}
 }

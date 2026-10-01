@@ -361,15 +361,19 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
     // link_observation (runner-emitted, camelCase canonical)
 
+    /** The observation {@code runner_link_observation.json} links. */
+    private static final UUID FIXTURE_LINK = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+
     @Test
     void linkObservation_camelCase_emitsDataObservation() throws Exception {
+        state.admitLink(FIXTURE_LINK);
         JsonNode event = fixture("runner_link_observation.json");
 
         List<UIMessageChunk> out = translator.translate(event, state);
 
         assertThat(out).hasSize(1);
         UIMessageChunk.DataObservation df = (UIMessageChunk.DataObservation) out.get(0);
-        assertThat(df.data().observationId()).isEqualTo(UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"));
+        assertThat(df.data().observationId()).isEqualTo(FIXTURE_LINK);
         assertThat(df.data().text()).startsWith("Your description names the decision");
         JsonNode stored = state.partsSnapshot().get(0);
         assertThat(stored.path("id").asString()).isEqualTo(df.id().toString());
@@ -391,7 +395,41 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldFailTheTurnWithoutShowingOrStoringALinkTheServerDidNotAdmit() throws Exception {
+        streamMessage("Let me look at your pull request.");
+
+        assertThat(translator.translate(fixture("runner_link_observation.json"), state))
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("Error");
+        assertThat(state.partsSnapshot())
+                .extracting(p -> p.get("type").asString())
+                .doesNotContain("data-observation");
+    }
+
+    @Test
+    void shouldShowOneLinkPerAdmissionAndFailTheTurnOnAReplayedOne() throws Exception {
+        state.admitLink(FIXTURE_LINK);
+        state.admitLink(FIXTURE_LINK);
+        streamMessage("Let me look at your pull request.");
+
+        assertThat(translator.translate(fixture("runner_link_observation.json"), state))
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("DataObservation");
+        assertThat(translator.translate(fixture("runner_link_observation.json"), state))
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("DataObservation");
+        assertThat(translator.translate(fixture("runner_link_observation.json"), state))
+                .extracting(c -> c.getClass().getSimpleName())
+                .containsExactly("Error");
+        assertThat(state.partsSnapshot())
+                .extracting(p -> p.get("type").asString())
+                .filteredOn("data-observation"::equals)
+                .hasSize(2);
+    }
+
+    @Test
     void shouldFinishWhenFeedbackIsShownBetweenVerifiedMessages() throws Exception {
+        state.admitLink(FIXTURE_LINK);
         streamMessage("Let me look at your pull request.");
         translator.translate(fixture("runner_link_observation.json"), state);
         streamMessage("What made you choose that approach?");
@@ -407,6 +445,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
     @Test
     void shouldStillFailWhenShownFeedbackSitsBesideALostMessage() throws Exception {
+        state.admitLink(FIXTURE_LINK);
         streamMessage("Let me look at your pull request.");
         translator.translate(fixture("runner_link_observation.json"), state);
 
@@ -449,6 +488,27 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
         assertThat(state.isStreamBroken()).isTrue();
+    }
+
+    @Test
+    @DisplayName("a compaction marks the turn as one its own usage report cannot account for")
+    void compactionHandsTheTurnsAccountToTheProxy() throws Exception {
+        translator.translate(fixture("message_end_assistant.json"), state);
+        assertThat(state.compactionAttempted()).isFalse();
+
+        assertThat(translator.translate(
+                        mapper.readTree("{\"type\":\"compaction_start\",\"reason\":\"threshold\"}"), state))
+                .isEmpty();
+        // Its aggregate usage adds nothing: it may cover two calls, or miss a call that failed.
+        assertThat(translator.translate(fixture("compaction_end_success.json"), state))
+                .isEmpty();
+
+        assertThat(state.compactionAttempted()).isTrue();
+        assertThat(java.util.Objects.requireNonNull(state.observedUsage())
+                        .get("input")
+                        .asInt())
+                .isEqualTo(25);
+        assertThat(state.observedCallCount()).isEqualTo(1);
     }
 
     @Test
@@ -630,6 +690,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         translator.translate(fixture("message_start_assistant.json"), state);
         streamDeltas("a");
         UUID observationId = UUID.randomUUID();
+        state.admitLink(observationId);
         translator.translate(
                 mapper.createObjectNode()
                         .put("type", "link_observation")

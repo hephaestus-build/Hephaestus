@@ -20,7 +20,8 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { hasText } from "@/lib/text";
+
+import { ACCOUNT_STATUS_LABELS, APP_ROLE_LABELS, type AppRole } from "./account-labels";
 
 export interface AdminUsersTableProps {
 	users: AdminAccountView[];
@@ -41,26 +42,16 @@ export interface AdminUsersTableProps {
 
 const COLUMN_COUNT = 6;
 
-function roleBadgeVariant(appRole: string | undefined) {
+function roleBadgeVariant(appRole: AppRole) {
 	return appRole === "APP_ADMIN" ? "default" : "secondary";
 }
 
-// Active is neutral; suspended / being-deleted are non-normal states and read as destructive.
-function statusBadgeVariant(status: string | undefined) {
-	if (!hasText(status)) {
-		return "outline" as const;
-	}
-	const normalized = status.toUpperCase();
-	if (normalized === "ACTIVE") {
-		return "secondary" as const;
-	}
-	if (normalized === "SUSPENDED" || normalized === "DELETING" || normalized === "DELETED") {
-		return "destructive" as const;
-	}
-	return "outline" as const;
+// Active is neutral; suspended and being-deleted are not normal states and read as destructive.
+function statusBadgeVariant(status: AdminAccountView["status"]) {
+	return status === "ACTIVE" ? "secondary" : "destructive";
 }
 
-function changeRoleLabel(isSelfAdmin: boolean, appRole: string | undefined) {
+function changeRoleLabel(isSelfAdmin: boolean, appRole: AppRole) {
 	if (isSelfAdmin) {
 		return "Can't revoke your own admin";
 	}
@@ -173,14 +164,12 @@ function UserRows({
 				<TableCell className="font-medium">{name}</TableCell>
 				<TableCell className="text-muted-foreground">{user.primaryEmail ?? "—"}</TableCell>
 				<TableCell>
-					<Badge variant={roleBadgeVariant(user.appRole)}>{user.appRole ?? "USER"}</Badge>
+					<Badge variant={roleBadgeVariant(user.appRole)}>{APP_ROLE_LABELS[user.appRole]}</Badge>
 				</TableCell>
 				<TableCell>
-					{hasText(user.status) ? (
-						<Badge variant={statusBadgeVariant(user.status)}>{user.status}</Badge>
-					) : (
-						<span className="text-muted-foreground">—</span>
-					)}
+					<Badge variant={statusBadgeVariant(user.status)}>
+						{ACCOUNT_STATUS_LABELS[user.status]}
+					</Badge>
 				</TableCell>
 				<TableCell className="text-right">
 					<DropdownMenu>

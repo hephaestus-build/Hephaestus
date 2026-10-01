@@ -41,6 +41,15 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
             @Param("threadId") UUID threadId,
             @Param("excludedMessageId") @Nullable UUID excludedMessageId);
 
+    Optional<ChatMessage> findByIdAndThread_Id(UUID id, UUID threadId);
+
+    boolean existsByThread_IdAndRoleAndCreatedAtAfter(UUID threadId, ChatMessage.Role role, Instant createdAt);
+
+    boolean existsByThread_IdAndStatus(UUID threadId, ChatMessage.Status status);
+
+    boolean existsByParentMessageIdAndRoleAndCreatedAtAfter(
+            UUID parentMessageId, ChatMessage.Role role, Instant createdAt);
+
     @Query(
             "SELECT m FROM ChatMessage m JOIN FETCH m.thread t JOIN FETCH t.workspace "
                     + "WHERE m.status = de.tum.cit.aet.hephaestus.mentor.ChatMessage.Status.in_flight AND m.createdAt < :cutoff")

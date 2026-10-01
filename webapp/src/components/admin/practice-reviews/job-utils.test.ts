@@ -55,8 +55,8 @@ describe("holdReasonCopy", () => {
 		expect(holdReasonCopy("BUDGET").detail).toMatch(/resumes on its own/u);
 	});
 
-	it("reads a reason it has never seen as English rather than as a constant", () => {
-		expect(holdReasonCopy("MODEL_UNAVAILABLE").label).toBe("Model unavailable");
+	it("reads a reason it has never seen as a plain hold, never as its constant", () => {
+		expect(holdReasonCopy("MODEL_UNAVAILABLE").label).toBe("On hold");
 		expect(holdReasonCopy("MODEL_UNAVAILABLE").detail).toMatch(/resumes on its own/u);
 	});
 

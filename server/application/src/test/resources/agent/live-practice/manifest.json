@@ -1,5 +1,5 @@
 {
-  "contractVersion": "1.2.0",
+  "contractVersion": "1.3.0",
   "catalogDigest": "51d5881fa473f13dd31b75fe8c6784db97a51fc5c9cb7f90935674bbdd36938a",
   "artifactKind": "scm.pull_request",
   "capturedAt": "2026-01-01T00:00:00Z",
@@ -12,7 +12,7 @@
       },
       "artifacts": [
         {
-          "path": "inputs/context/change.json"
+          "path": "context/change.json"
         }
       ]
     },
@@ -24,7 +24,7 @@
       },
       "artifacts": [
         {
-          "path": "inputs/context/metadata.json"
+          "path": "context/metadata.json"
         }
       ]
     },
@@ -36,9 +36,30 @@
       },
       "artifacts": [
         {
-          "path": "inputs/context/comments.json"
+          "path": "context/comments.json"
         }
       ]
     }
-  ]
+  ],
+  "artifacts": [
+    {
+      "kind": "scm.pull-request.diff",
+      "artifact": {
+        "path": "context/change.json"
+      }
+    },
+    {
+      "kind": "scm.pull-request.core",
+      "artifact": {
+        "path": "context/metadata.json"
+      }
+    },
+    {
+      "kind": "scm.pull-request.comments",
+      "artifact": {
+        "path": "context/comments.json"
+      }
+    }
+  ],
+  "refusals": []
 }

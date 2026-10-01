@@ -113,7 +113,7 @@ or on "the only" result, and never write cleanup that another test depends on ha
   (`WorkspaceMembershipService`, `GitHubUserProcessor`). Everything else is constructor injection via
   `@RequiredArgsConstructor`.
 - **A bean that exists in one runtime role only is gated on that role** (`@ConditionalOnProperty` on
-  a `RuntimeRole` property, as in `LeaderboardTaskScheduler`), and a consumer that must survive its
+  a `RuntimeRole` property, as in `ShedLockConfig`), and a consumer that must survive its
   absence takes `ObjectProvider` (`WorkspaceSyncTargetProvider`). An ungated consumer crash-loops the
   `worker` and `webhook` runtimes, which start a different slice of the context.
 - **A test-tree `package-info.java` shadows the main one.** Test classes sit first on the classpath,
@@ -171,9 +171,13 @@ envelope to JetStream, all gated on `RuntimeRole.WEBHOOK_PROPERTY`. Configuratio
   with `SPRING_PROFILES_ACTIVE=prod,webhook` — so an app-server deploy does not interrupt reception.
   That matters because push events on GitHub and GitLab are **not manually redeliverable**: a webhook
   missed during a restart is lost.
-- **Subject grammar**: `github.<owner>.<repo>.<event>`, `gitlab.<namespace>.<project>.<event>`. Dots
-  inside a path segment become `~`; nested GitLab groups join with `~`. The consumer-side builder
-  `integration.core.consumer.ConsumerSubjectMath#buildSubjectPrefix` must agree —
+- **Subject grammar**: `github.<owner>.<repo>.<event>`; registered GitLab group hooks use
+  `gitlab.?connection.<connectionId>.<event>` from `GitlabSubjectKeyDeriver.deriveConnectionSubject`,
+  after the connection endpoint verifies the route credential. Operator-created GitLab hooks on
+  the shared endpoint retain `gitlab.<namespace>.<project>.<event>`.
+  `ConsumerSubjectMath#connectionFilter` matches connection subjects;
+  `ConsumerSubjectMath#buildSubjectPrefix` matches path subjects, where dots inside a path segment
+  become `~` and nested GitLab groups join with `~`. Producer and consumer must agree —
   `SubjectGrammarRoundTripTest` enforces it for every committed fixture.
 - **ArchUnit guards the primitives**: `HexEncodingArchTest` (only `HexFormat.of()`),
   `LocaleSafetyArchTest` (no naked `toLowerCase`/`toUpperCase`). `application/build.gradle.kts` sets

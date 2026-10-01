@@ -1,15 +1,12 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, Outlet, useLocation, useMatchRoute } from "@tanstack/react-router";
+import { focusManager, useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, Outlet, useLocation, useMatchRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
 
-import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
-import { HephIcon } from "@/components/brand/HephIcon";
-import { EmptyState } from "@/components/common/EmptyState";
-import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
+import {
+	getMemberOnboardingOptions,
+	prepareMentorSandboxMutation,
+} from "@/api/@tanstack/react-query.gen";
 import { WorkspaceMentorPreferenceNotice } from "@/components/onboarding/WorkspaceMentorPreferenceNotice";
-import { buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
-import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { mentorPreferenceReason } from "@/lib/mentor-preference";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { getUserViewSession } from "@/runtime/user-view/session";
@@ -32,46 +29,6 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")(
 function MentorLayout() {
 	const { workspaceSlug } = Route.useParams();
 	const { userView } = useAuth();
-	const featureState = useWorkspaceFeatures(workspaceSlug);
-	const mentorEnabled = featureState.features?.mentorEnabled;
-
-	if (!featureState.isLoading && !featureState.isError && mentorEnabled === false) {
-		return (
-			<div className="flex h-full items-center justify-center p-6">
-				<EmptyState
-					icon={<HephIcon />}
-					title="Heph is off in this workspace"
-					description="A workspace admin can turn on Chat with Heph under Administration → Settings."
-					action={
-						<Link to="/w/$workspaceSlug" params={{ workspaceSlug }} className={buttonVariants()}>
-							Go to workspace home
-						</Link>
-					}
-				/>
-			</div>
-		);
-	}
-
-	if (featureState.isError) {
-		return (
-			<StandardPageSurface className="h-full overflow-auto">
-				<QueryErrorAlert
-					error={featureState.error}
-					title="Couldn't load workspace features"
-					onRetry={featureState.refetch}
-				/>
-			</StandardPageSurface>
-		);
-	}
-
-	if (featureState.isLoading || mentorEnabled !== true) {
-		return (
-			<div className="flex min-h-0 flex-1 items-center justify-center">
-				<Spinner className="h-8 w-8" />
-			</div>
-		);
-	}
-
 	return userView ? <Outlet /> : <MentorPreferenceGate workspaceSlug={workspaceSlug} />;
 }
 
@@ -82,6 +39,7 @@ function MentorPreferenceGate({ workspaceSlug }: { workspaceSlug: string }) {
 	// than hiding a readable conversation behind an alert.
 	const preference = useSuspenseQuery(getMemberOnboardingOptions({ path: { workspaceSlug } }));
 	const notice = mentorPreferenceReason(preference.data);
+	usePrepareHeph(workspaceSlug, notice === undefined);
 	if (notice) {
 		return (
 			<div className="flex min-h-0 flex-1 flex-col">
@@ -95,4 +53,24 @@ function MentorPreferenceGate({ workspaceSlug }: { workspaceSlug: string }) {
 		);
 	}
 	return <Outlet />;
+}
+
+/**
+ * Starts the member's Heph sandbox while they type, and again when they come back to the tab after it may have
+ * gone idle. The server returns at once and does nothing when the sandbox is warm or Heph could not answer.
+ */
+function usePrepareHeph(workspaceSlug: string, enabled: boolean) {
+	const { mutate } = useMutation(prepareMentorSandboxMutation());
+	useEffect(() => {
+		if (!enabled) {
+			return;
+		}
+		const prepare = () => mutate({ path: { workspaceSlug } });
+		prepare();
+		return focusManager.subscribe((focused) => {
+			if (focused) {
+				prepare();
+			}
+		});
+	}, [enabled, mutate, workspaceSlug]);
 }

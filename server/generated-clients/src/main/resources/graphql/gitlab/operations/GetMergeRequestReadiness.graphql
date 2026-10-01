@@ -1,0 +1,49 @@
+# One merge request's merge readiness for its current head, and its merge once merged, read after its webhook.
+query GetMergeRequestReadiness($fullPath: ID!, $iid: String!) {
+    project(fullPath: $fullPath) {
+        id
+        mergeRequest(iid: $iid) {
+            id
+            iid
+            state
+            updatedAt
+            diffHeadSha
+            mergeable
+            detailedMergeStatus
+            approved
+            # Who merged it and what the merge left, for a merged merge request; null otherwise.
+            mergedAt
+            mergeCommitSha
+            mergeUser {
+                ...GitLabUserFields
+            }
+            headPipeline {
+                status
+                sha
+            }
+            reviewers(first: 20) {
+                count
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+                nodes {
+                    ...GitLabUserFields
+                    mergeRequestInteraction {
+                        reviewState
+                    }
+                }
+            }
+            approvedBy(first: 20) {
+                count
+                pageInfo {
+                    hasNextPage
+                    endCursor
+                }
+                nodes {
+                    ...GitLabUserFields
+                }
+            }
+        }
+    }
+}

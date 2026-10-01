@@ -1,10 +1,10 @@
 import path from "node:path";
 
-export const SUPPORTED_SCHEMA_VERSION = 2;
+export const SUPPORTED_SCHEMA_VERSION = 3;
 
 export function taskPaths(value: unknown) {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
-		throw new Error("task.json: paths must be an object");
+		throw new Error("task.json must be an object");
 	}
 	const object = value;
 	function workspacePath(key: string): string {
@@ -15,7 +15,7 @@ export function taskPaths(value: unknown) {
 			/[\\:\p{Cc}]/u.test(candidate) ||
 			candidate.split("/").some((part) => !part || part === "." || part === "..")
 		) {
-			throw new Error(`task.json: paths.${key} must be a normalized workspace-relative path`);
+			throw new Error(`task.json: ${key} must be a normalized workspace-relative path`);
 		}
 		return candidate;
 	}

@@ -1,10 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.trace.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 /**
  * One line in the index of everything this workspace was in a position to say something about.
@@ -17,16 +17,13 @@ import org.jspecify.annotations.Nullable;
 public record TracedArtifactDTO(
         @NonNull ArtifactKind artifactKind,
         @NonNull Long artifactId,
-        @NonNull String title,
 
-        @Schema(description = "The number the provider shows, for kinds that have one") @Nullable
-        Integer number,
-
-        @Schema(description = "Repository, collection or channel it sits in") @Nullable
-        String container,
-
-        @Schema(description = "Where to open it upstream; absent for a deleted or unlinkable artifact") @Nullable
-        String url,
+        @NonNull
+        @Schema(
+                description = "The work as every surface names it: its provider, the label the provider writes "
+                        + "(\"#1423\", \"!1423\"), its title, where it sits and where to open it; the link is "
+                        + "absent for deleted work")
+        ReviewedWorkRefDTO reviewedWork,
 
         @NonNull Instant lastSignalAt,
 

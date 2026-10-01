@@ -9,7 +9,6 @@ x-practice-review-env:
   # Feature visibility, separate from the review gate above.
   PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR: ${PRACTICE_REVIEW_MAX_REQUESTS_PER_REQUESTER_PER_HOUR:-5}
   PRACTICE_REVIEW_PROGRESS_FOOTER: ${PRACTICE_REVIEW_PROGRESS_FOOTER:-false}
-  PRACTICE_REVIEW_REACTION_SUPPRESSION: ${PRACTICE_REVIEW_REACTION_SUPPRESSION:-false}
   # The sampling temperature of every review model call; unset leaves the model's own default.
   PRACTICE_REVIEW_SAMPLING_TEMPERATURE: ${PRACTICE_REVIEW_SAMPLING_TEMPERATURE:-}
   # Spend guardrails for reviewing past work. A campaign is priced before it runs; these bound what
@@ -154,6 +153,9 @@ services:
         max-file: "5"
 
   application-server:
+    # Management is reachable only inside the Compose network; never publish or proxy it.
+    expose:
+      - "9090"
     image: "${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
     # Bounds heap sizing to this container; without it the JVM targets host RAM and co-located
     # services oversubscribe and swap. Hosts the NATS sync consumers, so it takes the largest limit.
@@ -163,6 +165,8 @@ services:
     ports:
       - "8080"
     environment:
+      # Compose preserves the placeholder; Spring resolves it on shared-network, not sandbox interfaces.
+      MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       # The buildpack's 10M MaxDirectMemorySize sits below this role's steady NIO
       # footprint (NATS + HTTP); give it headroom.
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"
@@ -177,6 +181,8 @@ services:
       # + docker/compose.core.yaml). Disable it here so the receiver beans don't load
       # in application-server (saves RAM; prevents accidental localhost traffic).
       HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"
+      # Sandboxes run on application-worker, the only service given the Docker socket.
+      HEPHAESTUS_RUNTIME_WORKER_ENABLED: "false"
       # Names the organisation running the optional research study, and its presence is what makes
       # first-login setup ask about it at all. Unset means this deployment runs none.
       HEPHAESTUS_RESEARCH_ORGANIZATION: ${HEPHAESTUS_RESEARCH_ORGANIZATION:-}
@@ -208,6 +214,8 @@ services:
       GITLAB_OAUTH_BASE_URL: ${GITLAB_OAUTH_BASE_URL:-https://gitlab.com}
       GITLAB_OAUTH_DISPLAY_NAME: ${GITLAB_OAUTH_DISPLAY_NAME:-GitLab}
       GH_APP_INSTALLATION_URL: ${GH_APP_INSTALLATION_URL:-}
+      GH_APP_CLIENT_ID: ${GH_APP_CLIENT_ID:-}
+      GH_APP_CLIENT_SECRET: ${GH_APP_CLIENT_SECRET:-}
       # Default on: the integration event flow needs NATS in prod (the code-level fallback is off for local dev).
       NATS_ENABLED: ${NATS_ENABLED:-true}
       NATS_DURABLE_CONSUMER_NAME: ${NATS_DURABLE_CONSUMER_NAME:-hephaestus}
@@ -222,10 +230,6 @@ services:
       MONITORING_BACKFILL_BATCH_SIZE: ${MONITORING_BACKFILL_BATCH_SIZE:-50}
       MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD: ${MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD:-500}
       MONITORING_BACKFILL_INTERVAL_SECONDS: ${MONITORING_BACKFILL_INTERVAL_SECONDS:-60}
-      # Per-workspace channel/team now live on the Slack Connection config; this is the global kill-switch.
-      LEADERBOARD_NOTIFICATION_ENABLED: ${LEADERBOARD_NOTIFICATION_ENABLED:-true}
-      LEADERBOARD_SCHEDULE_DAY: ${LEADERBOARD_SCHEDULE_DAY:-2}
-      LEADERBOARD_SCHEDULE_TIME: ${LEADERBOARD_SCHEDULE_TIME:-9}
       SENTRY_DSN: ${SENTRY_DSN}
       # Email: off until SPRING_MAIL_HOST is set. Server role only — notifications are sent here.
       # Boot's own property names, forwarded as-is (docs/admin/production-setup.mdx § Email).
@@ -244,6 +248,8 @@ services:
       HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY: ${HEPHAESTUS_EMAIL_RATE_LIMIT_OPTIONAL_DAILY_CAPACITY:-200}
       HEPHAESTUS_EMAIL_REPLY_TO: ${HEPHAESTUS_EMAIL_REPLY_TO:-}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET to at least 32 printable ASCII characters}
+      WEBHOOK_ROUTING_SECRET: ${WEBHOOK_ROUTING_SECRET:?Set WEBHOOK_ROUTING_SECRET to at least 32 printable ASCII characters, different from WEBHOOK_SECRET}
+      WEBHOOK_ROUTING_PREVIOUS_SECRET: ${WEBHOOK_ROUTING_PREVIOUS_SECRET:-}
       # WEBHOOK_EXTERNAL_URL intentionally unset: GitLab auto-registration defaults it to
       # APPLICATION_HOST_URL (same origin here), then appends /webhooks/gitlab itself.
       # AES-256-GCM key for credentials encrypted at rest in the `connection` table. Exactly 32
@@ -277,22 +283,9 @@ services:
       OUTLINE_OAUTH_DISPLAY_NAME: ${OUTLINE_OAUTH_DISPLAY_NAME:-Outline}
       OUTLINE_OAUTH_CLIENT_ID: ${OUTLINE_OAUTH_CLIENT_ID:-}
       OUTLINE_OAUTH_CLIENT_SECRET: ${OUTLINE_OAUTH_CLIENT_SECRET:-}
-      # Agent sandbox (practice review + Pi mentor chat). Activated by the worker role
-      # (hephaestus.runtime.worker.enabled), then gated per-workspace via WorkspaceFeatures.
+      # The agent image every role pins to (ADR 0031); sandboxes themselves run on application-worker.
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       HEPHAESTUS_AGENT_IMAGE_REFERENCE: ${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
-      SANDBOX_DOCKER_HOST: ${SANDBOX_DOCKER_HOST:-unix:///var/run/docker.sock}
-      SANDBOX_DOCKER_TLS_VERIFY: ${SANDBOX_DOCKER_TLS_VERIFY:-false}
-      SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
-      SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:-}
-      SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
-      SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
-      SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
-      SANDBOX_API_REQUESTS_PER_MINUTE: ${SANDBOX_API_REQUESTS_PER_MINUTE:-120}
-      SANDBOX_DOCKER_CONTAINER_RUNTIME: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:-}
-      SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-5}
-      SANDBOX_MEMORY_BYTES: ${SANDBOX_MEMORY_BYTES:-4294967296}
-      SANDBOX_CPUS: ${SANDBOX_CPUS:-2.0}
       # Agent job queue (practice review). The queue runs on PostgreSQL — no NATS involved. NATS
       # stays required elsewhere on this pod for webhook-driven sync consumption (NATS_ENABLED above).
       AGENT_ENABLED: ${AGENT_ENABLED:-false}
@@ -322,29 +315,22 @@ services:
       # the proxy reads each connection's base URL/auth from the catalog per request.
       # Worker control channel: same env var feeds the worker pod's registration-token claim.
       HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:-}
-      # thc healthcheck target: actuator liveness on the management port.
+      # thc probes liveness on the application listener, independently of management.
       THC_PORT: "8080"
-      THC_PATH: /actuator/health/liveness
+      THC_PATH: /livez
     depends_on:
       postgres:
         condition: service_healthy
       volume-init:
         condition: service_completed_successfully
     restart: unless-stopped
-    # Joins the host's docker group so the unprivileged image can reach root:docker 0660
-    # /var/run/docker.sock. Host-specific — see DOCKER_GROUP_ID in .env.example.
-    group_add:
-      - "${DOCKER_GROUP_ID:-999}"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # Commit ingestion clones and fetches here; the worker keeps its own checkouts.
       - git-repos:/data/git-repos
     networks:
       - shared-network
     labels:
       - "traefik.enable=true"
-      # Pin Traefik to shared-network: the app-server temporarily joins agent sandbox
-      # networks (agent-net-*) during review jobs. Without this label, Traefik can pick
-      # the sandbox network IP and route requests to an unreachable internal network.
       - "traefik.docker.network=shared-network"
       - "traefik.http.middlewares.https-application-server-stripprefix.stripprefix.prefixes=/api"
       - "traefik.http.middlewares.edge-api-rate-limit.ratelimit.average=100"
@@ -366,15 +352,16 @@ services:
       - "traefik.http.routers.http-application-server.priority=5"
       - "traefik.http.routers.https-application-server.priority=10"
       # Replica affinity for workspace traffic (mentor lives here) — see docs/contributor/unified-pi-runtime.mdx.
-      # maxAge=300 matches hephaestus.mentor.idle-ttl-seconds; cookie.path requires Traefik >=3.3.
+      # maxAge=900 follows hephaestus.mentor.idle-ttl-seconds; change both together. Traefik sets the cookie
+      # only when it picks a replica, so the affinity runs from that request. cookie.path requires Traefik >=3.3.
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie=true"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.name=__Secure-hep_workspace_aff"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.httpOnly=true"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.secure=true"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.sameSite=lax"
       - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.path=/api/workspaces"
-      - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.maxAge=300"
-      - "traefik.http.services.https-application-server.loadbalancer.healthcheck.path=/actuator/health/readiness"
+      - "traefik.http.services.https-application-server.loadbalancer.sticky.cookie.maxAge=900"
+      - "traefik.http.services.https-application-server.loadbalancer.healthcheck.path=/readyz"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.interval=10s"
       - "traefik.http.services.https-application-server.loadbalancer.healthcheck.timeout=3s"
     # The distroless image has no shell for a wget probe; the probe is the static thc binary the
@@ -402,7 +389,11 @@ services:
     mem_limit: ${APPLICATION_WORKER_MEM_LIMIT:-3g}
     cpus: ${APPLICATION_WORKER_CPUS:-4.0}
     pids_limit: ${APPLICATION_WORKER_PIDS_LIMIT:-512}
+    # Management is reachable only inside the Compose network; never publish or proxy it.
+    expose:
+      - "9090"
     environment:
+      MANAGEMENT_SERVER_ADDRESS: "$${HOSTNAME}.shared-network"
       # See application-server: the buildpack's 10M direct-memory default is too small.
       JAVA_TOOL_OPTIONS: "-XX:MaxDirectMemorySize=${APP_MAX_DIRECT_MEMORY:-128M}"
       APP_VERSION: ${IMAGE_TAG}
@@ -421,7 +412,6 @@ services:
       SANDBOX_DOCKER_HOST: ${SANDBOX_DOCKER_HOST:-unix:///var/run/docker.sock}
       SANDBOX_DOCKER_TLS_VERIFY: ${SANDBOX_DOCKER_TLS_VERIFY:-false}
       SANDBOX_DOCKER_CERT_PATH: ${SANDBOX_DOCKER_CERT_PATH:-}
-      SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:-}
       SANDBOX_DOCKER_OWNER: ${SANDBOX_DOCKER_OWNER:-default}
       SANDBOX_API_PORT: ${SANDBOX_API_PORT:-8081}
       SANDBOX_API_MAX_REQUEST_BYTES: ${SANDBOX_API_MAX_REQUEST_BYTES:-4194304}
@@ -473,9 +463,9 @@ services:
       # application-prod.yml binds host-url=${APPLICATION_HOST_URL} with no YAML default; compose always
       # supplies it so the agent context builds links from a real origin (an unset var fails the boot).
       APPLICATION_HOST_URL: https://${APP_HOSTNAME}
-      # thc runs inside the container, so it reaches the loopback-bound management endpoint.
+      # thc probes the loopback-bound application listener inside the container.
       THC_PORT: "8080"
-      THC_PATH: /actuator/health/liveness
+      THC_PATH: /livez
     depends_on:
       application-server:
         condition: service_healthy

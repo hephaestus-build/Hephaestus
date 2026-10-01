@@ -45,7 +45,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
             recorder,
             submitter,
             workspaceResolver,
-            new PracticeReviewProperties(false, 15, 5, false, null),
+            new PracticeReviewProperties(false, 15, 5, null),
             mock(TransactionTemplate.class));
 
     private final PullRequest pullRequest = pullRequest();
@@ -54,7 +54,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     void stubOwner() {
         Workspace workspace = new Workspace();
         workspace.setId(7L);
-        when(workspaceResolver.resolveForRepository("owner/repo")).thenReturn(Optional.of(workspace));
+        when(workspaceResolver.resolveAllForRepository("owner/repo")).thenReturn(List.of(workspace));
         when(pullRequests.findByIdWithAllForGate(42L)).thenReturn(Optional.of(pullRequest));
     }
 
@@ -63,7 +63,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     void shouldReviewOnlyTheNewestHeadWhenABurstSettles() {
         ArtifactSignal older = signal(OLD_HEAD, 20 * 60);
         ArtifactSignal newest = signal(NEW_HEAD, 11 * 60);
-        when(signals.lockDeferred(7L, 42L, SIGNAL)).thenReturn(List.of(older, newest));
+        when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(older, newest));
 
         coalescer.drain(7L, 42L, NOW);
 
@@ -76,7 +76,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     void shouldReviewTheLatestHeadWhenContinuousPushesReachTheMaximumWait() {
         ArtifactSignal older = signal(OLD_HEAD, 60 * 60);
         ArtifactSignal newest = signal(NEW_HEAD, 30);
-        when(signals.lockDeferred(7L, 42L, SIGNAL)).thenReturn(List.of(older, newest));
+        when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(older, newest));
 
         coalescer.drain(7L, 42L, NOW);
 
@@ -91,7 +91,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
         ArtifactSignal newest = signal(NEW_HEAD, 11 * 60);
         ArtifactSignal lastReview = signal(OLD_HEAD, 5 * 60);
         lastReview.setState(SignalState.TRIGGERED);
-        when(signals.lockDeferred(7L, 42L, SIGNAL)).thenReturn(List.of(newest));
+        when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(newest));
         when(signals.findForArtifact(7L, ScmSignals.PULL_REQUEST.value(), 42L)).thenReturn(List.of(lastReview));
 
         coalescer.drain(7L, 42L, NOW);
@@ -104,7 +104,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     void shouldLeaveAMergedPullRequestToItsMergeOccasion() {
         pullRequest.setState(Issue.State.MERGED);
         ArtifactSignal newest = signal(NEW_HEAD, 11 * 60);
-        when(signals.lockDeferred(7L, 42L, SIGNAL)).thenReturn(List.of(newest));
+        when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(newest));
 
         coalescer.drain(7L, 42L, NOW);
 
@@ -115,7 +115,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
     @Test
     @DisplayName("a push still inside the quiet period is not reviewed yet")
     void shouldHoldAPushInsideTheQuietPeriod() {
-        when(signals.lockDeferred(7L, 42L, SIGNAL)).thenReturn(List.of(signal(NEW_HEAD, 60)));
+        when(signals.lockUnsettled(7L, 42L, SIGNAL)).thenReturn(List.of(signal(NEW_HEAD, 60)));
 
         coalescer.drain(7L, 42L, NOW);
 
@@ -136,6 +136,7 @@ class PullRequestPushCoalescerTest extends BaseUnitTest {
                         .value());
         signal.setOccurredAt(NOW.minusSeconds(ageSeconds));
         signal.setStateChangedAt(NOW.minusSeconds(ageSeconds));
+        signal.setState(SignalState.DEFERRED);
         return signal;
     }
 

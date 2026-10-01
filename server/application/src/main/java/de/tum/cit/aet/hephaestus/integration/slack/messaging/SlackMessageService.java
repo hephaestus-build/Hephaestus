@@ -14,11 +14,9 @@ import com.slack.api.methods.response.chat.ChatStopStreamResponse;
 import com.slack.api.methods.response.conversations.ConversationsInfoResponse;
 import com.slack.api.methods.response.conversations.ConversationsJoinResponse;
 import com.slack.api.methods.response.conversations.ConversationsListResponse;
-import com.slack.api.methods.response.users.UsersListResponse;
 import com.slack.api.methods.response.views.ViewsPublishResponse;
 import com.slack.api.model.Conversation;
 import com.slack.api.model.ConversationType;
-import com.slack.api.model.User;
 import com.slack.api.model.assistant.SuggestedPrompt;
 import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.view.View;
@@ -55,8 +53,6 @@ public class SlackMessageService {
 
     private static final Logger log = LoggerFactory.getLogger(SlackMessageService.class);
 
-    private static final int USERS_LIST_PAGE_SIZE = 1000;
-    private static final int USERS_LIST_MAX_PAGES = 50; // hard cap: 50_000 users is well above any realistic workspace
     private static final int CONVERSATIONS_LIST_PAGE_SIZE = 200;
     private static final int CONVERSATIONS_LIST_MAX_PAGES = 20;
 
@@ -611,56 +607,6 @@ public class SlackMessageService {
                 conversation.isPrivate(),
                 conversation.isMember(),
                 conversation.isArchived());
-    }
-
-    public List<User> listMembers(long workspaceId) {
-        Optional<String> token = resolveToken(workspaceId);
-        if (token.isEmpty()) {
-            log.debug("Slack listMembers skipped: no token for workspaceId={}", workspaceId);
-            return List.of();
-        }
-        MethodsClient methods = slack.methods(token.get());
-        List<User> accumulator = new ArrayList<>();
-        String cursor = "";
-        int pages = 0;
-        try {
-            do {
-                final String pageCursor = cursor;
-                UsersListResponse response = callHonoringRateLimit(
-                        workspaceId,
-                        () -> methods.usersList(
-                                r -> r.limit(USERS_LIST_PAGE_SIZE).cursor(pageCursor)));
-                if (!response.isOk()) {
-                    log.warn(
-                            "Slack users.list returned ok=false: workspaceId={}, error={}",
-                            workspaceId,
-                            response.getError());
-                    return accumulator;
-                }
-                if (response.getMembers() != null) {
-                    accumulator.addAll(response.getMembers());
-                }
-                cursor = response.getResponseMetadata() == null
-                        ? null
-                        : response.getResponseMetadata().getNextCursor();
-                pages++;
-            } while (cursor != null && !cursor.isBlank() && pages < USERS_LIST_MAX_PAGES);
-            if (pages >= USERS_LIST_MAX_PAGES) {
-                log.warn(
-                        "Slack users.list pagination hit cap: workspaceId={}, pages={}, members={}",
-                        workspaceId,
-                        pages,
-                        accumulator.size());
-            }
-            return accumulator;
-        } catch (SlackApiException | IOException e) {
-            log.warn(
-                    "Slack users.list transport failure: workspaceId={}, collected={}, error={}",
-                    workspaceId,
-                    accumulator.size(),
-                    e.getMessage());
-            return accumulator;
-        }
     }
 
     public record SlackConversationInfo(

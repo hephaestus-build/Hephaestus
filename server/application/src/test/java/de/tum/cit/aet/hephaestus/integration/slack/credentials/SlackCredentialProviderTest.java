@@ -46,7 +46,7 @@ class SlackCredentialProviderTest extends BaseUnitTest {
                 ws,
                 IntegrationKind.SLACK,
                 "T12345",
-                new ConnectionConfig.SlackConfig("T12345", "Acme", null, null, null, Set.of()));
+                new ConnectionConfig.SlackConfig("T12345", "Acme", null, Set.of()));
         connection.setCredentials(new BearerToken("xoxb-secret-bot-token", null), converter);
         connection.setState(IntegrationState.ACTIVE);
         IntegrationRef ref = new IntegrationRef(IntegrationKind.SLACK, workspaceId, "T12345");

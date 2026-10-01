@@ -39,7 +39,7 @@ const meta = {
 		],
 		holdingUpNote: "Another two practices held too.",
 		reviewedWork: [
-			{ kind: ARTIFACT_KIND.pullRequest, items: [20, 21, 22].map(pullRequest) },
+			{ kind: ARTIFACT_KIND.pullRequest, provider: "GITHUB", items: [20, 21, 22].map(pullRequest) },
 			{ kind: ARTIFACT_KIND.issue, items: [{ id: "13", kind: ARTIFACT_KIND.issue, label: "#13" }] },
 		],
 		blocks: [

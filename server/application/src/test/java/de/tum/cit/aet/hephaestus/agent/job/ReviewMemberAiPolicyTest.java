@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -49,7 +50,7 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
         author.setId(20L);
         var issue = new Issue();
         issue.setAuthor(author);
-        when(ownership.pullRequestBelongsToWorkspace(1L, 9L)).thenReturn(true);
+        when(ownership.belongsToWorkspace(1L, PullRequest.class, 9L)).thenReturn(true);
         when(issues.findById(9L)).thenReturn(Optional.of(issue));
         policy.binding(1L, AgentJobType.PULL_REQUEST_REVIEW, metadata);
         verify(routing).binding(1L, AgentPurpose.PRACTICE_REVIEW, 20L);

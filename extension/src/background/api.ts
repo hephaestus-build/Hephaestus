@@ -1,6 +1,6 @@
 import { type Client, createClient, createConfig } from "~/api/client";
 import {
-	getArtifactTrace,
+	getOwnArtifactTrace,
 	getClientSignInConfiguration,
 	getConsentStatus,
 	getCurrentUser,
@@ -8,6 +8,7 @@ import {
 	getWorkspace,
 	listIdentityProviders,
 	listObservations,
+	listReviewedWorkReviewRuns,
 	listWorkspaces,
 	logoutClientSession,
 	refreshClientSession,
@@ -26,7 +27,15 @@ import type {
 	Workspace,
 	WorkspaceListItem,
 } from "~/api/types.gen";
-import { consentRequired, forbidden, network, server, signedOut, stale } from "~/background/errors";
+import {
+	consentRequired,
+	forbidden,
+	network,
+	server,
+	signedOut,
+	stale,
+	WorkerError,
+} from "~/background/errors";
 import {
 	type AccessGrant,
 	type Credentials,
@@ -223,16 +232,45 @@ export class AuthenticatedApi {
 		return body(result);
 	}
 
-	/** `null` when nothing has been recorded about this work — not an error, and not "no problems". */
+	/** A trace of the reader's latest visible review; missing access says nothing about other reviews. */
 	async trace(workspaceSlug: string, artifactKind: string, artifactId: number) {
-		const trace: ArtifactTrace | undefined = bodyOrMissing(
+		const runs = body(
 			await this.#call(async (client) =>
-				getArtifactTrace({
+				listReviewedWorkReviewRuns({
 					client,
 					path: { workspaceSlug, artifactKind, artifactId },
+					query: { size: 1 },
 				}),
 			),
 		);
+		const run = runs.content[0];
+		if (run === undefined) {
+			return null;
+		}
+		if (run.reviewedWork.kind !== artifactKind || run.reviewedWork.id !== String(artifactId)) {
+			throw new WorkerError(
+				"server",
+				"Hephaestus returned records about different work. Open the work in Hephaestus instead.",
+			);
+		}
+		const trace: ArtifactTrace | undefined = bodyOrMissing(
+			await this.#call(async (client) =>
+				getOwnArtifactTrace({
+					client,
+					path: { workspaceSlug, artifactKind, artifactId },
+					query: { reviewId: run.reviewId },
+				}),
+			),
+		);
+		if (
+			trace !== undefined &&
+			(trace.artifactKind !== artifactKind || trace.artifactId !== artifactId)
+		) {
+			throw new WorkerError(
+				"server",
+				"Hephaestus returned records about different work. Open the work in Hephaestus instead.",
+			);
+		}
 		return trace ?? null;
 	}
 

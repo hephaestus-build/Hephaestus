@@ -52,8 +52,6 @@ class SandboxWorkspaceManagerTest {
                         new byte[0],
                         ".pi/settings.json",
                         new byte[0],
-                        ".sessions/thread.jsonl",
-                        new byte[0],
                         "out/.gitkeep",
                         new byte[0],
                         "work/analysis/.gitkeep",
@@ -68,8 +66,6 @@ class SandboxWorkspaceManagerTest {
                     .containsEntry("inputs/diff.patch", 0444)
                     .containsEntry(".pi/", 0755)
                     .containsEntry(".pi/settings.json", 0644)
-                    .containsEntry(".sessions/", 0755)
-                    .containsEntry(".sessions/thread.jsonl", 0644)
                     .containsEntry("out/", 0755)
                     .containsEntry("out/.gitkeep", 0644)
                     .containsEntry("work/analysis/", 0755)

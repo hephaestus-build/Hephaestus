@@ -38,15 +38,9 @@ export interface SummaryFacts {
 }
 
 const ACTIVITY_TEXT: Record<ReviewActivity, string> = {
-	"queued-or-running": "Review queued or running",
 	pending: "Review decision pending",
 	deferred: "Review decision deferred",
 };
-
-/** A request is refused while a review of this work is queued or running. */
-export function blocksRequest(activity: ReviewActivity | undefined): boolean {
-	return activity === "queued-or-running";
-}
 
 /**
  * When a review last recorded a result for this work: the newest time a practice's review decided,
@@ -156,17 +150,11 @@ export function summarizeReport({
 			break;
 		}
 	}
-	const request =
-		state.canRequestReview && !readOnly && !blocksRequest(activity)
-			? ("request-review" as const)
-			: undefined;
+	const request = state.canRequestReview && !readOnly ? ("request-review" as const) : undefined;
 	const parts: string[] = [];
 	let tone: ReportSummary["tone"] = "neutral";
 	if (activity !== undefined) {
 		parts.push(ACTIVITY_TEXT[activity]);
-		if (blocksRequest(activity)) {
-			tone = "progress";
-		}
 	}
 	if (feedback?.status === "error") {
 		parts.push("Your feedback could not load");
@@ -181,7 +169,7 @@ export function summarizeReport({
 	if (relative !== undefined) {
 		parts.push(`reviewed ${relative}`);
 	} else if (state.trace === null && activity === undefined) {
-		parts.push("no review recorded");
+		parts.push("review status unavailable");
 	}
 	// A review that could not finish for a practice is said on the line, not only inside.
 	const incomplete = incompletePractices(state);

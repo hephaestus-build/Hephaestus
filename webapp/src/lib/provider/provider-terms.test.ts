@@ -4,6 +4,7 @@ import {
 	getProviderSlug,
 	getProviderTerms,
 	type ProviderType,
+	workReference,
 } from "@/lib/provider/provider-terms";
 
 describe("getProviderTerms", () => {
@@ -53,5 +54,32 @@ describe("getProviderSlug", () => {
 
 	it("converts GITLAB to gitlab", () => {
 		expect(getProviderSlug("GITLAB")).toBe("gitlab");
+	});
+});
+
+describe("workReference", () => {
+	const repository = {
+		id: 1,
+		name: "Hephaestus",
+		nameWithOwner: "ls1intum/Hephaestus",
+		htmlUrl: "https://example.test/ls1intum/Hephaestus",
+		hiddenFromContributions: false,
+	};
+
+	it("writes a GitLab merge request with its own sigil and an issue with #", () => {
+		expect(workReference("GITLAB", { type: "PULL_REQUEST", number: 42, repository })).toBe(
+			"Hephaestus !42",
+		);
+		expect(workReference("GITLAB", { type: "ISSUE", number: 7, repository })).toBe("Hephaestus #7");
+	});
+
+	it("writes a GitHub pull request with #", () => {
+		expect(workReference("GITHUB", { type: "PULL_REQUEST", number: 42, repository })).toBe(
+			"Hephaestus #42",
+		);
+	});
+
+	it("writes the number alone when the repository is not known", () => {
+		expect(workReference("GITLAB", { type: "PULL_REQUEST", number: 7 })).toBe("!7");
 	});
 });

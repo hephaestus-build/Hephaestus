@@ -300,6 +300,12 @@ export const NotHelpfulReasonOpen: Story = {
 			"Not useful",
 			"Already doing this",
 		]);
+		// Only "Not accurate" disputes the card, and only then is the sentence read by the admins.
+		await expect(field).not.toHaveAccessibleDescription(/workspace admins/u);
+		await userEvent.click(canvas.getByRole("button", { name: "Not accurate" }));
+		await expect(field).toHaveAccessibleDescription(
+			/workspace admins read your sentence, not the card/u,
+		);
 		await userEvent.click(canvas.getByRole("button", { name: "Already doing this" }));
 		await userEvent.type(field, "Each of these was already one concern.");
 		await userEvent.click(canvas.getByRole("button", { name: "Send" }));
@@ -443,8 +449,8 @@ export const WorkWithoutAnAddress: Story = {
 };
 
 /**
- * The practice's review rules changed after the card was written: it closes unresolved, keeps
- * its evidence and the meter where the work left it, wears no wash, and the condition says why.
+ * The practice's review rules changed after the card was written: it closes unresolved, keeps its
+ * evidence, wears no wash, draws no clean-work meter, and says why in the condition line.
  */
 export const Closed: Story = {
 	args: {
@@ -459,13 +465,44 @@ export const Closed: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Closed")).toBeVisible();
 		await expect(canvas.queryByText("Resolved")).toBeNull();
-		await expect(canvas.getByText("2 of 3 clean")).toBeVisible();
+		await expect(canvas.queryByRole("meter")).toBeNull();
 		await expect(canvas.getByText("Closed 9 September")).toBeVisible();
 		await expect(
 			canvas.getByText("Closed on 9 September · the practice's review rules changed"),
 		).toBeVisible();
 		// Closed unresolved, and no answer reopens it.
 		await expect(canvas.queryByRole("group", { name: "Your response" })).toBeNull();
+	},
+};
+
+/**
+ * Withdrawn by a workspace admin: the notice alone, with none of the old words, evidence, next step, meter
+ * or answer buttons, and nothing that reads as a resolution.
+ */
+export const Withdrawn: Story = {
+	args: {
+		card: {
+			...card,
+			headline: card.practiceName,
+			body: "",
+			nextStep: "",
+			condition: [],
+			reviewedWork: [],
+			cleanWork: [],
+			state: "withdrawn",
+			timestamp: new Date("2026-09-12T09:00"),
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByRole("heading", { name: "This feedback was withdrawn" }),
+		).toBeVisible();
+		await expect(canvas.getByText("Withdrawn 12 September")).toBeVisible();
+		await expect(canvas.queryByText("Next step")).toBeNull();
+		await expect(canvas.queryByRole("meter")).toBeNull();
+		await expect(canvas.queryByText("Resolved")).toBeNull();
+		await expect(canvas.queryByRole("group", { name: "Your response" })).toBeNull();
+		await expect(canvas.queryByRole("button", { name: "Helpful" })).toBeNull();
 	},
 };
 

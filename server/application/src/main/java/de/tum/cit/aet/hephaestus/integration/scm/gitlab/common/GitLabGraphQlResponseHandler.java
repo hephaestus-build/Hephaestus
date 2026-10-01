@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.common;
 
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier.Category;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier.ClassificationResult;
+import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -105,6 +106,23 @@ public class GitLabGraphQlResponseHandler {
                 : Objects.requireNonNull(response).getErrors();
         log.warn("GraphQL request failed (unclassified): context={}, errors={}", context, errors);
         return new HandleResult(HandleResult.Action.ABORT, null);
+    }
+
+    /**
+     * Whether one page of the connection at {@code connectionPath} is whole: its {@code nodes} is a list and its
+     * {@code pageInfo.hasNextPage} a boolean. A group the token cannot read comes back as {@code group: null} with no
+     * error, and a null or omitted field decodes as an empty list or {@code false}, so without this check such a page
+     * reads as an empty or last page. A real {@code nodes: []} is whole.
+     *
+     * @param response       a response {@link #handle} let through
+     * @param connectionPath the connection's path in the response, such as {@code group.groupMembers}
+     * @return true if the page says both what it lists and whether more follows
+     */
+    public boolean isWholePage(ClientGraphQlResponse response, String connectionPath) {
+        Object nodes = response.field(connectionPath + ".nodes").getValue();
+        Object hasNextPage =
+                response.field(connectionPath + ".pageInfo.hasNextPage").getValue();
+        return nodes instanceof List<?> && hasNextPage instanceof Boolean;
     }
 
     /**

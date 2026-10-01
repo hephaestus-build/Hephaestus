@@ -1,3 +1,5 @@
+import type { WorkItem } from "@/api/types.gen";
+
 export type ProviderType = "GITHUB" | "GITLAB";
 
 /** Lowercase slug used for the `data-provider` CSS attribute. */
@@ -7,6 +9,8 @@ export interface ProviderTerminology {
 	readonly displayName: string;
 	readonly pullRequest: string;
 	readonly pullRequests: string;
+	/** What the provider writes before a pull request's number; an issue's is `#` everywhere. */
+	readonly pullRequestSigil: string;
 	readonly pullRequestShort: string;
 	readonly pullRequestsShort: string;
 	readonly repository: string;
@@ -19,6 +23,7 @@ const TERMS = {
 		displayName: "GitHub",
 		pullRequest: "Pull Request",
 		pullRequests: "Pull Requests",
+		pullRequestSigil: "#",
 		pullRequestShort: "PR",
 		pullRequestsShort: "PRs",
 		repository: "Repository",
@@ -29,6 +34,7 @@ const TERMS = {
 		displayName: "GitLab",
 		pullRequest: "Merge Request",
 		pullRequests: "Merge Requests",
+		pullRequestSigil: "!",
 		pullRequestShort: "MR",
 		pullRequestsShort: "MRs",
 		repository: "Project",
@@ -42,6 +48,19 @@ export type ProviderTerm = keyof ProviderTerminology;
 /** Returns the terminology map for the given provider. */
 export function getProviderTerms(provider: ProviderType): ProviderTerminology {
 	return TERMS[provider];
+}
+
+/**
+ * A pull request or issue as its provider writes it: "Hephaestus #2310", "Hephaestus !42", and the
+ * number alone when the repository is not known.
+ */
+export function workReference(
+	provider: ProviderType,
+	work: Pick<WorkItem, "type" | "number" | "repository">,
+): string {
+	const sigil = work.type === "PULL_REQUEST" ? TERMS[provider].pullRequestSigil : "#";
+	const number = `${sigil}${work.number}`;
+	return work.repository ? `${work.repository.name} ${number}` : number;
 }
 
 const SLUGS = {

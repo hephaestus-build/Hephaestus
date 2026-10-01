@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublisher;
@@ -44,8 +45,18 @@ class GitlabWebhookIngressIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JetStreamPublisher publisher;
 
+    @Autowired
+    private GitLabRouteCredential routeCredential;
+
     @Value("${hephaestus.webhook.secret}")
     private String secret;
+
+    private static final GitLabRouteCredential.Route ROUTE =
+            new GitLabRouteCredential.Route(7L, 3L, "https://gitlab.lrz.de", 42L, "hephaestustest/introcourse");
+
+    private static final byte[] ROUTED_BODY =
+            "{\"object_kind\":\"issue\",\"project\":{\"path_with_namespace\":\"hephaestustest/introcourse/demo\"}}"
+                    .getBytes(StandardCharsets.UTF_8);
 
     @BeforeEach
     void forgetEarlierPublishes() {
@@ -102,6 +113,115 @@ class GitlabWebhookIngressIntegrationTest extends BaseIntegrationTest {
                 }))
                 .isEqualTo(HttpStatus.ACCEPTED);
         verify(publisher).publish(any());
+    }
+
+    @Test
+    void shouldPublishOnTheConnectionSubjectOnlyWhatTheCredentialProves() {
+        GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
+
+        assertThat(postToConnection(7L, issued, ROUTED_BODY, headers -> {
+                    headers.set("X-Gitlab-Token", issued.token());
+                    headers.set("X-Gitlab-Instance", "https://gitlab.lrz.de");
+                    headers.set(GitLabRouteCredential.HEADER_WORKSPACE, "99");
+                }))
+                .isEqualTo(HttpStatus.ACCEPTED);
+
+        ArgumentCaptor<PublishRequest> published = ArgumentCaptor.forClass(PublishRequest.class);
+        verify(publisher).publish(published.capture());
+        assertThat(published.getValue().subject()).isEqualTo("gitlab.?connection.7.issue");
+        assertThat(published.getValue().headers())
+                .containsEntry(GitLabRouteCredential.HEADER_WORKSPACE, "3")
+                .containsEntry(GitLabRouteCredential.HEADER_GROUP_ID, "42")
+                .containsEntry(GitLabRouteCredential.HEADER_GROUP_PATH, "hephaestustest/introcourse")
+                .containsEntry(GitLabRouteCredential.HEADER_ORIGIN, "https://gitlab.lrz.de");
+    }
+
+    @Test
+    void shouldPublishOneEventThatTwoHooksOfTheConnectionDeliverUnderOneDedupKey() {
+        GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
+        Consumer<HttpHeaders> sameEvent = headers -> {
+            headers.set("X-Gitlab-Token", issued.token());
+            headers.set("X-Gitlab-Event", "Issue Hook");
+            headers.set("X-Gitlab-Event-UUID", "event-1");
+        };
+
+        postToConnection(7L, issued, ROUTED_BODY, sameEvent.andThen(headers -> headers.set("Idempotency-Key", "a")));
+        postToConnection(7L, issued, ROUTED_BODY, sameEvent.andThen(headers -> headers.set("Idempotency-Key", "b")));
+
+        ArgumentCaptor<PublishRequest> published = ArgumentCaptor.forClass(PublishRequest.class);
+        verify(publisher, times(2)).publish(published.capture());
+        String dedupId = published.getAllValues().getFirst().dedupId();
+        assertThat(dedupId).startsWith("gitlab-c7-");
+        assertThat(published.getAllValues()).extracting(PublishRequest::dedupId).containsOnly(dedupId);
+    }
+
+    @Test
+    void shouldRejectAConnectionCredentialAnywhereElse() {
+        GitLabRouteCredential.Issued issued = routeCredential.issue(ROUTE);
+        String token = issued.token();
+        GitLabRouteCredential.Issued otherRoute = routeCredential.issue(new GitLabRouteCredential.Route(
+                7L, 3L, "https://gitlab.lrz.de", 42L, "hephaestustest/introcourse-renamed"));
+
+        assertThat(postToConnection(8L, issued, ROUTED_BODY, headers -> headers.set("X-Gitlab-Token", token)))
+                .as("another connection's endpoint")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(postToConnection(7L, otherRoute, ROUTED_BODY, headers -> headers.set("X-Gitlab-Token", token)))
+                .as("the URL of another route of the same connection")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(postToConnection(
+                        7L,
+                        new GitLabRouteCredential.Issued(token, "unknown-key", issued.routeId()),
+                        ROUTED_BODY,
+                        headers -> headers.set("X-Gitlab-Token", token)))
+                .as("a key the receiver does not hold")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(postToConnection(7L, issued, ROUTED_BODY, headers -> {
+                    headers.set("X-Gitlab-Token", token);
+                    headers.set("X-Gitlab-Instance", "https://gitlab.example.com");
+                }))
+                .as("an instance header contradicting the signed origin")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(post(ROUTED_BODY, headers -> {
+                    headers.set("X-Gitlab-Event", "Issue Hook");
+                    headers.set("X-Gitlab-Token", token);
+                }))
+                .as("the shared endpoint")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(postToConnection(7L, issued, ROUTED_BODY, headers -> headers.set("X-Gitlab-Token", secret)))
+                .as("the shared secret on a connection endpoint")
+                .isEqualTo(HttpStatus.UNAUTHORIZED);
+        verify(publisher, never()).publish(any());
+    }
+
+    @Test
+    void shouldNeverPublishAConnectionSubjectFromTheSharedEndpoint() {
+        byte[] body = "{\"object_kind\":\"issue\",\"project\":{\"path_with_namespace\":\"?connection/7\"}}"
+                .getBytes(StandardCharsets.UTF_8);
+
+        assertThat(post(body, headers -> {
+                    headers.set("X-Gitlab-Event", "Issue Hook");
+                    headers.set("X-Gitlab-Token", secret);
+                }))
+                .isEqualTo(HttpStatus.ACCEPTED);
+
+        ArgumentCaptor<PublishRequest> published = ArgumentCaptor.forClass(PublishRequest.class);
+        verify(publisher).publish(published.capture());
+        assertThat(published.getValue().subject()).isEqualTo("gitlab.?.7.issue");
+        assertThat(published.getValue().headers()).doesNotContainKey(GitLabRouteCredential.HEADER_WORKSPACE);
+    }
+
+    private HttpStatusCode postToConnection(
+            long connectionId, GitLabRouteCredential.Issued route, byte[] body, Consumer<HttpHeaders> headers) {
+        return webTestClient
+                .post()
+                .uri(GitLabConnectionWebhookController.PATH_PREFIX + connectionId + "/" + route.keyId() + "/"
+                        + route.routeId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .headers(headers)
+                .bodyValue(body)
+                .exchange()
+                .returnResult(Void.class)
+                .getStatus();
     }
 
     private HttpStatusCode post(byte[] body, Consumer<HttpHeaders> headers) {

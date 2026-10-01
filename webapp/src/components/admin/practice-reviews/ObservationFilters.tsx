@@ -11,6 +11,13 @@ import { ResultCount } from "@/components/common/ResultCount";
 import { statusFacetOptions } from "@/components/common/status-def";
 import { ASSESSMENT_DEFS } from "@/components/practice-vocabulary/assessment-defs";
 import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
+import {
+	DEVELOPER_RESPONSE_DEFS,
+	type DeveloperResponse,
+} from "@/components/practice-vocabulary/observation-dispute-defs";
+import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
+import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PRESENCE_DEFS } from "@/components/practice-vocabulary/presence-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { fromDateRange, toDateRange } from "@/lib/date-range-search";
@@ -18,16 +25,36 @@ import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
 import { AppliedFacetPills, facetPills } from "./AppliedFacetPills";
-import { ObservationSortSelect } from "./ObservationSortSelect";
-import type { ObservationsSearch } from "./review-search";
+import type { ObservationSort, ObservationsSearch } from "./review-search";
 import { reviewArtifactScopeLabel } from "./ReviewArtifact";
 import { type ReviewPeople, ReviewPersonFacet } from "./ReviewPersonFacet";
+import { type ReviewSortItem, ReviewSortSelect } from "./ReviewSortSelect";
 
 /** Every option wears the badge its rows wear; see the note on `FeedbackFilters`' facets. */
+const OUTCOME_OPTIONS = statusFacetOptions(OUTCOME_DEFS);
 const ASSESSMENT_OPTIONS = statusFacetOptions(ASSESSMENT_DEFS);
 const ASSESSMENT_STATUS_OPTIONS = statusFacetOptions(ASSESSMENT_STATUS_DEFS);
 const PRESENCE_OPTIONS = statusFacetOptions(PRESENCE_DEFS);
 const SEVERITY_OPTIONS = statusFacetOptions(SEVERITY_DEFS);
+const ORIGIN_OPTIONS = statusFacetOptions(OBSERVATION_ORIGIN_DEFS);
+const RESPONSE_OPTIONS = statusFacetOptions(DEVELOPER_RESPONSE_DEFS);
+
+/** The one boolean the server filters by, as the facet's selection: both or neither is no filter. */
+function responseSelection(disputed: boolean | undefined): DeveloperResponse[] {
+	if (disputed === undefined) {
+		return [];
+	}
+	return [disputed ? "DISPUTED" : "UNDISPUTED"];
+}
+
+function disputedFrom(values: DeveloperResponse[]): boolean | undefined {
+	return values.length === 1 ? values[0] === "DISPUTED" : undefined;
+}
+
+const SORT_ITEMS: [ReviewSortItem<ObservationSort>, ...ReviewSortItem<ObservationSort>[]] = [
+	{ value: "NEWEST", label: "Newest first" },
+	{ value: "ACTIONABILITY", label: "Most actionable first" },
+];
 
 /**
  * Every field this toolbar can set, cleared — `order` deliberately excluded, because sorting does not
@@ -36,10 +63,12 @@ const SEVERITY_OPTIONS = statusFacetOptions(SEVERITY_DEFS);
  */
 export function clearedObservationFilters(): Partial<ObservationsSearch> {
 	return {
-		page: 0,
 		groupSlug: undefined,
 		practiceSlug: undefined,
 		assessmentStatus: undefined,
+		outcome: undefined,
+		invalidated: undefined,
+		disputed: undefined,
 		presence: undefined,
 		assessment: undefined,
 		severity: undefined,
@@ -47,6 +76,7 @@ export function clearedObservationFilters(): Partial<ObservationsSearch> {
 		artifactKind: undefined,
 		artifactId: undefined,
 		subjectUserId: undefined,
+		origin: undefined,
 		from: undefined,
 		to: undefined,
 	};
@@ -57,12 +87,16 @@ export function hasObservationFilter(search: ObservationsSearch): boolean {
 		(search.groupSlug?.length ?? 0) > 0 ||
 		(search.practiceSlug?.length ?? 0) > 0 ||
 		(search.assessmentStatus?.length ?? 0) > 0 ||
+		(search.outcome?.length ?? 0) > 0 ||
+		search.invalidated !== undefined ||
+		search.disputed !== undefined ||
 		(search.presence?.length ?? 0) > 0 ||
 		(search.assessment?.length ?? 0) > 0 ||
 		(search.severity?.length ?? 0) > 0 ||
 		search.agentJobId !== undefined ||
 		search.artifactKind !== undefined ||
 		search.subjectUserId !== undefined ||
+		(search.origin?.length ?? 0) > 0 ||
 		search.from !== undefined ||
 		search.to !== undefined
 	);
@@ -99,9 +133,9 @@ export interface ObservationFiltersProps {
 	total: number | undefined;
 	/**
 	 * The work `artifactKind`/`artifactId` points at, so the pill can name it rather than print an
-	 * id. Absent until a row carrying that artifact has arrived.
+	 * id. Absent until a row carrying that work has arrived.
 	 */
-	scopedArtifact?: ReviewedWorkRef;
+	scopedWork?: ReviewedWorkRef;
 	/**
 	 * The name of the person `subjectUserId` identifies. It must name *that* person: reading it off
 	 * the first row is right only while the filter is on.
@@ -117,7 +151,7 @@ export function ObservationFilters({
 	practices,
 	people,
 	total,
-	scopedArtifact,
+	scopedWork,
 	subjectName,
 }: ObservationFiltersProps) {
 	const hasFilter = hasObservationFilter(search);
@@ -130,7 +164,11 @@ export function ObservationFilters({
 				<>
 					{/* Sort sits with the count rather than among the facets: it does not narrow the set,
 					    and `Reset` deliberately leaves it alone. */}
-					<ObservationSortSelect value={search.order} onChange={(order) => onPatch({ order })} />
+					<ReviewSortSelect
+						items={SORT_ITEMS}
+						value={search.order}
+						onChange={(order) => onPatch({ order })}
+					/>
 					<ResultCount total={total} noun={["observation", "observations"]} hasFilter={hasFilter} />
 				</>
 			}
@@ -152,8 +190,15 @@ export function ObservationFilters({
 					disabled={practices.isLoading}
 					emptyLabel={practices.isError ? "Could not load practices" : "No practices available"}
 				/>
+				{/* Outcome is what every row's badge says; Behaviour is the practice's framing of it. */}
 				<FacetMultiSelect
-					title="Result"
+					title="Outcome"
+					options={OUTCOME_OPTIONS}
+					selected={search.outcome ?? []}
+					onChange={(values) => onPatch({ outcome: nonEmpty(values) })}
+				/>
+				<FacetMultiSelect
+					title="Behaviour"
 					options={ASSESSMENT_OPTIONS}
 					selected={search.assessment ?? []}
 					onChange={(values) => onPatch({ assessment: nonEmpty(values) })}
@@ -175,6 +220,20 @@ export function ObservationFilters({
 					options={PRESENCE_OPTIONS}
 					selected={search.presence ?? []}
 					onChange={(values) => onPatch({ presence: nonEmpty(values) })}
+				/>
+				<FacetMultiSelect
+					title="Developer response"
+					options={RESPONSE_OPTIONS}
+					selected={responseSelection(search.disputed)}
+					onChange={(values) => onPatch({ disputed: disputedFrom(values) })}
+				/>
+				{/* Every origin is offered, live included, though a row badges only the other two: a
+				    reader comparing live reviews with requested ones has to be able to pick either. */}
+				<FacetMultiSelect
+					title="Origin"
+					options={ORIGIN_OPTIONS}
+					selected={search.origin ?? []}
+					onChange={(values) => onPatch({ origin: nonEmpty(values) })}
 				/>
 				<ReviewPersonFacet
 					title="Developer"
@@ -199,7 +258,10 @@ export function ObservationFilters({
 					...facetPills("Practice", practices.options, search.practiceSlug, (values) =>
 						onPatch({ practiceSlug: nonEmpty(values) }),
 					),
-					...facetPills("Result", ASSESSMENT_OPTIONS, search.assessment, (values) =>
+					...facetPills("Outcome", OUTCOME_OPTIONS, search.outcome, (values) =>
+						onPatch({ outcome: nonEmpty(values) }),
+					),
+					...facetPills("Behaviour", ASSESSMENT_OPTIONS, search.assessment, (values) =>
 						onPatch({ assessment: nonEmpty(values) }),
 					),
 					...facetPills("Severity", SEVERITY_OPTIONS, search.severity, (values) =>
@@ -214,8 +276,24 @@ export function ObservationFilters({
 					...facetPills("Presence", PRESENCE_OPTIONS, search.presence, (values) =>
 						onPatch({ presence: nonEmpty(values) }),
 					),
+					...facetPills("Origin", ORIGIN_OPTIONS, search.origin, (values) =>
+						onPatch({ origin: nonEmpty(values) }),
+					),
+					...facetPills(
+						"Developer response",
+						RESPONSE_OPTIONS,
+						responseSelection(search.disputed),
+						(values) => onPatch({ disputed: disputedFrom(values) }),
+					),
 				]}
 			/>
+			{search.invalidated !== undefined && (
+				<ReferenceFilterPill
+					label={MARKED_INCORRECT_DEF.label}
+					value={search.invalidated ? "Only" : "Excluded"}
+					onClear={() => onPatch({ invalidated: undefined })}
+				/>
+			)}
 			{hasText(search.agentJobId) && (
 				<ReferenceFilterPill
 					label="Review"
@@ -226,7 +304,7 @@ export function ObservationFilters({
 			{search.artifactKind && (
 				<ReferenceFilterPill
 					label="Reviewed work"
-					value={reviewArtifactScopeLabel(search.artifactKind, search.artifactId, scopedArtifact)}
+					value={reviewArtifactScopeLabel(search.artifactKind, search.artifactId, scopedWork)}
 					onClear={() => onPatch({ artifactKind: undefined, artifactId: undefined })}
 				/>
 			)}

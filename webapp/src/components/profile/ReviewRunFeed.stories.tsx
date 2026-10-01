@@ -56,6 +56,16 @@ export const LoadingMore: Story = {
 	},
 };
 
+/** A page that did not arrive keeps the runs already read and offers the press back. */
+export const LoadMoreFailed: Story = {
+	args: { feed: { ...readyFeed, hasMore: true, loadMoreError: new Error("network") } },
+	play: async ({ canvas, userEvent }) => {
+		await expect(canvas.getByText("Could not load earlier reviews.")).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "View earlier reviews" }));
+		await expect(onLoadMore).toHaveBeenCalledOnce();
+	},
+};
+
 /** One block per run card the feed will show, in a region marked busy until they land. */
 export const Loading: Story = {
 	args: { feed: { status: "loading" } },

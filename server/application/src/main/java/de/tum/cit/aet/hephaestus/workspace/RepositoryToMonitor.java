@@ -11,10 +11,13 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -53,6 +56,11 @@ public class RepositoryToMonitor {
     @Nullable
     private Long nativeId;
 
+    /** Review policy independent of repository coverage selection and provider sync state. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "generated_paths", nullable = false, columnDefinition = "jsonb")
+    private List<String> generatedPaths = List.of();
+
     private Instant repositorySyncedAt;
     private Instant labelsSyncedAt;
     private Instant milestonesSyncedAt;
@@ -73,7 +81,18 @@ public class RepositoryToMonitor {
     @Column(length = 2048)
     private @Nullable String historicalBackfillSyncError;
 
+    /** Availability queries own these writes so ordinary monitor edits cannot overwrite a concurrent reservation. */
+    @Column(updatable = false)
+    private @Nullable Instant unavailableSince;
+
+    /** Earliest metadata recheck after consecutive unavailable responses. */
+    @Column(updatable = false)
+    private @Nullable Instant unavailableRetryAt;
+
     public @Nullable String getSyncErrorSummary() {
+        if (unavailableSince != null) {
+            return "Repository not found or not accessible";
+        }
         if (recentSyncError == null) {
             return historicalBackfillSyncError;
         }

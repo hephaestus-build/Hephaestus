@@ -13,11 +13,7 @@ const WORKSPACE = {
 	displayName: "Acme",
 	providerType: "GITHUB",
 	status: "ACTIVE",
-	leaguesEnabled: false,
-	leaderboardEnabled: false,
 	practicesEnabled: true,
-	mentorEnabled: false,
-	progressionEnabled: false,
 };
 
 function mockMembersRoute() {

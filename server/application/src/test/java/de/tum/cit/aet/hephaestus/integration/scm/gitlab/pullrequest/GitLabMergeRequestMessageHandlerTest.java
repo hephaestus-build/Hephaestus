@@ -4,7 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,15 +22,20 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhook
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookProject;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
+import io.nats.client.impl.NatsJetStreamMetaData;
 import java.io.IOException;
+import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -51,6 +59,12 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
     @Mock
     private GitLabClosingIssueClient closingIssueClient;
 
+    @Mock
+    private GitLabMergeRequestReadinessReader readinessReader;
+
+    @Mock
+    private GitLabDiscussionSyncService discussionSyncService;
+
     private TransactionTemplate transactionTemplate;
     private GitLabMergeRequestMessageHandler handler;
 
@@ -72,7 +86,18 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
         });
 
         handler = new GitLabMergeRequestMessageHandler(
-                mergeRequestProcessor, contextResolver, closingIssueClient, deserializer, transactionTemplate);
+                mergeRequestProcessor,
+                contextResolver,
+                closingIssueClient,
+                readinessReader,
+                discussionSyncService,
+                deserializer,
+                transactionTemplate);
+
+        lenient().when(contextResolver.mayStillWrite(any())).thenReturn(true);
+        lenient()
+                .when(mergeRequestProcessor.storedVersion(any(), anyInt()))
+                .thenReturn(Optional.of(new GitLabMergeRequestProcessor.StoredVersion("abc123", null)));
 
         // Default: context resolver returns a valid context
         lenient()
@@ -107,6 +132,23 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldDateTheEventByWhenJetStreamStoredItWhenItArrivesThroughTheStream() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
+            setupRepository();
+            ZonedDateTime storedAt = ZonedDateTime.parse("2026-01-31T18:05:00Z");
+            Message msg = mockMessage(event);
+            NatsJetStreamMetaData metaData = mock(NatsJetStreamMetaData.class);
+            when(metaData.timestamp()).thenReturn(storedAt);
+            when(msg.isJetStream()).thenReturn(true);
+            when(msg.metaData()).thenReturn(metaData);
+
+            handler.onMessage(msg);
+
+            verify(mergeRequestProcessor)
+                    .process(eq(event), argThat(context -> storedAt.toInstant().equals(context.observedAt())));
+        }
+
+        @Test
         void updateAction_routesToProcess() throws IOException {
             GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
             setupRepository();
@@ -127,7 +169,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            verify(mergeRequestProcessor).replaceClosingIssues(any(), eq(5), eq(List.of(41, 42)));
+            verify(mergeRequestProcessor).replaceClosingIssues(any(), eq(5), eq(List.of(41, 42)), any());
         }
 
         @Test
@@ -138,7 +180,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            verify(mergeRequestProcessor, never()).replaceClosingIssues(any(), anyInt(), any());
+            verify(mergeRequestProcessor, never()).replaceClosingIssues(any(), anyInt(), any(), any());
         }
 
         @Test
@@ -149,6 +191,111 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             handler.onMessage(mockMessage(event));
 
             verify(closingIssueClient, never()).closesIssues(any(), anyLong(), anyInt());
+        }
+
+        @Test
+        void shouldRecordWhatGitLabSaysAboutTheMergeRequestAfterAnApproval() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("approved", "opened", false);
+            setupRepository();
+            GitLabMergeRequestReadinessReader.Facts facts = facts();
+            when(readinessReader.read(eq(1L), anyString(), eq(5))).thenReturn(facts);
+
+            handler.onMessage(mockMessage(event));
+
+            verify(mergeRequestProcessor).applyReadiness(any(), eq(5), eq(facts), any(), any());
+        }
+
+        @Test
+        void shouldRecordWhoMergedTheMergeRequestAfterItsMergeHook() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("merge", "merged", false);
+            setupRepository();
+            GitLabMergeRequestReadinessReader.Facts facts = facts();
+            when(readinessReader.read(eq(1L), anyString(), eq(5))).thenReturn(facts);
+
+            handler.onMessage(mockMessage(event));
+
+            InOrder order = inOrder(readinessReader, mergeRequestProcessor);
+            order.verify(readinessReader).read(eq(1L), anyString(), eq(5));
+            order.verify(mergeRequestProcessor).applyTerminalFacts(any(), eq(5), eq(facts));
+            order.verify(mergeRequestProcessor).offerMerge(any(), eq(5), any());
+            verify(mergeRequestProcessor, never()).applyReadiness(any(), anyInt(), any(), any(), any());
+            verify(closingIssueClient, never()).closesIssues(any(), anyLong(), anyInt());
+        }
+
+        @Test
+        void shouldStillOfferTheMergeWhenGitLabCouldNotBeRead() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("merge", "merged", false);
+            setupRepository();
+            when(readinessReader.read(eq(1L), anyString(), eq(5))).thenReturn(null);
+
+            handler.onMessage(mockMessage(event));
+
+            verify(mergeRequestProcessor, never()).applyTerminalFacts(any(), anyInt(), any());
+            verify(mergeRequestProcessor).offerMerge(any(), eq(5), any());
+        }
+
+        @Test
+        void shouldOfferNoMergeOnceTheDeliveryMayNoLongerWrite() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("merge", "merged", false);
+            setupRepository();
+            when(readinessReader.read(eq(1L), anyString(), eq(5))).thenReturn(facts());
+            when(contextResolver.mayStillWrite(any())).thenReturn(false);
+
+            handler.onMessage(mockMessage(event));
+
+            verify(mergeRequestProcessor, never()).applyTerminalFacts(any(), anyInt(), any());
+            verify(mergeRequestProcessor, never()).offerMerge(any(), anyInt(), any());
+        }
+
+        @Test
+        void shouldRecordNothingWhenGitLabCouldNotBeRead() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
+            setupRepository();
+            when(readinessReader.read(eq(1L), anyString(), eq(5))).thenReturn(null);
+
+            handler.onMessage(mockMessage(event));
+
+            verify(mergeRequestProcessor, never()).applyReadiness(any(), anyInt(), any(), any(), any());
+        }
+
+        @Test
+        void shouldRecordNothingOnceTheDeliveryMayNoLongerWrite() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("update", "opened", false);
+            setupRepository();
+            when(readinessReader.read(eq(1L), anyString(), eq(5))).thenReturn(facts());
+            when(closingIssueClient.closesIssues(1L, 278964L, 5)).thenReturn(List.of(41));
+            when(contextResolver.mayStillWrite(any())).thenReturn(false);
+
+            handler.onMessage(mockMessage(event));
+
+            verify(mergeRequestProcessor, never()).applyReadiness(any(), anyInt(), any(), any(), any());
+            verify(mergeRequestProcessor, never()).replaceClosingIssues(any(), anyInt(), any(), any());
+        }
+
+        @Test
+        void shouldNotReadTheMergeRequestAfterItClosed() throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent("close", "closed", false);
+            setupRepository();
+
+            handler.onMessage(mockMessage(event));
+
+            verify(readinessReader, never()).read(any(), anyString(), anyInt());
+        }
+
+        private GitLabMergeRequestReadinessReader.Facts facts() {
+            return new GitLabMergeRequestReadinessReader.Facts(
+                    278964L,
+                    1L,
+                    "opened",
+                    java.time.Instant.parse("2026-09-30T10:00:00Z"),
+                    "abc123",
+                    true,
+                    "MERGEABLE",
+                    true,
+                    GitLabHeadPipeline.NO_PIPELINE,
+                    List.of(),
+                    List.of(),
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
         }
 
         @Test
@@ -211,36 +358,28 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             verify(mergeRequestProcessor, never()).process(any(), any());
         }
 
+        /** GitLab sends {@code approval} for an approval that leaves approvals missing: the same act as {@code approved}. */
         @Test
-        void approvalAction_skipsProcessing() throws IOException {
+        void shouldRecordTheApproverWhenAnApprovalLeavesApprovalsMissing() throws IOException {
             GitLabMergeRequestEventDTO event = createEvent("approval", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
+            handler.onMessage(mockMessage(event));
 
+            verify(mergeRequestProcessor).processApproved(eq(event), any(ProcessingContext.class));
             verify(mergeRequestProcessor, never()).process(any(), any());
-            verify(mergeRequestProcessor, never()).processApproved(any(), any());
-            verify(mergeRequestProcessor, never()).processUnapproved(any(), any());
-            verify(mergeRequestProcessor, never()).processClosed(any(), any());
-            verify(mergeRequestProcessor, never()).processReopened(any(), any());
-            verify(mergeRequestProcessor, never()).processMerged(any(), any());
         }
 
+        /** GitLab sends {@code unapproval} when the merge request still meets its approval rules afterwards. */
         @Test
-        void unapprovalAction_skipsProcessing() throws IOException {
+        void shouldDismissTheApprovalWhenItsWithdrawalLeavesTheRulesMet() throws IOException {
             GitLabMergeRequestEventDTO event = createEvent("unapproval", "opened", false);
             setupRepository();
 
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
+            handler.onMessage(mockMessage(event));
 
+            verify(mergeRequestProcessor).processUnapproved(eq(event), any(ProcessingContext.class));
             verify(mergeRequestProcessor, never()).process(any(), any());
-            verify(mergeRequestProcessor, never()).processApproved(any(), any());
-            verify(mergeRequestProcessor, never()).processUnapproved(any(), any());
-            verify(mergeRequestProcessor, never()).processClosed(any(), any());
-            verify(mergeRequestProcessor, never()).processReopened(any(), any());
-            verify(mergeRequestProcessor, never()).processMerged(any(), any());
         }
 
         @Test
@@ -285,6 +424,8 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                     null,
                     null,
                     "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                    null,
+                    null,
                     null,
                     null,
                     null);
@@ -346,6 +487,8 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                     null,
                     null,
                     "https://example.com",
+                    null,
+                    null,
                     null,
                     null,
                     null);
@@ -415,6 +558,8 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                 null,
                 null,
                 "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
+                null,
+                null,
                 null,
                 null,
                 null);

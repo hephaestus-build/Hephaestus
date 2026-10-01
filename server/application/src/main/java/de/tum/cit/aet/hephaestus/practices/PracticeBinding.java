@@ -41,7 +41,7 @@ import org.jspecify.annotations.Nullable;
 @Schema(description = "An occasion that starts a review, and the evidence that review reads")
 public record PracticeBinding(
         @NonNull
-        @NotEmpty(message = "A binding must name at least one signal")
+        @NotEmpty(message = "Choose at least one moment that starts a review.")
         @Schema(description = "Signals that occasion this review, e.g. scm.pull_request.merged")
         List<SignalName> signals,
 
@@ -84,13 +84,13 @@ public record PracticeBinding(
                 .sorted(Comparator.comparing(SignalName::value))
                 .toList()));
         if (signals.isEmpty()) {
-            throw new IllegalArgumentException("A binding must name at least one signal");
+            throw new IllegalArgumentException("Choose at least one moment that starts a review.");
         }
         ArtifactKind kind = signals.getFirst().artifactKind();
         for (SignalName signal : signals) {
             if (!kind.equals(signal.artifactKind())) {
                 throw new IllegalArgumentException(
-                        "One binding cannot mix artifact kinds: " + kind + " and " + signal.artifactKind());
+                        "The moments that start a review must all belong to one kind of work. Choose them from one.");
             }
         }
         needs = Objects.requireNonNull(needs, "needs").stream()
@@ -99,7 +99,7 @@ public record PracticeBinding(
         Set<String> seen = new HashSet<>();
         for (PracticeEvidenceRequirement need : needs) {
             if (!seen.add(need.sourceKind().value())) {
-                throw new IllegalArgumentException("needs contains duplicate source " + need.sourceKind());
+                throw new IllegalArgumentException("An evidence source is listed twice. List each source once.");
             }
         }
     }
@@ -208,13 +208,13 @@ public record PracticeBinding(
     /** The one artifact kind every binding in the list is about. */
     public static ArtifactKind artifactKindOf(List<PracticeBinding> bindings) {
         if (bindings.isEmpty()) {
-            throw new IllegalArgumentException("A practice must declare at least one binding");
+            throw new IllegalArgumentException("Choose when this practice is reviewed.");
         }
         ArtifactKind kind = bindings.getFirst().artifactKind();
         for (PracticeBinding binding : bindings) {
             if (!kind.equals(binding.artifactKind())) {
-                throw new IllegalArgumentException("A practice reviews one kind of artifact; bindings name " + kind
-                        + " and " + binding.artifactKind());
+                throw new IllegalArgumentException(
+                        "A practice reviews one kind of work. Choose its moments from one kind of work only.");
             }
         }
         return kind;

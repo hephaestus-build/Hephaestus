@@ -16,6 +16,7 @@ import {
 	type FeedbackResolution,
 } from "@/components/practice-vocabulary/feedback-resolution-defs";
 import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
+import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
 import {
 	OBSERVATION_OUTCOME_PRESENTATION,
@@ -64,6 +65,10 @@ function DetailSection({ label, labelId, className, children }: DetailSectionPro
 	);
 }
 
+/** A dispute is the one answer the developer writes for somebody else to read. */
+const DISPUTE_AUDIENCE =
+	"Workspace admins read this on the observation, and can mark it incorrect or withdraw the feedback.";
+
 export interface ReviewObservationRowProps {
 	observation: ObservationDetail;
 	/** Open on arrival; a closed row waits for a press. The card placing the row decides which. */
@@ -100,6 +105,7 @@ export function ReviewObservationRow({
 	const outcome = OBSERVATION_OUTCOME_PRESENTATION[observationOutcome(observation)];
 	const OutcomeIcon = outcome.icon;
 	const note = claimCurrentnessNote(observation.claimCurrentness);
+	const invalidated = observation.invalidatedAt !== undefined;
 	const evidenceLocations = toEvidenceLocations(observation.evidence);
 	const checks = toEvidenceCheck(observation.evidence);
 	// The sentence the review wrote about this work stands over the one that was delivered: the
@@ -111,6 +117,7 @@ export function ReviewObservationRow({
 	const respondTo = hasText(observation.feedbackResponse?.feedbackId) ? onRespond : undefined;
 	const hasWorkLine = rendersContent(work);
 	const hasBody =
+		invalidated ||
 		note !== undefined ||
 		hasText(observation.evidenceRationale) ||
 		checks.length > 0 ||
@@ -138,6 +145,7 @@ export function ReviewObservationRow({
 				{showPill && <PracticePill name={observation.practiceName} />}
 			</span>
 			<span className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-2.5 gap-y-1">
+				{invalidated && <StatusBadge def={MARKED_INCORRECT_DEF} />}
 				{observation.origin !== "LIVE" && (
 					<StatusBadge def={OBSERVATION_ORIGIN_DEFS[observation.origin]} />
 				)}
@@ -192,6 +200,17 @@ export function ReviewObservationRow({
 				</div>
 				<CollapsibleContent className="border-t bg-sidebar">
 					<div className="flex min-w-0 flex-col gap-3.5 px-4 pt-3.5 pb-4">
+						{invalidated && (
+							<p className="text-sm">
+								<span className="font-medium">
+									A workspace admin marked this observation as incorrect.
+								</span>{" "}
+								It no longer counts toward your standing or what Heph knows about your work.
+								{hasText(observation.invalidationReason) && (
+									<> Their reason: “{observation.invalidationReason}”</>
+								)}
+							</p>
+						)}
 						{note !== undefined && <p className="text-sm text-muted-foreground">{note}</p>}
 						{hasText(observation.evidenceRationale) && (
 							<DetailSection label="Why it was noted">
@@ -226,11 +245,6 @@ export function ReviewObservationRow({
 											detector={detector}
 										/>
 									))}
-									{hasText(detector) && (
-										<p className="text-xs text-muted-foreground">
-											Captured by <code className="font-mono">{detector}</code>
-										</p>
-									)}
 								</div>
 							</DetailSection>
 						)}
@@ -341,6 +355,7 @@ function ObservationResponse({
 					label="What was missed?"
 					placeholder="One or two sentences on what is off"
 					required
+					audience={() => DISPUTE_AUDIENCE}
 					isPending={isPending}
 					onSend={({ comment }) => {
 						const sentence = comment.trim();

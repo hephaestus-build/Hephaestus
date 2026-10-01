@@ -68,10 +68,11 @@ export function bindingTargetKey({ purpose, tier }: BindingTarget): string {
 	return `${purpose}:${tier}`;
 }
 
+const PRACTICE_REVIEWS_OFF = "Practice reviews off";
+
 interface PurposeMeta {
 	purpose: Purpose;
 	description: string;
-	disabledLabel: string;
 }
 
 export const PURPOSE_TITLES = {
@@ -87,12 +88,11 @@ const PURPOSES: PurposeMeta[] = [
 	{
 		purpose: "PRACTICE_REVIEW",
 		description: "Reviews connected project work and conversations.",
-		disabledLabel: "Practice reviews off",
 	},
 	{
 		purpose: "MENTOR",
-		description: "Powers conversations with Heph.",
-		disabledLabel: "Heph web chat off",
+		description:
+			"Powers conversations with Heph. Every member is offered Heph once a row here is ready.",
 	},
 ];
 
@@ -158,7 +158,6 @@ export interface AgentBindingsPageProps {
 	bindings: AgentBinding[];
 	availableModels: AvailableLlmModel[];
 	practicesEnabled: boolean;
-	mentorEnabled: boolean;
 	/** Once a workspace requires the choice, the undeclared row serves nobody. */
 	aiChoiceRequired: boolean;
 	providerPanel?: ReactElement;
@@ -182,7 +181,6 @@ export function AgentBindingsPage({
 	bindings,
 	availableModels,
 	practicesEnabled,
-	mentorEnabled,
 	aiChoiceRequired,
 	providerPanel,
 	usage,
@@ -196,9 +194,6 @@ export function AgentBindingsPage({
 	onSave,
 	onTurnOff,
 }: AgentBindingsPageProps) {
-	const featureEnabled = (purpose: Purpose): boolean =>
-		purpose === "MENTOR" ? mentorEnabled : practicesEnabled;
-
 	return (
 		<PageLayout>
 			<PageHeader
@@ -257,7 +252,7 @@ export function AgentBindingsPage({
 									bindings={bindings.filter((binding) => binding.purpose === meta.purpose)}
 									availableModels={availableModels}
 									aiChoiceRequired={aiChoiceRequired}
-									featureEnabled={featureEnabled(meta.purpose)}
+									practiceReviewsOff={meta.purpose === "PRACTICE_REVIEW" && !practicesEnabled}
 									pendingTargets={pendingTargets}
 									saveRevisions={saveRevisions}
 									saveErrors={saveErrors}
@@ -284,7 +279,8 @@ interface AgentPurposeCardProps {
 	bindings: AgentBinding[];
 	availableModels: AvailableLlmModel[];
 	aiChoiceRequired: boolean;
-	featureEnabled: boolean;
+	/** Practice reviews are off; the card links to where they are turned on. */
+	practiceReviewsOff: boolean;
 	pendingTargets: ReadonlySet<string>;
 	saveRevisions?: Partial<Record<string, number>>;
 	saveErrors?: Partial<Record<string, string>>;
@@ -298,7 +294,7 @@ function AgentPurposeCard({
 	bindings,
 	availableModels,
 	aiChoiceRequired,
-	featureEnabled,
+	practiceReviewsOff,
 	pendingTargets,
 	saveRevisions,
 	saveErrors,
@@ -315,34 +311,23 @@ function AgentPurposeCard({
 						<CardTitle id={cardLabelId}>{PURPOSE_TITLES[meta.purpose]}</CardTitle>
 						<CardDescription>
 							{meta.description}
-							{!featureEnabled &&
-								(meta.purpose === "PRACTICE_REVIEW" ? (
-									<div>
-										<Link
-											to="/w/$workspaceSlug/admin/practices/review"
-											params={{ workspaceSlug }}
-											search={{ section: "when-and-where" }}
-											className="underline underline-offset-4"
-										>
-											Open Review: When and where
-										</Link>
-									</div>
-								) : (
-									<div>
-										<Link
-											to="/w/$workspaceSlug/admin/settings"
-											params={{ workspaceSlug }}
-											className="underline underline-offset-4"
-										>
-											Open Workspace settings
-										</Link>
-									</div>
-								))}
+							{practiceReviewsOff && (
+								<div>
+									<Link
+										to="/w/$workspaceSlug/admin/practices/review"
+										params={{ workspaceSlug }}
+										search={{ section: "when-and-where" }}
+										className="underline underline-offset-4"
+									>
+										Open Review: When and where
+									</Link>
+								</div>
+							)}
 						</CardDescription>
 					</div>
-					{!featureEnabled && (
+					{practiceReviewsOff && (
 						<div className="flex flex-wrap justify-end gap-2">
-							<Badge variant="secondary">{meta.disabledLabel}</Badge>
+							<Badge variant="secondary">{PRACTICE_REVIEWS_OFF}</Badge>
 						</div>
 					)}
 				</div>
@@ -352,7 +337,7 @@ function AgentPurposeCard({
 					bindings={bindings}
 					availableModels={availableModels}
 					aiChoiceRequired={aiChoiceRequired}
-					featureOffLabel={featureEnabled ? undefined : meta.disabledLabel}
+					practiceReviewsOff={practiceReviewsOff}
 				/>
 				{DATA_HANDLING_TIERS.map((tier) => {
 					const target: BindingTarget = { purpose: meta.purpose, tier };
@@ -380,8 +365,8 @@ interface BindingPreviewProps {
 	bindings: AgentBinding[];
 	availableModels: AvailableLlmModel[];
 	aiChoiceRequired: boolean;
-	/** Set while the purpose is switched off: no row serves anyone, whatever it binds. */
-	featureOffLabel?: string;
+	/** While practice reviews are off no row serves anyone, whatever it binds. */
+	practiceReviewsOff: boolean;
 }
 
 /**
@@ -392,11 +377,11 @@ function BindingPreview({
 	bindings,
 	availableModels,
 	aiChoiceRequired,
-	featureOffLabel,
+	practiceReviewsOff,
 }: BindingPreviewProps) {
 	const served = (choice: MemberAiChoice | null): ReactNode => {
-		if (featureOffLabel !== undefined) {
-			return `Nothing runs for them (${featureOffLabel})`;
+		if (practiceReviewsOff) {
+			return `Nothing runs for them (${PRACTICE_REVIEWS_OFF})`;
 		}
 		const binding = bindingFor(choice, bindings);
 		if (!binding) {

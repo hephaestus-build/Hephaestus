@@ -88,7 +88,8 @@ export function toFeedbackCard(
 	groups: PracticeGroup[],
 ): PracticeFeedbackCardEntry {
 	const group = groups.find((candidate) => candidate.slug === feedback.groupSlug);
-	const closure = closureOf(feedback);
+	const { withdrawnAt } = feedback;
+	const closure = withdrawnAt === undefined ? closureOf(feedback) : undefined;
 	const reviewedWork: ReviewedWorkOutcome[] = feedback.evidence.map((evidence) => ({
 		ref: evidence.reviewedWork,
 		date: evidence.observedAt,
@@ -102,14 +103,15 @@ export function toFeedbackCard(
 		group: hasText(feedback.groupSlug)
 			? {
 					slug: feedback.groupSlug,
-					name: feedback.groupName ?? feedback.groupSlug,
+					name: feedback.groupName ?? group?.name ?? "Practice group",
 					color: group?.color,
 					icon: group ? getGroupVisual(group.icon, group.color).Icon : undefined,
 				}
 			: undefined,
 		headline: feedback.headline,
-		// The composer's own Markdown; the card renders it and links the work it can vouch for.
-		body: feedback.body,
+		// The composer's own Markdown; the card renders it and links the work it can vouch for. A
+		// withdrawn card arrives without it.
+		body: feedback.body ?? "",
 		reviewedWork,
 		// The composer writes the step as a clause; the card shows it as a sentence.
 		nextStep: capitalise(feedback.nextStep ?? ""),
@@ -119,8 +121,11 @@ export function toFeedbackCard(
 			date: clean.reviewedAt,
 		})),
 		cleanNeeded: feedback.cleanNeeded,
-		state: closure?.state ?? (feedback.readAt ? "open" : "new"),
+		state:
+			withdrawnAt === undefined
+				? (closure?.state ?? (feedback.readAt ? "open" : "new"))
+				: "withdrawn",
 		resolvedBy: closure?.resolvedBy,
-		timestamp: closure?.at ?? feedback.preparedAt,
+		timestamp: withdrawnAt ?? closure?.at ?? feedback.preparedAt,
 	};
 }

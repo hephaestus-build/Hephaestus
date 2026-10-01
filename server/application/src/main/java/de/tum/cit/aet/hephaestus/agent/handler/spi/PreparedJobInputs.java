@@ -1,60 +1,42 @@
 package de.tum.cit.aet.hephaestus.agent.handler.spi;
 
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
-import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/**
- * What one attempt stages for its sandbox: the captured evidence, and what preparation established
- * about it before any model ran.
- *
- * @param automatedReviewReadinessReport present exactly when the evidence carries a source manifest
- */
+/** The immutable, disk-backed folder retained for one attempt through admission. */
 public record PreparedJobInputs(
-        PreparedEvidence evidence, @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport)
+        Map<String, Path> filesOnDisk,
+        List<EvidenceDirectory> directories,
+        List<AutoCloseable> cleanups,
+        @Nullable JobFolderIndex folderIndex,
+        @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport)
         implements AutoCloseable {
+    private static final Logger log = LoggerFactory.getLogger(PreparedJobInputs.class);
 
     public PreparedJobInputs {
-        Objects.requireNonNull(evidence, "evidence");
-        if ((evidence.manifest() == null) != (automatedReviewReadinessReport == null)) {
-            throw new IllegalArgumentException("Evidence manifest and readiness report must be provided together");
+        filesOnDisk = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(filesOnDisk));
+        directories = List.copyOf(directories);
+        cleanups = List.copyOf(cleanups);
+        if ((folderIndex == null) != (automatedReviewReadinessReport == null)) {
+            throw new IllegalArgumentException("Folder index and readiness report must be provided together");
         }
-    }
-
-    public static PreparedJobInputs filesOnly(Map<String, byte[]> files) {
-        return new PreparedJobInputs(new PreparedEvidence(files, null), null);
-    }
-
-    public Map<String, byte[]> files() {
-        return evidence.files();
-    }
-
-    /** Staged by path rather than retained as byte arrays; see {@code EvidenceContribution#filesOnDisk}. */
-    public Map<String, Path> filesOnDisk() {
-        return evidence.filesOnDisk();
-    }
-
-    public List<EvidenceDirectory> directories() {
-        return evidence.directories();
-    }
-
-    /** Releases worker evidence after final admission, or when the attempt terminates without admission. */
-    public List<AutoCloseable> cleanups() {
-        return evidence.cleanups();
-    }
-
-    public @Nullable ArtifactSourceManifest artifactSourceManifest() {
-        return evidence.manifest();
     }
 
     @Override
     public void close() {
-        evidence.close();
+        for (AutoCloseable cleanup : cleanups) {
+            try {
+                cleanup.close();
+            } catch (Exception exception) {
+                log.warn("Could not release the job folder", exception);
+            }
+        }
     }
 }

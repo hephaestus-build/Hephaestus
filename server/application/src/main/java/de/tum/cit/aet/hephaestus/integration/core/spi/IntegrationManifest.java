@@ -40,6 +40,15 @@ public interface IntegrationManifest {
     ReviewContribution reviewContribution();
 
     /**
+     * The roles this integration may name only in a later capture from the provider, after the occasion that
+     * concerns them is raised. Merge admission consults {@link ActorRole#MERGER} for merged work, holding its review
+     * until the merger is named; no other role is consulted.
+     */
+    default Set<ActorRole> rolesNamedAfterTheOccasion() {
+        return Set.of();
+    }
+
+    /**
      * The practice-review section of a manifest. {@link #raises()} is deliberately a subset of what the
      * artifact's {@link ArtifactDescriptor} declares — the descriptor states what the domain can express,
      * this states what one vendor delivers of it — so the gap reads as a dormant binding rather than a

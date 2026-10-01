@@ -1,5 +1,5 @@
 import type { ReviewedWorkRef } from "@/api/types.gen";
-import type { KnownWorkProvider } from "@/components/icons/reviewed-work-icon";
+import type { WorkProvider } from "@/lib/artifact-kinds";
 
 import { count, countedWork } from "./feedback-text";
 import type { CleanWork, ReviewedWorkOutcome } from "./PracticeFeedbackCard";
@@ -49,7 +49,7 @@ export function stripPieces(
  */
 export function countedStripWork(refs: ReviewedWorkRef[]): {
 	kind?: string;
-	provider?: KnownWorkProvider;
+	provider?: WorkProvider;
 	text: string;
 } {
 	const [first] = refs;

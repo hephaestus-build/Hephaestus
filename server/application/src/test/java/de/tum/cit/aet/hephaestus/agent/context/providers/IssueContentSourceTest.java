@@ -53,8 +53,8 @@ import tools.jackson.databind.node.ObjectNode;
 class IssueContentSourceTest extends BaseUnitTest {
 
     private static final long ISSUE_ID = 777L;
-    private static final String METADATA_KEY = "inputs/context/metadata.json";
-    private static final String COMMENTS_KEY = "inputs/context/comments.json";
+    private static final String METADATA_KEY = "context/metadata.json";
+    private static final String COMMENTS_KEY = "context/comments.json";
     private static final SourceKind CORE = new SourceKind("scm.issue.core");
     private static final SourceKind COMMENTS = new SourceKind("scm.issue.comments");
 
@@ -160,7 +160,7 @@ class IssueContentSourceTest extends BaseUnitTest {
     }
 
     private void stubComments(List<IssueComment> chronological) {
-        int from = Math.max(0, chronological.size() - IssueContentSource.MAX_COMMENTS - 1);
+        int from = 0;
         List<IssueComment> recent = new ArrayList<>(chronological.subList(from, chronological.size()));
         Collections.reverse(recent);
         when(issueCommentRepository.findRecentByIssueIdWithAuthor(eq(ISSUE_ID), any()))
@@ -324,10 +324,10 @@ class IssueContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void truncatesToMaxCommentsKeepingMostRecent() throws Exception {
+        void shouldKeepAllCommentsAboveTheFormerCaptureLimit() throws Exception {
             Issue issue = richIssue();
             var thread = new ArrayList<IssueComment>();
-            int overflow = IssueContentSource.MAX_COMMENTS + 50;
+            int overflow = 10_000 + 50;
             Instant base = Instant.parse("2025-01-01T00:00:00Z");
             for (int i = 0; i < overflow; i++) {
                 thread.add(comment("u" + i, "Comment " + i, base.plusSeconds(i)));
@@ -339,18 +339,18 @@ class IssueContentSourceTest extends BaseUnitTest {
             provider.contribute(request(sampleMetadata()), files);
 
             JsonNode comments = objectMapper.readTree(files.get(COMMENTS_KEY));
-            assertThat(comments).hasSize(IssueContentSource.MAX_COMMENTS);
-            assertThat(comments.get(0).get("body").asString()).isEqualTo("Comment 50");
+            assertThat(comments).hasSize(overflow);
+            assertThat(comments.get(0).get("body").asString()).isEqualTo("Comment 0");
             assertThat(comments.get(comments.size() - 1).get("body").asString()).isEqualTo("Comment " + (overflow - 1));
         }
 
         @Test
-        void reportsExactLimitAsCompleteAndOverflowAsPartial() {
+        void shouldReportCompleteWithoutACommentLimit() {
             Issue issue = richIssue();
             when(issueRepository.findByIdWithRepository(ISSUE_ID)).thenReturn(Optional.of(issue));
             Instant base = Instant.parse("2025-01-01T00:00:00Z");
             List<IssueComment> comments = new ArrayList<>();
-            for (int i = 0; i < IssueContentSource.MAX_COMMENTS; i++) {
+            for (int i = 0; i < 10_000; i++) {
                 comments.add(comment("u" + i, "Comment " + i, base.plusSeconds(i)));
             }
             stubComments(comments);
@@ -364,7 +364,7 @@ class IssueContentSourceTest extends BaseUnitTest {
             assertThat(provider.capture(request(sampleMetadata()), Set.of(COMMENTS))
                             .completeness()
                             .get(COMMENTS))
-                    .isEqualTo(SourceCompleteness.PARTIAL);
+                    .isEqualTo(SourceCompleteness.COMPLETE);
         }
 
         @Test
@@ -390,8 +390,8 @@ class IssueContentSourceTest extends BaseUnitTest {
             Map<String, byte[]> files = new LinkedHashMap<>();
             provider.contribute(request(sampleMetadata()), files);
 
-            assertThat(files).containsOnlyKeys(METADATA_KEY, "inputs/context/description.md", COMMENTS_KEY);
-            assertThat(new String(files.get("inputs/context/description.md"), StandardCharsets.UTF_8))
+            assertThat(files).containsOnlyKeys(METADATA_KEY, "context/description.md", COMMENTS_KEY);
+            assertThat(new String(files.get("context/description.md"), StandardCharsets.UTF_8))
                     .isEqualTo("Make the catalogue honest.");
 
             JsonNode comments = objectMapper.readTree(files.get(COMMENTS_KEY));

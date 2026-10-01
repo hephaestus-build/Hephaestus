@@ -89,7 +89,6 @@ const meta = {
 		bindings: [binding("IN_HOUSE", inHouseModel)],
 		availableModels: mockAvailableModels,
 		practicesEnabled: true,
-		mentorEnabled: true,
 		aiChoiceRequired: false,
 		isLoading: false,
 		isError: false,

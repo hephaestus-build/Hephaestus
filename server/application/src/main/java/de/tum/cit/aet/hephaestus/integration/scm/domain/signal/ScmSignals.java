@@ -37,6 +37,12 @@ public final class ScmSignals {
     public static final SignalName PULL_REQUEST_OPENED = SignalName.of("scm.pull_request.opened");
     public static final SignalName PULL_REQUEST_READY = SignalName.of("scm.pull_request.ready");
     public static final SignalName PULL_REQUEST_SYNCHRONIZED = SignalName.of("scm.pull_request.synchronized");
+    /** The title or description changed; keyed on the head and that text. */
+    public static final SignalName PULL_REQUEST_EDITED = SignalName.of("scm.pull_request.edited");
+
+    public static final SignalName PULL_REQUEST_LINKED_ISSUE_UPDATED =
+            SignalName.of("scm.pull_request.linked_issue_updated");
+
     public static final SignalName PULL_REQUEST_REVIEWED = SignalName.of("scm.pull_request.reviewed");
     public static final SignalName PULL_REQUEST_MERGED = SignalName.of("scm.pull_request.merged");
     public static final SignalName PULL_REQUEST_CLOSED = SignalName.of("scm.pull_request.closed");
@@ -65,6 +71,8 @@ public final class ScmSignals {
             PULL_REQUEST_READY,
             TriggerEventNames.PULL_REQUEST_SYNCHRONIZED,
             PULL_REQUEST_SYNCHRONIZED,
+            TriggerEventNames.PULL_REQUEST_UPDATED,
+            PULL_REQUEST_EDITED,
             TriggerEventNames.REVIEW_SUBMITTED,
             PULL_REQUEST_REVIEWED,
             TriggerEventNames.PULL_REQUEST_MERGED,
@@ -85,6 +93,8 @@ public final class ScmSignals {
             Map.entry(PULL_REQUEST_OPENED, RevisionScheme.HEAD_COMMIT),
             Map.entry(PULL_REQUEST_READY, RevisionScheme.HEAD_COMMIT),
             Map.entry(PULL_REQUEST_SYNCHRONIZED, RevisionScheme.HEAD_COMMIT),
+            Map.entry(PULL_REQUEST_EDITED, RevisionScheme.CONTENT_DIGEST),
+            Map.entry(PULL_REQUEST_LINKED_ISSUE_UPDATED, RevisionScheme.CONTENT_DIGEST),
             Map.entry(PULL_REQUEST_REVIEWED, RevisionScheme.EVENT_ID),
             Map.entry(PULL_REQUEST_MERGED, RevisionScheme.TERMINAL_STATE),
             Map.entry(PULL_REQUEST_CLOSED, RevisionScheme.TERMINAL_STATE),
@@ -131,11 +141,21 @@ public final class ScmSignals {
             @Nullable String headRefOid,
             String title,
             @Nullable String body) {
-        if (!PULL_REQUEST.equals(signal.artifactKind())) {
+        return pullRequestRevision(signal, headRefOid, title, body)
+                .map(revision -> new SignalKey(workspaceId, pullRequestId, signal, revision));
+    }
+
+    /**
+     * The revision part of {@link #pullRequestKey}. Content-keyed pull-request occasions frame the head with the
+     * text: the same description written again after a push describes different work, and a revision that forgot
+     * the head would already be settled.
+     */
+    public static Optional<SignalRevision> pullRequestRevision(
+            SignalName signal, @Nullable String headRefOid, String title, @Nullable String body) {
+        if (!PULL_REQUEST.equals(signal.artifactKind()) || PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(signal)) {
             return Optional.empty();
         }
-        return revisionFor(signal, headRefOid, title, body)
-                .map(revision -> new SignalKey(workspaceId, pullRequestId, signal, revision));
+        return revisionFor(signal, headRefOid, headRefOid, title, body);
     }
 
     /**

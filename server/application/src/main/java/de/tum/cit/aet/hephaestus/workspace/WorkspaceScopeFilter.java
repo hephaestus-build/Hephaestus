@@ -111,6 +111,21 @@ public class WorkspaceScopeFilter {
         return true;
     }
 
+    /**
+     * Whether {@code workspace} may handle {@code nameWithOwner}, a repository its caller has already placed inside the
+     * workspace's own group. The organization filter applies to that group, so an allowed nested group is not judged by
+     * its root segment; the repository filter still has to name the repository exactly.
+     */
+    public boolean isRepositoryAllowed(Workspace workspace, String nameWithOwner) {
+        return isGroupRepositoryAllowed(workspace.getAccountLogin(), nameWithOwner);
+    }
+
+    /** {@link #isRepositoryAllowed(Workspace, String)} for a caller that holds the workspace's group, not the entity. */
+    public boolean isGroupRepositoryAllowed(String group, String nameWithOwner) {
+        return isOrganizationAllowed(group)
+                && (allowedRepositories.isEmpty() || allowedRepositories.contains(normalize(nameWithOwner)));
+    }
+
     public boolean isOrganizationAllowed(String login) {
         if (allowedOrganizations.isEmpty()) {
             return true;

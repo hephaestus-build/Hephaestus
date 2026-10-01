@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
@@ -24,6 +25,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -118,10 +120,10 @@ public class MentorTurnPersistence {
     }
 
     /**
-     * Persist the user message + assistant placeholder in a single transaction. The DB unique
-     * partial index on {@code (thread_id) WHERE status='in_flight'} converts a racy second
-     * insert from a non-affinity replica into a {@link DataIntegrityViolationException}, which
-     * we surface as {@link TurnAlreadyInFlightException}.
+     * Persist the user message + assistant placeholder in a single transaction, admitted under the
+     * thread's lock. The DB unique partial index on {@code (thread_id) WHERE status='in_flight'}
+     * turns a second turn into a {@link DataIntegrityViolationException}, which we surface as
+     * {@link TurnAlreadyInFlightException}.
      *
      * <p>{@code userMessageId} is the client-supplied UUID, or {@code null} to generate one.
      * Persisting the client's id is what makes a duplicate inbound delivery collapse onto the
@@ -134,6 +136,7 @@ public class MentorTurnPersistence {
             UUID assistantMessageId,
             @Nullable UUID userMessageId,
             MentorLlmConfig llmConfig) {
+        lockForAdmission(thread);
         try {
             if (userMessageId != null && chatMessageRepository.existsById(userMessageId)) {
                 throw new TurnAlreadyInFlightException(
@@ -148,27 +151,7 @@ public class MentorTurnPersistence {
             // Materialize the parent before its dependent row. Both writes remain in this transaction,
             // including rollback when a concurrent turn wins the unique in-flight constraint.
             ChatMessage savedUser = chatMessageRepository.saveAndFlush(userMessage);
-
-            ChatMessage assistant = new ChatMessage();
-            assistant.setId(assistantMessageId);
-            assistant.setThread(thread);
-            assistant.setRole(ChatMessage.Role.ASSISTANT);
-            assistant.setParentMessage(savedUser);
-            assistant.setParts(NODES.arrayNode());
-            assistant.setStatus(ChatMessage.Status.in_flight);
-            assistant.setMetadata(admissionMetadata(llmConfig));
-            chatMessageRepository.save(assistant);
-            chatMessageRepository.flush();
-            if (llmConfig.priceSnapshot() == null) {
-                throw new IllegalStateException("Mentor turn has no admitted LLM price snapshot");
-            }
-            return new TurnPersistenceCookie(
-                    thread.getId(),
-                    savedUser.getId(),
-                    assistantMessageId,
-                    Instant.now(),
-                    llmConfig.upstreamModelId(),
-                    llmConfig.priceSnapshot());
+            return persistAssistant(thread, savedUser, assistantMessageId, llmConfig);
         } catch (DataIntegrityViolationException ex) {
             // Spring maps every integrity violation to this one class, so narrow by constraint name:
             // an unrelated CHECK regression must not masquerade as a 409.
@@ -177,6 +160,90 @@ public class MentorTurnPersistence {
             }
             throw ex;
         }
+    }
+
+    /**
+     * Admits a new attempt at the reply {@code failedAssistantId}, answering its stored prompt again. Only the latest
+     * attempt at the thread's latest prompt, sent as {@code userMessageId}, and only once it was interrupted, may be
+     * retried. No USER row is written, and the earlier attempt keeps its outcome and usage.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public RetryAdmission persistRetry(
+            ChatThread thread,
+            @Nullable UUID userMessageId,
+            UUID failedAssistantId,
+            UUID assistantMessageId,
+            MentorLlmConfig llmConfig) {
+        lockForAdmission(thread);
+        ChatMessage prompt = userMessageId == null
+                ? null
+                : chatMessageRepository
+                        .findByIdAndThread_Id(userMessageId, thread.getId())
+                        .orElse(null);
+        ChatMessage failed = chatMessageRepository
+                .findByIdAndThread_Id(failedAssistantId, thread.getId())
+                .orElse(null);
+        if (prompt == null
+                || prompt.getRole() != ChatMessage.Role.USER
+                || failed == null
+                || failed.getRole() != ChatMessage.Role.ASSISTANT
+                || !prompt.getId().equals(failed.getParentMessageId())
+                || chatMessageRepository.existsByThread_IdAndRoleAndCreatedAtAfter(
+                        thread.getId(), ChatMessage.Role.USER, prompt.getCreatedAt())) {
+            throw new MentorRetryRejectedException(MentorRetryRejectedException.NOT_RETRYABLE);
+        }
+        if (chatMessageRepository.existsByThread_IdAndStatus(thread.getId(), ChatMessage.Status.in_flight)) {
+            throw new TurnAlreadyInFlightException(
+                    thread.getId(), new IllegalStateException("a reply in this thread is still in flight"));
+        }
+        if (failed.getStatus() != ChatMessage.Status.interrupted
+                || chatMessageRepository.existsByParentMessageIdAndRoleAndCreatedAtAfter(
+                        prompt.getId(), ChatMessage.Role.ASSISTANT, failed.getCreatedAt())) {
+            throw new MentorRetryRejectedException(MentorRetryRejectedException.SUPERSEDED);
+        }
+        String storedPrompt = storedText(prompt.getParts());
+        if (storedPrompt == null) {
+            throw new MentorRetryRejectedException(MentorRetryRejectedException.NOT_RETRYABLE);
+        }
+        try {
+            return new RetryAdmission(persistAssistant(thread, prompt, assistantMessageId, llmConfig), storedPrompt);
+        } catch (DataIntegrityViolationException ex) {
+            if (isInFlightUniqueViolation(ex)) {
+                throw new TurnAlreadyInFlightException(thread.getId(), ex);
+            }
+            throw ex;
+        }
+    }
+
+    private void lockForAdmission(ChatThread thread) {
+        chatThreadRepository
+                .lockForTurnAdmission(thread.getId(), thread.getWorkspace().getId())
+                .orElseThrow(() ->
+                        new EntityNotFoundException("ChatThread", thread.getId().toString()));
+    }
+
+    private TurnPersistenceCookie persistAssistant(
+            ChatThread thread, ChatMessage prompt, UUID assistantMessageId, MentorLlmConfig llmConfig) {
+        ChatMessage assistant = new ChatMessage();
+        assistant.setId(assistantMessageId);
+        assistant.setThread(thread);
+        assistant.setRole(ChatMessage.Role.ASSISTANT);
+        assistant.setParentMessage(prompt);
+        assistant.setParts(NODES.arrayNode());
+        assistant.setStatus(ChatMessage.Status.in_flight);
+        assistant.setMetadata(admissionMetadata(llmConfig));
+        chatMessageRepository.save(assistant);
+        chatMessageRepository.flush();
+        if (llmConfig.priceSnapshot() == null) {
+            throw new IllegalStateException("Mentor turn has no admitted LLM price snapshot");
+        }
+        return new TurnPersistenceCookie(
+                thread.getId(),
+                prompt.getId(),
+                assistantMessageId,
+                Instant.now(),
+                llmConfig.upstreamModelId(),
+                llmConfig.priceSnapshot());
     }
 
     private static ObjectNode admissionMetadata(MentorLlmConfig config) {
@@ -198,106 +265,122 @@ public class MentorTurnPersistence {
     }
 
     /**
-     * Injects the turn's cost into {@code finish}. Called before the Finish chunk goes on the wire, so
-     * the client and {@code chat_message.metadata} show the same number.
+     * Durably completes the turn: the message and its ledger write share one new transaction. Returns the Finish to
+     * send, whose usage and cost are the ones the row and the ledger record; empty, having written nothing, when the
+     * row is no longer in flight because another writer (the in-flight reaper, or an interrupt) recorded its outcome
+     * first. Any other failure throws.
      */
-    public UIMessageChunk.Finish augmentFinishWithCost(UIMessageChunk.Finish finish, TranslatorState state) {
-        Double cost = computeFinalCostUsd(state);
-        if (cost == null) return finish;
-        UIMessageChunk.MessageMetadata existing = finish.messageMetadata();
-        UIMessageChunk.MessageMetadata.Usage usage = existing != null ? existing.usage() : null;
-        String model = existing != null ? existing.model() : state.admittedModel();
-        return new UIMessageChunk.Finish(finish.finishReason(), new UIMessageChunk.MessageMetadata(model, usage, cost));
-    }
-
-    /**
-     * Display-only cost for the chat UI, priced off the turn's admission-frozen
-     * {@link LlmPriceSnapshot} — the same rates {@link #billTurn} bills from. {@code null} when the
-     * model is unpriced or no tokens were observed.
-     */
-    @Nullable
-    private Double computeFinalCostUsd(TranslatorState state) {
-        UsageBreakdown breakdown = extractUsageFromState(state);
-        LlmPriceSnapshot price = state.admittedPrice();
-        if (price == null || isEmpty(breakdown)) {
-            return null;
-        }
-        var cost = price.calculateCost(
-                        breakdown.inputTokens(),
-                        breakdown.outputTokens(),
-                        breakdown.cacheReadTokens(),
-                        breakdown.cacheWriteTokens())
-                .usd();
-        return cost != null ? cost.doubleValue() : null;
-    }
-
-    /**
-     * Durably completes the turn: the message and its ledger write share one new transaction. Returns
-     * {@code false}, having written nothing, when the row is no longer in flight because another writer
-     * (the in-flight reaper, or an interrupt) recorded its outcome first. Any other failure throws.
-     */
-    public boolean complete(TurnPersistenceCookie cookie, TranslatorState state, UIMessageChunk.Finish finish) {
+    public Optional<UIMessageChunk.Finish> complete(
+            TurnPersistenceCookie cookie, TranslatorState state, UIMessageChunk.Finish finish) {
         try {
-            return Boolean.TRUE.equals(requiresNewTx.execute(tx -> doComplete(cookie, state, finish)));
+            return Optional.ofNullable(requiresNewTx.execute(tx -> doComplete(cookie, state, finish)));
         } catch (OptimisticLockingFailureException concurrentlyTerminated) {
-            return false;
+            return Optional.empty();
         }
     }
 
-    private boolean doComplete(TurnPersistenceCookie cookie, TranslatorState state, UIMessageChunk.Finish finish) {
+    private UIMessageChunk.@Nullable Finish doComplete(
+            TurnPersistenceCookie cookie, TranslatorState state, UIMessageChunk.Finish finish) {
         ChatMessage assistant = chatMessageRepository
                 .findById(cookie.assistantMessageId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "ChatMessage", cookie.assistantMessageId().toString()));
         if (assistant.getStatus() != ChatMessage.Status.in_flight) {
-            return false;
+            return null;
         }
         assistant.setParts(state.partsSnapshot());
         assistant.setStatus(ChatMessage.Status.completed);
+        // saveAndFlush, not save: forces the optimistic-lock check inside complete's try/catch instead of
+        // at the REQUIRES_NEW commit boundary, where it would escape uncaught. The terminal status also closes
+        // the proxy's per-call fence, so the proxy totals read below are final.
+        chatMessageRepository.saveAndFlush(assistant);
+        TurnUsage turn = turnUsage(assistant.getId(), state);
+        UIMessageChunk.Finish recorded = recordedFinish(finish, state, turn);
+
+        // Persisted shape MUST match the wire UIMessageChunk.MessageMetadata: the webapp rehydrates a
+        // thread by feeding this GET response into the same typed accessor it uses for live chunks.
         ObjectNode meta = newOrCopyMeta(assistant);
         if (finish.finishReason() != null) {
             meta.put("finishReason", finish.finishReason().wire());
         }
-        // Persisted shape MUST match the wire UIMessageChunk.MessageMetadata: the webapp rehydrates a
-        // thread by feeding this GET response into the same typed accessor it uses for live chunks.
-        UsageBreakdown usage = extractUsageFromState(state);
-        if (usage.model() != null) {
-            meta.put("model", usage.model());
-        }
-        ObjectNode usageNode = meta.has("usage") && meta.get("usage").isObject()
-                ? (ObjectNode) meta.get("usage")
-                : meta.putObject("usage");
-        usageNode.put("input", usage.inputTokens());
-        usageNode.put("output", usage.outputTokens());
-        usageNode.put("cacheRead", usage.cacheReadTokens());
-        usageNode.put("cacheWrite", usage.cacheWriteTokens());
-        // The provider's own total may include cache tokens, so it is not input+output; prefer it.
-        Long wireTotalTokens = wireTotalTokens(finish);
-        long totalTokens = wireTotalTokens != null ? wireTotalTokens : usage.inputTokens() + usage.outputTokens();
-        if (totalTokens > 0) {
-            usageNode.put("totalTokens", totalTokens);
-        }
-        // Reuse the figure already on the wire Finish rather than re-deriving it, so the row holds
-        // exactly what the client saw.
-        Double wireCostUsd =
-                finish.messageMetadata() != null ? finish.messageMetadata().costUsd() : null;
-        if (wireCostUsd != null) {
-            meta.put("costUsd", wireCostUsd);
+        UIMessageChunk.MessageMetadata metadata = recorded.messageMetadata();
+        if (metadata != null) {
+            if (metadata.model() != null) {
+                meta.put("model", metadata.model());
+            }
+            UIMessageChunk.MessageMetadata.Usage usage = metadata.usage();
+            if (usage != null) {
+                ObjectNode usageNode = meta.putObject("usage");
+                putIfPresent(usageNode, "input", usage.input());
+                putIfPresent(usageNode, "output", usage.output());
+                putIfPresent(usageNode, "cacheRead", usage.cacheRead());
+                putIfPresent(usageNode, "cacheWrite", usage.cacheWrite());
+                putIfPresent(usageNode, "totalTokens", usage.totalTokens());
+            }
+            if (metadata.costUsd() != null) {
+                meta.put("costUsd", metadata.costUsd());
+            }
         }
         meta.put(
                 "durationMs",
                 Duration.between(cookie.startedAt(), Instant.now()).toMillis());
         assistant.setMetadata(meta);
-        // saveAndFlush, not save: forces the optimistic-lock check inside complete's try/catch instead of
-        // at the REQUIRES_NEW commit boundary, where it would escape uncaught.
         chatMessageRepository.saveAndFlush(assistant);
-        billTurn(assistant, state, cookie);
+        billTurn(assistant, state, cookie, turn);
 
         byte[] sessionBytes = state.observedSessionJsonl();
         if (sessionBytes != null) {
             chatThreadRepository.updateSessionJsonl(cookie.threadId(), sessionBytes);
         }
-        return true;
+        return recorded;
+    }
+
+    /**
+     * The Finish a turn reports: the usage and cost of {@code turn}, the same account its row and ledger entry
+     * record, priced off the turn's admission-frozen {@link LlmPriceSnapshot}. A total the provider reported is kept
+     * only when it describes those calls; otherwise it is the sum of every bucket, as Pi counts one.
+     */
+    UIMessageChunk.Finish recordedFinish(UIMessageChunk.Finish finish, TranslatorState state, TurnUsage turn) {
+        UIMessageChunk.MessageMetadata existing = finish.messageMetadata();
+        String model = existing != null && existing.model() != null ? existing.model() : state.admittedModel();
+        UsageBreakdown usage = turn.usage();
+        if (isEmpty(usage)) {
+            return new UIMessageChunk.Finish(
+                    finish.finishReason(),
+                    UIMessageChunk.MessageMetadata.of(model, existing != null ? existing.usage() : null, null));
+        }
+        Long wireTotal = turn.provenance() == UsageProvenance.RUNNER ? wireTotalTokens(finish) : null;
+        long total = wireTotal != null
+                ? wireTotal
+                : usage.inputTokens() + usage.outputTokens() + usage.cacheReadTokens() + usage.cacheWriteTokens();
+        var wireUsage = new UIMessageChunk.MessageMetadata.Usage(
+                Math.toIntExact(usage.inputTokens()),
+                Math.toIntExact(usage.outputTokens()),
+                Math.toIntExact(usage.cacheReadTokens()),
+                Math.toIntExact(usage.cacheWriteTokens()),
+                Math.toIntExact(total));
+        return new UIMessageChunk.Finish(
+                finish.finishReason(), new UIMessageChunk.MessageMetadata(model, wireUsage, costUsd(state, usage)));
+    }
+
+    /** {@code null} when the model is unpriced; cost coverage metrics expose a missing price. */
+    private static @Nullable Double costUsd(TranslatorState state, UsageBreakdown usage) {
+        LlmPriceSnapshot price = state.admittedPrice();
+        if (price == null) {
+            return null;
+        }
+        try {
+            var cost = price.calculateCost(
+                            usage.inputTokens(),
+                            usage.outputTokens(),
+                            usage.cacheReadTokens(),
+                            usage.cacheWriteTokens())
+                    .usd();
+            return cost != null ? cost.doubleValue() : null;
+        } catch (RuntimeException costEx) {
+            log.debug("Cost calculation failed; reporting no cost: {}", costEx.toString());
+            return null;
+        }
     }
 
     /**
@@ -314,37 +397,11 @@ public class MentorTurnPersistence {
     /**
      * Append this turn's spend to the {@code llm_usage_event} ledger, in the same transaction as the
      * assistant message. Runs for complete AND interrupt: an interrupted turn still burned tokens.
-     *
-     * <p>The runner's own report and the proxy's per-call meter are two views of the SAME calls, so
-     * exactly one is billed, never their sum. The proxy's totals are the fallback for a turn that died
-     * before the runner reported anything — real calls that were already paid for.
      */
-    private void billTurn(ChatMessage assistant, TranslatorState state, TurnPersistenceCookie cookie) {
+    private void billTurn(ChatMessage assistant, TranslatorState state, TurnPersistenceCookie cookie, TurnUsage turn) {
         ChatThread thread = assistant.getThread();
         if (thread == null || thread.getWorkspace() == null || !state.hasLlmCallStarted()) return;
-        UsageBreakdown usage = extractUsageFromState(state);
-        int calls = state.observedCallCount();
-        long reasoning = 0;
-        UsageProvenance provenance = UsageProvenance.RUNNER;
-        if (isEmpty(usage)) {
-            MentorTurnLlmUsage viaProxy =
-                    chatMessageRepository.findLlmUsageById(assistant.getId()).orElse(MentorTurnLlmUsage.NONE);
-            if (viaProxy.hasBillableUsage()) {
-                log.info(
-                        "Mentor turn {} reported no usage of its own; billing the {} call(s) the proxy recorded",
-                        assistant.getId(),
-                        viaProxy.totalCalls());
-                usage = new UsageBreakdown(
-                        usage.model(),
-                        viaProxy.inputTokens(),
-                        viaProxy.outputTokens(),
-                        viaProxy.cacheReadTokens(),
-                        viaProxy.cacheWriteTokens());
-                calls = viaProxy.totalCalls();
-                reasoning = viaProxy.reasoningTokens();
-                provenance = UsageProvenance.PROXY;
-            }
-        }
+        UsageBreakdown usage = turn.usage();
         LlmUsageSample sample = new LlmUsageSample(
                 LlmUsageJobType.MENTOR_TURN,
                 LlmUsageSourceType.MENTOR_TURN,
@@ -355,16 +412,44 @@ public class MentorTurnPersistence {
                 usage.outputTokens(),
                 usage.cacheReadTokens(),
                 usage.cacheWriteTokens(),
-                reasoning,
-                Math.max(1, calls),
+                turn.reasoningTokens(),
+                Math.max(1, turn.calls()),
                 cookie.priceSnapshot(),
                 // Neither record had tokens, so the row names no source rather than crediting one that saw
                 // nothing — the same distinction the UNVERIFIABLE append below makes about the amount.
-                isEmpty(usage) ? UsageProvenance.NONE : provenance,
+                isEmpty(usage) ? UsageProvenance.NONE : turn.provenance(),
                 Instant.now());
         if (isEmpty(usage))
             usageRecorder.recordUnverifiable(thread.getWorkspace().getId(), sample);
         else usageRecorder.record(thread.getWorkspace().getId(), sample);
+    }
+
+    /**
+     * The one account of a turn's calls that its row, its cost and its ledger entry all use. The runner's report
+     * and the proxy's per-call meter are two views of the SAME calls, so exactly one is used, never their sum. The
+     * runner's is used unless it cannot be complete: when it reported nothing, or when the turn compacted — Pi
+     * reports a compaction's summary calls as one total, and nothing for one that failed partway — in which case
+     * the proxy, which records every call, is the account. Read only after the turn's terminal status is flushed.
+     */
+    private TurnUsage turnUsage(UUID assistantId, TranslatorState state) {
+        UsageBreakdown runner = extractUsageFromState(state);
+        if (state.compactionAttempted() || isEmpty(runner)) {
+            MentorTurnLlmUsage viaProxy =
+                    chatMessageRepository.findLlmUsageById(assistantId).orElse(MentorTurnLlmUsage.NONE);
+            if (viaProxy.hasBillableUsage()) {
+                return new TurnUsage(
+                        new UsageBreakdown(
+                                runner.model(),
+                                viaProxy.inputTokens(),
+                                viaProxy.outputTokens(),
+                                viaProxy.cacheReadTokens(),
+                                viaProxy.cacheWriteTokens()),
+                        viaProxy.totalCalls(),
+                        viaProxy.reasoningTokens(),
+                        UsageProvenance.PROXY);
+            }
+        }
+        return new TurnUsage(runner, state.observedCallCount(), 0, UsageProvenance.RUNNER);
     }
 
     private static boolean isEmpty(UsageBreakdown usage) {
@@ -428,7 +513,7 @@ public class MentorTurnPersistence {
             assistant.setMetadata(meta);
             // saveAndFlush, not save — see doComplete.
             chatMessageRepository.saveAndFlush(assistant);
-            billTurn(assistant, state, cookie);
+            billTurn(assistant, state, cookie, turnUsage(assistant.getId(), state));
         });
 
         // Session bytes the runner shipped before the interrupt still buy prompt-cache continuity.
@@ -447,12 +532,30 @@ public class MentorTurnPersistence {
         return total != null ? total.longValue() : null;
     }
 
+    private static void putIfPresent(ObjectNode node, String field, @Nullable Integer value) {
+        if (value != null) {
+            node.put(field, value);
+        }
+    }
+
     private static ObjectNode newOrCopyMeta(ChatMessage message) {
         JsonNode existing = message.getMetadata();
         if (existing != null && existing.isObject()) {
             return ((ObjectNode) existing).deepCopy();
         }
         return NODES.objectNode();
+    }
+
+    private static @Nullable String storedText(@Nullable JsonNode parts) {
+        if (parts == null || !parts.isArray()) return null;
+        for (JsonNode part : parts) {
+            if ("text".equals(part.path("type").asString(""))
+                    && part.path("text").isString()) {
+                String text = part.path("text").asString();
+                if (!text.isBlank()) return text;
+            }
+        }
+        return null;
     }
 
     private static JsonNode toTextParts(String userText) {
@@ -480,6 +583,8 @@ public class MentorTurnPersistence {
         return v.isIntegralNumber() || v.isFloatingPointNumber() ? v.asLong() : 0L;
     }
 
+    public record RetryAdmission(TurnPersistenceCookie cookie, String prompt) {}
+
     /** Tracking record carried through the turn pipeline. */
     public record TurnPersistenceCookie(
             UUID threadId,
@@ -489,6 +594,8 @@ public class MentorTurnPersistence {
             String upstreamModelId,
             LlmPriceSnapshot priceSnapshot) {}
 
-    private record UsageBreakdown(
+    record UsageBreakdown(
             @Nullable String model, long inputTokens, long outputTokens, long cacheReadTokens, long cacheWriteTokens) {}
+
+    record TurnUsage(UsageBreakdown usage, int calls, long reasoningTokens, UsageProvenance provenance) {}
 }

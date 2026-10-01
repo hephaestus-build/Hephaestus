@@ -18,7 +18,7 @@ class InteractiveSandboxPropertiesTest extends BaseUnitTest {
     @Test
     void bindsDefaultsAndOverrides() {
         InteractiveSandboxProperties defaults = bind(Map.of());
-        assertThat(defaults.idleTtlSeconds()).isEqualTo(300);
+        assertThat(defaults.idleTtlSeconds()).isEqualTo(900);
         assertThat(defaults.graceTimeoutSeconds()).isEqualTo(25);
         assertThat(defaults.maxSessionsPerUser()).isEqualTo(3);
         assertThat(defaults.maxFrameChars()).isEqualTo(1_048_576);

@@ -1,30 +1,33 @@
-// Precompute HINTS for avoids-unsafe-panics-and-chosen-crashes: locate deliberate-crash constructs ADDED
-// in the diff, across languages. These are CANDIDATES to investigate — the LLM decides whether each is a
-// real, unsafe crash a realistic input/state can trigger. General by design: a per-language pattern table
-// keyed off the file extension, NOT a Swift-only scan. Adding a language = adding a row, no engine change.
-import { isCommentLine } from "../lib/declarations.ts";
-import { languageOf } from "../lib/languages.ts";
+// Precompute FACTS for avoids-unsafe-panics-and-chosen-crashes: the added lines that spell a crash
+// operator the author wrote — a force unwrap, `try!`, a force cast, an abort — across languages, each
+// with where it runs: inside a preview block or in a test file. A row matches spelling on one line; it
+// does not know the operand's type, where the value came from, or what bounds it, and the criteria
+// decide which rows are lapses. Implicit traps (a subscript, an integer division) are the input
+// practice's, so they are not listed here. Adding a language = adding a row, no engine change.
+import { readFile } from "node:fs/promises";
+import nodePath from "node:path";
+
+import { blockExtents, codeLines, isCommentLine } from "../lib/declarations.ts";
+import { isTestPath, languageOf } from "../lib/languages.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
-// language key -> [human label, regex] of deliberate-crash / force-unwrap constructs in ADDED code.
+// language key -> [label, regex] of crash operators the author writes, matched against the line's code.
 const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 	swift: [
 		["try!", /\btry!/u],
 		["fatalError", /\bfatalError\s*\(/u],
-		["force-cast as!", /\bas!\s/u],
-		["preconditionFailure", /\bpreconditionFailure\s*\(/u],
-		["assertionFailure", /\bassertionFailure\s*\(/u],
-		["force-unwrap", /[A-Za-z0-9_)\]]!(?:\.|\s|$|\))/u],
-		// The closed list the criteria decide the occasion by continues with the traps that are not
-		// spelled with a bang: a subscript whose index is not a literal, a lossy numeric conversion of
-		// a runtime value, and a division or modulo by a non-literal.
-		["subscript with a non-literal index", /[A-Za-z_][A-Za-z0-9_.]*\[\s*[A-Za-z_(][^\]\n]*\]/u],
-		["lossy numeric conversion", /\b(?:U?Int(?:8|16|32|64)?)\(\s*[A-Za-z_(]/u],
-		["division or modulo by a non-literal", /\S\s[/%]\s[A-Za-z_(]/u],
+		["force cast as!", /\bas!\s/u],
+		[
+			"precondition or assert",
+			/\b(?:precondition|preconditionFailure|assert|assertionFailure)\s*\(/u,
+		],
+		["exit or abort", /\b(?:exit|abort)\s*\(/u],
+		// `try!` and `as!` have their own rows.
+		["force unwrap", /[A-Za-z0-9_)\]](?<!\btry|\bas)!(?:[.\s),\]]|$)/u],
 	],
 	typescript: [
 		["process.exit", /\bprocess\.exit\s*\(/u],
-		["non-null assertion", /[A-Za-z0-9_)\]]![.;)\s]/u],
+		["non-null assertion", /[A-Za-z0-9_)\]]!(?:[.;)\s,\]]|$)/u],
 	],
 	javascript: [["process.exit", /\bprocess\.exit\s*\(/u]],
 	python: [
@@ -44,7 +47,7 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 		["Optional.get()", /\bOptional[^;]*\.get\s*\(\s*\)/u],
 	],
 	kotlin: [
-		["!! force non-null", /!!(?:\.|\s|$|\))/u],
+		["!! force non-null", /!!(?:[.\s)]|$)/u],
 		["error(", /(?:^|[^.\w])error\s*\(/u],
 		["TODO(", /\bTODO\s*\(/u],
 	],
@@ -74,56 +77,112 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 		["Environment.Exit", /\bEnvironment\.Exit\s*\(/u],
 		["Environment.FailFast", /\bEnvironment\.FailFast\s*\(/u],
 		["Debug.Assert", /\bDebug\.Assert\s*\(/u],
-		["throw new", /\bthrow\s+new\s+\w+/u],
 		["null-forgiving !", /[A-Za-z0-9_)\]]!\.(?=[A-Za-z_])/u],
 	],
 };
 
-export default function avoidsUnsafePanicsAndChosenCrashes(
-	_repo: string,
+// Code that runs only when Xcode renders a preview, never on a user's device.
+const PREVIEW_OPENER = /^\s*(?:#Preview\b|(?:\w+\s+)*struct\s+\w+\s*:\s*PreviewProvider\b)/u;
+
+/** The new side as far as the hunks show it: context and added lines at their numbers, gaps empty. */
+function newSideOfHunks(file: DiffFile): string {
+	const lines: string[] = [];
+	for (const hunk of file.hunks) {
+		let number = hunk.newStart;
+		for (const line of hunk.lines) {
+			if (line.startsWith("-")) {
+				continue;
+			}
+			while (lines.length < number - 1) {
+				lines.push("");
+			}
+			lines[number - 1] = line.slice(1);
+			number += 1;
+		}
+	}
+	return lines.join("\n");
+}
+
+/** The lines inside a preview block: read from the pinned file, else from what the hunks show. */
+async function previewLines(
+	repoPath: string,
+	file: DiffFile,
+	language: string,
+): Promise<Set<number>> {
+	let source: string;
+	try {
+		source = await readFile(nodePath.join(repoPath, file.path), "utf8");
+	} catch {
+		source = newSideOfHunks(file);
+	}
+	const lines = new Set<number>();
+	for (const { start, end } of blockExtents(language, source, PREVIEW_OPENER) ?? []) {
+		for (let line = start; line <= end; line += 1) {
+			lines.add(line);
+		}
+	}
+	return lines;
+}
+
+export default async function avoidsUnsafePanicsAndChosenCrashes(
+	repoPath: string,
 	diffFiles: Map<string, DiffFile>,
 	_m: PullRequestMetadata,
 ) {
 	const hints: Hint[] = [];
-	const byLang: Record<string, number> = {};
+	const byKind: Record<string, number> = {};
 	for (const [path, df] of diffFiles) {
 		const lang = languageOf(path);
-		if (lang === null) {
+		const patterns = lang === null ? undefined : LANG_PATTERNS[lang];
+		if (lang === null || !patterns) {
 			continue;
 		}
-		const patterns = LANG_PATTERNS[lang];
-		if (!patterns) {
-			continue;
-		}
+		const code = codeLines(lang, df.addedLines);
+		const preview = lang === "swift" ? await previewLines(repoPath, df, lang) : new Set<number>();
+		const testFile = isTestPath(path);
 		for (const [line, content] of df.addedLines) {
 			if (isCommentLine(content, lang)) {
 				continue;
 			}
-			for (const [name, re] of patterns) {
-				if (re.test(content)) {
-					hints.push({
-						file: path,
-						line,
-						pattern: `${lang}:${name}`,
-						context: content.trim().slice(0, 160),
-						inDiff: true,
-						flags: {},
-					});
-					byLang[lang] = (byLang[lang] ?? 0) + 1;
-					break;
-				}
+			const labels = patterns
+				.filter(([, re]) => re.test(code.get(line) ?? ""))
+				.map(([name]) => name);
+			if (labels.length === 0) {
+				continue;
 			}
+			for (const label of labels) {
+				byKind[label] = (byKind[label] ?? 0) + 1;
+			}
+			hints.push({
+				file: path,
+				line,
+				pattern: `${lang}:${labels.join(" + ")}`,
+				context: content.trim().slice(0, 160),
+				inDiff: true,
+				flags: { inPreview: preview.has(line), testFile },
+			});
 		}
 	}
+	// Rows on an ordinary path first, so preview and test rows cannot push them out of a shown sample.
+	hints.sort(
+		(a, b) =>
+			Number(a.flags.inPreview === true || a.flags.testFile === true) -
+			Number(b.flags.inPreview === true || b.flags.testFile === true),
+	);
+	const inPreview = hints.filter((h) => h.flags.inPreview === true).length;
+	const inTests = hints.filter((h) => h.flags.testFile === true).length;
+	const kinds = Object.entries(byKind)
+		.map(([kind, count]) => `${String(count)} ${kind}`)
+		.join(", ");
 	const directions =
 		hints.length > 0
 			? [
-					`Found ${hints.length} deliberate-crash / force-unwrap construct(s) added across ${Object.keys(byLang).length} language(s) — investigate whether each can be triggered by realistic input/state and should handle the failure instead of crashing.`,
+					`${hints.length} added line(s) spell a crash operator (${kinds}); ${inPreview} sit inside a preview block and ${inTests} in test files. String-literal text and comments were not scanned. A row matches spelling on one line: it does not know the operand's type, where the value came from, or what bounds it.`,
 				]
 			: [];
 	return {
 		hints: hints.slice(0, 40),
-		metrics: { crashConstructsAdded: hints.length, ...byLang },
+		metrics: { crashOperatorLines: hints.length, inPreview, inTests, ...byKind },
 		directions,
 	};
 }

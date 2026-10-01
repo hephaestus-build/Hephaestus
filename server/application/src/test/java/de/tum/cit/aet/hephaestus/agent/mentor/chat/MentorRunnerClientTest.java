@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxIdentity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -45,6 +44,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
     private final CopyOnWriteArrayList<JsonNode> events = new CopyOnWriteArrayList<>();
     private final AtomicInteger streamLost = new AtomicInteger();
     private final AtomicReference<MentorRunnerClient.FetchContextRequest> lastFetchContext = new AtomicReference<>();
+    private final AtomicReference<MentorRunnerClient.LinkObservationRequest> lastLink = new AtomicReference<>();
     private ScheduledExecutorService scheduler;
     private UUID threadId;
 
@@ -62,6 +62,10 @@ class MentorRunnerClientTest extends BaseUnitTest {
                     lastFetchContext.set(req);
                     return mapper.createObjectNode().put("ok", true);
                 },
+                link -> {
+                    lastLink.set(link);
+                    return false;
+                },
                 scheduler,
                 threadId);
         client.start();
@@ -71,6 +75,18 @@ class MentorRunnerClientTest extends BaseUnitTest {
     void tearDown() {
         client.close();
         scheduler.shutdownNow();
+    }
+
+    @Test
+    void shouldSendCurrentEvidenceWithThePromptWithoutChangingTheUserText() throws Exception {
+        var future = client.prompt(threadId, "hello", "{\"providerFreshness\":\"UNKNOWN\"}");
+        JsonNode frame = sandbox.takeFrame();
+        assertThat(frame.path("params").path("text").asString()).isEqualTo("hello");
+        assertThat(frame.path("params").path("currentEvidence").asString())
+                .isEqualTo("{\"providerFreshness\":\"UNKNOWN\"}");
+        sandbox.pushFrame(
+                responseOf(frame.path("id").asLong(), mapper.createObjectNode().put("accepted", true)));
+        assertThat(future.get(2, TimeUnit.SECONDS).path("accepted").asBoolean()).isTrue();
     }
 
     @Test
@@ -91,7 +107,14 @@ class MentorRunnerClientTest extends BaseUnitTest {
     @Test
     void shouldSettleOnlyItsOwnCallWhenClientsShareASandbox() throws Exception {
         MentorRunnerClient other = new MentorRunnerClient(
-                sandbox, mapper, e -> {}, () -> {}, req -> mapper.nullNode(), scheduler, UUID.randomUUID());
+                sandbox,
+                mapper,
+                e -> {},
+                () -> {},
+                req -> mapper.nullNode(),
+                link -> false,
+                scheduler,
+                UUID.randomUUID());
         other.start();
         CompletableFuture<JsonNode> mine = client.hello();
         long myId = sandbox.takeFrame().get("id").asLong();
@@ -110,7 +133,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
 
     @Test
     void shouldFailPendingAndLaterCallsWhenTheEventStreamIsLost() throws Exception {
-        CompletableFuture<JsonNode> inFlight = client.openThread(threadId);
+        CompletableFuture<JsonNode> inFlight = client.openThread(threadId, null);
         sandbox.takeFrame();
 
         sandbox.onLost.run();
@@ -126,7 +149,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
 
     @Test
     void errorResponseBecomesException() throws Exception {
-        CompletableFuture<JsonNode> future = client.openThread(UUID.randomUUID());
+        CompletableFuture<JsonNode> future = client.openThread(UUID.randomUUID(), null);
         JsonNode request = sandbox.takeFrame();
         long id = request.get("id").asLong();
         ObjectNode error = mapper.createObjectNode();
@@ -210,6 +233,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
                 otherEvents::add,
                 otherLost::incrementAndGet,
                 req -> mapper.nullNode(),
+                link -> false,
                 scheduler,
                 UUID.randomUUID());
         other.start();
@@ -283,6 +307,32 @@ class MentorRunnerClientTest extends BaseUnitTest {
         assertThat(response.get("result").get("content").get("ok").asBoolean()).isTrue();
     }
 
+    /** Fields of any other shape are refused at once, the same way as an unknown observation, never left to time out. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{\"threadId\":\"%s\",\"observationId\":{\"id\":\"3ec24178-2219-4af4-bebf-077c73a0435e\"}}",
+                "{\"threadId\":[\"%s\"],\"observationId\":\"3ec24178-2219-4af4-bebf-077c73a0435e\"}",
+                "{\"threadId\":\"%s\",\"observationId\":7}",
+                "{\"threadId\":\"%s\",\"observationId\":\"not-a-uuid\"}",
+                "[\"%s\"]"
+            })
+    void shouldRefuseALinkWhoseFieldsAreNotUuidStrings(String params) {
+        ObjectNode callback = mapper.createObjectNode();
+        callback.put("jsonrpc", "2.0");
+        callback.put("id", "cb-malformed");
+        callback.put("method", "link_observation");
+        callback.set("params", mapper.readTree(params.formatted(threadId)));
+
+        sandbox.pushFrame(callback);
+
+        JsonNode response = sandbox.takeFrame();
+        assertThat(response.get("id").asString()).isEqualTo("cb-malformed");
+        assertThat(response.path("error").path("message").asString()).isEqualTo(MentorRunnerClient.LINK_REFUSED);
+        assertThat(response.has("result")).isFalse();
+        assertThat(lastLink.get()).isNull();
+    }
+
     @Test
     void fetchContextForDifferentThread_isIgnored() {
         ObjectNode callback = mapper.createObjectNode();
@@ -345,7 +395,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
         }
 
         @Override
-        public Disposable subscribe(Consumer<JsonNode> listener) {
+        public Disposable subscribe(Consumer<JsonNode> listener, Runnable onLost) {
             listeners.add(listener);
             return () -> listeners.remove(listener);
         }
@@ -353,17 +403,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
         @Override
         public Disposable subscribeFromNow(Consumer<JsonNode> listener, Runnable onLost) {
             this.onLost = onLost;
-            return subscribe(listener);
-        }
-
-        @Override
-        public Instant lastActivityAt() {
-            return Instant.now();
-        }
-
-        @Override
-        public Duration idleFor() {
-            return Duration.ZERO;
+            return subscribe(listener, onLost);
         }
 
         @Override

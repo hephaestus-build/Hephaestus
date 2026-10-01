@@ -39,6 +39,7 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
     private final WorkerCapacityState state;
     private final WorkerProperties properties;
     private final Optional<AgentJobExecutor> executor;
+    private final Optional<WorkerMentorSessions> mentorSessions;
     private final ApplicationEventPublisher events;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicBoolean draining = new AtomicBoolean(false);
@@ -48,12 +49,14 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
             WorkerCapacityState state,
             WorkerProperties properties,
             Optional<AgentJobExecutor> executor,
+            Optional<WorkerMentorSessions> mentorSessions,
             ApplicationEventPublisher events,
             MeterRegistry meterRegistry) {
         this.client = client;
         this.state = state;
         this.properties = properties;
         this.executor = executor;
+        this.mentorSessions = mentorSessions;
         this.events = events;
         Gauge.builder(AgentMetrics.WORKER_DRAIN_ACTIVE, draining, b -> b.get() ? 1.0 : 0.0)
                 .description("1 while the worker is draining, 0 otherwise")
@@ -84,6 +87,7 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
                 safeSend(new CapacityReport(
                         snap.reviewMax(), snap.mentorMax(), snap.inFlightReview(), snap.inFlightMentor(), 0, 0));
 
+                mentorSessions.ifPresent(WorkerMentorSessions::stop);
                 executor.ifPresent(e -> drainExecutor(e, timeout));
                 log.info("Worker drain complete.");
             }

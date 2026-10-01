@@ -187,13 +187,13 @@ const TREND_LABELS: Record<string, string | undefined> = Object.fromEntries(
 );
 
 /**
- * The registry's word for a standing or a trend; an enum value the build does not know is shown as
- * it came.
+ * The registry's word for a standing or a trend. The wire types both as a bare string, so one this
+ * build does not know reads as a phrase that fits the sentence, never as the enum value.
  */
 const standingLabel = (value: string | undefined) =>
-	value === undefined ? "" : (STANDING_LABELS[value] ?? value);
+	(value === undefined ? undefined : STANDING_LABELS[value]) ?? "a new standing";
 const trendLabel = (value: string | undefined) =>
-	value === undefined ? "" : (TREND_LABELS[value] ?? value);
+	(value === undefined ? undefined : TREND_LABELS[value]) ?? "a new trend";
 
 function heldEvent(held: HeldPractice): ProfileEvent {
 	return {
