@@ -34,6 +34,62 @@ class PracticeReviewSettingsControllerIntegrationTest extends AbstractWorkspaceI
         return workspace;
     }
 
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository monitors;
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    @WithAdminUser
+    void shouldSetAndClearGeneratedPathsWithoutChangingCoverageForBothProviders(boolean gitLab) {
+        Workspace workspace = setupWorkspace("generated-paths");
+        String repositoryName = gitLab ? "group/nested/project" : "owner/repo";
+        var monitor = new de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor();
+        monitor.setNameWithOwner(repositoryName);
+        monitor.setWorkspace(workspace);
+        monitor = monitors.saveAndFlush(monitor);
+        String slug = workspace.getWorkspaceSlug();
+        patch(slug, currentEtag(slug), Map.of("generatedPaths", Map.of(repositoryName, List.of("src/api/**"))))
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.generatedPaths['" + repositoryName + "'][0]")
+                .isEqualTo("src/api/**")
+                .jsonPath("$.reviewScope.repositoryMode")
+                .isEqualTo("ALL_MONITORED");
+        assertThat(monitors.findById(monitor.getId()).orElseThrow().getGeneratedPaths())
+                .containsExactly("src/api/**");
+        patch(slug, currentEtag(slug), Map.of("generatedPaths", Map.of(repositoryName, List.of())))
+                .expectStatus()
+                .isOk()
+                .expectBody();
+        assertThat(monitors.findById(monitor.getId()).orElseThrow().getGeneratedPaths())
+                .isEmpty();
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldRejectCrossWorkspaceAndInvalidGeneratedPathUpdates() {
+        Workspace workspace = setupWorkspace("generated-paths-invalid");
+        patch(
+                        workspace.getWorkspaceSlug(),
+                        currentEtag(workspace.getWorkspaceSlug()),
+                        Map.of("generatedPaths", Map.of("another/tenant", List.of("**"))))
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        var monitor = new de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor();
+        monitor.setNameWithOwner("owner/local");
+        monitor.setWorkspace(workspace);
+        monitors.saveAndFlush(monitor);
+        patch(
+                        workspace.getWorkspaceSlug(),
+                        currentEtag(workspace.getWorkspaceSlug()),
+                        Map.of("generatedPaths", Map.of("owner/local", List.of("../**"))))
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+    }
+
     @Test
     @WithAdminUser
     void readReturnsInheritedPolicyAndNothingElse() {

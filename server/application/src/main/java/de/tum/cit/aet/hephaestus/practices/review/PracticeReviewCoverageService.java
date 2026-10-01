@@ -38,6 +38,32 @@ public class PracticeReviewCoverageService {
     private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression;
 
     @Transactional(readOnly = true)
+    public Map<String, List<String>> generatedPaths(Workspace workspace) {
+        return monitorRepository.findByWorkspaceId(workspace.getId()).stream()
+                .filter(monitor -> !monitor.getGeneratedPaths().isEmpty())
+                .collect(Collectors.toUnmodifiableMap(
+                        RepositoryToMonitor::getNameWithOwner, monitor -> List.copyOf(monitor.getGeneratedPaths())));
+    }
+
+    @Transactional
+    public void patchGeneratedPaths(Workspace workspace, Map<String, List<String>> requested) {
+        Map<String, RepositoryToMonitor> monitors = monitorRepository.findByWorkspaceId(workspace.getId()).stream()
+                .collect(Collectors.toMap(RepositoryToMonitor::getNameWithOwner, Function.identity()));
+        Map<String, List<String>> validated = new HashMap<>();
+        requested.forEach((name, patterns) -> {
+            if (!monitors.containsKey(name)) {
+                throw new InvalidReviewCoverageException("Repository is not monitored by this workspace: " + name);
+            }
+            validated.put(name, GeneratedPaths.normalize(patterns));
+        });
+        validated.forEach((name, patterns) -> {
+            RepositoryToMonitor monitor = java.util.Objects.requireNonNull(monitors.get(name));
+            monitor.setGeneratedPaths(patterns);
+            monitorRepository.save(monitor);
+        });
+    }
+
+    @Transactional(readOnly = true)
     public WorkspaceReviewScope scope(Workspace workspace) {
         return readScope(workspace);
     }

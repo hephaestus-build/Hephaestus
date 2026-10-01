@@ -193,6 +193,7 @@ public final class ScmEventPayload {
             boolean isDismissed,
             @Nullable String htmlUrl,
             @Nullable Long authorId,
+            boolean humanAuthor,
             @NonNull Long pullRequestId,
             @Nullable Instant submittedAt,
             @Nullable Long repositoryId) {
@@ -209,6 +210,7 @@ public final class ScmEventPayload {
                     review.isDismissed(),
                     review.getHtmlUrl(),
                     review.getAuthor() != null ? review.getAuthor().getId() : null,
+                    review.getAuthor() != null && review.getAuthor().getType() == User.Type.USER,
                     pr.getId(),
                     review.getSubmittedAt(),
                     pr.getRepository() != null ? pr.getRepository().getId() : null));

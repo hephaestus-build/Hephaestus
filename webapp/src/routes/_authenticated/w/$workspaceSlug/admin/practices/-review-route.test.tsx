@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
 import { assert, describe, expect, it, vi } from "vitest";
 
+import type { UpdatePracticeReviewSettingsRequest } from "@/api/types.gen";
 import { buildAutonomyFixture } from "@/components/admin/practices/practice-autonomy/fixtures";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
@@ -140,5 +141,69 @@ describe("review route", () => {
 		assert(body);
 		expect(body).toStrictEqual({});
 		expect("autonomy" in body).toBe(false);
+	});
+
+	it("saves and clears generated patterns through the settings API with its ETag", async () => {
+		let settings = { ...fixture.settings, generatedPaths: { "owner/repo": ["old/**"] } };
+		const patches: { body: UpdatePracticeReviewSettingsRequest; etag: string | null }[] = [];
+		stubWorkspace([
+			http.get("*/workspaces/:workspaceSlug", () =>
+				HttpResponse.json({ id: 1, slug: "acme", displayName: "Acme", practicesEnabled: true }),
+			),
+			http.get("*/workspaces/:workspaceSlug/members", () => HttpResponse.json([])),
+			http.get("*/workspaces/:workspaceSlug/agents", () => HttpResponse.json([])),
+			http.get("*/workspaces/:workspaceSlug/practices/sweep-schedules", () =>
+				HttpResponse.json([]),
+			),
+			http.get("*/workspaces/:workspaceSlug/repositories", () => HttpResponse.json(["owner/repo"])),
+			http.get("*/workspaces/:workspaceSlug/practices/review-settings", () =>
+				HttpResponse.json(settings),
+			),
+			http.patch<PathParams, UpdatePracticeReviewSettingsRequest>(
+				"*/workspaces/:workspaceSlug/practices/review-settings",
+				async ({ request }) => {
+					const body = await request.json();
+					patches.push({ body, etag: request.headers.get("If-Match") });
+					settings = {
+						...settings,
+						etag: `"${patches.length}"`,
+						generatedPaths: { ...settings.generatedPaths, ...body.generatedPaths },
+					};
+					return HttpResponse.json(settings);
+				},
+			),
+		]);
+		renderRouteAt("/w/acme/admin/practices/review?section=when-and-where");
+		const input = await screen.findByRole("textbox", { name: "owner/repo" }, ROUTE_RENDER_WAIT);
+		await userEvent.clear(input);
+		await userEvent.type(input, "generated/**");
+		await userEvent.click(
+			screen.getByRole("button", { name: "Save generated paths for owner/repo" }),
+		);
+		await waitFor(
+			() =>
+				expect(patches).toStrictEqual([
+					{
+						body: { generatedPaths: { "owner/repo": ["generated/**"] } },
+						etag: fixture.settings.etag,
+					},
+				]),
+			ROUTE_RENDER_WAIT,
+		);
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Save generated paths for owner/repo" }),
+			).toHaveProperty("disabled", true),
+		);
+		await userEvent.clear(input);
+		await userEvent.click(
+			screen.getByRole("button", { name: "Save generated paths for owner/repo" }),
+		);
+		await waitFor(() =>
+			expect(patches[1]).toStrictEqual({
+				body: { generatedPaths: { "owner/repo": [] } },
+				etag: '"1"',
+			}),
+		);
 	});
 });

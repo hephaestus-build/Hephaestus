@@ -9440,6 +9440,10 @@ components:
           type: integer
           format: int32
           description: Container exit code
+        generatedPaths:
+          $ref: "#/components/schemas/GeneratedPathReview"
+          description: Frozen generated-path policy and changed paths marked generated;
+            available on review detail after evidence capture
         holdReason:
           type: string
           description: "Why a QUEUED job is waiting rather than eligible, when the\
@@ -12186,6 +12190,24 @@ components:
       - rateDate
       - ratePerUsd
       - source
+    GeneratedPathReview:
+      type: object
+      description: "Generated-path policy used by this review, not the repository's\
+        \ current settings"
+      properties:
+        paths:
+          type: array
+          description: "Changed paths marked generated, including both names of a\
+            \ rename"
+          items:
+            type: string
+        patterns:
+          type: array
+          items:
+            type: string
+      required:
+      - paths
+      - patterns
     GitHubProvider:
       type: object
       description: GitHub provider configuration
@@ -14943,6 +14965,14 @@ components:
         etag:
           type: string
           description: Strong entity tag to send in If-Match when updating this rollout
+        generatedPaths:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: "Repository-root Ant-style generated-path patterns, keyed by\
+            \ monitored repository name"
         reviewScope:
           $ref: "#/components/schemas/WorkspaceReviewScope"
           description: Explicit all-or-selected repository and person coverage. Selected-empty
@@ -14959,6 +14989,7 @@ components:
       - deliverToMerged
       - deliveryStatus
       - etag
+      - generatedPaths
       - reviewScope
       - revision
     PracticeSignal:
@@ -16872,6 +16903,8 @@ components:
           - CONCURRENT_DUPLICATE
           - COALESCED
           - OUT_OF_REVIEW_SCOPE
+          - BOT_AUTHOR
+          - BOT_REVIEWER
           - STALE_ROLLOUT_REVISION
           - WORKSPACE_INACTIVE
           - PRACTICES_DISABLED
@@ -17980,6 +18013,8 @@ components:
           - CONCURRENT_DUPLICATE
           - COALESCED
           - OUT_OF_REVIEW_SCOPE
+          - BOT_AUTHOR
+          - BOT_REVIEWER
           - STALE_ROLLOUT_REVISION
           - WORKSPACE_INACTIVE
           - PRACTICES_DISABLED
@@ -18558,6 +18593,14 @@ components:
           enum:
           - ACTIVE
           - PAUSED
+        generatedPaths:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: Patch generated-path patterns per monitored repository. An
+            empty list clears that repository. Null leaves all unchanged.
         reset:
           type: array
           description: Fields to reset back to inherit
