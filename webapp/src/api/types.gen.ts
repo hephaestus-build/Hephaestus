@@ -3194,7 +3194,13 @@ export type PersonDataRequest = {
   externalDeliveries: Array<ExternalDelivery>;
   failureCode?: string;
   id: string;
+  scope?: PersonDataScope;
   state: 'PREVIEW' | 'ERASING' | 'FAILED' | 'COMPLETE' | 'EXPIRED';
+};
+
+export type PersonDataScope = {
+  accountId?: number;
+  identities: Array<Identity>;
 };
 
 /**

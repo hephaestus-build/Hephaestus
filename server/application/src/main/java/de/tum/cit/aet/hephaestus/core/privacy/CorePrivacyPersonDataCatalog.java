@@ -100,7 +100,7 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "t.actor_account_id = :account OR t.acting_account_id = :account",
                         "id,occurred_at,workspace_id,entity_type,entity_id,action,changed_keys",
                         "id",
-                        "actor_account_id=NULL,acting_account_id=NULL",
+                        "actor_account_id=NULL,acting_account_id=NULL,old_value=NULL,new_value=NULL",
                         850),
                 new JdbcPersonDataStore(
                         jdbc,
@@ -110,7 +110,7 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
                         "t.silent_mode_changed_by_account_id = :account",
                         "id,silent_mode_engaged,silent_mode_reason,silent_mode_changed_at,silent_mode_changed_by_account_id",
                         "id",
-                        "silent_mode_changed_by_account_id=NULL",
+                        "silent_mode_changed_by_account_id=NULL,silent_mode_reason=NULL",
                         800),
                 new JdbcPersonDataStore(
                         jdbc,

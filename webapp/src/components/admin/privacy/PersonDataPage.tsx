@@ -228,6 +228,27 @@ export function PersonDataPage({ providers, selection, onChange, onPreview, stat
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
+						{state.request.scope == null ? null : (
+							<section aria-label="Resolved identity scope" className="space-y-2">
+								<h3 className="font-medium">Resolved identity scope</h3>
+								{state.request.scope.accountId == null ? null : (
+									<p>Account ID: {state.request.scope.accountId}</p>
+								)}
+								<ul className="space-y-1 text-sm">
+									{state.request.scope.identities.map((identity) => (
+										<li key={`${identity.providerId}:${identity.subject}:${identity.teamId ?? ""}`}>
+											Provider instance {identity.providerId}, native user{" "}
+											<code>{identity.subject}</code>
+											{identity.teamId == null ? null : (
+												<>
+													; Slack workspace <code>{identity.teamId}</code>
+												</>
+											)}
+										</li>
+									))}
+								</ul>
+							</section>
+						)}
 						<Table>
 							<TableHeader>
 								<TableRow>

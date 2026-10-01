@@ -49,6 +49,15 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                 accounts.saveAndFlush(new Account("Administrator")).getId());
         var snapshot = personData.preview(administratorId, null, List.of(identity(provider, "42", null)));
         var export = personData.export(snapshot.request().getId());
+        java.util.Set<String> exportedStores = new java.util.TreeSet<>();
+        export.path("stores").propertyNames().forEach(exportedStores::add);
+        java.util.Map<String, Long> counts = new tools.jackson.databind.ObjectMapper()
+                .readValue(snapshot.request().getCountsJson(), new tools.jackson.core.type.TypeReference<>() {});
+        assertThat(exportedStores).containsExactlyInAnyOrderElementsOf(counts.keySet());
+        counts.forEach((store, count) -> assertThat(
+                        (long) export.path("stores").path(store).size())
+                .as("Frozen preview/export parity for %s", store)
+                .isEqualTo(count));
         assertThat(export.path("stores").path("user").size()).isEqualTo(1);
         assertThat(export.path("stores").path("user").get(0).path("id").asLong())
                 .isEqualTo(user.getId());
@@ -57,6 +66,9 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         var receipt = personData.get(snapshot.request().getId()).request();
         assertThat(receipt.getState())
                 .isEqualTo(de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State.COMPLETE);
+        java.util.Map<String, Long> completed = new tools.jackson.databind.ObjectMapper()
+                .readValue(receipt.getCompletedJson(), new tools.jackson.core.type.TypeReference<>() {});
+        assertThat(completed.keySet()).containsExactlyInAnyOrderElementsOf(exportedStores);
         assertThat(receipt.getScopeJson()).isNull();
         assertThat(receipt.getSelectionsJson()).isNull();
         assertThat(users.findById(user.getId()).orElseThrow().getLogin()).startsWith("erased-");

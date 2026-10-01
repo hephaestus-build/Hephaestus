@@ -240,6 +240,47 @@ Verify no duplicate provider objects, no historical suppressed work released, an
 window. Even an empty broker does not remove restored PostgreSQL jobs/proposals or prevent source sync
 from creating new reviews: check those before release too.
 
+## Access and erasure for one person
+
+Use **Instance administration → Person data**. Only an instance administrator with a recent sign-in
+can create a preview, download an export or start erasure. Requests and replies go through the
+privacy contact in the instance notice; this page is not a data-subject request portal.
+
+1. Verify the requester's identity and authority under your privacy procedure. Enter the account ID
+   or exact provider-instance ID and native user ID. For Slack, also enter the native Slack workspace
+   ID. Add all verified identities that belong to the request. Do not match names, logins or email
+   addresses. A conflicting account link stops resolution; repair the verified link or correct the
+   supplied exact IDs before creating another preview.
+2. Select **Preview data**. Check the resolved identity scope and every store count, including zeros.
+   The preview expires after 48 hours. Export and erasure use its frozen row keys; changed data needs
+   a new preview, not an SQL supplement.
+3. For an access request, select **Download JSON export** and transfer the file securely. The file
+   has a schema version and a `stores` object keyed by store name. It excludes credentials and
+   session capabilities. Handle the file as personal data; the completed erasure receipt is not an
+   export archive.
+4. For erasure, follow [Un-deliver external feedback, then purge](#un-deliver-external-feedback-then-purge)
+   for each provider locator in the preview. Confirm that those external copies have been removed.
+   The application does not automatically delete comments already posted on a provider.
+5. Type **ERASE** and start erasure. Keep the opaque request URL to check progress after a reload.
+   The job records progress one store at a time. If it stops, correct the operational failure and
+   select **Resume erasure** on the same request. Do not create a second request to bypass a failed
+   job. Worker evidence owners must acknowledge removal of every attempt and copy before database
+   evidence is cleared; an unavailable owner is a failure, not proof of erasure.
+6. Check **Erasure complete** and the per-store receipt before replying. The receipt retains the
+   acting administrator, operational state, times and counts, not the erased content or selected
+   subject keys. Working request keys are cleared on completion; abandoned previews are cleared on
+   expiry. Failed jobs retain the working keys required to resume.
+
+Exact provider-key suppression is held separately from the audit receipt. It prevents the erased
+identity from being processed again and is not a reversible workspace consent choice. Provider sync
+can still mirror records that remain upstream. Tell the requester what remains outside the active
+application's control: original provider records, provider comments not yet removed, delivered mailbox
+copies, third-party retention and [backups](./backup-restore). A restore must follow the isolation and
+reconciliation procedure above before processing resumes. Do not claim selective deletion in backups.
+
+The [personal-data map](./dsms/personal-data-map) owns store-specific export, removal and residual
+retention. The [record of processing](./dsms/record-of-processing) owns the legal and retention record.
+
 ## Un-deliver external feedback, then purge
 
 Deleting in-app data does not delete a provider comment. If external copies must be scrubbed,

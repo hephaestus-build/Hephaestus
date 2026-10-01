@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn } from "storybook/test";
 import type { PersonDataRequest } from "@/api/types.gen";
+import { Stateful } from "@/stories/stateful";
 import { daysAfter } from "@/stories/story-clock";
 import { PersonDataPage } from "./PersonDataPage";
 
@@ -16,12 +17,27 @@ const request = {
 		user: 1,
 		user_preferences: 0,
 	},
+	scope: { accountId: 42, identities: [{ providerId: 1, subject: "314", teamId: undefined }] },
 	completed: {},
 	externalDeliveries: [],
 } satisfies PersonDataRequest;
 const ready = { status: "ready", request, onExport: fn(), onErase: fn(), onRefresh: fn() } as const;
 const meta = {
 	component: PersonDataPage,
+	render: (args) => (
+		<Stateful initial={args.selection}>
+			{(selection, setSelection) => (
+				<PersonDataPage
+					{...args}
+					selection={selection}
+					onChange={(next) => {
+						setSelection(next);
+						args.onChange(next);
+					}}
+				/>
+			)}
+		</Stateful>
+	),
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
 	args: {
@@ -120,6 +136,7 @@ export const Complete: Story = {
 			request: {
 				...request,
 				state: "COMPLETE",
+				scope: undefined,
 				completed: {
 					observation: 4,
 					feedback: 2,
@@ -151,7 +168,7 @@ export const SlackIdentity: Story = {
 };
 
 export const Expired: Story = {
-	args: { state: { ...ready, request: { ...request, state: "EXPIRED" } } },
+	args: { state: { ...ready, request: { ...request, state: "EXPIRED", scope: undefined } } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Preview expired")).toBeVisible();
 	},

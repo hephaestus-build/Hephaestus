@@ -504,7 +504,7 @@ erDiagram
         TIMESTAMPTZ restored_at
         BIGINT restored_by_account_id FK
         TIMESTAMPTZ withdrawn_at "NOT NULL"
-        BIGINT withdrawn_by_account_id FK "NOT NULL"
+        BIGINT withdrawn_by_account_id FK
         BIGINT workspace_id FK "NOT NULL"
     }
 
@@ -885,7 +885,7 @@ erDiagram
     ObservationInvalidation {
         UUID id PK
         TIMESTAMPTZ invalidated_at "NOT NULL"
-        BIGINT invalidated_by_account_id FK "NOT NULL"
+        BIGINT invalidated_by_account_id FK
         UUID observation_id FK "NOT NULL"
         VARCHAR(16) provider_copy "NOT NULL"
         TIMESTAMPTZ provider_copy_retry_at "NOT NULL"

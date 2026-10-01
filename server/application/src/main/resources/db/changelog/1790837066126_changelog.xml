@@ -92,4 +92,23 @@
     <changeSet id="1790837066126-11" author="hephaestus">
         <addForeignKeyConstraint baseTableName="connection_audit" baseColumnNames="actor_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_connection_audit_actor_account" onDelete="SET NULL"/>
     </changeSet>
+    <changeSet id="1790837066126-12" author="hephaestus">
+        <dropNotNullConstraint columnDataType="bigint" columnName="invalidated_by_account_id" tableName="observation_invalidation"/>
+    </changeSet>
+    <changeSet id="1790837066126-13" author="hephaestus">
+        <dropNotNullConstraint columnDataType="bigint" columnName="withdrawn_by_account_id" tableName="feedback_withdrawal"/>
+    </changeSet>
+    <changeSet id="1790837066126-14" author="hephaestus">
+        <comment>Keep restoration facts and times when a person request removes actor attribution and free text.</comment>
+        <sql><![CDATA[
+            ALTER TABLE observation_invalidation DROP CONSTRAINT ck_observation_invalidation_restoration;
+            ALTER TABLE observation_invalidation ADD CONSTRAINT ck_observation_invalidation_restoration
+                CHECK ((restored_at IS NULL AND restored_by_account_id IS NULL AND restoration_reason IS NULL)
+                    OR (restored_at IS NOT NULL AND (restoration_reason IS NULL OR btrim(restoration_reason) <> '')));
+            ALTER TABLE feedback_withdrawal DROP CONSTRAINT ck_feedback_withdrawal_restoration;
+            ALTER TABLE feedback_withdrawal ADD CONSTRAINT ck_feedback_withdrawal_restoration
+                CHECK ((restored_at IS NULL AND restored_by_account_id IS NULL AND restoration_reason IS NULL)
+                    OR (restored_at IS NOT NULL AND (restoration_reason IS NULL OR btrim(restoration_reason) <> '')));
+        ]]></sql>
+    </changeSet>
 </databaseChangeLog>

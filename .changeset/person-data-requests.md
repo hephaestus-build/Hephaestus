@@ -1,0 +1,12 @@
+---
+"hephaestus": minor
+---
+
+Instance administrators can preview, export and erase one person's data using an account ID or exact
+provider identities, including people who never created an account. Names, logins and email addresses
+are not used to match. JSON exports and erasure use the same preview scope, and erasure can resume from
+its last completed store. Posted provider feedback must be removed with the operator runbook first.
+Completed audit receipts retain operational facts and counts, not the erased content.
+
+Shared records retain other people's attribution. Erasure clears the person's typed approval,
+withdrawal, invalidation and restoration attribution while keeping the event and its time.

@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
+import org.jspecify.annotations.Nullable;
 
 /** Minimal exact identity held separately from non-content erasure receipts to prevent reprocessing. */
 @Entity
@@ -20,7 +21,7 @@ public class PersonSuppression {
     private UUID id = UUID.randomUUID();
 
     @Column(name = "active_request_id")
-    private UUID activeRequestId;
+    private @Nullable UUID activeRequestId;
 
     @Column(name = "provider_id", nullable = false)
     private long providerId;

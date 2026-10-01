@@ -75,6 +75,9 @@ public class PersonDataAdminController {
     public record ExternalDeliveryDTO(
             @NonNull long workspaceId, @NonNull String locator) {}
 
+    public record PersonDataScopeDTO(
+            @Nullable Long accountId, @NonNull List<IdentityDTO> identities) {}
+
     public record PersonDataRequestDTO(
             @NonNull UUID id,
             @NonNull State state,
@@ -82,7 +85,8 @@ public class PersonDataAdminController {
             @NonNull Map<String, Long> counts,
             @NonNull Map<String, Long> completed,
             @NonNull List<ExternalDeliveryDTO> externalDeliveries,
-            @Nullable String failureCode) {}
+            @Nullable String failureCode,
+            @Nullable PersonDataScopeDTO scope) {}
 
     @PostMapping("/preview")
     @RequiresRecentSignIn
@@ -148,12 +152,30 @@ public class PersonDataAdminController {
         var r = snapshot.request();
         Map<String, Long> counts = mapper.readValue(r.getCountsJson(), new TypeReference<Map<String, Long>>() {});
         Map<String, Long> completed = mapper.readValue(r.getCompletedJson(), new TypeReference<Map<String, Long>>() {});
+        PersonDataScopeDTO resolvedScope = null;
+        if (r.getScopeJson() != null) {
+            var scope =
+                    mapper.readValue(r.getScopeJson(), de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope.class);
+            resolvedScope = new PersonDataScopeDTO(
+                    scope.accountId(),
+                    scope.identities().stream()
+                            .map(identity ->
+                                    new IdentityDTO(identity.providerId(), identity.subject(), identity.teamId()))
+                            .toList());
+        }
         var locations = snapshot.externalDeliveries().stream()
                 .map(d -> new ExternalDeliveryDTO(d.workspaceId(), d.locator()))
                 .toList();
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(new PersonDataRequestDTO(
-                        r.getId(), r.getState(), r.getExpiresAt(), counts, completed, locations, r.getFailureCode()));
+                        r.getId(),
+                        r.getState(),
+                        r.getExpiresAt(),
+                        counts,
+                        completed,
+                        locations,
+                        r.getFailureCode(),
+                        resolvedScope));
     }
 }

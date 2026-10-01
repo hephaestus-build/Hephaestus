@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p><strong>Deny-if-opted-out, allow-if-absent.</strong> A person who explicitly opted out
  * ({@code ingestion_opted_out = true}) is never ingested; a person with no consent row has made no opt-out and is
- * allowed. This is the correct default for the mentoring purpose (legitimate interest with an individual opt-out),
+ * allowed unless a permanent person-erasure control denies processing. This is the correct default for the mentoring purpose (legitimate interest with an individual opt-out),
  * and it composes with the two fail-closed layers above it in {@link SlackIngestService}: ingestion happens iff the
  * capability flag is on AND the channel is {@code ACTIVE} AND the author is NOT ingestion-opted-out.
  */
@@ -28,11 +28,12 @@ public class SlackParticipantConsentGate {
 
     /**
      * @return {@code true} iff this Slack user is allowed to be ingested in this workspace — i.e. has NOT opted out.
-     *     An absent consent row means no opt-out, so ingestion is allowed (allow-if-absent).
+     *     An absent consent row means no opt-out; a permanent person-erasure control still denies ingestion.
      */
     @Transactional(readOnly = true)
     public boolean ingestionAllowed(long workspaceId, String slackUserId) {
-        return !participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
-                workspaceId, slackUserId);
+        return !participantConsentRepository.isPersonProcessingSuppressed(workspaceId, slackUserId)
+                && !participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
+                        workspaceId, slackUserId);
     }
 }

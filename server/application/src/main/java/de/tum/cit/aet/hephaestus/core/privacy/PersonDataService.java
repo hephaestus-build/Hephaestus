@@ -63,7 +63,7 @@ public class PersonDataService {
         var bundle = mapper.createObjectNode();
         bundle.put("schemaVersion", "1.0");
         bundle.put("generatedAt", Instant.now().toString());
-        bundle.set("identities", mapper.valueToTree(scope(r).identities()));
+        bundle.set("scope", mapper.valueToTree(scope(r)));
         var stores = bundle.putObject("stores");
         for (var store : registry.stores())
             stores.set(
@@ -77,6 +77,12 @@ public class PersonDataService {
         PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
         if (r.getState() == PersonDataRequest.State.COMPLETE || r.getState() == PersonDataRequest.State.ERASING) return;
         if (r.getState() == PersonDataRequest.State.FAILED) {
+            PersonScope person = scope(r);
+            if (Objects.equals(person.accountId(), administratorId))
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT, "Another administrator must resume this erasure");
+            requireExternalRemoval(selections(r), externalCopiesRemoved);
+            r.setAdministratorAccountId(administratorId);
             r.setState(PersonDataRequest.State.ERASING);
             r.setFailureCode(null);
             return;
@@ -88,10 +94,7 @@ public class PersonDataService {
         if (person.accountId() != null && person.accountId().equals(r.getAdministratorAccountId()))
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "Another administrator must create a new preview for this erasure");
-        if (!externalCopiesRemoved && !deliveries(selected).isEmpty())
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Remove provider feedback using the un-deliver runbook and confirm removal first");
+        requireExternalRemoval(selected, externalCopiesRemoved);
         if (person.accountId() != null) {
             jdbc.queryForList("SELECT id FROM account WHERE id=? FOR UPDATE", person.accountId());
             Boolean busy = jdbc.queryForObject(
@@ -127,6 +130,11 @@ public class PersonDataService {
                         : Map.<String, PersonDataSelection>of();
             });
             if (frozen == null || frozen.isEmpty()) return;
+            Set<String> inventory = registry.stores().stream()
+                    .map(PersonDataContributor::store)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            if (!frozen.keySet().equals(inventory))
+                throw new IllegalStateException("Erasure contributor inventory changed");
             for (var store : registry.stores()) store.prepareErasure(Objects.requireNonNull(frozen.get(store.store())));
             for (var store : registry.stores()) {
                 Boolean proceed = tx.execute(status -> {
@@ -175,6 +183,13 @@ public class PersonDataService {
     public void expirePreviews() {
         jdbc.update(
                 "UPDATE person_data_request SET state='EXPIRED',scope_json=NULL,selections_json=NULL WHERE state='PREVIEW' AND expires_at<CURRENT_TIMESTAMP");
+    }
+
+    private void requireExternalRemoval(Map<String, PersonDataSelection> selected, boolean externalCopiesRemoved) {
+        if (!externalCopiesRemoved && !deliveries(selected).isEmpty())
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Remove provider feedback using the un-deliver runbook and confirm removal first");
     }
 
     private void requireUnchanged(PersonDataRequest r, Map<String, PersonDataSelection> selected) {

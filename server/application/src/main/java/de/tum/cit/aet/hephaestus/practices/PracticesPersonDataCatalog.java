@@ -21,7 +21,12 @@ import tools.jackson.databind.ObjectMapper;
     "feedback_withdrawal",
     "observation_invalidation",
     "feedback",
-    "observation"
+    "observation",
+    "feedback_approval_actor",
+    "feedback_withdrawal_actor",
+    "feedback_restoration_actor",
+    "observation_invalidation_actor",
+    "observation_restoration_actor"
 })
 public class PracticesPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
@@ -85,7 +90,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "feedback_approval",
                         "feedback_approval",
-                        "t.feedback_id IN (SELECT id FROM feedback WHERE about_user_id IN (:users) OR recipient_user_id IN (:users) OR id IN (SELECT feedback_id FROM feedback_observation WHERE observation_id IN (SELECT id FROM observation WHERE about_user_id IN (:users)))) OR t.actor_account_id = :account",
+                        "t.feedback_id IN (SELECT id FROM feedback WHERE about_user_id IN (:users) OR recipient_user_id IN (:users) OR id IN (SELECT feedback_id FROM feedback_observation WHERE observation_id IN (SELECT id FROM observation WHERE about_user_id IN (:users))))",
                         "id,feedback_id,workspace_id,actor_account_id,decision,rejection_reason,rejection_note,content_digest,decided_at",
                         "id",
                         "",
@@ -129,6 +134,56 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog {
                         "id,occurrence_key,agent_job_id,practice_id,artifact_kind,artifact_id,about_user_id,summary,presence,severity,evidence,evidence_rationale,observed_at,recurrence_key,practice_revision_id,assessment,origin,workspace_id,assessment_status,superseded_at",
                         "id",
                         "",
-                        -150));
+                        -150),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "feedback_approval_actor",
+                        "feedback_approval",
+                        "t.actor_account_id = :account",
+                        "id,feedback_id,workspace_id,actor_account_id,decision,rejection_reason,rejection_note,decided_at",
+                        "id",
+                        "actor_account_id=NULL,rejection_note=NULL",
+                        -185),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "feedback_withdrawal_actor",
+                        "feedback_withdrawal",
+                        "t.withdrawn_by_account_id = :account",
+                        "id,feedback_id,workspace_id,withdrawn_by_account_id,withdrawn_at,reason",
+                        "id",
+                        "withdrawn_by_account_id=NULL,reason='Erased administrator text'",
+                        -185),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "feedback_restoration_actor",
+                        "feedback_withdrawal",
+                        "t.restored_by_account_id = :account",
+                        "id,feedback_id,workspace_id,restored_by_account_id,restored_at,restoration_reason",
+                        "id",
+                        "restored_by_account_id=NULL,restoration_reason=NULL",
+                        -185),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "observation_invalidation_actor",
+                        "observation_invalidation",
+                        "t.invalidated_by_account_id = :account",
+                        "id,observation_id,workspace_id,invalidated_by_account_id,invalidated_at,reason",
+                        "id",
+                        "invalidated_by_account_id=NULL,reason='Erased administrator text'",
+                        -185),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "observation_restoration_actor",
+                        "observation_invalidation",
+                        "t.restored_by_account_id = :account",
+                        "id,observation_id,workspace_id,restored_by_account_id,restored_at,restoration_reason",
+                        "id",
+                        "restored_by_account_id=NULL,restoration_reason=NULL",
+                        -185));
     }
 }

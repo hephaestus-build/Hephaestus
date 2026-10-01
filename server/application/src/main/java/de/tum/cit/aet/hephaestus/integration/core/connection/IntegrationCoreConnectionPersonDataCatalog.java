@@ -39,7 +39,11 @@ import tools.jackson.databind.ObjectMapper;
     "project_field_value",
     "connection_audit",
     "sync_job",
-    "artifact_signal"
+    "artifact_signal",
+    "git_commit_committer",
+    "issue_merger",
+    "discussion_answer_actor",
+    "artifact_signal_requester"
 })
 public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
@@ -233,10 +237,10 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         mapper,
                         "git_commit",
                         "git_commit",
-                        "t.author_id IN (:users) OR t.committer_id IN (:users)",
-                        "id,sha,message,message_body,html_url,authored_at,committed_at,additions,deletions,changed_files,author_email,committer_email,signature_valid,authored_by_committer,committed_via_web,parent_count,last_sync_at,created_at,updated_at,repository_id,author_id,committer_id,signature_state,signature_was_signed_by_github,signature_signer_login,parent_shas,status_check_rollup_state,on_behalf_of_login,git_details_captured_at",
+                        "t.author_id IN (:users)",
+                        "id,sha,message,message_body,html_url,authored_at,committed_at,additions,deletions,changed_files,author_email,signature_valid,authored_by_committer,committed_via_web,parent_count,last_sync_at,created_at,updated_at,repository_id,author_id,signature_state,signature_was_signed_by_github,parent_shas,status_check_rollup_state,git_details_captured_at",
                         "id",
-                        "author_id=NULL,committer_id=NULL,author_email=NULL,committer_email=NULL,message='',message_body=NULL,on_behalf_of_login=NULL,signature_signer_login=NULL",
+                        "author_id=NULL,author_email=NULL,message='',message_body=NULL",
                         250),
                 new JdbcPersonDataStore(
                         jdbc,
@@ -323,10 +327,50 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         mapper,
                         "artifact_signal",
                         "artifact_signal",
-                        "t.requested_by_user_id IN (:users) OR t.actor_user_id IN (:users)",
+                        "t.actor_user_id IN (:users)",
                         "id,workspace_id,artifact_kind,artifact_id,signal_name,revision,occurred_at,discovered_via,state,state_reason,job_id,state_changed_at,last_attempted_at,requested_by_user_id,actor_user_id",
                         "id",
-                        "requested_by_user_id=NULL,actor_user_id=NULL",
+                        "actor_user_id=NULL",
+                        400),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "git_commit_committer",
+                        "git_commit",
+                        "t.committer_id IN (:users)",
+                        "id,sha,repository_id,committer_id,committer_email,committed_at",
+                        "id",
+                        "committer_id=NULL,committer_email=NULL",
+                        250),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "issue_merger",
+                        "issue",
+                        "t.merged_by_id IN (:users)",
+                        "id,native_id,provider_id,repository_id,merged_by_id,merged_at",
+                        "id",
+                        "merged_by_id=NULL",
+                        250),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "discussion_answer_actor",
+                        "discussion",
+                        "t.answer_chosen_by_id IN (:users)",
+                        "id,native_id,provider_id,repository_id,answer_chosen_by_id,answer_chosen_at",
+                        "id",
+                        "answer_chosen_by_id=NULL",
+                        250),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "artifact_signal_requester",
+                        "artifact_signal",
+                        "t.requested_by_user_id IN (:users)",
+                        "id,workspace_id,artifact_kind,artifact_id,signal_name,state,occurred_at,requested_by_user_id",
+                        "id",
+                        "requested_by_user_id=NULL",
                         400));
     }
 }

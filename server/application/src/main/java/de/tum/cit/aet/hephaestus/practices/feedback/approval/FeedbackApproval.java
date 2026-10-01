@@ -36,7 +36,7 @@ public class FeedbackApproval {
     private Long workspaceId;
 
     @Column(name = "actor_account_id")
-    private Long actorAccountId;
+    private @org.jspecify.annotations.Nullable Long actorAccountId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "decision", nullable = false, length = 16)

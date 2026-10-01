@@ -15,7 +15,9 @@ import tools.jackson.databind.ObjectMapper;
     "product_feedback",
     "product_survey_participation",
     "product_survey_email_invitation",
-    "product_survey"
+    "product_survey",
+    "product_feedback_resolver",
+    "product_survey_invitation_requester"
 })
 public class ProductfeedbackPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
@@ -63,6 +65,26 @@ public class ProductfeedbackPersonDataCatalog implements PersonDataCatalog {
                         "id,title,description,questions_json,workspace_id,starts_at,ends_at,active,created_by_account_id,created_at,research_organization,summary_queued_at",
                         "id",
                         "created_by_account_id=NULL",
+                        400),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "product_feedback_resolver",
+                        "product_feedback",
+                        "t.resolved_by_account_id = :account",
+                        "id,kind,resolved_at,resolved_by_account_id",
+                        "id",
+                        "resolved_by_account_id=NULL",
+                        400),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "product_survey_invitation_requester",
+                        "product_survey_email_invitation",
+                        "t.requested_by_account_id = :account",
+                        "id,survey_id,workspace_id,requested_by_account_id,requested_at,accepted_at,cancelled_at",
+                        "id",
+                        "requested_by_account_id=NULL",
                         400));
     }
 }

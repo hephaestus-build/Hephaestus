@@ -14045,6 +14045,8 @@ components:
         id:
           type: string
           format: uuid
+        scope:
+          $ref: "#/components/schemas/PersonDataScope"
         state:
           type: string
           enum:
@@ -14060,6 +14062,18 @@ components:
       - externalDeliveries
       - id
       - state
+    PersonDataScope:
+      type: object
+      properties:
+        accountId:
+          type: integer
+          format: int64
+        identities:
+          type: array
+          items:
+            $ref: "#/components/schemas/Identity"
+      required:
+      - identities
     PlacePracticeRequest:
       type: object
       description: A practice's position in the catalog
