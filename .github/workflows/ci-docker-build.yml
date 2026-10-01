@@ -111,9 +111,6 @@ jobs:
       docker-file: "./docker/agents/pi/Dockerfile"
       docker-context: "./docker/agents"
       registry: "ghcr.io"
-      # Cache-busts the OS-package upgrade layer; this build imports the `cache-main` registry cache.
-      build-args: |
-        SOURCE_COMMIT=${{ github.sha }}
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
       scan-images: ${{ inputs.scan-images }}
@@ -140,9 +137,6 @@ jobs:
       docker-file: "./docker/postgres/Dockerfile"
       docker-context: "./docker/postgres"
       registry: "ghcr.io"
-      # Cache-busts the OS-package upgrade layer; this build imports the `cache-main` registry cache.
-      build-args: |
-        SOURCE_COMMIT=${{ github.sha }}
       publish: ${{ inputs.publish }}
       single-arch: ${{ inputs.single_arch == 'true' }}
       scan-images: ${{ inputs.scan-images }}

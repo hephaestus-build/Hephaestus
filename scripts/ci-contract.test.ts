@@ -381,6 +381,43 @@ function taskClosure(tasks: Record<string, unknown>, roots: Iterable<string>): S
 }
 
 void describe("CI contract", () => {
+	void test("every Dockerfile build refreshes its isolated OS-package stage", async () => {
+		const reusable = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const build = namedStep(reusable, ["jobs", "build"], "Build and push (Dockerfile)");
+		assert.equal(build.getIn(["with", "no-cache-filters"]), "os-packages");
+		assert.match(String(build.getIn(["with", "cache-from"])), /cache-main-/u);
+		assert.match(String(build.getIn(["with", "cache-to"])), /mode=max/u);
+
+		const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+		const jobs = caller.get("jobs");
+		assert.ok(isMap(jobs));
+		const dockerfiles = new Set(await posixGlob("{docker,webapp}/**/Dockerfile"));
+		assert.ok(dockerfiles.size > 0);
+		for (const entry of jobs.items) {
+			assert.ok(isMap(entry.value));
+			const file = entry.value.getIn(["with", "docker-file"]);
+			if (typeof file !== "string") {
+				continue;
+			}
+			dockerfiles.delete(file.replace(/^\.\//u, ""));
+			const dockerfile = await readFile(file, "utf8");
+			const stages = dockerfile.split(/^FROM /mu);
+			const packages = stages.find((stage) => /^.* AS os-packages$/mu.test(stage));
+			assert.ok(packages !== undefined, `${file} must have the stage named by no-cache-filters`);
+			assert.match(packages, /^RUN .*?(?:apt-get|apk)/msu);
+			assert.doesNotMatch(packages, /^COPY |^ARG SOURCE_COMMIT/mu);
+			if (packages.includes("apt-get")) {
+				assert.match(packages, /apt-get update -o APT::Update::Error-Mode=any/u);
+			}
+			for (const stage of stages.filter((candidate) => candidate !== packages)) {
+				assert.doesNotMatch(stage, /\b(?:apt-get|apk) (?:update|upgrade|install|add)\b/u);
+			}
+		}
+		assert.deepEqual([...dockerfiles], [], "every Dockerfile must use the shared build workflow");
+	});
+
 	void test("the webapp image includes root configuration read by Vite", async () => {
 		const config = await readFile("webapp/vite.config.ts", "utf8");
 		const dockerfile = await readFile("webapp/Dockerfile", "utf8");
@@ -1490,7 +1527,29 @@ void describe("CI contract", () => {
 		assert.match(scan, /IMAGE_REF:.*@\$\{\{/u);
 		assert.doesNotMatch(scan, /github\.(?:run_id|run_attempt)/u);
 		assert.match(scan, /linux\/amd64/u);
-		assert.doesNotMatch(scan, /linux\/arm64/u);
+		assert.match(scan, /linux\/arm64/u);
+		const workflow = parseDocument(reusable);
+		assert.equal(workflow.getIn(["jobs", "scan", "strategy", "fail-fast"]), false);
+		assert.equal(
+			workflow.getIn(["jobs", "scan", "strategy", "matrix", "platform"]),
+			`\${{ fromJSON(inputs.single-arch && '["linux/amd64"]' || '["linux/amd64","linux/arm64"]') }}`,
+		);
+		const enforce = namedStep(
+			workflow,
+			["jobs", "scan"],
+			"Enforce the release vulnerability policy",
+		);
+		assert.match(
+			String(enforce.get("run")),
+			/check-release-vulnerabilities\.ts "\$IMAGE" "\$SCAN_PLATFORM"/u,
+		);
+		assert.equal(
+			namedStep(workflow, ["jobs", "scan"], "Upload the vulnerability policy result").getIn([
+				"with",
+				"name",
+			]),
+			`vulnerability-policy-\${{ steps.subject.outputs.report-stem }}`,
+		);
 		// A gate that cannot say what it rejected is not finished.
 		assert.match(scan, /uses: actions\/upload-artifact@/u);
 		assert.match(scan, /uses: \.\/\.github\/actions\/download-trivy-db/u);
