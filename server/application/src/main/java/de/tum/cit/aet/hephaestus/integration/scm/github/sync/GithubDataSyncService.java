@@ -268,6 +268,7 @@ public class GithubDataSyncService {
                 syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
                 return false;
             } catch (InstallationNotFoundException e) {
+                syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
                 throw e;
             } catch (Exception e) {
                 syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
@@ -460,7 +461,7 @@ public class GithubDataSyncService {
             syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, error);
             return error == null;
         } catch (InstallationNotFoundException e) {
-            // Re-throw to abort the entire sync operation
+            syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = e instanceof RepositoryNotFoundOnGitProviderException

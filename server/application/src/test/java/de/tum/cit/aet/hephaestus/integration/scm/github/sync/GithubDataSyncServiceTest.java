@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -27,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -404,6 +406,32 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, "acme/renamed");
         verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
         verifyNoInteractions(repositorySyncService, issueSyncService, pullRequestSyncService, commitBackfillService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldReleaseDailyRecheckWhenInstallationCannotBeRead(boolean hasLocalRepository) {
+        if (hasLocalRepository) {
+            var repository = new Repository();
+            repository.setId(REPOSITORY_ID);
+            repository.setNativeId(NATIVE_ID);
+            repository.setNameWithOwner(REPO_NAME);
+            when(repositoryRepository.findByNativeIdAndProviderId(NATIVE_ID, PROVIDER_ID))
+                    .thenReturn(Optional.of(repository));
+        }
+        when(syncTargetProvider.isRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID))
+                .thenReturn(true);
+        var failure = new InstallationNotFoundException(99L);
+        when(repositorySyncService.resolveRepositoryNameById(SCOPE_ID, NATIVE_ID))
+                .thenThrow(failure);
+
+        assertThatThrownBy(() -> service.syncSyncTarget(syncTargetWithNativeId(NATIVE_ID)))
+                .isSameAs(failure);
+
+        verify(syncTargetProvider).retryUnavailableRepository(SCOPE_ID, SYNC_TARGET_ID);
+        verify(syncTargetProvider, never()).recordRepositoryUnavailable(any(), any());
+        verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
+        verifyNoInteractions(issueSyncService, pullRequestSyncService, commitBackfillService);
     }
 
     @Test
