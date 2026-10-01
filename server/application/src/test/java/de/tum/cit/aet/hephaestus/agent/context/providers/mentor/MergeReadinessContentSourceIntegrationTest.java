@@ -184,6 +184,28 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
     }
 
     @Test
+    void shouldKeepTheCurrentUndatedApprovalAheadOfDatedHistoryAndADismissedOneBehindIt() {
+        PullRequest mr = mergeRequest(course, 24, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        review(mr, tutor, PullRequestReview.State.CHANGES_REQUESTED, "Please fix this.", at("10:00"));
+        PullRequestReview approval = review(mr, tutor, PullRequestReview.State.APPROVED, "", at("10:01"));
+        approval.setSubmittedAt(null);
+        reviewRepository.save(approval);
+
+        JsonNode current = inspect(mr).path("latestReviews").get(0);
+        assertThat(current.path("state").asString()).isEqualTo("APPROVED");
+        assertThat(current.has("submittedAt")).isFalse();
+
+        approval.setDismissed(true);
+        approval.setState(PullRequestReview.State.DISMISSED);
+        reviewRepository.save(approval);
+
+        JsonNode withdrawn = inspect(mr).path("latestReviews").get(0);
+        assertThat(withdrawn.path("state").asString()).isEqualTo("CHANGES_REQUESTED");
+        assertThat(withdrawn.path("submittedAt").asString())
+                .isEqualTo(at("10:00").toString());
+    }
+
+    @Test
     void shouldReportAGreenMergeRequestWithNoReviewerNotes() {
         PullRequest mr = mergeRequest(course, 2, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
         review(mr, tutor, PullRequestReview.State.APPROVED, "", at("10:00"));

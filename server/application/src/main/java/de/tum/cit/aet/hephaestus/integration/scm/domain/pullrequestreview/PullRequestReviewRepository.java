@@ -70,9 +70,16 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
         """)
     List<PullRequestReview> findAllByPullRequestIdWithAuthor(@Param("pullRequestId") Long pullRequestId);
 
-    @Query("SELECT prr FROM PullRequestReview prr LEFT JOIN FETCH prr.author "
-            + "WHERE prr.pullRequest.id = :pullRequestId AND prr.state NOT IN :excludedStates "
-            + "ORDER BY prr.submittedAt DESC, prr.id DESC")
+    @Query("""
+        SELECT prr FROM PullRequestReview prr LEFT JOIN FETCH prr.author
+        WHERE prr.pullRequest.id = :pullRequestId AND prr.state NOT IN :excludedStates
+        ORDER BY CASE WHEN
+            prr.provider.type = de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITLAB
+            AND prr.state = de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview$State.APPROVED
+            AND prr.isDismissed = false AND prr.submittedAt IS NULL
+            THEN 0 ELSE 1 END,
+            prr.submittedAt DESC NULLS LAST, prr.id DESC
+        """)
     List<PullRequestReview> findRecentByPullRequestIdWithAuthor(
             @Param("pullRequestId") Long pullRequestId,
             @Param("excludedStates") Collection<PullRequestReview.State> excludedStates,

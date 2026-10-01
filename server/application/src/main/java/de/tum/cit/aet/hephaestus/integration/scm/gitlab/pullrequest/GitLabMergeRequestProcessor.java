@@ -655,8 +655,8 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
      * (<a href="https://gitlab.com/gitlab-org/gitlab/-/blob/v18.4.0-ee/ee/app/services/ee/merge_requests/execute_approval_hooks_service.rb">execute_approval_hooks_service.rb</a>),
      * so both are the same act by one person.
      *
-     * <p>Creates a new APPROVED review or gives a dismissed one again, anchored to the head the hook names and dated by
-     * when Hephaestus received it. It applies only to the merge request as stored now ({@link #actsOnStoredHead}) and
+     * <p>Creates a new APPROVED review or gives a dismissed one again, anchored to the head the hook names. The hook does not date the approval;
+     * its receipt time is used only for ingestion ordering. It applies only to the merge request as stored now ({@link #actsOnStoredHead}) and
      * only where no later read of the reviews is stored ({@link PullRequest#takesReviewSnapshotAt}); otherwise it
      * changes nothing and announces nothing.
      */
@@ -697,7 +697,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                     || !approvedCommit.equals(review.getCommitId())) {
                 review.setState(PullRequestReview.State.APPROVED);
                 review.setDismissed(false);
-                review.setSubmittedAt(approvedAt);
+                review.setSubmittedAt(null);
                 review.setUpdatedAt(approvedAt);
                 review.setCommitId(approvedCommit);
                 reviewRepository.save(review);
@@ -711,7 +711,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         } else {
             // First approval: create new review
             PullRequestReview review = createApprovalReview(approvalNativeId, pr, approver);
-            review.setSubmittedAt(approvedAt);
+            review.setSubmittedAt(null);
             review.setCreatedAt(approvedAt);
             review.setUpdatedAt(approvedAt);
             review.setCommitId(approvedCommit);
@@ -1459,31 +1459,13 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         review.setProvider(pr.getProvider());
         review.setState(PullRequestReview.State.APPROVED);
         review.setHtmlUrl(pr.getHtmlUrl() + "#approvals");
-        // GitLab GraphQL exposes approvedBy as a plain UserCore connection without a
-        // per-user approvedAt timestamp, so we use the MR-level merged/updated time
-        // (deterministic — not Instant.now()) as the best-effort approval instant.
-        Instant approvalInstant = resolveApprovalInstant(pr);
-        review.setSubmittedAt(approvalInstant);
-        review.setCreatedAt(approvalInstant);
-        review.setUpdatedAt(approvalInstant);
+        // approvedBy names who currently approves; it does not date their approval.
         // Anchor the approval to the MR head commit so downstream consumers have a
         // commit SHA. Falls back to mergeCommitSha when the head is unavailable.
         review.setCommitId(resolveApprovalCommit(pr));
         review.setAuthor(approver);
         review.setPullRequest(pr);
         return review;
-    }
-
-    /**
-     * Best-effort approval timestamp for a GitLab MR: prefers {@code mergedAt},
-     * falls back to {@code updatedAt}, then {@code createdAt}, then
-     * {@link Instant#EPOCH} as a final deterministic fallback.
-     */
-    private static Instant resolveApprovalInstant(PullRequest pr) {
-        if (pr.getMergedAt() != null) return pr.getMergedAt();
-        if (pr.getUpdatedAt() != null) return pr.getUpdatedAt();
-        if (pr.getCreatedAt() != null) return pr.getCreatedAt();
-        return Instant.EPOCH;
     }
 
     /**
@@ -1539,11 +1521,10 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 // GitLab lists them as approving again: an approval given anew after it was withdrawn or reset, which
                 // approves the head GitLab reports now. One that stayed approved keeps the commit it was given for.
                 if (existingReview.getState() != PullRequestReview.State.APPROVED || existingReview.isDismissed()) {
-                    Instant approvalInstant = resolveApprovalInstant(pr);
                     existingReview.setState(PullRequestReview.State.APPROVED);
                     existingReview.setDismissed(false);
-                    existingReview.setSubmittedAt(approvalInstant);
-                    existingReview.setUpdatedAt(approvalInstant);
+                    existingReview.setSubmittedAt(null);
+                    existingReview.setUpdatedAt(ctx != null ? ctx.observedAt() : Instant.now());
                     String commit = resolveApprovalCommit(pr);
                     if (commit != null) {
                         existingReview.setCommitId(commit);
@@ -1563,10 +1544,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                         changed = true;
                     }
                 }
-                if (changed) {
+                boolean dateChanged = existingReview.getSubmittedAt() != null;
+                if (dateChanged) {
+                    existingReview.setSubmittedAt(null);
+                }
+                if (changed || dateChanged) {
                     reviewRepository.save(existingReview);
 
-                    if (ctx != null) {
+                    if (changed && ctx != null) {
                         ScmEventPayload.ReviewData.from(existingReview)
                                 .ifPresent(reviewData -> eventPublisher.publishEvent(
                                         new ScmDomainEvent.ReviewSubmitted(reviewData, EventContext.from(ctx))));

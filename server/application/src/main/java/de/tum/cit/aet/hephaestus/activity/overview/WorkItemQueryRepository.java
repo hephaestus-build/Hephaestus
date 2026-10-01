@@ -187,6 +187,7 @@ public interface WorkItemQueryRepository extends Repository<Issue, Long> {
 
         PullRequestReview.State getState();
 
+        @Nullable
         Instant getSubmittedAt();
 
         Long getId();

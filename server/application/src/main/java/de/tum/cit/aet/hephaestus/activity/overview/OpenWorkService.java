@@ -41,10 +41,13 @@ public class OpenWorkService {
     /** Enough to see what is waiting; the provider's own lists are one link away. */
     static final int LIMIT = 50;
 
-    /** Comments first, then verdicts, each oldest first: the last one is where the reviewer stands. */
+    /**
+     * Comments precede verdicts. An undated standing GitLab approval is the current approvedBy state,
+     * so it takes precedence over dated history; the provider's stated reviewer state still wins.
+     */
     private static final Comparator<StandingReview> STANDING = Comparator.comparing(
                     (StandingReview review) -> review.getState() != PullRequestReview.State.COMMENTED)
-            .thenComparing(StandingReview::getSubmittedAt)
+            .thenComparing(StandingReview::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder()))
             .thenComparing(StandingReview::getId);
 
     private static final Comparator<ReviewerDTO> LISTED = Comparator.comparing(ReviewerDTO::state)

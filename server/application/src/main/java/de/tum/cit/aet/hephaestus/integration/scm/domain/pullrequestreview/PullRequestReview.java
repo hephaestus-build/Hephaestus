@@ -71,8 +71,7 @@ public class PullRequestReview extends BaseGitServiceEntity {
     @NonNull
     private String htmlUrl;
 
-    @NonNull
-    private Instant submittedAt;
+    private @Nullable Instant submittedAt;
 
     private @Nullable String commitId;
 

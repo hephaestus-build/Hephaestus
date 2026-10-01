@@ -27,11 +27,9 @@ import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -115,8 +113,6 @@ public class GitLabDiscussionSyncService {
         IdentityProvider provider = repository.getProvider();
         Long providerId = Objects.requireNonNull(provider.getId());
 
-        // Who withdrew an approval by note in this pass: the only approvals a later note re-gives.
-        Set<Long> unapproved = new HashSet<>();
         List<ThreadResolution> resolutions = new ArrayList<>();
         // diff notes, general notes, skipped
         int[] totals = new int[3];
@@ -128,8 +124,7 @@ public class GitLabDiscussionSyncService {
                     resolutions.add(resolution);
                 }
                 try {
-                    int[] result = processDiscussion(
-                            discussionNode, pr, repository, provider, providerId, scopeId, unapproved);
+                    int[] result = processDiscussion(discussionNode, pr, repository, provider, providerId, scopeId);
                     totals[0] += result[0];
                     totals[1] += result[1];
                     totals[2] += result[2];
@@ -413,8 +408,7 @@ public class GitLabDiscussionSyncService {
             Repository repository,
             IdentityProvider provider,
             Long providerId,
-            Long scopeId,
-            Set<Long> unapproved) {
+            Long scopeId) {
         String discussionGlobalId = (String) discussionNode.get("id");
         if (discussionGlobalId == null) {
             return new int[] {0, 0, 1};
@@ -457,7 +451,7 @@ public class GitLabDiscussionSyncService {
                     providerId,
                     scopeId);
         } else {
-            return processGeneralDiscussion(noteNodes, pr, providerId, scopeId, unapproved);
+            return processGeneralDiscussion(noteNodes, pr, providerId, scopeId);
         }
     }
 
@@ -632,14 +626,14 @@ public class GitLabDiscussionSyncService {
      * Processes a general discussion into IssueComment(s) via the existing processor.
      */
     private int[] processGeneralDiscussion(
-            List<Map<String, Object>> noteNodes, PullRequest pr, Long providerId, Long scopeId, Set<Long> unapproved) {
+            List<Map<String, Object>> noteNodes, PullRequest pr, Long providerId, Long scopeId) {
         int generalNotes = 0;
 
         for (Map<String, Object> noteNode : noteNodes) {
             // A system note is not a comment, but the ones that record a review decision are the only
             // place GitLab says who approved, withdrew an approval or requested changes, and when.
             if (Boolean.TRUE.equals(noteNode.get("system"))) {
-                recordReviewDecisionFromSystemNote(noteNode, pr, providerId, unapproved);
+                recordReviewDecisionFromSystemNote(noteNode, pr, providerId);
                 continue;
             }
             if (Boolean.TRUE.equals(noteNode.get("internal"))) {
@@ -684,12 +678,7 @@ public class GitLabDiscussionSyncService {
         return new int[] {0, generalNotes, 0};
     }
 
-    /**
-     * @param unapproved the authors whose "unapproved" note this pass has already seen; an "approved"
-     *     note by one of them gives the approval again
-     */
-    void recordReviewDecisionFromSystemNote(
-            Map<String, Object> noteNode, PullRequest pr, Long providerId, Set<Long> unapproved) {
+    void recordReviewDecisionFromSystemNote(Map<String, Object> noteNode, PullRequest pr, Long providerId) {
         String body = String.valueOf(noteNode.get("body"));
         String noteGlobalId = (String) noteNode.get("id");
         Instant at = parseTimestamp((String) noteNode.get("createdAt"));
@@ -701,11 +690,7 @@ public class GitLabDiscussionSyncService {
             return;
         }
         reviewReconciler.recordSystemNote(
-                pr,
-                author,
-                new GitLabReviewReconciler.SystemNote(body, at, noteGlobalId, false),
-                pr.getProvider(),
-                unapproved);
+                pr, author, new GitLabReviewReconciler.SystemNote(body, at, noteGlobalId, false), pr.getProvider());
     }
 
     /**

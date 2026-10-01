@@ -1081,6 +1081,92 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
+        void shouldRemoveAGuessedApprovalDateOnlyOnAnAcceptedWholeSnapshotWithoutAnotherApprovalEvent()
+                throws Exception {
+            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            PullRequestReview initial = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(initial.getSubmittedAt()).isNull();
+            Instant legacyDate = Instant.parse("2026-01-31T21:00:00Z");
+            transactionTemplate.executeWithoutResult(tx ->
+                    reviewRepository.findById(initial.getId()).orElseThrow().setSubmittedAt(legacyDate));
+            eventListener.clear();
+
+            read(facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, null, "mergeable"), readAt);
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(legacyDate);
+            read(
+                    facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(approver()), "approvals_syncing"),
+                    readAt.plusSeconds(1));
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(legacyDate);
+            assertThat(read(
+                            facts(
+                                    FIXTURE_HEAD,
+                                    GitLabHeadPipeline.NOT_CAPTURED,
+                                    true,
+                                    List.of(approver()),
+                                    "mergeable"),
+                            readAt.plusSeconds(2)))
+                    .isFalse();
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(legacyDate);
+            read(
+                    facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(approver()), "mergeable"),
+                    readAt.minusSeconds(1));
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(legacyDate);
+
+            read(
+                    facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(approver()), "mergeable"),
+                    readAt.plusSeconds(3));
+            PullRequestReview current = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(current.getId()).isEqualTo(initial.getId());
+            assertThat(current.getSubmittedAt()).isNull();
+            assertThat(current.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(current.isDismissed()).isFalse();
+            assertThat(current.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void shouldKeepSnapshotApprovalMembershipWhenOldDecisionNotesAreReplayed(boolean listed) throws Exception {
+            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            read(
+                    facts(
+                            NEXT_HEAD,
+                            GitLabHeadPipeline.NOT_CAPTURED,
+                            listed,
+                            listed ? List.of(approver()) : List.of(),
+                            "mergeable"),
+                    readAt);
+            PullRequestReview current = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            transactionTemplate.executeWithoutResult(tx -> {
+                PullRequest mr = pullRequestRepository
+                        .findByRepositoryIdAndNumber(savedRepo.getId(), MR4_IID)
+                        .orElseThrow();
+                var author = Objects.requireNonNull(
+                        reviewRepository.findById(current.getId()).orElseThrow().getAuthor());
+                for (String body :
+                        List.of("unapproved this merge request", "approved this merge request", "requested changes")) {
+                    reviewReconciler.recordSystemNote(
+                            mr,
+                            author,
+                            new GitLabReviewReconciler.SystemNote(
+                                    body, Instant.parse("2026-01-01T10:00:00Z"), "gid://gitlab/Note/987654", false),
+                            savedRepo.getProvider());
+                }
+            });
+            PullRequestReview after = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(after.getState())
+                    .isEqualTo(listed ? PullRequestReview.State.APPROVED : PullRequestReview.State.DISMISSED);
+            assertThat(after.isDismissed()).isEqualTo(!listed);
+            assertThat(after.getSubmittedAt()).isNull();
+            assertThat(after.getCommitId()).isEqualTo(NEXT_HEAD);
+        }
+
+        @Test
         void shouldRecordThatTheCurrentHeadHasNoPipeline() {
             assertThat(read(facts(NEXT_HEAD, GitLabHeadPipeline.NO_PIPELINE, true, List.of(), "mergeable"), readAt))
                     .isTrue();

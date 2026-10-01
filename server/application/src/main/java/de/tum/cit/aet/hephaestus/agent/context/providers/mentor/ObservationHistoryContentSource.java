@@ -374,7 +374,10 @@ public class ObservationHistoryContentSource implements ContentSource {
                 node.put("state", review.getState().name());
             }
             node.put("hasComment", review.getBody() != null && !review.getBody().isBlank());
-            node.put("submittedAt", review.getSubmittedAt().toString());
+            Instant submittedAt = review.getSubmittedAt();
+            if (submittedAt != null) {
+                node.put("submittedAt", submittedAt.toString());
+            }
         }
 
         ObjectNode omitted = objectMapper.createObjectNode();
