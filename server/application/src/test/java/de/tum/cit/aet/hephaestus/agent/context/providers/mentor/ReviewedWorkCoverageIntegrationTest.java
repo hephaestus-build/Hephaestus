@@ -450,6 +450,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
 
     private AgentJob reviewWith(PullRequest mr, ObjectNode snapshot) {
         AgentJob job = persistPullRequestReview(workspace, mr.getNumber(), mr.getId(), NOW);
+        job.setStatus(AgentJobStatus.COMPLETED);
         job.setEvidenceSnapshot(snapshot);
         return agentJobRepository.save(job);
     }
