@@ -93,8 +93,8 @@ minute by default). Redeeming a sign-in code, renewing a session and signing out
 per-address limit (`HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_CAPACITY` per
 `HEPHAESTUS_AUTH_RATE_LIMIT_CLIENT_SESSION_PERIOD`, 30 a minute by default). Everyone behind one
 network address shares it, so raise it for a campus or company network whose users all sign in at
-the start of a session. Review requests, and cancelling or retrying a run, are confirmed in the
-extension's own window and sent to the same endpoints the web app uses, under the same permissions,
+the start of a session. Review requests are confirmed in the extension's own window and sent to the
+same endpoints the web app uses, under the same permissions,
 cooldowns and rate limits; a refusal comes back in your instance's words. Approving or rejecting
 feedback stays in the web app.
 

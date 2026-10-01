@@ -16,6 +16,10 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessage;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -80,6 +84,12 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private SlackMessageRepository slackMessageRepository;
+
+    @Autowired
+    private SlackMonitoredChannelRepository slackChannelRepository;
 
     private Workspace workspace;
     private Workspace otherWorkspace;
@@ -226,13 +236,19 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
         @Test
         @WithUser
         void scopesTheOwnTraceToTheMemberInAMultiDeveloperReview() {
-            assertOwnTraceCounts(member);
+            assertOwnTraceCounts(member, true);
         }
 
         @Test
         @WithMentorUser
         void scopesTheOwnTraceToTheAdminInAMultiDeveloperReview() {
-            assertOwnTraceCounts(workspaceAdmin);
+            assertOwnTraceCounts(workspaceAdmin, true);
+        }
+
+        @Test
+        @WithUser
+        void authorizesTheNamedMemberTraceWithTheSameSourceChecks() {
+            assertOwnTraceCounts(member, false);
         }
 
         @Test
@@ -681,11 +697,54 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
         }
     }
 
-    private void assertOwnTraceCounts(User developer) {
+    private void assertOwnTraceCounts(User developer, boolean ownEndpoint) {
         Practice shared = persistPractice(workspace, null, "shared", "Shared practice", null);
         AgentJob job = persistPullRequestReview(workspace, (int) ARTIFACT_ID, ARTIFACT_ID, READY_AT);
         recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, job.getId());
         UUID own = observe(shared, job, ARTIFACT_ID, developer, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
+        observe(
+                shared,
+                job,
+                ARTIFACT_ID,
+                developer,
+                ObservationKind.DEMONSTRATED_STRENGTH,
+                null,
+                READY_AT.plusSeconds(60),
+                "{\"citations\":[{\"sourceKind\":\"workspace.project-inventory\","
+                        + "\"artifactPath\":\"context/project_inventory.json\"}]}");
+        SlackMonitoredChannel channel = new SlackMonitoredChannel();
+        channel.setWorkspaceId(workspace.getId());
+        channel.setSlackTeamId("trace-team");
+        channel.setSlackChannelId("trace-channel");
+        channel.setConsentState(SlackMonitoredChannel.ConsentState.ACTIVE);
+        channel = slackChannelRepository.saveAndFlush(channel);
+        SlackMessage message = new SlackMessage();
+        message.setWorkspaceId(workspace.getId());
+        message.setSlackTeamId(channel.getSlackTeamId());
+        message.setSlackChannelId(channel.getSlackChannelId());
+        message.setSlackTs("1.000001");
+        message.setText("A permitted message");
+        slackMessageRepository.saveAndFlush(message);
+        observe(
+                shared,
+                job,
+                ARTIFACT_ID,
+                developer,
+                ObservationKind.DEMONSTRATED_STRENGTH,
+                null,
+                READY_AT.plusSeconds(30),
+                "{\"citations\":[{\"sourceKind\":\"slack.conversation.thread\","
+                        + "\"artifactPath\":\"context/conversation_thread.json\","
+                        + "\"sourceReference\":{\"records\":[{\"type\":\"chat\","
+                        + "\"channel\":\"trace-channel\",\"message\":\"1.000001\"}]}}]}");
+        observe(
+                shared,
+                job,
+                ARTIFACT_ID + 1,
+                developer,
+                ObservationKind.DEMONSTRATED_STRENGTH,
+                null,
+                READY_AT.plusSeconds(120));
         UUID theirs = observe(shared, job, ARTIFACT_ID, author, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
         feedback(job, 1, own, developer, FeedbackDeliveryState.DELIVERED, null);
         feedback(
@@ -695,23 +754,41 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                 author,
                 FeedbackDeliveryState.SUPPRESSED,
                 FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
-        get(
-                        TRACE + "/own?reviewId={reviewId}",
-                        workspace.getWorkspaceSlug(),
-                        ArtifactKinds.PULL_REQUEST.value(),
-                        ARTIFACT_ID,
-                        job.getId())
+        String uri = TRACE + (ownEndpoint ? "/own" : "") + "?reviewId={reviewId}";
+        get(uri, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID, job.getId())
                 .expectStatus()
                 .isOk()
                 .expectBody()
                 .jsonPath("$.practices[?(@.practiceSlug=='shared')].observationCount")
-                .isEqualTo(1)
+                .isEqualTo(2)
+                .jsonPath("$.practices[?(@.practiceSlug=='shared')].decidedAt")
+                .isEqualTo(READY_AT.plusSeconds(30).toString())
                 .jsonPath("$.practices[?(@.practiceSlug=='shared')].deliveredCount")
                 .isEqualTo(1)
                 .jsonPath("$.practices[?(@.practiceSlug=='shared')].withheldReasons[*]")
                 .isEmpty()
                 .jsonPath("$.deliveryPolicy")
                 .doesNotExist();
+        channel.setConsentState(SlackMonitoredChannel.ConsentState.REVOKED);
+        slackChannelRepository.saveAndFlush(channel);
+        get(uri, workspace.getWorkspaceSlug(), ArtifactKinds.PULL_REQUEST.value(), ARTIFACT_ID, job.getId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.practices[?(@.practiceSlug=='shared')].observationCount")
+                .isEqualTo(1)
+                .jsonPath("$.practices[?(@.practiceSlug=='shared')].decidedAt")
+                .isEqualTo(READY_AT.toString());
+        if (developer.getId().equals(workspaceAdmin.getId())) {
+            getForReview(job.getId())
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.practices[?(@.practiceSlug=='shared')].observationCount")
+                    .isEqualTo(4)
+                    .jsonPath("$.practices[?(@.practiceSlug=='shared')].decidedAt")
+                    .isEqualTo(READY_AT.plusSeconds(60).toString());
+        }
     }
 
     private WebTestClient.ResponseSpec get(String uri, Object... vars) {

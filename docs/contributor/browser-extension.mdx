@@ -391,8 +391,7 @@ JAR. Read `SERVER_PORT` and `WEBAPP_PORT` from `server/.env`; the defaults are `
    worker, webhook receiver and NATS consumers: this suite exercises API behavior without pulling
    a review-runtime image or running review containers. The environment override keeps the GitLab
    adapter available for the seeded connection. Wait until
-   `http://localhost:<SERVER_PORT>/actuator/health/readiness` answers; set `MANAGEMENT_PORT` to
-   `SERVER_PORT` in `server/.env` if you changed the server port.
+   `http://localhost:<SERVER_PORT>/readyz` answers.
 
 2. Create the `e2e` admin and `e2e-dev` developer accounts, then load the web app's seed and the extension's, in that order — the
    extension's workspace belongs to the developer the web app's seed creates:

@@ -196,14 +196,15 @@ function useWorkReview(subject: WorkSubject, workspaceSlug: string | undefined, 
 	}, [context.data]);
 	const ready = context.data?.status === "ready" ? context.data : undefined;
 	const slug = ready?.workspace.slug ?? "";
+	const refetchInterval = () =>
+		latestContext.current === undefined || !onScreen
+			? false
+			: refreshInterval(latestContext.current);
 	const feedback = useQuery({
 		queryKey: ["work-feedback", slug],
 		queryFn: async () => ask({ type: "get-work-feedback", workspaceSlug: slug, subject }),
 		enabled: ready !== undefined,
-		refetchInterval: () =>
-			latestContext.current === undefined || !onScreen
-				? false
-				: refreshInterval(latestContext.current),
+		refetchInterval,
 	});
 	let state: ReportState = { status: "loading" };
 	// A failed refresh keeps the last answer on screen, marked as not current; only a first load that
@@ -216,6 +217,7 @@ function useWorkReview(subject: WorkSubject, workspaceSlug: string | undefined, 
 	return {
 		state,
 		ready,
+		refetchInterval,
 		feedback: ready === undefined ? undefined : loadable(feedback),
 		activity: context.data === undefined ? undefined : reviewActivity(context.data),
 		stale:
@@ -262,6 +264,7 @@ function PageContent() {
 		queryKey: ["observations", slug],
 		queryFn: async () => ask({ type: "list-observations", workspaceSlug: slug }),
 		enabled: ready !== undefined && expanded,
+		refetchInterval: review.refetchInterval,
 	});
 	const action = useMutation({
 		mutationFn: async (request: ReviewAction) =>

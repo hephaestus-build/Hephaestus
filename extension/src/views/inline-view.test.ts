@@ -10,6 +10,7 @@ import {
 	READY_ON_GITHUB,
 	WORK_FEEDBACK,
 } from "~/components/report/fixtures";
+import { VISIBLE_REFRESH_MS } from "~/shared/review-context";
 import type { RpcRequest, RpcResult } from "~/shared/rpc";
 import { createQueryClient } from "~/ui/worker-state";
 import { InlineView } from "~/views/InlineView";
@@ -79,6 +80,7 @@ beforeEach(() => {
 afterEach(async () => {
 	await act(async () => root.unmount());
 	container.remove();
+	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
 
@@ -170,5 +172,44 @@ it("says a list row's preview is not current when its refresh fails, and keeps t
 	expect(
 		[...container.querySelectorAll("button")].map((button) => button.textContent),
 	).toStrictEqual(["Try again"]);
+	client.clear();
+});
+
+it("refreshes new and repaired observations while the report stays open", async () => {
+	vi.useFakeTimers();
+	answers.set("list-observations", ok({ ...OWN_PAGE, rows: [], total: 0 }));
+	answers.set("get-work-feedback", ok({ ...WORK_FEEDBACK, comments: [] }));
+	const client = createQueryClient();
+	await act(async () => {
+		root.render(createElement(QueryClientProvider, { client }, createElement(InlineView)));
+		await vi.advanceTimersByTimeAsync(100);
+	});
+	await act(async () => {
+		await vi.advanceTimersByTimeAsync(100);
+	});
+	expect(container.textContent).toContain("No observations about your work here.");
+	expect(container.textContent).not.toContain(NEGATIVE_ROW.summary);
+
+	answers.set("list-observations", ok(OWN_PAGE));
+	await act(async () => {
+		await vi.advanceTimersByTimeAsync(VISIBLE_REFRESH_MS);
+	});
+	expect(container.textContent).toContain(NEGATIVE_ROW.summary);
+
+	const repairedSummary = "The repaired description explains the purpose of the change.";
+	answers.set(
+		"list-observations",
+		ok({
+			...OWN_PAGE,
+			rows: [{ ...NEGATIVE_ROW, outcome: "POSITIVE", summary: repairedSummary }],
+			total: 1,
+		}),
+	);
+	await act(async () => {
+		await vi.advanceTimersByTimeAsync(VISIBLE_REFRESH_MS);
+	});
+	expect(container.textContent).toContain(repairedSummary);
+	expect(container.textContent).not.toContain(NEGATIVE_ROW.summary);
+	expect(container.querySelector("button[aria-expanded=true]")).not.toBeNull();
 	client.clear();
 });

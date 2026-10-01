@@ -167,7 +167,7 @@ class ReviewContextControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .isEqualTo("Merge request five")
                     .jsonPath("$.work.url")
                     .isEqualTo(CONNECTED + "/top/sub/project/-/merge_requests/5")
-                    .jsonPath("$.work.repositoryName")
+                    .jsonPath("$.work.container")
                     .isEqualTo(PROJECT);
         }
 
