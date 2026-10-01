@@ -62,7 +62,7 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 			file: contextFile(contextReference, `linked_work_items/${String(item.number)}.md`),
 			line: items[0]?.line ?? 0,
 			pattern: checkable ? "checkable outcome" : "no checkable outcome",
-			context: `#${String(item.number)} ${item.title} — ${how}; ${String(items.length)} task-list item(s), ${String(ticked)} ticked${heading ? "; an outcome heading" : ""}${subIssues > 0 ? `; ${String(item.subIssuesCompleted ?? 0)}/${String(subIssues)} sub-issues done` : ""}; state ${item.state ?? "unknown"}`,
+			context: `#${String(item.number)} ${item.title} — ${how}; ${String(items.length)} task-list item(s), ${String(ticked)} ticked as captured${heading ? "; an outcome heading" : ""}${subIssues > 0 ? `; ${String(item.subIssuesCompleted ?? 0)}/${String(subIssues)} sub-issues done` : ""}; state ${item.state ?? "unknown"}`,
 			inDiff: false,
 			flags: {
 				number: item.number,
@@ -88,7 +88,7 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 		);
 	} else {
 		directions.push(
-			`${String(occasions.length)} linked issue(s) state a checkable outcome — every one is an occasion, closing candidates and issues only named alike. For each, the confirmation is in the record: its items ticked as captured, or the description or a closing comment naming which items are done and where the rest moves. Work delivered in the diff but neither ticked nor named is unconfirmed.`,
+			`${String(occasions.length)} linked issue(s) state a checkable outcome — every one is an occasion, closing candidates and issues only named alike. For each, the confirmation is in the record: its items ticked as captured, or the description or a closing comment naming which items are done and where the rest moves. Work delivered in the diff but neither ticked nor named is unconfirmed. A confirmation captured after the merge counts; when it was written is unknown unless independently dated evidence establishes it.`,
 		);
 	}
 	return {

@@ -61,6 +61,10 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
     /** Title and unescaped body for line-based citations; the JSON projection escapes the same text. */
     static final String ITEMS_PREFIX = OUTPUT_PREFIX + "linked_work_items/";
 
+    private static final String BODY_PROVENANCE =
+            "The body below is the issue's text as mirrored when this was captured; these dates are the issue's, "
+                    + "not when any line of it was written.";
+
     /**
      * {@code #N} standing on its own. The leading boundary {@code (?<![\w/.-])} rejects a number that
      * belongs to another name: {@code owner/repo#12} and {@code group/project#12} point at another
@@ -211,7 +215,8 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         String dates = "Opened " + (issue.getCreatedAt() == null ? "at an unknown time" : issue.getCreatedAt())
                 + (issue.getClosedAt() == null ? "" : ", closed " + issue.getClosedAt())
                 + (issue.getState() == null ? "" : ", state " + issue.getState().name()) + ".";
-        return ("# " + issue.getTitle() + "\n\n" + dates + "\n\n" + body).getBytes(StandardCharsets.UTF_8);
+        return ("# " + issue.getTitle() + "\n\n" + dates + "\n" + BODY_PROVENANCE + "\n\n" + body)
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     /**

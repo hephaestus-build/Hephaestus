@@ -65,7 +65,8 @@ what the cited lines actually read: copy from that.
   full commit SHA from its history, and the file is then read at that commit.
 - Everything else: the captured file under `<contextRoot>` or `<historyRoot>`, with `path` naming the
   file or the record inside it. Quote the description from `description.md` and a linked issue from
-  `linked_work_items/<n>.md`, never from an escaped `body` string in a JSON file.
+  `linked_work_items/<n>.md`, never from an escaped `body` string in a JSON file. A linked issue's file states what
+  its dates mean for its body.
 
 ## Grounding
 
