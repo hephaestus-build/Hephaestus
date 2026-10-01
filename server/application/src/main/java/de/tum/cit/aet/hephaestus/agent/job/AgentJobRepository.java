@@ -248,14 +248,15 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     /** The staged identity and source contract for material repair admission. */
     @Query(value = """
         SELECT j.id AS "id", CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork",
-               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion"
+               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion",
+               CAST(j.evidence_snapshot -> 'manifest' AS text) AS "manifest"
         FROM agent_job j
         WHERE j.id IN :ids AND j.workspace_id = :workspaceId
         """, nativeQuery = true)
     List<CapturedReviewedWorkRow> findCapturedReviewedWork(
             @Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
 
-    interface CapturedReviewedWorkRow {
+    public interface CapturedReviewedWorkRow {
         UUID getId();
 
         @Nullable
@@ -263,6 +264,9 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
         @Nullable
         String getReviewedWork();
+
+        @Nullable
+        String getManifest();
     }
 
     interface ReviewedWorkRow {

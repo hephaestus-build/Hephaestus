@@ -158,6 +158,10 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
                 sourceCatalogs,
                 historicalGit,
                 new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class),
+                org.mockito.Mockito.mock(
+                        de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.class),
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.class),
                 citedSourceAccess);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);

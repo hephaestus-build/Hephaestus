@@ -110,6 +110,14 @@ class PracticeSignalOptionsTest extends BaseUnitTest {
     }
 
     @Test
+    void keepsTheLinkedIssueRepairOccasionInternalWhileDeclaringItsProviderProvenance() {
+        assertThat(options.producedByIngestion(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED))
+                .isTrue();
+        assertThat(options.eligibleFor(ArtifactKinds.PULL_REQUEST))
+                .doesNotContain(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED);
+    }
+
+    @Test
     @DisplayName("only reviewable kinds are authorable")
     void offersOnlyReviewableKinds() {
         assertThat(options.authorableKinds())

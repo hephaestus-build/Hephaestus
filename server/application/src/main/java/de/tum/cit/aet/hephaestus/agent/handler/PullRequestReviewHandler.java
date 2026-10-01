@@ -134,6 +134,9 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             // Use the signal-time draft state for both gate and catalog selection.
             metadata.put(PracticeCatalogInjector.DRAFT_METADATA_KEY, pullRequestData.isDraft());
         }
+        if (submissionRequest.linkedIssueRevision() != null) {
+            metadata.put("linked_issue_revision", submissionRequest.linkedIssueRevision());
+        }
         if (submissionRequest.reviewId() != null && submissionRequest.aboutUserId() != null) {
             metadata.put("review_id", submissionRequest.reviewId());
             metadata.put("about_user_id", submissionRequest.aboutUserId());
@@ -150,15 +153,17 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         // An edit is keyed on what was written as well as the head, so two edits at one head are two reviews.
         String freshness = submissionRequest.reviewId() != null
                 ? "review-" + submissionRequest.reviewId()
-                : ScmSignals.PULL_REQUEST_EDITED.equals(submissionRequest.triggerSignal())
-                        ? ScmSignals.pullRequestRevision(
-                                        ScmSignals.PULL_REQUEST_EDITED,
-                                        submissionRequest.headRefOid(),
-                                        pullRequestData.title(),
-                                        pullRequestData.body())
-                                .orElseThrow()
-                                .value()
-                        : submissionRequest.headRefOid();
+                : ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(submissionRequest.triggerSignal())
+                        ? java.util.Objects.requireNonNull(submissionRequest.linkedIssueRevision())
+                        : ScmSignals.PULL_REQUEST_EDITED.equals(submissionRequest.triggerSignal())
+                                ? ScmSignals.pullRequestRevision(
+                                                ScmSignals.PULL_REQUEST_EDITED,
+                                                submissionRequest.headRefOid(),
+                                                pullRequestData.title(),
+                                                pullRequestData.body())
+                                        .orElseThrow()
+                                        .value()
+                                : submissionRequest.headRefOid();
         String idempotencyKey = "pr_review:" + pullRequestData.repository().nameWithOwner()
                 + ":"
                 + pullRequestData.number()

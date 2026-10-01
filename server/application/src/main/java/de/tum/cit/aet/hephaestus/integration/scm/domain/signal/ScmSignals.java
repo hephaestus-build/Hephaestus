@@ -40,6 +40,9 @@ public final class ScmSignals {
     /** The title or description changed; keyed on the head and that text. */
     public static final SignalName PULL_REQUEST_EDITED = SignalName.of("scm.pull_request.edited");
 
+    public static final SignalName PULL_REQUEST_LINKED_ISSUE_UPDATED =
+            SignalName.of("scm.pull_request.linked_issue_updated");
+
     public static final SignalName PULL_REQUEST_REVIEWED = SignalName.of("scm.pull_request.reviewed");
     public static final SignalName PULL_REQUEST_MERGED = SignalName.of("scm.pull_request.merged");
     public static final SignalName PULL_REQUEST_CLOSED = SignalName.of("scm.pull_request.closed");
@@ -91,6 +94,7 @@ public final class ScmSignals {
             Map.entry(PULL_REQUEST_READY, RevisionScheme.HEAD_COMMIT),
             Map.entry(PULL_REQUEST_SYNCHRONIZED, RevisionScheme.HEAD_COMMIT),
             Map.entry(PULL_REQUEST_EDITED, RevisionScheme.CONTENT_DIGEST),
+            Map.entry(PULL_REQUEST_LINKED_ISSUE_UPDATED, RevisionScheme.CONTENT_DIGEST),
             Map.entry(PULL_REQUEST_REVIEWED, RevisionScheme.EVENT_ID),
             Map.entry(PULL_REQUEST_MERGED, RevisionScheme.TERMINAL_STATE),
             Map.entry(PULL_REQUEST_CLOSED, RevisionScheme.TERMINAL_STATE),
@@ -148,7 +152,7 @@ public final class ScmSignals {
      */
     public static Optional<SignalRevision> pullRequestRevision(
             SignalName signal, @Nullable String headRefOid, String title, @Nullable String body) {
-        if (!PULL_REQUEST.equals(signal.artifactKind())) {
+        if (!PULL_REQUEST.equals(signal.artifactKind()) || PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(signal)) {
             return Optional.empty();
         }
         return revisionFor(signal, headRefOid, headRefOid, title, body);

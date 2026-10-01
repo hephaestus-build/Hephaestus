@@ -20,21 +20,27 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeDetectionCompletedEvent;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -72,6 +78,9 @@ public class PracticeDetectionDeliveryService {
     private final HistoricalGitEvidence historicalGit;
     private final ArtifactSourceCatalogRegistry sourceCatalogs;
     private final AutomatedReviewFence fence;
+    private final ReviewedWorkChanges reviewedWorkChanges;
+    private final FeedbackObservationRepository feedbackObservations;
+    private final FeedbackRepository feedbackRepository;
 
     public PracticeDetectionDeliveryService(
             PracticeRevisionRepository practiceRevisionRepository,
@@ -85,6 +94,9 @@ public class PracticeDetectionDeliveryService {
             ArtifactSourceCatalogRegistry sourceCatalogs,
             HistoricalGitEvidence historicalGit,
             AutomatedReviewFence fence,
+            ReviewedWorkChanges reviewedWorkChanges,
+            FeedbackObservationRepository feedbackObservations,
+            FeedbackRepository feedbackRepository,
             CitedSourceAccess citedSourceAccess) {
         this.practiceRevisionRepository = practiceRevisionRepository;
         this.observationRepository = observationRepository;
@@ -97,6 +109,9 @@ public class PracticeDetectionDeliveryService {
         this.sourceCatalogs = sourceCatalogs;
         this.historicalGit = historicalGit;
         this.fence = fence;
+        this.reviewedWorkChanges = reviewedWorkChanges;
+        this.feedbackObservations = feedbackObservations;
+        this.feedbackRepository = feedbackRepository;
         this.citedSourceAccess = citedSourceAccess;
     }
 
@@ -289,6 +304,18 @@ public class PracticeDetectionDeliveryService {
                 throw new JobDeliveryException("Issue changed after this review was submitted: jobId=" + job.getId());
             }
         }
+        if (target.type().equals(ArtifactKinds.PULL_REQUEST)
+                && ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED
+                        .value()
+                        .equals(metadata.path(PracticeCatalogInjector.SIGNAL_METADATA_KEY)
+                                .asString())) {
+            String revision = metadata.path("linked_issue_revision").asString();
+            if (revision.isBlank()
+                    || !reviewedWorkChanges.linkedCaptureCurrent(workspaceId, job.getId(), target.id(), revision)) {
+                throw new ObservationsRefusedException(
+                        "linked_issue_capture_stale", "Linked issue changed since capture: jobId=" + job.getId());
+            }
+        }
         Map<String, PracticeRevision> revisionsBySlug = admissible.revisionsBySlug();
         List<ValidatedObservation> admittedObservations = prepared.observations;
         List<Integer> admittedIndexes = prepared.indexes;
@@ -307,6 +334,20 @@ public class PracticeDetectionDeliveryService {
         Long aboutUserId = target.aboutUserId();
         ArtifactKind artifactKind = target.type();
         Long artifactId = target.id();
+        boolean linkedRepair = ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED
+                .value()
+                .equals(metadata.path(PracticeCatalogInjector.SIGNAL_METADATA_KEY)
+                        .asString());
+        Map<Long, de.tum.cit.aet.hephaestus.practices.model.Observation> previousNegatives = new HashMap<>();
+        if (linkedRepair && aboutUserId != null) {
+            for (var previous : LatestRun.perClaim(
+                    observationRepository.findStandingForWork(workspaceId, artifactKind, artifactId, aboutUserId))) {
+                if (ObservationKind.of(previous).isNegative()) {
+                    previousNegatives.put(previous.getPractice().getId(), previous);
+                }
+            }
+        }
+        Set<Long> replacedPractices = new HashSet<>();
 
         int inserted = 0;
         int discardedDuplicate = 0;
@@ -385,6 +426,9 @@ public class PracticeDetectionDeliveryService {
 
             if (rows == 1) {
                 inserted++;
+                if (linkedRepair && observation.outcome() == Outcome.POSITIVE) {
+                    if (previousNegatives.containsKey(practice.getId())) replacedPractices.add(practice.getId());
+                }
             } else {
                 discardedDuplicate++;
             }
@@ -393,6 +437,17 @@ public class PracticeDetectionDeliveryService {
             if (observation.outcome() == Outcome.NEGATIVE) {
                 hasNegative = true;
             }
+        }
+
+        for (Long practiceId : replacedPractices) {
+            for (UUID feedbackId : feedbackObservations.findPreparedConversationFeedbackIdsForNegativeClaim(
+                    workspaceId, Objects.requireNonNull(aboutUserId), practiceId, artifactKind, artifactId)) {
+                feedbackRepository.markSuperseded(workspaceId, feedbackId);
+            }
+            observationRepository.supersedeById(
+                    workspaceId,
+                    Objects.requireNonNull(previousNegatives.get(practiceId)).getId(),
+                    observedAt);
         }
 
         log.info(

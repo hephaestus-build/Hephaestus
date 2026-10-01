@@ -24,6 +24,7 @@ import java.util.Set;
  * @param requestedByHand whether this is the signal a person raises by explicitly asking for a review
  *                    now. Declared here rather than on the descriptor so "named a request signal the
  *                    kind never declared" is unrepresentable rather than merely validated
+ * @param bindableForAuthoring whether a practice author can select this signal as an occasion
  */
 public record Signal(
         SignalName name,
@@ -31,10 +32,11 @@ public record Signal(
         Set<EventTypeKey> producedBy,
         RevisionScheme revision,
         boolean recommendedForAuthoring,
-        boolean requestedByHand) {
+        boolean requestedByHand,
+        boolean bindableForAuthoring) {
     /** A signal the authoring surface offers but does not pre-select. */
     public Signal(SignalName name, String displayName, Set<EventTypeKey> producedBy, RevisionScheme revision) {
-        this(name, displayName, producedBy, revision, false, false);
+        this(name, displayName, producedBy, revision, false, false, true);
     }
 
     /** A signal an ingested event raises, which the authoring surface may pre-select. */
@@ -44,7 +46,18 @@ public record Signal(
             Set<EventTypeKey> producedBy,
             RevisionScheme revision,
             boolean recommendedForAuthoring) {
-        this(name, displayName, producedBy, revision, recommendedForAuthoring, false);
+        this(name, displayName, producedBy, revision, recommendedForAuthoring, false, true);
+    }
+
+    /** Existing declared signals are authorable unless they are explicit review requests. */
+    public Signal(
+            SignalName name,
+            String displayName,
+            Set<EventTypeKey> producedBy,
+            RevisionScheme revision,
+            boolean recommendedForAuthoring,
+            boolean requestedByHand) {
+        this(name, displayName, producedBy, revision, recommendedForAuthoring, requestedByHand, !requestedByHand);
     }
 
     public Signal {
@@ -54,6 +67,12 @@ public record Signal(
             throw new IllegalArgumentException("signal " + name + " must have a display name");
         }
         producedBy = Set.copyOf(Objects.requireNonNullElse(producedBy, Set.of()));
+        if (requestedByHand && bindableForAuthoring) {
+            throw new IllegalArgumentException("A review request is not a practice occasion");
+        }
+        if (recommendedForAuthoring && !bindableForAuthoring) {
+            throw new IllegalArgumentException("An internal signal cannot be recommended for authoring");
+        }
     }
 
     /** Whether any ingested event of the given integration raises this signal. */

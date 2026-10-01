@@ -16,7 +16,14 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -29,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -109,6 +117,61 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         issue.setState(Issue.State.OPEN);
         issue.setHtmlUrl("https://example.com/issues/" + number);
         return issue;
+    }
+
+    @Test
+    void tombstonedClosingIssueHasNoCurrentMaterialKey() {
+        var pr = new PullRequest();
+        pr.setId(PR_ID);
+        pr.setHeadRefOid(HEAD);
+        pr.setTitle("Closes #18");
+        Issue linked = issue(18, "Acceptance criteria", "- [x] Confirm repair");
+        assertThat(LinkedWorkItemContentSource.currentClosingMaterialKey(99L, pr, List.of(linked)))
+                .isPresent();
+        linked.setDeletedAt(java.time.Instant.now());
+        assertThat(LinkedWorkItemContentSource.currentClosingMaterialKey(99L, pr, List.of(linked)))
+                .isEmpty();
+    }
+
+    @Test
+    void comparesOnlyTheCapturedProviderClosingIssueFilesAndTreatsMissingEvidenceAsUnknown() {
+        Issue first = issue(18, "Acceptance criteria", "- [x] Confirm repair");
+        Issue second = issue(19, "Release check", "- [x] Verify release");
+        var captured = closingManifest(List.of(first, second));
+
+        assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(captured, List.of(second, first)))
+                .contains(true);
+        second.setBody("- [ ] Verify release");
+        assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(captured, List.of(first, second)))
+                .contains(false);
+        second.setBody("- [x] Verify release");
+        assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(
+                        closingManifest(List.of(first)), List.of(first, second)))
+                .isEmpty();
+        first.setDeletedAt(java.time.Instant.now());
+        assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(captured, List.of(first, second)))
+                .isEmpty();
+    }
+
+    private static JobFolderIndex closingManifest(List<Issue> issues) {
+        var capturedAt = java.time.Instant.parse("2026-09-01T00:00:00Z");
+        var base = ReviewedWorkFixtures.pullRequestManifest(capturedAt, "Closes #18 and #19", HEAD);
+        var sources = new ArrayList<>(base.sources());
+        sources.add(new SourceCapture(
+                KIND,
+                new SourceCaptureState.Available(
+                        SourceContentState.NON_EMPTY,
+                        SourceCompleteness.PARTIAL,
+                        new SourceCaptureFacts(capturedAt, null, null, null)),
+                issues.stream()
+                        .map(issue -> new SourceArtifact(
+                                LinkedWorkItemContentSource.ITEMS_PREFIX + issue.getNumber() + ".md",
+                                "text/markdown",
+                                ProvenanceDigest.sha256Hex(LinkedWorkItemContentSource.asText(issue)),
+                                LinkedWorkItemContentSource.asText(issue).length))
+                        .toList()));
+        return new JobFolderIndex(
+                base.contractVersion(), base.catalogDigest(), base.artifactKind(), base.capturedAt(), sources);
     }
 
     private void pullRequestWithBody(String body) {

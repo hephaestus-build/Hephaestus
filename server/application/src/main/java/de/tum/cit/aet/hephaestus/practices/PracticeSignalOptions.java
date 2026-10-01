@@ -46,7 +46,7 @@ public class PracticeSignalOptions {
      */
     public List<SignalOption> bindableOptionsFor(ArtifactKind kind) {
         return declaredOptions(kind)
-                .filter(signal -> !signal.requestedByHand())
+                .filter(Signal::bindableForAuthoring)
                 .map(SignalOption::of)
                 .toList();
     }

@@ -144,24 +144,31 @@ public class ObservationAdmissionService {
                     JsonNodeFactory.instance.arrayNode());
             throw inadmissible;
         }
-        return Objects.requireNonNull(transactions.execute(status -> {
-            AgentJob job = ownedJob(identity);
-            String admitted = admissionDigest(job);
-            if (!admitted.isBlank()) {
-                if (!digest.equals(admitted)) throw new AdmissionConflictException();
-            } else {
-                prepared.record(job);
-                ObjectNode metadata =
-                        job.getMetadata() instanceof ObjectNode object ? object.deepCopy() : mapper.createObjectNode();
-                metadata.remove(REFUSAL_METADATA_KEY);
-                metadata.put(DIGEST_METADATA_KEY, digest);
-                job.setMetadata(metadata);
-                jobs.save(job);
-                jobs.discardRetiredArtifactInventory(
-                        job.getId(), identity.workspaceId(), identity.attempt(), identity.workerId());
-            }
-            return response(job, digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
-        }));
+        try {
+            return Objects.requireNonNull(transactions.execute(status -> {
+                AgentJob job = ownedJob(identity);
+                String admitted = admissionDigest(job);
+                if (!admitted.isBlank()) {
+                    if (!digest.equals(admitted)) throw new AdmissionConflictException();
+                } else {
+                    prepared.record(job);
+                    ObjectNode metadata = job.getMetadata() instanceof ObjectNode object
+                            ? object.deepCopy()
+                            : mapper.createObjectNode();
+                    metadata.remove(REFUSAL_METADATA_KEY);
+                    metadata.put(DIGEST_METADATA_KEY, digest);
+                    job.setMetadata(metadata);
+                    jobs.save(job);
+                    jobs.discardRetiredArtifactInventory(
+                            job.getId(), identity.workspaceId(), identity.attempt(), identity.workerId());
+                }
+                return response(job, digest, observations.findByAgentJobId(identity.jobId(), identity.workspaceId()));
+            }));
+        } catch (ObservationsRefusedException refusal) {
+            // The publish transaction rolled back before this separate refusal write.
+            recordRefusal(identity, refusal.reasonCode(), refusal.reason(), refusal.verificationFailures());
+            throw refusal;
+        }
     }
 
     public static boolean isAdmitted(AgentJob job) {
