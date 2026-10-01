@@ -50,9 +50,8 @@ import tools.jackson.databind.node.ObjectNode;
  * are earlier runs of a claim whose latest run is listed. Every row passes the same visibility and consent checks,
  * and an earlier run is listed only beside a latest run this conversation may see, so none hints at one it may not.
  *
- * <p>The list is an overview: a row's evidence and rationale are read on demand as
- * {@code inputs/context/observations_history/<id>.json}, which selects the history afresh and answers only for an
- * observation it lists.
+ * <p>The list is an overview: a row's evidence and rationale are read on demand from the {@code resource} the row
+ * carries, which selects the history afresh and answers only for an observation it lists.
  */
 @Component
 @RequiredArgsConstructor
@@ -62,7 +61,6 @@ public class ObservationHistoryContentSource implements ContentSource {
 
     private static final Pattern DETAIL_KEY = Pattern.compile(
             "inputs/context/observations_history/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\\.json");
-    private static final String DETAIL_PATH = OUTPUT_PREFIX + "observations_history/<id>.json";
 
     private static final int LOOKBACK_DAYS = 90;
     private static final int MAX_RECENT_OBSERVATIONS = 50;
@@ -123,6 +121,11 @@ public class ObservationHistoryContentSource implements ContentSource {
         }
     }
 
+    /** The on-demand key of one observation's detail, published as the {@code resource} of its row. */
+    public static String resourceOf(UUID observationId) {
+        return OUTPUT_PREFIX + "observations_history/" + observationId + ".json";
+    }
+
     /** The observation id an on-demand key names, if {@code key} is one. */
     public static Optional<UUID> observationIdOf(String key) {
         Matcher matcher = DETAIL_KEY.matcher(key);
@@ -157,7 +160,10 @@ public class ObservationHistoryContentSource implements ContentSource {
         if (listed.isEmpty()) {
             root.put("readAt", selection.preparedAt().toString());
             root.put("status", "NOT_FOUND");
-            root.put("reason", "No observation listed in observations_history.json has that id.");
+            root.put(
+                    "reason",
+                    "No observation listed in observations_history.json has that id. Copy the resource of a listed "
+                            + "row.");
             return root;
         }
         Observation observation = listed.get().getValue();
@@ -314,7 +320,6 @@ public class ObservationHistoryContentSource implements ContentSource {
         root.set("coverage", objectMapper.valueToTree(Coverage.of(preparedAt)));
         root.putObject("detail")
                 .put("loaded", false)
-                .put("path", DETAIL_PATH)
                 .set("adds", objectMapper.createArrayNode().add("evidence").add("evidenceRationale"));
 
         ObjectNode summary = root.putObject("summary");
@@ -391,6 +396,7 @@ public class ObservationHistoryContentSource implements ContentSource {
 
     private static void describe(ObjectNode node, Observation o, Map<UUID, ObjectNode> reviewedWork) {
         node.put("id", o.getId().toString());
+        node.put("resource", resourceOf(o.getId()));
         node.put("reviewId", o.getAgentJobId().toString());
         node.put("origin", o.getOrigin().name());
         node.put("summary", o.getSummary());
