@@ -540,6 +540,7 @@ public class ConnectionService {
                 req.actorRef(),
                 req.correlationId(),
                 req.detail());
+        audit.setActorAccountId(req.actorAccountId());
         try {
             auditRepository.save(audit);
         } catch (DataIntegrityViolationException e) {
@@ -652,5 +653,32 @@ public class ConnectionService {
             String actorKind,
             @Nullable String actorRef,
             @Nullable String correlationId,
-            @Nullable String detail) {}
+            @Nullable String detail,
+            @Nullable Long actorAccountId) {
+        public TransitionRequest {
+            if (("ADMIN".equals(actorKind) || "USER".equals(actorKind)) && actorRef != null)
+                throw new IllegalArgumentException("Personal actors require a typed account reference");
+        }
+
+        /** Provider and system events have no account actor. */
+        public TransitionRequest(
+                IntegrationState next,
+                String eventType,
+                String actorKind,
+                @Nullable String actorRef,
+                @Nullable String correlationId,
+                @Nullable String detail) {
+            this(next, eventType, actorKind, actorRef, correlationId, detail, null);
+        }
+
+        public static TransitionRequest byAccount(
+                IntegrationState next,
+                String eventType,
+                String actorKind,
+                @Nullable Long accountId,
+                @Nullable String correlationId,
+                @Nullable String detail) {
+            return new TransitionRequest(next, eventType, actorKind, null, correlationId, detail, accountId);
+        }
+    }
 }

@@ -27,6 +27,9 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
     private ExactPersonIdentityResolver resolver;
 
     @Autowired
+    private de.tum.cit.aet.hephaestus.core.privacy.PersonDataService personData;
+
+    @Autowired
     private IdentityProviderRepository providers;
 
     @Autowired
@@ -37,6 +40,31 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IdentityLinkRepository links;
+
+    @Test
+    void shouldPreviewAndExportEveryRegisteredStoreForGitLabOnlyPerson() {
+        var provider = provider(IdentityProviderType.GITLAB);
+        var user = user(provider, 42);
+        long administratorId = Objects.requireNonNull(
+                accounts.saveAndFlush(new Account("Administrator")).getId());
+        var snapshot = personData.preview(administratorId, null, List.of(identity(provider, "42", null)));
+        var export = personData.export(snapshot.request().getId());
+        assertThat(export.path("stores").path("user").size()).isEqualTo(1);
+        assertThat(export.path("stores").path("user").get(0).path("id").asLong())
+                .isEqualTo(user.getId());
+        personData.requestErasure(snapshot.request().getId(), administratorId, true);
+        personData.run(snapshot.request().getId());
+        var receipt = personData.get(snapshot.request().getId()).request();
+        assertThat(receipt.getState())
+                .isEqualTo(de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State.COMPLETE);
+        assertThat(receipt.getScopeJson()).isNull();
+        assertThat(receipt.getSelectionsJson()).isNull();
+        assertThat(users.findById(user.getId()).orElseThrow().getLogin()).startsWith("erased-");
+        personData.requestErasure(snapshot.request().getId(), administratorId, true);
+        personData.run(snapshot.request().getId());
+        assertThat(personData.get(snapshot.request().getId()).request().getCompletedJson())
+                .isEqualTo(receipt.getCompletedJson());
+    }
 
     @Test
     void shouldResolveGitLabOnlyPersonWithoutAnAccount() {

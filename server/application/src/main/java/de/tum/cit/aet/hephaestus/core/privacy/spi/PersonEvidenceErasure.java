@@ -9,6 +9,9 @@ import java.util.UUID;
  * this hook. Implementations must await deletion of every attempt, including failed attempts, and
  * prevent a running attempt from recreating evidence. A failed acknowledgement stops erasure.
  */
-public interface PersonEvidenceErasure {
+public interface PersonEvidenceErasure extends PersonDataCatalog {
+    /** Every job whose inputs contain the exact subject, even when the reviewed author is someone else. */
+    Set<UUID> jobsContaining(PersonScope person);
+
     void eraseJobEvidence(Set<UUID> jobIds);
 }

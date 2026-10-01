@@ -86,7 +86,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     @Test
     void happyPath_slackCompleted_transitionsAndRedirects() {
         String state = "signed-state-token";
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice@example.com");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume(state)).thenReturn(binding);
 
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
@@ -116,11 +116,11 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
         ArgumentCaptor<ConnectFinalization.Completed> completed =
                 ArgumentCaptor.forClass(ConnectFinalization.Completed.class);
-        ArgumentCaptor<String> actor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Long> actor = ArgumentCaptor.forClass(Long.class);
         verify(callbackService).completeConnection(eq(pending), completed.capture(), actor.capture());
         assertThat(completed.getValue().instanceKey()).isEqualTo("T123ABC");
         assertThat(completed.getValue().displayName()).isEqualTo("Acme Workspace");
-        assertThat(actor.getValue()).isEqualTo("alice@example.com");
+        assertThat(actor.getValue()).isEqualTo(42L);
 
         // The strategy's finalize must NOT see the state param — the controller scrubs it
         // before handoff so vendors don't accidentally double-log.
@@ -142,7 +142,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
         controller.callbackGet("slack", state, null, null, Map.of("code", "c", "state", state), htmlRequest());
 
-        ArgumentCaptor<String> actor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Long> actor = ArgumentCaptor.forClass(Long.class);
         verify(callbackService).completeConnection(any(Connection.class), any(), actor.capture());
         assertThat(actor.getValue()).isNull();
     }
@@ -237,7 +237,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
     @Test
     void stateKindMismatch_jsonRequest_returns400() {
         // State issued for SLACK; replayed against /oauth/callback/github.
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("slack-state")).thenReturn(binding);
 
         ResponseEntity<?> response = controller.callbackGet(
@@ -256,7 +256,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void finalizeFailed_jsonRequest_returns400() {
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
@@ -278,7 +278,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void finalizeFailed_browserRequest_redirects() {
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
@@ -302,7 +302,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void finalizeThrows_jsonRequest_returns400() {
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
@@ -347,7 +347,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void shouldReportAnInstanceConnectedElsewhereAsAConflict() {
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "5");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 5L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
@@ -377,7 +377,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void completeConnection_transitionGuardRejects_jsonRequest_returns409() {
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
@@ -397,7 +397,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void completeConnection_transitionGuardRejects_browserRequest_redirects() {
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))
@@ -445,7 +445,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
         // Build a controller with NO strategies registered.
         OAuthCallbackController bare =
                 new OAuthCallbackController(routing, oauthStateService, callbackService, List.of(), PROPS);
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
 
         ResponseEntity<?> response =
@@ -461,7 +461,7 @@ class OAuthCallbackControllerTest extends BaseUnitTest {
 
     @Test
     void postCallback_sharesGetHandler() {
-        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), "alice");
+        StateBinding binding = new StateBinding(42L, IntegrationKind.SLACK, Instant.now(), 42L);
         when(oauthStateService.consume("s")).thenReturn(binding);
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         when(callbackService.findOrCreatePendingConnection(42L, IntegrationKind.SLACK))

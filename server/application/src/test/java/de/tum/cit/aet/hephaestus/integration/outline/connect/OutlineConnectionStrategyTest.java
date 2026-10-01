@@ -53,7 +53,7 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     }
 
     private InitiateRequest request(Map<String, String> userInput) {
-        return new InitiateRequest(1L, IntegrationKind.OUTLINE, userInput, "admin");
+        return new InitiateRequest(1L, IntegrationKind.OUTLINE, userInput, 42L);
     }
 
     @Test

@@ -287,7 +287,7 @@ class SlackOAuthCallbackConflictIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     private String state(Workspace workspace, User caller) {
-        return oauthStateService.issue(workspace.getId(), IntegrationKind.SLACK, Long.toString(accountId(caller)));
+        return oauthStateService.issue(workspace.getId(), IntegrationKind.SLACK, accountId(caller));
     }
 
     private User accountHolder(String prefix) {

@@ -50,9 +50,6 @@ public class OAuthCallbackService {
 
     private static final Logger log = LoggerFactory.getLogger(OAuthCallbackService.class);
 
-    /** Marker used in audit rows when the state token didn't carry an actorRef. */
-    static final String ACTOR_FALLBACK = "oauth-callback";
-
     /**
      * The kinds whose instance one workspace holds at a time: the states in which a connection holds it, the unique
      * index that settles a race the check here cannot, and the words that name it to the person connecting.
@@ -123,7 +120,7 @@ public class OAuthCallbackService {
     /**
      * Finalize a successful OAuth flow: stamp instance_key + display_name, persist the
      * credential placeholder, and transition PENDING (or ACTIVE on reconnect) → ACTIVE
-     * with an audit row attributed to {@code actorRef}.
+     * with an audit row attributed to {@code actorAccountId}.
      *
      * <p>Throws {@link InstanceConnectedElsewhereException} if another workspace holds the Slack
      * team or GitHub App installation, and {@link IllegalStateException} if the transition guard
@@ -131,10 +128,10 @@ public class OAuthCallbackService {
      * controller translates both into HTTP 409.
      */
     public Connection completeConnection(
-            Connection pending, ConnectFinalization.Completed completed, @Nullable String actorRef) {
+            Connection pending, ConnectFinalization.Completed completed, @Nullable Long actorAccountId) {
         try {
             return Objects.requireNonNull(
-                    transactionTemplate.execute(status -> complete(pending, completed, actorRef)));
+                    transactionTemplate.execute(status -> complete(pending, completed, actorAccountId)));
         } catch (DataIntegrityViolationException e) {
             ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(pending.getKind());
             if (exclusive == null || !DataIntegrityViolationConstraints.hasName(e, exclusive.index())) {
@@ -142,29 +139,28 @@ public class OAuthCallbackService {
             }
             // A concurrent connect of the same instance committed after this one's ownership check passed.
             String conflict = connectedElsewhere(
-                            pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), actorRef)
+                            pending.getKind(), pending.getWorkspace().getId(), completed.instanceKey(), actorAccountId)
                     .orElseThrow(() -> e);
             throw new InstanceConnectedElsewhereException(conflict, e);
         }
     }
 
     private Connection complete(
-            Connection pending, ConnectFinalization.Completed completed, @Nullable String actorRef) {
-        Connection connection = resolveCompletionTarget(pending, completed, actorRef);
+            Connection pending, ConnectFinalization.Completed completed, @Nullable Long actorAccountId) {
+        Connection connection = resolveCompletionTarget(pending, completed, actorAccountId);
         deleteSupersededPending(pending, connection);
         applyVendorMetadata(connection, completed);
         connection.setCredentials(completed.credentials(), credentialBundleConverter);
         connection = connectionRepository.save(connection);
 
-        String actor = actorRef != null ? actorRef : ACTOR_FALLBACK;
         String correlationId = "oauth-" + completed.instanceKey() + "-" + UUID.randomUUID();
         connection = connectionService.transition(
                 connection,
-                new TransitionRequest(
+                TransitionRequest.byAccount(
                         IntegrationState.ACTIVE,
                         "OAUTH_COMPLETE",
                         "USER",
-                        actor,
+                        actorAccountId,
                         correlationId,
                         completed.displayName()));
         log.info(
@@ -173,7 +169,7 @@ public class OAuthCallbackService {
                 connection.getWorkspace().getId(),
                 connection.getId(),
                 sanitizeForLog(completed.instanceKey()),
-                sanitizeForLog(actor));
+                actorAccountId);
         return connection;
     }
 
@@ -182,7 +178,7 @@ public class OAuthCallbackService {
      * reuses this workspace's own row for it rather than colliding with it on {@code (workspace, kind, instance_key)}.
      */
     private Connection resolveCompletionTarget(
-            Connection connection, ConnectFinalization.Completed completed, @Nullable String actorRef) {
+            Connection connection, ConnectFinalization.Completed completed, @Nullable Long actorAccountId) {
         if (!EXCLUSIVE_INSTANCES.containsKey(connection.getKind())) {
             return connection;
         }
@@ -191,7 +187,7 @@ public class OAuthCallbackService {
             return connection;
         }
         long workspaceId = connection.getWorkspace().getId();
-        Optional<String> conflict = connectedElsewhere(connection.getKind(), workspaceId, instanceKey, actorRef);
+        Optional<String> conflict = connectedElsewhere(connection.getKind(), workspaceId, instanceKey, actorAccountId);
         if (conflict.isPresent()) {
             throw new InstanceConnectedElsewhereException(conflict.get(), null);
         }
@@ -206,7 +202,7 @@ public class OAuthCallbackService {
      * named only to an administrator of it; the log names it for the operator.
      */
     private Optional<String> connectedElsewhere(
-            IntegrationKind kind, long workspaceId, String instanceKey, @Nullable String actorRef) {
+            IntegrationKind kind, long workspaceId, String instanceKey, @Nullable Long actorAccountId) {
         ExclusiveInstance exclusive = EXCLUSIVE_INSTANCES.get(kind);
         if (exclusive == null) {
             return Optional.empty();
@@ -224,7 +220,7 @@ public class OAuthCallbackService {
                             sanitizeForLog(instanceKey),
                             owner.getId(),
                             workspaceId);
-                    return administers(owner.getId(), actorRef)
+                    return administers(owner.getId(), actorAccountId)
                             ? "This " + exclusive.noun() + " is already connected to the Hephaestus workspace \""
                                     + owner.getDisplayName() + "\" (" + owner.getWorkspaceSlug()
                                     + "). Disconnect " + exclusive.provider() + " there before connecting it here."
@@ -234,16 +230,12 @@ public class OAuthCallbackService {
                 });
     }
 
-    /** The OAuth state's {@code actorRef} is the initiating account id; anything else is not an administrator. */
-    private boolean administers(long workspaceId, @Nullable String actorRef) {
-        if (actorRef == null) {
+    /** The OAuth state's {@code actorAccountId} is the initiating account id; anything else is not an administrator. */
+    private boolean administers(long workspaceId, @Nullable Long actorAccountId) {
+        if (actorAccountId == null) {
             return false;
         }
-        try {
-            return membershipQuery.isAdministrator(workspaceId, Long.parseLong(actorRef));
-        } catch (NumberFormatException e) {
-            return false;
-        }
+        return membershipQuery.isAdministrator(workspaceId, actorAccountId);
     }
 
     private void deleteSupersededPending(Connection original, Connection target) {

@@ -18,6 +18,9 @@ public interface PersonDataContributor extends Ordered {
 
     long erase(PersonDataSelection selection);
 
+    /** Stop admitted writers before any store is erased. Repeat calls must be safe. */
+    default void prepareErasure(PersonDataSelection selection) {}
+
     default List<ExternalDelivery> externalDeliveries(PersonDataSelection selection) {
         return List.of();
     }

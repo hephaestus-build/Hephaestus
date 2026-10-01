@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790837066126-1" author="hephaestus">
+        <createTable tableName="person_data_request">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="person_data_requestPK"/>
+            </column>
+            <column name="administrator_account_id" type="BIGINT"/>
+            <column name="completed_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="completed_json" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="counts_json" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_code" type="VARCHAR(48)"/>
+            <column name="scope_json" type="TEXT"/>
+            <column name="selections_json" type="TEXT"/>
+            <column name="state" type="VARCHAR(24)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790837066126-2" author="hephaestus">
+        <createTable tableName="person_suppression">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="person_suppressionPK"/>
+            </column>
+            <column name="active_request_id" type="UUID"/>
+            <column name="provider_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="team_key" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790837066126-3" author="hephaestus">
+        <addColumn tableName="instance_settings">
+            <column name="silent_mode_changed_by_account_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790837066126-4" author="hephaestus">
+        <addColumn tableName="instance_llm_settings">
+            <column name="updated_by_account_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790837066126-5" author="hephaestus">
+        <addUniqueConstraint columnNames="provider_id, subject, team_key" constraintName="uq_person_suppression_key" tableName="person_suppression"/>
+    </changeSet>
+    <changeSet id="1790837066126-6" author="hephaestus">
+        <preConditions onFail="HALT"><columnExists tableName="instance_settings" columnName="silent_mode_changed_by"/></preConditions>
+        <comment>Approved removal of mutable login attribution. Do not infer account ownership from old logins. Operational facts and times remain.</comment>
+        <dropColumn columnName="silent_mode_changed_by" tableName="instance_settings"/>
+        <rollback><stop>Restore the verified pre-upgrade backup. Dropped attribution cannot be reconstructed.</stop></rollback>
+    </changeSet>
+    <changeSet id="1790837066126-7" author="hephaestus">
+        <preConditions onFail="HALT"><columnExists tableName="instance_llm_settings" columnName="updated_by"/></preConditions>
+        <comment>Approved removal of mutable login attribution. Do not infer account ownership from old logins. Operational facts and times remain.</comment>
+        <dropColumn columnName="updated_by" tableName="instance_llm_settings"/>
+        <rollback><stop>Restore the verified pre-upgrade backup. Dropped attribution cannot be reconstructed.</stop></rollback>
+    </changeSet>
+    <changeSet id="1790837066126-8" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="instance_settings" baseColumnNames="silent_mode_changed_by_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_instance_settings_changed_by_account" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="instance_llm_settings" baseColumnNames="updated_by_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_instance_llm_settings_updated_by_account" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="person_data_request" baseColumnNames="administrator_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_person_data_request_administrator" onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="person_suppression" baseColumnNames="provider_id" referencedTableName="identity_provider" referencedColumnNames="id" constraintName="sfk_person_suppression_provider" onDelete="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="person_suppression" baseColumnNames="active_request_id" referencedTableName="person_data_request" referencedColumnNames="id" constraintName="sfk_person_suppression_active_request" onDelete="SET NULL"/>
+    </changeSet>
+    <changeSet id="1790837066126-9" author="hephaestus">
+        <addColumn tableName="connection_audit">
+            <column name="actor_account_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1790837066126-10" author="hephaestus">
+        <comment>Approved removal of unresolved historical personal attribution. Never map actor_ref by name, login, email or numeric appearance. Keep lifecycle facts and times.</comment>
+        <sql>UPDATE connection_audit SET actor_ref=NULL, detail=NULL WHERE actor_kind IN ('ADMIN','USER')</sql>
+        <rollback><stop>Restore the verified pre-upgrade backup. Cleared attribution cannot be reconstructed.</stop></rollback>
+    </changeSet>
+    <changeSet id="1790837066126-11" author="hephaestus">
+        <addForeignKeyConstraint baseTableName="connection_audit" baseColumnNames="actor_account_id" referencedTableName="account" referencedColumnNames="id" constraintName="sfk_connection_audit_actor_account" onDelete="SET NULL"/>
+    </changeSet>
+</databaseChangeLog>

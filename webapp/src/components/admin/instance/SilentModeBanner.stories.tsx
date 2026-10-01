@@ -12,7 +12,7 @@ const engaged: InstanceSettings = {
 	silentModeEngaged: true,
 	silentModeReason: "Investigating incident #42 — bad feedback going out",
 	silentModeChangedAt: minutesBefore(45),
-	silentModeChangedBy: "felixtjdietrich",
+	silentModeChangedByAccountId: 42,
 };
 
 const meta = {
@@ -47,7 +47,7 @@ export const AbovePageContentOnReflow: Story = {
 	args: {
 		settings: {
 			...engaged,
-			silentModeChangedBy: "an-instance-administrator-with-a-long-identity@example.invalid",
+			silentModeChangedByAccountId: 42,
 			silentModeReason:
 				"https://status.example.invalid/incidents/delivery-suppression-investigation-without-convenient-breakpoints",
 		},

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
+import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyException;
@@ -124,8 +125,8 @@ public class ConnectionController {
         // Strategy-level validation failures (e.g. missing 'pat' for GitLab) surface as
         // IllegalArgumentException → 400 ProblemDetail via GlobalControllerAdvice.
         Map<String, String> userInput = body.userInput() == null ? Map.of() : body.userInput();
-        ConnectInitiation initiation = strategy.initiate(
-                new ConnectionStrategy.InitiateRequest(workspaceId, body.kind(), userInput, actorRef(authentication)));
+        ConnectInitiation initiation = strategy.initiate(new ConnectionStrategy.InitiateRequest(
+                workspaceId, body.kind(), userInput, CurrentAccount.requireId()));
 
         return switch (initiation) {
             case ConnectInitiation.RedirectToVendor r ->
@@ -137,7 +138,7 @@ public class ConnectionController {
                         inline.instanceKey(),
                         inline.credentials(),
                         userInput,
-                        actorRef(authentication));
+                        CurrentAccount.requireId());
                 yield ResponseEntity.ok(InitiateConnectionResponseDTO.linked(connection.getId()));
             }
         };
@@ -170,8 +171,8 @@ public class ConnectionController {
                 };
 
         String correlationId = eventType.toLowerCase(Locale.ROOT) + "-" + connection.getId() + "-" + UUID.randomUUID();
-        TransitionRequest request = new TransitionRequest(
-                target, eventType, "ADMIN", actorRef(authentication), correlationId, body.reason());
+        TransitionRequest request = TransitionRequest.byAccount(
+                target, eventType, "ADMIN", CurrentAccount.requireId(), correlationId, body.reason());
         Connection updated = target == IntegrationState.UNINSTALLED
                 ? connectionService.disconnect(connection, request, strategyForDisconnect(connection))
                 : connectionService.transition(connection, request);
@@ -197,11 +198,6 @@ public class ConnectionController {
                 .map(ConnectionAuditEntryDTO::from)
                 .toList();
         return ResponseEntity.ok(entries);
-    }
-
-    private static String actorRef(@Nullable Authentication authentication) {
-        if (authentication == null || authentication.getName() == null) return "anonymous";
-        return authentication.getName();
     }
 
     /**

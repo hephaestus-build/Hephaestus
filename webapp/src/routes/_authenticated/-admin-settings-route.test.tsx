@@ -11,7 +11,7 @@ const settings = (revision: number) => ({
 	etag: `"${revision}"`,
 	silentModeReason: "incident",
 	silentModeChangedAt: "2026-08-03T08:00:00Z",
-	silentModeChangedBy: "operator",
+	silentModeChangedByAccountId: 42,
 });
 
 describe("instance settings route", () => {

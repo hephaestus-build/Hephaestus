@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
 /**
  * Default {@link OAuthStateService} impl: HMAC-SHA256 over
  * {@code workspaceId | kind | issuedAt | nonce | actorSegment} (five pipe-delimited
- * fields; {@code actorSegment} is the base64url-encoded actorRef, empty when null),
+ * fields; {@code actorSegment} is the base64url-encoded actorAccountId, empty when null),
  * base64url-encoded. The emitted token appends the signature as a sixth segment, so
  * {@link #consume} splits on exactly six parts.
  *
@@ -138,18 +138,17 @@ public class HmacOAuthStateService implements OAuthStateService {
     /**
      * {@inheritDoc}
      *
-     * <p>The actorRef is encoded as a base64url segment so it survives the {@code |}
-     * tokeniser intact even if a future identity source emits subjects containing the
-     * delimiter. {@code null} → empty segment, which decodes back to {@code null} in
+     * <p>The actorAccountId is encoded as a base64url segment so it survives the {@code |}
+     * tokeniser intact. It contains only a decimal account id. {@code null} → empty segment, which decodes back to {@code null} in
      * {@link #consume(String)} — preserving the binding-field nullability contract.
      */
     @Override
-    public String issue(long workspaceId, IntegrationKind kind, @Nullable String actorRef) {
+    public String issue(long workspaceId, IntegrationKind kind, @Nullable Long actorAccountId) {
         long issuedAt = Instant.now().getEpochSecond();
         byte[] nonceBytes = new byte[12];
         RANDOM.nextBytes(nonceBytes);
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
-        String actorSegment = encodeActor(actorRef);
+        String actorSegment = encodeActor(actorAccountId);
         String payload = workspaceId + "|" + kind.name() + "|" + issuedAt + "|" + nonce + "|" + actorSegment;
         String sig = hmac(payload);
         // Persist the nonce BEFORE returning so a fast OAuth roundtrip can't race the
@@ -174,7 +173,7 @@ public class HmacOAuthStateService implements OAuthStateService {
             throw new IllegalArgumentException("OAuth state malformed", e);
         }
         // -1 limit preserves the trailing empty actorSegment that {@link #issue} writes
-        // when actorRef is null. Without -1 a trailing empty string is dropped and the
+        // when actorAccountId is null. Without -1 a trailing empty string is dropped and the
         // arity check below misfires.
         String[] parts = decoded.split("\\|", -1);
         if (parts.length != 6) {
@@ -219,20 +218,22 @@ public class HmacOAuthStateService implements OAuthStateService {
         if (nonceStore != null && !nonceStore.tryConsume(nonce)) {
             throw new IllegalArgumentException("OAuth state already consumed");
         }
-        String actorRef = decodeActor(actorSegment);
-        return new StateBinding(workspaceId, kind, issued, actorRef);
+        Long actorAccountId = decodeActor(actorSegment);
+        return new StateBinding(workspaceId, kind, issued, actorAccountId);
     }
 
-    private static String encodeActor(@Nullable String actorRef) {
-        if (actorRef == null || actorRef.isEmpty()) return "";
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(actorRef.getBytes(StandardCharsets.UTF_8));
+    private static String encodeActor(@Nullable Long actorAccountId) {
+        if (actorAccountId == null) return "";
+        return Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(actorAccountId.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     @Nullable
-    private static String decodeActor(String actorSegment) {
+    private static Long decodeActor(String actorSegment) {
         if (actorSegment.isEmpty()) return null;
         try {
-            return new String(Base64.getUrlDecoder().decode(actorSegment), StandardCharsets.UTF_8);
+            return Long.valueOf(new String(Base64.getUrlDecoder().decode(actorSegment), StandardCharsets.UTF_8));
         } catch (IllegalArgumentException e) {
             return null;
         }

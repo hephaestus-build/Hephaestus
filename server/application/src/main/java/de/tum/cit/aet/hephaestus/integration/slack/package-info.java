@@ -12,6 +12,7 @@
         displayName = "Integration · Slack",
         type = org.springframework.modulith.ApplicationModule.Type.OPEN,
         allowedDependencies = {
+            "core::person-data",
             "integration.core",
             "integration.core::events",
             "integration.core::spi",

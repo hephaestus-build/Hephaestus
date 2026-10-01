@@ -150,50 +150,45 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void actorRefRoundTripsThroughHmacPayload() {
+    void actorAccountIdRoundTripsThroughHmacPayload() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
-        String state = svc.issue(42L, IntegrationKind.SLACK, "alice@example.com");
+        String state = svc.issue(42L, IntegrationKind.SLACK, 42L);
 
         StateBinding binding = svc.consume(state);
         assertThat(binding.workspaceId()).isEqualTo(42L);
         assertThat(binding.kind()).isEqualTo(IntegrationKind.SLACK);
-        assertThat(binding.actorRef()).isEqualTo("alice@example.com");
+        assertThat(binding.actorAccountId()).isEqualTo(42L);
     }
 
     @Test
-    void actorRefIsNullWhenIssuedViaLegacyOverload() {
+    void actorAccountIdIsNullWhenIssuedViaLegacyOverload() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
-        // The no-actor overload must keep working byte-compatibly — older callers don't
-        // know about actorRef and the controller should fall back to a sentinel.
         String state = svc.issue(42L, IntegrationKind.GITHUB);
 
         StateBinding binding = svc.consume(state);
-        assertThat(binding.actorRef()).isNull();
+        assertThat(binding.actorAccountId()).isNull();
     }
 
     @Test
-    void actorRefIsNullWhenExplicitNullPassedToNewOverload() {
+    void actorAccountIdIsNullWhenExplicitNullPassedToNewOverload() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
         String state = svc.issue(42L, IntegrationKind.GITHUB, null);
         StateBinding binding = svc.consume(state);
-        assertThat(binding.actorRef()).isNull();
+        assertThat(binding.actorAccountId()).isNull();
     }
 
     @Test
-    void actorRefContainingPipeCharacterSurvivesTokeniser() {
-        // The HMAC payload tokeniser uses '|' as a delimiter; the actor segment is
-        // base64url-encoded specifically so identity sources that emit pipe-bearing
-        // subjects (rare but valid in some IDP configs) don't break the framing.
+    void shouldRoundTripLargestAccountId() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
-        String actor = "user|with|pipes";
+        Long actor = Long.MAX_VALUE;
         String state = svc.issue(42L, IntegrationKind.SLACK, actor);
-        assertThat(svc.consume(state).actorRef()).isEqualTo(actor);
+        assertThat(svc.consume(state).actorAccountId()).isEqualTo(actor);
     }
 
     @Test
     void tamperedActorSegmentRejectedByHmac() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
-        String state = svc.issue(42L, IntegrationKind.GITHUB, "alice");
+        String state = svc.issue(42L, IntegrationKind.GITHUB, 42L);
         // Flipping a base64 char in the payload (not the signature) MUST still fail —
         // the actor segment is part of the signed payload.
         String tampered = state.substring(0, 4) + "AAAA" + state.substring(8);

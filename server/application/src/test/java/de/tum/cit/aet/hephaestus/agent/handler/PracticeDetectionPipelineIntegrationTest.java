@@ -383,12 +383,12 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
 
     private void releaseSilentMode() {
         var current = instanceSettingsService.get();
-        instanceSettingsService.updateSilentMode(false, null, "pipeline-test", version(current));
+        instanceSettingsService.updateSilentMode(false, null, null, version(current));
     }
 
     private void engageSilentMode() {
         var current = instanceSettingsService.get();
-        instanceSettingsService.updateSilentMode(true, "pipeline safety test", "pipeline-test", version(current));
+        instanceSettingsService.updateSilentMode(true, "pipeline safety test", null, version(current));
     }
 
     private static EntityTagPrecondition version(InstanceSettings settings) {

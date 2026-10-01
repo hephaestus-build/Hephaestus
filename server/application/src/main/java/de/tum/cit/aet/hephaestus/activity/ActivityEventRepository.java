@@ -29,9 +29,12 @@ public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UU
             id, event_key, event_type, occurred_at, actor_id,
             workspace_id, repository_id, target_type, target_id, ingested_at
         )
-        VALUES (
-            :id, :eventKey, :eventType, :occurredAt, :actorId,
+        SELECT :id, :eventKey, :eventType, :occurredAt, :actorId,
             :workspaceId, :repositoryId, :targetType, :targetId, CURRENT_TIMESTAMP
+        WHERE NOT EXISTS (
+            SELECT 1 FROM person_suppression s JOIN "user" u
+              ON u.provider_id=s.provider_id AND u.native_id::text=s.subject
+            WHERE u.id=:actorId AND s.team_key=''
         )
         ON CONFLICT (workspace_id, event_key) DO NOTHING
         """, nativeQuery = true)

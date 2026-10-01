@@ -23,10 +23,12 @@ export function SilentModeBanner({ settings }: SilentModeBannerProps) {
 			</AlertTitle>
 			<AlertDescription className="min-w-0 break-words">
 				Practice feedback and workspace Slack messages are suppressed across this instance.
-				{hasText(settings.silentModeChangedBy) || engagedAt ? (
+				{settings.silentModeChangedByAccountId != null || engagedAt ? (
 					<>
 						{" Engaged"}
-						{hasText(settings.silentModeChangedBy) ? ` by ${settings.silentModeChangedBy}` : ""}
+						{settings.silentModeChangedByAccountId == null
+							? ""
+							: ` by account #${settings.silentModeChangedByAccountId}`}
 						{engagedAt ? (
 							<>
 								{" "}

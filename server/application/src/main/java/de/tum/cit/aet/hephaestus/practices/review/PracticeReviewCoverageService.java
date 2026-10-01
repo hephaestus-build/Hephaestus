@@ -35,6 +35,7 @@ public class PracticeReviewCoverageService {
     private final WorkspaceMembershipService membershipService;
     private final PracticeReviewRepositoryTargetRepository repositoryTargetRepository;
     private final PracticeReviewPersonTargetRepository personTargetRepository;
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression;
 
     @Transactional(readOnly = true)
     public WorkspaceReviewScope scope(Workspace workspace) {
@@ -236,6 +237,7 @@ public class PracticeReviewCoverageService {
 
     private ReviewSubjectStatus subjectStatus(Workspace workspace, @Nullable ReviewSubject subject) {
         if (subject == null || subject.actorId() == null) return ReviewSubjectStatus.MISSING;
+        if (suppression.isUserSuppressed(subject.actorId())) return ReviewSubjectStatus.UNLINKED;
         if (!subject.human()) return ReviewSubjectStatus.NON_HUMAN;
         return membershipService.isPracticeReviewEligible(workspace.getId(), subject.actorId())
                 ? ReviewSubjectStatus.RESOLVED_LINKED_HUMAN

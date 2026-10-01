@@ -127,6 +127,42 @@ class PersonalDataMapArchTest {
                 .isEmpty();
     }
 
+    @Test
+    void everyPersonalStoreHasImplementedExportAndErasureCitations() throws IOException {
+        String map = Files.readString(MAP);
+        Set<String> declared = new TreeSet<>();
+        Pattern declarations = Pattern.compile("@PersonDataStores\\s*\\(\\{(.*?)\\}\\)", Pattern.DOTALL);
+        Pattern names = Pattern.compile("\"([a-z0-9_]+)\"");
+        for (Path source : productionSources()) {
+            Matcher annotation = declarations.matcher(Files.readString(source));
+            if (!annotation.find()) continue;
+            Matcher name = names.matcher(annotation.group(1));
+            String citation = "`server/application/" + source.toString().replace('\\', '/') + "`";
+            while (name.find()) {
+                String store = name.group(1);
+                assertThat(declared.add(store))
+                        .as("single contributor owner for %s", store)
+                        .isTrue();
+                List<String> rows = map.lines()
+                        .filter(line -> line.startsWith("| ") && line.contains("`" + store + "`"))
+                        .toList();
+                assertThat(rows)
+                        .as("export and erasure implementation citations for %s", store)
+                        .anySatisfy(row -> {
+                            String[] cells = row.split("\\|");
+                            assertThat(cells.length).isGreaterThanOrEqualTo(4);
+                            assertThat(cells[2]).contains(citation);
+                            assertThat(cells[3]).contains(citation);
+                        });
+            }
+        }
+        Set<String> required = tableNames();
+        required.removeAll(NOT_PERSONAL_DATA);
+        assertThat(declared)
+                .as("every personal table must have a full contributor, not an operator path")
+                .containsAll(required);
+    }
+
     /**
      * A {@code @JoinTable}, {@code @CollectionTable} or {@code @SecondaryTable} whose name is not the
      * annotation's first attribute is one the scanner cannot classify. JPA lets that name default from
@@ -171,7 +207,11 @@ class PersonalDataMapArchTest {
                 continue;
             }
             Matcher name = TABLE_NAME.matcher(source);
-            tables.add(name.find() ? name.group(1) : defaultTableName(path));
+            if (name.find()) {
+                tables.add(name.group(1));
+            } else if (!usesParentSingleTable(path)) {
+                tables.add(defaultTableName(path));
+            }
         }
         return tables;
     }
@@ -180,6 +220,29 @@ class PersonalDataMapArchTest {
         try (var paths = Files.walk(PRODUCTION_SOURCES)) {
             return paths.filter(candidate -> candidate.toString().endsWith(".java"))
                     .toList();
+        }
+    }
+
+    private static boolean usesParentSingleTable(Path source) {
+        String className = "de.tum.cit.aet.hephaestus."
+                + PRODUCTION_SOURCES
+                        .relativize(source)
+                        .toString()
+                        .replace('/', '.')
+                        .replace('\\', '.')
+                        .replace(".java", "");
+        try {
+            Class<?> parent = Class.forName(className, false, PersonalDataMapArchTest.class.getClassLoader())
+                    .getSuperclass();
+            while (parent != null && parent.isAnnotationPresent(jakarta.persistence.Entity.class)) {
+                var inheritance = parent.getDeclaredAnnotation(jakarta.persistence.Inheritance.class);
+                if (inheritance != null)
+                    return inheritance.strategy() == jakarta.persistence.InheritanceType.SINGLE_TABLE;
+                parent = parent.getSuperclass();
+            }
+            return false;
+        } catch (ClassNotFoundException exception) {
+            throw new IllegalStateException("Cannot inspect an entity's inheritance", exception);
         }
     }
 

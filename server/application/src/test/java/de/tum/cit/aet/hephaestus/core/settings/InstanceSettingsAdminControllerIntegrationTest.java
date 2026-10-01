@@ -105,7 +105,7 @@ class InstanceSettingsAdminControllerIntegrationTest extends AbstractWorkspaceIn
                 .singleElement()
                 .satisfies(event -> assertThat(event.getResult()).isEqualTo(AuthEvent.Result.SUCCESS));
         assertThat(engaged.silentModeChangedAt()).isNotNull();
-        assertThat(engaged.silentModeChangedBy()).isNotBlank();
+        assertThat(engaged.silentModeChangedByAccountId()).isNotNull();
 
         assertThat(getSettings().silentModeEngaged()).isTrue();
         // API → DB → SPI: the port the delivery paths consult sees it too.

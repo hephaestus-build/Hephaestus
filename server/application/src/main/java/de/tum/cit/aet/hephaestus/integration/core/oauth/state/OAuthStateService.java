@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
  * tokens older than the configured TTL. Prevents CSRF on the OAuth callback path —
  * an attacker cannot fabricate a state that binds to a workspace they don't own.
  *
- * <p>The optional {@code actorRef} carried by {@link StateBinding} records WHO
+ * <p>The optional {@code actorAccountId} carried by {@link StateBinding} records WHO
  * initiated the flow (authenticated account id of the admin who clicked "Connect"). It is
  * encoded in the signed payload so the callback can attribute the audit row to the
  * actual user — the vendor redirect arrives unauthenticated, so there is no
@@ -24,12 +24,12 @@ public interface OAuthStateService {
 
     /**
      * Overload that additionally binds the initiating user's identity (authenticated account id)
-     * into the signed state. Implementations that don't support actorRef may delegate to
+     * into the signed state. Implementations that don't support actorAccountId may delegate to
      * {@link #issue(long, IntegrationKind)} — the default does exactly that, dropping
-     * the actorRef. Callers that need attribution should ensure an impl that honours
+     * the actorAccountId. Callers that need attribution should ensure an impl that honours
      * the overload is wired (today: {@code de.tum.cit.aet.hephaestus.integration.core.oauth.state.HmacOAuthStateService}).
      */
-    default String issue(long workspaceId, IntegrationKind kind, @Nullable String actorRef) {
+    default String issue(long workspaceId, IntegrationKind kind, @Nullable Long actorAccountId) {
         return issue(workspaceId, kind);
     }
 
@@ -39,15 +39,15 @@ public interface OAuthStateService {
     /**
      * Decoded payload from a valid state token.
      *
-     * <p>{@code actorRef} is the authenticated account id of the user that initiated the OAuth
+     * <p>{@code actorAccountId} is the authenticated account id of the user that initiated the OAuth
      * flow; {@code null} for tokens issued via the no-actor overload.
      */
     record StateBinding(
             long workspaceId,
             IntegrationKind kind,
             Instant issuedAt,
-            @Nullable String actorRef) {
-        /** Convenience constructor that defaults actorRef to null. */
+            @Nullable Long actorAccountId) {
+        /** Convenience constructor that defaults actorAccountId to null. */
         public StateBinding(long workspaceId, IntegrationKind kind, Instant issuedAt) {
             this(workspaceId, kind, issuedAt, null);
         }

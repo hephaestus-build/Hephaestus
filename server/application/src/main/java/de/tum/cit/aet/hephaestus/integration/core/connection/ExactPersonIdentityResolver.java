@@ -32,6 +32,17 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<Provider> providers() {
+        return jdbc.query(
+                "SELECT id,type,server_url FROM identity_provider ORDER BY type,server_url,id",
+                (rs, row) -> new Provider(
+                        rs.getLong(1),
+                        Objects.requireNonNull(rs.getString(2)),
+                        Objects.requireNonNull(rs.getString(3))));
+    }
+
+    @Override
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public PersonScope resolve(@Nullable Long accountId, List<PersonIdentity> supplied) {
         if (accountId == null && supplied.isEmpty()) {

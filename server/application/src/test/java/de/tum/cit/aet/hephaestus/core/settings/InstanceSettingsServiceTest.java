@@ -39,7 +39,7 @@ class InstanceSettingsServiceTest extends BaseUnitTest {
     void toggleIsRecordedOnTheAuditTrail() {
         givenEngagedRow(new InstanceSettings());
 
-        service.updateSilentMode(true, "incident #42", "felix", null);
+        service.updateSilentMode(true, "incident #42", 42L, null);
 
         verify(authEventWriter)
                 .write(argThat(data -> data.type() == AuthEvent.EventType.SILENT_MODE_CHANGED
@@ -59,18 +59,18 @@ class InstanceSettingsServiceTest extends BaseUnitTest {
     void engage_recordsTrimmedReasonAndActor() {
         givenEngagedRow(new InstanceSettings());
 
-        InstanceSettings updated = service.updateSilentMode(true, "  incident #42  ", "felix", null);
+        InstanceSettings updated = service.updateSilentMode(true, "  incident #42  ", 42L, null);
 
         assertThat(updated.isSilentModeEngaged()).isTrue();
         assertThat(updated.getSilentModeReason()).isEqualTo("incident #42");
-        assertThat(updated.getSilentModeChangedBy()).isEqualTo("felix");
+        assertThat(updated.getSilentModeChangedByAccountId()).isEqualTo(42L);
         assertThat(updated.getSilentModeChangedAt()).isNotNull();
     }
 
     @Test
     void engage_blankReasonBecomesNull() {
         givenEngagedRow(new InstanceSettings());
-        assertThat(service.updateSilentMode(true, "   ", "felix", null).getSilentModeReason())
+        assertThat(service.updateSilentMode(true, "   ", 42L, null).getSilentModeReason())
                 .isNull();
     }
 
@@ -82,7 +82,7 @@ class InstanceSettingsServiceTest extends BaseUnitTest {
         givenReleasedRow(engaged);
 
         InstanceSettings released =
-                service.updateSilentMode(false, "ignored on release", "felix", EntityTagPrecondition.parse("\"0\""));
+                service.updateSilentMode(false, "ignored on release", 42L, EntityTagPrecondition.parse("\"0\""));
 
         assertThat(released.isSilentModeEngaged()).isFalse();
         assertThat(released.getSilentModeReason()).isNull();
@@ -91,12 +91,12 @@ class InstanceSettingsServiceTest extends BaseUnitTest {
     private void givenEngagedRow(InstanceSettings row) {
         row.setId(InstanceSettings.SINGLETON_ID);
         when(repository.findById(InstanceSettings.SINGLETON_ID)).thenReturn(Optional.of(row));
-        when(repository.engageSilentMode(nullable(String.class), any(), nullable(String.class)))
+        when(repository.engageSilentMode(nullable(String.class), any(), nullable(Long.class)))
                 .thenAnswer(call -> {
                     row.setSilentModeEngaged(true);
                     row.setSilentModeReason(call.getArgument(0));
                     row.setSilentModeChangedAt(call.getArgument(1));
-                    row.setSilentModeChangedBy(call.getArgument(2));
+                    row.setSilentModeChangedByAccountId(call.getArgument(2));
                     return 1;
                 });
     }

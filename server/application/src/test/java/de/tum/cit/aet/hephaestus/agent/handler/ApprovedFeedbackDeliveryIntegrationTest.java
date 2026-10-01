@@ -730,7 +730,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
             instanceSettings.updateSilentMode(
                     engaged,
                     engaged ? "approved delivery test" : null,
-                    "approved-delivery-test",
+                    null,
                     EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
         }
     }
