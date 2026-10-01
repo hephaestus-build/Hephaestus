@@ -75,6 +75,11 @@ public record Signal(
         }
     }
 
+    /** An internal repair rechecks recorded work, rather than declaring a new occasion or manual request. */
+    public boolean repairsRecordedWork() {
+        return !bindableForAuthoring && !requestedByHand;
+    }
+
     /** Whether any ingested event of the given integration raises this signal. */
     public boolean isProducedBy(IntegrationKind kind) {
         return producedBy.stream().anyMatch(key -> key.kind() == kind);

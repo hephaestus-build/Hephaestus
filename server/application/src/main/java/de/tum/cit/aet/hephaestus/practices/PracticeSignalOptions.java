@@ -75,6 +75,12 @@ public class PracticeSignalOptions {
                 .isPresent();
     }
 
+    public boolean isInternalRepair(SignalName signal) {
+        return declaredOptions(signal.artifactKind())
+                .filter(declared -> declared.name().equals(signal))
+                .anyMatch(Signal::repairsRecordedWork);
+    }
+
     /** The signal's words for an author, as its kind's descriptor declares them. */
     public String displayNameOf(SignalName signal) {
         return artifacts.signalDisplayName(signal);

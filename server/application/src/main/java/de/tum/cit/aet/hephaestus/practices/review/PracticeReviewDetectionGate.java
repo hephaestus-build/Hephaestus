@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
@@ -249,9 +248,7 @@ public class PracticeReviewDetectionGate {
             ReviewSubject subject) {
         Long authorId = subject.actorId();
         if (!(reviewable instanceof PullRequest pullRequest)
-                || (ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(signal)
-                        ? pullRequest.getState() != Issue.State.MERGED
-                        : !reviewable.isOpen())
+                || (signalOptions.isInternalRepair(signal) ? !pullRequest.isMerged() : !reviewable.isOpen())
                 || draft
                 || triggerMode != TriggerMode.AUTO
                 || authorId == null) {
@@ -271,7 +268,7 @@ public class PracticeReviewDetectionGate {
                 .filter(observation -> current.contains(observation.getId()))
                 .map(Observation::getAgentJobId)
                 .collect(Collectors.toSet());
-        Set<UUID> changed = ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(signal)
+        Set<UUID> changed = signalOptions.isInternalRepair(signal)
                 ? reviewedWorkChanges.materiallyChangedLinkedIssues(workspace.getId(), runIds, pullRequest.getId())
                 : reviewedWorkChanges.materiallyChanged(
                         workspace.getId(),
@@ -284,7 +281,7 @@ public class PracticeReviewDetectionGate {
         return negative.stream()
                 .filter(observation -> current.contains(observation.getId()))
                 .filter(observation -> changed.contains(observation.getAgentJobId()))
-                .filter(observation -> !ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(signal)
+                .filter(observation -> !signalOptions.isInternalRepair(signal)
                         || observation.getPractice().getBindings().stream()
                                 .anyMatch(binding -> binding.needs().stream()
                                         .anyMatch(need ->
@@ -389,8 +386,7 @@ public class PracticeReviewDetectionGate {
                 triggerMode,
                 match.admitted().stream()
                         .filter(p -> isCandidate(p, rechecks)
-                                && (ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(signal)
-                                        || !occasionedBy(p, signal, draft)))
+                                && (signalOptions.isInternalRepair(signal) || !occasionedBy(p, signal, draft)))
                         .map(Practice::getSlug)
                         .collect(Collectors.toSet()));
     }
@@ -417,7 +413,7 @@ public class PracticeReviewDetectionGate {
             Workspace workspace, SignalName signal, boolean draft, Set<Long> rechecks) {
         boolean requestedByHand = signalOptions.isManualRequest(signal);
         List<Practice> bound = practiceRepository.findByWorkspaceId(workspace.getId()).stream()
-                .filter(p -> ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(signal)
+                .filter(p -> signalOptions.isInternalRepair(signal)
                         ? rechecked(p, signal, rechecks)
                         : requestedByHand
                                 ? p.getBindings().stream().anyMatch(binding -> binding.appliesTo(signal.artifactKind()))

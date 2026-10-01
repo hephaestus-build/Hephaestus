@@ -350,8 +350,15 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         pr.setState(Issue.State.MERGED);
         pr.setMerged(true);
         pr.setMergedAt(NOW);
-        pr.replaceClosingIssues(Set.of(issue));
-        pullRequestRepository.saveAndFlush(pr);
+        long linkedIssueId = issue.getId();
+        transactions.executeWithoutResult(status -> {
+            PullRequest managed = pullRequestRepository.findById(pr.getId()).orElseThrow();
+            managed.setState(Issue.State.MERGED);
+            managed.setMerged(true);
+            managed.setMergedAt(NOW);
+            managed.replaceClosingIssues(Set.of(issueRepository.getReferenceById(linkedIssueId)));
+            pullRequestRepository.saveAndFlush(managed);
+        });
         AgentJob merged = capturedLinkedReview(pr, issue);
         UUID olderNegative =
                 observe(linked, merged, pr.getId(), developer, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
@@ -370,6 +377,23 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 ObservationKind.OMISSION_GAP,
                 Severity.MINOR,
                 NOW.plusSeconds(1));
+        UUID secondCurrentNegative = observe(
+                linked,
+                laterNegativeRun,
+                pr.getId(),
+                developer,
+                ObservationKind.COMMISSION_PROBLEM,
+                Severity.MINOR,
+                NOW.plusSeconds(1));
+        Feedback currentBrief = persistFeedback(
+                laterNegativeRun,
+                developer,
+                FeedbackChannel.IN_CHAT,
+                0,
+                FeedbackDeliveryState.PREPARED,
+                "Current guidance",
+                NOW.plusSeconds(1));
+        bind(currentBrief, secondCurrentNegative);
         String capturedRevision = LinkedWorkItemContentSource.currentClosingMaterialKey(
                         workspace.getId(), pr, List.of(issue))
                 .orElseThrow()
@@ -465,7 +489,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 .isEmpty();
         assertThat(feedbackRepository.findById(oldBrief.getId()).orElseThrow().getDeliveryState())
                 .isEqualTo(FeedbackDeliveryState.PREPARED);
-        assertThat(standing(pr)).containsExactly(currentNegative);
+        assertThat(standing(pr)).containsExactlyInAnyOrder(currentNegative, secondCurrentNegative);
 
         SignalKey newerKey = LinkedWorkItemContentSource.currentClosingMaterialKey(
                         workspace.getId(), reload(), pullRequestRepository.findClosingIssuesById(pr.getId()))
@@ -488,6 +512,18 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         assertThat(observationRepository.findById(currentNegative)).isPresent();
         assertThat(observationRepository.findById(currentNegative).orElseThrow().getSupersededAt())
                 .isNotNull();
+        assertThat(observationRepository
+                        .findById(secondCurrentNegative)
+                        .orElseThrow()
+                        .getSupersededAt())
+                .isNotNull();
+        assertThat(observationRepository.findById(olderNegative).orElseThrow().getSupersededAt())
+                .isNull();
+        assertThat(feedbackRepository
+                        .findById(currentBrief.getId())
+                        .orElseThrow()
+                        .getDeliveryState())
+                .isEqualTo(FeedbackDeliveryState.SUPERSEDED);
         assertThat(standing(pr)).containsExactly(positive.getFirst().getId());
         assertThat(feedbackRepository.findById(oldBrief.getId()).orElseThrow().getDeliveryState())
                 .isEqualTo(FeedbackDeliveryState.SUPERSEDED);

@@ -149,19 +149,21 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         service = new PracticeDetectionDeliveryService(
                 practiceRevisionRepository,
                 observationRepository,
-                reviewTargets,
-                conversationSourceLiveness,
-                documentProjection,
+                new ReviewResultTargetResolver(reviewTargets, conversationSourceLiveness, documentProjection),
                 eventPublisher,
                 objectMapper,
                 cas,
                 sourceCatalogs,
                 historicalGit,
                 new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class),
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.class),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.class),
+                new LinkedIssueRepairAdmissionService(
+                        org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class),
+                        observationRepository,
+                        org.mockito.Mockito.mock(
+                                de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.class),
+                        org.mockito.Mockito.mock(
+                                de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.class)),
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions.class),
                 citedSourceAccess);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
@@ -1403,7 +1405,7 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             metadata.put("about_user_id", 789L);
             testJob.setMetadata(metadata);
 
-            assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(service, "resolveTarget", testJob, metadata))
+            assertThatThrownBy(() -> publishVerified(testJob, List.of()))
                     .isInstanceOf(JobDeliveryException.class)
                     .hasMessageContaining("no longer authorized");
             verify(conversationSourceLiveness).isDeliverableThread(1L, 77L, "C123", "1700000000.100000", 789L);
