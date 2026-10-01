@@ -138,7 +138,8 @@ execute on Node; see
   descriptions, comments, threads and commit metadata. `INDEX.json` records primary readiness and all folder artifact digests.
   `change.json` pins the reviewed range (`base_sha`, `head_sha`) and is the artifact a citation of the
   change names; the change itself is read from the checkout. `linked_work_items/<n>.md` is each linked
-  issue as text, title first, for quoting. `description.md` is the description as its
+  issue as text, title first, then its dates and a line saying the body is the text mirrored at capture and the
+  dates are not when its lines were written, for quoting. `description.md` is the description as its
   author wrote it, for quoting; `metadata.json` carries the same text escaped, for programs. Every
   projection is pretty-printed, one field per line, so a line citation into it is possible. A source with nothing to report still
   writes its file, holding an empty list: "the record was read and held nothing" is a fact a review may

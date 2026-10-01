@@ -321,6 +321,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 999)).thenReturn(Optional.empty());
 
             linked.setCreatedAt(java.time.Instant.parse("2026-04-01T09:00:00Z"));
+            linked.setClosedAt(java.time.Instant.parse("2026-04-03T12:00:00Z"));
+            linked.setState(Issue.State.CLOSED);
 
             var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
 
@@ -331,8 +333,11 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             assertThat(new String(
                             captured.files().get(LinkedWorkItemContentSource.ITEMS_PREFIX + "42.md"),
                             java.nio.charset.StandardCharsets.UTF_8))
-                    .isEqualTo("# Add token refresh\n\nOpened 2026-04-01T09:00:00Z, state OPEN.\n\n"
-                            + "## Acceptance criteria\n- [ ] refreshes silently\n");
+                    .isEqualTo("# Add token refresh\n\n"
+                            + "Opened 2026-04-01T09:00:00Z, closed 2026-04-03T12:00:00Z, state CLOSED.\n"
+                            + "The body below is the issue's text as mirrored when this was captured; these dates "
+                            + "are the issue's, not when any line of it was written."
+                            + "\n\n## Acceptance criteria\n- [ ] refreshes silently\n");
         }
 
         @Test
