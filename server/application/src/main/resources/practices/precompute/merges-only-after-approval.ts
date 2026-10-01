@@ -37,6 +37,7 @@ export default async function mergesOnlyAfterApproval(
 			r.flags.dismissed !== true &&
 			r.flags.bot !== true,
 	).length;
+	const unknownDecisionTimes = decisions.filter((d) => d.submittedAt === undefined).length;
 	const directions: string[] = [];
 	if (!merge.merged) {
 		directions.push("The pull request is not merged: the occasion did not arise.");
@@ -46,8 +47,13 @@ export default async function mergesOnlyAfterApproval(
 		);
 	} else {
 		directions.push(
-			`Merged${merge.mergedBy === undefined ? "" : ` by ${merge.mergedBy}`}${merge.mergedByIsAuthor ? " (the author)" : ""}${merge.mergedAt === undefined ? "" : ` at ${merge.mergedAt}`}; ${decisions.length} submitted decision(s), ${approvalsBeforeMergeByOthers} of them an undismissed APPROVED before the merge by an account other than the author's that is not marked bot; the last decision of each reviewer is listed apart.`,
+			`Merged${merge.mergedBy === undefined ? "" : ` by ${merge.mergedBy}`}${merge.mergedByIsAuthor ? " (the author)" : ""}${merge.mergedAt === undefined ? "" : ` at ${merge.mergedAt}`}; ${decisions.length} submitted decision(s), ${approvalsBeforeMergeByOthers} of them an undismissed APPROVED before the merge by an account other than the author's that is not marked bot; the last decision of each reviewer whose decision times are all known is listed apart.`,
 		);
+		if (unknownDecisionTimes > 0) {
+			directions.push(
+				`${unknownDecisionTimes} decision time(s) are unknown: the dated approval count is a lower bound, and no historical last decision is established for those reviewers.`,
+			);
+		}
 	}
 	return {
 		hints: [mergeRow(metadata, merge, contextReference), ...rows, ...last],
@@ -55,6 +61,7 @@ export default async function mergesOnlyAfterApproval(
 			merged: merge.merged ? 1 : 0,
 			mergedByIsAuthor: merge.mergedByIsAuthor ? 1 : 0,
 			decisions: decisions.length,
+			unknownDecisionTimes,
 			approvalsBeforeMergeByOthers,
 			decisionsByBots: decisions.filter((d) => d.bot).length,
 			threadsFileAbsent: record === null ? 1 : 0,

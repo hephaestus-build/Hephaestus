@@ -1063,3 +1063,44 @@ void test("an approval by an account marked bot is kept as a row but counted as 
 		}
 	}
 });
+
+void test("unknown approval times establish neither before-merge absence nor a last historical decision", async () => {
+	const staged = await stage("merges-only-after-approval", {
+		"review_threads.json": {
+			threads: [],
+			reviewDecisions: [
+				{ state: "CHANGES_REQUESTED", author: "jennifer", submittedAt: "2026-04-13T14:20:00Z" },
+				{ state: "APPROVED", author: "jennifer" },
+				{ state: "APPROVED", author: "tom", submittedAt: "2026-04-13T15:00:00Z" },
+			],
+		},
+	});
+	try {
+		const result = await staged.script(
+			nodePath.join(staged.root, "repo"),
+			new Map(),
+			{ ...metadata, is_merged: true },
+			staged.contextDir,
+			staged.changeDir,
+		);
+		const unknown = result.hints.find(
+			(h) =>
+				h.pattern === "review decision" &&
+				h.flags.author === "jennifer" &&
+				h.flags.state === "APPROVED",
+		);
+		assert.ok(unknown);
+		assert.equal(Object.hasOwn(unknown.flags, "beforeMerge"), false);
+		assert.equal(result.metrics.unknownDecisionTimes, 1);
+		assert.equal(result.metrics.approvalsBeforeMergeByOthers, 1);
+		assert.deepEqual(
+			result.hints
+				.filter((h) => h.pattern === "last decision by reviewer")
+				.map((h) => h.flags.author),
+			["tom"],
+		);
+		assert.match(result.directions[1] ?? "", /lower bound.*no historical last decision/u);
+	} finally {
+		rmSync(staged.root, { recursive: true, force: true });
+	}
+});

@@ -394,7 +394,9 @@ export function decisionRows(
 			state: d.state,
 			author: d.author ?? "",
 			submittedAt: d.submittedAt ?? "",
-			beforeMerge: merge.mergedAt !== undefined && later(merge.mergedAt, d.submittedAt),
+			...(merge.mergedAt !== undefined && d.submittedAt !== undefined
+				? { beforeMerge: later(merge.mergedAt, d.submittedAt) }
+				: {}),
 			isAuthor: d.author !== undefined && d.author === merge.author,
 			dismissed: d.dismissed === true,
 			bot: d.bot,
@@ -402,13 +404,20 @@ export function decisionRows(
 	}));
 }
 
-/** Each reviewer's last decision, in the order the reviewers first decided. */
+/** Each reviewer's last decision, only where all their decision times are known. */
 export function lastDecisionPerReviewer(decisions: readonly ReviewDecision[]): ReviewDecision[] {
 	const last = new Map<string, ReviewDecision>();
+	const unknown = new Set<string>();
 	for (const d of decisions) {
-		last.set(d.author ?? "", d);
+		const reviewer = d.author ?? "";
+		if (d.submittedAt === undefined) {
+			unknown.add(reviewer);
+		}
+		last.set(reviewer, d);
 	}
-	return [...last.values()];
+	return [...last.entries()]
+		.filter(([reviewer]) => !unknown.has(reviewer))
+		.map(([, decision]) => decision);
 }
 
 /**

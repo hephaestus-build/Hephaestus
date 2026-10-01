@@ -281,7 +281,7 @@ public class MergeReadinessContentSource implements ContentSource {
         ArrayNode reviews = node.putArray("latestReviews");
         Set<Long> seen = new HashSet<>();
         boolean reviewsCut = recent.size() == MAX_REVIEWS_READ;
-        // Newest first, so the first review per reviewer is their current one.
+        // Current undated GitLab approvals precede dated history; this order is not approval chronology.
         for (PullRequestReview review : recent) {
             User reviewer = review.getAuthor();
             if (reviewer == null || !seen.add(reviewer.getId())) {
@@ -303,7 +303,10 @@ public class MergeReadinessContentSource implements ContentSource {
             } else {
                 entry.put("state", review.getState().name());
             }
-            entry.put("submittedAt", review.getSubmittedAt().toString());
+            Instant submittedAt = review.getSubmittedAt();
+            if (submittedAt != null) {
+                entry.put("submittedAt", submittedAt.toString());
+            }
             // A review stands for the commit it was given on; one given on an earlier head says nothing of this one.
             entry.put("commit", review.getCommitId());
             entry.put("commitFor", commitFor(review.getCommitId(), pr.getHeadRefOid()));

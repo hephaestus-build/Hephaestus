@@ -1226,6 +1226,26 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         }
 
         @Test
+        void shouldKeepAnUndatedCurrentGitLabApprovalWithoutInferringItFromHistoricalDates() {
+            PullRequest mr = pullRequest(ada, monitored, onGitLab().andThen(requesting(zoe)));
+            review(mr, zoe, PullRequestReview.State.CHANGES_REQUESTED);
+            PullRequestReview approval = review(mr, zoe, PullRequestReview.State.APPROVED);
+            approval.setSubmittedAt(null);
+            reviewRepository.save(approval);
+
+            assertThat(reviewersOf(openWork(ada).pullRequests().content(), mr))
+                    .extracting(ReviewerDTO::state)
+                    .containsExactly(ReviewerState.APPROVED);
+
+            approval.setDismissed(true);
+            approval.setState(PullRequestReview.State.DISMISSED);
+            reviewRepository.save(approval);
+            assertThat(reviewersOf(openWork(ada).pullRequests().content(), mr))
+                    .extracting(ReviewerDTO::state)
+                    .containsExactly(ReviewerState.CHANGES_REQUESTED);
+        }
+
+        @Test
         void shouldKeepAMergeRequestWithTheReadersOwnReviewWhenGitLabStatedNoReviewerState() {
             PullRequest approved = pullRequest(zoe, monitored, onGitLab().andThen(requesting(ada)));
             review(approved, ada, PullRequestReview.State.APPROVED);
