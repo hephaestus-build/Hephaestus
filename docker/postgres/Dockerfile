@@ -3,7 +3,6 @@
 # SQL from the app scheduler, so this stays stock Postgres + one extension. See ADR 0018 and ADR 0038.
 FROM postgres:18-bookworm@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af AS os-packages
 ARG PARTMAN_VERSION=5.5.0-1.pgdg12+1
-# CI always refreshes this stage with --no-cache-filter os-packages; see vulnerability-remediation.mdx.
 RUN set -eux; \
     apt-get update -o APT::Update::Error-Mode=any; \
     apt-get upgrade -y; \

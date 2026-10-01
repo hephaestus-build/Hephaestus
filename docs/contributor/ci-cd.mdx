@@ -650,8 +650,8 @@ no attestation, no policy scan and no alias moves. Forks therefore get no previe
 the release path exercises their code once it is on `main`.
 
 When release preflight is required, it owns image vulnerability scanning for both architectures;
-the image-build workflows omit their duplicate amd64 scans. Other published builds retain those
-scans. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
+the image-build workflows omit their duplicate scans. Other published builds scan every platform
+they built. Each platform retains its own report and policy result. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
 
 The build scan resolves its immutable image reference through
 `scripts/resolve-image-scan-subject.ts`, using the same platform resolver in `scripts/lib/image-scan.ts` as scheduled rescans. An index must

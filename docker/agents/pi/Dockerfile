@@ -13,7 +13,6 @@ COPY precompute/package.json precompute/pnpm-lock.yaml precompute/pnpm-workspace
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
 FROM node:${NODE_VERSION}-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS os-packages
-# CI always refreshes this stage with --no-cache-filter os-packages; see vulnerability-remediation.mdx.
 RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
     apt-get install -y --no-install-recommends bash git ripgrep fd-find findutils tree jq ca-certificates grep coreutils util-linux tar && \
     rm -rf /var/lib/apt/lists/*
