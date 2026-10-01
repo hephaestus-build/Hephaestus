@@ -59,7 +59,8 @@ public class PracticeReviewSettingsService {
             throw new StalePracticeReviewSettingsException();
         }
         var beforeScope = coverageService.scope(workspace);
-        PracticeReviewSnapshot before = PracticeReviewSnapshot.of(settings, beforeScope);
+        PracticeReviewSnapshot before =
+                PracticeReviewSnapshot.of(settings, beforeScope, coverageService.generatedPaths(workspace));
         // Reset-to-inherit first, then the value patch, so a field can be reset and re-set in one request.
         settings.reset(req.reset());
         settings.applyPatch(req.deliverToMerged(), req.cooldownMinutes());
@@ -69,14 +70,18 @@ public class PracticeReviewSettingsService {
         if (req.reviewScope() != null) {
             coverageService.replace(workspace, req.reviewScope());
         }
+        if (req.generatedPaths() != null) {
+            coverageService.patchGeneratedPaths(workspace, req.generatedPaths());
+        }
         settings.applyRollout(null, null, req.deliveryStatus());
         settings.applyDefaultAutonomy(
                 req.defaultAutonomy() == null ? null : req.defaultAutonomy().name());
         var afterScope = coverageService.scope(workspace);
-        PracticeReviewSnapshot after = PracticeReviewSnapshot.of(settings, afterScope);
+        PracticeReviewSnapshot after =
+                PracticeReviewSnapshot.of(settings, afterScope, coverageService.generatedPaths(workspace));
         if (!before.sameRolloutPolicyAs(after)) {
             settings.incrementRolloutRevision();
-            after = PracticeReviewSnapshot.of(settings, afterScope);
+            after = PracticeReviewSnapshot.of(settings, afterScope, coverageService.generatedPaths(workspace));
         }
         settings.incrementConfigVersion();
         configAudit.record(ConfigAuditEntry.updated(
@@ -119,7 +124,8 @@ public class PracticeReviewSettingsService {
                 s.getDeliveryStatus(),
                 coverageService.summary(workspace, recentVolume),
                 defaults.defaultAutonomy(),
-                s.getDefaultAutonomy() == null ? null : PracticeAutonomy.valueOf(s.getDefaultAutonomy()));
+                s.getDefaultAutonomy() == null ? null : PracticeAutonomy.valueOf(s.getDefaultAutonomy()),
+                coverageService.generatedPaths(workspace));
     }
 
     private int recentVolume(Workspace workspace) {

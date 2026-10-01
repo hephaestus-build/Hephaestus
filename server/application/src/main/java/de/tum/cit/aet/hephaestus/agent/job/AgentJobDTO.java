@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.net.URI;
@@ -111,7 +112,13 @@ public record AgentJobDTO(
         Integer llmCacheReadTokens,
 
         @Schema(description = "Tokens written to prompt cache") @Nullable
-        Integer llmCacheWriteTokens) {
+        Integer llmCacheWriteTokens,
+
+        @Schema(
+                description =
+                        "Frozen generated-path policy and changed paths marked generated; available on review detail after evidence capture")
+        @Nullable
+        GeneratedPathReviewDTO generatedPaths) {
     public static AgentJobDTO from(AgentJob job, Target target) {
         JsonNode snapshot = job.getConfigSnapshot();
         return new AgentJobDTO(
@@ -141,12 +148,14 @@ public record AgentJobDTO(
                 job.getLlmTotalOutputTokens(),
                 job.getLlmTotalReasoningTokens(),
                 job.getLlmCacheReadTokens(),
-                job.getLlmCacheWriteTokens());
+                job.getLlmCacheWriteTokens(),
+                generatedPaths(job.getEvidenceSnapshot()));
     }
 
     /**
      * The listing's row, which carries every column this record renders and no transcript — the one
-     * thing an entity page would have read per row and thrown away.
+     * thing an entity page would have read per row and thrown away. Captured generated-path details
+     * are loaded only for the individual review, not for its listing.
      */
     public static AgentJobDTO from(AgentJobRepository.AgentJobListRow row, Target target) {
         JsonNode snapshot = row.getConfigSnapshot();
@@ -177,7 +186,20 @@ public record AgentJobDTO(
                 row.getLlmTotalOutputTokens(),
                 row.getLlmTotalReasoningTokens(),
                 row.getLlmCacheReadTokens(),
-                row.getLlmCacheWriteTokens());
+                row.getLlmCacheWriteTokens(),
+                null);
+    }
+
+    private static @Nullable GeneratedPathReviewDTO generatedPaths(@Nullable JsonNode snapshot) {
+        if (snapshot == null || !snapshot.has("generatedPaths")) return null;
+        var policy = snapshot.path("generatedPaths");
+        return new GeneratedPathReviewDTO(
+                java.util.stream.StreamSupport.stream(policy.path("patterns").spliterator(), false)
+                        .map(JsonNode::asString)
+                        .toList(),
+                java.util.stream.StreamSupport.stream(policy.path("paths").spliterator(), false)
+                        .map(JsonNode::asString)
+                        .toList());
     }
 
     /**

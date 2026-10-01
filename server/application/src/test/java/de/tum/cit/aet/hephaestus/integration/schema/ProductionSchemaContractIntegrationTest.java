@@ -232,6 +232,7 @@ class ProductionSchemaContractIntegrationTest {
     @DisplayName("Production Liquibase schema applies cleanly and the JPA entities validate against it")
     void productionSchemaAppliesAndEntitiesValidate() {
         assertColumnExists("workspace", "account_login");
+        assertColumnExists("repository_to_monitor", "generated_paths");
         assertColumnExists("connection", "credentials_encrypted");
         assertColumnExists("slack_message", "author_member_id");
         assertColumnExists("slack_thread", "participant_member_ids");
@@ -277,7 +278,7 @@ class ProductionSchemaContractIntegrationTest {
     void shouldRejectMalformedBaseBranches(String branches) {
         long workspaceId = insertWorkspace("base-branches-" + UUID.randomUUID());
         Long monitorId = jdbcTemplate.queryForObject(
-                "INSERT INTO repository_to_monitor (workspace_id, name_with_owner) VALUES (?, ?) RETURNING id",
+                "INSERT INTO repository_to_monitor (workspace_id, name_with_owner, generated_paths) VALUES (?, ?, '[]'::jsonb) RETURNING id",
                 Long.class,
                 workspaceId,
                 "acme/repository");
@@ -303,7 +304,7 @@ class ProductionSchemaContractIntegrationTest {
         long ownerWorkspace = insertWorkspace("monitor-owner-" + UUID.randomUUID());
         long targetWorkspace = insertWorkspace("monitor-target-" + UUID.randomUUID());
         Long monitorId = jdbcTemplate.queryForObject(
-                "INSERT INTO repository_to_monitor (workspace_id, name_with_owner) VALUES (?, ?) RETURNING id",
+                "INSERT INTO repository_to_monitor (workspace_id, name_with_owner, generated_paths) VALUES (?, ?, '[]'::jsonb) RETURNING id",
                 Long.class,
                 ownerWorkspace,
                 "acme/repository");

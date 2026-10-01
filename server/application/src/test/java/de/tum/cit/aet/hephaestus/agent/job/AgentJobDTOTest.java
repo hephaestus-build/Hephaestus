@@ -46,6 +46,25 @@ class AgentJobDTOTest extends BaseUnitTest {
      * "waiting for a worker" and an admin has no way to tell that raising the cap is what releases it.
      */
     @Test
+    void shouldReadGeneratedPathsFromCapturedReviewInsteadOfCurrentMetadata() {
+        AgentJob job = jobWithSnapshot(snapshotWithScope(FundingSource.INSTANCE));
+        ObjectNode captured = MAPPER.createObjectNode();
+        captured.set(
+                "generatedPaths",
+                MAPPER.valueToTree(new de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO(
+                        java.util.List.of("generated/**"), java.util.List.of("generated/client.ts"))));
+        job.setEvidenceSnapshot(captured);
+        AgentJobDTO dto = AgentJobDTO.from(job, ReviewRunTargetMapper.from(job));
+        var policy = dto.generatedPaths();
+        assertThat(policy).isNotNull();
+        assertThat(policy.patterns()).containsExactly("generated/**");
+        assertThat(policy.paths()).containsExactly("generated/client.ts");
+        job.setEvidenceSnapshot(MAPPER.createObjectNode());
+        assertThat(AgentJobDTO.from(job, ReviewRunTargetMapper.from(job)).generatedPaths())
+                .isNull();
+    }
+
+    @Test
     void carriesTheHoldReasonAndReleaseTimeOfABudgetHeldJob() {
         AgentJob job = jobWithSnapshot(snapshotWithScope(FundingSource.INSTANCE));
         Instant releaseAt = job.getCreatedAt().plus(Duration.ofHours(6));

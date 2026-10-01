@@ -212,7 +212,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
                         pullRequest,
                         WORKSPACE_ID,
                         ScmSignals.PULL_REQUEST_REVIEWED,
-                        new ReviewSubject(REVIEWER_ID, true),
+                        ReviewSubject.reviewer(REVIEWER_ID, true),
                         false))
                 .thenReturn(detection);
 
@@ -299,6 +299,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
     private PullRequestReview review() {
         User reviewer = new User();
         reviewer.setId(REVIEWER_ID);
+        reviewer.setType(User.Type.USER);
         PullRequestReview review = new PullRequestReview();
         review.setId(REVIEW_ID);
         review.setPullRequest(pullRequest());

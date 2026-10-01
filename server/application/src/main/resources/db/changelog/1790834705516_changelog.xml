@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790834705516-1" author="hephaestus">
+        <addColumn tableName="repository_to_monitor">
+            <column name="generated_paths" type="JSONB" defaultValueComputed="'[]'::jsonb">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <dropDefaultValue tableName="repository_to_monitor" columnName="generated_paths" columnDataType="JSONB"/>
+        <rollback>
+            <dropColumn tableName="repository_to_monitor" columnName="generated_paths"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

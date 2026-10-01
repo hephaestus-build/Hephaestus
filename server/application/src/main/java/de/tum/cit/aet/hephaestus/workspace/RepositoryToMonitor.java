@@ -11,10 +11,13 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
+import java.util.List;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -52,6 +55,11 @@ public class RepositoryToMonitor {
      */
     @Nullable
     private Long nativeId;
+
+    /** Review policy independent of repository coverage selection and provider sync state. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "generated_paths", nullable = false, columnDefinition = "jsonb")
+    private List<String> generatedPaths = List.of();
 
     private Instant repositorySyncedAt;
     private Instant labelsSyncedAt;
