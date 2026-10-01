@@ -1,0 +1,12 @@
+package de.tum.cit.aet.hephaestus.core.privacy.spi;
+
+import java.util.List;
+import org.jspecify.annotations.Nullable;
+
+/** Verified identity closure, never inferred from names, logins, email or cached actor ids. */
+public record PersonScope(@Nullable Long accountId, List<PersonIdentity> identities, List<Long> userIds) {
+    public PersonScope {
+        identities = List.copyOf(identities);
+        userIds = List.copyOf(userIds);
+    }
+}
