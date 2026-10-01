@@ -181,6 +181,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                 false,
                 "https://github.com/owner/repo/pull/42#pullrequestreview-100",
                 200L,
+                true,
                 PR_ID,
                 Instant.now(),
                 100L);

@@ -33,6 +33,7 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 ];
 
 export const mockPracticeReviewSettings: PracticeReviewSettings = {
+	generatedPaths: {},
 	etag: '"0"',
 	revision: 0,
 	cooldownMinutes: 30,

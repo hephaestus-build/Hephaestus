@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision.Detect;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaults;
@@ -73,6 +74,7 @@ public class AgentJobService {
     private final LlmBudgetService llmBudgetService;
     private final LlmModelResolver llmModelResolver;
     private final SignalRecorder signalRecorder;
+    private final PracticeReviewCoverageService coverageService;
 
     public AgentJobService(
             AgentJobRepository agentJobRepository,
@@ -86,7 +88,8 @@ public class AgentJobService {
             PracticeRepository practiceRepository,
             LlmBudgetService llmBudgetService,
             LlmModelResolver llmModelResolver,
-            SignalRecorder signalRecorder) {
+            SignalRecorder signalRecorder,
+            PracticeReviewCoverageService coverageService) {
         this.agentJobRepository = agentJobRepository;
         this.memberAiPolicy = memberAiPolicy;
         this.workspaceRepository = workspaceRepository;
@@ -99,6 +102,7 @@ public class AgentJobService {
         this.llmBudgetService = llmBudgetService;
         this.llmModelResolver = llmModelResolver;
         this.signalRecorder = signalRecorder;
+        this.coverageService = coverageService;
     }
 
     @Transactional(readOnly = true)
@@ -372,6 +376,12 @@ public class AgentJobService {
                     var rechecked = objectMetadata.putArray(AgentJob.RECHECKED_PRACTICES_METADATA_KEY);
                     admission.recheckedPractices().stream().sorted().forEach(rechecked::add);
                 }
+            }
+            if (jobType == AgentJobType.PULL_REQUEST_REVIEW && metadata instanceof ObjectNode objectMetadata) {
+                String repository = objectMetadata.path("repository_full_name").asString();
+                objectMetadata.set(
+                        "generated_path_patterns",
+                        objectMapper.valueToTree(coverageService.generatedPaths(currentWorkspace, repository)));
             }
             job.setMetadata(metadata);
             job.setIdempotencyKey(detectionKey);

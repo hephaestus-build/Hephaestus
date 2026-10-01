@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
@@ -148,6 +149,9 @@ public class PracticeReviewDetectionGate {
             @NonNull SignalName signal,
             @NonNull TriggerMode triggerMode,
             @NonNull ReviewSubject subject) {
+        if (subject.actorId() != null && !subject.human()) {
+            return botRefusal(signal);
+        }
         var coverage = coverageService.assessRepositoryless(workspace, subject);
         GateDecision.@Nullable Skip scopeSkip = coverage.admitted()
                 ? null
@@ -192,6 +196,9 @@ public class PracticeReviewDetectionGate {
             boolean allowOutsideCoverage,
             ReviewSubject subject,
             boolean recheck) {
+        if (subject.actorId() != null && !subject.human()) {
+            return botRefusal(signal);
+        }
         String nameWithOwner =
                 reviewable.getRepository() != null ? reviewable.getRepository().getNameWithOwner() : null;
 
@@ -287,8 +294,16 @@ public class PracticeReviewDetectionGate {
         }
         return switch (coverage.subjectStatus()) {
             case MISSING, UNLINKED -> SignalStateReason.SUBJECT_UNLINKED;
-            case NON_HUMAN, RESOLVED_LINKED_HUMAN -> SignalStateReason.OUT_OF_REVIEW_SCOPE;
+            case NON_HUMAN -> SignalStateReason.BOT_AUTHOR;
+            case RESOLVED_LINKED_HUMAN -> SignalStateReason.OUT_OF_REVIEW_SCOPE;
         };
+    }
+
+    private static GateDecision.Skip botRefusal(SignalName signal) {
+        SignalStateReason reason = signal.equals(ScmSignals.PULL_REQUEST_REVIEWED)
+                ? SignalStateReason.BOT_REVIEWER
+                : SignalStateReason.BOT_AUTHOR;
+        return new GateDecision.Skip(reason.describe(), reason);
     }
 
     private GateDecision evaluateWorkspaceAndSignal(

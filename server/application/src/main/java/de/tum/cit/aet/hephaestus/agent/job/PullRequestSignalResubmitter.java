@@ -105,7 +105,9 @@ public class PullRequestSignalResubmitter {
                 pr,
                 key.workspaceId(),
                 key.signalName(),
-                reviewData != null ? new ReviewSubject(reviewData.authorId(), true) : pr.reviewSubject(),
+                reviewData != null
+                        ? new ReviewSubject(reviewData.authorId(), reviewData.humanAuthor())
+                        : pr.reviewSubject(),
                 PullRequestPushCoalescer.SIGNALS.contains(key.signalName()));
         switch (decision) {
             case GateDecision.Skip skip -> {

@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -50,4 +52,8 @@ public record PracticeReviewSettingsDTO(
 
         @Schema(description = "Raw override; null = this workspace has never chosen, so HUMAN_APPROVAL applies")
         @Nullable
-        PracticeAutonomy defaultAutonomyOverride) {}
+        PracticeAutonomy defaultAutonomyOverride,
+
+        @NonNull
+        @Schema(description = "Repository-root Ant-style generated-path patterns, keyed by monitored repository name")
+        Map<String, List<String>> generatedPaths) {}

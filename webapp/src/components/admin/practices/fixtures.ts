@@ -19,6 +19,7 @@ export function mockReviewSettings(
 ): PracticeReviewSettings {
 	return {
 		etag: '"0"',
+		generatedPaths: {},
 		revision: 0,
 		cooldownMinutes: 30,
 		defaultAutonomy: "HUMAN_APPROVAL",

@@ -248,7 +248,10 @@ public class AgentJobEventListener {
             GateDecision decision = reviewData == null
                     ? practiceReviewDetectionGate.evaluate(pr, key.signalName(), TriggerMode.AUTO)
                     : practiceReviewDetectionGate.evaluate(
-                            pr, key.signalName(), TriggerMode.AUTO, new ReviewSubject(reviewData.authorId(), true));
+                            pr,
+                            key.signalName(),
+                            TriggerMode.AUTO,
+                            new ReviewSubject(reviewData.authorId(), reviewData.humanAuthor()));
             switch (decision) {
                 case GateDecision.Skip skip -> {
                     log.debug(
