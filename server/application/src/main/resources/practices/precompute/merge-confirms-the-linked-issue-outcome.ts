@@ -3,7 +3,7 @@ import { text } from "../lib/practice-contract.ts";
 // Precompute FACTS for merge-confirms-the-linked-issue-outcome: every linked issue with a checkable
 // outcome, one row each — its task-list items as captured, ticked and unticked, its state, and how
 // the change names it. The practice's occasion is any linked item that states a checkable outcome,
-// not only a closing candidate; the review decides whether the merge left each confirmed.
+// not only a closing candidate; the review assesses confirmation in this capture after the merge.
 import {
 	branchIssueReferences,
 	closingReferences,
@@ -88,7 +88,7 @@ export default async function mergeConfirmsTheLinkedIssueOutcome(
 		);
 	} else {
 		directions.push(
-			`${String(occasions.length)} linked issue(s) state a checkable outcome — every one is an occasion, closing candidates and issues only named alike. For each, the confirmation is in the record: its items ticked as captured, or the description or a closing comment naming which items are done and where the rest moves. Work delivered in the diff but neither ticked nor named is unconfirmed. A confirmation captured after the merge counts; when it was written is unknown unless independently dated evidence establishes it.`,
+			`${String(occasions.length)} linked issue(s) state a checkable outcome for this merged change — every one is an occasion, closing candidates and issues only named alike. For each, assess confirmation in the captured record: its items ticked as captured, or the description or a closing comment naming which items are done and where the rest moves. Work delivered in the diff but neither ticked nor named is unconfirmed. A confirmation captured after the merge counts; when it was written is unknown unless independently dated evidence establishes it.`,
 		);
 	}
 	return {
