@@ -75,7 +75,7 @@ function RepositoryGeneratedPaths({
 	const invalid = patterns.length > 100 || patterns.some((pattern) => pattern.length > 512);
 	const guard = useUnsavedChanges({
 		isDirty: dirty,
-		disabled: busy,
+		disabled: state === "saving",
 		description: "Your generated-path changes will be lost if you leave.",
 	});
 	const errorMessage = conflicted
