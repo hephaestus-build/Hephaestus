@@ -156,16 +156,21 @@ class CitedSourceAccessTest extends BaseUnitTest {
     }
 
     @Test
-    void composedHistoryCannotBypassCanonicalRecordAuthorization() {
+    void composedViewsCannotBypassCanonicalRecordAuthorization() {
         var files = new JobEvidenceFiles(
                 new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
-        var citation = mapper.createObjectNode().put("artifactPath", "inputs/history/observations.json");
-        assertThatThrownBy(() -> access(files).bind(job(), citation, "a".repeat(64)))
-                .isInstanceOf(JobDeliveryException.class)
-                .hasMessageContaining("canonical");
-        citation.putObject("sourceReference").putArray("records").addObject().put("type", "person");
-        assertThat(access(files).permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
-                .isFalse();
+        for (String path : java.util.List.of("inputs/history/observations.json", "context/project_inventory.json")) {
+            var citation = mapper.createObjectNode().put("artifactPath", path);
+            assertThatThrownBy(() -> access(files).bind(job(), citation, "a".repeat(64)))
+                    .isInstanceOf(JobDeliveryException.class)
+                    .hasMessageContaining("canonical");
+            citation.putObject("sourceReference")
+                    .putArray("records")
+                    .addObject()
+                    .put("type", "person");
+            assertThat(access(files).permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isFalse();
+        }
     }
 
     @Test

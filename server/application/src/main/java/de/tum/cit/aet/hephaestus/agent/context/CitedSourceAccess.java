@@ -71,7 +71,7 @@ public class CitedSourceAccess {
         }
         var reference = mapper.createObjectNode();
         var records = reference.putArray("records");
-        if (path.startsWith("inputs/history/")) {
+        if ((path.startsWith("inputs/history/") || path.equals("context/project_inventory.json"))) {
             throw new JobDeliveryException("Cite the canonical source record, not a composed view");
         }
         if (path.equals("context/document.md") || path.equals("context/document.json")) {
@@ -174,7 +174,7 @@ public class CitedSourceAccess {
 
     public boolean permits(long workspace, JsonNode citation, SourceUsePurpose purpose) {
         String artifact = citation.path("artifactPath").asString("");
-        if (artifact.startsWith("inputs/history/")) return false;
+        if (artifact.startsWith("inputs/history/") || artifact.equals("context/project_inventory.json")) return false;
         JsonNode reference = citation.path("sourceReference");
         String path = citation.path("artifactPath").asString("");
         if (reference.isMissingNode()) {

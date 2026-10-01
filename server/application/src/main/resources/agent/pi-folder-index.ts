@@ -34,7 +34,10 @@ export function folderCitationIndex(value: unknown): {
 			throw new Error("Folder index: duplicate artifact path");
 		}
 		// Composed views have no per-record identity; cite their canonical source files instead.
-		if (entry.artifact.path.startsWith("inputs/history/")) {
+		if (
+			entry.artifact.path.startsWith("inputs/history/") ||
+			entry.artifact.path === "context/project_inventory.json"
+		) {
 			continue;
 		}
 		artifactSources.set(entry.artifact.path, entry.kind);
