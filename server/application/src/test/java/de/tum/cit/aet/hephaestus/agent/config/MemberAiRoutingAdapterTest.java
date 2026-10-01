@@ -38,11 +38,14 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
     @Mock
     private WorkspaceRepository workspaces;
 
+    @Mock
+    private de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression;
+
     private MemberAiRoutingAdapter routing;
 
     @BeforeEach
     void setUp() {
-        routing = new MemberAiRoutingAdapter(bindings, preferences, models, workspaces);
+        routing = new MemberAiRoutingAdapter(bindings, preferences, models, workspaces, suppression);
     }
 
     private WorkspaceAgentBinding ready(DataHandlingTier tier) {
@@ -254,5 +257,14 @@ class MemberAiRoutingAdapterTest extends BaseUnitTest {
         model.setUpstreamModelId(upstreamId);
         model.setConnection(connection);
         return model;
+    }
+
+    @Test
+    void shouldNotRouteErasedIdentityToReviewsOrHephEvenWhenAiChoiceIsOptional() {
+        when(suppression.isUserSuppressed(20L)).thenReturn(true);
+        assertThat(routing.binding(1L, AgentPurpose.PRACTICE_REVIEW, 20L)).isEmpty();
+        assertThat(routing.binding(1L, AgentPurpose.MENTOR, 20L)).isEmpty();
+        assertThat(routing.allows(1L, 20L, LlmModelResolver.ConnectionRef.NONE)).isFalse();
+        verifyNoInteractions(preferences, bindings, models);
     }
 }

@@ -7,4 +7,7 @@ public interface PersonProcessingSuppression {
     boolean isSuppressed(long providerId, String subject, @Nullable String teamId);
 
     boolean isUserSuppressed(long userId);
+
+    /** Current source attribution, including resynced provider records, scoped to the requesting workspace. */
+    boolean isArtifactSuppressed(long workspaceId, String artifactKind, long artifactId);
 }

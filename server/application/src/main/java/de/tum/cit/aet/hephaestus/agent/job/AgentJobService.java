@@ -229,6 +229,8 @@ public class AgentJobService {
 
         JobTypeHandler handler = handlerRegistry.getHandler(jobType);
         JobSubmission submission = handler.createSubmission(request);
+        if (memberAiPolicy.isProcessingSuppressed(workspaceId, jobType, submission.metadata()))
+            return refuse(signalKey, SignalStateReason.PERSON_DATA_ERASED);
         if (!memberAiPolicy.permitsReview(workspaceId, jobType, submission.metadata()))
             return refuse(signalKey, SignalStateReason.MEMBER_AI_DECLINED);
         WorkspaceAgentBinding binding = memberAiPolicy
@@ -309,6 +311,8 @@ public class AgentJobService {
                 return refuseInTransaction(signalKey, SignalStateReason.NO_ACTIVE_PRACTICE);
             }
 
+            if (memberAiPolicy.isProcessingSuppressed(workspace.getId(), jobType, submission.metadata()))
+                return refuseInTransaction(signalKey, SignalStateReason.PERSON_DATA_ERASED);
             if (!memberAiPolicy.permitsReview(workspace.getId(), jobType, submission.metadata()))
                 return refuseInTransaction(signalKey, SignalStateReason.MEMBER_AI_DECLINED);
             WorkspaceAgentBinding binding = memberAiPolicy

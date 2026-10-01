@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.time.Clock;
 import java.util.Map;
@@ -46,6 +47,7 @@ public class AccountProvisioningService {
     private final AdminBootstrapPolicy adminBootstrapPolicy;
     private final Clock clock;
     private final ApplicationEventPublisher eventPublisher;
+    private final PersonProcessingSuppression suppression;
 
     public AccountProvisioningService(
             AccountRepository accountRepository,
@@ -56,7 +58,8 @@ public class AccountProvisioningService {
             AccountJitCreator accountJitCreator,
             AdminBootstrapPolicy adminBootstrapPolicy,
             Clock clock,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            PersonProcessingSuppression suppression) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
         this.gitProviderRegistry = gitProviderRegistry;
@@ -66,6 +69,7 @@ public class AccountProvisioningService {
         this.adminBootstrapPolicy = adminBootstrapPolicy;
         this.clock = clock;
         this.eventPublisher = eventPublisher;
+        this.suppression = suppression;
     }
 
     /**
@@ -98,6 +102,11 @@ public class AccountProvisioningService {
         // its team, so a null teamId would alias identities across tenants — fail closed.
         if (provider.getType().isLinkOnly() && (teamId == null || teamId.isBlank())) {
             throw new IllegalStateException(provider.getType() + " identity is missing team_id");
+        }
+
+        if (suppression.isSuppressed(providerId, subject, teamId)) {
+            throw new org.springframework.security.oauth2.core.OAuth2AuthenticationException(
+                    "identity_processing_suppressed");
         }
 
         IdentityLink link = identityLinkRepository

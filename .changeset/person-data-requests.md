@@ -10,3 +10,7 @@ Completed audit receipts retain operational facts and counts, not the erased con
 
 Shared records retain other people's attribution. Erasure clears the person's typed approval,
 withdrawal, invalidation and restoration attribution while keeping the event and its time.
+
+Erased provider identities cannot create a new linked account or start another practice review.
+Native Slack conversations and Outline documents are included even when the resulting observations
+are about a different participant. Shared Slack conversations retain the other participants' work.

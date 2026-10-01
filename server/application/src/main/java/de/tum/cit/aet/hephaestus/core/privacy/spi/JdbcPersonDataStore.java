@@ -65,6 +65,10 @@ public class JdbcPersonDataStore implements PersonDataContributor {
         return Map.of(
                 "users",
                 scope.userIds().isEmpty() ? List.of(-1L) : scope.userIds(),
+                "conversations",
+                scope.conversationIds().isEmpty() ? List.of(-1L) : scope.conversationIds(),
+                "documents",
+                scope.outlineDocumentIds().isEmpty() ? List.of(-1L) : scope.outlineDocumentIds(),
                 "account",
                 Objects.requireNonNullElse(scope.accountId(), -1L),
                 "identities",

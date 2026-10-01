@@ -36,11 +36,15 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
     private ReviewableArtifactOwnershipRepository ownership;
 
     private final JsonMapper mapper = JsonMapper.builder().build();
+
+    @Mock
+    private de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression;
+
     private ReviewMemberAiPolicy policy;
 
     @BeforeEach
     void setUp() {
-        policy = new ReviewMemberAiPolicy(routing, mapper, preferences, issues, ownership);
+        policy = new ReviewMemberAiPolicy(routing, mapper, preferences, issues, ownership, suppression);
     }
 
     @Test
@@ -147,5 +151,16 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
 
         assertThat(policy.allowsResult(job)).isFalse();
         verify(routing).allows(eq(1L), eq(20L), any());
+    }
+
+    @Test
+    void shouldStopRepositorylessReviewWhenTheExactNativeSourceIsSuppressed() {
+        var metadata = mapper.createObjectNode().put("slack_thread_id", 9L);
+        when(suppression.isArtifactSuppressed(1L, "chat.conversation_thread", 9L))
+                .thenReturn(true);
+        assertThat(policy.isProcessingSuppressed(1L, AgentJobType.CONVERSATION_REVIEW, metadata))
+                .isTrue();
+        assertThat(policy.permitsReview(1L, AgentJobType.CONVERSATION_REVIEW, metadata))
+                .isFalse();
     }
 }

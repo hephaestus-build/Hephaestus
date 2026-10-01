@@ -215,7 +215,12 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
         var preferences = mock(MemberAiPreferences.class);
         when(preferences.forDeveloper(workspace.getId(), 20L))
                 .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.CLOUD));
-        var routing = new MemberAiRoutingAdapter(bindings, preferences, resolver, workspaces);
+        var routing = new MemberAiRoutingAdapter(
+                bindings,
+                preferences,
+                resolver,
+                workspaces,
+                mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression.class));
 
         assertThat(routing.binding(workspace.getId(), AgentPurpose.PRACTICE_REVIEW, 20L))
                 .get()

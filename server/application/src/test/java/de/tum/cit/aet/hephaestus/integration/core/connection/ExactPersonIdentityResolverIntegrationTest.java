@@ -244,4 +244,32 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         link.setExternalActorId(actorId);
         return links.saveAndFlush(link);
     }
+
+    @Test
+    void shouldResolveOutlineOAuthWorkspaceKeysWithoutLosingTheLinkedAccount() {
+        var outline = provider(IdentityProviderType.OUTLINE);
+        var account = accounts.saveAndFlush(new Account("Outline person"));
+        String subject = UUID.randomUUID().toString();
+        link(account, outline, subject, "outline-workspace", null);
+        var scope = resolver.resolve(null, List.of(identity(outline, subject, null)));
+        assertThat(scope.accountId()).isEqualTo(account.getId());
+        assertThat(scope.identities())
+                .containsExactlyInAnyOrder(
+                        identity(outline, subject, null), identity(outline, subject, "outline-workspace"));
+        assertThat(resolver.resolve(account.getId(), List.of()).identities())
+                .containsExactlyInAnyOrderElementsOf(scope.identities());
+    }
+
+    @Test
+    void shouldRejectConflictingOutlineWorkspaceLinksBeforeSelectingMirroredContent() {
+        var outline = provider(IdentityProviderType.OUTLINE);
+        var first = accounts.saveAndFlush(new Account("First Outline person"));
+        var second = accounts.saveAndFlush(new Account("Second Outline person"));
+        String subject = UUID.randomUUID().toString();
+        link(first, outline, subject, "outline-workspace-a", null);
+        link(second, outline, subject, "outline-workspace-b", null);
+        assertThatThrownBy(() -> resolver.resolve(null, List.of(identity(outline, subject, "outline-workspace-a"))))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("409");
+    }
 }

@@ -60,14 +60,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             owners.add(accountId);
         }
         for (PersonIdentity identity : identities) {
-            validateProvider(identity);
-            owners.addAll(jdbc.query(
-                    "SELECT DISTINCT account_id FROM identity_link "
-                            + "WHERE provider_id = ? AND subject = ? AND team_id IS NOT DISTINCT FROM ?",
-                    (rs, row) -> rs.getLong("account_id"),
-                    identity.providerId(),
-                    identity.subject(),
-                    identity.teamId()));
+            owners.addAll(linkedOwners(identity));
         }
         if (owners.size() > 1) {
             throw conflict("The supplied identities belong to different accounts; correct the exact identity scope");
@@ -81,6 +74,12 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                             Objects.requireNonNull(rs.getString("subject")),
                             rs.getString("team_id")),
                     resolvedAccount));
+        }
+        // A mirror is keyed by instance and native user, not by the OAuth workspace.
+        // Normalize after account closure so account-only requests install the same control.
+        for (PersonIdentity identity : List.copyOf(identities)) {
+            if (validateProvider(identity).equals("OUTLINE"))
+                identities.add(new PersonIdentity(identity.providerId(), identity.subject(), null));
         }
         List<Long> users = new ArrayList<>();
         for (PersonIdentity identity : identities) {
@@ -108,13 +107,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             }
             // Check every link again, including closure additions and disabled links. An account
             // with an internally conflicting link must not widen an erasure request silently.
-            List<Long> linked = jdbc.query(
-                    "SELECT DISTINCT account_id FROM identity_link "
-                            + "WHERE provider_id = ? AND subject = ? AND team_id IS NOT DISTINCT FROM ?",
-                    (rs, row) -> rs.getLong("account_id"),
-                    identity.providerId(),
-                    identity.subject(),
-                    identity.teamId());
+            List<Long> linked = linkedOwners(identity);
             if (linked.stream().anyMatch(owner -> !owner.equals(resolvedAccount))) {
                 throw conflict("A provider identity is linked to another account; resolve the link conflict first");
             }
@@ -124,8 +117,59 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                         .thenComparing(PersonIdentity::subject)
                         .thenComparing(i -> Objects.requireNonNullElse(i.teamId(), "")))
                 .toList();
+        Set<Long> conversations = new LinkedHashSet<>();
+        Set<Long> documents = new LinkedHashSet<>();
+        for (PersonIdentity identity : ordered) {
+            String type = validateProvider(identity);
+            if (type.equals("SLACK")) {
+                conversations.addAll(jdbc.query(
+                        """
+                        SELECT DISTINCT st.id FROM slack_message m
+                        JOIN slack_thread st ON st.workspace_id=m.workspace_id
+                            AND st.slack_channel_id=m.slack_channel_id
+                            AND st.slack_thread_ts=COALESCE(m.slack_thread_ts,m.slack_ts)
+                        JOIN identity_provider p ON p.id=? AND p.type='SLACK'
+                            AND p.server_url='https://slack.com'
+                        WHERE m.author_slack_user_id=? AND m.slack_team_id=?
+                        """, (rs, row) -> rs.getLong(1), identity.providerId(), identity.subject(), identity.teamId()));
+            } else if (type.equals("OUTLINE")) {
+                documents.addAll(jdbc.query(
+                        """
+                        SELECT DISTINCT d.id FROM outline_document d
+                        JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
+                        JOIN identity_provider p ON p.id=? AND p.type='OUTLINE'
+                            AND p.server_url=c.config->>'serverUrl'
+                        WHERE d.created_by_subject=? OR d.updated_by_subject=?
+                            OR COALESCE(d.collaborator_subjects,'[]'::jsonb) @> jsonb_build_array(CAST(? AS text))
+                        """,
+                        (rs, row) -> rs.getLong(1),
+                        identity.providerId(),
+                        identity.subject(),
+                        identity.subject(),
+                        identity.subject()));
+            }
+        }
         return new PersonScope(
-                resolvedAccount, ordered, users.stream().distinct().sorted().toList());
+                resolvedAccount,
+                ordered,
+                users.stream().distinct().sorted().toList(),
+                conversations.stream().sorted().toList(),
+                documents.stream().sorted().toList());
+    }
+
+    private List<Long> linkedOwners(PersonIdentity identity) {
+        String type = validateProvider(identity);
+        // Outline links retain the verified OAuth workspace key. An instance/native-user request
+        // must check every such link before selecting anything, not silently miss its account.
+        boolean outlineInstanceIdentity = type.equals("OUTLINE");
+        return jdbc.query(
+                "SELECT DISTINCT account_id FROM identity_link WHERE provider_id=? AND subject=? "
+                        + "AND (team_id IS NOT DISTINCT FROM ? OR ?)",
+                (rs, row) -> rs.getLong(1),
+                identity.providerId(),
+                identity.subject(),
+                identity.teamId(),
+                outlineInstanceIdentity);
     }
 
     private boolean accountExists(long accountId) {
@@ -146,8 +190,8 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             if (identity.teamId() == null) {
                 throw invalid("A Slack identity requires its native Slack workspace id");
             }
-        } else if (identity.teamId() != null) {
-            throw invalid("Only a Slack identity accepts a native workspace id");
+        } else if (!type.equals("OUTLINE") && identity.teamId() != null) {
+            throw invalid("Only Slack and Outline identities accept a native workspace id");
         }
         if (type.equals("GITHUB") || type.equals("GITLAB")) {
             nativeScmId(identity.subject());

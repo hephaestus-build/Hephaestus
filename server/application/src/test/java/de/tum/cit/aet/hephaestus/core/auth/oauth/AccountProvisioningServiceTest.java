@@ -54,6 +54,8 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     private AdminBootstrapPolicy adminBootstrapPolicy;
     private LoginProviderRepository loginProviderRepository;
     private GitProviderRegistry gitProviderRegistry;
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression =
+            mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression.class);
     private AccountProvisioningService service;
     private final org.springframework.context.ApplicationEventPublisher events =
             mock(org.springframework.context.ApplicationEventPublisher.class);
@@ -89,7 +91,8 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 accountJitCreator,
                 adminBootstrapPolicy,
                 Clock.fixed(NOW, ZoneOffset.UTC),
-                events);
+                events,
+                suppression);
     }
 
     @Test
@@ -414,5 +417,14 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 .hasMessageContaining("authenticated account binding");
 
         verify(accountRepository, never()).save(any());
+    }
+
+    @Test
+    void erasedProviderIdentity_cannotCreateAnotherAccountOrAttachANewLink() {
+        when(suppression.isSuppressed(PROVIDER_ID, "42", null)).thenReturn(true);
+        assertThatThrownBy(() -> service.resolveOrProvision("github", "42", mock(OAuth2User.class), null))
+                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
+        verify(accountJitCreator, never()).create(any(), any());
+        verify(identityLinkRepository, never()).save(any());
     }
 }

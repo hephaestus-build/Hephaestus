@@ -241,7 +241,7 @@ export function PersonDataPage({ providers, selection, onChange, onPreview, stat
 											<code>{identity.subject}</code>
 											{identity.teamId == null ? null : (
 												<>
-													; Slack workspace <code>{identity.teamId}</code>
+													; provider workspace <code>{identity.teamId}</code>
 												</>
 											)}
 										</li>

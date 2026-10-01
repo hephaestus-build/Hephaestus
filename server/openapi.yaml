@@ -16925,6 +16925,7 @@ components:
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
           - MEMBER_AI_DECLINED
+          - PERSON_DATA_ERASED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED
@@ -18035,6 +18036,7 @@ components:
           - NO_ACTIVE_PRACTICE
           - REVIEW_MODEL_UNBOUND
           - MEMBER_AI_DECLINED
+          - PERSON_DATA_ERASED
           - PRACTICE_AUTONOMY_OFF
           - BUDGET_EXHAUSTED
           - SUBJECT_UNLINKED

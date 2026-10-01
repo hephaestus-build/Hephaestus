@@ -1,0 +1,418 @@
+package de.tum.cit.aet.hephaestus.core.privacy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import de.tum.cit.aet.hephaestus.account.*;
+import de.tum.cit.aet.hephaestus.agent.*;
+import de.tum.cit.aet.hephaestus.agent.job.*;
+import de.tum.cit.aet.hephaestus.core.auth.domain.*;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.integration.core.connection.*;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.user.*;
+import de.tum.cit.aet.hephaestus.integration.slack.domain.*;
+import de.tum.cit.aet.hephaestus.mentor.*;
+import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.feedback.*;
+import de.tum.cit.aet.hephaestus.practices.model.*;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.testconfig.*;
+import de.tum.cit.aet.hephaestus.workspace.*;
+import java.time.Instant;
+import java.util.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+
+class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
+    @Autowired
+    private PersonDataService personData;
+
+    @Autowired
+    private PersonProcessingSuppression suppression;
+
+    @Autowired
+    private ObservationInvalidationRepository invalidations;
+
+    @Autowired
+    private PersonDataRegistry registry;
+
+    @Autowired
+    private PersonIdentityResolver resolver;
+
+    @Autowired
+    private ObjectMapper mapper;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private AccountRepository accounts;
+
+    @Autowired
+    private IdentityProviderRepository providers;
+
+    @Autowired
+    private IdentityLinkRepository links;
+
+    @Autowired
+    private UserRepository users;
+
+    @Autowired
+    private WorkspaceRepository workspaces;
+
+    @Autowired
+    private WorkspaceMembershipRepository memberships;
+
+    @Autowired
+    private ConnectionRepository connections;
+
+    @Autowired
+    private UserPreferencesRepository preferences;
+
+    @Autowired
+    private SlackMessageRepository slackMessages;
+
+    @Autowired
+    private SlackThreadRepository slackThreads;
+
+    @Autowired
+    private ChatThreadRepository chatThreadRepository;
+
+    @Autowired
+    private ChatMessageRepository chatMessageRepository;
+
+    @Autowired
+    private PracticeRepository practiceRepository;
+
+    @Autowired
+    private AgentJobRepository agentJobRepository;
+
+    @Autowired
+    private ObservationRepository observationRepository;
+
+    @Autowired
+    private FeedbackRepository feedbackRepository;
+
+    @Autowired
+    private FeedbackObservationRepository feedbackObservationRepository;
+
+    @Autowired
+    private FeedbackPlacementRepository feedbackPlacementRepository;
+
+    @BeforeEach
+    void clearRows() {
+        databaseTestUtils.cleanDatabase();
+    }
+
+    @Test
+    void erasesTargetAcrossTwoWorkspacesAndEveryRegisteredStoreWithoutTouchingAnotherPerson() {
+        IdentityProvider scm = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://privacy-gitlab.example.com"));
+        IdentityProvider slack =
+                providers.saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"));
+        Account administrator = accounts.saveAndFlush(new Account("Administrator"));
+        Account targetAccount = accounts.saveAndFlush(new Account("Target"));
+        Account otherAccount = accounts.saveAndFlush(new Account("Other"));
+        User target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", scm));
+        User other = users.saveAndFlush(TestUserFactory.createUser(84L, "other", scm));
+        link(targetAccount, scm, "42", null, target.getId());
+        link(otherAccount, scm, "84", null, other.getId());
+        preference(target);
+        preference(other);
+        List<DerivedConversation> targetDerived = new ArrayList<>();
+        List<DerivedConversation> otherDerived = new ArrayList<>();
+        List<Long> sharedThreads = new ArrayList<>();
+        for (int index = 1; index <= 2; index++) {
+            String team = "T" + index;
+            Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("privacy-" + index));
+            connections.saveAndFlush(new Connection(
+                    workspace,
+                    IntegrationKind.SLACK,
+                    team,
+                    new ConnectionConfig.SlackConfig(team, null, null, Set.of())));
+            link(targetAccount, slack, "UTARGET", team, null);
+            link(otherAccount, slack, "UOTHER", team, null);
+            membership(workspace, target);
+            membership(workspace, other);
+            SlackThread shared = slackThread(workspace, "100.1", target, other);
+            sharedThreads.add(shared.getId());
+            message(workspace, team, "100.1", "100.1", "UTARGET", target, "Target's collected work");
+            message(workspace, team, "100.1", "200.1", "UOTHER", other, "Other person's shared reply");
+            SlackThread unrelated = slackThread(workspace, "300.1", other);
+            message(workspace, team, "300.1", "300.1", "UOTHER", other, "Unrelated conversation");
+            targetDerived.add(seedDerivedConversation(workspace, shared.getId(), target));
+            otherDerived.add(seedDerivedConversation(workspace, unrelated.getId(), other));
+        }
+        for (var derived : targetDerived) {
+            invalidations.saveAndFlush(new ObservationInvalidation(
+                    observationRepository
+                            .findById(derived.observationIds().getFirst())
+                            .orElseThrow(),
+                    Objects.requireNonNull(administrator.getId()),
+                    "Correction before access request",
+                    Instant.now()));
+        }
+        PersonScope otherScope = resolver.resolve(Objects.requireNonNull(otherAccount.getId()), List.of());
+        // Source-derived copies can belong to multiple participants. Compare the other person's
+        // primary rows, not the target's guidance from their shared source conversation.
+        PersonScope otherPrimaryScope =
+                new PersonScope(otherScope.accountId(), otherScope.identities(), otherScope.userIds());
+        var otherSelection = registry.select(otherPrimaryScope);
+        Map<String, Object> otherRows = new TreeMap<>();
+        for (var contributor : registry.stores())
+            otherRows.put(
+                    contributor.store(),
+                    contributor.export(Objects.requireNonNull(otherSelection.get(contributor.store()))));
+        long administratorId = Objects.requireNonNull(administrator.getId());
+        var preview = personData.preview(administratorId, targetAccount.getId(), List.of());
+        UUID requestId = preview.request().getId();
+        var export = personData.export(requestId);
+        Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
+        assertThat(counts.get("feedback")).isEqualTo(4L);
+        assertThat(counts.get("observation")).isEqualTo(4L);
+        assertThat(counts.get("observation_invalidation")).isEqualTo(2L);
+        assertThat(counts.get("chat_thread")).isEqualTo(2L);
+        assertThat(counts.get("slack_message")).isEqualTo(2L);
+        counts.forEach((store, count) -> assertThat(
+                        (long) export.path("stores").path(store).size())
+                .as("Frozen preview/export parity for %s", store)
+                .isEqualTo(count));
+        assertThat(export.toString())
+                .doesNotContain(
+                        "Unrelated conversation",
+                        "Other person's shared reply",
+                        "credential-canary",
+                        "unrelated-profile-canary");
+        personData.requestErasure(requestId, administratorId, true);
+        assertThat(suppression.isUserSuppressed(target.getId())).isTrue();
+        assertThat(suppression.isUserSuppressed(other.getId())).isFalse();
+        for (long threadId : sharedThreads) {
+            long workspaceId = Objects.requireNonNull(
+                    jdbc.queryForObject("SELECT workspace_id FROM slack_thread WHERE id=?", Long.class, threadId));
+            assertThat(suppression.isArtifactSuppressed(workspaceId, "chat.conversation_thread", threadId))
+                    .isTrue();
+            assertThat(suppression.isArtifactSuppressed(-1L, "chat.conversation_thread", threadId))
+                    .isFalse();
+        }
+        personData.run(requestId);
+        var receipt = personData.get(requestId).request();
+        assertThat(receipt.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(receipt.getScopeJson()).isNull();
+        assertThat(receipt.getSelectionsJson()).isNull();
+        Map<String, Long> completed = mapper.readValue(receipt.getCompletedJson(), new TypeReference<>() {});
+        assertThat(completed.keySet()).containsExactlyInAnyOrderElementsOf(counts.keySet());
+        assertThat(accounts.findById(Objects.requireNonNull(targetAccount.getId()))
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(Account.Status.DELETED);
+        assertThat(users.findById(target.getId()).orElseThrow().getLogin()).startsWith("erased-");
+        for (var derived : targetDerived) {
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM observation WHERE id IN (?,?)",
+                            Long.class,
+                            derived.observationIds().get(0),
+                            derived.observationIds().get(1)))
+                    .isZero();
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM feedback WHERE id IN (?,?)",
+                            Long.class,
+                            derived.preparedId(),
+                            derived.deliveredId()))
+                    .isZero();
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM chat_message WHERE id=?", Long.class, derived.messageId()))
+                    .isZero();
+        }
+        for (long threadId : sharedThreads) {
+            assertThat(jdbc.queryForObject(
+                            "SELECT message_count FROM slack_thread WHERE id=?", Integer.class, threadId))
+                    .isEqualTo(1);
+            assertThat(jdbc.queryForObject(
+                            "SELECT cardinality(participant_member_ids) FROM slack_thread WHERE id=?",
+                            Integer.class,
+                            threadId))
+                    .isEqualTo(1);
+        }
+        for (var contributor : registry.stores()) {
+            // A shared thread's aggregate changes; the other person's participant projection does not.
+            assertThat(contributor.export(Objects.requireNonNull(otherSelection.get(contributor.store()))))
+                    .as("Another person's %s rows", contributor.store())
+                    .isEqualTo(otherRows.get(contributor.store()));
+        }
+        personData.requestErasure(requestId, administratorId, true);
+        personData.run(requestId);
+        assertThat(personData.get(requestId).request().getCompletedJson()).isEqualTo(receipt.getCompletedJson());
+    }
+
+    private void link(
+            Account account,
+            IdentityProvider provider,
+            String subject,
+            @org.jspecify.annotations.Nullable String team,
+            @org.jspecify.annotations.Nullable Long actor) {
+        IdentityLink link = new IdentityLink();
+        link.setAccount(account);
+        link.setProviderId(Objects.requireNonNull(provider.getId()));
+        link.setSubject(subject);
+        link.setTeamId(team);
+        link.setExternalActorId(actor);
+        links.saveAndFlush(link);
+    }
+
+    private void preference(User user) {
+        UserPreferences preference = new UserPreferences();
+        preference.setUser(user);
+        preferences.saveAndFlush(preference);
+    }
+
+    private void membership(Workspace workspace, User user) {
+        WorkspaceMembership membership = new WorkspaceMembership();
+        membership.setWorkspace(workspace);
+        membership.setUser(user);
+        memberships.saveAndFlush(membership);
+    }
+
+    private SlackThread slackThread(Workspace workspace, String root, User... participants) {
+        SlackThread thread = new SlackThread();
+        thread.setWorkspaceId(workspace.getId());
+        thread.setSlackChannelId("C1");
+        thread.setSlackThreadTs(root);
+        thread.setParticipantMemberIds(
+                Arrays.stream(participants).mapToLong(User::getId).toArray());
+        thread.setMessageCount(participants.length);
+        return slackThreads.saveAndFlush(thread);
+    }
+
+    private void message(
+            Workspace workspace,
+            String team,
+            String root,
+            String timestamp,
+            String nativeUser,
+            User member,
+            String text) {
+        SlackMessage message = new SlackMessage();
+        message.setWorkspaceId(workspace.getId());
+        message.setSlackTeamId(team);
+        message.setSlackChannelId("C1");
+        message.setSlackThreadTs(root);
+        message.setSlackTs(timestamp);
+        message.setAuthorSlackUserId(nativeUser);
+        message.setAuthorMemberId(member.getId());
+        message.setText(text);
+        slackMessages.saveAndFlush(message);
+    }
+
+    private record DerivedConversation(List<UUID> observationIds, UUID preparedId, UUID deliveredId, UUID messageId) {}
+
+    private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId, User owner) {
+        ChatThread chatThread = new ChatThread();
+        chatThread.setId(UUID.randomUUID());
+        chatThread.setWorkspace(workspace);
+        chatThread.setUser(owner);
+        chatThreadRepository.save(chatThread);
+        ChatMessage message = new ChatMessage();
+        message.setId(UUID.randomUUID());
+        message.setThread(chatThread);
+        message.setRole(ChatMessage.Role.ASSISTANT);
+        message.setStatus(ChatMessage.Status.completed);
+        message.setParts(mapper.valueToTree(List.of(Map.of("type", "text", "text", "Delivered guidance"))));
+        message.setMetadata(mapper.createObjectNode());
+        chatMessageRepository.save(message);
+
+        Practice practice = new Practice();
+        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
+        practice.setWorkspace(workspace);
+        practice.setSlug("conv-practice-" + workspace.getId() + "-" + owner.getId());
+        practice.setName("Conversation Practice");
+        practice.setCriteria("Test description");
+        practice = practiceRepository.save(practice);
+
+        AgentJob job = new AgentJob();
+        job.setWorkspace(workspace);
+        job.setJobType(AgentJobType.CONVERSATION_REVIEW);
+        job.setArtifactKind(ArtifactKinds.CONVERSATION_THREAD);
+        job.setStatus(AgentJobStatus.COMPLETED);
+        job.setConfigSnapshot(mapper.valueToTree(Map.of("model", "test", "apiKey", "credential-canary")));
+        job.setContainerLogs("credential-canary unrelated-profile-canary");
+        job.setMetadata(mapper.valueToTree(Map.of(
+                "slack_thread_id",
+                threadId,
+                "actor_user_id",
+                owner.getId(),
+                "author_login",
+                "unrelated-profile-canary")));
+        job = agentJobRepository.save(job);
+
+        List<UUID> observationIds = List.of(UUID.randomUUID(), UUID.randomUUID());
+        for (UUID observationId : observationIds) {
+            observationRepository.insertIfAbsent(
+                    observationId,
+                    "occ-" + observationId,
+                    job.getId(),
+                    job.getWorkspace().getId(),
+                    practice.getId(),
+                    null,
+                    ArtifactKinds.CONVERSATION_THREAD.value(),
+                    threadId,
+                    owner.getId(),
+                    "Observation title",
+                    "ASSESSED",
+                    "ABSENT",
+                    "GOOD",
+                    "MAJOR",
+                    null,
+                    null,
+                    null,
+                    Instant.now(),
+                    "LIVE");
+        }
+        Feedback prepared = feedbackRepository.save(Feedback.builder()
+                .agentJobId(job.getId())
+                .workspaceId(workspace.getId())
+                .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                .artifactId(threadId)
+                .recipientUserId(owner.getId())
+                .aboutUserId(owner.getId())
+                .channel(FeedbackChannel.IN_CHAT)
+                .position(0)
+                .deliveryState(FeedbackDeliveryState.PREPARED)
+                .body("Practice guidance for developer " + owner.getId())
+                .source(FeedbackSource.AGENT)
+                .createdAt(Instant.now())
+                .build());
+        feedbackObservationRepository.insertIfAbsent(
+                prepared.getId(), observationIds.get(0), EvidenceRole.PRIMARY.name(), 0);
+        Feedback delivered = feedbackRepository.save(Feedback.builder()
+                .agentJobId(job.getId())
+                .workspaceId(workspace.getId())
+                .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                .artifactId(threadId)
+                .recipientUserId(owner.getId())
+                .aboutUserId(owner.getId())
+                .channel(FeedbackChannel.IN_CHAT)
+                .position(1)
+                .deliveryState(FeedbackDeliveryState.DELIVERED)
+                .body("Practice guidance for developer " + owner.getId())
+                .source(FeedbackSource.AGENT)
+                .createdAt(Instant.now())
+                .deliveredAt(Instant.now())
+                .build());
+        feedbackObservationRepository.insertIfAbsent(
+                delivered.getId(), observationIds.get(1), EvidenceRole.PRIMARY.name(), 0);
+        feedbackPlacementRepository.save(FeedbackPlacement.builder()
+                .feedback(delivered)
+                .placementType(PlacementType.CONVERSATION_TURN)
+                .chatMessageId(message.getId())
+                .createdAt(Instant.now())
+                .build());
+        return new DerivedConversation(observationIds, prepared.getId(), delivered.getId(), message.getId());
+    }
+}
