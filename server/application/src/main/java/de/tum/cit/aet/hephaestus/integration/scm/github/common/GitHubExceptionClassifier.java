@@ -23,40 +23,7 @@ import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
-/**
- * Classifies GitHub API exceptions into actionable categories for retry decisions.
- * <p>
- * This classifier enables smart retry behavior by differentiating between:
- * <ul>
- *   <li><b>RETRYABLE</b>: Transient failures (timeouts, network errors, 5xx) - retry with backoff</li>
- *   <li><b>RATE_LIMITED</b>: Rate limit exceeded (429, 403 with rate limit) - wait for reset then retry</li>
- *   <li><b>NOT_FOUND</b>: Resource deleted (404, GraphQL NOT_FOUND) - log and skip</li>
- *   <li><b>AUTH_ERROR</b>: Authentication/authorization failure (401, 403) - abort sync</li>
- *   <li><b>CLIENT_ERROR</b>: Bad request (400, 422) - abort sync, fix request</li>
- *   <li><b>UNKNOWN</b>: Unclassified exceptions - default handling</li>
- * </ul>
- * <p>
- * Thread-safe: This class is stateless except for metrics counters.
- *
- * <p>Usage example:
- * <pre>{@code
- * try {
- *     fetchFromGitHub();
- * } catch (Exception e) {
- *     Category category = exceptionClassifier.classify(e);
- *     switch (category) {
- *         case RETRYABLE -> retryWithBackoff(attempt);
- *         case RATE_LIMITED -> waitForRateLimit(e);
- *         case NOT_FOUND -> handleResourceDeleted();
- *         case AUTH_ERROR, CLIENT_ERROR -> abortSync();
- *         default -> handleUnknown(e);
- *     }
- * }
- * }</pre>
- *
- * @see ExponentialBackoff
- * @see de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker
- */
+/** Classifies GitHub API failures for retry decisions. A not-found response does not prove deletion. */
 @Component
 @Slf4j
 public class GitHubExceptionClassifier {
@@ -78,7 +45,7 @@ public class GitHubExceptionClassifier {
         RATE_LIMITED,
 
         /**
-         * Resource not found - resource may have been deleted on GitHub.
+         * Resource not found or not accessible.
          * Includes: 404 Not Found, GraphQL NOT_FOUND errors.
          */
         NOT_FOUND,

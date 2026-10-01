@@ -155,10 +155,12 @@ public class GitHubRepositorySyncService {
                                     signal.failure().getMessage())))
                     .block(syncProperties.graphqlTimeout());
 
-            if (response == null || !response.isValid()) {
+            if (response == null || !response.isValid() || !response.getErrors().isEmpty()) {
                 ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(response);
                 if (classification != null) {
-                    if (classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND) {
+                    if (classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND
+                            && response != null
+                            && response.field("repository").getValue() == null) {
                         throw new RepositoryNotFoundOnGitProviderException(nameWithOwner);
                     }
                     if (graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(

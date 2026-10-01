@@ -45,6 +45,7 @@ public class GitLabProjectSyncService {
 
     private final GitLabGraphQlClientProvider graphQlClientProvider;
     private final GitLabGraphQlResponseHandler responseHandler;
+    private final GitLabExceptionClassifier exceptionClassifier;
     private final GitLabProjectProcessor projectProcessor;
     private final GitLabGroupProcessor groupProcessor;
     private final GitLabProperties gitLabProperties;
@@ -56,9 +57,11 @@ public class GitLabProjectSyncService {
             GitLabProjectProcessor projectProcessor,
             GitLabGroupProcessor groupProcessor,
             GitLabProperties gitLabProperties,
-            IdentityProviderRepository gitProviderRepository) {
+            IdentityProviderRepository gitProviderRepository,
+            GitLabExceptionClassifier exceptionClassifier) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
+        this.exceptionClassifier = exceptionClassifier;
         this.projectProcessor = projectProcessor;
         this.groupProcessor = groupProcessor;
         this.gitLabProperties = gitLabProperties;
@@ -185,10 +188,23 @@ public class GitLabProjectSyncService {
                 .variable(name, value)
                 .execute()
                 .block(gitLabProperties.graphqlTimeout());
-        var handled = responseHandler.handle(response, context, log);
+        var handled = complete
+                        && response != null
+                        && response.isValid()
+                        && !response.getErrors().isEmpty()
+                ? new GitLabGraphQlResponseHandler.HandleResult(
+                        GitLabGraphQlResponseHandler.HandleResult.Action.ABORT,
+                        exceptionClassifier.classifyGraphQlResponse(response))
+                : responseHandler.handle(response, context, log);
         var classification = handled.classification();
         if (classification != null && classification.category() == GitLabExceptionClassifier.Category.NOT_FOUND) {
-            throw new RepositoryNotFoundOnGitProviderException(context);
+            Object projectData = response != null
+                    ? response.field(GET_PROJECT_DOCUMENT.equals(document) ? "project" : "projects.nodes")
+                            .getValue()
+                    : null;
+            if (projectData == null || (projectData instanceof List<?> projects && projects.isEmpty())) {
+                throw new RepositoryNotFoundOnGitProviderException(context);
+            }
         }
         if (handled.action() != GitLabGraphQlResponseHandler.HandleResult.Action.CONTINUE
                 || (complete && !Objects.requireNonNull(response).getErrors().isEmpty())) {

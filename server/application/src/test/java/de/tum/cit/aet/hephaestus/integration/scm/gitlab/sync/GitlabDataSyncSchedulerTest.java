@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.commit.GitLabCommitMergeRequestLinker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
@@ -395,6 +396,23 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSkipAllProjectRequestsAfterMetadataFailure() {
+        var holder = mockHolder();
+        prepareProject(holder);
+        var linker = mock(GitLabCommitMergeRequestLinker.class);
+        var subIssues = mock(GitLabSubIssueSyncService.class);
+        when(holder.getCommitMergeRequestLinker()).thenReturn(linker);
+        when(holder.getSubIssueSyncService()).thenReturn(subIssues);
+        when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project")).thenReturn(Optional.empty());
+
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+
+        verify(linker, never()).linkCommits(any(), any(), any());
+        verify(subIssues, never()).syncSubIssuesForRepository(any(), any());
+        verify(syncTargetProvider).recordRepositoryUnavailable(WORKSPACE_ID, 77L);
+    }
+
+    @Test
     void shouldSkipMetadataAndCommitFetchWhenRecheckIsNotDue() {
         var holder = mockHolder();
         prepareProject(holder);
@@ -407,9 +425,17 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
     @Test
     void shouldRecoverWhenProjectReappears() {
         var holder = mockHolder();
-        prepareProject(holder);
+        var project = prepareProject(holder);
+        var linker = mock(GitLabCommitMergeRequestLinker.class);
+        var subIssues = mock(GitLabSubIssueSyncService.class);
+        when(holder.getCommitMergeRequestLinker()).thenReturn(linker);
+        when(holder.getSubIssueSyncService()).thenReturn(subIssues);
+        when(linker.linkCommits(WORKSPACE_ID, project, null)).thenReturn(SyncResult.completed(1));
+        when(subIssues.syncSubIssuesForRepository(WORKSPACE_ID, project)).thenReturn(SyncResult.completed(1));
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
         verify(syncTargetProvider).clearRepositoryUnavailable(WORKSPACE_ID, 77L);
+        verify(linker).linkCommits(WORKSPACE_ID, project, null);
+        verify(subIssues).syncSubIssuesForRepository(WORKSPACE_ID, project);
     }
 
     @Test

@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -339,9 +339,14 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         repository.setId(REPOSITORY_ID);
         repository.setNativeId(NATIVE_ID);
         repository.setNameWithOwner("owner/renamed");
+        repository.setProvider(gitProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseThrow());
         when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq("owner/renamed"), any()))
                 .thenReturn(Optional.of(repository));
-        service.syncSyncTarget(target);
+        assertThat(service.syncSyncTarget(target)).isTrue();
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
         verify(repositorySyncService, never()).syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any());
         verify(syncTargetProvider).clearRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID);
         verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, "owner/renamed");
@@ -369,8 +374,7 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
 
     @Test
     void shouldReconcileMonitorIdentityOnEverySync() {
-        // The happy path backfills the monitor's stable id (and re-keys its name on divergence) so future
-        // renames can be told apart from deletions.
+        // Successful metadata captures the stable id and current name for later rechecks.
         Repository resolved = new Repository();
         resolved.setId(REPOSITORY_ID);
         resolved.setNativeId(NATIVE_ID);
@@ -379,6 +383,8 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
                 .when(repositoryRepository.findByNameWithOwnerAndProviderId(REPO_NAME, PROVIDER_ID))
                 .thenReturn(Optional.of(resolved));
 
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any()))
+                .thenReturn(Optional.of(resolved));
         service.syncSyncTarget(syncTarget(null, null));
 
         verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, REPO_NAME);
@@ -393,8 +399,8 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         boolean result = service.syncSyncTarget(target);
 
         // The sub-syncs still run rather than being skipped as "repoUnchanged".
-        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
-        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
         org.assertj.core.api.Assertions.assertThat(result).isTrue();
         verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
     }
@@ -443,8 +449,8 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
 
         // The UPDATED_AT-ordered incremental path starts fresh instead of resuming from a cursor produced
         // by a different ordering (which would skip the newest items).
-        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
-        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
     }
 
     @Test

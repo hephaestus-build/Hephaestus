@@ -270,14 +270,9 @@ public class GithubDataSyncService {
             repository = syncedRepository.get();
             syncTargetProvider.clearRepositoryUnavailable(scopeId, syncTarget.id());
             repositoryCreatedDuringSync = true;
-            syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
         }
 
         Long repositoryId = repository.getId();
-
-        // Capture stable identity and heal names already updated by a webhook or another workspace.
-        syncTargetProvider.reconcileSyncTargetIdentity(
-                syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
 
         log.info(
                 "Starting repository sync: scopeId={}, repoId={}, repoName={}",
@@ -291,15 +286,7 @@ public class GithubDataSyncService {
                 if (syncedRepository.isPresent()) {
                     repository = syncedRepository.get();
                     syncTargetProvider.clearRepositoryUnavailable(scopeId, syncTarget.id());
-                    syncTargetProvider.reconcileSyncTargetIdentity(
-                            syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
-                    if (!repository.getNameWithOwner().equals(nameWithOwner)) {
-                        // The next pass uses the healed monitor name for all child requests.
-                        syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, null);
-                        return true;
-                    }
                     log.debug("Synced repository metadata: scopeId={}, repoId={}", scopeId, repositoryId);
-                    syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
                 } else {
                     syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
                     syncTargetProvider.updateSyncError(
@@ -307,6 +294,11 @@ public class GithubDataSyncService {
                     return false;
                 }
             }
+
+            repositoryId = repository.getId();
+            syncTargetProvider.reconcileSyncTargetIdentity(
+                    syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
+            syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
 
             // Backfill commits from local git clone. Uses local git, not the GitHub API, so
             // there is no rate limit concern. The backfill service has its own short-circuit
