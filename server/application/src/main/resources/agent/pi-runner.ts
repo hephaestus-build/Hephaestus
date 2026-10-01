@@ -41,6 +41,7 @@ import {
 	isRecord,
 	type NormalizedCitation,
 	type NormalizedObservation,
+	type Outcome,
 	normalizeObservation,
 	resolveQuote,
 	validateEvidenceSources,
@@ -255,6 +256,7 @@ interface AdmittedCitation {
 interface AdmittedObservation {
 	id: string;
 	practiceSlug: string;
+	outcome: Outcome | null;
 	citations: AdmittedCitation[];
 	[key: string]: unknown;
 }
@@ -268,6 +270,7 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 		isRecord(value) &&
 		typeof value.id === "string" &&
 		typeof value.practiceSlug === "string" &&
+		(value.outcome === "POSITIVE" || value.outcome === "NEGATIVE" || value.outcome === null) &&
 		Array.isArray(value.citations) &&
 		value.citations.every(isAdmittedCitation)
 	);
@@ -1679,18 +1682,6 @@ function buildFeedbackTool(
 		if (delivers && usedPerChannel[unit.channel] >= bounds.maxUnits) {
 			return skipped(`${unit.channel} cap of ${bounds.maxUnits} reached; skipped.`);
 		}
-		// WITHHOLD requires a NEGATIVE observation; otherwise there is nothing to withhold.
-		if (
-			!delivers &&
-			!observations.some(
-				(observation) =>
-					observation.practiceSlug === unit.practiceSlug && observation.outcome === "NEGATIVE",
-			)
-		) {
-			return skipped(
-				`${unit.practiceSlug} has no NEGATIVE observation in this run, so there is nothing to withhold; skipped.`,
-			);
-		}
 		const rejection = validateUnit(unit, observationsById, preparedTargets, placementKinds);
 		if (rejection !== null) {
 			return skipped(rejection);
@@ -2191,7 +2182,9 @@ function validateUnit(
 	const evidenceError = validateFeedbackEvidence(
 		unit.practiceSlug,
 		unit.basedOn,
-		new Map([...observationsById].map(([id, observation]) => [id, observation.practiceSlug])),
+		observationsById,
+		unit.channel,
+		unit.action,
 	);
 	if (evidenceError !== null) {
 		return evidenceError;
