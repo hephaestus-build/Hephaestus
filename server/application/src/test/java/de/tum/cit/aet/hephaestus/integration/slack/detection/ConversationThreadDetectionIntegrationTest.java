@@ -190,14 +190,10 @@ class ConversationThreadDetectionIntegrationTest extends BaseIntegrationTest {
         assertThat(payload.get("messages")).hasSize(2);
     }
 
-    @Test
-    @DisplayName("thread truncation is reported only when messages exist beyond the projection limit")
-    void reportsExactTruncation() {
-        assertProjectedTruncation(100, false);
-        assertProjectedTruncation(101, true);
-    }
-
-    private void assertProjectedTruncation(int messageCount, boolean expected) {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {100, 101})
+    @DisplayName("review threads retain every permitted message without a projection cap")
+    void shouldRetainEveryPermittedThreadMessage(int messageCount) {
         long ws = newWorkspace();
         long baseSecond = Instant.now().getEpochSecond() - 1200;
         String rootTs = baseSecond + ".000000";
@@ -211,8 +207,8 @@ class ConversationThreadDetectionIntegrationTest extends BaseIntegrationTest {
 
         ObjectNode payload = projector.buildThreadPayload(ws, "C1", rootTs);
 
-        assertThat(payload.get("messages")).hasSize(100);
-        assertThat(payload.get("truncated").asBoolean()).isEqualTo(expected);
+        assertThat(payload.get("messages")).hasSize(messageCount);
+        assertThat(payload.get("truncated").asBoolean()).isFalse();
     }
 
     @Test

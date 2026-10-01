@@ -164,7 +164,7 @@ public final class TestMentorWorker implements AutoCloseable {
                             .put("method", "fetch_context");
                     callback.putObject("params")
                             .put("threadId", thread)
-                            .put("path", "context/observations_history.json");
+                            .put("path", "inputs/context/observations_history.json");
                     push(callback);
                 }
                 case "close_thread", "abort" -> result(id, mapper.createObjectNode());

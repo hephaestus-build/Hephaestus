@@ -144,7 +144,11 @@ class PracticeDefinitionOptionsServiceTest {
                     // The bound the claim is made against travels with the flag. Offering EXHAUSTIVE without
                     // saying where the capture stops asks an author to promise something they cannot check.
                     assertThat(option.selectionScope())
-                            .contains("Every permitted", "without record-count or history-window caps");
+                            .isEqualTo(catalogs.requireSource(
+                                            catalogs.current().version(),
+                                            new de.tum.cit.aet.hephaestus.evidence.SourceKind(
+                                                    "scm.pull-request.comments"))
+                                    .selectionScope());
                 });
         assertThat(pullRequests.allowedSources())
                 .filteredOn(option -> option.sourceKind().equals("scm.linked-work-items"))

@@ -570,6 +570,11 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
         assertThat(java.nio.file.Files.readString(
                         prepared.filesOnDisk().get("context/scm/reviewed/pulls/51/record.json")))
                 .contains("Just committed", "synced_at");
+        var comment = OBJECT_MAPPER.readTree(java.nio.file.Files.readAllLines(
+                        prepared.filesOnDisk().get("context/scm/" + repository.getId() + "/pulls/50/comments.jsonl"))
+                .getFirst());
+        assertThat(comment.has("synced_at")).isTrue();
+        assertThat(comment.path("synced_at").isNull()).isTrue();
         assertThat(java.nio.file.Files.readString(prepared.filesOnDisk().get("INDEX.md")))
                 .contains("context/chat/", "context/docs/", "context/people/");
         assertThat(java.nio.file.Files.readString(prepared.filesOnDisk().get("context/chat/C1732/2024-01.jsonl")))

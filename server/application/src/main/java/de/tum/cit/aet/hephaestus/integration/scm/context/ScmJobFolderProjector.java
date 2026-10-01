@@ -89,7 +89,7 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
         if (!allowed.contains(new SourceKind(kind))) return;
         String foreign = table.equals("issue_comment") ? "issue_id" : "pull_request_id";
         rows(
-                "SELECT (to_jsonb(c)||jsonb_build_object('synced_at',i.last_sync_at))::text FROM " + table
+                "SELECT (to_jsonb(c)||jsonb_build_object('synced_at',NULL))::text FROM " + table
                         + " c JOIN issue i ON i.id=c." + foreign
                         + " WHERE i.id=? AND EXISTS (SELECT 1 FROM repository_to_monitor m JOIN repository r ON r.name_with_owner=m.name_with_owner WHERE m.workspace_id=? AND r.id=i.repository_id) ORDER BY c.id",
                 new Object[] {issue, workspace},
