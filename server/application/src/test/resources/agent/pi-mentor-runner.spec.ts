@@ -34,6 +34,7 @@ void test("fetch_context admits canonical keys and one item by its canonical id,
 	assert.equal(isFetchContextKey("merge_readiness.json"), false);
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness/../user.json"), false);
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness/42.json.bak"), false);
+	assert.equal(isFetchContextKey("inputs/context/merge_readiness/!9.json"), false);
 	const observation = "0b7e1c9a-3f5d-4a8e-9c21-6d4f8e2a1b3c";
 	assert.equal(isFetchContextKey(`inputs/context/observations_history/${observation}.json`), true);
 	assert.equal(

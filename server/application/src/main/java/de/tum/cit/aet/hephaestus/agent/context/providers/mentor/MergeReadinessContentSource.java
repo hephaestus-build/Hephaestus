@@ -52,9 +52,9 @@ import tools.jackson.databind.node.ObjectNode;
  * general note or an inline thread beside it, and resolving that thread does not show the condition was met. Its description and the issues the provider records it closing, with their bodies,
  * carry conditions too: a closing link says the provider will close the issue on merge, not that the issue's
  * conditions are met, and a stored list can miss a link whose read failed. One that is only listed in
- * {@code notLoaded} is read on demand as {@code inputs/context/merge_readiness/<artifactId>.json}, which also reads
- * the developer's closed or merged work: the list is for work still to merge, the detail for any work they authored,
- * with its stored state saying which.
+ * {@code notLoaded} is read on demand from the {@code resource} its entry carries, as is the developer's closed or
+ * merged work from its entry in {@code recent_authored_work.json}: the list is for work still to merge, the detail for
+ * any work they authored, with its stored state saying which.
  *
  * <p>Each read is one snapshot: the pages of a scan are ordered by thread state a sync may change between them, so
  * under read-committed a row could slip past the offset unread.
@@ -127,6 +127,11 @@ public class MergeReadinessContentSource implements ContentSource {
         }
     }
 
+    /** The on-demand key of one pull request's detail, published as the {@code resource} of its entries. */
+    public static String resourceOf(long artifactId) {
+        return OUTPUT_PREFIX + "merge_readiness/" + artifactId + ".json";
+    }
+
     /** The artifact id an on-demand key names, if {@code key} is one. */
     public static Optional<Long> artifactIdOf(String key) {
         Matcher matcher = ITEM_KEY.matcher(key);
@@ -148,7 +153,10 @@ public class MergeReadinessContentSource implements ContentSource {
                             .findFirst();
             if (pr.isEmpty()) {
                 root.put("status", "NOT_FOUND");
-                root.put("reason", "No pull request by this developer has that artifactId in this workspace.");
+                root.put(
+                        "reason",
+                        "No pull request by this developer has that artifactId in this workspace. Copy the resource "
+                                + "of an entry in recent_authored_work.json or merge_readiness.json.");
                 return;
             }
             root.putArray("pullRequests").add(describe(workspaceId, developerId, providerId, pr.get()));
@@ -216,6 +224,7 @@ public class MergeReadinessContentSource implements ContentSource {
         return objectMapper
                 .createObjectNode()
                 .put("artifactId", pr.getId())
+                .put("resource", resourceOf(pr.getId()))
                 .put("number", pr.getNumber())
                 .put("title", pr.getTitle());
     }
@@ -224,6 +233,7 @@ public class MergeReadinessContentSource implements ContentSource {
         return objectMapper
                 .createObjectNode()
                 .put("artifactId", detail.path("artifactId").asLong())
+                .put("resource", resourceOf(detail.path("artifactId").asLong()))
                 .put("number", detail.path("number").asInt())
                 .put("title", detail.path("title").asString());
     }
@@ -231,6 +241,7 @@ public class MergeReadinessContentSource implements ContentSource {
     private ObjectNode describe(long workspaceId, long developerId, long providerId, PullRequest pr) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("artifactId", pr.getId());
+        node.put("resource", resourceOf(pr.getId()));
         node.put("number", pr.getNumber());
         node.put("title", pr.getTitle());
         node.put("url", pr.getHtmlUrl());

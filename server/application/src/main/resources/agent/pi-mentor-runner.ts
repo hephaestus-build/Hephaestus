@@ -542,24 +542,29 @@ async function ensureRuntime(): Promise<MentorRuntime> {
 	}
 }
 
+const ITEM_RESOURCES =
+	"For one item, copy the `resource` value exactly as a context file gives it: a pull request's from its entry in " +
+	"recent_authored_work.json or merge_readiness.json, an observation's from its row in observations_history.json. " +
+	"Never build one from a pull request number or another id.";
+
 function defineFetchContextTool(sdk: PiSdk) {
 	const { defineTool } = sdk;
 	return defineTool({
 		name: "fetch_context",
 		label: "Fetch Context",
 		description:
-			"Fetch a Hephaestus mentor context JSON resource from the server. Use the exact canonical path, " +
-			`for example inputs/context/recent_authored_work.json. Allowed paths: ${[...FETCH_CONTEXT_ALLOWED].join(", ")}, ` +
-			"inputs/context/merge_readiness/<artifactId>.json for one pull request of theirs, open, closed or merged, " +
-			"by the artifactId merge_readiness.json or recent_authored_work.json lists, " +
-			"and inputs/context/observations_history/<id>.json for the evidence of one observation listed in " +
-			"observations_history.json.",
+			"Fetch a Hephaestus mentor context JSON resource from the server by its exact path. Fixed paths: " +
+			`${[...FETCH_CONTEXT_ALLOWED].join(", ")}. ${ITEM_RESOURCES}`,
 		parameters: {
 			type: "object",
 			additionalProperties: false,
 			required: ["path"],
 			properties: {
-				path: { type: "string", minLength: 1 },
+				path: {
+					type: "string",
+					minLength: 1,
+					description: "A fixed path, or a `resource` value copied exactly from a context file.",
+				},
 			},
 		},
 		execute: async (_toolCallId, params): Promise<FetchContextToolResult> => {
@@ -567,7 +572,9 @@ function defineFetchContextTool(sdk: PiSdk) {
 			// Pi treats THROWN errors as the tool's failure signal — a returned `isError:true`
 			// is ignored by the runtime, so throw to flag the call as failed.
 			if (!isFetchContextKey(contextKey)) {
-				throw new Error(`fetch_context: path "${contextKey}" is not in the allow-list`);
+				throw new Error(
+					`fetch_context: "${contextKey}" is not a context resource. ${ITEM_RESOURCES}`,
+				);
 			}
 			if (activeThreadId === null) {
 				throw new Error("fetch_context: no active thread bound to the runtime");

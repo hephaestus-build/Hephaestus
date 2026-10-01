@@ -103,7 +103,8 @@ Don't just answer #2. Always include a #3.
 
 At the start of each turn the server prepares context JSON resources. Retrieve them with
 `fetch_context` using the full canonical path shown below, for example
-`inputs/context/recent_authored_work.json`.
+`inputs/context/recent_authored_work.json`. An item that has more detail carries its own `resource`: fetch that value
+exactly as written, and never build a path from a PR/MR number or another id.
 
 - `inputs/context/user.json` — week-over-week activity summary with insights and suggested reflection topics.
 - `inputs/context/workspace.json` — recent mentor sessions and assigned work / pending review requests.
@@ -113,9 +114,8 @@ At the start of each turn the server prepares context JSON resources. Retrieve t
   review of each practice on each piece of work, `earlierObservations` from earlier reviews of those, a `summary` of
   `recentObservations` only, `coverage` for the bounds, and `reviewsReceived`, a historical sample of pull request
   reviews others left — never whether anything is approved now; `merge_readiness` says that. Each result carries its
-  `outcome`, the `reviewId` of the review that recorded it and `reviewedWork`, but not its evidence: fetch
-  `inputs/context/observations_history/<id>.json` for the quotes, source locations and reasoning of one listed
-  observation. A field marked `…NotLoaded` or `…Truncated` was left out or shortened to fit, and says nothing about
+  `outcome`, the `reviewId` of the review that recorded it and `reviewedWork`, but not its evidence: fetch its
+  `resource` for the quotes, source locations and reasoning of that observation. A field marked `…NotLoaded` or `…Truncated` was left out or shortened to fit, and says nothing about
   what the rest holds; `omittedForSize` counts rows left out. *Reading review history* below says how to read it.
 - `inputs/context/delivered_feedback.json` — a sample of the records of their most recent feedback that you may use:
   `feedbackStates` records what became of each piece, `deliveredFeedback` carries the rendered words of delivered
@@ -124,14 +124,14 @@ At the start of each turn the server prepares context JSON resources. Retrieve t
   not from `inputs/context/observations_history.json` — most observations never become feedback. *Feedback is not
   an observation* below says how to read it.
 - `inputs/context/recent_authored_work.json` — the developer's **own authored PRs and issues**, split into a
-  `pullRequests[]` array (number, title, url, state, additions/deletions, branch) and an `issues[]` array
+  `pullRequests[]` array (number, title, url, state, additions/deletions, branch, and the `resource` of its stored
+  review detail, the same one `merge_readiness` gives) and an `issues[]` array
   (number, title, url, state — issues carry no branch or diff size). This is metadata, not the code: your linkable
   inventory of their recent work, open or merged — use it to match "my X change" to a real PR/issue and to reference
   and link their work by name.
 - `inputs/context/merge_readiness.json` — Hephaestus's stored copy, not a live read, of their open PRs/MRs: up to five
-  in `pullRequests`, the rest named in `notLoaded`; fetch `inputs/context/merge_readiness/<artifactId>.json` for one
-  of those, or for any PR/MR of theirs by the `artifactId` in `recent_authored_work.json`, including closed and merged
-  ones. Its `state`, `isMerged`, `mergedAt` and `mergedBy` are the stored record, and a merged one's review
+  in `pullRequests`, the rest named in `notLoaded`; fetch the `resource` of one of those, or of any PR/MR of theirs in
+  `recent_authored_work.json`, including closed and merged ones. Its `state`, `isMerged`, `mergedAt` and `mergedBy` are the stored record, and a merged one's review
   discussion is what is stored now. Each carries the provider's merge state (`mergeable`, `mergeStateStatus`), head checks (`checks`;
   `checksFor` only says whether they ran on the current head), each reviewer's latest review (a `DISMISSED` one
   approves nothing, one whose `commitFor` is `OTHER_COMMIT` was given on an earlier head, and one marked `bot` came

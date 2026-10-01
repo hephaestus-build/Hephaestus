@@ -267,8 +267,11 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(bad.has("evidence")).isFalse();
         assertThat(bad.has("evidenceRationale")).isFalse();
         assertThat(root.get("detail").get("loaded").asBoolean()).isFalse();
-        assertThat(root.get("detail").get("path").asString())
-                .isEqualTo("inputs/context/observations_history/<id>.json");
+        assertThat(bad.get("resource").asString())
+                .isEqualTo("inputs/context/observations_history/" + badObservation.getId() + ".json");
+        assertThat(ObservationHistoryContentSource.observationIdOf(
+                        bad.get("resource").asString()))
+                .contains(badObservation.getId());
 
         JsonNode badDetail = provider.inspect(1L, 2L, badObservation.getId());
         assertThat(badDetail.get("list").asString()).isEqualTo("recentObservations");

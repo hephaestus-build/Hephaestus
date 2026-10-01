@@ -616,6 +616,43 @@ void test("a restored tool batch too large to cut sends no ordinary request", as
 	assert.match(piError(runner), /could not be shortened/u);
 });
 
+void test("a path built from a pull request number is refused before the server, saying where its resource is", async (t) => {
+	const root = runnerRoot(t);
+	const model = await fakeModel(t, (_kind, index) =>
+		index === 0
+			? { toolCall: "inputs/context/merge_readiness/!9.json", promptTokens: 3000 }
+			: { text: "answer", promptTokens: 3000 },
+	);
+	const runner = spawnRealRunner(t, root, model);
+	await openAndPrompt(runner, "what did the tutor ask on !9?");
+	const first = await runner.next(
+		(frame) => frame.method === "fetch_context" || isEvent("agent_end")(frame),
+	);
+	assert.equal(eventOf(first)?.type, "agent_end", JSON.stringify(first).slice(0, 300));
+
+	const refusal =
+		'fetch_context: "inputs/context/merge_readiness/!9.json" is not a context resource. For one item, copy the ' +
+		"`resource` value exactly as a context file gives it: a pull request's from its entry in " +
+		"recent_authored_work.json or merge_readiness.json, an observation's from its row in observations_history.json. " +
+		"Never build one from a pull request number or another id.";
+	const ended = runner.events.find((e) => e.type === "tool_execution_end");
+	assert.ok(ended !== undefined);
+	assert.equal(ended.event.isError, true);
+	assert.deepEqual(ended.event.result, {
+		content: [{ type: "text", text: refusal }],
+		details: {},
+	});
+	assert.deepEqual(model.calls, ["turn", "turn"]);
+	const retry: unknown = JSON.parse(model.bodies[1] ?? "");
+	assert.ok(isRecord(retry) && Array.isArray(retry.messages));
+	assert.deepEqual(
+		retry.messages
+			.filter((message) => isRecord(message) && message.role === "tool")
+			.map((message) => (isRecord(message) ? message.content : undefined)),
+		[refusal],
+	);
+});
+
 void test("a small restored session is not compacted", async (t) => {
 	const root = runnerRoot(t);
 	const model = await fakeModel(t, () => ({ text: "answer", promptTokens: 3000 }));
