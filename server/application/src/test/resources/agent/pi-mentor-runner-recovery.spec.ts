@@ -390,11 +390,14 @@ function savedSession(root: string, replies: SavedReply[]): string {
 	return jsonl;
 }
 
-/** Two long saved answers: enough for Pi to summarise, under the working trigger by their recorded usage. */
+/**
+ * Two long saved answers: enough for Pi to summarise, under the working trigger by their recorded usage. The
+ * newer one alone passes Pi's retention target, so a compaction summarises the oldest.
+ */
 const longHistory = (root: string, ...more: SavedReply[]) =>
 	savedSession(root, [
 		{ text: `${OLDEST} ${"a".repeat(100_000)}`, inputTokens: 2000 },
-		{ text: "b".repeat(40_000), inputTokens: 2000 },
+		{ text: "b".repeat(100_000), inputTokens: 2000 },
 		...more,
 	]);
 
@@ -619,11 +622,11 @@ void test("a restored tool batch too large to cut sends no ordinary request", as
 	const root = runnerRoot();
 	const model = await fakeModel(t, () => ({ text: "answer", promptTokens: 3000 }));
 	const runner = spawnRealRunner(t, root, model);
-	// The turn ended on its tool result, which Pi never splits from its call.
+	// The turn ended on a tool result past Pi's retention target, which Pi never splits from its call.
 	await openAndPrompt(
 		runner,
 		"and the tests?",
-		longHistory(root, { toolResultChars: 48_000, inputTokens: 100_000 }),
+		longHistory(root, { toolResultChars: 120_000, inputTokens: 100_000 }),
 	);
 	await runner.next(isEvent("agent_end"));
 
@@ -744,6 +747,72 @@ void test("a link the server admits only after Stop is neither shown nor reporte
 	await runner.next(isEvent("agent_end"));
 	assert.deepEqual(model.calls, ["turn", "turn"]);
 	assert.ok(!typesOf(runner).includes("link_observation"));
+});
+
+/**
+ * The measured staging turn, with made-up content: the question fetched a merge request's detail, then a small
+ * observation detail, and the reply that asked for the second crossed the working trigger, so Pi compacted between
+ * the two tool batches. What the turn read before that stays verbatim, not only in the summary: the question, and
+ * the reviewer's and the student's comments told apart. Only the messages are measured here; the system prompt,
+ * tool schemas and the reply's headroom come on top of them and are not modelled by the scripted usage.
+ */
+void test("a compaction during a turn keeps its question and the comments it fetched", async (t) => {
+	const question = "What did the tutor ask on !10, and did I answer it?";
+	const reviewer =
+		"REVIEWER-NOTE: one bounded file and diff check; no question asked and no correction requested.";
+	const student =
+		"STUDENT-NOTE: thanks, the generated file stays as it is and the issue is linked.";
+	const mergeRequest = "inputs/context/merge_readiness/4009562523.json";
+	const observation =
+		"inputs/context/observations_history/3ec24178-2219-4af4-bebf-077c73a0435e.json";
+	const model = await fakeModel(t, (kind, index) => {
+		if (kind === "summary") {
+			return { text: SUMMARY, promptTokens: 3000 };
+		}
+		return (
+			[
+				{ toolCall: mergeRequest, promptTokens: 30_000 },
+				{ toolCall: observation, promptTokens: 52_000 },
+				{ toolCall: HISTORY, promptTokens: 31_000 },
+			][index] ?? { text: "answer", promptTokens: 32_000 }
+		);
+	});
+	const root = runnerRoot();
+	const runner = spawnRealRunner(t, root, model);
+	const earlier = Array.from({ length: 6 }, (_, i) => ({
+		text: `${i} ${"e".repeat(16_000)}`,
+		inputTokens: 2000,
+	}));
+	await openAndPrompt(runner, question, savedSession(root, earlier));
+	const answer = async (content: Json) => {
+		const callback = await runner.next((frame) => frame.method === "fetch_context");
+		runner.send({ jsonrpc: "2.0", id: callback.id, result: { content } });
+	};
+	await answer({
+		pullRequests: [
+			{
+				description: "d".repeat(64_000),
+				threads: [{ comments: [{ authorRelation: "OTHER_PARTICIPANT", body: reviewer }] }],
+				generalNotes: [{ authorRelation: "WORK_AUTHOR", body: student }],
+			},
+		],
+	});
+	await answer({ observation: { evidenceRationale: "r".repeat(2000) } });
+	await answer({ rows: "h".repeat(2000) });
+	await runner.next(isEvent("agent_end"));
+
+	const turns = model.bodies.filter((_, i) => model.calls[i] === "turn");
+	assert.equal(turns.length, 4, model.calls.join(", "));
+	assert.ok(
+		model.calls.indexOf("summary") === 2 && model.calls.lastIndexOf("summary") < 4,
+		model.calls.join(", "),
+	);
+	for (const body of turns.slice(2)) {
+		assert.ok(body.includes(SUMMARY), "the requests after the compaction carry its summary");
+		for (const kept of [question, reviewer, student]) {
+			assert.ok(body.includes(kept), `the request after the compaction still holds: ${kept}`);
+		}
+	}
 });
 
 void test("a small restored session is not compacted", async (t) => {

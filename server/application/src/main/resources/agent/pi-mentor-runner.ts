@@ -416,6 +416,7 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 	const compaction = mentorCompaction(
 		model.contextWindow,
 		settingsManager.getCompactionReserveTokens(),
+		settingsManager.getCompactionKeepRecentTokens(),
 	);
 	log(
 		`compaction: window=${model.contextWindow} trigger=${model.contextWindow - compaction.reserveTokens} ` +
@@ -487,18 +488,21 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 }
 
 /** A conversation is compacted past this many tokens, when the model's window allows it. */
-const MENTOR_WORKING_TOKENS = 32_768;
-/** What a compaction keeps unsummarised, at most. */
-const MENTOR_RECENT_TOKENS = 8192;
+const MENTOR_WORKING_TOKENS = 49_152;
 
 /**
  * The mentor's working policy in Pi's own terms, for a model whose real window is `window`. Pi compacts once
  * the context passes `window - reserveTokens`, so the reserve sets the trigger; it also caps Pi's summary
  * output, which the model's own output limit caps in turn. The window itself is never changed.
+ *
+ * `keepRecentTokens` is Pi's native target for recent messages kept unsummarised, not a bound: Pi cuts at a message
+ * boundary, keeps a tool call with its results, and may split a long active turn. On a small window the target is
+ * held to half the trigger, leaving nominal headroom for the summary.
  */
 function mentorCompaction(
 	window: number,
 	nativeReserve: number,
+	nativeKeepRecent: number,
 ): { reserveTokens: number; keepRecentTokens: number } {
 	if (!Number.isInteger(window) || window <= 1) {
 		throw new Error(`the model's context window is not a usable size: ${window}`);
@@ -507,7 +511,7 @@ function mentorCompaction(
 	const trigger = Math.min(MENTOR_WORKING_TOKENS, window - minimumReserve);
 	return {
 		reserveTokens: window - trigger,
-		keepRecentTokens: Math.min(MENTOR_RECENT_TOKENS, Math.floor(trigger / 4)),
+		keepRecentTokens: Math.min(nativeKeepRecent, Math.floor(trigger / 2)),
 	};
 }
 
