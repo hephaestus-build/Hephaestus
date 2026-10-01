@@ -381,6 +381,43 @@ function taskClosure(tasks: Record<string, unknown>, roots: Iterable<string>): S
 }
 
 void describe("CI contract", () => {
+	void test("every Dockerfile build refreshes its isolated OS-package stage", async () => {
+		const reusable = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const build = namedStep(reusable, ["jobs", "build"], "Build and push (Dockerfile)");
+		assert.equal(build.getIn(["with", "no-cache-filters"]), "os-packages");
+		assert.match(String(build.getIn(["with", "cache-from"])), /cache-main-/u);
+		assert.match(String(build.getIn(["with", "cache-to"])), /mode=max/u);
+
+		const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+		const jobs = caller.get("jobs");
+		assert.ok(isMap(jobs));
+		let dockerfiles = 0;
+		for (const entry of jobs.items) {
+			assert.ok(isMap(entry.value));
+			const file = entry.value.getIn(["with", "docker-file"]);
+			if (typeof file !== "string") {
+				continue;
+			}
+			dockerfiles += 1;
+			const dockerfile = await readFile(file, "utf8");
+			const stages = dockerfile.split(/^FROM /mu);
+			const packages = stages.find((stage) => /^.* AS os-packages$/mu.test(stage));
+			assert.ok(packages !== undefined, `${file} must have the stage named by no-cache-filters`);
+			assert.match(packages, /^RUN .*?(?:apt-get|apk)/msu);
+			assert.doesNotMatch(packages, /^COPY |^ARG SOURCE_COMMIT/mu);
+			if (packages.includes("apt-get")) {
+				assert.match(packages, /apt-get update -o APT::Update::Error-Mode=any/u);
+			}
+			assert.match(dockerfile, /^FROM os-packages AS runtime$/mu);
+			for (const stage of stages.filter((candidate) => candidate !== packages)) {
+				assert.doesNotMatch(stage, /\b(?:apt-get|apk) (?:update|upgrade|install|add)\b/u);
+			}
+		}
+		assert.equal(dockerfiles, 3);
+	});
+
 	void test("the webapp image includes root configuration read by Vite", async () => {
 		const config = await readFile("webapp/vite.config.ts", "utf8");
 		const dockerfile = await readFile("webapp/Dockerfile", "utf8");

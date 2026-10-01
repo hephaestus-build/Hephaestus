@@ -171,6 +171,8 @@ jobs:
           # image into the daemon leaves something nothing can name.
           load: ${{ !inputs.publish && inputs.single-arch }}
           outputs: ${{ inputs.publish && !inputs.single-arch && format('type=image,"name={0}/{1}",push-by-digest=true,name-canonical=true,push=true', inputs.registry, inputs.image-name) || '' }}
+          # Live distribution indexes are not BuildKit cache inputs. Refresh them even on reruns.
+          no-cache-filters: os-packages
           cache-from: |
             type=registry,ref=${{ inputs.registry }}/${{ inputs.image-name }}:cache-main-${{ steps.prep.outputs.platform_pair }}
           cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:cache-main-{2},mode=max', inputs.registry, inputs.image-name, steps.prep.outputs.platform_pair) || '' }}
