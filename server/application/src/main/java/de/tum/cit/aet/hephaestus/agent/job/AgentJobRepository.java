@@ -228,6 +228,7 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     @Query(value = """
         SELECT j.id AS "id",
                j.job_type AS "jobType",
+               j.status AS "status",
                COALESCE(j.metadata ->> 'pull_request_id', j.metadata ->> 'issue_id') AS "reviewedArtifactId",
                jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion",
                jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'capturedAt') AS "capturedAt",
@@ -267,6 +268,8 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     interface ReviewedWorkRow {
         UUID getId();
+
+        AgentJobStatus getStatus();
 
         @Nullable
         String getJobType();

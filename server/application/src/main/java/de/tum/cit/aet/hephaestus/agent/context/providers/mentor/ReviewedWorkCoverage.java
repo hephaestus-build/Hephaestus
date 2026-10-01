@@ -123,6 +123,9 @@ class ReviewedWorkCoverage {
             @Nullable StoredWork stored,
             boolean pullRequest) {
         ObjectNode node = objectMapper.createObjectNode();
+        node.put(
+                "producingReviewStatus",
+                capture == null ? "UNKNOWN" : capture.getStatus().name());
         ArrayNode checked = objectMapper.createArrayNode();
         ArtifactKind kind = observation.getArtifactKind();
         Long artifactId = observation.getArtifactId();
