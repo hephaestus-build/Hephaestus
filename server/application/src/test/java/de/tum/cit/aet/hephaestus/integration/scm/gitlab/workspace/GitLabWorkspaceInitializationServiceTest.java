@@ -178,7 +178,8 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                         null,
                         null,
                         ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of())));
+                        Set.of(),
+                        null)));
         lenient()
                 .when(connectionService.findActiveBearerToken(anyLong(), eq(IntegrationKind.GITLAB)))
                 .thenReturn(Optional.of(new BearerToken("glpat-test-token", null)));
@@ -445,7 +446,8 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
                             42L,
                             99L,
                             ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                            Set.of())));
+                            Set.of(),
+                            null)));
 
             assertThat(initService.initializeIfWebhookMissing(1L)).isFalse();
             verifyNoInteractions(gitLabSyncServiceHolderProvider);

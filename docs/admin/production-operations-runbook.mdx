@@ -146,8 +146,9 @@ Those consumers must show **unknown**, not infer health from a configured timer 
 `pgbackrest verify`. Until the status publisher and [operator alert service](https://github.com/hephaestus-build/Hephaestus/issues/1369)
 exist, the operator must monitor failed systemd units, WAL archive lag and disk space, pgBackRest
 `info`/`verify`, and the last actual drill record. A passing backup is not a restore result or release
-gate. [Telemetry alerts](https://github.com/hephaestus-build/Hephaestus/issues/1639) must cover stale
-backup/WAL, failed attempts, and an expired or failed restore rehearsal.
+gate. [Application metrics](./observability.mdx#scrape-metrics) do not report backup or WAL freshness
+or restore-rehearsal outcomes. Configure those alerts in the host or backup monitoring tools to cover
+stale backup/WAL, failed attempts, and an expired or failed restore rehearsal.
 
 Set explicit RPO/RTO, backup schedule, retention, owner, off-host destination and restore-test cadence.
 Monitor last successful backup/WAL archive and restore drill. Test loss of the primary host and backup
@@ -186,7 +187,8 @@ preserve them for gap analysis, not automatic replay after PITR.
    [restore-clone lockdown](./backup-restore#automated-off-host-backup-self-host-compose) against the
    recovered database before any application role. The restore overlay refuses direct server, worker
    and webhook starts; an operator-owned isolated override is needed to inspect application health.
-   Keep `AGENT_ENABLED=false` on the server too: it includes an in-process worker. Read back Silent Mode
+   Keep `AGENT_ENABLED=false` on the server and the worker: the server submits and recovers reviews and
+   the worker runs them. Read back Silent Mode
    and workspace delivery pause before permitting review execution. Record provider-readiness failures
    caused by isolation without restoring live write access.
 5. For releases predating Silent Mode, the environment, mentor/Slack shutdown, credential withholding
@@ -303,7 +305,8 @@ and verify the incident record matches provider state.
 
 ## Alert response
 
-Use the instrumented metrics in [Practice review operations](./practice-review-operations#queue-health)
+Use [Scrape metrics](./observability.mdx#scrape-metrics) for the private endpoint and example alert
+rules. Use the instrumented metrics in [Practice review operations](./practice-review-operations#queue-health)
 and [Webhook ingestion operations](./webhook-ingestion-operations); configure thresholds against your
 traffic and recovery objectives. Assign an owner and test the alert delivery route.
 

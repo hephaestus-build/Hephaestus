@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -44,8 +46,13 @@ public sealed interface ConnectionConfig
             @Nullable Long gitlabGroupId,
             @Nullable Long gitlabWebhookId,
             SigningMode signingMode,
-            Set<String> enabledStreams)
+            Set<String> enabledStreams,
+            @Nullable GitLabTokenMetadata tokenMetadata)
             implements ConnectionConfig {
+        public GitLabConfig withTokenMetadata(@Nullable GitLabTokenMetadata metadata) {
+            return new GitLabConfig(serverUrl, gitlabGroupId, gitlabWebhookId, signingMode, enabledStreams, metadata);
+        }
+
         public enum SigningMode {
             PLAINTEXT,
             WHSEC,
@@ -57,7 +64,7 @@ public sealed interface ConnectionConfig
          * persist the swap atomically.
          */
         public GitLabConfig withGitlabWebhookId(@Nullable Long webhookId) {
-            return new GitLabConfig(serverUrl, gitlabGroupId, webhookId, signingMode, enabledStreams);
+            return new GitLabConfig(serverUrl, gitlabGroupId, webhookId, signingMode, enabledStreams, tokenMetadata);
         }
 
         /**
@@ -65,9 +72,11 @@ public sealed interface ConnectionConfig
          * lookup resolves the numeric id on a workspace that only carried the group path.
          */
         public GitLabConfig withGitlabGroupId(@Nullable Long groupId) {
-            return new GitLabConfig(serverUrl, groupId, gitlabWebhookId, signingMode, enabledStreams);
+            return new GitLabConfig(serverUrl, groupId, gitlabWebhookId, signingMode, enabledStreams, tokenMetadata);
         }
     }
+
+    record GitLabTokenMetadata(@Nullable LocalDate expiresAt, Instant checkedAt) {}
 
     /** Slack bot identity, enabled streams, and message-retention configuration. */
     record SlackConfig(

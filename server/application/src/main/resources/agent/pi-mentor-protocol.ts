@@ -37,11 +37,16 @@ export const FETCH_CONTEXT_ALLOWED = new Set([
 	"inputs/context/current_thread_history.json",
 	"inputs/context/outline_docs.json",
 ]);
-// One authored pull request by artifactId, read on demand; mirrors MergeReadinessContentSource.ITEM_KEY.
+// One authored pull request by artifactId, in any stored state, read on demand; mirrors MergeReadinessContentSource.ITEM_KEY.
 const MERGE_READINESS_ITEM = /^inputs\/context\/merge_readiness\/\d{1,18}\.json$/u;
+// One listed observation's evidence by its canonical id; mirrors ObservationHistoryContentSource.DETAIL_KEY.
+const OBSERVATION_DETAIL =
+	/^inputs\/context\/observations_history\/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}\.json$/u;
 
 export function isFetchContextKey(key: string): boolean {
-	return FETCH_CONTEXT_ALLOWED.has(key) || MERGE_READINESS_ITEM.test(key);
+	return (
+		FETCH_CONTEXT_ALLOWED.has(key) || MERGE_READINESS_ITEM.test(key) || OBSERVATION_DETAIL.test(key)
+	);
 }
 
 /**

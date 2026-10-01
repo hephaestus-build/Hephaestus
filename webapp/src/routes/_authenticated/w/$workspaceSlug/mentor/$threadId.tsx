@@ -131,6 +131,7 @@ function ThreadContainer() {
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
 				status={mentorChat.status}
+				errorMessage={mentorChat.error?.message}
 				readonly={readonly}
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}

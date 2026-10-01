@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.FrameRingBuffer;
+import de.tum.cit.aet.hephaestus.agent.sandbox.FrameSubscription;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;

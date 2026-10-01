@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventAction
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
@@ -63,6 +64,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
     private final GitLabWebhookContextResolver contextResolver;
     private final GitLabClosingIssueClient closingIssueClient;
     private final GitLabMergeRequestReadinessReader readinessReader;
+    private final GitLabDiscussionSyncService discussionSyncService;
     private final TransactionTemplate transactionTemplate;
 
     GitLabMergeRequestMessageHandler(
@@ -70,6 +72,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             GitLabWebhookContextResolver contextResolver,
             GitLabClosingIssueClient closingIssueClient,
             GitLabMergeRequestReadinessReader readinessReader,
+            GitLabDiscussionSyncService discussionSyncService,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -82,6 +85,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
         this.contextResolver = contextResolver;
         this.closingIssueClient = closingIssueClient;
         this.readinessReader = readinessReader;
+        this.discussionSyncService = discussionSyncService;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -100,7 +104,10 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
      * under the same project check, is the merge offered for review ({@link GitLabMergeRequestProcessor#offerMerge}) —
      * also when the read failed, so that a merger it could not name holds the review pending instead of dropping it.
      * An opened or updated merge request also has the issues it closes read from GitLab — the webhook stores the
-     * {@code updated_at} the sync later compares against, so the sync would not read them for this change.
+     * {@code updated_at} the sync later compares against, so the sync would not read them for this change. An update
+     * also has its discussions' resolution read ({@link GitLabDiscussionSyncService#readThreadResolutions}) and
+     * recorded under the same check: GitLab documents an update for all threads becoming resolved, and the hook
+     * itself names no thread.
      */
     @Override
     protected void dispatchEvent(GitLabMergeRequestEventDTO event, Instant arrivedAt) {
@@ -136,7 +143,10 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
                         && project.id() != null
                 ? closingIssueClient.closesIssues(scopeId, project.id(), iid)
                 : null;
-        if (facts == null && closing == null && !merge) {
+        GitLabDiscussionSyncService.DiscussionRead threads = scopeId != null && action == GitLabEventAction.UPDATE
+                ? discussionSyncService.readThreadResolutions(scopeId, repository.getNameWithOwner(), iid)
+                : null;
+        if (facts == null && closing == null && threads == null && !merge) {
             return;
         }
         transactionTemplate.executeWithoutResult(status -> {
@@ -145,6 +155,9 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             }
             if (closing != null) {
                 mergeRequestProcessor.replaceClosingIssues(repository, iid, closing, stored.version());
+            }
+            if (threads != null && scopeId != null) {
+                discussionSyncService.applyThreadResolutions(repository, iid, threads, scopeId);
             }
             if (merge) {
                 if (facts != null) {

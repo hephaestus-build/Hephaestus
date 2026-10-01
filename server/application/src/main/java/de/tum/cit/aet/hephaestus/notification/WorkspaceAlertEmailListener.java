@@ -56,6 +56,8 @@ public class WorkspaceAlertEmailListener {
         String description = change.recovered()
                 ? "The integration is connected again."
                 : switch (change.problem()) {
+                    case CREDENTIAL_EXPIRING ->
+                        "The GitLab token expires soon and could not be rotated. Replace it in workspace settings before it expires.";
                     case CREDENTIAL_REVOKED ->
                         "The provider revoked this integration's credentials. Reconnect it in workspace settings.";
                     case PROVIDER_SUSPENDED ->

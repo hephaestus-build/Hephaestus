@@ -179,3 +179,13 @@ topology instead.
 the BYO-runner and Kubernetes-adapter epics; the 2026-05-20 update above already recorded the third
 role landing as ADR 0008. ADR 0041 fixes the steady-state role set, and the BYO-runner epic the
 Decision defers to is withdrawn. The Compose role declarations are deleted in 2.0.
+
+## Update — 2026-10-01 (issue #1158)
+
+The 2026-07-22 update's second point no longer holds. Heph sessions run on connected workers, and the
+application server reaches them through the worker hub with no Docker client or local LLM proxy of its
+own, so `hephaestus.runtime.worker.enabled=false` on an application-server pod removes nothing that pod
+needs. The shipped Compose stacks now set it there: `application-worker` is the only container with
+the worker role and the only one given the Docker socket, and the `gate:env` check fails a container
+that mounts the socket without that role. That is the server-only deployment the 2026-07-22 update
+called unbuilt; it needed no new role.

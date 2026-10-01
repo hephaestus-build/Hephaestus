@@ -16,7 +16,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.DockerInteract
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.StdinWriteWatchdog;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -278,7 +277,7 @@ public class DockerSandboxConfiguration {
     }
 
     @Bean
-    public InteractiveSandboxService dockerInteractiveSandboxAdapter(
+    public DockerInteractiveSandboxAdapter dockerInteractiveSandboxAdapter(
             InteractiveSandboxProperties interactiveProperties,
             SandboxNetworkManager networkManager,
             SandboxWorkspaceManager workspaceManager,

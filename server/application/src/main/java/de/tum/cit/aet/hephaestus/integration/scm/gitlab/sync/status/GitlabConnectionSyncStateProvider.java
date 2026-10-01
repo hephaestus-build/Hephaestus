@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.status;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.framework.CronSchedules;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.BackfillSummary;
@@ -88,7 +89,11 @@ public class GitlabConnectionSyncStateProvider implements ConnectionSyncStatePro
                 CronSchedules.interval(syncSchedulerProperties.cron()),
                 rateLimit,
                 backfill,
-                false);
+                connectionService
+                        .findInWorkspace(workspaceId, connectionId)
+                        .map(c ->
+                                c.getAttentionProblem() == IntegrationAttentionChangedEvent.Problem.CREDENTIAL_REVOKED)
+                        .orElse(false));
     }
 
     @Override

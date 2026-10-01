@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MentorContextKeys;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
@@ -20,11 +21,11 @@ import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslat
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
-import de.tum.cit.aet.hephaestus.agent.proxy.MentorTurnMeter;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -99,6 +100,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final MemberAiRoutingAdapter memberAiRouting;
     private final MemberAiPreferences memberAiPreferences;
     private final MergeReadinessContentSource mergeReadiness;
+    private final ObservationHistoryContentSource observationHistory;
 
     /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
     @Override
@@ -288,7 +290,6 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         UUID assistantMessageId = UUID.randomUUID();
         // Read model only: it makes this turn's completed calls visible to the budget gate while the
         // turn is still running. Billing comes from the turn's row, which the proxy writes per call.
-        MentorTurnMeter proxyMeter = new MentorTurnMeter(assistantMessageId, llmConfig.priceSnapshot());
         MentorTurnPersistence.TurnPersistenceCookie cookie;
         MentorTurnRequest request;
         if (retryOf == null) {
@@ -367,17 +368,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                                 startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, fetchContext);
                         client.openThread(request.threadId(), null).get(10, TimeUnit.SECONDS);
                     }
+                    metrics.recordRuntimeReady(Duration.ofNanos(System.nanoTime() - turn.acceptedAt));
                     // Bind and unbind INSIDE the sandbox lock: that exclusivity is what stops a call being
                     // attributed to the wrong turn. A late call outside the window has no row to bill and
                     // the proxy refuses it.
-                    UUID sandboxSessionId = sandbox.identity().sessionId();
-                    if (!proxyCredentialRegistry.bindTurn(sandboxSessionId, proxyMeter)) {
-                        log.warn(
-                                "Mentor sandbox session {} has no live proxy credential; this turn has no billing "
-                                        + "target, so the proxy will refuse its LLM calls",
-                                sandboxSessionId);
-                    }
                     try {
+                        sandbox.bindTurn(assistantMessageId, llmConfig.priceSnapshot());
                         var prompt = client.prompt(
                                 request.threadId(), MentorTurnPromptFactory.forRunner(request, contextInputs));
                         state.markLlmCallStarted();
@@ -390,7 +386,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         turn.done.get(
                                 MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis() + 30_000, TimeUnit.MILLISECONDS);
                     } finally {
-                        proxyCredentialRegistry.unbindTurn(sandboxSessionId, proxyMeter);
+                        sandbox.unbindTurn(assistantMessageId);
                     }
                 } catch (Exception failure) {
                     poisoning = isPoisoning(failure);
@@ -712,32 +708,27 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         if (!turn.terminal.compareAndSet(null, Terminal.COMPLETING)) {
             return;
         }
-        UIMessageChunk.Finish toSend = finish;
+        Optional<UIMessageChunk.Finish> recorded;
         try {
-            toSend = persistence.augmentFinishWithCost(finish, state);
-        } catch (RuntimeException costEx) {
-            // Cost-coverage metrics expose missing prices; avoid a warning on every affected turn.
-            log.debug("Cost augmentation failed — sending raw Finish: {}", costEx.toString());
-        }
-        boolean completed;
-        try {
-            completed = persistence.complete(cookie, state, toSend);
-            if (!completed) {
+            recorded = persistence.complete(cookie, state, finish);
+            if (recorded.isEmpty()) {
                 log.warn(
                         "Mentor reply {} was already settled by another writer; not reporting it finished",
                         cookie.assistantMessageId());
             }
         } catch (RuntimeException saveFailure) {
             log.warn("Mentor reply {} could not be saved", cookie.assistantMessageId(), saveFailure);
-            completed = false;
+            recorded = Optional.empty();
             interruptOrLeaveForReaper(cookie, state, saveFailure);
         }
-        if (!completed) {
+        if (recorded.isEmpty()) {
             turn.terminal.set(Terminal.FAILED_IN_STREAM);
             sendTerminal(channel, new UIMessageChunk.Error(REPLY_NOT_SAVED));
             turn.done.complete(null);
             return;
         }
+        // The Finish carries the usage and cost the row and the ledger record, so the reply and its reload agree.
+        UIMessageChunk.Finish toSend = recorded.get();
         turn.terminal.set(Terminal.COMPLETED);
         sendTerminal(channel, toSend);
         // Slack learns whether its buffered reply was suppressed only as it closes, so delivery is settled after.
@@ -800,6 +791,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
      * internal ids or upstream errors. The server log retains those details.
      */
     private static String userFacingError(Throwable e) {
+        if (e instanceof MentorBusyException || e.getCause() instanceof MentorBusyException) {
+            return "Heph is busy. Please try again.";
+        }
         if (e.getCause() instanceof MentorStreamLostException || e instanceof MentorStreamLostException) {
             return PiEventToUiChunkTranslator.REPLY_LOST_IN_TRANSIT;
         }
@@ -865,6 +859,10 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         Optional<Long> mergeRequest = MergeReadinessContentSource.artifactIdOf(path);
         if (mergeRequest.isPresent()) {
             return mergeReadiness.inspect(workspaceId, developerId, mergeRequest.get());
+        }
+        Optional<UUID> observation = ObservationHistoryContentSource.observationIdOf(path);
+        if (observation.isPresent()) {
+            return observationHistory.inspect(workspaceId, developerId, observation.get());
         }
         if (!MentorContextKeys.ALLOWED_OUTPUT_KEYS.contains(path)) {
             throw new IllegalArgumentException("fetch_context path not allowed: " + path);

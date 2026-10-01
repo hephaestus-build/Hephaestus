@@ -28,12 +28,31 @@ void test("mentor exposes only read and inline-rendering tools", () => {
 	assert.deepEqual(MENTOR_TOOL_NAMES, ["fetch_context", "link_observation"]);
 });
 
-void test("fetch_context admits canonical keys and one pull request by artifactId, nothing else", () => {
+void test("fetch_context admits canonical keys and one item by its canonical id, nothing else", () => {
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness.json"), true);
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness/42.json"), true);
 	assert.equal(isFetchContextKey("merge_readiness.json"), false);
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness/../user.json"), false);
 	assert.equal(isFetchContextKey("inputs/context/merge_readiness/42.json.bak"), false);
+	assert.equal(isFetchContextKey("inputs/context/merge_readiness/!9.json"), false);
+	const observation = "0b7e1c9a-3f5d-4a8e-9c21-6d4f8e2a1b3c";
+	assert.equal(isFetchContextKey(`inputs/context/observations_history/${observation}.json`), true);
+	assert.equal(
+		isFetchContextKey(`inputs/context/observations_history/${observation.toUpperCase()}.json`),
+		false,
+	);
+	assert.equal(
+		isFetchContextKey(
+			`inputs/context/observations_history/${observation.replaceAll("-", "")}.json`,
+		),
+		false,
+	);
+	assert.equal(
+		isFetchContextKey(`inputs/context/observations_history/${observation}.json.bak`),
+		false,
+	);
+	assert.equal(isFetchContextKey("inputs/context/observations_history/../user.json"), false);
+	assert.equal(isFetchContextKey("inputs/context/observations_history/42.json"), false);
 });
 
 const SESSIONS_TMPDIR = mkdtempSync(path.join(tmpdir(), "pi-mentor-runner-spec-"));
@@ -179,6 +198,14 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 				if (
 					hasText(env.MENTOR_TURN_BUDGET_MS) &&
 					/^watchdog fired: rebuilding session for thread=[\da-f-]+$/u.test(message)
+				) {
+					continue;
+				}
+				if (
+					env.MENTOR_RUNNER_STUB_ABORT_REJECTS === "1" &&
+					/^abort during watchdog failed; the runtime takes no further turn: stub: abort failed$/u.test(
+						message,
+					)
 				) {
 					continue;
 				}
@@ -595,6 +622,43 @@ void test("watchdog cross-thread rebind: no event leakage from concurrently-boun
 			[],
 			`thread B received events after thread A rebound: ${summarise(postRebind)}`,
 		);
+	} catch (error) {
+		runner.diagnose();
+		throw error;
+	} finally {
+		await shutdown(runner);
+	}
+});
+
+void test("a timed-out turn whose abort rejects fails once and leaves no runtime for another turn", async (t) => {
+	const threadId = "55555555-5555-5555-5555-555555555555";
+	const runner = spawnRunner(t, {
+		MENTOR_RUNNER_STUB_DELAY_MS: "400",
+		MENTOR_TURN_BUDGET_MS: "50",
+		MENTOR_TURN_GRACE_MS: "30",
+		MENTOR_RUNNER_STUB_ABORT_REJECTS: "1",
+	});
+	try {
+		await readReady(runner.reader);
+		runner.send({ jsonrpc: "2.0", id: "o", method: "open_thread", params: { threadId } });
+		await readResult(runner.reader, "o");
+		runner.send({ jsonrpc: "2.0", id: "p1", method: "prompt", params: { threadId, text: "go" } });
+		await readResult(runner.reader, "p1");
+
+		await readUntil(runner.reader, (f) => eventType(f) === "turn_watchdog_fired");
+		const end = await readUntil(runner.reader, (f) => eventType(f) === "agent_end");
+		assert.ok(isEventNotification(end));
+		assert.deepEqual(end.params.event, { type: "agent_end", messages: [], willRetry: false });
+
+		// A rejected abort proves nothing about Pi having stopped: Java discards a runner answering -32003.
+		runner.send({
+			jsonrpc: "2.0",
+			id: "p2",
+			method: "prompt",
+			params: { threadId, text: "again" },
+		});
+		const refused = await readError(runner.reader, "p2");
+		assert.equal(refused.code, -32_003);
 	} catch (error) {
 		runner.diagnose();
 		throw error;

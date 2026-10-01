@@ -197,7 +197,8 @@ management:
             otlp:
                 enabled: false
     server:
-        port: ${MANAGEMENT_PORT:8080}
+        port: ${MANAGEMENT_PORT:9090}
+        address: 127.0.0.1
     endpoints:
         web:
             exposure:
@@ -208,6 +209,7 @@ management:
             show-details: when_authorized
             probes:
                 enabled: true
+                add-additional-paths: true
             # Operational dependencies affect readiness, not process liveness. This group replaces the
             # auto-configured readiness probe, which contains readinessState alone — on the
             # webhook-only container that reduces the probe to "the Spring context started", and both
@@ -365,7 +367,7 @@ hephaestus:
     #     The webhook-server production container deploys with server=false + worker=false
     #     + webhook=true so it runs webhook reception in isolation — restart-independent
     #     from application-server. See ADR 0008.
-    # All three default true → single-JVM monolith (the dev + initial prod topology).
+    # All three default true → single-JVM monolith (the dev topology; the shipped Compose stacks split them).
     runtime:
         server:
             enabled: ${HEPHAESTUS_RUNTIME_SERVER_ENABLED:true}
@@ -558,7 +560,6 @@ hephaestus:
             host: ${SANDBOX_DOCKER_HOST:unix:///var/run/docker.sock}
             tls-verify: ${SANDBOX_DOCKER_TLS_VERIFY:false}
             cert-path: ${SANDBOX_DOCKER_CERT_PATH:}
-            app-server-container-id: ${SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID:}
             # OCI runtime: null=runc (default), "runsc"=gVisor (recommended for production)
             container-runtime: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:}
             owner: ${SANDBOX_DOCKER_OWNER:default}

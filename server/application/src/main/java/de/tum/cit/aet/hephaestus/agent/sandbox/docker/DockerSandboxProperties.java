@@ -17,7 +17,6 @@ import org.springframework.validation.annotation.Validated;
  * @param tlsVerify enable mutual TLS for TCP connections
  * @param certPath directory containing Docker client TLS certificates
  * @param containerRuntime Docker runtime name (unset uses the daemon default; runsc selects gVisor)
- * @param appServerContainerId container attached to job networks (unset falls back to HOSTNAME)
  * @param owner stable installation identifier, shared by roles using the same database
  */
 @Validated
@@ -30,7 +29,6 @@ public record DockerSandboxProperties(
         @DefaultValue("false") boolean tlsVerify,
         @Nullable String certPath,
         @Nullable String containerRuntime,
-        @Nullable String appServerContainerId,
 
         @DefaultValue("default") @NotBlank @Pattern(regexp = "[a-z0-9][a-z0-9-]{0,62}")
         String owner) {
@@ -39,9 +37,5 @@ public record DockerSandboxProperties(
     @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isTlsCertificatePathConfigured() {
         return !tlsVerify || (certPath != null && !certPath.isBlank());
-    }
-
-    public @Nullable String resolvedAppServerContainerId() {
-        return appServerContainerId == null || appServerContainerId.isBlank() ? null : appServerContainerId;
     }
 }

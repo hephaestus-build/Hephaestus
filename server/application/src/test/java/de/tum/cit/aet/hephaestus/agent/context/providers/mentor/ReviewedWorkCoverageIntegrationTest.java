@@ -159,6 +159,8 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         assertThat(entry.path("reviewId").asString()).isEqualTo(reviewed.getId().toString());
         JsonNode work = entry.path("reviewedWork");
         assertThat(work.path("coreCoverage").asString()).isEqualTo("DIFFERS_FROM_STORED_WORK");
+        assertThat(work.path("titleAndDescriptionCoverage").asString()).isEqualTo("DIFFERS_FROM_STORED_WORK");
+        assertThat(work.path("headCoverage").asString()).isEqualTo("MATCHES_STORED_WORK");
         assertThat(work.path("checkedFields").valueStream().map(JsonNode::asString))
                 .containsExactly("title", "description", "head");
         assertThat(work.path("providerFreshness").asString()).isEqualTo("UNKNOWN");
@@ -206,9 +208,43 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         assertThat(entry.path("outcome").asString()).isEqualTo("NEGATIVE");
         JsonNode work = entry.path("reviewedWork");
         assertThat(work.path("coreCoverage").asString()).isEqualTo("UNKNOWN");
+        assertThat(work.path("titleAndDescriptionCoverage").asString()).isEqualTo("UNKNOWN");
+        assertThat(work.path("headCoverage").asString()).isEqualTo("UNKNOWN");
         assertThat(work.path("checkedFields")).isEmpty();
         assertThat(work.has("capturedAt")).isFalse();
         assertThat(work.toString()).doesNotContain("Closes", "Plans", "dig~", HEAD);
+    }
+
+    /** The text and the head are compared apart, so a repaired description is not told as new code, nor the reverse. */
+    @Test
+    void shouldTellAChangedTextFromAChangedHead() {
+        String newHead = "c".repeat(40);
+        PullRequest textOnly = mergeRequest(course, "MR !7", "Closes #18");
+        PullRequest headOnly = mergeRequest(course, "MR !8", "Closes #19");
+        PullRequest both = mergeRequest(course, "MR !9", "Closes #20");
+        PullRequest neither = mergeRequest(course, "MR !10", "Closes #21");
+
+        assertThat(coverageOf(textOnly, review(textOnly, "MR !7", "Plans the work", HEAD)))
+                .containsExactly(
+                        "DIFFERS_FROM_STORED_WORK",
+                        "DIFFERS_FROM_STORED_WORK",
+                        "MATCHES_STORED_WORK",
+                        "title,description,head");
+        assertThat(coverageOf(headOnly, review(headOnly, "MR !8", "Closes #19", newHead)))
+                .containsExactly(
+                        "DIFFERS_FROM_STORED_WORK",
+                        "MATCHES_STORED_WORK",
+                        "DIFFERS_FROM_STORED_WORK",
+                        "title,description,head");
+        assertThat(coverageOf(both, review(both, "MR !9", "Plans the work", newHead)))
+                .containsExactly(
+                        "DIFFERS_FROM_STORED_WORK",
+                        "DIFFERS_FROM_STORED_WORK",
+                        "DIFFERS_FROM_STORED_WORK",
+                        "title,description,head");
+        assertThat(coverageOf(neither, review(neither, "MR !10", "Closes #21", HEAD)))
+                .containsExactly(
+                        "MATCHES_STORED_WORK", "MATCHES_STORED_WORK", "MATCHES_STORED_WORK", "title,description,head");
     }
 
     @Test
@@ -264,9 +300,14 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         PullRequest unchanged = mergeRequest(course, "MR !3", "Closes #14");
 
         assertThat(coverageOf(repaired, legacyReview(repaired, "Plans the work")))
-                .containsExactly("DIFFERS_FROM_STORED_WORK", "description,head");
+                .containsExactly(
+                        "DIFFERS_FROM_STORED_WORK",
+                        "DIFFERS_FROM_STORED_WORK",
+                        "MATCHES_STORED_WORK",
+                        "description,head");
+        // Such a review recorded no title, so a matching description leaves the text unknown.
         assertThat(coverageOf(unchanged, legacyReview(unchanged, "Closes #14")))
-                .containsExactly("UNKNOWN", "description,head");
+                .containsExactly("UNKNOWN", "UNKNOWN", "MATCHES_STORED_WORK", "description,head");
     }
 
     @Test
@@ -299,6 +340,8 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         JsonNode work = Objects.requireNonNull(
                 coverage.of(workspace.getId(), List.of(observation(id))).get(id));
         assertThat(work.path("coreCoverage").asString()).isEqualTo("DIFFERS_FROM_STORED_WORK");
+        assertThat(work.path("titleAndDescriptionCoverage").asString()).isEqualTo("DIFFERS_FROM_STORED_WORK");
+        assertThat(work.path("headCoverage").asString()).isEqualTo("UNKNOWN");
         assertThat(work.path("checkedFields").valueStream().map(JsonNode::asString))
                 .containsExactly("title", "description");
     }
@@ -343,6 +386,8 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         assertThat(ids).allSatisfy(id -> {
             JsonNode work = Objects.requireNonNull(nodes.get(id));
             assertThat(work.path("coreCoverage").asString()).isEqualTo("UNKNOWN");
+            assertThat(work.path("titleAndDescriptionCoverage").asString()).isEqualTo("UNKNOWN");
+            assertThat(work.path("headCoverage").asString()).isEqualTo("UNKNOWN");
             assertThat(work.path("checkedFields")).isEmpty();
             assertThat(work.has("capturedAt")).isFalse();
         });
@@ -360,6 +405,8 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
                 coverage.of(workspace.getId(), List.of(observation(id))).get(id));
         return List.of(
                 work.path("coreCoverage").asString(),
+                work.path("titleAndDescriptionCoverage").asString(),
+                work.path("headCoverage").asString(),
                 String.join(
                         ",",
                         work.path("checkedFields")
@@ -434,7 +481,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
                 IntegrationKind.GITLAB,
                 "GITLAB",
                 new ConnectionConfig.GitLabConfig(
-                        INSTANCE, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of()));
+                        INSTANCE, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
     }

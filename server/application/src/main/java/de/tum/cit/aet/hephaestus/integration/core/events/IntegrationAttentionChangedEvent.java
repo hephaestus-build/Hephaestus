@@ -13,6 +13,7 @@ public record IntegrationAttentionChangedEvent(
         long revision,
         Instant occurredAt) {
     public enum Problem {
+        CREDENTIAL_EXPIRING,
         CREDENTIAL_REVOKED,
         PROVIDER_SUSPENDED
     }

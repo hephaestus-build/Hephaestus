@@ -823,6 +823,7 @@ export type ConnectionAuditEntry = {
  *  object.
  */
 export type ConnectionDetail = {
+  attentionProblem?: 'CREDENTIAL_EXPIRING' | 'CREDENTIAL_REVOKED' | 'PROVIDER_SUSPENDED';
   capabilities?: Array<'WEBHOOK_INGEST' | 'TOKEN_REFRESH' | 'FEEDBACK_DELIVERY' | 'INLINE_FEEDBACK' | 'APPROVAL_WORKFLOW' | 'SCOPE_CHANGES'>;
   config?: {
     [key: string]: unknown;
@@ -836,6 +837,8 @@ export type ConnectionDetail = {
   kind?: 'GITHUB' | 'GITLAB' | 'SLACK' | 'OUTLINE';
   state?: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'UNINSTALLED';
   stateReason?: string;
+  tokenExpiresAt?: Date;
+  tokenExpiryCheckedAt?: Date;
   updatedAt?: Date;
 };
 

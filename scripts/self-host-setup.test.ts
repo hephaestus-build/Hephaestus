@@ -85,6 +85,7 @@ function managedValues(environment: string): string[] {
 		"WEBHOOK_ROUTING_SECRET",
 		"NATS_USERNAME",
 		"NATS_PASSWORD",
+		"HEPHAESTUS_WORKER_REGISTRATION_TOKEN",
 	]);
 	return environment
 		.split("\n")
@@ -111,6 +112,7 @@ await test("generates protected secrets without printing them", posixOnly, async
 	assert.match(environment, /^HEPHAESTUS_AUTH_STATE_COOKIE_KEY=[A-Za-z0-9+/]{43}=$/mu);
 	assert.match(environment, /^WEBHOOK_SECRET=[0-9a-f]{64}$/mu);
 	assert.match(environment, /^WEBHOOK_ROUTING_SECRET=[0-9a-f]{64}$/mu);
+	assert.match(environment, /^HEPHAESTUS_WORKER_REGISTRATION_TOKEN=[0-9a-f]{64}$/mu);
 	assert.notEqual(
 		/^WEBHOOK_SECRET=(?<value>.+)$/mu.exec(environment)?.groups?.value,
 		/^WEBHOOK_ROUTING_SECRET=(?<value>.+)$/mu.exec(environment)?.groups?.value,

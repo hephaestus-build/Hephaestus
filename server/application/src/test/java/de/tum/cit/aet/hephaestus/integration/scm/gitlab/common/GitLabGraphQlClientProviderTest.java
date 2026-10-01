@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.gitlab.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -45,7 +46,12 @@ class GitLabGraphQlClientProviderTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         provider = new GitLabGraphQlClientProvider(
-                baseClient, tokenService, circuitBreaker, rateLimitTracker, clientFactory);
+                baseClient,
+                tokenService,
+                circuitBreaker,
+                rateLimitTracker,
+                clientFactory,
+                mock(de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabCredentialHealthFilter.class));
     }
 
     @Nested
@@ -58,11 +64,12 @@ class GitLabGraphQlClientProviderTest extends BaseUnitTest {
 
             HttpGraphQlClient builtClient = mock(HttpGraphQlClient.class);
             when(clientFactory.withBearerTokenAndAttribute(
-                            baseClient,
-                            "https://gitlab.example.com/api/graphql",
-                            "glpat-test-token",
-                            GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE,
-                            1L))
+                            eq(baseClient),
+                            eq("https://gitlab.example.com/api/graphql"),
+                            eq("glpat-test-token"),
+                            eq(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE),
+                            eq(1L),
+                            any(org.springframework.graphql.client.GraphQlClientInterceptor.class)))
                     .thenReturn(builtClient);
 
             HttpGraphQlClient result = provider.forScope(1L);
@@ -70,11 +77,12 @@ class GitLabGraphQlClientProviderTest extends BaseUnitTest {
             assertThat(result).isSameAs(builtClient);
             verify(clientFactory)
                     .withBearerTokenAndAttribute(
-                            baseClient,
-                            "https://gitlab.example.com/api/graphql",
-                            "glpat-test-token",
-                            GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE,
-                            1L);
+                            eq(baseClient),
+                            eq("https://gitlab.example.com/api/graphql"),
+                            eq("glpat-test-token"),
+                            eq(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE),
+                            eq(1L),
+                            any(org.springframework.graphql.client.GraphQlClientInterceptor.class));
         }
 
         @Test

@@ -284,15 +284,20 @@ class MentorSandboxStressTest {
             session.openThreadNanos = System.nanoTime();
 
             CompletableFuture<Void> turnComplete = new CompletableFuture<>();
-            sandbox.subscribe(frame -> {
-                if (!"event".equals(frame.path("method").asString())) return;
-                if (!threadId.toString()
-                        .equals(frame.path("params").path("threadId").asString())) return;
-                if ("agent_end"
-                        .equals(frame.path("params").path("event").path("type").asString())) {
-                    turnComplete.complete(null);
-                }
-            });
+            sandbox.subscribe(
+                    frame -> {
+                        if (!"event".equals(frame.path("method").asString())) return;
+                        if (!threadId.toString()
+                                .equals(frame.path("params").path("threadId").asString())) return;
+                        if ("agent_end"
+                                .equals(frame.path("params")
+                                        .path("event")
+                                        .path("type")
+                                        .asString())) {
+                            turnComplete.complete(null);
+                        }
+                    },
+                    () -> {});
 
             driver.prompt(
                     threadId, "Answer in exactly one sentence: what is dependency injection?", Duration.ofSeconds(10));
@@ -348,21 +353,26 @@ class MentorSandboxStressTest {
             // using the first /proc sample (before Pi SDK was loaded at all).
 
             var turnCompletes = new ConcurrentHashMap<UUID, CompletableFuture<Void>>();
-            sandbox.subscribe(frame -> {
-                if (!"event".equals(frame.path("method").asString())) return;
-                String tid = frame.path("params").path("threadId").asString();
-                UUID parsed;
-                try {
-                    parsed = UUID.fromString(tid);
-                } catch (Exception e) {
-                    return;
-                }
-                if ("agent_end"
-                        .equals(frame.path("params").path("event").path("type").asString())) {
-                    CompletableFuture<Void> cf = turnCompletes.get(parsed);
-                    if (cf != null) cf.complete(null);
-                }
-            });
+            sandbox.subscribe(
+                    frame -> {
+                        if (!"event".equals(frame.path("method").asString())) return;
+                        String tid = frame.path("params").path("threadId").asString();
+                        UUID parsed;
+                        try {
+                            parsed = UUID.fromString(tid);
+                        } catch (Exception e) {
+                            return;
+                        }
+                        if ("agent_end"
+                                .equals(frame.path("params")
+                                        .path("event")
+                                        .path("type")
+                                        .asString())) {
+                            CompletableFuture<Void> cf = turnCompletes.get(parsed);
+                            if (cf != null) cf.complete(null);
+                        }
+                    },
+                    () -> {});
 
             // Stage 1a — open thread #0 and run one warm-up turn so the Pi runtime is fully
             // initialised. RSS sample taken here is the honest "one-session container floor".
@@ -790,18 +800,20 @@ class MentorSandboxStressTest {
 
         RunnerDriver(StdioAttachedSandbox sandbox) {
             this.sandbox = sandbox;
-            sandbox.subscribe(frame -> {
-                if (frame.has("id") && (frame.has("result") || frame.has("error"))) {
-                    responses.add(frame);
-                } else if ("event".equals(frame.path("method").asString())
-                        && "runner_ready"
-                                .equals(frame.path("params")
-                                        .path("event")
-                                        .path("type")
-                                        .asString())) {
-                    ready.add(frame);
-                }
-            });
+            sandbox.subscribe(
+                    frame -> {
+                        if (frame.has("id") && (frame.has("result") || frame.has("error"))) {
+                            responses.add(frame);
+                        } else if ("event".equals(frame.path("method").asString())
+                                && "runner_ready"
+                                        .equals(frame.path("params")
+                                                .path("event")
+                                                .path("type")
+                                                .asString())) {
+                            ready.add(frame);
+                        }
+                    },
+                    () -> {});
         }
 
         void expectRunnerReady(Duration timeout) {

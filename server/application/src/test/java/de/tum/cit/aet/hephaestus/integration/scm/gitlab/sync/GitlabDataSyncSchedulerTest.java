@@ -161,7 +161,12 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 IntegrationKind.GITLAB,
                 "gitlab.com:1",
                 new ConnectionConfig.GitLabConfig(
-                        "https://gitlab.com", 1L, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of()));
+                        "https://gitlab.com",
+                        1L,
+                        null,
+                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                        Set.of(),
+                        null));
         ReflectionTestUtils.setField(connection, "id", CONNECTION_ID);
         return connection;
     }
@@ -242,7 +247,7 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(deletionSweepService.sweepScope(eq(WORKSPACE_ID), any()))
-                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, false));
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, false));
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 
@@ -271,7 +276,7 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 .when(repositoryRepository.findAllByWorkspaceMonitors(WORKSPACE_ID))
                 .thenReturn(List.of());
         when(deletionSweepService.sweepScope(eq(WORKSPACE_ID), any()))
-                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, true));
+                .thenReturn(new GitLabDeletionSweepService.SweepOutcome(0, 0, 0, true));
 
         scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.RECONCILIATION);
 

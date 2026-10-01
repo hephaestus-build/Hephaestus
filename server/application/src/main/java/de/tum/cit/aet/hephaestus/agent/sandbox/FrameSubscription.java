@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
+package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import io.micrometer.core.instrument.Counter;
 import java.time.Duration;
@@ -23,7 +23,7 @@ import tools.jackson.databind.JsonNode;
  * the subscriber first receives every frame already queued, then is told the same way.
  * {@link #dispose} is a deliberate cancellation and never reports a loss.
  */
-final class FrameSubscription implements Disposable {
+public final class FrameSubscription implements Disposable {
 
     private static final Logger log = LoggerFactory.getLogger(FrameSubscription.class);
 
@@ -48,7 +48,7 @@ final class FrameSubscription implements Disposable {
      * @param onLost runs once, on the producer's or dispatcher's thread, when this subscriber is cut
      *     off; must not block
      */
-    FrameSubscription(
+    public FrameSubscription(
             Consumer<JsonNode> listener,
             int queueCapacity,
             Duration stallTimeout,
@@ -65,7 +65,7 @@ final class FrameSubscription implements Disposable {
         this.onDispose = onDispose;
     }
 
-    void start() {
+    public void start() {
         Thread t = Thread.ofVirtual()
                 .name("mentor-sub-" + subscriptionId)
                 .uncaughtExceptionHandler((thread, ex) -> log.warn("Subscriber dispatcher died unexpectedly", ex))
@@ -73,7 +73,7 @@ final class FrameSubscription implements Disposable {
         this.dispatcherThread = t;
     }
 
-    void offer(JsonNode frame) {
+    public void offer(JsonNode frame) {
         offer(frame, System.nanoTime() + stallTimeout.toNanos());
     }
 
@@ -81,7 +81,7 @@ final class FrameSubscription implements Disposable {
      * Blocks while the queue is full; cuts the subscriber off if it is still full at {@code deadlineNanos}
      * ({@link System#nanoTime} scale). No-op when disposed or after the stream ended.
      */
-    void offer(JsonNode frame, long deadlineNanos) {
+    public void offer(JsonNode frame, long deadlineNanos) {
         // A peer may have used up a shared deadline; only a full queue of our own is a stall.
         if (disposed.get() || streamEnded || queue.offer(frame)) {
             return;
@@ -111,12 +111,12 @@ final class FrameSubscription implements Disposable {
      * already queued — a terminal frame among them is not lost — and is then cut off, unless its owner
      * disposes it first.
      */
-    void endOfStream() {
+    public void endOfStream() {
         streamEnded = true;
     }
 
     /** Cuts this subscriber off because it cannot receive every frame. No-op when already disposed. */
-    void lose(String reason) {
+    public void lose(String reason) {
         // No join: the caller may be the pump, and the dispatcher it would wait for is the one stuck.
         if (!disposeOnce(false)) {
             return;

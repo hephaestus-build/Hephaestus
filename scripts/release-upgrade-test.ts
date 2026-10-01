@@ -7,13 +7,21 @@ import { asArray, asRecord, asString } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
 
-const [previousImage = "", candidateImage = "", postgresImage = ""] = process.argv.slice(2);
+const [previousImage = "", candidateImage = "", postgresImage = "", upgradePath = "latest"] =
+	process.argv.slice(2);
 
 if (previousImage === "" || candidateImage === "" || postgresImage === "") {
 	throw new Error(
-		"Usage: node scripts/release-upgrade-test.ts <previous-app-image> <candidate-app-image> <postgres-image>",
+		"Usage: node scripts/release-upgrade-test.ts <previous-app-image> <candidate-app-image> <postgres-image> [latest|baseline|refusal]",
 	);
 }
+
+if (!["latest", "baseline", "refusal"].includes(upgradePath)) {
+	throw new Error(`Unknown upgrade path: ${upgradePath}`);
+}
+
+const CUT_POINT_MESSAGE =
+	"install v0.77.4 and start it once, then follow the baseline synchronization runbook";
 
 const WORKSPACE_SLUG = "upgrade-fixture";
 const ADOPTION_WORKSPACE_SLUG = "upgrade-adoption-fixture";
@@ -30,7 +38,7 @@ function docker(...args: string[]): string {
 	if (result.status !== 0) {
 		throw new Error(`docker ${args.join(" ")} failed:\n${result.stdout}${result.stderr}`);
 	}
-	return result.stdout.trim();
+	return (args[0] === "logs" ? result.stdout + result.stderr : result.stdout).trim();
 }
 
 async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Response> {
@@ -82,22 +90,28 @@ function startApplication(name: string, image: string): number {
 	return port;
 }
 
-async function waitUntilReady(name: string, port: number): Promise<void> {
+async function waitUntilReady(
+	name: string,
+	port: number,
+	readinessPaths: readonly string[] = ["/readyz"],
+): Promise<void> {
 	const deadline = Date.now() + 180_000;
 	while (Date.now() < deadline) {
 		const state = docker("inspect", "--format", "{{.State.Status}}", name);
 		if (state !== "running") {
 			throw new Error(`${name} stopped during startup`);
 		}
-		try {
-			const response = await fetch(`http://127.0.0.1:${port}/actuator/health/readiness`, {
-				signal: AbortSignal.timeout(READINESS_TIMEOUT_MS),
-			});
-			if (response.ok) {
-				return;
+		for (const readinessPath of readinessPaths) {
+			try {
+				const response = await fetch(`http://127.0.0.1:${port}${readinessPath}`, {
+					signal: AbortSignal.timeout(READINESS_TIMEOUT_MS),
+				});
+				if (response.ok) {
+					return;
+				}
+			} catch {
+				// The endpoint is unavailable while the container starts.
 			}
-		} catch {
-			// The endpoint is unavailable while the container starts.
 		}
 		await sleep(2000);
 	}
@@ -351,11 +365,11 @@ function linkWorkspaceIdentity(): void {
 		   SELECT provider_id, 424242, 'account:' || account_id, 'https://example.invalid/avatar',
 		          'https://example.invalid/user', 'USER'
 		   FROM fixture
-		   RETURNING id, provider_id
+		   RETURNING id, provider_id, native_id
 		 )
 		 INSERT INTO identity_link
 		   (account_id, provider_id, subject, external_actor_id, username_at_signup, linked_via)
-		 SELECT fixture.account_id, created.provider_id, 'upgrade-fixture', created.id,
+		 SELECT fixture.account_id, created.provider_id, created.native_id::text, created.id,
 		        'account:' || fixture.account_id, 'MANUAL_LINK'
 		 FROM fixture CROSS JOIN created;`,
 	);
@@ -377,7 +391,8 @@ function dataFingerprint(): string {
 		          concat_ws('|', id, display_name, app_role, status) AS value
 		   FROM account
 		   UNION ALL
-		   SELECT 'identity', concat_ws('|', id, account_id, subject, username_at_signup, linked_via)
+		   SELECT 'identity', concat_ws('|', id, account_id, provider_id, external_actor_id,
+		          subject, username_at_signup, linked_via)
 		   FROM identity_link
 		   UNION ALL
 		   SELECT 'user', concat_ws('|', id, provider_id, native_id, login, type)
@@ -432,6 +447,94 @@ function appliedChangeCount(): number {
 	return count("SELECT count(*) FROM databasechangelog;");
 }
 
+// Use the target image's bundled Liquibase and resources, not a separately versioned CLI.
+function baselineSynchronization(image: string) {
+	return spawnSync(
+		"docker",
+		[
+			"run",
+			"--rm",
+			"--name",
+			`${runId}-sync`,
+			"--network",
+			network,
+			"--entrypoint",
+			"/cnb/lifecycle/launcher",
+			image,
+			"--",
+			"java",
+			"-cp",
+			"runner.jar:lib/*",
+			"liquibase.integration.commandline.Main",
+			"--changeLogFile=db/master.xml",
+			"--url=jdbc:postgresql://postgres:5432/hephaestus",
+			"--username=root",
+			"--password=root",
+			"--contexts=prod",
+			"changeLogSyncToTag",
+			"baseline_v0_77_4",
+		],
+		{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES, timeout: 180_000 },
+	);
+}
+
+function historyFingerprint(): string {
+	return docker(
+		"exec",
+		postgres,
+		"psql",
+		"--username=root",
+		"--dbname=hephaestus",
+		"--tuples-only",
+		"--no-align",
+		"--set=ON_ERROR_STOP=1",
+		"--command",
+		"SELECT row_to_json(history)::text FROM databasechangelog history ORDER BY orderexecuted;",
+	);
+}
+
+async function assertRefusal(image: string, seededData: string): Promise<void> {
+	if (count("SELECT count(*) FROM databasechangelog WHERE id = '1788679885460-1';") !== 0) {
+		throw new Error("Refusal fixture unexpectedly reached v0.77.4");
+	}
+	const history = historyFingerprint();
+	const result = baselineSynchronization(image);
+	if (
+		result.status === null ||
+		result.status === 0 ||
+		!`${result.stdout}${result.stderr}`.includes(CUT_POINT_MESSAGE)
+	) {
+		throw new Error(`Expected cut-point refusal from changeLogSyncToTag:
+${result.stdout}${result.stderr}`);
+	}
+	if (historyFingerprint() !== history || dataFingerprint() !== seededData) {
+		throw new Error("Refused synchronization changed migration history or seeded data");
+	}
+
+	application = `${runId}-refused`;
+	startApplication(application, image);
+	const deadline = Date.now() + 180_000;
+	while (docker("inspect", "--format", "{{.State.Status}}", application) === "running") {
+		if (Date.now() >= deadline) {
+			throw new Error("Pre-cut-point startup did not stop within 180 seconds");
+		}
+		await sleep(1000);
+	}
+	const exitCode = docker("inspect", "--format", "{{.State.ExitCode}}", application);
+	const logs = docker("logs", application);
+	if (exitCode === "0" || !logs.includes(CUT_POINT_MESSAGE)) {
+		throw new Error(`Expected cut-point refusal at startup (exit ${exitCode}):
+${logs}`);
+	}
+	if (historyFingerprint() !== history || dataFingerprint() !== seededData) {
+		throw new Error("Refused startup changed migration history or seeded data");
+	}
+	if (count("SELECT count(*) FROM databasechangeloglock WHERE locked;") !== 0) {
+		throw new Error("Refused upgrade left the Liquibase lock held");
+	}
+	console.log("Pinned v0.76.0 update and synchronization refusal passed.");
+}
+
 function synchronizeBaseline(image: string): void {
 	const baselineFile = "db/changelog/0000000000000_baseline_v0_77_4.xml";
 	if (
@@ -454,28 +557,11 @@ function synchronizeBaseline(image: string): void {
 		);
 	}
 
-	// Use the candidate's bundled Liquibase and resources, not a separately versioned CLI.
-	docker(
-		"run",
-		"--rm",
-		"--network",
-		network,
-		"--entrypoint",
-		"/cnb/lifecycle/launcher",
-		image,
-		"--",
-		"java",
-		"-cp",
-		"runner.jar:lib/*",
-		"liquibase.integration.commandline.Main",
-		"--changeLogFile=db/master.xml",
-		"--url=jdbc:postgresql://postgres:5432/hephaestus",
-		"--username=root",
-		"--password=root",
-		"--contexts=prod",
-		"changeLogSyncToTag",
-		"baseline_v0_77_4",
-	);
+	const result = baselineSynchronization(image);
+	if (result.status !== 0) {
+		throw new Error(`Baseline synchronization failed:\n${result.stdout}${result.stderr}`);
+	}
+
 	if (
 		count(`SELECT count(*) FROM databasechangelog
 			WHERE id = 'baseline_v0_77_4-tag' AND author = 'hephaestus-release'
@@ -518,7 +604,8 @@ try {
 	}
 
 	let port = startApplication(application, previousImage);
-	await waitUntilReady(application, port);
+	// Released images before the management-port split expose only the legacy application-port probe.
+	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
 	const previousSession = await login(port, "alice");
 	await completeTransparencyNotice(port, previousSession);
 	await login(port, "root");
@@ -536,42 +623,54 @@ try {
 
 	docker("stop", "--time", "30", application);
 	docker("rm", application);
-	synchronizeBaseline(candidateImage);
-	application = `${runId}-candidate`;
-	port = startApplication(application, candidateImage);
-	await waitUntilReady(application, port);
-	const upgradedData = dataFingerprint();
-	if (upgradedData !== seededData) {
-		throw new Error("Seeded application data changed during upgrade");
-	}
-	const upgradedPractices = workspacePracticeCount(WORKSPACE_SLUG);
-	if (upgradedPractices < previousPractices) {
-		throw new Error(
-			`Workspace practices shrank during upgrade: before=${previousPractices}, after=${upgradedPractices}`,
-		);
-	}
-	const candidateChanges = appliedChangeCount();
-	if (candidateChanges < previousChanges) {
-		throw new Error(
-			`Liquibase history shrank during upgrade: before=${previousChanges}, after=${candidateChanges}`,
-		);
-	}
-	const candidateSession = await login(port, "alice");
-	await completeTransparencyNotice(port, candidateSession);
-	await assertCoreReads(port, candidateSession);
+	if (upgradePath === "refusal") {
+		await assertRefusal(candidateImage, seededData);
+	} else {
+		if (
+			upgradePath === "baseline" &&
+			count("SELECT count(*) FROM databasechangelog WHERE id = 'baseline_v0_77_4-tag';") !== 0
+		) {
+			throw new Error("Pinned v0.77.4 fixture already has a baseline tag");
+		}
+		synchronizeBaseline(candidateImage);
+		application = `${runId}-candidate`;
+		port = startApplication(application, candidateImage);
+		await waitUntilReady(application, port);
+		const upgradedData = dataFingerprint();
+		if (upgradedData !== seededData) {
+			throw new Error("Seeded application data changed during upgrade");
+		}
+		const upgradedPractices = workspacePracticeCount(WORKSPACE_SLUG);
+		if (upgradedPractices < previousPractices) {
+			throw new Error(
+				`Workspace practices shrank during upgrade: before=${previousPractices}, after=${upgradedPractices}`,
+			);
+		}
+		const candidateChanges = appliedChangeCount();
+		if (candidateChanges < previousChanges) {
+			throw new Error(
+				`Liquibase history shrank during upgrade: before=${previousChanges}, after=${candidateChanges}`,
+			);
+		}
+		const candidateSession = await login(port, "alice");
+		await completeTransparencyNotice(port, candidateSession);
+		await assertCoreReads(port, candidateSession);
 
-	await seedWorkspace(port, candidateSession, ADOPTION_WORKSPACE_SLUG);
-	const practicesBeforeAdoption = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
-	if (practicesBeforeAdoption !== 0) {
-		throw new Error(`New workspace unexpectedly started with ${practicesBeforeAdoption} practices`);
-	}
-	await adoptCatalogPractice(port, candidateSession);
-	const practicesAfterAdoption = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
-	if (practicesAfterAdoption !== 1) {
-		throw new Error(`Adoption created ${practicesAfterAdoption} practices instead of one`);
-	}
+		await seedWorkspace(port, candidateSession, ADOPTION_WORKSPACE_SLUG);
+		const practicesBeforeAdoption = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
+		if (practicesBeforeAdoption !== 0) {
+			throw new Error(
+				`New workspace unexpectedly started with ${practicesBeforeAdoption} practices`,
+			);
+		}
+		await adoptCatalogPractice(port, candidateSession);
+		const practicesAfterAdoption = workspacePracticeCount(ADOPTION_WORKSPACE_SLUG);
+		if (practicesAfterAdoption !== 1) {
+			throw new Error(`Adoption created ${practicesAfterAdoption} practices instead of one`);
+		}
 
-	console.log("Seeded previous-release upgrade passed.");
+		console.log(`Seeded ${upgradePath} release upgrade passed.`);
+	}
 } catch (error) {
 	for (const name of [application, postgres]) {
 		try {
@@ -582,6 +681,8 @@ try {
 	}
 	throw error;
 } finally {
-	spawnSync("docker", ["rm", "--force", application, postgres], { stdio: "ignore" });
+	spawnSync("docker", ["rm", "--force", application, `${runId}-sync`, postgres], {
+		stdio: "ignore",
+	});
 	spawnSync("docker", ["network", "rm", network], { stdio: "ignore" });
 }

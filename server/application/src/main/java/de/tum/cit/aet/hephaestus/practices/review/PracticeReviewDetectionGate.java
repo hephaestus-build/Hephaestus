@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.util.List;
@@ -45,6 +46,7 @@ public class PracticeReviewDetectionGate {
     private final AutomatedReviewFence fence;
     private final ObservationRepository observations;
     private final ObservationVisibilityPolicy observationVisibility;
+    private final ReviewedWorkChanges reviewedWorkChanges;
 
     public PracticeReviewDetectionGate(
             PracticeReviewReadiness practiceDetectionReadiness,
@@ -54,7 +56,8 @@ public class PracticeReviewDetectionGate {
             PracticeReviewCoverageService coverageService,
             AutomatedReviewFence fence,
             ObservationRepository observations,
-            ObservationVisibilityPolicy observationVisibility) {
+            ObservationVisibilityPolicy observationVisibility,
+            ReviewedWorkChanges reviewedWorkChanges) {
         this.practiceDetectionReadiness = practiceDetectionReadiness;
         this.practiceRepository = practiceRepository;
         this.workspaceResolver = workspaceResolver;
@@ -63,6 +66,7 @@ public class PracticeReviewDetectionGate {
         this.fence = fence;
         this.observations = observations;
         this.observationVisibility = observationVisibility;
+        this.reviewedWorkChanges = reviewedWorkChanges;
     }
 
     public GateDecision evaluate(
@@ -225,7 +229,8 @@ public class PracticeReviewDetectionGate {
      * The practices whose current word on this pull request is a problem of its author's, whatever occasion
      * they are bound to. The claim is read the way every current read
      * reads it — each claim's latest run, then currentness, invalidation and evidence authorization — so a
-     * later positive or abstention stands and a withdrawn verdict starts nothing.
+     * later positive or abstention stands and a withdrawn verdict starts nothing. A repair also needs a
+     * known difference from that negative run's staged work; a deferred event alone proves no change.
      */
     private Set<Long> practicesToRecheck(
             Issue reviewable,
@@ -235,7 +240,7 @@ public class PracticeReviewDetectionGate {
             TriggerMode triggerMode,
             ReviewSubject subject) {
         Long authorId = subject.actorId();
-        if (!(reviewable instanceof PullRequest)
+        if (!(reviewable instanceof PullRequest pullRequest)
                 || !reviewable.isOpen()
                 || draft
                 || triggerMode != TriggerMode.AUTO
@@ -252,8 +257,20 @@ public class PracticeReviewDetectionGate {
         }
         Set<UUID> current = observationVisibility.permitsAll(
                 workspace.getId(), negative, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+        Set<UUID> changed = reviewedWorkChanges.materiallyChanged(
+                workspace.getId(),
+                negative.stream()
+                        .filter(observation -> current.contains(observation.getId()))
+                        .map(Observation::getAgentJobId)
+                        .collect(Collectors.toSet()),
+                new ReviewedWorkChanges.PullRequestRevision(
+                        pullRequest.getId(),
+                        pullRequest.getHeadRefOid(),
+                        pullRequest.getTitle(),
+                        pullRequest.getBody()));
         return negative.stream()
                 .filter(observation -> current.contains(observation.getId()))
+                .filter(observation -> changed.contains(observation.getAgentJobId()))
                 .map(observation -> observation.getPractice().getId())
                 .collect(Collectors.toSet());
     }

@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhook
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookProject;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookUser;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequestreviewcomment.GitLabDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
 import io.nats.client.impl.NatsJetStreamMetaData;
@@ -61,6 +62,9 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
     @Mock
     private GitLabMergeRequestReadinessReader readinessReader;
 
+    @Mock
+    private GitLabDiscussionSyncService discussionSyncService;
+
     private TransactionTemplate transactionTemplate;
     private GitLabMergeRequestMessageHandler handler;
 
@@ -86,6 +90,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                 contextResolver,
                 closingIssueClient,
                 readinessReader,
+                discussionSyncService,
                 deserializer,
                 transactionTemplate);
 

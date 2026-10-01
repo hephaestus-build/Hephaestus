@@ -140,6 +140,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             when(mockWebClient.post()).thenReturn(bodyUriSpec);
             Mockito.doReturn(bodySpec).when(bodyUriSpec).uri(anyString(), eq(GROUP_ID));
             Mockito.doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
+            org.mockito.Mockito.lenient()
+                    .doReturn(bodySpec)
+                    .when(bodySpec)
+                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
             Mockito.doReturn(bodySpec).when(bodySpec).bodyValue(any());
             when(bodySpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
@@ -184,6 +188,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
             org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
             org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("id", 99, "url", "https://example.com/webhooks/gitlab")));
@@ -205,6 +213,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
             org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(999L));
             org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             404, "Not Found", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
@@ -229,6 +241,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
             org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID));
             org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(List.of(
@@ -253,6 +269,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
             org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID));
             org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attribute(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class))).thenReturn(Mono.just(List.of()));
 
@@ -276,6 +296,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).delete();
             org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
             org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attributes(org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.toBodilessEntity()).thenReturn(Mono.empty());
 
@@ -293,6 +317,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).delete();
             org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(999L));
             org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attributes(org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             404, "Not Found", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
@@ -311,6 +339,10 @@ class GitLabWebhookClientTest extends BaseUnitTest {
             org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).delete();
             org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString(), eq(GROUP_ID), eq(99L));
             org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            org.mockito.Mockito.lenient()
+                    .doReturn(headersSpec)
+                    .when(headersSpec)
+                    .attributes(org.mockito.ArgumentMatchers.any());
             when(headersSpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             500, "Internal Server Error", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));

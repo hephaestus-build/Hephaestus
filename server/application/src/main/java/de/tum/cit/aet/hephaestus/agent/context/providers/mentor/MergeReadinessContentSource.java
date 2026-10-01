@@ -46,12 +46,15 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Materialises {@code inputs/context/merge_readiness.json}: for the developer's open authored pull requests, what
- * the provider says about merging and what reviewers wrote. An approval with an empty body is not the whole
- * review — a condition often sits in a general note or an inline thread beside it, and resolving that thread does
- * not show the condition was met. Its description and the issues the provider records it closing, with their bodies,
+ * the provider says about merging and what participants wrote, the work's author included. Each comment carries its
+ * author's relation to the work, from stored identities; a comment is never a review, and only a recorded review
+ * approves or requests changes. An approval with an empty body is not the whole review — a condition often sits in a
+ * general note or an inline thread beside it, and resolving that thread does not show the condition was met. Its description and the issues the provider records it closing, with their bodies,
  * carry conditions too: a closing link says the provider will close the issue on merge, not that the issue's
  * conditions are met, and a stored list can miss a link whose read failed. One that is only listed in
- * {@code notLoaded} is read on demand as {@code inputs/context/merge_readiness/<artifactId>.json}.
+ * {@code notLoaded} is read on demand from the {@code resource} its entry carries, as is the developer's closed or
+ * merged work from its entry in {@code recent_authored_work.json}: the list is for work still to merge, the detail for
+ * any work they authored, with its stored state saying which.
  *
  * <p>Each read is one snapshot: the pages of a scan are ordered by thread state a sync may change between them, so
  * under read-committed a row could slip past the offset unread.
@@ -124,25 +127,36 @@ public class MergeReadinessContentSource implements ContentSource {
         }
     }
 
+    /** The on-demand key of one pull request's detail, published as the {@code resource} of its entries. */
+    public static String resourceOf(long artifactId) {
+        return OUTPUT_PREFIX + "merge_readiness/" + artifactId + ".json";
+    }
+
     /** The artifact id an on-demand key names, if {@code key} is one. */
     public static Optional<Long> artifactIdOf(String key) {
         Matcher matcher = ITEM_KEY.matcher(key);
         return matcher.matches() ? Optional.of(Long.parseLong(matcher.group(1))) : Optional.empty();
     }
 
-    /** One open authored pull request, in the same shape and scope as the list; {@code NOT_FOUND} otherwise. */
+    /**
+     * One pull request the developer authored, open, closed or merged, in the shape of the list and its scope apart
+     * from state; {@code NOT_FOUND} otherwise.
+     */
     @Transactional(readOnly = true, propagation = Propagation.REQUIRES_NEW, isolation = Isolation.REPEATABLE_READ)
     public ObjectNode inspect(long workspaceId, long developerId, long artifactId) {
         return build(workspaceId, (root, providerId) -> {
             // A list: two monitor rows with one path would make a single-result query throw.
             Optional<PullRequest> pr =
                     queryRepository
-                            .findOpenAuthoredPullRequestOnInstance(workspaceId, developerId, providerId, artifactId)
+                            .findAuthoredPullRequestOnInstance(workspaceId, developerId, providerId, artifactId)
                             .stream()
                             .findFirst();
             if (pr.isEmpty()) {
                 root.put("status", "NOT_FOUND");
-                root.put("reason", "No open pull request by this developer has that artifactId in this workspace.");
+                root.put(
+                        "reason",
+                        "No pull request by this developer has that artifactId in this workspace. Copy the resource "
+                                + "of an entry in recent_authored_work.json or merge_readiness.json.");
                 return;
             }
             root.putArray("pullRequests").add(describe(workspaceId, developerId, providerId, pr.get()));
@@ -210,6 +224,7 @@ public class MergeReadinessContentSource implements ContentSource {
         return objectMapper
                 .createObjectNode()
                 .put("artifactId", pr.getId())
+                .put("resource", resourceOf(pr.getId()))
                 .put("number", pr.getNumber())
                 .put("title", pr.getTitle());
     }
@@ -218,6 +233,7 @@ public class MergeReadinessContentSource implements ContentSource {
         return objectMapper
                 .createObjectNode()
                 .put("artifactId", detail.path("artifactId").asLong())
+                .put("resource", resourceOf(detail.path("artifactId").asLong()))
                 .put("number", detail.path("number").asInt())
                 .put("title", detail.path("title").asString());
     }
@@ -225,10 +241,23 @@ public class MergeReadinessContentSource implements ContentSource {
     private ObjectNode describe(long workspaceId, long developerId, long providerId, PullRequest pr) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("artifactId", pr.getId());
+        node.put("resource", resourceOf(pr.getId()));
         node.put("number", pr.getNumber());
         node.put("title", pr.getTitle());
         node.put("url", pr.getHtmlUrl());
+        node.put("state", pr.getState().name());
         node.put("isDraft", pr.isDraft());
+        node.put("isMerged", pr.isMerged());
+        if (pr.getMergedAt() != null) {
+            node.put("mergedAt", pr.getMergedAt().toString());
+        }
+        User merger = pr.getMergedBy();
+        if (merger != null) {
+            node.put("mergedBy", merger.getLogin());
+            if (merger.getType() == User.Type.BOT) {
+                node.put("mergedByBot", true);
+            }
+        }
         if (pr.getBody() != null && !pr.getBody().isBlank()) {
             putText(node, "description", pr.getBody());
         }
@@ -264,6 +293,9 @@ public class MergeReadinessContentSource implements ContentSource {
             }
             ObjectNode entry = reviews.addObject();
             entry.put("reviewer", reviewer.getLogin());
+            if (reviewer.getType() == User.Type.BOT) {
+                entry.put("bot", true);
+            }
             // GitHub keeps a dismissed review's original state beside the flag; a dismissed approval approves nothing.
             if (review.isDismissed() && review.getState() != PullRequestReview.State.DISMISSED) {
                 entry.put("state", PullRequestReview.State.DISMISSED.name());
@@ -298,7 +330,7 @@ public class MergeReadinessContentSource implements ContentSource {
         // Newest first from the query; listed oldest first.
         for (IssueComment note :
                 notes.subList(0, Math.min(notes.size(), MAX_NOTES)).reversed()) {
-            notesCut |= putComment(noteArray, note.getAuthor(), note.getBody(), note.getCreatedAt());
+            notesCut |= putComment(noteArray, pr.getAuthor(), note.getAuthor(), note.getBody(), note.getCreatedAt());
         }
         node.put("generalNotesStatus", notesCut ? "TRUNCATED" : "COMPLETE");
 
@@ -348,12 +380,13 @@ public class MergeReadinessContentSource implements ContentSource {
             ArrayNode shown = entry.putArray("comments");
             for (PullRequestReviewComment comment :
                     comments.subList(0, Math.min(comments.size(), MAX_THREAD_COMMENTS))) {
-                threadsCut |= putComment(shown, comment.getAuthor(), comment.getBody(), comment.getCreatedAt());
+                threadsCut |= putComment(
+                        shown, pr.getAuthor(), comment.getAuthor(), comment.getBody(), comment.getCreatedAt());
             }
         }
         node.put("threadsStatus", threadsCut ? "TRUNCATED" : "COMPLETE");
 
-        List<Issue> closing = queryRepository.findClosingIssuesOfOpenAuthoredPullRequest(
+        List<Issue> closing = queryRepository.findClosingIssuesOfAuthoredPullRequest(
                 workspaceId, developerId, providerId, pr.getId(), PageRequest.of(0, MAX_CLOSING_ISSUES + 1));
         boolean closingCut = closing.size() > MAX_CLOSING_ISSUES;
         ArrayNode closes = node.putArray("closingIssues");
@@ -413,9 +446,15 @@ public class MergeReadinessContentSource implements ContentSource {
     }
 
     /** @return whether the body was clipped */
-    private static boolean putComment(ArrayNode into, @Nullable User author, String body, @Nullable Instant createdAt) {
+    private static boolean putComment(
+            ArrayNode into,
+            @Nullable User workAuthor,
+            @Nullable User author,
+            String body,
+            @Nullable Instant createdAt) {
         ObjectNode c = into.addObject();
         c.put("author", author == null ? null : author.getLogin());
+        c.put("authorRelation", authorRelation(workAuthor, author));
         if (author != null && author.getType() == User.Type.BOT) {
             c.put("bot", true);
         }
@@ -425,6 +464,16 @@ public class MergeReadinessContentSource implements ContentSource {
             c.put("quotesHephaestusMarker", true);
         }
         return putBody(c, body);
+    }
+
+    /** Whether {@code author} wrote the work itself, by stored identity; unknown when either identity is missing. */
+    private static String authorRelation(@Nullable User workAuthor, @Nullable User author) {
+        Long workAuthorId = workAuthor == null ? null : workAuthor.getId();
+        Long authorId = author == null ? null : author.getId();
+        if (workAuthorId == null || authorId == null) {
+            return "UNKNOWN";
+        }
+        return workAuthorId.equals(authorId) ? "WORK_AUTHOR" : "OTHER_PARTICIPANT";
     }
 
     /** @return whether the body was clipped — a condition past the cut is then unseen */

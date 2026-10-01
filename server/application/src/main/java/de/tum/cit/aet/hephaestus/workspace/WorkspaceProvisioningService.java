@@ -244,7 +244,8 @@ public class WorkspaceProvisioningService {
                         /* gitlabGroupId */ null,
                         /* gitlabWebhookId */ null,
                         ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                        Set.of()),
+                        Set.of(),
+                        null),
                 token,
                 "bootstrap-gitlab-pat-workspace-" + savedWorkspace.getId());
 

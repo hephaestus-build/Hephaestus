@@ -108,6 +108,42 @@ class WorkerControlChannelIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void aWorkerWithoutMentorSessionFramesIsRejectedAtHandshake() throws Exception {
+        String workerId = "worker-old-" + UUID.randomUUID();
+        var closed = new CompletableFuture<Integer>();
+        WebSocket ws = HttpClient.newHttpClient()
+                .newWebSocketBuilder()
+                .header("Authorization", "Bearer " + jwtIssuer.issue(workerId).token())
+                .buildAsync(URI.create("ws://localhost:" + port + "/api/workers/connect"), new WebSocket.Listener() {
+                    @Override
+                    public void onOpen(WebSocket socket) {
+                        socket.request(1);
+                    }
+
+                    @Override
+                    public CompletionStage<?> onClose(WebSocket socket, int statusCode, String reason) {
+                        closed.complete(statusCode);
+                        return CompletableFuture.completedFuture(null);
+                    }
+                })
+                .get(10, TimeUnit.SECONDS);
+        try {
+            var codec = new FrameCodec(objectMapper);
+            ws.sendText(
+                            codec.encode(new FrameEnvelope(
+                                    2,
+                                    UUID.randomUUID().toString(),
+                                    new WorkerHello(workerId, List.of(2), "previous-release"))),
+                            true)
+                    .get(5, TimeUnit.SECONDS);
+            assertThat(closed.get(10, TimeUnit.SECONDS)).isEqualTo(4400);
+            assertThat(workerSessions.findByWorkerId(workerId)).isEmpty();
+        } finally {
+            ws.abort();
+        }
+    }
+
+    @Test
     void revokedJwtIsRejected() throws Exception {
         assertThat(denylist).as("WorkerTokenDenylistService must be wired").isNotNull();
         String workerId = "worker-rev-" + UUID.randomUUID();

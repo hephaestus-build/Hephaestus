@@ -6,7 +6,7 @@
  * but every one has to be non-empty, because a blank required setting is exactly what the boot is
  * checking the installation refuses to start on.
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { run } from "./lib/process.ts";
@@ -44,8 +44,21 @@ export function answerBlankSettings(environment: string): string {
 	return text;
 }
 
+/**
+ * The worker reaches the Docker socket through the group that owns it, which differs between hosts, so
+ * a boot that relied on the example's default would start a worker the daemon refuses.
+ */
+export function withDockerGroup(environment: string, groupId: number): string {
+	const line = `DOCKER_GROUP_ID=${groupId}`;
+	const assigned = /^DOCKER_GROUP_ID=.*$/mu;
+	return assigned.test(environment)
+		? environment.replace(assigned, line)
+		: `${environment.trimEnd()}\n${line}\n`;
+}
+
 if (import.meta.main) {
 	await run("./setup.sh", [], { cwd: SELF_HOST });
 	const file = path.join(SELF_HOST, ".env");
-	await writeFile(file, answerBlankSettings(await readFile(file, "utf8")));
+	const { gid } = await stat("/var/run/docker.sock");
+	await writeFile(file, withDockerGroup(answerBlankSettings(await readFile(file, "utf8")), gid));
 }

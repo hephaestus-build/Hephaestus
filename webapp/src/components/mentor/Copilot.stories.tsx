@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen } from "storybook/test";
+import { expect, fn, screen, waitFor } from "storybook/test";
 
 import type { ChatMessageVote } from "@/api/types.gen";
 import type { ChatMessage } from "@/lib/types";
@@ -165,5 +165,38 @@ export const Opened: Story = {
 		await expectDismissed();
 		await expect(getComputedStyle(document.body).overflow).not.toBe("hidden");
 		await expect(launcher).toHaveFocus();
+	},
+};
+
+export const Busy: Story = {
+	args: {
+		hasMessages: true,
+		children: (
+			<Chat
+				messages={CONVERSATION_MESSAGES.slice(0, 3)}
+				status="error"
+				errorMessage="Heph is busy. Please try again."
+				attachments={[]}
+				onMessageSubmit={fn()}
+				onStop={fn()}
+				onReload={fn()}
+				className="h-full max-h-none"
+			/>
+		),
+	},
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Open Heph, AI mentor" }));
+		const panel = await screen.findByRole("dialog", { name: /Heph/u });
+		await expectSettledVisible(panel);
+		await expect(screen.getByText("Heph is busy", { exact: true })).toBeVisible();
+		const scroll = screen.getByRole("button", { name: "Scroll to latest message" });
+		await expect(scroll.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+			screen.getByRole("alert").getBoundingClientRect().top,
+		);
+		await expect(screen.getByRole("button", { name: "Try again" })).toBeEnabled();
+		await userEvent.click(scroll);
+		await waitFor(async () =>
+			expect(screen.queryByRole("button", { name: "Scroll to latest message" })).toBeNull(),
+		);
 	},
 };

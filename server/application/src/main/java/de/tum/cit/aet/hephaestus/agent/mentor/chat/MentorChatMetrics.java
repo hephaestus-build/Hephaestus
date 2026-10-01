@@ -58,6 +58,7 @@ public class MentorChatMetrics {
     private final Counter started;
     private final Map<Outcome, Counter> completedByOutcome;
     private final Timer duration;
+    private final Timer runtimeReady;
     private final Timer firstTokenWarm;
     private final Timer firstTokenCold;
     private final DistributionSummary costUsd;
@@ -70,6 +71,10 @@ public class MentorChatMetrics {
                 .register(registry);
         this.duration = Timer.builder(AgentMetrics.MENTOR_TURN_DURATION)
                 .description("Mentor chat turn wall-clock duration including sandbox attach + Pi RPC.")
+                .publishPercentileHistogram()
+                .register(registry);
+        this.runtimeReady = Timer.builder(AgentMetrics.MENTOR_TURN_RUNTIME_READY)
+                .description("Time from turn acceptance until open_thread confirms SDK runtime usability.")
                 .publishPercentileHistogram()
                 .register(registry);
         this.firstTokenWarm = firstTokenTimer(registry, "warm");
@@ -106,6 +111,10 @@ public class MentorChatMetrics {
 
     public void stopTimer(Timer.Sample sample) {
         sample.stop(duration);
+    }
+
+    public void recordRuntimeReady(Duration sinceAccepted) {
+        runtimeReady.record(sinceAccepted);
     }
 
     public void recordFirstToken(boolean coldSandbox, Duration sinceAccepted) {

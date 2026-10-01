@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.FrameRingBuffer;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -46,6 +47,25 @@ class FrameRingBufferTest extends BaseUnitTest {
             List<JsonNode> snap = buffer.snapshotSince(-1L);
             assertThat(snap).extracting(JsonNode::intValue).containsExactly(3, 4, 5);
         }
+    }
+
+    @Test
+    void evictsByUtf8BytesBeforeTheFrameCountLimit() {
+        var buffer = new FrameRingBuffer(20, dropped);
+        var frame = tools.jackson.databind.node.StringNode.valueOf("é".repeat(512 * 1024 - 1));
+        for (int i = 0; i < 9; i++) buffer.offer(frame);
+        assertThat(buffer.size()).isEqualTo(8);
+        assertThat(dropped.count()).isEqualTo(1.0);
+        assertThat(buffer.snapshotSince(7)).containsExactly(frame);
+    }
+
+    @Test
+    void neverRetainsAFrameLargerThanTheEntireReplayBudget() {
+        var buffer = new FrameRingBuffer(20, dropped);
+        buffer.offer(tools.jackson.databind.node.StringNode.valueOf("x".repeat(8 * 1024 * 1024)));
+        assertThat(buffer.size()).isZero();
+        assertThat(buffer.latestSequence()).isZero();
+        assertThat(dropped.count()).isEqualTo(1.0);
     }
 
     @Nested

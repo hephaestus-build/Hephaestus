@@ -165,14 +165,16 @@ class MentorLiveLlmTest {
         TranslatorState state = new TranslatorState(assistantMessageId);
         List<UIMessageChunk> chunks = new ArrayList<>();
         var translationDone = new CompletableFuture<Void>();
-        sandbox.subscribe(frame -> {
-            if (!isThreadEvent(frame, threadId)) return;
-            JsonNode event = frame.path("params").path("event");
-            chunks.addAll(translator.translate(event, state));
-            if ("agent_end".equals(event.path("type").asString())) {
-                translationDone.complete(null);
-            }
-        });
+        sandbox.subscribe(
+                frame -> {
+                    if (!isThreadEvent(frame, threadId)) return;
+                    JsonNode event = frame.path("params").path("event");
+                    chunks.addAll(translator.translate(event, state));
+                    if ("agent_end".equals(event.path("type").asString())) {
+                        translationDone.complete(null);
+                    }
+                },
+                () -> {});
 
         driver.prompt(threadId, "Briefly explain unit testing in one sentence.");
         translationDone.get(TURN_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
@@ -380,14 +382,16 @@ class MentorLiveLlmTest {
         TranslatorState state = new TranslatorState(assistantMessageId);
         List<UIMessageChunk> chunks = new ArrayList<>();
         var done = new CompletableFuture<Void>();
-        sandbox.subscribe(frame -> {
-            if (!isThreadEvent(frame, threadId)) return;
-            JsonNode event = frame.path("params").path("event");
-            chunks.addAll(translator.translate(event, state));
-            if ("agent_end".equals(event.path("type").asString())) {
-                done.complete(null);
-            }
-        });
+        sandbox.subscribe(
+                frame -> {
+                    if (!isThreadEvent(frame, threadId)) return;
+                    JsonNode event = frame.path("params").path("event");
+                    chunks.addAll(translator.translate(event, state));
+                    if ("agent_end".equals(event.path("type").asString())) {
+                        done.complete(null);
+                    }
+                },
+                () -> {});
 
         driver.prompt(
                 threadId,
@@ -463,14 +467,16 @@ class MentorLiveLlmTest {
         driver.openThread(threadId);
 
         AtomicReference<byte[]> captured = new AtomicReference<>();
-        sandbox.subscribe(frame -> {
-            if (!isThreadEvent(frame, threadId)) return;
-            JsonNode event = frame.path("params").path("event");
-            if ("session_persisted".equals(event.path("type").asString())) {
-                String jsonl = event.path("jsonl").asString("");
-                if (!jsonl.isEmpty()) captured.set(jsonl.getBytes(StandardCharsets.UTF_8));
-            }
-        });
+        sandbox.subscribe(
+                frame -> {
+                    if (!isThreadEvent(frame, threadId)) return;
+                    JsonNode event = frame.path("params").path("event");
+                    if ("session_persisted".equals(event.path("type").asString())) {
+                        String jsonl = event.path("jsonl").asString("");
+                        if (!jsonl.isEmpty()) captured.set(jsonl.getBytes(StandardCharsets.UTF_8));
+                    }
+                },
+                () -> {});
         runTurnAndCollect(driver, threadId, prompt);
         sandbox.close(Duration.ofSeconds(5));
         sandbox = null;
@@ -523,14 +529,17 @@ class MentorLiveLlmTest {
         List<UIMessageChunk> chunks = new ArrayList<>();
         var done = new CompletableFuture<Void>();
         // Use a per-turn subscription so collected chunks are scoped to this turn only.
-        var unsubscribe = activeSandbox().subscribe(frame -> {
-            if (!isThreadEvent(frame, threadId)) return;
-            JsonNode event = frame.path("params").path("event");
-            chunks.addAll(translator.translate(event, state));
-            if ("agent_end".equals(event.path("type").asString())) {
-                done.complete(null);
-            }
-        });
+        var unsubscribe = activeSandbox()
+                .subscribe(
+                        frame -> {
+                            if (!isThreadEvent(frame, threadId)) return;
+                            JsonNode event = frame.path("params").path("event");
+                            chunks.addAll(translator.translate(event, state));
+                            if ("agent_end".equals(event.path("type").asString())) {
+                                done.complete(null);
+                            }
+                        },
+                        () -> {});
         try {
             driver.prompt(threadId, prompt);
             done.get(TURN_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
@@ -669,20 +678,22 @@ class MentorLiveLlmTest {
 
         RunnerDriver(AttachedSandbox sandbox) {
             this.sandbox = sandbox;
-            sandbox.subscribe(frame -> {
-                if (frame.has("id") && (frame.has("result") || frame.has("error"))) {
-                    responses.add(frame);
-                } else if ("fetch_context".equals(frame.path("method").asString())) {
-                    respondToFetchContext(frame);
-                } else if ("event".equals(frame.path("method").asString())
-                        && "runner_ready"
-                                .equals(frame.path("params")
-                                        .path("event")
-                                        .path("type")
-                                        .asString())) {
-                    readyNotifications.add(frame);
-                }
-            });
+            sandbox.subscribe(
+                    frame -> {
+                        if (frame.has("id") && (frame.has("result") || frame.has("error"))) {
+                            responses.add(frame);
+                        } else if ("fetch_context".equals(frame.path("method").asString())) {
+                            respondToFetchContext(frame);
+                        } else if ("event".equals(frame.path("method").asString())
+                                && "runner_ready"
+                                        .equals(frame.path("params")
+                                                .path("event")
+                                                .path("type")
+                                                .asString())) {
+                            readyNotifications.add(frame);
+                        }
+                    },
+                    () -> {});
         }
 
         RunnerDriver withContext(String path, JsonNode content) {

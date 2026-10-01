@@ -216,6 +216,14 @@ public class PullRequest extends Issue {
     @Column(name = "head_check_observed_at")
     private Instant headCheckObservedAt;
 
+    /**
+     * When the provider was last asked for the discussions whose resolution is stored on this pull request's threads: a
+     * read begun earlier records none of it. Null until one was stored.
+     */
+    @Nullable
+    @Column(name = "discussions_observed_at")
+    private Instant discussionsObservedAt;
+
     @OneToMany(mappedBy = "pullRequest", cascade = CascadeType.REMOVE, orphanRemoval = true)
     @BatchSize(size = 50)
     @ToString.Exclude

@@ -325,7 +325,11 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
             @Param("providerId") Long providerId,
             Pageable page);
 
-    /** One pull request under the same scope as {@link #findOpenAuthoredPullRequestsOnInstance}. */
+    /**
+     * One pull request the developer authored, in whatever state is stored — open, closed or merged — under the
+     * scope of {@link #findOpenAuthoredPullRequestsOnInstance} otherwise: monitored by the workspace, on its connected
+     * instance, not tombstoned.
+     */
     @Query("""
         SELECT p
         FROM PullRequest p
@@ -334,11 +338,10 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         WHERE p.id = :pullRequestId
           AND p.author.id = :userId
           AND p.deletedAt IS NULL
-          AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
           AND rtm.workspace.id = :workspaceId
           AND r.provider.id = :providerId
         """)
-    List<PullRequest> findOpenAuthoredPullRequestOnInstance(
+    List<PullRequest> findAuthoredPullRequestOnInstance(
             @Param("workspaceId") Long workspaceId,
             @Param("userId") Long userId,
             @Param("providerId") Long providerId,
@@ -346,10 +349,10 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
 
     /**
      * The issues the provider records {@code pullRequestId} as closing — GitHub's closing references, GitLab's
-     * closes-issues — under the same scope as {@link #findOpenAuthoredPullRequestOnInstance}: an open pull request
-     * the developer authored, monitored by the workspace, on its connected instance. Only issues of the pull
-     * request's own repository that are not tombstoned, lowest number first; a caller passes its cap plus one to
-     * learn whether more exist.
+     * closes-issues — under the same scope as {@link #findAuthoredPullRequestOnInstance}: a pull request the
+     * developer authored, in any stored state, monitored by the workspace, on its connected instance. Only issues of
+     * the pull request's own repository that are not tombstoned, lowest number first; a caller passes its cap plus
+     * one to learn whether more exist.
      */
     @Query("""
         SELECT DISTINCT i
@@ -360,7 +363,6 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
         WHERE p.id = :pullRequestId
           AND p.author.id = :userId
           AND p.deletedAt IS NULL
-          AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue.State.OPEN
           AND rtm.workspace.id = :workspaceId
           AND r.provider.id = :providerId
           AND TYPE(i) = Issue
@@ -368,7 +370,7 @@ public interface MentorContextQueryRepository extends JpaRepository<User, Long> 
           AND i.deletedAt IS NULL
         ORDER BY i.number ASC, i.id ASC
         """)
-    List<Issue> findClosingIssuesOfOpenAuthoredPullRequest(
+    List<Issue> findClosingIssuesOfAuthoredPullRequest(
             @Param("workspaceId") Long workspaceId,
             @Param("userId") Long userId,
             @Param("providerId") Long providerId,

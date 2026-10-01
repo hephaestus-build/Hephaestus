@@ -32,6 +32,7 @@ public final class WorkerSession {
     private final AtomicBoolean forceReconnectSent = new AtomicBoolean(false);
     private final AtomicReference<@Nullable ScheduledFuture<?>> helloDeadline = new AtomicReference<>();
     private volatile Instant lastInboundAt;
+    private volatile boolean draining;
 
     public WorkerSession(
             String workerId,
@@ -101,6 +102,14 @@ public final class WorkerSession {
         if (f != null) {
             f.cancel(false);
         }
+    }
+
+    public boolean isDraining() {
+        return draining;
+    }
+
+    void markDraining() {
+        draining = true;
     }
 
     public boolean send(WorkerControlFrame frame) {

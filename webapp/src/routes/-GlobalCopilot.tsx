@@ -81,12 +81,17 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
 				status={mentorChat.status}
+				errorMessage={mentorChat.error?.message}
 				readonly={false}
 				attachments={[]}
 				onMessageSubmit={handleMessageSubmit}
 				onMessageEdit={handleMessageEdit}
 				onStop={() => {
 					void mentorChat.stop();
+				}}
+				onReload={() => {
+					mentorChat.clearError();
+					mentorChat.retry();
 				}}
 				onCopy={copyToClipboard}
 				onVote={handleVote}

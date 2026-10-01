@@ -118,6 +118,7 @@ public class GitLabDeletionSweepService {
      */
     private static final int MAX_RETRY_ATTEMPTS = 5;
 
+    private final GitLabNoteReconciliationService noteReconciliation;
     private final IssueRepository issueRepository;
     private final RepositoryRepository repositoryRepository;
     private final GitLabGraphQlClientProvider graphQlClientProvider;
@@ -135,7 +136,9 @@ public class GitLabDeletionSweepService {
             GitLabProperties gitLabProperties,
             WorkspaceActorSelector actorSelector,
             GitLabWorkspaceLinkService workspaceLinkService,
-            TransactionTemplate transactionTemplate) {
+            TransactionTemplate transactionTemplate,
+            GitLabNoteReconciliationService noteReconciliation) {
+        this.noteReconciliation = noteReconciliation;
         this.issueRepository = issueRepository;
         this.repositoryRepository = repositoryRepository;
         this.graphQlClientProvider = graphQlClientProvider;
@@ -220,11 +223,11 @@ public class GitLabDeletionSweepService {
      * @param skipped                 true when at least one entity class could not be swept because its
      *                                upstream listing was incomplete — the job should report warnings
      */
-    public record SweepOutcome(int issuesTombstoned, int mergeRequestsTombstoned, boolean skipped) {
-        static final SweepOutcome NOTHING = new SweepOutcome(0, 0, false);
+    public record SweepOutcome(int issuesTombstoned, int mergeRequestsTombstoned, int notesRemoved, boolean skipped) {
+        static final SweepOutcome NOTHING = new SweepOutcome(0, 0, 0, false);
 
         public int total() {
-            return issuesTombstoned + mergeRequestsTombstoned;
+            return issuesTombstoned + mergeRequestsTombstoned + notesRemoved;
         }
     }
 
@@ -252,6 +255,7 @@ public class GitLabDeletionSweepService {
 
         int issues = 0;
         int mergeRequests = 0;
+        int notes = 0;
         boolean skipped = false;
         int done = 0;
         int total = repositories.size();
@@ -290,11 +294,12 @@ public class GitLabDeletionSweepService {
 
             issues += outcome.issuesTombstoned();
             mergeRequests += outcome.mergeRequestsTombstoned();
+            notes += outcome.notesRemoved();
             skipped = skipped || outcome.skipped();
             done++;
         }
 
-        SweepOutcome scopeOutcome = new SweepOutcome(issues, mergeRequests, skipped);
+        SweepOutcome scopeOutcome = new SweepOutcome(issues, mergeRequests, notes, skipped);
         report(handle, done, total, sweepSummary(scopeOutcome), null);
         log.info(
                 "GitLab deletion sweep finished: scopeId={}, projectsSwept={}, issuesTombstoned={}, mergeRequestsTombstoned={}, degraded={}",
@@ -410,7 +415,9 @@ public class GitLabDeletionSweepService {
             }
         }
 
-        return new SweepOutcome(issuesTombstoned, mergeRequestsTombstoned, skipped);
+        var noteOutcome = noteReconciliation.reconcileRepository(scopeId, repository, handle);
+        return new SweepOutcome(
+                issuesTombstoned, mergeRequestsTombstoned, noteOutcome.removed(), skipped || noteOutcome.skipped());
     }
 
     /** The live local numbers for one entity class of one repository. */

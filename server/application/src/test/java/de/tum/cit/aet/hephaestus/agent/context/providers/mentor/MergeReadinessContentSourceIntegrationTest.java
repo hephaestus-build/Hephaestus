@@ -274,6 +274,48 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
     }
 
     @Test
+    void shouldTellTheDevelopersOwnRepliesFromOtherParticipantsAndAnAutomatedReviewFromAPerson() {
+        User bot = TestUserFactory.createUser(nativeIds.incrementAndGet(), "ci-bot", instance);
+        bot.setType(User.Type.BOT);
+        bot = userRepository.save(bot);
+        PullRequest mr = mergeRequest(course, 20, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        review(mr, bot, PullRequestReview.State.APPROVED, "", at("10:00"));
+        review(mr, tutor, PullRequestReview.State.COMMENTED, "", at("10:01"));
+        note(mr, tutor, "Please say which issue this closes.", at("10:02"));
+        posted(mr, "gid://gitlab/Note/" + note(mr, tutor, NOTE, at("10:03")).getNativeId());
+        note(mr, student, "Added the issue to the description.", at("10:04"));
+        note(mr, bot, "Pipeline passed.", at("10:05"));
+        PullRequestReviewThread thread =
+                thread(mr, PullRequestReviewThread.State.RESOLVED, tutor, "Why is the timeout this long?");
+        reply(thread, student, "The course server is slow; I explained it in the description.");
+
+        JsonNode entry = inspect(mr);
+
+        assertThat(entry.path("latestReviews")
+                        .valueStream()
+                        .map(r -> r.path("reviewer").asString() + " "
+                                + r.path("state").asString() + " bot="
+                                + r.path("bot").asBoolean()))
+                .containsExactly("tutor COMMENTED bot=false", "ci-bot APPROVED bot=true");
+        assertThat(entry.path("generalNotes")
+                        .valueStream()
+                        .map(n -> n.path("author").asString() + " "
+                                + n.path("authorRelation").asString() + " bot="
+                                + n.path("bot").asBoolean()))
+                .containsExactly(
+                        "tutor OTHER_PARTICIPANT bot=false",
+                        "student WORK_AUTHOR bot=false",
+                        "ci-bot OTHER_PARTICIPANT bot=true");
+        assertThat(entry.path("threads")
+                        .get(0)
+                        .path("comments")
+                        .valueStream()
+                        .map(c -> c.path("author").asString() + " "
+                                + c.path("authorRelation").asString()))
+                .containsExactly("tutor OTHER_PARTICIPANT", "student WORK_AUTHOR");
+    }
+
+    @Test
     void shouldFindATutorConditionBehindAPageOfHephaestusNotes() {
         JsonNode entry = mergeRequestBehindOwnNotes(11, 60);
 
@@ -446,14 +488,23 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
     }
 
     @Test
-    void shouldReadOnlyTheConnectedInstanceAndThisWorkspace() {
+    void shouldReadOnlyTheConnectedInstanceThisWorkspaceAndLiveWorkWhateverItsState() {
         mergeRequest(course, 4, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        // Merged, so that only the scope, not the open-state filter of the list, keeps each of these out of a detail.
         // The same path on another GitLab instance; its monitor row would match by path alone.
         Repository samePathElsewhere = repository(gitLabInstance("https://gitlab.other.example"), "course/intro");
         PullRequest elsewhere =
-                mergeRequest(samePathElsewhere, 5, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+                merged(mergeRequest(samePathElsewhere, 5, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD));
         Repository unmonitored = repository(instance, "course/other");
-        mergeRequest(unmonitored, 6, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        PullRequest notMonitored =
+                merged(mergeRequest(unmonitored, 6, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD));
+        PullRequest deleted = merged(mergeRequest(course, 7, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD));
+        deleted.setDeletedAt(Instant.now());
+        pullRequestRepository.save(deleted);
+        PullRequest ours = merged(mergeRequest(course, 8, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD));
+        // Connected to the same instance, but not monitoring this project.
+        Workspace other = createWorkspace("other-course", "Other course", "other-course", AccountType.ORG, student);
+        connect(other, INSTANCE);
 
         JsonNode payload = source.buildPayload(workspace.getId(), student.getId());
 
@@ -461,20 +512,78 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                         .valueStream()
                         .map(pr -> pr.path("number").asInt()))
                 .containsExactly(4);
-        assertThat(source.inspect(workspace.getId(), student.getId(), elsewhere.getId())
+        for (PullRequest hidden : List.of(elsewhere, notMonitored, deleted)) {
+            assertThat(source.inspect(workspace.getId(), student.getId(), hidden.getId())
+                            .path("status")
+                            .asString())
+                    .as("MR !%d", hidden.getNumber())
+                    .isEqualTo("NOT_FOUND");
+        }
+        assertThat(source.inspect(workspace.getId(), tutor.getId(), ours.getId())
                         .path("status")
                         .asString())
                 .isEqualTo("NOT_FOUND");
-        assertThat(source.inspect(
-                                workspace.getId(),
-                                tutor.getId(),
-                                payload.path("pullRequests")
-                                        .get(0)
-                                        .path("artifactId")
-                                        .asLong())
+        assertThat(source.inspect(other.getId(), student.getId(), ours.getId())
                         .path("status")
                         .asString())
                 .isEqualTo("NOT_FOUND");
+        assertThat(inspect(ours).path("state").asString()).isEqualTo("MERGED");
+    }
+
+    @Test
+    void shouldGiveMergedAndClosedWorkItsStoredStateDiscussionAndClosingIssueOutsideTheOpenList() {
+        User bot = TestUserFactory.createUser(nativeIds.incrementAndGet(), "ci-bot", instance);
+        bot.setType(User.Type.BOT);
+        bot = userRepository.save(bot);
+        PullRequest mr = mergeRequest(course, 9, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        review(mr, bot, PullRequestReview.State.APPROVED, "", at("10:00"));
+        note(mr, tutor, "Link the issue before this goes in.", at("10:01"));
+        PullRequestReviewThread thread =
+                thread(mr, PullRequestReviewThread.State.RESOLVED, tutor, "Why is the timeout this long?");
+        reply(thread, student, "The course server is slow; I explained it in the description.");
+        JsonNode beforeMerge = inspect(mr);
+        mr.setMergedBy(bot);
+        mr = merged(mr);
+        Issue linked = issue(course, 1, "- [ ] The setup guide builds");
+        linked.setState(Issue.State.CLOSED);
+        closes(mr, issueRepository.save(linked));
+        PullRequest abandoned = mergeRequest(course, 10, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        abandoned.setState(PullRequest.State.CLOSED);
+        pullRequestRepository.save(abandoned);
+
+        JsonNode payload = source.buildPayload(workspace.getId(), student.getId());
+        JsonNode entry = inspect(mr);
+        JsonNode closed = inspect(abandoned);
+
+        assertThat(payload.path("pullRequests")).isEmpty();
+        assertThat(payload.path("notLoaded")).isEmpty();
+        assertThat(beforeMerge.path("state").asString()).isEqualTo("OPEN");
+        assertThat(entry.path("state").asString()).isEqualTo("MERGED");
+        assertThat(entry.path("isMerged").asBoolean()).isTrue();
+        assertThat(entry.path("mergedAt").asString()).isEqualTo(NOW.toString());
+        assertThat(entry.path("mergedBy").asString()).isEqualTo("ci-bot");
+        assertThat(entry.path("mergedByBot").asBoolean()).isTrue();
+        // The stored discussion reads the same after the merge as before it.
+        for (String field : List.of("latestReviews", "generalNotes", "threads")) {
+            assertThat(entry.path(field)).as(field).isEqualTo(beforeMerge.path(field));
+        }
+        assertThat(entry.path("latestReviews").get(0).path("bot").asBoolean()).isTrue();
+        assertThat(entry.path("threads")
+                        .get(0)
+                        .path("comments")
+                        .valueStream()
+                        .map(c -> c.path("author").asString() + " "
+                                + c.path("authorRelation").asString()))
+                .containsExactly("tutor OTHER_PARTICIPANT", "student WORK_AUTHOR");
+        assertThat(entry.path("closingIssues")
+                        .valueStream()
+                        .map(issue -> issue.path("number").asInt() + " "
+                                + issue.path("state").asString()))
+                .containsExactly("1 CLOSED");
+        assertThat(closed.path("state").asString()).isEqualTo("CLOSED");
+        assertThat(closed.path("isMerged").asBoolean()).isFalse();
+        assertThat(closed.has("mergedAt")).isFalse();
+        assertThat(closed.has("mergedBy")).isFalse();
     }
 
     @Test
@@ -715,7 +824,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                 IntegrationKind.GITLAB,
                 "GITLAB",
                 new ConnectionConfig.GitLabConfig(
-                        serverUrl, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of()));
+                        serverUrl, null, null, ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT, Set.of(), null));
         connection.setState(IntegrationState.ACTIVE);
         connectionRepository.saveAndFlush(connection);
     }
@@ -832,6 +941,14 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         comment.setHtmlUrl(mr.getHtmlUrl() + "#note_" + comment.getNativeId());
         comment.setCreatedAt(Instant.now());
         return reviewCommentRepository.save(comment);
+    }
+
+    /** Records {@code mr} as merged, as a provider sync stores it. */
+    private PullRequest merged(PullRequest mr) {
+        mr.setState(PullRequest.State.MERGED);
+        mr.setMerged(true);
+        mr.setMergedAt(NOW);
+        return pullRequestRepository.save(mr);
     }
 
     /** What the delivery ledger records when Hephaestus posts {@code refs} as feedback on {@code mr}. */
