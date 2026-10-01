@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
+import tools.jackson.databind.JsonNode;
 
 /** Capture comparison without a dependency from practices to the job-owning module. */
 public interface ReviewedWorkChanges {
@@ -13,7 +14,11 @@ public interface ReviewedWorkChanges {
      */
     Set<UUID> materiallyChanged(long workspaceId, Collection<UUID> runIds, PullRequestRevision current);
 
-    Set<UUID> materiallyChangedLinkedIssues(long workspaceId, Collection<UUID> runIds, long pullRequestId);
+    /** The authorized observation ids whose verified closing-issue file differs from its current projection. */
+    Set<UUID> materiallyChangedLinkedIssues(
+            long workspaceId, Collection<ObservationEvidence> observations, long pullRequestId);
+
+    record ObservationEvidence(UUID observationId, UUID runId, JsonNode citations) {}
 
     boolean linkedCaptureCurrent(long workspaceId, UUID jobId, long pullRequestId, String signalRevision);
 

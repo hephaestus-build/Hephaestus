@@ -269,7 +269,18 @@ public class PracticeReviewDetectionGate {
                 .map(Observation::getAgentJobId)
                 .collect(Collectors.toSet());
         Set<UUID> changed = signalOptions.isInternalRepair(signal)
-                ? reviewedWorkChanges.materiallyChangedLinkedIssues(workspace.getId(), runIds, pullRequest.getId())
+                ? reviewedWorkChanges.materiallyChangedLinkedIssues(
+                        workspace.getId(),
+                        negative.stream()
+                                .filter(observation -> current.contains(observation.getId()))
+                                .filter(observation -> observation.getEvidence() != null)
+                                .map(observation -> new ReviewedWorkChanges.ObservationEvidence(
+                                        observation.getId(),
+                                        observation.getAgentJobId(),
+                                        Objects.requireNonNull(observation.getEvidence())
+                                                .path("citations")))
+                                .toList(),
+                        pullRequest.getId())
                 : reviewedWorkChanges.materiallyChanged(
                         workspace.getId(),
                         runIds,
@@ -280,7 +291,8 @@ public class PracticeReviewDetectionGate {
                                 pullRequest.getBody()));
         return negative.stream()
                 .filter(observation -> current.contains(observation.getId()))
-                .filter(observation -> changed.contains(observation.getAgentJobId()))
+                .filter(observation -> changed.contains(
+                        signalOptions.isInternalRepair(signal) ? observation.getId() : observation.getAgentJobId()))
                 .filter(observation -> !signalOptions.isInternalRepair(signal)
                         || observation.getPractice().getBindings().stream()
                                 .anyMatch(binding -> binding.needs().stream()
