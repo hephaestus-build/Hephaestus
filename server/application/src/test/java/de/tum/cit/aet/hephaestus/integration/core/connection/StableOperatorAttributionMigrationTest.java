@@ -52,6 +52,14 @@ class StableOperatorAttributionMigrationTest {
                     VALUES (995001,995001,'INITIATE','PENDING','ACTIVE','ADMIN','42','{"reason":"legacy admin"}','2026-09-01T12:00:00Z'),
                            (995002,995001,'OAUTH_COMPLETE','PENDING','ACTIVE','USER','login@example.org','{"name":"legacy user"}','2026-09-01T13:00:00Z'),
                            (995003,995001,'SUSPEND','ACTIVE','SUSPENDED','SYSTEM','provider-event','{"reason":"provider fact"}','2026-09-01T14:00:00Z');
+                    INSERT INTO identity_provider(id,type,server_url) VALUES (995001,'GITLAB','https://migration-gitlab.example.org');
+                    INSERT INTO "user"(id,provider_id,native_id,login) VALUES (995100,995001,987,'42');
+                    INSERT INTO config_audit_event(id,occurred_at,workspace_id,actor_kind,actor_account_id,
+                        entity_type,entity_id,action,changed_keys,old_value,new_value)
+                    SELECT id,'2026-09-01T15:00:00Z'::timestamptz,995001,'USER',995001,
+                        'WORKSPACE_ROLE',subject,'UPDATED',ARRAY['role'],
+                        '{"role":"MEMBER","hidden":false}'::jsonb,'{"role":"ADMIN","hidden":false}'::jsonb
+                    FROM (VALUES (995001,'42'),(995002,'login@example.org'),(995003,'995100')) AS legacy(id,subject);
                     UPDATE instance_settings SET silent_mode_changed_by='42',silent_mode_changed_at='2026-09-01T12:00:00Z';
                     UPDATE instance_llm_settings SET updated_by='login@example.org',updated_at='2026-09-01T13:00:00Z';
                     """);
@@ -112,6 +120,26 @@ class StableOperatorAttributionMigrationTest {
                             "UPDATE connection_audit SET actor_account_id=99999999 WHERE id=995001"))
                     .isInstanceOf(SQLException.class)
                     .hasMessageContaining("sfk_connection_audit_actor_account");
+        }
+    }
+
+    @Test
+    void shouldClearOnlyUnresolvedMembershipKeysAndKeepRoleChanges() throws SQLException {
+        try (var connection = connect();
+                var statement = connection.createStatement();
+                var rows = statement.executeQuery("""
+                        SELECT entity_id,old_value->>'role',new_value->>'role',occurred_at,actor_account_id
+                        FROM config_audit_event WHERE id IN (995001,995002,995003) ORDER BY id
+                        """)) {
+            for (String subject : new String[] {"ERASED", "ERASED", "995100"}) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo(subject);
+                assertThat(rows.getString(2)).isEqualTo("MEMBER");
+                assertThat(rows.getString(3)).isEqualTo("ADMIN");
+                assertThat(rows.getTimestamp(4).toInstant().toString()).isEqualTo("2026-09-01T15:00:00Z");
+                assertThat(rows.getLong(5)).isEqualTo(995001L);
+            }
+            assertThat(rows.next()).isFalse();
         }
     }
 

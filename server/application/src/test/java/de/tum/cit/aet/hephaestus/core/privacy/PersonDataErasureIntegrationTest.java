@@ -140,6 +140,26 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
             link(otherAccount, slack, "UOTHER", team, null);
             membership(workspace, target);
             membership(workspace, other);
+            jdbc.update(
+                    """
+                    INSERT INTO config_audit_event(occurred_at,workspace_id,actor_kind,actor_account_id,
+                        acting_account_id,entity_type,entity_id,action,changed_keys)
+                    VALUES (CURRENT_TIMESTAMP,?,'IMPERSONATED',?,?,'WORKSPACE_VISIBILITY',?,'UPDATED',ARRAY['visibility'])
+                    """,
+                    workspace.getId(),
+                    otherAccount.getId(),
+                    targetAccount.getId(),
+                    workspace.getId().toString());
+            jdbc.update(
+                    """
+                    INSERT INTO config_audit_event(occurred_at,workspace_id,actor_kind,actor_account_id,
+                        entity_type,entity_id,action,changed_keys,old_value,new_value)
+                    VALUES (CURRENT_TIMESTAMP,?,'USER',?,'WORKSPACE_ROLE',?,'UPDATED',ARRAY['role'],
+                        '{"role":"MEMBER","hidden":false}'::jsonb,'{"role":"ADMIN","hidden":false}'::jsonb)
+                    """,
+                    workspace.getId(),
+                    administrator.getId(),
+                    target.getId().toString());
             SlackThread shared = slackThread(workspace, "100.1", target, other);
             sharedThreads.add(shared.getId());
             message(workspace, team, "100.1", "100.1", "UTARGET", target, "Target's collected work");
@@ -177,6 +197,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(counts.get("feedback")).isEqualTo(4L);
         assertThat(counts.get("observation")).isEqualTo(4L);
         assertThat(counts.get("observation_invalidation")).isEqualTo(2L);
+        assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(2L);
         assertThat(counts.get("chat_thread")).isEqualTo(2L);
         assertThat(counts.get("slack_message")).isEqualTo(2L);
         counts.forEach((store, count) -> assertThat(
@@ -212,6 +233,17 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         .getStatus())
                 .isEqualTo(Account.Status.DELETED);
         assertThat(users.findById(target.getId()).orElseThrow().getLogin()).startsWith("erased-");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM config_audit_event WHERE actor_account_id=? AND acting_account_id IS NULL",
+                        Long.class,
+                        otherAccount.getId()))
+                .isEqualTo(2L);
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM config_audit_event WHERE entity_type='WORKSPACE_ROLE' AND entity_id='ERASED' "
+                                + "AND old_value->>'role'='MEMBER' AND new_value->>'role'='ADMIN' AND actor_account_id=?",
+                        Long.class,
+                        administrator.getId()))
+                .isEqualTo(2L);
         for (var derived : targetDerived) {
             assertThat(jdbc.queryForObject(
                             "SELECT count(*) FROM observation WHERE id IN (?,?)",

@@ -81,8 +81,11 @@ public class AccountPurger {
 
         // The append-only audit trigger permits nulling account references for erasure.
         int unlinked = jdbcTemplate.update(
-                "UPDATE config_audit_event SET actor_account_id = NULL, acting_account_id = NULL "
+                "UPDATE config_audit_event SET actor_account_id = CASE WHEN actor_account_id = ? THEN NULL ELSE actor_account_id END, "
+                        + "acting_account_id = CASE WHEN acting_account_id = ? THEN NULL ELSE acting_account_id END "
                         + "WHERE actor_account_id = ? OR acting_account_id = ?",
+                accountId,
+                accountId,
                 accountId,
                 accountId);
         if (unlinked > 0) {

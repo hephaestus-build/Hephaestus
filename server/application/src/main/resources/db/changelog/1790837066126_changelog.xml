@@ -111,4 +111,86 @@
                     OR (restored_at IS NOT NULL AND (restoration_reason IS NULL OR btrim(restoration_reason) <> '')));
         ]]></sql>
     </changeSet>
+    <changeSet id="1790837066126-15" author="hephaestus">
+        <comment>Permit exact-key person erasure of a membership audit subject while preserving role changes, event types and times.</comment>
+        <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    -- Retention is the ONLY sanctioned delete (ConfigAuditRetentionJob, 365 days).
+                    -- Keeping the window here rather than blocking DELETE outright is what lets this
+                    -- table stay unpartitioned while still honouring storage limitation (GDPR Art.
+                    -- 5(1)(e)). Inside the window the row is untouchable.
+                    IF OLD.occurred_at >= now() - interval '365 days' THEN
+                        RAISE EXCEPTION 'config_audit_event is append-only: DELETE is only permitted past the 365-day retention window';
+                    END IF;
+                    RETURN OLD;
+                END IF;
+                -- Permit ONLY erasure, per column: each redactable column may stay or go to NULL. Per-column
+            -- (not all-at-once) so an FK's ON DELETE SET NULL, which touches one column, does not trip
+            -- this. Comparing to_jsonb(NEW) minus the redactable keys covers future columns with no edit here.
+
+                IF (NEW.actor_account_id IS NULL OR NEW.actor_account_id = OLD.actor_account_id)
+                   AND (NEW.acting_account_id IS NULL OR NEW.acting_account_id = OLD.acting_account_id)
+                   AND (NEW.old_value IS NULL OR NEW.old_value = OLD.old_value)
+                   AND (NEW.new_value IS NULL OR NEW.new_value = OLD.new_value)
+                   AND (NEW.entity_id IS NOT DISTINCT FROM OLD.entity_id
+                        OR (OLD.entity_type = 'WORKSPACE_ROLE' AND NEW.entity_id = 'ERASED'))
+                   AND (to_jsonb(NEW) - 'entity_id' - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value')
+                        IS NOT DISTINCT FROM (to_jsonb(OLD) - 'entity_id' - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value')
+                THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'config_audit_event is append-only: only erasure (setting actor refs / snapshots to NULL, or erasing a membership subject) is permitted';
+            END;
+            $$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+            BEGIN
+                IF TG_OP = 'DELETE' THEN
+                    -- Retention is the ONLY sanctioned delete (ConfigAuditRetentionJob, 365 days).
+                    -- Keeping the window here rather than blocking DELETE outright is what lets this
+                    -- table stay unpartitioned while still honouring storage limitation (GDPR Art.
+                    -- 5(1)(e)). Inside the window the row is untouchable.
+                    IF OLD.occurred_at >= now() - interval '365 days' THEN
+                        RAISE EXCEPTION 'config_audit_event is append-only: DELETE is only permitted past the 365-day retention window';
+                    END IF;
+                    RETURN OLD;
+                END IF;
+                -- Permit ONLY erasure, per column: each redactable column may stay or go to NULL. Per-column
+            -- (not all-at-once) so an FK's ON DELETE SET NULL, which touches one column, does not trip
+            -- this. Comparing to_jsonb(NEW) minus the redactable keys covers future columns with no edit here.
+
+                IF (NEW.actor_account_id IS NULL OR NEW.actor_account_id = OLD.actor_account_id)
+                   AND (NEW.acting_account_id IS NULL OR NEW.acting_account_id = OLD.acting_account_id)
+                   AND (NEW.old_value IS NULL OR NEW.old_value = OLD.old_value)
+                   AND (NEW.new_value IS NULL OR NEW.new_value = OLD.new_value)
+                   AND (to_jsonb(NEW) - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value')
+                        IS NOT DISTINCT FROM (to_jsonb(OLD) - 'actor_account_id' - 'acting_account_id' - 'old_value' - 'new_value')
+                THEN
+                    RETURN NEW;
+                END IF;
+                RAISE EXCEPTION 'config_audit_event is append-only: only erasure (setting actor refs / snapshots to NULL) is permitted';
+            END;
+            $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1790837066126-16" author="hephaestus">
+        <comment>Drop unresolved historical membership attribution. Keep event types, role changes and times; never infer a person from names, logins or emails.</comment>
+        <sql><![CDATA[
+            UPDATE config_audit_event e SET entity_id='ERASED'
+            WHERE e.entity_type='WORKSPACE_ROLE' AND e.entity_id<>'ERASED'
+                AND NOT EXISTS (SELECT 1 FROM "user" u WHERE u.id::text=e.entity_id);
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Historical attribution cannot be restored. Restore a verified pre-migration backup instead.'; END $$;</sql>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>

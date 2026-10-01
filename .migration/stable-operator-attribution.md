@@ -5,3 +5,7 @@ The upgrade removes the historical display-login attribution from silent-mode an
 Existing `ADMIN` and `USER` connection audit rows lose their untyped `actor_ref` and free-text `detail`. Event types, state changes and times remain. New connection history uses typed account references. Provider and system event references are unchanged.
 
 Before upgrading, take and verify a backup if your retention policy requires the old attribution. This removal cannot be reversed from the upgraded database; recovery requires the verified pre-upgrade backup. Do not backfill attribution by matching display logins to accounts.
+
+The migration also clears membership-history subject references that have no exact contributor ID.
+It retains the recorded role changes and their times. No historical name, login or email is used to
+recover attribution.
