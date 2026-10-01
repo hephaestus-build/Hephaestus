@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -34,6 +35,14 @@ public class GitHubManifest implements IntegrationManifest {
     @Override
     public String displayName() {
         return "GitHub";
+    }
+
+    @Override
+    public String reviewCommitFor(@Nullable String recordedCommit, @Nullable String currentHead) {
+        if (recordedCommit == null || recordedCommit.isBlank() || currentHead == null || currentHead.isBlank()) {
+            return "UNKNOWN";
+        }
+        return recordedCommit.equals(currentHead) ? "CURRENT_HEAD" : "OTHER_COMMIT";
     }
 
     @Override

@@ -162,6 +162,7 @@ public class GitLabMergeRequestMessageHandler extends AbstractIntegrationMessage
             if (merge) {
                 if (facts != null) {
                     mergeRequestProcessor.applyTerminalFacts(repository, iid, facts);
+                    mergeRequestProcessor.applyReadiness(repository, iid, facts, requestedAt, stored.context());
                 }
                 // Offered whether or not the read succeeded: a merger it could not name holds the review pending.
                 mergeRequestProcessor.offerMerge(repository, iid, stored.context());

@@ -142,7 +142,8 @@ exactly as written, and never build a path from a PR/MR number or another id.
   `recent_authored_work.json`, including closed and merged ones. Its `state`, `isMerged`, `mergedAt` and `mergedBy` are the stored record, and a merged one's review
   discussion is what is stored now. Each carries the provider's merge state (`mergeable`, `mergeStateStatus`), head checks (`checks`;
   `checksFor` only says whether they ran on the current head), each reviewer's latest review (a `DISMISSED` one
-  approves nothing, one whose `commitFor` is `OTHER_COMMIT` was given on an earlier head, and one marked `bot` came
+  approves nothing; GitHub's native review commit makes `commitFor=OTHER_COMMIT` a review of a different commit, whereas
+  GitLab's `commit` is a recorded association and `commitFor=UNKNOWN` cannot prove the originally approved head. A review marked `bot` came
   from an automated account, not a person), the general notes, and inline `threads` (unresolved first, each with its
   `state`), with author and time, plus the `description` and the `closingIssues` the provider records it closing, each
   with its state and body. Notes and thread comments come from anyone taking part, the developer included: each
