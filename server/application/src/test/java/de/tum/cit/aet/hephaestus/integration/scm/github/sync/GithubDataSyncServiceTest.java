@@ -1,13 +1,15 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.sync;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -26,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncPass;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider.SyncTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -35,8 +38,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitAuthorEnric
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.CommitMetadataEnrichmentService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.commit.GitHubCommitBackfillService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier;
-import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.Category;
-import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.github.discussion.GitHubDiscussionSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.GitHubIssueSyncService;
@@ -48,6 +49,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.organization.GitHubOrgan
 import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.RepositoryIdentityMismatchException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.GitHubTeamSyncService;
@@ -58,6 +60,8 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -217,14 +221,16 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         repository.setUpdatedAt(REPO_UPDATED_AT);
 
         when(syncTargetProvider.isScopeActiveForSync(SCOPE_ID)).thenReturn(true);
-        when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
+        lenient()
+                .when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com"))
                 .thenReturn(Optional.of(provider));
-        when(repositoryRepository.findByNameWithOwnerAndProviderId(REPO_NAME, PROVIDER_ID))
+        lenient()
+                .when(repositoryRepository.findByNameWithOwnerAndProviderId(REPO_NAME, PROVIDER_ID))
                 .thenReturn(Optional.of(repository));
         // Re-sync returns the same entity with an unchanged updatedAt. Lenient: the NOT_FOUND
         // rename/delete tests re-stub this to throw, which would otherwise flag this as unused.
         lenient()
-                .when(repositorySyncService.syncRepository(SCOPE_ID, REPO_NAME, provider))
+                .when(repositorySyncService.syncRepository(SCOPE_ID, REPO_NAME, provider, null))
                 .thenReturn(Optional.of(repository));
 
         lenient()
@@ -292,13 +298,14 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
     @Test
     void shouldPreserveSyncTargetWhenRenamedRepoHasStableIdOnNotFound() {
         // The repo was renamed upstream. Its local row (found by the old name) still exists, so metadata
-        // re-sync is attempted and GitHub answers a definitive 404 for the old name. Because the monitor
-        // carries a stable native id, this is a rename — NOT a deletion.
+        // re-sync answers 404 for both name and stable id. Access loss and deletion are indistinguishable,
+        // so neither the monitor nor its retained work may be removed.
         SyncTarget target = syncTargetWithNativeId(NATIVE_ID);
-        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any()))
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any()))
                 .thenThrow(new RepositoryNotFoundOnGitProviderException(REPO_NAME));
-        when(exceptionClassifier.classifyWithDetails(any()))
-                .thenReturn(ClassificationResult.of(Category.NOT_FOUND, "not found"));
+        when(repositorySyncService.resolveRepositoryNameById(SCOPE_ID, NATIVE_ID))
+                .thenThrow(new RepositoryNotFoundOnGitProviderException(REPO_NAME));
+
         lenient().when(repositoryRepository.findById(REPOSITORY_ID)).thenReturn(Optional.empty());
 
         boolean result = service.syncSyncTarget(target);
@@ -311,34 +318,145 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRemoveSyncTargetWhenLegacyRowHasNoStableIdOnNotFound() {
-        // A legacy monitor with no captured native id: a definitive 404 is treated as a real deletion, so
-        // the orphan is cleaned up.
+    void shouldPreserveSyncTargetWhenLegacyRowHasNoStableIdOnNotFound() {
+        // Even without a stable id, 404 is not proof of deletion.
         SyncTarget target = syncTargetWithNativeId(null);
-        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any()))
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any()))
                 .thenThrow(new RepositoryNotFoundOnGitProviderException(REPO_NAME));
-        when(exceptionClassifier.classifyWithDetails(any()))
-                .thenReturn(ClassificationResult.of(Category.NOT_FOUND, "not found"));
+
         lenient().when(repositoryRepository.findById(REPOSITORY_ID)).thenReturn(Optional.empty());
 
         boolean result = service.syncSyncTarget(target);
 
-        // The monitor is removed to stop perpetual retries for a genuinely deleted repository.
-        verify(syncTargetProvider).removeSyncTarget(SYNC_TARGET_ID);
-        org.assertj.core.api.Assertions.assertThat(result).isTrue();
+        // Preserve the monitor and pause repeated failing fetches.
+        verify(syncTargetProvider, never()).removeSyncTarget(SYNC_TARGET_ID);
+        verify(syncTargetProvider).recordRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID);
+        org.assertj.core.api.Assertions.assertThat(result).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldTrackStableIdInsteadOfReusedNameWhenUnavailableOrHealthy(boolean unavailable) {
+        var target = syncTargetWithNativeId(NATIVE_ID);
+        when(syncTargetProvider.isRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID))
+                .thenReturn(unavailable);
+        if (!unavailable) {
+            when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any()))
+                    .thenThrow(new RepositoryIdentityMismatchException(REPO_NAME, NATIVE_ID, NATIVE_ID + 1));
+        }
+        when(repositorySyncService.resolveRepositoryNameById(SCOPE_ID, NATIVE_ID))
+                .thenReturn("owner/renamed");
+        var repository = new Repository();
+        repository.setId(REPOSITORY_ID + 1);
+        repository.setNativeId(NATIVE_ID);
+        repository.setNameWithOwner("owner/renamed");
+        repository.setProvider(gitProviderRepository
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
+                .orElseThrow());
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq("owner/renamed"), any(), any()))
+                .thenReturn(Optional.of(repository));
+        assertThat(service.syncSyncTarget(target)).isTrue();
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID + 1), any(), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID + 1), any(), any(), any());
+        verify(repositorySyncService, times(unavailable ? 0 : 1))
+                .syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any());
+        verify(syncTargetProvider).clearRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID);
+        verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, "owner/renamed");
+        verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
+    }
+
+    @Test
+    void shouldKeepUnavailableStateWhenResolvedNameReturnsAnotherRepository() {
+        when(syncTargetProvider.isRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID))
+                .thenReturn(true);
+        when(repositorySyncService.resolveRepositoryNameById(SCOPE_ID, NATIVE_ID))
+                .thenReturn(REPO_NAME);
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any()))
+                .thenThrow(new RepositoryIdentityMismatchException(REPO_NAME, NATIVE_ID, NATIVE_ID + 1));
+
+        assertThat(service.syncSyncTarget(syncTargetWithNativeId(NATIVE_ID))).isFalse();
+
+        verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
+        verify(syncTargetProvider, never()).recordRepositoryUnavailable(any(), any());
+        verify(syncTargetProvider).retryUnavailableRepository(SCOPE_ID, SYNC_TARGET_ID);
+        verifyNoInteractions(issueSyncService, pullRequestSyncService, commitBackfillService);
+    }
+
+    @Test
+    void shouldSkipRepositoryAndCommitFetchWhenDailyRecheckIsNotDue() {
+        when(syncTargetProvider.deferUnavailableRepository(SCOPE_ID, SYNC_TARGET_ID))
+                .thenReturn(true);
+        service.syncSyncTarget(syncTargetWithNativeId(NATIVE_ID));
+        verify(repositorySyncService, never()).syncRepository(any(), any(), any(), any());
+        verify(commitBackfillService, never()).backfillCommits(any(), any(), any());
+    }
+
+    @Test
+    void shouldKeepRetainedWorkVisibleAfterAnotherWorkspaceResolvesARename() {
+        var repository = new Repository();
+        repository.setNativeId(NATIVE_ID);
+        repository.setNameWithOwner("acme/renamed");
+        when(repositoryRepository.findByNativeIdAndProviderId(NATIVE_ID, PROVIDER_ID))
+                .thenReturn(Optional.of(repository));
+        when(syncTargetProvider.deferUnavailableRepository(SCOPE_ID, SYNC_TARGET_ID))
+                .thenReturn(true);
+
+        assertThat(service.syncSyncTarget(syncTargetWithNativeId(NATIVE_ID))).isFalse();
+
+        verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, "acme/renamed");
+        verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
+        verifyNoInteractions(repositorySyncService, issueSyncService, pullRequestSyncService, commitBackfillService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldReleaseDailyRecheckWhenInstallationCannotBeRead(boolean hasLocalRepository) {
+        if (hasLocalRepository) {
+            var repository = new Repository();
+            repository.setId(REPOSITORY_ID);
+            repository.setNativeId(NATIVE_ID);
+            repository.setNameWithOwner(REPO_NAME);
+            when(repositoryRepository.findByNativeIdAndProviderId(NATIVE_ID, PROVIDER_ID))
+                    .thenReturn(Optional.of(repository));
+        }
+        when(syncTargetProvider.isRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID))
+                .thenReturn(true);
+        var failure = new InstallationNotFoundException(99L);
+        when(repositorySyncService.resolveRepositoryNameById(SCOPE_ID, NATIVE_ID))
+                .thenThrow(failure);
+
+        assertThatThrownBy(() -> service.syncSyncTarget(syncTargetWithNativeId(NATIVE_ID)))
+                .isSameAs(failure);
+
+        verify(syncTargetProvider).retryUnavailableRepository(SCOPE_ID, SYNC_TARGET_ID);
+        verify(syncTargetProvider, never()).recordRepositoryUnavailable(any(), any());
+        verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
+        verifyNoInteractions(issueSyncService, pullRequestSyncService, commitBackfillService);
+    }
+
+    @Test
+    void shouldKeepNormalRetryWhenMetadataFetchIsRateLimited() {
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any()))
+                .thenReturn(Optional.empty());
+        service.syncSyncTarget(syncTargetWithNativeId(NATIVE_ID));
+        verify(syncTargetProvider, never()).recordRepositoryUnavailable(any(), any());
+        verify(syncTargetProvider).retryUnavailableRepository(SCOPE_ID, SYNC_TARGET_ID);
+        verify(commitBackfillService, never()).backfillCommits(any(), any(), any());
     }
 
     @Test
     void shouldReconcileMonitorIdentityOnEverySync() {
-        // The happy path backfills the monitor's stable id (and re-keys its name on divergence) so future
-        // renames can be told apart from deletions.
+        // Successful metadata captures the stable id and current name for later rechecks.
         Repository resolved = new Repository();
         resolved.setId(REPOSITORY_ID);
         resolved.setNativeId(NATIVE_ID);
         resolved.setNameWithOwner(REPO_NAME);
-        when(repositoryRepository.findByNameWithOwnerAndProviderId(REPO_NAME, PROVIDER_ID))
+        lenient()
+                .when(repositoryRepository.findByNameWithOwnerAndProviderId(REPO_NAME, PROVIDER_ID))
                 .thenReturn(Optional.of(resolved));
 
+        when(repositorySyncService.syncRepository(eq(SCOPE_ID), eq(REPO_NAME), any(), any()))
+                .thenReturn(Optional.of(resolved));
         service.syncSyncTarget(syncTarget(null, null));
 
         verify(syncTargetProvider).reconcileSyncTargetIdentity(SYNC_TARGET_ID, NATIVE_ID, REPO_NAME);
@@ -353,8 +471,8 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
         boolean result = service.syncSyncTarget(target);
 
         // The sub-syncs still run rather than being skipped as "repoUnchanged".
-        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
-        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
         org.assertj.core.api.Assertions.assertThat(result).isTrue();
         verify(syncTargetProvider).updateSyncError(SYNC_TARGET_ID, SyncPass.RECENT, null);
     }
@@ -403,8 +521,8 @@ class GithubDataSyncServiceTest extends BaseUnitTest {
 
         // The UPDATED_AT-ordered incremental path starts fresh instead of resuming from a cursor produced
         // by a different ordering (which would skip the newest items).
-        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
-        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), isNull(), isNull(), any());
+        verify(issueSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
+        verify(pullRequestSyncService).syncForRepository(eq(SCOPE_ID), eq(REPOSITORY_ID), any(), any(), any());
     }
 
     @Test

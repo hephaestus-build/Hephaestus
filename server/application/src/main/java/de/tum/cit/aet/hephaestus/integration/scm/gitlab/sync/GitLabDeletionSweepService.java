@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -118,6 +119,7 @@ public class GitLabDeletionSweepService {
      */
     private static final int MAX_RETRY_ATTEMPTS = 5;
 
+    private final SyncTargetProvider syncTargetProvider;
     private final GitLabNoteReconciliationService noteReconciliation;
     private final IssueRepository issueRepository;
     private final RepositoryRepository repositoryRepository;
@@ -137,7 +139,9 @@ public class GitLabDeletionSweepService {
             WorkspaceActorSelector actorSelector,
             GitLabWorkspaceLinkService workspaceLinkService,
             TransactionTemplate transactionTemplate,
-            GitLabNoteReconciliationService noteReconciliation) {
+            GitLabNoteReconciliationService noteReconciliation,
+            SyncTargetProvider syncTargetProvider) {
+        this.syncTargetProvider = syncTargetProvider;
         this.noteReconciliation = noteReconciliation;
         this.issueRepository = issueRepository;
         this.repositoryRepository = repositoryRepository;
@@ -260,7 +264,16 @@ public class GitLabDeletionSweepService {
         int done = 0;
         int total = repositories.size();
 
+        var unavailableTargets = syncTargetProvider.getSyncTargetsForScope(scopeId).stream()
+                .filter(target -> syncTargetProvider.isRepositoryUnavailable(scopeId, target.id()))
+                .toList();
         for (Repository repository : repositories) {
+            if (unavailableTargets.stream()
+                    .anyMatch(target -> target.repositoryNameWithOwner().equals(repository.getNameWithOwner())
+                            || (target.nativeId() != null && target.nativeId().equals(repository.getNativeId())))) {
+                skipped = true;
+                continue;
+            }
             if (isCancelled(handle)) {
                 log.info(
                         "GitLab deletion sweep cancelled between projects: scopeId={}, projectsSwept={}, projectsRemaining={}",

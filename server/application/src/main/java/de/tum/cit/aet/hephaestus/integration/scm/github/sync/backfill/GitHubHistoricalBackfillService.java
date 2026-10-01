@@ -408,6 +408,9 @@ public class GitHubHistoricalBackfillService {
      * @return true if any work was performed
      */
     boolean backfillRepository(SyncTarget target, int batchSize, BackfillPageObserver observer) {
+        if (syncTargetProvider.isRepositoryUnavailable(target.scopeId(), target.id())) {
+            return false;
+        }
         String safeRepoName = Objects.requireNonNull(sanitizeForLog(target.repositoryNameWithOwner()));
         Long syncTargetId = target.id();
         Long scopeId = target.scopeId();

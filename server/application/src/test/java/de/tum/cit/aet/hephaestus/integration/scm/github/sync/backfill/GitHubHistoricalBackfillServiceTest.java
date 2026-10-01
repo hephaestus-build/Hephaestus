@@ -147,6 +147,17 @@ class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
         });
     }
 
+    @Test
+    void shouldSkipHistoricalFetchWhenRepositoryIsUnavailable() {
+        var target = createTargetWithIncrementalComplete(SYNC_TARGET_ID_A, "course/project");
+        when(syncTargetProvider.isRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID_A))
+                .thenReturn(true);
+        assertThat(createService(enabledSchedulerProperties).backfillRepository(target, 50, BackfillPageObserver.NOOP))
+                .isFalse();
+        verify(graphQlClientProvider, never()).forScope(any());
+        verify(repositoryRepository, never()).findByNameWithOwner(any());
+    }
+
     private GitHubHistoricalBackfillService createService(SyncSchedulerProperties schedulerProps) {
         return new GitHubHistoricalBackfillService(
                 syncTargetProvider,

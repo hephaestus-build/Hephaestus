@@ -22,7 +22,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncStateProvide
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationSyncRunner;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResourceState;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobConflictException;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobHandle;
@@ -43,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -91,6 +94,7 @@ class SyncStatusServiceTest extends BaseUnitTest {
     private IntegrationSyncRunner githubRunner;
 
     private Connection connection;
+    private final SyncTargetProvider syncTargetProvider = mock(SyncTargetProvider.class);
     private SyncStatusService service;
 
     @BeforeEach
@@ -128,7 +132,8 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 connectionActivityRepository,
                 taskExecutor,
                 List.of(githubProvider),
-                List.of(githubRunner));
+                List.of(githubRunner),
+                syncTargetProvider);
     }
 
     // --- health derivation ---
@@ -329,7 +334,8 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 connectionActivityRepository,
                 taskExecutor,
                 List.of(),
-                List.of());
+                List.of(),
+                org.mockito.Mockito.mock(SyncTargetProvider.class));
 
         var status = noProviders.getStatus(WORKSPACE_ID, CONNECTION_ID);
 
@@ -387,7 +393,8 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 connectionActivityRepository,
                 taskExecutor,
                 List.of(githubProvider),
-                List.of());
+                List.of(),
+                org.mockito.Mockito.mock(SyncTargetProvider.class));
 
         assertThat(noRunners.getStatus(WORKSPACE_ID, CONNECTION_ID).backfillSupported())
                 .isFalse();
@@ -413,7 +420,8 @@ class SyncStatusServiceTest extends BaseUnitTest {
                 connectionActivityRepository,
                 taskExecutor,
                 List.of(githubProvider),
-                List.of());
+                List.of(),
+                org.mockito.Mockito.mock(SyncTargetProvider.class));
 
         assertThatThrownBy(() -> noRunners.triggerSync(WORKSPACE_ID, CONNECTION_ID, SyncJobType.RECONCILIATION, null))
                 .isInstanceOf(SyncNotSupportedException.class);
@@ -457,6 +465,30 @@ class SyncStatusServiceTest extends BaseUnitTest {
         assertThat(outcome.created()).isTrue();
         assertThat(outcome.job().id()).isEqualTo(created.getId());
         verify(taskExecutor).execute(any());
+    }
+
+    @Test
+    void shouldPermitImmediateRepositoryRecheckWhenAdminStartsConnectionSync() {
+        var started = new SyncJobService.Started(pendingJob(), mock(SyncJobHandle.class));
+        when(syncJobService.beginJob(any())).thenReturn(started);
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    Runnable body = invocation.getArgument(0);
+                    body.run();
+                    return null;
+                })
+                .when(taskExecutor)
+                .execute(any());
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    Consumer<SyncExecutionHandle> body = invocation.getArgument(1);
+                    body.accept(started.handle());
+                    return null;
+                })
+                .when(syncJobService)
+                .executeBody(eq(started), any());
+        service.triggerSync(WORKSPACE_ID, CONNECTION_ID, SyncJobType.RECONCILIATION, null);
+        var order = org.mockito.Mockito.inOrder(syncTargetProvider, githubRunner);
+        order.verify(syncTargetProvider).recheckUnavailableRepositories(WORKSPACE_ID);
+        order.verify(githubRunner).reconcile(any(), any(), eq(SyncJobType.RECONCILIATION));
     }
 
     @Test

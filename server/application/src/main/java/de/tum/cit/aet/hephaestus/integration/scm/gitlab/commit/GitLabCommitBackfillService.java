@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributor;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
@@ -47,6 +48,7 @@ public class GitLabCommitBackfillService {
     private static final Pattern CO_AUTHORED_BY_PATTERN =
             Pattern.compile("(?im)^\\s*co-authored-by:\\s*([^<]+?)\\s*<([^>]+)>\\s*$");
 
+    private final SyncTargetProvider syncTargetProvider;
     private final GitRepositoryManager gitRepositoryManager;
     private final GitLabTokenService tokenService;
     private final CommitRepository commitRepository;
@@ -60,7 +62,9 @@ public class GitLabCommitBackfillService {
             CommitRepository commitRepository,
             CommitDetailsPersister persister,
             CommitContributorRepository contributorRepository,
-            CommitAuthorResolver authorResolver) {
+            CommitAuthorResolver authorResolver,
+            SyncTargetProvider syncTargetProvider) {
+        this.syncTargetProvider = syncTargetProvider;
         this.gitRepositoryManager = gitRepositoryManager;
         this.tokenService = tokenService;
         this.commitRepository = commitRepository;
@@ -77,6 +81,13 @@ public class GitLabCommitBackfillService {
      *     local Git checkout is disabled
      */
     public SyncResult backfillCommits(Long scopeId, Repository repository) {
+        if (syncTargetProvider.getSyncTargetsForScope(scopeId).stream()
+                .anyMatch(target -> (target.repositoryNameWithOwner().equals(repository.getNameWithOwner())
+                                || (target.nativeId() != null
+                                        && target.nativeId().equals(repository.getNativeId())))
+                        && syncTargetProvider.isRepositoryUnavailable(scopeId, target.id()))) {
+            return SyncResult.abortedError(0);
+        }
         if (!gitRepositoryManager.isEnabled()) {
             log.warn(
                     "Skipped JGit commit backfill: reason=gitDisabled, repoId={}, repoName={} — caller should fall through to REST commit sync",

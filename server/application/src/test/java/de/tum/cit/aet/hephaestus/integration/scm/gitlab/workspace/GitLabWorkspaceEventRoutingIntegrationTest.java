@@ -337,6 +337,11 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         when(gitLabSyncServices.getIssueTypeSyncService()).thenReturn(issueTypeSync);
         when(groupSync.syncGroupProjects(anyLong(), eq(GROUP), eq(SERVER_URL)))
                 .thenAnswer(invocation -> GitLabSyncResult.completed(List.of(discoveredRepository()), 1, 0, 0));
+        doAnswer(invocation -> repositoryRepository
+                        .findByNativeIdAndProviderId(REPOSITORY_NATIVE_ID, gitLabProviderId())
+                        .map(repository -> reported(REPOSITORY_NATIVE_ID, repository.getNameWithOwner())))
+                .when(projectSyncService)
+                .fetchProjectById(anyLong(), eq(REPOSITORY_NATIVE_ID));
         doReturn(Map.of(
                         MEMBER_USER_ID,
                         new GitLabUserLookup(
