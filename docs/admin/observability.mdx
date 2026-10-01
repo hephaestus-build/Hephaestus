@@ -54,8 +54,7 @@ rule_files:
   - hephaestus-alerts.yml
 ```
 
-For single-host Compose, omit `application-worker`: that service is disabled there and its role runs
-inside `application-server`. For multiple replicas, discover and scrape **every container**, not a
+For multiple replicas, discover and scrape **every container**, not a
 load-balanced service address that can switch replicas between scrapes. Keep each target's `instance`
 label distinct. Apply `increase` or `rate` to each counter before summing so resets are handled per
 process. `runtime_role` above is an operator-supplied target label, not an application meter label.

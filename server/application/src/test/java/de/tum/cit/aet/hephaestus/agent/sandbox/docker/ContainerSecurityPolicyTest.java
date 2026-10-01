@@ -22,7 +22,7 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         DockerSandboxProperties properties =
-                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
+                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
         securityPolicy = new ContainerSecurityPolicy(properties, null);
     }
 
@@ -139,7 +139,7 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         @Test
         void shouldUseGlobalRuntime() {
             DockerSandboxProperties propsWithRuntime =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, "runsc", null, "default");
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, "runsc", "default");
             ContainerSecurityPolicy policyWithRuntime = new ContainerSecurityPolicy(propsWithRuntime, null);
 
             DockerOperations.HostConfigSpec config = policyWithRuntime.buildHostConfig(
@@ -177,7 +177,7 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         @Test
         void shouldIncludeSeccompWhenProvided() {
             ContainerSecurityPolicy policyWithSeccomp = new ContainerSecurityPolicy(
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default"),
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default"),
                     "{\"defaultAction\":\"SCMP_ACT_ERRNO\"}");
 
             DockerOperations.HostConfigSpec config = policyWithSeccomp.buildHostConfig(
@@ -331,7 +331,7 @@ class ContainerSecurityPolicyTest extends BaseUnitTest {
         @Test
         void shouldPreventRuntimeDowngrade() {
             DockerSandboxProperties propsWithRuntime =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, "runsc", null, "default");
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, "runsc", "default");
             ContainerSecurityPolicy policyWithRuntime = new ContainerSecurityPolicy(propsWithRuntime, null);
 
             SecurityProfile runcProfile = new SecurityProfile("runc", "none", List.of("ALL"), Map.of());

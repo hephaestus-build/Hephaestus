@@ -187,7 +187,8 @@ preserve them for gap analysis, not automatic replay after PITR.
    [restore-clone lockdown](./backup-restore#automated-off-host-backup-self-host-compose) against the
    recovered database before any application role. The restore overlay refuses direct server, worker
    and webhook starts; an operator-owned isolated override is needed to inspect application health.
-   Keep `AGENT_ENABLED=false` on the server too: it includes an in-process worker. Read back Silent Mode
+   Keep `AGENT_ENABLED=false` on the server and the worker: the server submits and recovers reviews and
+   the worker runs them. Read back Silent Mode
    and workspace delivery pause before permitting review execution. Record provider-readiness failures
    caused by isolation without restoring live write access.
 5. For releases predating Silent Mode, the environment, mentor/Slack shutdown, credential withholding

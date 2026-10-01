@@ -65,8 +65,8 @@ class DockerSandboxPropertiesTest {
         runner.run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context.getBean(DockerSandboxProperties.class))
-                    .isEqualTo(new DockerSandboxProperties(
-                            "unix:///var/run/docker.sock", false, null, null, null, "default"));
+                    .isEqualTo(
+                            new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default"));
             assertThat(context.getBean(SandboxGatewayProperties.class).port()).isEqualTo(8081);
             assertThat(context.getBean(SandboxProperties.class).maxConcurrentContainers())
                     .isEqualTo(5);
@@ -80,14 +80,13 @@ class DockerSandboxPropertiesTest {
                         "hephaestus.sandbox.docker.tls-verify=true",
                         "hephaestus.sandbox.docker.cert-path=/run/docker-certs",
                         "hephaestus.sandbox.docker.container-runtime=runsc",
-                        "hephaestus.sandbox.docker.app-server-container-id=worker-id",
                         "hephaestus.sandbox.gateway.port=9081",
                         "hephaestus.sandbox.max-concurrent-containers=3")
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(DockerSandboxProperties.class))
                             .isEqualTo(new DockerSandboxProperties(
-                                    "tcp://docker:2376", true, "/run/docker-certs", "runsc", "worker-id", "default"));
+                                    "tcp://docker:2376", true, "/run/docker-certs", "runsc", "default"));
                     assertThat(context.getBean(SandboxGatewayProperties.class).port())
                             .isEqualTo(9081);
                     assertThat(context.getBean(SandboxProperties.class).maxConcurrentContainers())
@@ -111,7 +110,6 @@ class DockerSandboxPropertiesTest {
                     var sandbox = context.getBean(SandboxProperties.class);
                     assertThat(docker.host()).isEqualTo("unix:///var/run/docker.sock");
                     assertThat(docker.tlsVerify()).isFalse();
-                    assertThat(docker.resolvedAppServerContainerId()).isNull();
                     var configuration = new DockerSandboxConfiguration(Clock.systemUTC());
                     assertThatCode(() -> {
                                 configuration.dockerClient(sandbox, docker).close();
@@ -137,14 +135,13 @@ class DockerSandboxPropertiesTest {
                                             "SANDBOX_DOCKER_HOST", "tcp://docker:2376",
                                             "SANDBOX_DOCKER_TLS_VERIFY", "true",
                                             "SANDBOX_DOCKER_CERT_PATH", "/run/docker-certs",
-                                            "SANDBOX_DOCKER_CONTAINER_RUNTIME", "runsc",
-                                            "SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID", "worker-id")));
+                                            "SANDBOX_DOCKER_CONTAINER_RUNTIME", "runsc")));
                 })
                 .run(context -> {
                     assertThat(context).hasNotFailed();
                     assertThat(context.getBean(DockerSandboxProperties.class))
                             .isEqualTo(new DockerSandboxProperties(
-                                    "tcp://docker:2376", true, "/run/docker-certs", "runsc", "worker-id", "default"));
+                                    "tcp://docker:2376", true, "/run/docker-certs", "runsc", "default"));
                 });
     }
 
@@ -166,6 +163,14 @@ class DockerSandboxPropertiesTest {
         }
         tlsRunner.run(context ->
                 assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(BindValidationException.class));
+    }
+
+    /** A container to join is not configurable: only the worker running the sandbox joins its network. */
+    @Test
+    void shouldRefuseToStartWhenAContainerToJoinIsConfigured() {
+        runner.withPropertyValues("hephaestus.sandbox.docker.app-server-container-id=application-server")
+                .run(context ->
+                        assertThat(context.getStartupFailure()).hasStackTraceContaining("app-server-container-id"));
     }
 
     @Test

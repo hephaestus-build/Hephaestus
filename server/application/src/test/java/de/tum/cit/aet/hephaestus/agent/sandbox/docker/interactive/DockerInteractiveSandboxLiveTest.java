@@ -105,8 +105,7 @@ class DockerInteractiveSandboxLiveTest {
     void setUp() throws Exception {
         gateway = new LiveSandboxGateway();
         SandboxProperties sandboxProperties = new SandboxProperties(5, 10, 60, null);
-        var dockerProperties = new DockerSandboxProperties(
-                "unix:///var/run/docker.sock", false, null, null, gateway.containerId(), "default");
+        var dockerProperties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
         // Tight TTL so idle eviction tests don't have to wait minutes.
         InteractiveSandboxProperties interactiveProperties = new InteractiveSandboxProperties(
                 /* idleTtlSeconds */ 2,

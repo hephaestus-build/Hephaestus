@@ -17,8 +17,6 @@ public final class LiveSandboxGateway implements AutoCloseable {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LiveSandboxGateway.class);
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
     private final Tomcat tomcat = new Tomcat();
-    private final org.testcontainers.containers.SocatContainer relay =
-            new org.testcontainers.containers.SocatContainer();
     private final Path directory;
 
     public LiveSandboxGateway() throws Exception {
@@ -45,19 +43,12 @@ public final class LiveSandboxGateway implements AutoCloseable {
                 },
                 null);
         tomcat.start();
-        org.testcontainers.Testcontainers.exposeHostPorts(port());
-        relay.withTarget(port(), "host.testcontainers.internal", port())
-                .withAccessToHost(true)
-                .start();
-        log.info("Live sandbox gateway: http://host.testcontainers.internal:{}/internal/llm/runtime", port());
+        // Runs on the host, so a sandbox reaches it through host.docker.internal, which needs internet access.
+        log.info("Live sandbox gateway: http://host.docker.internal:{}/internal/llm/runtime", port());
     }
 
     public int port() {
         return tomcat.getConnector().getLocalPort();
-    }
-
-    public String containerId() {
-        return relay.getContainerId();
     }
 
     public SandboxGatewaySessions sessions() {
@@ -67,7 +58,6 @@ public final class LiveSandboxGateway implements AutoCloseable {
     @Override
     public void close() {
         try {
-            relay.stop();
             tomcat.stop();
             tomcat.destroy();
         } catch (org.apache.catalina.LifecycleException exception) {

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
 
-import { answerBlankSettings } from "./prepare-host-smoke-env.ts";
+import { answerBlankSettings, withDockerGroup } from "./prepare-host-smoke-env.ts";
 
 // `setup.sh` copies `.env.example` and fills in the secrets it generates; every setting the smoke
 // has to answer is still blank in it, so the shipped example is the honest input for this.
@@ -51,4 +51,10 @@ await test("answers the settings a boot refuses to start without, and touches no
 await test("refuses a setting the installer did not leave blank", () => {
 	const supplied = example.replace(/^APP_HOSTNAME=$/mu, "APP_HOSTNAME=hephaestus.example");
 	assert.throws(() => answerBlankSettings(supplied), /APP_HOSTNAME/u);
+});
+
+await test("gives the worker the group that owns this host's Docker socket", () => {
+	assert.match(withDockerGroup(example, 118), /^DOCKER_GROUP_ID=118$/mu);
+	const assigned = withDockerGroup("A=1\nDOCKER_GROUP_ID=999\nB=2\n", 988);
+	assert.equal(assigned, "A=1\nDOCKER_GROUP_ID=988\nB=2\n");
 });

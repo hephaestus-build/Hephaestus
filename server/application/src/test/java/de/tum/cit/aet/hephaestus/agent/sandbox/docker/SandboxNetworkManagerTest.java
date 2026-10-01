@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,7 +44,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
     @Test
     void shouldExcludeOtherOwnersAndLegacyNetworksWhenListingNetworks() {
-        var properties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "course");
+        var properties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "course");
         var manager = new SandboxNetworkManager(networkOps, properties, creator);
         String id = UUID.randomUUID().toString();
         var own = new DockerOperations.NetworkInfo("own", "hephaestus-sandbox-course--" + id, null, Map.of());
@@ -61,8 +60,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         creator = new SandboxCreator(containers, () -> SELF_SHORT_ID);
-        DockerSandboxProperties properties = new DockerSandboxProperties(
-                "unix:///var/run/docker.sock", false, null, null, "app-server-id", "default");
+        DockerSandboxProperties properties =
+                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
         manager = new SandboxNetworkManager(networkOps, properties, creator);
     }
 
@@ -83,13 +82,14 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
         @DisplayName("a network an interrupted run left under this job's name is removed, not fought over")
         void shouldReplaceLeftoverNetworkOfTheSameJob() {
             String networkName = "hephaestus-sandbox-default--" + JOB_ID;
+            identifySelf();
             when(networkOps.listNetworksByName(networkName))
                     .thenReturn(List.of(new DockerOperations.NetworkInfo("stale-net", networkName, null, Map.of())));
             when(networkOps.createNetwork(anyString(), eq(true), any())).thenReturn(NETWORK_ID);
 
             assertThat(manager.createJobNetwork(JOB_ID, false, Map.of())).isEqualTo(NETWORK_ID);
 
-            verify(networkOps).disconnectFromNetwork("stale-net", "app-server-id");
+            verify(networkOps).disconnectFromNetwork("stale-net", SELF_ID);
             verify(networkOps).removeNetwork("stale-net");
             verify(networkOps).createNetwork(networkName, true, Map.of());
         }
@@ -219,70 +219,26 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
     class ConnectAppServer {
 
         @Test
-        void shouldConnectAndReturnIp() {
-            when(networkOps.connectToNetwork(NETWORK_ID, "app-server-id")).thenReturn("172.18.0.2");
+        void shouldConnectTheContainerThisProcessRunsIn() {
+            identifySelf();
+            when(networkOps.connectToNetwork(NETWORK_ID, SELF_ID)).thenReturn("172.18.0.2");
 
-            String ip = manager.connectAppServer(NETWORK_ID);
-
-            assertThat(ip).isEqualTo("172.18.0.2");
+            assertThat(manager.connectAppServer(NETWORK_ID)).isEqualTo("172.18.0.2");
         }
 
         @ParameterizedTest
         @NullAndEmptySource
-        @ValueSource(strings = "   ")
-        void shouldFallBackToHostnameWhenContainerIdIsMissingOrBlank(@Nullable String containerId) {
-            DockerSandboxProperties propsNoId = new DockerSandboxProperties(
-                    "unix:///var/run/docker.sock", false, null, null, containerId, "default");
-            SandboxNetworkManager mgr =
-                    new SandboxNetworkManager(networkOps, propsNoId, creator, () -> "hostname-container-id");
+        @ValueSource(strings = {"   ", "application-server", SELF_SHORT_ID})
+        void shouldJoinNothingWhenThisProcessIsNotAnIdentifiedContainer(@Nullable String hostname) {
+            // SELF_SHORT_ID has the shape of a container id, but no running container answers to it here.
+            SandboxNetworkManager mgr = new SandboxNetworkManager(
+                    networkOps,
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default"),
+                    new SandboxCreator(containers, () -> hostname));
 
-            when(networkOps.connectToNetwork(NETWORK_ID, "hostname-container-id"))
-                    .thenReturn("172.18.0.3");
+            assertThat(mgr.connectAppServer(NETWORK_ID)).isNull();
 
-            String ip = mgr.connectAppServer(NETWORK_ID);
-
-            assertThat(ip).isEqualTo("172.18.0.3");
-            verify(networkOps).connectToNetwork(NETWORK_ID, "hostname-container-id");
-        }
-
-        @Test
-        void shouldReturnNullWhenNoContainerId() {
-            DockerSandboxProperties propsNoId =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
-            SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, creator, () -> null);
-
-            String ip = mgr.connectAppServer(NETWORK_ID);
-
-            assertThat(ip).isNull();
-        }
-
-        @Test
-        void shouldReturnNullWhenHostnameBlank() {
-            DockerSandboxProperties propsNoId =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
-            SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, creator, () -> "  ");
-
-            String ip = mgr.connectAppServer(NETWORK_ID);
-
-            assertThat(ip).isNull();
-        }
-
-        @Test
-        void shouldCacheContainerId() {
-            var callCount = new AtomicInteger(0);
-            DockerSandboxProperties propsNoId =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
-            SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, creator, () -> {
-                callCount.incrementAndGet();
-                return "cached-id";
-            });
-            when(networkOps.connectToNetwork(anyString(), eq("cached-id"))).thenReturn("172.18.0.5");
-
-            mgr.connectAppServer(NETWORK_ID);
-            mgr.connectAppServer(NETWORK_ID);
-
-            // Supplier should only be invoked once — second call uses cached value
-            assertThat(callCount.get()).isEqualTo(1);
+            verify(networkOps, Mockito.never()).connectToNetwork(anyString(), anyString());
         }
     }
 
@@ -290,20 +246,21 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
     class DisconnectAppServer {
 
         @Test
-        @DisplayName("should disconnect app-server from network")
-        void shouldDisconnect() {
+        void shouldDisconnectTheContainerThisProcessRunsIn() {
+            identifySelf();
+
             manager.disconnectAppServer(NETWORK_ID);
 
-            verify(networkOps).disconnectFromNetwork(NETWORK_ID, "app-server-id");
+            verify(networkOps).disconnectFromNetwork(NETWORK_ID, SELF_ID);
         }
 
         @Test
-        void shouldNoOpWhenNoContainerId() {
-            DockerSandboxProperties propsNoId =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
-            SandboxNetworkManager mgr = new SandboxNetworkManager(networkOps, propsNoId, creator, () -> null);
+        void shouldNoOpWhenThisProcessIsNotAnIdentifiedContainer() {
+            SandboxNetworkManager mgr = new SandboxNetworkManager(
+                    networkOps,
+                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default"),
+                    new SandboxCreator(containers, () -> null));
 
-            // Should not throw — silently skips disconnect
             mgr.disconnectAppServer(NETWORK_ID);
 
             verify(networkOps, Mockito.never()).disconnectFromNetwork(anyString(), anyString());
@@ -324,39 +281,28 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
     @Nested
     class RemoveUnlessInUse {
 
-        private static final String PROXY_ID = "3f2a9c1b7d4e5a6b7c8d9e0f";
-        private static final DockerOperations.NetworkEndpoint PROXY =
-                new DockerOperations.NetworkEndpoint(PROXY_ID, "hephaestus-app-1");
+        @Test
+        void shouldRemoveANetworkOnlyThisContainerIsAttachedTo() {
+            identifySelf();
+            when(networkOps.inspectEndpoints(NETWORK_ID))
+                    .thenReturn(List.of(new DockerOperations.NetworkEndpoint(SELF_ID, "hephaestus-worker-1")));
 
-        private SandboxNetworkManager withAppServer(String configured) {
-            return new SandboxNetworkManager(
-                    networkOps,
-                    new DockerSandboxProperties(
-                            "unix:///var/run/docker.sock", false, null, null, configured, "default"),
-                    creator);
-        }
+            assertThat(manager.removeUnlessInUse(NETWORK_ID, "n")).isTrue();
 
-        @ParameterizedTest
-        @ValueSource(strings = {"hephaestus-app-1", PROXY_ID, "3f2a9c1b7d4e"})
-        void shouldRemoveANetworkOnlyTheAppServerIsAttachedTo(String configured) {
-            when(networkOps.inspectEndpoints(NETWORK_ID)).thenReturn(List.of(PROXY));
-
-            assertThat(withAppServer(configured).removeUnlessInUse(NETWORK_ID, "n"))
-                    .isTrue();
-
-            verify(networkOps).disconnectFromNetwork(NETWORK_ID, configured);
+            verify(networkOps).disconnectFromNetwork(NETWORK_ID, SELF_ID);
             verify(networkOps).removeNetwork(NETWORK_ID);
         }
 
         @Test
-        void shouldKeepTheAppServerConnectedWhenItsNameStartsAnotherContainersId() {
-            // An app-server named "a", and a sandbox whose id happens to start with "a".
+        void shouldKeepANetworkAnotherContainerIsAttachedTo() {
+            identifySelf();
+            // A container whose id starts like this one's is still another container.
             when(networkOps.inspectEndpoints(NETWORK_ID))
                     .thenReturn(List.of(
-                            new DockerOperations.NetworkEndpoint("0b1c2d3e4f5a6b7c", "a"),
-                            new DockerOperations.NetworkEndpoint("a1b2c3d4e5f6a7b8", "mentor-runtime")));
+                            new DockerOperations.NetworkEndpoint(SELF_ID, "hephaestus-worker-1"),
+                            new DockerOperations.NetworkEndpoint(SELF_SHORT_ID + "ffffffffffff", "mentor-runtime")));
 
-            assertThat(withAppServer("a").removeUnlessInUse(NETWORK_ID, "n")).isFalse();
+            assertThat(manager.removeUnlessInUse(NETWORK_ID, "n")).isFalse();
 
             verify(networkOps, Mockito.never()).disconnectFromNetwork(anyString(), anyString());
             verify(networkOps, Mockito.never()).removeNetwork(anyString());
@@ -383,6 +329,11 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
                 SandboxLabels.SESSION_ID, JOB_ID.toString(),
                 SandboxLabels.CREATOR_CONTAINER, container,
                 SandboxLabels.CREATOR_STARTED_AT, startedAt);
+    }
+
+    private void identifySelf() {
+        when(containers.inspectContainerIdentity(SELF_SHORT_ID))
+                .thenReturn(Optional.of(new DockerOperations.ContainerIdentity(SELF_ID, true, "t0", SELF_SHORT_ID)));
     }
 
     private static DockerOperations.ContainerIdentity running(String id, String startedAt) {

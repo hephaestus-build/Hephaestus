@@ -77,8 +77,7 @@ class RepositoryTreeStagingLiveTest {
     void setUp() throws Exception {
         gateway = new LiveSandboxGateway();
         SandboxProperties properties = new SandboxProperties(5, 10, 300, null);
-        var dockerProperties = new DockerSandboxProperties(
-                "unix:///var/run/docker.sock", false, null, null, gateway.containerId(), "default");
+        var dockerProperties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
         var dockerClient = DockerClientImpl.getInstance(
                 DefaultDockerClientConfig.createDefaultConfigBuilder().build(),
                 new ApacheDockerHttpClient.Builder()

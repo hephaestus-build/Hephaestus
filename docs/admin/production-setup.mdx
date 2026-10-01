@@ -281,9 +281,9 @@ sweeps, the agent queue-health metrics and retention, and the checklist for a wo
 
 Two facts belong here because they are deployment topology rather than feature configuration. The Docker
 sandbox is activated by the **worker runtime role** (`hephaestus.runtime.worker.enabled`), not by
-`AGENT_ENABLED`: keep that capability and Docker access on the application server, because interactive
-mentor sandboxes are request-affine and run there, and add a dedicated `application-worker` for queued
-review capacity. And `NATS_ENABLED` gates webhook-driven sync consumption and must stay on for that; it is
+`AGENT_ENABLED`: only `application-worker` runs sandboxes and holds the Docker socket, for queued
+reviews and Heph sessions alike, and `application-server` turns the worker role off and reaches them
+through connected workers. And `NATS_ENABLED` gates webhook-driven sync consumption and must stay on for that; it is
 not part of the practice-review bundle.
 
 Heph starts a developer's sandbox when they open Heph in the webapp or open the Hephaestus app in Slack,
@@ -307,7 +307,7 @@ Staging and production both use the production compose files. The difference sho
 
 ### Instance-wide LLM settings
 
-The mentor's interactive sandbox uses the application-server replica's LLM proxy; a queued practice review uses the proxy beside the worker that claimed it. That proxy is the only path a sandbox has to a provider key, which is never injected directly. There is no separate intelligence service to configure.
+Every sandbox, a Heph session's or a queued practice review's, uses the LLM proxy on the worker that runs it. That proxy is the only path a sandbox has to a provider key, which is never injected directly. There is no separate intelligence service to configure.
 
 **No provider, model, price, or credential is ever set through the environment.** All of that is
 runtime catalog data entered in the admin UI, and it is documented in full — field by field, with

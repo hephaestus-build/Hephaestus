@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -65,7 +66,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
                 networkManager,
                 new SandboxVolumeManager(
                         volumes,
-                        new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default")),
+                        new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default")),
                 new SandboxCreator(creatorContainers, () -> "reconciling-worker"),
                 meterRegistry,
                 Clock.fixed(NOW, ZoneOffset.UTC));
@@ -508,6 +509,9 @@ class SandboxReconcilerTest extends BaseUnitTest {
     @Nested
     class InteractiveAdmission {
 
+        private static final String RECONCILER_SHORT_ID = "0a1b2c3d4e5f";
+        private static final String RECONCILER_ID = RECONCILER_SHORT_ID + "6a7b8c9d0e1f";
+
         private static final UUID SESSION = UUID.randomUUID();
         private static final String NAME = "hephaestus-sandbox-default--" + SESSION;
         private static final Instant MINUTES_AGO = NOW.minus(Duration.ofMinutes(10));
@@ -519,9 +523,13 @@ class SandboxReconcilerTest extends BaseUnitTest {
 
         @BeforeEach
         void setUp() {
-            var properties =
-                    new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "proxy", "default");
-            var creator = new SandboxCreator(creatorContainers, () -> "reconciling-worker");
+            var properties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
+            // The reconciling worker, which is also the container joined to the networks it creates.
+            lenient()
+                    .when(creatorContainers.inspectContainerIdentity(RECONCILER_SHORT_ID))
+                    .thenReturn(Optional.of(
+                            new DockerOperations.ContainerIdentity(RECONCILER_ID, true, "t0", RECONCILER_SHORT_ID)));
+            var creator = new SandboxCreator(creatorContainers, () -> RECONCILER_SHORT_ID);
             sweeper = new SandboxReconciler(
                     jobRepository,
                     containerManager,
@@ -617,11 +625,11 @@ class SandboxReconcilerTest extends BaseUnitTest {
             admissionCreatedBy("creator-worker", "t1");
             creatorIs("creator-worker", null);
             when(networkOps.inspectEndpoints("net-session"))
-                    .thenReturn(List.of(new DockerOperations.NetworkEndpoint("proxy-full-id", "proxy")));
+                    .thenReturn(List.of(new DockerOperations.NetworkEndpoint(RECONCILER_ID, "worker")));
 
             sweeper.periodicReconciliation();
 
-            verify(networkOps).disconnectFromNetwork("net-session", "proxy");
+            verify(networkOps).disconnectFromNetwork("net-session", RECONCILER_ID);
             verify(networkOps).removeNetwork("net-session");
             verify(volumes).removeVolume("vol-session");
         }
@@ -646,7 +654,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
                     new DockerOperations.ContainerIdentity("creator-worker", false, "t1", "creator-worker"));
             when(networkOps.inspectEndpoints("net-session"))
                     .thenReturn(List.of(
-                            new DockerOperations.NetworkEndpoint("proxy-full-id", "proxy"),
+                            new DockerOperations.NetworkEndpoint(RECONCILER_ID, "worker"),
                             new DockerOperations.NetworkEndpoint("runtime-full-id", "mentor-runtime")));
 
             sweeper.periodicReconciliation();
@@ -664,7 +672,8 @@ class SandboxReconcilerTest extends BaseUnitTest {
             sweeper.periodicReconciliation();
 
             verify(networkOps).removeNetwork("net-job");
-            verify(creatorContainers, never()).inspectContainerIdentity(any());
+            // Only the worker's own identity is read, to disconnect itself; no creator's liveness is asked.
+            verify(creatorContainers, never()).inspectContainerIdentity(argThat(id -> !RECONCILER_SHORT_ID.equals(id)));
         }
     }
 }
