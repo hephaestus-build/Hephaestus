@@ -8,6 +8,8 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationFeedbackPreparedEvent;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -40,6 +42,7 @@ public class SlackConversationNudgeService {
     private final SlackMentorIdentityResolver identityResolver;
     private final SlackMessageService slackMessageService;
     private final MentorReadinessQuery mentorReadinessQuery;
+    private final MentorTurnRunner mentorTurnRunner;
 
     private final Cache<Recipient, Instant> cooldowns = Caffeine.newBuilder()
             .maximumSize(MAX_COOLDOWN_ENTRIES)
@@ -51,12 +54,14 @@ public class SlackConversationNudgeService {
             AccountPreferencesQuery accountPreferencesQuery,
             SlackMentorIdentityResolver identityResolver,
             SlackMessageService slackMessageService,
-            MentorReadinessQuery mentorReadinessQuery) {
+            MentorReadinessQuery mentorReadinessQuery,
+            MentorTurnRunner mentorTurnRunner) {
         this.connectionService = connectionService;
         this.accountPreferencesQuery = accountPreferencesQuery;
         this.identityResolver = identityResolver;
         this.slackMessageService = slackMessageService;
         this.mentorReadinessQuery = mentorReadinessQuery;
+        this.mentorTurnRunner = mentorTurnRunner;
     }
 
     @Async
@@ -97,6 +102,15 @@ public class SlackConversationNudgeService {
                 recipientId, connection.get().getInstanceKey());
         if (slackUserId.isEmpty()) {
             log.debug("slack.nudge: skip, no Slack identity link: recipientUserId={}", recipientId);
+            return;
+        }
+        // Eligibility can change while the notification event waits in the async queue.
+        Optional<MentorRefusal> refusal = mentorTurnRunner.refusal(workspaceId, recipientId);
+        if (refusal.isPresent()) {
+            log.debug(
+                    "slack.nudge: skip, Heph declines the recipient: recipientUserId={}, refusal={}",
+                    recipientId,
+                    refusal.get());
             return;
         }
         Recipient recipient = new Recipient(workspaceId, recipientId);
