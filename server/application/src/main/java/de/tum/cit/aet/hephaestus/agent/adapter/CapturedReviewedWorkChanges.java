@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSo
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -18,10 +20,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -46,19 +51,60 @@ public class CapturedReviewedWorkChanges implements ReviewedWorkChanges {
     private static final SourceKind LINKED = new SourceKind("scm.linked-work-items");
 
     @Override
-    public Set<UUID> materiallyChangedLinkedIssues(long workspaceId, Collection<UUID> runIds, long pullRequestId) {
-        if (runIds.isEmpty()) return Set.of();
+    public Set<UUID> materiallyChangedLinkedIssues(
+            long workspaceId, Collection<ObservationEvidence> observations, long pullRequestId) {
+        if (observations.isEmpty()) return Set.of();
         var closing = pullRequests.findClosingIssuesById(pullRequestId);
+        if (closing.isEmpty() || closing.stream().anyMatch(issue -> issue.getDeletedAt() != null)) return Set.of();
+        Map<String, String> current = new HashMap<>();
+        for (Issue issue : closing) {
+            String path = SandboxLayout.CONTEXT_PREFIX + "linked_work_items/" + issue.getNumber() + ".md";
+            if (current.put(path, ProvenanceDigest.sha256Hex(LinkedWorkItemContentSource.asText(issue))) != null) {
+                return Set.of();
+            }
+        }
+        var runIds = observations.stream().map(ObservationEvidence::runId).collect(Collectors.toSet());
+        Map<UUID, AgentJobRepository.CapturedReviewedWorkRow> captures = new HashMap<>();
+        jobs.findCapturedReviewedWork(workspaceId, runIds).forEach(row -> captures.put(row.getId(), row));
         Set<UUID> changed = new HashSet<>();
-        for (var row : jobs.findCapturedReviewedWork(workspaceId, runIds)) {
-            var manifest = manifest(row);
-            if (manifest != null
-                    && sourceCatalogs.isSourceUsePermitted(
-                            manifest.contractVersion(), LINKED, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)
-                    && LinkedWorkItemContentSource.capturedClosingMaterialMatches(manifest, closing)
-                            .filter(matches -> !matches)
-                            .isPresent()) {
-                changed.add(row.getId());
+        for (ObservationEvidence observation : observations) {
+            var row = captures.get(observation.runId());
+            if (row == null) continue;
+            String stored = row.getReviewedWork();
+            String version = row.getContractVersion();
+            if (stored == null || version == null) continue;
+            try {
+                var work = mapper.readValue(stored, ReviewedWork.class);
+                var contract = new SourceContractVersion(version);
+                // An admitted verdict keeps its producing attempt when worker recovery rotates the job counter.
+                var attempt =
+                        observation.citations().path(0).path("verification").path("attempt");
+                if (work == null
+                        || !ArtifactKinds.PULL_REQUEST.value().equals(work.artifactKind())
+                        || work.artifactId() != pullRequestId
+                        || !sourceCatalogs.isSourceUsePermitted(
+                                contract, LINKED, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)
+                        || !attempt.isIntegralNumber()
+                        || !attempt.canConvertToInt()
+                        || attempt.asInt() < 0
+                        || attempt.asInt() > row.getAttempt()
+                        || !CitationVerification.isVerified(
+                                observation.runId(), attempt.asInt(), observation.citations())) {
+                    continue;
+                }
+                for (var citation : observation.citations()) {
+                    String digest = current.get(citation.path("artifactPath").asString());
+                    if (LINKED.value().equals(citation.path("sourceKind").asString())
+                            && digest != null
+                            && !digest.equals(citation.path("verification")
+                                    .path("artifactSha256")
+                                    .asString())) {
+                        changed.add(observation.observationId());
+                        break;
+                    }
+                }
+            } catch (JacksonException | IllegalArgumentException ignored) {
+                // Unknown capture provenance cannot establish a material repair.
             }
         }
         return Set.copyOf(changed);
