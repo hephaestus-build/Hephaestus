@@ -129,10 +129,11 @@ public final class MentorRunnerClient implements AutoCloseable {
         return call("open_thread", params, DEFAULT_CONTROL_TIMEOUT);
     }
 
-    public CompletableFuture<JsonNode> prompt(UUID threadId, String text) {
+    public CompletableFuture<JsonNode> prompt(UUID threadId, String text, String currentEvidence) {
         ObjectNode params = objectMapper.createObjectNode();
         params.put("threadId", threadId.toString());
         params.put("text", text);
+        params.put("currentEvidence", currentEvidence);
         return call("prompt", params, DEFAULT_PROMPT_TIMEOUT);
     }
 

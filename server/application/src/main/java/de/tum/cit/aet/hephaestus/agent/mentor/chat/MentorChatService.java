@@ -403,7 +403,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     try {
                         sandbox.bindTurn(assistantMessageId, llmConfig.priceSnapshot());
                         var prompt = client.prompt(
-                                request.threadId(), MentorTurnPromptFactory.forRunner(request, contextInputs));
+                                request.threadId(),
+                                MentorTurnPromptFactory.forRunner(request, contextInputs),
+                                MentorTurnEvidence.forRunner(objectMapper, contextInputs));
                         state.markLlmCallStarted();
                         prompt.whenComplete((result, ex) -> {
                             if (ex != null) {

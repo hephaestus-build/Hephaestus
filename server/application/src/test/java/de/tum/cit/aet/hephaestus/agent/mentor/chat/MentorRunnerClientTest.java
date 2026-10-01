@@ -78,6 +78,18 @@ class MentorRunnerClientTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSendCurrentEvidenceWithThePromptWithoutChangingTheUserText() throws Exception {
+        var future = client.prompt(threadId, "hello", "{\"providerFreshness\":\"UNKNOWN\"}");
+        JsonNode frame = sandbox.takeFrame();
+        assertThat(frame.path("params").path("text").asString()).isEqualTo("hello");
+        assertThat(frame.path("params").path("currentEvidence").asString())
+                .isEqualTo("{\"providerFreshness\":\"UNKNOWN\"}");
+        sandbox.pushFrame(
+                responseOf(frame.path("id").asLong(), mapper.createObjectNode().put("accepted", true)));
+        assertThat(future.get(2, TimeUnit.SECONDS).path("accepted").asBoolean()).isTrue();
+    }
+
+    @Test
     @DisplayName("hello() correlates request id and resolves with the result body")
     void helloRoundtrip() throws Exception {
         CompletableFuture<JsonNode> future = client.hello();

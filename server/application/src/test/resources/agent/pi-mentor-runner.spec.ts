@@ -287,6 +287,40 @@ void test("hello handshake returns protocolVersion 1", async (t) => {
 	}
 });
 
+void test("a malformed or oversized evidence receipt is refused before a turn starts", async (t) => {
+	const runner = spawnRunner(t);
+	const threadId = "44444444-2222-3333-4444-555555555555";
+	try {
+		await readReady(runner.reader);
+		runner.send({ jsonrpc: "2.0", id: "open", method: "open_thread", params: { threadId } });
+		await readResult(runner.reader, "open");
+		const { stdin } = runner.child;
+		assert.ok(stdin);
+		for (const currentEvidence of [{ wrongType: true }, "x".repeat(40_001)]) {
+			stdin.write(
+				`${JSON.stringify({
+					jsonrpc: "2.0",
+					id: "bad",
+					method: "prompt",
+					params: { threadId, text: "hello", currentEvidence },
+				})}\n`,
+			);
+			const error = await readError(runner.reader, "bad");
+			assert.equal(error.code, -32_600);
+		}
+		runner.send({
+			jsonrpc: "2.0",
+			id: "good",
+			method: "prompt",
+			params: { threadId, text: "hello" },
+		});
+		assert.deepEqual(await readResult(runner.reader, "good"), { accepted: true });
+		await readUntil(runner.reader, (frame) => eventType(frame) === "agent_end");
+	} finally {
+		await shutdown(runner);
+	}
+});
+
 void test("starts the runtime with the process, before any request", async (t) => {
 	const runner = spawnRunner(t);
 	try {

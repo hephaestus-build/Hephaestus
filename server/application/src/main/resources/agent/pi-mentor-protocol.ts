@@ -94,6 +94,7 @@ export interface OpenThreadParams extends ThreadScopedParams {
 
 export interface PromptParams extends ThreadScopedParams {
 	text: string;
+	currentEvidence?: string;
 }
 
 /**
