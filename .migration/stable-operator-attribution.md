@@ -9,3 +9,5 @@ Before upgrading, take and verify a backup if your retention policy requires the
 The migration also clears membership-history subject references that have no exact contributor ID.
 It retains the recorded role changes and their times. No historical name, login or email is used to
 recover attribution.
+
+Pending integration authorizations must be started again after the upgrade. Older signed OAuth states are rejected rather than interpreting their historical display-login attribution as an account reference.

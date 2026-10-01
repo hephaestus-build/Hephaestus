@@ -20,18 +20,12 @@ import org.jspecify.annotations.Nullable;
  */
 public interface OAuthStateService {
     /** Mints a state parameter binding the OAuth flow to {@code workspaceId} + {@code kind}. */
-    String issue(long workspaceId, IntegrationKind kind);
-
-    /**
-     * Overload that additionally binds the initiating user's identity (authenticated account id)
-     * into the signed state. Implementations that don't support actorAccountId may delegate to
-     * {@link #issue(long, IntegrationKind)} — the default does exactly that, dropping
-     * the actorAccountId. Callers that need attribution should ensure an impl that honours
-     * the overload is wired (today: {@code de.tum.cit.aet.hephaestus.integration.core.oauth.state.HmacOAuthStateService}).
-     */
-    default String issue(long workspaceId, IntegrationKind kind, @Nullable Long actorAccountId) {
-        return issue(workspaceId, kind);
+    default String issue(long workspaceId, IntegrationKind kind) {
+        return issue(workspaceId, kind, null);
     }
+
+    /** Binds the exact initiating account, or null for a system flow. */
+    String issue(long workspaceId, IntegrationKind kind, @Nullable Long actorAccountId);
 
     /** Verifies the state; returns the binding if valid and not expired+used; throws otherwise. */
     StateBinding consume(String state);

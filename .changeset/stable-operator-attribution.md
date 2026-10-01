@@ -9,3 +9,5 @@ Instance settings and connection lifecycle history now record the acting adminis
 Membership-history subject references that have no exact contributor ID are also cleared. Role
 changes and their times are kept. Person erasure preserves another administrator's attribution on
 shared history rows and removes only the erased person's actor or impersonator reference.
+
+Pending integration authorizations must be started again after the upgrade. Older signed OAuth states are rejected rather than interpreting their historical display-login attribution as an account reference.

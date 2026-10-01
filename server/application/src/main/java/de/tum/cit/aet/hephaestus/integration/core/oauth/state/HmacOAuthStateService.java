@@ -22,10 +22,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Default {@link OAuthStateService} impl: HMAC-SHA256 over
- * {@code workspaceId | kind | issuedAt | nonce | actorSegment} (five pipe-delimited
- * fields; {@code actorSegment} is the base64url-encoded actorAccountId, empty when null),
- * base64url-encoded. The emitted token appends the signature as a sixth segment, so
- * {@link #consume} splits on exactly six parts.
+ * {@code v2 | workspaceId | kind | issuedAt | nonce | actorSegment}.
+ * The seventh segment is the signature. Versioning prevents a historical display login
+ * in an older signed token from being interpreted as an account id.
  *
  * <p>Verifies the MAC + freshness; rejects expired tokens (10-minute TTL by default).
  * The nonce makes every issued state unique, so even simultaneous concurrent OAuth
@@ -149,7 +148,7 @@ public class HmacOAuthStateService implements OAuthStateService {
         RANDOM.nextBytes(nonceBytes);
         String nonce = Base64.getUrlEncoder().withoutPadding().encodeToString(nonceBytes);
         String actorSegment = encodeActor(actorAccountId);
-        String payload = workspaceId + "|" + kind.name() + "|" + issuedAt + "|" + nonce + "|" + actorSegment;
+        String payload = "v2|" + workspaceId + "|" + kind.name() + "|" + issuedAt + "|" + nonce + "|" + actorSegment;
         String sig = hmac(payload);
         // Persist the nonce BEFORE returning so a fast OAuth roundtrip can't race the
         // first consume to an empty row. Skipped when no store is wired (test path).
@@ -176,16 +175,16 @@ public class HmacOAuthStateService implements OAuthStateService {
         // when actorAccountId is null. Without -1 a trailing empty string is dropped and the
         // arity check below misfires.
         String[] parts = decoded.split("\\|", -1);
-        if (parts.length != 6) {
+        if (parts.length != 7 || !"v2".equals(parts[0])) {
             throw new IllegalArgumentException("OAuth state malformed");
         }
-        String workspaceIdStr = parts[0];
-        String kindStr = parts[1];
-        String issuedAtStr = parts[2];
-        String nonce = parts[3];
-        String actorSegment = parts[4];
-        String suppliedSig = parts[5];
-        String payload = workspaceIdStr + "|" + kindStr + "|" + issuedAtStr + "|" + nonce + "|" + actorSegment;
+        String workspaceIdStr = parts[1];
+        String kindStr = parts[2];
+        String issuedAtStr = parts[3];
+        String nonce = parts[4];
+        String actorSegment = parts[5];
+        String suppliedSig = parts[6];
+        String payload = "v2|" + workspaceIdStr + "|" + kindStr + "|" + issuedAtStr + "|" + nonce + "|" + actorSegment;
         String expectedSig = hmac(payload);
         if (!MessageDigest.isEqual(
                 expectedSig.getBytes(StandardCharsets.UTF_8), suppliedSig.getBytes(StandardCharsets.UTF_8))) {
@@ -213,17 +212,18 @@ public class HmacOAuthStateService implements OAuthStateService {
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("OAuth state workspaceId malformed", e);
         }
+        Long actorAccountId = decodeActor(actorSegment);
         // Single-use enforcement via atomic UPDATE inside tryConsume. The HMAC + TTL are
         // already verified — any forged or stale token has been rejected.
         if (nonceStore != null && !nonceStore.tryConsume(nonce)) {
             throw new IllegalArgumentException("OAuth state already consumed");
         }
-        Long actorAccountId = decodeActor(actorSegment);
         return new StateBinding(workspaceId, kind, issued, actorAccountId);
     }
 
     private static String encodeActor(@Nullable Long actorAccountId) {
         if (actorAccountId == null) return "";
+        if (actorAccountId <= 0) throw new IllegalArgumentException("OAuth state actor malformed");
         return Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(actorAccountId.toString().getBytes(StandardCharsets.UTF_8));
@@ -233,9 +233,14 @@ public class HmacOAuthStateService implements OAuthStateService {
     private static Long decodeActor(String actorSegment) {
         if (actorSegment.isEmpty()) return null;
         try {
-            return Long.valueOf(new String(Base64.getUrlDecoder().decode(actorSegment), StandardCharsets.UTF_8));
+            String value = new String(Base64.getUrlDecoder().decode(actorSegment), StandardCharsets.UTF_8);
+            long accountId = Long.parseLong(value);
+            if (accountId <= 0 || !Long.toString(accountId).equals(value)) {
+                throw new IllegalArgumentException("OAuth state actor malformed");
+            }
+            return accountId;
         } catch (IllegalArgumentException e) {
-            return null;
+            throw new IllegalArgumentException("OAuth state actor malformed", e);
         }
     }
 

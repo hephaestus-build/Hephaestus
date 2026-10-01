@@ -98,6 +98,32 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void rejectsCorrectlySignedLegacyNumericLogin() throws Exception {
+        String payload = "42|GITHUB|" + java.time.Instant.now().getEpochSecond() + "|nonce|NDI";
+        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(
+                SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+        var encoder = java.util.Base64.getUrlEncoder().withoutPadding();
+        String signature =
+                encoder.encodeToString(mac.doFinal(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        String state =
+                encoder.encodeToString((payload + "|" + signature).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var service = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
+        assertThatThrownBy(() -> service.consume(state))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("OAuth state malformed");
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, -1})
+    void rejectsInvalidAccountReference(long accountId) {
+        var service = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
+        assertThatThrownBy(() -> service.issue(42, IntegrationKind.GITHUB, accountId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("OAuth state actor malformed");
+    }
+
+    @Test
     void issuedStateRoundTrips() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
         String state = svc.issue(42L, IntegrationKind.GITHUB);
@@ -161,7 +187,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void actorAccountIdIsNullWhenIssuedViaLegacyOverload() {
+    void actorAccountIdIsNullForSystemFlow() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
         String state = svc.issue(42L, IntegrationKind.GITHUB);
 
