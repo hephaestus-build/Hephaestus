@@ -139,8 +139,11 @@ async function fakeModel(
 	return model;
 }
 
-/** A runner's working directory; a saved session records the directory it was made in, as production's does. */
-function runnerRoot(t: TestContext): string {
+/**
+ * A runner's working directory; a saved session records the directory it was made in, as production's does. The
+ * runner started in it removes it once it has exited.
+ */
+function runnerRoot(): string {
 	const root = mkdtempSync(path.join(tmpdir(), "pi-mentor-recovery-"));
 	mkdirSync(path.join(root, "agent"));
 	writeFileSync(
@@ -148,7 +151,6 @@ function runnerRoot(t: TestContext): string {
 		JSON.stringify({ apiProtocol: "openai-completions", modelId: "fake-mentor" }),
 	);
 	writeFileSync(path.join(root, "system.md"), "You are a test mentor.");
-	t.after(() => rmSync(root, { recursive: true, force: true }));
 	return root;
 }
 
@@ -231,11 +233,14 @@ function spawnRealRunner(
 			stop.abort();
 		}
 	};
+	// One hook, so the directory goes only after the runner writing into it has exited: a throwing hook skips the
+	// test's later ones, and the runner would outlive the test file.
 	t.after(async () => {
 		child.stdin.end();
 		if (child.exitCode === null) {
 			await once(child, "close");
 		}
+		rmSync(root, { recursive: true, force: true });
 	});
 	const send: Runner["send"] = (request) => {
 		child.stdin.write(`${JSON.stringify(request)}\n`);
@@ -400,7 +405,7 @@ const piError = (runner: Runner) =>
 	String(runner.events.find((e) => e.type === "pi_error")?.event.error);
 
 void test("a completed compaction is checkpointed before the watchdog fails the turn, and restores", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const model = await fakeModel(t, (kind, index) => {
 		if (kind === "summary") {
 			return { text: SUMMARY, promptTokens: 3000 };
@@ -443,7 +448,7 @@ void test("a completed compaction is checkpointed before the watchdog fails the 
 
 	// A fresh runner restored from that checkpoint answers from the summary, without compacting again.
 	const restoredModel = await fakeModel(t, () => ({ text: "restored answer", promptTokens: 9000 }));
-	const restored = spawnRealRunner(t, runnerRoot(t), restoredModel);
+	const restored = spawnRealRunner(t, runnerRoot(), restoredModel);
 	await openAndPrompt(restored, "and now?", jsonlOf(last));
 	const end = await restored.next(isEvent("agent_end"));
 	assert.ok(JSON.stringify(end).includes("restored answer"));
@@ -453,7 +458,7 @@ void test("a completed compaction is checkpointed before the watchdog fails the 
 });
 
 void test("a failed compaction is not checkpointed and the restored checkpoint stays in place", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const prior = longHistory(root);
 	const model = await fakeModel(t, (kind, index) => {
 		if (kind === "summary") {
@@ -481,7 +486,7 @@ void test("a failed compaction is not checkpointed and the restored checkpoint s
 });
 
 void test("a compaction the watchdog interrupts is not checkpointed and the turn still fails in time", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const prior = longHistory(root);
 	const model = await fakeModel(t, (kind) => (kind === "summary" ? "hang" : bigToolCall));
 	const runner = spawnRealRunner(t, root, model, {
@@ -519,7 +524,7 @@ void test("a compaction the watchdog interrupts is not checkpointed and the turn
 });
 
 void test("the measured restored session is compacted before its first ordinary request", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const model = await fakeModel(t, (kind) =>
 		kind === "summary"
 			? { text: SUMMARY, promptTokens: 3000 }
@@ -548,7 +553,7 @@ void test("the measured restored session is compacted before its first ordinary 
 });
 
 void test("a failed compaction of the measured session sends no ordinary request", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const model = await fakeModel(t, (kind) =>
 		kind === "summary" ? { status: 400 } : { text: "answer", promptTokens: 3000 },
 	);
@@ -564,7 +569,7 @@ void test("a failed compaction of the measured session sends no ordinary request
 });
 
 void test("a compaction that leaves the conversation too long sends no ordinary request", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const model = await fakeModel(t, (kind) =>
 		kind === "summary"
 			? { text: SUMMARY, promptTokens: 3000 }
@@ -592,7 +597,7 @@ void test("a compaction that leaves the conversation too long sends no ordinary 
 	const retryModel = await fakeModel(t, (kind) =>
 		kind === "summary" ? { status: 400 } : { text: "answer", promptTokens: 3000 },
 	);
-	const retry = spawnRealRunner(t, runnerRoot(t), retryModel);
+	const retry = spawnRealRunner(t, runnerRoot(), retryModel);
 	await openAndPrompt(retry, "and the tests?", jsonlOf(checkpoint));
 	await retry.next(isEvent("agent_end"));
 	assert.ok(!retryModel.calls.includes("turn"), retryModel.calls.join(", "));
@@ -600,7 +605,7 @@ void test("a compaction that leaves the conversation too long sends no ordinary 
 });
 
 void test("a restored tool batch too large to cut sends no ordinary request", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const model = await fakeModel(t, () => ({ text: "answer", promptTokens: 3000 }));
 	const runner = spawnRealRunner(t, root, model);
 	// The turn ended on its tool result, which Pi never splits from its call.
@@ -617,7 +622,7 @@ void test("a restored tool batch too large to cut sends no ordinary request", as
 });
 
 void test("a path built from a pull request number is refused before the server, saying where its resource is", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const model = await fakeModel(t, (_kind, index) =>
 		index === 0
 			? { toolCall: "inputs/context/merge_readiness/!9.json", promptTokens: 3000 }
@@ -654,7 +659,7 @@ void test("a path built from a pull request number is refused before the server,
 });
 
 void test("a small restored session is not compacted", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const model = await fakeModel(t, () => ({ text: "answer", promptTokens: 3000 }));
 	const runner = spawnRealRunner(t, root, model);
 	await openAndPrompt(
@@ -671,7 +676,7 @@ void test("a small restored session is not compacted", async (t) => {
 });
 
 void test("aborting during the pre-prompt compaction ends the turn once, without sending the prompt", async (t) => {
-	const root = runnerRoot(t);
+	const root = runnerRoot();
 	const model = await fakeModel(t, (kind) =>
 		kind === "summary" ? "hang" : { text: "answer", promptTokens: 3000 },
 	);
