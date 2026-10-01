@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy.spi;
 
 import java.util.*;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.support.SqlArrayValue;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -64,11 +65,11 @@ public class JdbcPersonDataStore implements PersonDataContributor {
     public static Map<String, Object> parameters(PersonScope scope, ObjectMapper mapper) {
         return Map.of(
                 "users",
-                scope.userIds().isEmpty() ? List.of(-1L) : scope.userIds(),
+                new SqlArrayValue("bigint", scope.userIds().toArray()),
                 "conversations",
-                scope.conversationIds().isEmpty() ? List.of(-1L) : scope.conversationIds(),
+                new SqlArrayValue("bigint", scope.conversationIds().toArray()),
                 "documents",
-                scope.outlineDocumentIds().isEmpty() ? List.of(-1L) : scope.outlineDocumentIds(),
+                new SqlArrayValue("bigint", scope.outlineDocumentIds().toArray()),
                 "account",
                 Objects.requireNonNullElse(scope.accountId(), -1L),
                 "identities",
@@ -99,7 +100,14 @@ public class JdbcPersonDataStore implements PersonDataContributor {
     }
 
     private String selected() {
-        return keyExpression() + " IN (SELECT value FROM jsonb_array_elements(CAST(:keys AS jsonb)))";
+        return "EXISTS (SELECT 1 FROM jsonb_populate_recordset(NULL::" + quotedTable()
+                + ",CAST(:keys AS jsonb)) selected WHERE "
+                + String.join(
+                        " AND ",
+                        keys.stream()
+                                .map(key -> "t.\"" + key + "\"=selected.\"" + key + "\"")
+                                .toList())
+                + ")";
     }
 
     @Override

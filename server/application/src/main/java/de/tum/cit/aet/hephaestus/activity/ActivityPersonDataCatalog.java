@@ -23,7 +23,7 @@ public class ActivityPersonDataCatalog implements PersonDataCatalog {
                 mapper,
                 "activity_event",
                 "activity_event",
-                "t.actor_id IN (:users)",
+                "t.actor_id = ANY(:users)",
                 "id,event_key,event_type,occurred_at,actor_id,workspace_id,repository_id,target_type,target_id,ingested_at",
                 "id",
                 "",

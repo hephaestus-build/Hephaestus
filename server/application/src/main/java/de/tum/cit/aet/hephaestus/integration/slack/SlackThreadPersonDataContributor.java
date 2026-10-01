@@ -29,7 +29,7 @@ final class SlackThreadPersonDataContributor implements PersonDataContributor {
     @Override
     public PersonDataSelection select(PersonScope person) {
         return new PersonDataSelection(jdbc.query(
-                "SELECT t.id, to_jsonb(ARRAY(SELECT member_id FROM unnest(t.participant_member_ids) member_id WHERE member_id IN (:users)))::text FROM slack_thread t WHERE t.id IN (:conversations) OR EXISTS(SELECT 1 FROM unnest(t.participant_member_ids) member_id WHERE member_id IN (:users)) ORDER BY t.id",
+                "SELECT t.id, to_jsonb(ARRAY(SELECT member_id FROM unnest(t.participant_member_ids) member_id WHERE member_id = ANY(:users)))::text FROM slack_thread t WHERE t.id = ANY(:conversations) OR EXISTS(SELECT 1 FROM unnest(t.participant_member_ids) member_id WHERE member_id = ANY(:users)) ORDER BY t.id",
                 JdbcPersonDataStore.parameters(person, mapper),
                 (rs, row) -> new PersonDataSelection.RowKey(Map.of(
                         "id", Long.toString(rs.getLong(1)), "participants", Objects.requireNonNull(rs.getString(2))))));

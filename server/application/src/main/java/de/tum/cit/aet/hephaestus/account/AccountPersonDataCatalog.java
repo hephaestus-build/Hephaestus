@@ -23,7 +23,7 @@ public class AccountPersonDataCatalog implements PersonDataCatalog {
                 mapper,
                 "user_preferences",
                 "user_preferences",
-                "t.user_id IN (:users)",
+                "t.user_id = ANY(:users)",
                 "id,user_id,participate_in_research,ai_review_enabled",
                 "id",
                 "",
