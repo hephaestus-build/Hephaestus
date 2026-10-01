@@ -210,11 +210,8 @@ await test("application metrics stay on the private network in both Compose depl
 			const service = document.getIn(["services", role]);
 			assert.ok(isMap(service), `${file}/${role} is missing`);
 			const expose = service.get("expose");
-			// The disabled single-host worker inherits the reference listener, not another topology.
-			if (!(file.includes("single-host") && role === "application-worker")) {
-				assert.ok(isSeq(expose), `${file}/${role} must expose management internally`);
-				assert.ok(expose.items.some((port) => isScalar(port) && String(port.value) === "9090"));
-			}
+			assert.ok(isSeq(expose), `${file}/${role} must expose management internally`);
+			assert.ok(expose.items.some((port) => isScalar(port) && String(port.value) === "9090"));
 			const managementAddress = service.getIn(["environment", "MANAGEMENT_SERVER_ADDRESS"]);
 			if (file.includes("single-host")) {
 				assert.ok(managementAddress === undefined || managementAddress === MANAGEMENT_BIND);

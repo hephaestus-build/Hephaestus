@@ -182,11 +182,12 @@ and workspace transfer limits remain under `hephaestus.sandbox.*`.
 | `tls-verify`                               | `SANDBOX_DOCKER_TLS_VERIFY`              | `false`                       |
 | `cert-path`                                | `SANDBOX_DOCKER_CERT_PATH`               | unset                         |
 | `container-runtime`                        | `SANDBOX_DOCKER_CONTAINER_RUNTIME`       | Docker daemon default         |
-| `app-server-container-id`                  | `SANDBOX_DOCKER_APP_SERVER_CONTAINER_ID` | container `HOSTNAME`          |
 | `owner`                                    | `SANDBOX_DOCKER_OWNER`                   | `default`                     |
 
-Compose forwards these variables to `application-server` and `application-worker`. Leave the
-container-ID override empty so each container uses its own `HOSTNAME` when joining job networks.
+Compose forwards these variables to `application-worker` only; `application-server` runs without the
+worker role. Each worker joins a job network as the container Docker identifies by its default
+hostname, so keep the worker's default hostname; a worker running outside Docker joins none, and its
+practice reviews, which run on an internal network, are refused.
 
 Use a distinct `owner` for each installation that shares a Docker daemon but uses a different
 database. All worker-capable roles of the same installation must use the same stable value.

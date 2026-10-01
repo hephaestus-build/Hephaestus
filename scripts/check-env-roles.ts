@@ -22,6 +22,10 @@
  *                  never mentions a setting makes no claim to disagree with, so `REQUIRED_SETTINGS`
  *                  names the settings whose absence is itself the failure, and the roles reading them.
  *
+ * One capability is a mount rather than a variable and is checked the same way: the Docker socket
+ * gives whoever holds it control of the host's daemon, and only the worker role opens sandboxes with
+ * it, so an application container with that role off must not mount it.
+ *
  * `ROLE_SCOPES` and `REQUIRED_SETTINGS` are the two things to extend, and they answer the same
  * question — which containers read a setting — from opposite ends: a scope says where a setting
  * must not go, a required setting where it must. Both are keyed on `application.yml`
@@ -332,7 +336,25 @@ export interface ComposeService {
 	readonly env: Set<string>;
 	readonly flags: Map<string, string>;
 	readonly raw: Map<string, string>;
+	/** Host paths and volume names it mounts, in either Compose syntax. */
+	readonly mounts: readonly string[];
 	image: string;
+}
+
+/** The host's Docker API, which only a container running the worker role uses. */
+const DOCKER_SOCKET = "/var/run/docker.sock";
+
+/** The source of each `volumes:` entry: `source:target[:mode]` or a mapping with `source`. */
+function mountSources(volumes: unknown): string[] {
+	if (!Array.isArray(volumes)) {
+		return [];
+	}
+	return volumes.flatMap((entry: unknown) => {
+		if (typeof entry === "string") {
+			return [entry.split(":")[0] ?? ""];
+		}
+		return isRecord(entry) && typeof entry.source === "string" ? [entry.source] : [];
+	});
 }
 
 /**
@@ -389,6 +411,7 @@ export function readComposeServices(text: string): Map<string, ComposeService> {
 			env: new Set(),
 			flags: new Map(),
 			raw: new Map(),
+			mounts: mountSources(value.volumes),
 			image: typeof value.image === "string" ? value.image : "",
 		};
 		services.set(name, service);
@@ -669,6 +692,24 @@ function omissionFailures(
 	return failures;
 }
 
+/** Application containers that mount the Docker socket without running the worker role. */
+function dockerSocketFailures(
+	applicationContainers: readonly Delivery[],
+	profileRoles: ProfileRoles,
+): string[] {
+	return applicationContainers
+		.filter(
+			({ service }) =>
+				service.mounts.includes(DOCKER_SOCKET) && !runsRole(service, "worker", profileRoles),
+		)
+		.map(
+			({ id }) =>
+				`${id} mounts ${DOCKER_SOCKET}, and disables the worker role, the only role that opens sandboxes with it.\n` +
+				"  The socket controls the host's Docker daemon, so here it is host access that nothing needs.\n" +
+				"  Remove the mount, and the docker group with it, or run the worker role on this container.",
+		);
+}
+
 export function analyse(
 	applicationText: string,
 	compose: readonly ComposeFile[],
@@ -696,6 +737,7 @@ export function analyse(
 		...unforwardedFailures(ownership, delivered),
 		...disagreementFailures(applicationContainers),
 		...omissionFailures(applicationContainers, paths, profileRoles),
+		...dockerSocketFailures(applicationContainers, profileRoles),
 	);
 
 	return { failures, delivered, applicationContainers: applicationContainers.map((c) => c.id) };

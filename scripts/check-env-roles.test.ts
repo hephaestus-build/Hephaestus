@@ -427,6 +427,49 @@ await test("agreeing containers pass, a webhook-only one omitting what only the 
 	assert.deepEqual(failures, []);
 });
 
+/** An application server whose worker role is `worker`, mounting `volumes`, beside the webhook receiver. */
+const serverMounting = (worker: "true" | "false", volumes: string): ComposeFile[] => {
+	const [file] = applicationPair(SERVER, [AGENT_DIGEST]);
+	assert.ok(file !== undefined);
+	const [label, text] = file;
+	return [
+		[
+			label,
+			text.replace(
+				'    environment:\n      HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"\n',
+				`    volumes:\n${volumes}\n    environment:\n      HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED: "false"\n      HEPHAESTUS_RUNTIME_WORKER_ENABLED: "${worker}"\n`,
+			),
+		],
+	];
+};
+
+await test("an application container without the worker role that mounts the Docker socket fails", () => {
+	for (const volumes of [
+		"      - /var/run/docker.sock:/var/run/docker.sock",
+		"      - type: bind\n        source: /var/run/docker.sock\n        target: /var/run/docker.sock\n        read_only: true",
+	]) {
+		const { failures } = analyse(APPLICATION, serverMounting("false", volumes));
+
+		assert.equal(failures.length, 1, failures.join("\n"));
+		assert.match(
+			failureAt(failures, 0),
+			/compose\.yaml:application-server mounts \/var\/run\/docker\.sock, and disables the worker role/u,
+		);
+	}
+});
+
+await test("a container running the worker role may mount the Docker socket", () => {
+	const { failures } = analyse(
+		APPLICATION,
+		serverMounting(
+			"true",
+			"      - /var/run/docker.sock:/var/run/docker.sock\n      - git-repos:/data/git-repos",
+		),
+	);
+
+	assert.deepEqual(failures, []);
+});
+
 await test("a setting named in PER_CONTAINER may differ", () => {
 	// THC_PATH is in the list: the receiver reports NATS through readiness and the others do not.
 	const { failures } = analyse(

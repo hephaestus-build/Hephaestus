@@ -44,6 +44,11 @@ Split the worker out when:
 - LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
 - You want to scale practice-review throughput independently of webhook ingestion.
 
+The shipped Compose stacks, the reference deployment and the single-host install alike, are split:
+`application-server` turns the worker role off and has no Docker socket, and `application-worker` runs
+every sandbox and is the only container given the socket. The `gate:env` check fails a container that
+mounts the socket without the worker role.
+
 Split the webhook receiver out when:
 
 - You want to deploy app-server changes without dropping inbound GitHub/GitLab events. The webhook pod runs the JetStream publisher in isolation; redeploys of the app pod don't touch the inbound HTTP surface.
@@ -115,8 +120,8 @@ gate alone.
 
 There is no `hephaestus.sandbox.enabled`, and an arch test forbids introducing one: the Docker
 sandbox *is* the worker capability, so it follows `hephaestus.runtime.worker.enabled`. Reading the
-worker row down the **Server** column: a server pod carries the worker role too, so it opens the
-sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
+worker row down the **Server** column: a server pod that keeps the worker role, as a monolith does,
+opens the sandbox gateway on the same port and needs the same firewall treatment as a split-out worker. The
 webhook role turns the worker role off, so it opens no gateway — the three `sandbox.gateway` rows
 read `—` in that column. Git needs no such row: it runs in-process through JGit in whichever role
 does the work, against that container's own mirrors under `hephaestus.fabric.root`. Commit ingestion

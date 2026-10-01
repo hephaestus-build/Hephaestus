@@ -14,9 +14,9 @@ import org.slf4j.LoggerFactory;
  * automatic cleanup can wait until that creator is gone.
  *
  * <p>The creator is the container this process runs in, found by the id Docker gives it as its default
- * hostname — not the configured app-server container, which may be another container that only
- * serves the model proxy. A process that cannot be identified that way records no creator, and what
- * it creates is never removed by automatic cleanup.
+ * hostname; it is also the one container {@link SandboxNetworkManager} joins to a sandbox network. A
+ * process that cannot be identified that way records no creator, joins no network, and what it creates
+ * is never removed by automatic cleanup.
  */
 public class SandboxCreator {
 

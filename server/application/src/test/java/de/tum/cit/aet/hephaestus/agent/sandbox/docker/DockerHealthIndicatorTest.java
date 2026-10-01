@@ -22,8 +22,7 @@ class DockerHealthIndicatorTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         SandboxProperties properties = new SandboxProperties(5, 10, 60, null);
-        var dockerProperties =
-                new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, null, "default");
+        var dockerProperties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
         indicator = new DockerHealthIndicator(containerManager, properties, dockerProperties);
     }
 

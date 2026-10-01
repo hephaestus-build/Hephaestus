@@ -1326,6 +1326,9 @@ void describe("CI contract", () => {
 			smoke,
 			/APPLICATION_DIGEST: \$\{\{ needs\.application-server-image\.outputs\.manifest-digest \}\}/u,
 		);
+		// The worker pulls and checks this commit's own agent image, never a placeholder.
+		assert.match(smoke, /scripts\/resolve-release-images\.ts "\$HEAD_SHA"/u);
+		assert.match(smoke, /AGENT_PI_DIGEST: \$\{\{ steps\.images\.outputs\.agent-pi-digest \}\}/u);
 		// The reduced topology an operator's first boot has to get through: no edge, no webapp. The
 		// service list runs onto a continuation line, so the command is rejoined before it is read.
 		const boot = /up -d --wait --wait-timeout \d+ (?<services>[^\n]+)/u.exec(
@@ -1334,9 +1337,17 @@ void describe("CI contract", () => {
 		assert.ok(boot, "the boot smoke must start the installation and wait for it to be ready");
 		assert.deepEqual(String(boot.groups?.services).trim().split(/\s+/u).toSorted(), [
 			"application-server",
+			"application-worker",
 			"nats-server",
 			"postgres",
 		]);
+		// ADR 0041's isolation probe runs against both booted installations.
+		for (const booted of [
+			smoke,
+			job(await readFile(".github/workflows/release.yml", "utf8"), "supported-host-smoke"),
+		]) {
+			assert.match(booted, /scripts\/sandbox-isolation-probe\.ts/u);
+		}
 		// The installer an operator runs, filled in by the one script both smoke jobs call.
 		assert.match(smoke, /scripts\/prepare-host-smoke-env\.ts/u);
 		assert.match(

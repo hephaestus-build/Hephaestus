@@ -742,10 +742,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The worker pulls and checks the agent image at startup, so it boots this commit's own, which the
+      # `Docker` job built or aliased under the head commit's tag.
+      - name: Resolve this commit's images
+        id: images
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/resolve-release-images.ts "$HEAD_SHA" release-images.tsv
+
       - name: Boot the operator installation path
         working-directory: docker/self-host
         env:
           APPLICATION_DIGEST: ${{ needs.application-server-image.outputs.manifest-digest }}
+          AGENT_PI_DIGEST: ${{ steps.images.outputs.agent-pi-digest }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
@@ -763,7 +772,8 @@ jobs:
           node ../../scripts/prepare-smoke-lock.ts
           docker compose --env-file .env --env-file smoke-lock.env config --quiet
           docker compose --env-file .env --env-file smoke-lock.env up -d --wait \
-            --wait-timeout 600 postgres nats-server application-server
+            --wait-timeout 600 postgres nats-server application-server application-worker
+          node ../../scripts/sandbox-isolation-probe.ts --env-file .env --env-file smoke-lock.env
 
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.

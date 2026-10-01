@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +22,6 @@ import org.slf4j.LoggerFactory;
 public class SandboxNetworkManager {
 
     private static final Logger log = LoggerFactory.getLogger(SandboxNetworkManager.class);
-    private static final Pattern SHORT_ID = Pattern.compile("[0-9a-f]{12,64}");
 
     public String networkPrefix() {
         return "hephaestus-sandbox-" + properties.owner() + "--";
@@ -33,28 +30,12 @@ public class SandboxNetworkManager {
     private final DockerNetworkOperations networkOps;
     private final DockerSandboxProperties properties;
     private final SandboxCreator creator;
-    private final Supplier<String> hostnameSupplier;
-
-    /** Resolved once at startup; cached for the lifetime of the bean. */
-    private volatile @Nullable String appServerContainerId;
 
     public SandboxNetworkManager(
             DockerNetworkOperations networkOps, DockerSandboxProperties properties, SandboxCreator creator) {
-        this(networkOps, properties, creator, () -> System.getenv("HOSTNAME"));
-    }
-
-    /**
-     * @param hostnameSupplier provides the container HOSTNAME fallback (testable seam)
-     */
-    SandboxNetworkManager(
-            DockerNetworkOperations networkOps,
-            DockerSandboxProperties properties,
-            SandboxCreator creator,
-            Supplier<String> hostnameSupplier) {
         this.networkOps = networkOps;
         this.properties = properties;
         this.creator = creator;
-        this.hostnameSupplier = hostnameSupplier;
     }
 
     /**
@@ -75,19 +56,20 @@ public class SandboxNetworkManager {
     }
 
     /**
-     * Connect the app-server container to a job network and return its IP.
+     * Connect the container this process runs in, which serves the sandbox gateway, to a job network and
+     * return its IP there. Only that container joins: it is the one {@link SandboxCreator} identifies, so
+     * no configuration can attach another.
      *
-     * <p>The agent container uses this IP as the LLM proxy endpoint.
+     * <p>The agent container uses this IP as the gateway and LLM proxy endpoint.
      *
      * @param networkId the network to connect to
-     * @return the app-server's IP address on the network
+     * @return this container's IP address on the network, or null when this process runs outside Docker
      */
     public @Nullable String connectAppServer(String networkId) {
         String containerId = resolveAppServerContainerId();
-        if (containerId == null || containerId.isBlank()) {
-            log.warn("Cannot determine app-server container ID — app server is likely running on the host, "
-                    + "not in Docker. Agent containers will use host.docker.internal to reach the LLM proxy. "
-                    + "Set hephaestus.sandbox.docker.app-server-container-id to suppress this warning.");
+        if (containerId == null) {
+            log.warn("This process does not run in an identifiable container, so it joins no job network; agent "
+                    + "containers will reach the LLM proxy through host.docker.internal.");
             return null;
         }
         String ip = networkOps.connectToNetwork(networkId, containerId);
@@ -132,32 +114,18 @@ public class SandboxNetworkManager {
         }
     }
 
-    /**
-     * The app-server among a network's endpoints, by its exact name or full id, else by a Docker short id
-     * that prefixes exactly one endpoint's id. A name can look like the start of another container's id,
-     * so anything less certain is no match, and the network then counts as in use.
-     */
+    /** This container among a network's endpoints, by the full id Docker reports for both. */
     private static Optional<DockerOperations.NetworkEndpoint> appServerEndpoint(
             List<DockerOperations.NetworkEndpoint> endpoints, @Nullable String appServer) {
-        if (appServer == null || appServer.isBlank()) {
-            return Optional.empty();
-        }
-        var exact = endpoints.stream()
-                .filter(endpoint -> endpoint.name().equals(appServer)
-                        || endpoint.containerId().equals(appServer))
-                .toList();
-        var candidates = !exact.isEmpty() || !SHORT_ID.matcher(appServer).matches()
-                ? exact
-                : endpoints.stream()
-                        .filter(endpoint -> endpoint.containerId().startsWith(appServer))
-                        .toList();
-        return candidates.size() == 1 ? Optional.of(candidates.getFirst()) : Optional.empty();
+        return endpoints.stream()
+                .filter(endpoint -> endpoint.containerId().equals(appServer))
+                .findFirst();
     }
 
     /** Disconnect the app-server from a job network. Idempotent — no-op if already disconnected. */
     public void disconnectAppServer(String networkId) {
         String containerId = resolveAppServerContainerId();
-        if (containerId == null || containerId.isBlank()) {
+        if (containerId == null) {
             return;
         }
         networkOps.disconnectFromNetwork(networkId, containerId);
@@ -202,26 +170,7 @@ public class SandboxNetworkManager {
                 .toList();
     }
 
-    private String resolveAppServerContainerId() {
-        if (appServerContainerId == null) {
-            synchronized (this) {
-                if (appServerContainerId == null) {
-                    appServerContainerId = resolveContainerId();
-                    if (appServerContainerId != null) {
-                        log.info("Resolved app-server container ID: {}", appServerContainerId);
-                    }
-                }
-            }
-        }
-        return appServerContainerId;
-    }
-
-    private String resolveContainerId() {
-        String id = properties.resolvedAppServerContainerId();
-        if (id != null) {
-            return id;
-        }
-        // Fall back to HOSTNAME env var — Docker sets this to the container short ID
-        return hostnameSupplier.get();
+    private @Nullable String resolveAppServerContainerId() {
+        return creator.labels().get(SandboxLabels.CREATOR_CONTAINER);
     }
 }

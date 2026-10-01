@@ -101,11 +101,11 @@ jobs:
         run: |
           set -euo pipefail
           services=$(docker compose config --services)
-          for unwanted in application-worker maintenance; do
+          for unwanted in maintenance; do
             grep -qx "$unwanted" <<< "$services" && {
               echo "::error::'$unwanted' is a reference-deployment service and must not run on a single host"; exit 1; } || true
           done
-          for required in application-server webhook-server postgres nats-server webapp reverse-proxy; do
+          for required in application-server application-worker webhook-server postgres nats-server webapp reverse-proxy; do
             grep -qx "$required" <<< "$services" || {
               echo "::error::'$required' is missing from the self-hosted stack"; exit 1; }
           done
