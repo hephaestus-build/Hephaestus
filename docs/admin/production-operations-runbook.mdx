@@ -250,7 +250,9 @@ privacy contact in the instance notice; this page is not a data-subject request 
    or exact provider-instance ID and native user ID. For Slack, also enter the native Slack workspace
    ID. Add all verified identities that belong to the request. Do not match names, logins or email
    addresses. A conflicting account link stops resolution; repair the verified link or correct the
-   supplied exact IDs before creating another preview.
+   supplied exact IDs before creating another preview. Cached Slack-to-SCM actor stamps are not
+   identity proof. If collected work has such a stamp, include the verified exact keys for both
+   providers, or repair the conflicting association; the page does not infer an identity from it.
 2. Select **Preview data**. Check the resolved identity scope and every store count, including zeros.
    The preview expires after 48 hours. Export and erasure use its frozen row keys; changed data needs
    a new preview, not an SQL supplement.

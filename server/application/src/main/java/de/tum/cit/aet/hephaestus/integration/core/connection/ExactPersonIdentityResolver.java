@@ -112,6 +112,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                 throw conflict("A provider identity is linked to another account; resolve the link conflict first");
             }
         }
+        requireVerifiedSlackCaches(identities, users);
         List<PersonIdentity> ordered = identities.stream()
                 .sorted(Comparator.comparingLong(PersonIdentity::providerId)
                         .thenComparing(PersonIdentity::subject)
@@ -157,6 +158,52 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                 documents.stream().sorted().toList());
     }
 
+    private record CachedSlackIdentity(
+            @Nullable String subject, @Nullable String teamId) {}
+
+    private void requireVerifiedSlackCaches(Set<PersonIdentity> identities, List<Long> users) {
+        List<Long> slackProviders = jdbc.query(
+                "SELECT id FROM identity_provider WHERE type='SLACK' AND server_url='https://slack.com'",
+                (rs, row) -> rs.getLong(1));
+        for (long userId : new LinkedHashSet<>(users)) {
+            List<CachedSlackIdentity> caches = jdbc.query(
+                    """
+                    SELECT author_slack_user_id,slack_team_id FROM slack_message WHERE author_member_id=?
+                    UNION SELECT m.slack_user_id,m.slack_team_id FROM mentor_slack_thread m
+                        JOIN chat_thread t ON t.id=m.chat_thread_id WHERE t.user_id=?
+                    """, (rs, row) -> new CachedSlackIdentity(rs.getString(1), rs.getString(2)), userId, userId);
+            for (var cache : caches) {
+                if (slackProviders.size() != 1
+                        || cache.subject() == null
+                        || cache.subject().isBlank()
+                        || cache.teamId() == null
+                        || cache.teamId().isBlank()
+                        || !identities.contains(
+                                new PersonIdentity(slackProviders.getFirst(), cache.subject(), cache.teamId())))
+                    throw conflict("Collected Slack work has cached SCM attribution without an exact Slack identity; "
+                            + "add its provider instance, native Slack user id and native workspace id");
+            }
+        }
+        for (PersonIdentity identity : identities) {
+            if (!validateProvider(identity).equals("SLACK")) continue;
+            List<Long> cachedActors = jdbc.query(
+                    """
+                    SELECT author_member_id FROM slack_message
+                        WHERE author_slack_user_id=? AND slack_team_id=? AND author_member_id IS NOT NULL
+                    UNION SELECT t.user_id FROM mentor_slack_thread m JOIN chat_thread t ON t.id=m.chat_thread_id
+                        WHERE m.slack_user_id=? AND m.slack_team_id=?
+                    """,
+                    (rs, row) -> rs.getLong(1),
+                    identity.subject(),
+                    identity.teamId(),
+                    identity.subject(),
+                    identity.teamId());
+            if (!users.containsAll(cachedActors))
+                throw conflict("Collected Slack work has an unverified cached SCM actor; "
+                        + "add the person's exact SCM provider identity or repair the conflicting association");
+        }
+    }
+
     private List<Long> linkedOwners(PersonIdentity identity) {
         String type = validateProvider(identity);
         // Outline links retain the verified OAuth workspace key. An instance/native-user request
@@ -187,6 +234,11 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
         }
         String type = types.getFirst();
         if (type.equals("SLACK")) {
+            if (!Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT server_url='https://slack.com' FROM identity_provider WHERE id=?",
+                    Boolean.class,
+                    identity.providerId())))
+                throw invalid("A Slack identity requires the configured https://slack.com provider instance");
             if (identity.teamId() == null) {
                 throw invalid("A Slack identity requires its native Slack workspace id");
             }

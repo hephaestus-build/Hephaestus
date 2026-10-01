@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.account.*;
 import de.tum.cit.aet.hephaestus.agent.*;
@@ -280,6 +281,27 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         personData.requestErasure(requestId, administratorId, true);
         personData.run(requestId);
         assertThat(personData.get(requestId).request().getCompletedJson()).isEqualTo(receipt.getCompletedJson());
+    }
+
+    @Test
+    void shouldRequireExactProviderKeysInsteadOfUsingSlackActorCaches() {
+        IdentityProvider scm = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://cache-gitlab.example.org"));
+        IdentityProvider slack =
+                providers.saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"));
+        User target = users.saveAndFlush(TestUserFactory.createUser(42L, "cached-person", scm));
+        Workspace workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("cached-person"));
+        message(workspace, "TCACHE", "100.1", "100.1", "UCACHE", target, "Captured contribution");
+        PersonIdentity gitlabKey = new PersonIdentity(Objects.requireNonNull(scm.getId()), "42", null);
+        PersonIdentity slackKey = new PersonIdentity(Objects.requireNonNull(slack.getId()), "UCACHE", "TCACHE");
+        assertThatThrownBy(() -> resolver.resolve(null, List.of(gitlabKey)))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("exact Slack identity");
+        assertThatThrownBy(() -> resolver.resolve(null, List.of(slackKey)))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("exact SCM provider identity");
+        assertThat(resolver.resolve(null, List.of(gitlabKey, slackKey)).userIds())
+                .containsExactly(target.getId());
     }
 
     private void link(

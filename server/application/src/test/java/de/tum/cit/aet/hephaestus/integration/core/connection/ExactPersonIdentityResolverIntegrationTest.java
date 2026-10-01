@@ -219,6 +219,10 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
     }
 
     private IdentityProvider provider(IdentityProviderType type) {
+        if (type == IdentityProviderType.SLACK)
+            return providers
+                    .findByTypeAndServerUrl(type, "https://slack.com")
+                    .orElseGet(() -> providers.saveAndFlush(new IdentityProvider(type, "https://slack.com")));
         return providers.saveAndFlush(new IdentityProvider(type, "https://" + UUID.randomUUID() + ".example.com"));
     }
 
