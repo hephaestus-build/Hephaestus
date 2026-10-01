@@ -136,6 +136,9 @@ public class GitLabHistoricalBackfillService {
             int reposDone = 0;
 
             for (SyncTarget target : session.syncTargets()) {
+                if (syncTargetProvider.isRepositoryUnavailable(session.scopeId(), target.id())) {
+                    continue;
+                }
                 if (handle != null && handle.isCancellationRequested()) {
                     return processed.get();
                 }

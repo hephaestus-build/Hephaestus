@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewRepositoryTargetRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -167,6 +168,44 @@ public class WorkspaceSyncTargetProvider implements SyncTargetProvider {
             case HISTORICAL_BACKFILL ->
                 repositoryToMonitorRepository.updateHistoricalBackfillSyncError(syncTargetId, error);
         }
+    }
+
+    @Override
+    public boolean deferUnavailableRepository(Long scopeId, Long syncTargetId) {
+        if (!isRepositoryUnavailable(scopeId, syncTargetId)) {
+            return false;
+        }
+        Instant now = Instant.now();
+        return repositoryToMonitorRepository.reserveUnavailableRecheck(
+                        scopeId, syncTargetId, now, now.plus(Duration.ofDays(1)))
+                == 0;
+    }
+
+    @Override
+    public boolean isRepositoryUnavailable(Long scopeId, Long syncTargetId) {
+        return repositoryToMonitorRepository.existsByWorkspaceIdAndIdAndUnavailableSinceIsNotNull(
+                scopeId, syncTargetId);
+    }
+
+    @Override
+    public void recordRepositoryUnavailable(Long scopeId, Long syncTargetId) {
+        Instant now = Instant.now();
+        repositoryToMonitorRepository.recordUnavailable(scopeId, syncTargetId, now, now.plus(Duration.ofDays(1)));
+    }
+
+    @Override
+    public void clearRepositoryUnavailable(Long scopeId, Long syncTargetId) {
+        repositoryToMonitorRepository.clearUnavailable(scopeId, syncTargetId);
+    }
+
+    @Override
+    public void retryUnavailableRepository(Long scopeId, Long syncTargetId) {
+        repositoryToMonitorRepository.retryUnavailable(scopeId, syncTargetId);
+    }
+
+    @Override
+    public void recheckUnavailableRepositories(Long scopeId) {
+        repositoryToMonitorRepository.recheckUnavailable(scopeId);
     }
 
     @Override

@@ -166,7 +166,7 @@ public class GitHubGraphQlClientProvider {
         return rateLimitTracker.getResetAt(scopeId);
     }
 
-    private String getToken(Long scopeId) {
+    public String getToken(Long scopeId) {
         // Fail fast for suspended/inactive scopes - don't waste API calls
         if (!tokenProvider.isScopeActive(scopeId)) {
             throw new IllegalStateException(

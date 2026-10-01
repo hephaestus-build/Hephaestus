@@ -81,7 +81,18 @@ public class RepositoryToMonitor {
     @Column(length = 2048)
     private @Nullable String historicalBackfillSyncError;
 
+    /** Availability queries own these writes so ordinary monitor edits cannot overwrite a concurrent reservation. */
+    @Column(updatable = false)
+    private @Nullable Instant unavailableSince;
+
+    /** Earliest metadata recheck after consecutive unavailable responses. */
+    @Column(updatable = false)
+    private @Nullable Instant unavailableRetryAt;
+
     public @Nullable String getSyncErrorSummary() {
+        if (unavailableSince != null) {
+            return "Repository not found or not accessible";
+        }
         if (recentSyncError == null) {
             return historicalBackfillSyncError;
         }

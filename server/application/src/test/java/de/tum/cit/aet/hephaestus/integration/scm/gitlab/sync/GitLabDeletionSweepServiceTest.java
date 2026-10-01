@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -133,7 +134,8 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
                 actorSelector,
                 workspaceLinkService,
                 new TransactionTemplate(transactionManager),
-                noteReconciliation);
+                noteReconciliation,
+                org.mockito.Mockito.mock(SyncTargetProvider.class));
         // Default: the scope is connected to the repository's instance and may still write it.
         lenient().when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.of(PROVIDER_ID));
         lenient()

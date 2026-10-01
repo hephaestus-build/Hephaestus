@@ -147,3 +147,22 @@ Owners and administrators can enable the **Workspace alerts** email in notificat
 It reports a token that needs replacement and reports recovery after rotation or replacement.
 Repeated checks of the same problem do not send duplicate alerts. GitHub App tokens renew
 automatically; GitHub personal access token expiry is not tracked.
+
+## Unavailable repositories
+
+If a monitored GitHub or GitLab repository cannot be read, **Administration → Integrations** shows
+**Repository not found or not accessible**. This does not mean that the repository was deleted.
+It can also mean that its name changed or that the connection no longer has access.
+Hephaestus keeps the monitor and the work it has already stored.
+
+After two consecutive unavailable responses, Hephaestus checks the repository at most once every
+24 hours. Recent sync and backfill wait while it is unavailable. A successful check clears the error
+and resumes sync automatically. Connection authentication errors, rate limits, and network errors
+keep their normal retry behavior.
+
+To recover, give the connection access to the repository again. A workspace admin can select
+**Sync now** on the connection to check immediately instead of waiting for the next daily check.
+If you no longer want the repository in the workspace, stop monitoring it. For a GitHub App
+connection, change repository access in the installation. For a token-managed connection, remove
+it from the monitored repositories. Removing a monitor permanently deletes its mirrored data;
+it does not delete the upstream repository.
