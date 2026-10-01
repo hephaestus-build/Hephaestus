@@ -56,9 +56,7 @@ class RepositoryAvailabilityIntegrationTest extends AbstractWorkspaceIntegration
         long id = monitor.getId();
         provider.recordRepositoryUnavailable(scope, id);
         provider.recordRepositoryUnavailable(scope, id);
-        var expired = reload(monitor);
-        expired.setUnavailableRetryAt(Instant.now().minusSeconds(1));
-        monitors.saveAndFlush(expired);
+        monitors.recordUnavailable(scope, id, Instant.now(), Instant.now().minusSeconds(1));
         var first = CompletableFuture.supplyAsync(() -> provider.deferUnavailableRepository(scope, id));
         var second = CompletableFuture.supplyAsync(() -> provider.deferUnavailableRepository(scope, id));
         assertThat(java.util.List.of(first.join(), second.join())).containsExactlyInAnyOrder(false, true);
@@ -87,6 +85,22 @@ class RepositoryAvailabilityIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(reload(first).getNativeId()).isEqualTo(123L);
         assertThat(reload(first).getIssueBackfillCheckpoint()).isEqualTo(17);
         assertThat(provider.isRepositoryUnavailable(otherScope, second.getId())).isTrue();
+    }
+
+    @Test
+    void shouldPreserveAvailabilityWhenAnOlderMonitorEntityIsEdited() {
+        var monitor = monitor("stale-edit");
+        long scope = Objects.requireNonNull(monitor.getWorkspace()).getId();
+        provider.recordRepositoryUnavailable(scope, monitor.getId());
+        provider.recordRepositoryUnavailable(scope, monitor.getId());
+        var unavailable = reload(monitor);
+        monitor.setNameWithOwner("course/renamed");
+        monitors.saveAndFlush(monitor);
+        var edited = reload(monitor);
+        assertThat(edited.getNameWithOwner()).isEqualTo("course/renamed");
+        assertThat(edited.getUnavailableSince()).isEqualTo(unavailable.getUnavailableSince());
+        assertThat(edited.getUnavailableRetryAt()).isEqualTo(unavailable.getUnavailableRetryAt());
+        assertThat(provider.deferUnavailableRepository(scope, monitor.getId())).isTrue();
     }
 
     @Test

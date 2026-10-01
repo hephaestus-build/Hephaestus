@@ -3,10 +3,13 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.repository;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -15,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
@@ -58,46 +62,77 @@ class GitHubRepositorySyncServiceTest extends BaseUnitTest {
     @ParameterizedTest
     @CsvSource({"RATE_LIMITED, true", "FORBIDDEN, true", "NOT_FOUND, true", "NOT_FOUND, false"})
     void shouldClassifyFieldErrorsBeforeTreatingRepositoryAsUnavailable(String errorType, boolean repositoryMissing) {
+        String body = """
+                {"data":{"repository":%s},"errors":[{"message":"Unavailable",
+                "path":%s,"extensions":{"type":"%s"}}]}
+                """.formatted(
+                        repositoryMissing ? "null" : "{\"id\":\"R_test\"}",
+                        repositoryMissing ? "[\"repository\"]" : "[\"repository\",\"defaultBranchRef\"]",
+                        errorType);
+        var service = graphQlService(body, mock(RepositoryRepository.class), mock(OrganizationRepository.class));
+
+        if (errorType.equals("NOT_FOUND") && repositoryMissing) {
+            assertThatThrownBy(() -> service.syncRepository(7L, "course/project", new IdentityProvider(), null))
+                    .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
+        } else {
+            assertThat(service.syncRepository(7L, "course/project", new IdentityProvider(), null))
+                    .isEmpty();
+        }
+    }
+
+    @Test
+    void shouldPersistRepositoryWhenMonitoredIdentityMatches() {
+        var repositories = mock(RepositoryRepository.class);
+        when(repositories.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        var service = graphQlService("""
+                {"data":{"repository":{"databaseId":123,"name":"project","nameWithOwner":"course/project",
+                "url":"https://github.com/course/project","isPrivate":false,"isArchived":false,
+                "isDisabled":false,"hasDiscussionsEnabled":false}}}
+                """, repositories, mock(OrganizationRepository.class));
+        var provider = TestEntities.gitProvider(100L, IdentityProviderType.GITHUB);
+
+        var repository =
+                service.syncRepository(7L, "course/project", provider, 123L).orElseThrow();
+
+        assertThat(repository.getNativeId()).isEqualTo(123L);
+        assertThat(repository.getNameWithOwner()).isEqualTo("course/project");
+        assertThat(repository.getProvider()).isSameAs(provider);
+    }
+
+    @Test
+    void shouldRejectReassignedNameBeforePersistingRepositoryOrOrganization() {
+        var repositories = mock(RepositoryRepository.class);
+        var organizations = mock(OrganizationRepository.class);
+        var service = graphQlService("{\"data\":{\"repository\":{\"databaseId\":124}}}", repositories, organizations);
+
+        assertThatThrownBy(() -> service.syncRepository(7L, "course/project", new IdentityProvider(), 123L))
+                .isInstanceOf(RepositoryIdentityMismatchException.class);
+        verifyNoInteractions(repositories, organizations);
+    }
+
+    private GitHubRepositorySyncService graphQlService(
+            String body, RepositoryRepository repositories, OrganizationRepository organizations) {
         var webClient = WebClient.builder()
                 .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
                         .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                        .body("""
-                                {"data":{"repository":%s},"errors":[{"message":"Unavailable",
-                                "path":%s,"extensions":{"type":"%s"}}]}
-                                """.formatted(
-                                repositoryMissing ? "null" : "{\"id\":\"R_test\"}",
-                                repositoryMissing ? "[\"repository\"]" : "[\"repository\",\"defaultBranchRef\"]",
-                                errorType))
+                        .body(body)
                         .build()))
                 .build();
         var clients = mock(GitHubGraphQlClientProvider.class);
         when(clients.forScope(7L))
                 .thenReturn(HttpGraphQlClient.builder(webClient)
-                        .documentSource(
-                                name -> Mono.just("query { repository(owner: \"course\", name: \"project\") { id } }"))
+                        .documentSource(name -> Mono.just(
+                                "query { repository(owner: \"course\", name: \"project\") { id databaseId } }"))
                         .build());
         var properties = mock(GitHubSyncProperties.class);
         when(properties.graphqlTimeout()).thenReturn(Duration.ofSeconds(2));
         var classifier = new GitHubExceptionClassifier(new SimpleMeterRegistry());
         var coordinator = mock(GitHubGraphQlSyncCoordinator.class);
-        when(coordinator.classifyGraphQlErrors(any()))
+        lenient()
+                .when(coordinator.classifyGraphQlErrors(any()))
                 .thenAnswer(invocation -> classifier.classifyGraphQlResponse(invocation.getArgument(0)));
-        var service = new GitHubRepositorySyncService(
-                clients,
-                mock(RepositoryRepository.class),
-                mock(OrganizationRepository.class),
-                properties,
-                classifier,
-                coordinator,
-                webClient);
-
-        if (errorType.equals("NOT_FOUND") && repositoryMissing) {
-            assertThatThrownBy(() -> service.syncRepository(7L, "course/project", new IdentityProvider()))
-                    .isInstanceOf(RepositoryNotFoundOnGitProviderException.class);
-        } else {
-            assertThat(service.syncRepository(7L, "course/project", new IdentityProvider()))
-                    .isEmpty();
-        }
+        return new GitHubRepositorySyncService(
+                clients, repositories, organizations, properties, classifier, coordinator, webClient);
     }
 
     @Test

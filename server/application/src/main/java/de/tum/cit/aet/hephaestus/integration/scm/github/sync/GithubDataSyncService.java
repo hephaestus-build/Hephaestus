@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.project.GitHubProjectSyn
 import de.tum.cit.aet.hephaestus.integration.scm.github.project.Project;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.GitHubRepositorySyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.repository.RepositoryIdentityMismatchException;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.collaborator.GitHubCollaboratorSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.subissue.GitHubSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.sync.exception.SyncInterruptedException;
@@ -186,19 +187,29 @@ public class GithubDataSyncService {
     }
 
     private Optional<Repository> fetchRepositoryMetadata(SyncTarget target, IdentityProvider provider) {
-        if (target.nativeId() != null && syncTargetProvider.isRepositoryUnavailable(target.scopeId(), target.id())) {
-            // A reused old name must not replace the identity of an unavailable monitor.
-            String currentName = repositorySyncService.resolveRepositoryNameById(target.scopeId(), target.nativeId());
-            return repositorySyncService.syncRepository(target.scopeId(), currentName, provider);
+        Long nativeId = target.nativeId();
+        if (nativeId != null && syncTargetProvider.isRepositoryUnavailable(target.scopeId(), target.id())) {
+            return fetchRepositoryMetadataById(target, provider, nativeId);
         }
         try {
-            return repositorySyncService.syncRepository(target.scopeId(), target.repositoryNameWithOwner(), provider);
-        } catch (RepositoryNotFoundOnGitProviderException e) {
-            if (target.nativeId() == null) {
+            return repositorySyncService.syncRepository(
+                    target.scopeId(), target.repositoryNameWithOwner(), provider, nativeId);
+        } catch (RepositoryNotFoundOnGitProviderException | RepositoryIdentityMismatchException e) {
+            if (nativeId == null) {
                 throw e;
             }
-            String currentName = repositorySyncService.resolveRepositoryNameById(target.scopeId(), target.nativeId());
-            return repositorySyncService.syncRepository(target.scopeId(), currentName, provider);
+            return fetchRepositoryMetadataById(target, provider, nativeId);
+        }
+    }
+
+    private Optional<Repository> fetchRepositoryMetadataById(
+            SyncTarget target, IdentityProvider provider, long nativeId) {
+        String currentName = repositorySyncService.resolveRepositoryNameById(target.scopeId(), nativeId);
+        try {
+            return repositorySyncService.syncRepository(target.scopeId(), currentName, provider, nativeId);
+        } catch (RepositoryIdentityMismatchException e) {
+            // A rename between the two requests is incomplete metadata, not proof of absence.
+            return Optional.empty();
         }
     }
 
@@ -222,18 +233,25 @@ public class GithubDataSyncService {
             return false;
         }
 
-        if (syncTargetProvider.deferUnavailableRepository(scopeId, syncTarget.id())) {
-            return false;
-        }
-
         IdentityProvider provider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, GITHUB_SERVER_URL)
                 .orElseThrow(() -> new IllegalStateException(
                         "IdentityProvider not found for type=GITHUB, serverUrl=" + GITHUB_SERVER_URL));
 
-        Repository repository = repositoryRepository
-                .findByNameWithOwnerAndProviderId(nameWithOwner, Objects.requireNonNull(provider.getId()))
+        Long providerId = Objects.requireNonNull(provider.getId());
+        Repository repository = (syncTarget.nativeId() != null
+                        ? repositoryRepository.findByNativeIdAndProviderId(syncTarget.nativeId(), providerId)
+                        : repositoryRepository.findByNameWithOwnerAndProviderId(nameWithOwner, providerId))
                 .orElse(null);
+        if (syncTarget.nativeId() != null
+                && repository != null
+                && !Objects.equals(nameWithOwner, repository.getNameWithOwner())) {
+            syncTargetProvider.reconcileSyncTargetIdentity(
+                    syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
+        }
+        if (syncTargetProvider.deferUnavailableRepository(scopeId, syncTarget.id())) {
+            return false;
+        }
         boolean repositoryCreatedDuringSync = false;
 
         // PAT workspaces start with only a RepositoryToMonitor entry — fetch and create the

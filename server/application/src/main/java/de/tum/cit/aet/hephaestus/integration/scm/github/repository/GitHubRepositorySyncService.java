@@ -88,11 +88,13 @@ public class GitHubRepositorySyncService {
      * @param scopeId the scope ID for authentication
      * @param nameWithOwner the full repository name (owner/repo)
      * @param provider the IdentityProvider entity representing the GitHub provider instance
+     * @param expectedNativeId the monitored identity, or null until it has been captured
      * @return the synced repository, or empty on a transient or incomplete response
      */
     @Transactional
-    public Optional<Repository> syncRepository(Long scopeId, String nameWithOwner, IdentityProvider provider) {
-        return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, 0);
+    public Optional<Repository> syncRepository(
+            Long scopeId, String nameWithOwner, IdentityProvider provider, @Nullable Long expectedNativeId) {
+        return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, expectedNativeId, 0);
     }
 
     /** Resolves a renamed repository through its stable REST id using this scope's credential. */
@@ -125,7 +127,11 @@ public class GitHubRepositorySyncService {
      * Internal implementation with retry counter to prevent infinite recursion.
      */
     private Optional<Repository> syncRepositoryWithRetry(
-            Long scopeId, String nameWithOwner, IdentityProvider provider, int retryAttempt) {
+            Long scopeId,
+            String nameWithOwner,
+            IdentityProvider provider,
+            @Nullable Long expectedNativeId,
+            int retryAttempt) {
         String safeNameWithOwner = Objects.requireNonNull(sanitizeForLog(nameWithOwner));
         Optional<RepositoryOwnerAndName> parsedName = GitHubRepositoryNameParser.parse(nameWithOwner);
         if (parsedName.isEmpty()) {
@@ -171,7 +177,8 @@ public class GitHubRepositorySyncService {
                             "repoName",
                             safeNameWithOwner,
                             log))) {
-                        return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, retryAttempt + 1);
+                        return syncRepositoryWithRetry(
+                                scopeId, nameWithOwner, provider, expectedNativeId, retryAttempt + 1);
                     }
                     return Optional.empty();
                 }
@@ -205,10 +212,6 @@ public class GitHubRepositorySyncService {
                 throw new RepositoryNotFoundOnGitProviderException(nameWithOwner);
             }
 
-            // Ensure organization exists
-            GHRepositoryOwner owner = repoData.getOwner();
-            Organization organization = ensureOrganization(owner, provider);
-
             // Create or update repository using typed accessors
             Long githubDatabaseId =
                     repoData.getDatabaseId() != null ? repoData.getDatabaseId().longValue() : null;
@@ -220,6 +223,12 @@ public class GitHubRepositorySyncService {
                 return Optional.empty();
             }
 
+            if (expectedNativeId != null && !expectedNativeId.equals(githubDatabaseId)) {
+                throw new RepositoryIdentityMismatchException(nameWithOwner, expectedNativeId, githubDatabaseId);
+            }
+
+            GHRepositoryOwner owner = repoData.getOwner();
+            Organization organization = ensureOrganization(owner, provider);
             Repository repository = repositoryRepository
                     .findByNativeIdAndProviderId(githubDatabaseId, Objects.requireNonNull(provider.getId()))
                     .orElseGet(Repository::new);
@@ -270,8 +279,9 @@ public class GitHubRepositorySyncService {
                     safeNameWithOwner);
 
             return Optional.of(repository);
-        } catch (InstallationNotFoundException | RepositoryNotFoundOnGitProviderException e) {
-            // Installation failure aborts the scope. Repository absence pauses only its monitor.
+        } catch (InstallationNotFoundException
+                | RepositoryNotFoundOnGitProviderException
+                | RepositoryIdentityMismatchException e) {
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
