@@ -12,22 +12,13 @@ WORKDIR /opt/precompute
 COPY precompute/package.json precompute/pnpm-lock.yaml precompute/pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
-FROM node:${NODE_VERSION}-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
-ARG NODE_VERSION
-
-# The base digest is pinned, so Debian security updates published after the upstream image was
-# built can reach it only here; Renovate bumps the digest only when upstream republishes one.
-#
-# SOURCE_COMMIT is what makes that upgrade actually run. The builder imports the `cache-main`
-# registry cache and nothing else in this layer changes between builds, so without a per-build
-# input BuildKit would replay a weeks-old package set and the upgrade would silently stop
-# happening — the exact failure this layer exists to prevent. webapp/Dockerfile gets the same
-# argument, one instruction ahead of its own upgrade.
-ARG SOURCE_COMMIT
-RUN echo "source commit: ${SOURCE_COMMIT:-<unset — local build>}" && \
-    apt-get update -qq && apt-get upgrade -y -qq && \
+FROM node:${NODE_VERSION}-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS os-packages
+RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
     apt-get install -y --no-install-recommends bash git ripgrep fd-find findutils tree jq ca-certificates grep coreutils util-linux tar && \
     rm -rf /var/lib/apt/lists/*
+
+FROM os-packages AS runtime
+ARG NODE_VERSION
 
 RUN groupmod --new-name agent node && \
     usermod --login agent --home /home/agent --move-home --shell /bin/bash node

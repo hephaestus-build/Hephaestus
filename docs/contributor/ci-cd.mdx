@@ -632,7 +632,9 @@ previews need every image at the head SHA; no other event has a preview.
 Dockerfile builds import `<image>:cache-main-<platform>` from `ghcr.io` and write it, with every
 intermediate layer, only on pushes to `main`, so a pull request reuses `main`'s layers and writes
 nothing. amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`; no emulation. The buildpacks
-path (`App Server image`) does not use this cache.
+path (`App Server image`) does not use this cache. Dockerfile builds always bypass the cache for
+the `os-packages` stage; [OS package updates](vulnerability-remediation.mdx#os-package-updates-in-first-party-images)
+owns that contract and the local build commands.
 
 ## Registry authentication
 
@@ -648,8 +650,8 @@ no attestation, no policy scan and no alias moves. Forks therefore get no previe
 the release path exercises their code once it is on `main`.
 
 When release preflight is required, it owns image vulnerability scanning for both architectures;
-the image-build workflows omit their duplicate amd64 scans. Other published builds retain those
-scans. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
+the image-build workflows omit their duplicate scans. Other published builds scan every platform
+they built. Each platform retains its own report and policy result. The final gate rejects a required preflight that is skipped, cancelled or unsuccessful.
 
 The build scan resolves its immutable image reference through
 `scripts/resolve-image-scan-subject.ts`, using the same platform resolver in `scripts/lib/image-scan.ts` as scheduled rescans. An index must
