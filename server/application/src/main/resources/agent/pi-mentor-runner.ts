@@ -34,6 +34,7 @@ import {
 	type MentorOutboundFrame,
 	type MentorResult,
 	type MentorWireEvent,
+	type ServerCallbackRequest,
 } from "./pi-mentor-protocol.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
 import { hasText } from "./pi-text.ts";
@@ -99,7 +100,8 @@ const ENVELOPE_MISMATCH_EXIT = 42;
 	}
 }
 
-const FETCH_CONTEXT_TIMEOUT_MS = 10_000;
+/** How long a tool waits for the server to answer its callback. */
+const CALLBACK_TIMEOUT_MS = 10_000;
 const TURN_BUDGET_MS = (() => {
 	const raw = Number(process.env.MENTOR_TURN_BUDGET_MS);
 	return Number.isFinite(raw) && raw > 0 ? raw : 120_000;
@@ -263,9 +265,9 @@ interface FetchContextDetails {
 
 type FetchContextToolResult = AgentToolResult<FetchContextDetails>;
 
-/** One in-flight `fetch_context` callback, keyed by its JSON-RPC id in `ThreadState`. */
-interface PendingFetchContext {
-	resolve: (result: FetchContextToolResult) => void;
+/** One in-flight server callback (`fetch_context`, `link_observation`), keyed by its JSON-RPC id in `ThreadState`. */
+interface PendingCallback {
+	resolve: (result: unknown) => void;
 	reject: (reason: Error) => void;
 	timer: ReturnType<typeof setTimeout>;
 }
@@ -278,7 +280,7 @@ interface ThreadState {
 	inFlight: boolean;
 	lastAgentEnd: Extract<AgentSessionEvent, { type: "agent_end" }> | null;
 	watchdogTimer: ReturnType<typeof setTimeout> | null;
-	readonly pendingFetchContexts: Map<string, PendingFetchContext>;
+	readonly pendingCallbacks: Map<string, PendingCallback>;
 	unsubscribe: (() => void) | null;
 	/** The caller aborted this turn. */
 	abortRequested: boolean;
@@ -293,7 +295,7 @@ function newThreadState(threadId: string, sessionPath: string): ThreadState {
 		inFlight: false,
 		lastAgentEnd: null,
 		watchdogTimer: null,
-		pendingFetchContexts: new Map(),
+		pendingCallbacks: new Map(),
 		unsubscribe: null,
 		abortRequested: false,
 		timedOut: false,
@@ -576,36 +578,50 @@ function defineFetchContextTool(sdk: PiSdk) {
 					`fetch_context: "${contextKey}" is not a context resource. ${ITEM_RESOURCES}`,
 				);
 			}
-			if (activeThreadId === null) {
-				throw new Error("fetch_context: no active thread bound to the runtime");
-			}
-			const state = threads.get(activeThreadId);
-			if (!state) {
-				throw new Error(`fetch_context: thread state lost for ${activeThreadId}`);
-			}
-			const callbackId = `fc-${randomUUID()}`;
-			const { promise, resolve, reject } = Promise.withResolvers<FetchContextToolResult>();
-			const timer = setTimeout(() => {
-				if (state.pendingFetchContexts.delete(callbackId)) {
-					log(
-						`fetch_context timed out: thread=${activeThreadId} path=${contextKey} id=${callbackId}`,
-					);
-					reject(
-						new Error(`fetch_context(${contextKey}) timed out after ${FETCH_CONTEXT_TIMEOUT_MS}ms`),
-					);
-				}
-			}, FETCH_CONTEXT_TIMEOUT_MS);
-			state.pendingFetchContexts.set(callbackId, { resolve, reject, timer });
-
-			writeFrame({
-				jsonrpc: JSONRPC_VERSION,
-				id: callbackId,
-				method: "fetch_context",
-				params: { threadId: activeThreadId, path: contextKey },
-			});
-			return promise;
+			const { result } = await askServer(
+				(threadId, id) => ({
+					jsonrpc: JSONRPC_VERSION,
+					id,
+					method: "fetch_context",
+					params: { threadId, path: contextKey },
+				}),
+				contextKey,
+			);
+			return fetchContextResult(result);
 		},
 	});
+}
+
+/**
+ * Sends the callback `request` builds for the active thread to the server and waits for its answer, which a tool
+ * turns into its result, with the thread it asked for. A server error or a timeout rejects, so Pi records the tool
+ * call as failed.
+ */
+async function askServer(
+	request: (threadId: string, id: string) => ServerCallbackRequest,
+	subject: string,
+): Promise<{ threadId: string; result: unknown }> {
+	const threadId = activeThreadId;
+	if (threadId === null) {
+		throw new Error(`server callback for ${subject}: no active thread bound to the runtime`);
+	}
+	const state = threads.get(threadId);
+	if (!state) {
+		throw new Error(`server callback for ${subject}: thread state lost for ${threadId}`);
+	}
+	const callbackId = `cb-${randomUUID()}`;
+	const frame = request(threadId, callbackId);
+	const { method } = frame;
+	const { promise, resolve, reject } = Promise.withResolvers<unknown>();
+	const timer = setTimeout(() => {
+		if (state.pendingCallbacks.delete(callbackId)) {
+			log(`${method} timed out: thread=${threadId} subject=${subject} id=${callbackId}`);
+			reject(new Error(`${method}(${subject}) timed out after ${CALLBACK_TIMEOUT_MS}ms`));
+		}
+	}, CALLBACK_TIMEOUT_MS);
+	state.pendingCallbacks.set(callbackId, { resolve, reject, timer });
+	writeFrame(frame);
+	return { threadId, result: await promise };
 }
 
 function defineLinkObservationTool(sdk: PiSdk) {
@@ -626,15 +642,37 @@ function defineLinkObservationTool(sdk: PiSdk) {
 				text: { type: "string", minLength: 1 },
 			},
 		},
-		execute: async (_toolCallId, params): Promise<AgentToolResult<{ observationId: string }>> => {
+		execute: async (
+			_toolCallId,
+			params,
+			signal,
+		): Promise<AgentToolResult<{ observationId: string }>> => {
 			const observationId = jsonText(params.observationId).trim();
 			const text = jsonText(params.text).trim();
 			if (!observationId || !text) {
 				throw new Error("link_observation: observationId and text are required");
 			}
-			if (activeThreadId !== null) {
-				sendEvent(activeThreadId, { type: "link_observation", observationId, text });
+			// The server decides which observation a reply may show feedback about: nothing is shown or reported
+			// as shown until it admits this one, and a refusal fails the call.
+			const { threadId, result } = await askServer(
+				(thread, id) => ({
+					jsonrpc: JSONRPC_VERSION,
+					id,
+					method: "link_observation",
+					params: { threadId: thread, observationId },
+				}),
+				observationId,
+			);
+			if (signal?.aborted === true) {
+				throw new Error("link_observation: the turn was stopped, so nothing was shown");
 			}
+			// Only an answer admitting this very observation is an admission.
+			if (!isRecord(result) || result.observationId !== observationId) {
+				throw new Error(
+					`link_observation: nothing was shown, the server did not admit observation ${observationId}`,
+				);
+			}
+			sendEvent(threadId, { type: "link_observation", observationId, text });
 			return {
 				content: [
 					{
@@ -998,6 +1036,8 @@ async function handleAbort(id: JsonRpcId | undefined, params: MentorParams) {
 		return;
 	}
 	state.abortRequested = true;
+	// A stopped turn shows nothing more, so no server answer may complete one of its tool calls.
+	rejectPendingCallbacks(state, "turn stopped before the server answered");
 	try {
 		const rt = await bindThread(state);
 		rt.session.abortCompaction();
@@ -1050,7 +1090,7 @@ function exitWhenDrained(code: number): void {
 
 async function handleShutdown(id: JsonRpcId | undefined) {
 	sendResult(id, { shuttingDown: true });
-	// Reject pending fetch_context callbacks (Pi flushes a clean is-error tool result) and
+	// Reject pending server callbacks (Pi flushes a clean is-error tool result) and
 	// tear down sessions. cleanupThread is sync, so a plain loop is enough.
 	for (const state of threads.values()) {
 		cleanupThread(state);
@@ -1074,27 +1114,27 @@ async function handleShutdown(id: JsonRpcId | undefined) {
 const FETCH_CONTEXT_MAX_CHARS = 200_000;
 
 /**
- * A `fetch_context` failure reported by Java, carrying the JSON-RPC code alongside the message.
+ * A callback failure reported by Java, carrying the JSON-RPC code alongside the message.
  * Pi surfaces the thrown message to the model; the code stays attached for server-side
  * diagnostics that survive the rethrow → LLM tool-error round-trip.
  */
-class FetchContextServerError extends Error {
+class ServerCallbackError extends Error {
 	readonly code: number | string;
 
 	constructor(code: number | string, detail: string) {
-		super(`fetch_context server error [${code}]: ${detail}`);
-		this.name = "FetchContextServerError";
+		super(`server error [${code}]: ${detail}`);
+		this.name = "ServerCallbackError";
 		this.code = code;
 	}
 
 	/** Java always sends `{code: int, message: string}`; anything else is reported as unknown. */
-	static from(error: unknown): FetchContextServerError {
+	static from(error: unknown): ServerCallbackError {
 		const body = isRecord(error) ? error : {};
 		const code =
 			typeof body.code === "number" || typeof body.code === "string" ? body.code : "unknown";
 		const message =
 			typeof body.message === "string" && body.message.length > 0 ? body.message : "unknown error";
-		return new FetchContextServerError(code, message);
+		return new ServerCallbackError(code, message);
 	}
 }
 
@@ -1106,56 +1146,58 @@ function contextText(content: unknown): string {
 	return typeof content === "string" ? content : JSON.stringify(content);
 }
 
-// fetch_context responses (Java → runner)
-function handleFetchContextResponse(frame: Record<string, unknown>) {
+/** The context document Java answered a `fetch_context` callback with, as the tool's result. */
+function fetchContextResult(result: unknown): FetchContextToolResult {
+	// Pi tool results accept `content: [{type:"text", text: string}]` (verified against
+	// pi-mono SDK tool-result type). Java sends the context document as parsed JSON, so we
+	// stringify ONCE; a plain string passes through untouched. Double-stringifying a
+	// string ("\"foo\"" → "\\\"foo\\\"") would leak an extra layer of JSON escaping into
+	// the LLM prompt.
+	let text = contextText(isRecord(result) ? result.content : undefined);
+	const originalLength = text.length;
+	let truncated = false;
+	if (text.length > FETCH_CONTEXT_MAX_CHARS) {
+		// Hard-cut the JSON; the marker rides on a separate content part so a model
+		// that parses the first part as JSON never has to skip our truncation prose.
+		text = text.slice(0, FETCH_CONTEXT_MAX_CHARS);
+		truncated = true;
+	}
+	const parts: FetchContextToolResult["content"] = [{ type: "text", text }];
+	if (truncated) {
+		parts.push({
+			type: "text",
+			text: `[truncated ${originalLength - FETCH_CONTEXT_MAX_CHARS} chars from response]`,
+		});
+	}
+	return { content: parts, details: { ok: true, length: text.length, truncated, originalLength } };
+}
+
+// Callback responses (Java → runner)
+function handleCallbackResponse(frame: Record<string, unknown>) {
 	const callbackId = jsonText(frame.id);
 	if (!callbackId) {
-		log("fetch_context response missing id; dropping");
+		log("callback response missing id; dropping");
 		return;
 	}
 	// Search every thread for the matching pending callback (small N).
 	for (const state of threads.values()) {
-		const pending = state.pendingFetchContexts.get(callbackId);
+		const pending = state.pendingCallbacks.get(callbackId);
 		if (!pending) {
 			continue;
 		}
-		state.pendingFetchContexts.delete(callbackId);
+		state.pendingCallbacks.delete(callbackId);
 		clearTimeout(pending.timer);
 		if (frame.error == null) {
-			// Pi tool results accept `content: [{type:"text", text: string}]` (verified against
-			// pi-mono SDK tool-result type). Java sends the context document as parsed JSON, so we
-			// stringify ONCE; a plain string passes through untouched. Double-stringifying a
-			// string ("\"foo\"" → "\\\"foo\\\"") would leak an extra layer of JSON escaping into
-			// the LLM prompt.
-			let text = contextText(isRecord(frame.result) ? frame.result.content : undefined);
-			const originalLength = text.length;
-			let truncated = false;
-			if (text.length > FETCH_CONTEXT_MAX_CHARS) {
-				// Hard-cut the JSON; the marker rides on a separate content part so a model
-				// that parses the first part as JSON never has to skip our truncation prose.
-				text = text.slice(0, FETCH_CONTEXT_MAX_CHARS);
-				truncated = true;
-			}
-			const parts: FetchContextToolResult["content"] = [{ type: "text", text }];
-			if (truncated) {
-				parts.push({
-					type: "text",
-					text: `[truncated ${originalLength - FETCH_CONTEXT_MAX_CHARS} chars from response]`,
-				});
-			}
-			pending.resolve({
-				content: parts,
-				details: { ok: true, length: text.length, truncated, originalLength },
-			});
+			pending.resolve(frame.result);
 		} else {
 			// Reject so Pi records this tool call as failed (agent-loop.ts §632-638). Echo the
 			// JSON-RPC error code in the rejection so server-side diagnostics survive the
 			// rethrow → LLM tool-error round-trip.
-			pending.reject(FetchContextServerError.from(frame.error));
+			pending.reject(ServerCallbackError.from(frame.error));
 		}
 		return;
 	}
-	log(`fetch_context response had no matching pending callback: id=${callbackId}`);
+	log(`callback response had no matching pending callback: id=${callbackId}`);
 }
 
 function startTurnWatchdog(state: ThreadState) {
@@ -1184,11 +1226,7 @@ async function runWatchdogRebind(state: ThreadState) {
 	let settled = true;
 	try {
 		// Reject callbacks before the rebound session can reuse their ids.
-		for (const [cbId, pending] of state.pendingFetchContexts) {
-			clearTimeout(pending.timer);
-			pending.reject(new Error("fetch_context: turn aborted by watchdog"));
-			state.pendingFetchContexts.delete(cbId);
-		}
+		rejectPendingCallbacks(state, "turn aborted by watchdog before the server answered");
 		if (rt) {
 			settled = await abortWithin(rt, state);
 		}
@@ -1296,11 +1334,18 @@ function dropSubscription(state: ThreadState) {
 function cleanupThread(state: ThreadState) {
 	clearTurnWatchdog(state);
 	dropSubscription(state);
-	for (const [cbId, pending] of state.pendingFetchContexts) {
+	rejectPendingCallbacks(state, "thread closed before the server answered");
+}
+
+/**
+ * Fails every tool call still waiting on the server (Pi records a thrown error as `isError: true`), so an answer that
+ * arrives afterwards finds nothing to settle and is dropped.
+ */
+function rejectPendingCallbacks(state: ThreadState, reason: string) {
+	for (const [cbId, pending] of state.pendingCallbacks) {
 		clearTimeout(pending.timer);
-		// Reject so Pi sees a failed tool call (thrown error → isError: true).
-		pending.reject(new Error("fetch_context: thread closed before context arrived"));
-		state.pendingFetchContexts.delete(cbId);
+		pending.reject(new Error(reason));
+		state.pendingCallbacks.delete(cbId);
 	}
 }
 
@@ -1349,7 +1394,7 @@ async function dispatch(frame: unknown) {
 		return;
 	}
 	if (frame.id != null && (frame.result !== undefined || frame.error !== undefined)) {
-		handleFetchContextResponse(frame);
+		handleCallbackResponse(frame);
 		return;
 	}
 	log("unrecognised frame:", JSON.stringify(frame).slice(0, 200));

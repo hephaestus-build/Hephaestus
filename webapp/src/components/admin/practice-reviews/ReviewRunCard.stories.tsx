@@ -65,3 +65,30 @@ export const FailedNarrow: Story = {
 		await expectNoPageOverflow();
 	},
 };
+
+export const GeneratedPathsApplied: Story = {
+	args: {
+		job: {
+			...reviewJob(COMPLETED_RUN),
+			generatedPaths: { patterns: ["webapp/src/api/**"], paths: ["webapp/src/api/types.gen.ts"] },
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Generated paths used by this review")).toBeVisible();
+		await expect(canvas.getByText("webapp/src/api/types.gen.ts")).toBeVisible();
+	},
+};
+export const NoGeneratedPathsMatched: Story = {
+	args: {
+		job: { ...reviewJob(COMPLETED_RUN), generatedPaths: { patterns: ["generated/**"], paths: [] } },
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("No changed paths matched.")).toBeVisible();
+	},
+};
+export const NoGeneratedPathsConfigured: Story = {
+	args: { job: { ...reviewJob(COMPLETED_RUN), generatedPaths: { patterns: [], paths: [] } } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Patterns: None configured")).toBeVisible();
+	},
+};

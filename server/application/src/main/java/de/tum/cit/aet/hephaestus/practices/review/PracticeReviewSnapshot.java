@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
+import java.util.List;
+import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -17,22 +19,26 @@ record PracticeReviewSnapshot(
         @Nullable WorkspaceReviewScope reviewScope,
         String deliveryStatus,
         long revision,
-        @Nullable String defaultAutonomy)
+        @Nullable String defaultAutonomy,
+        Map<String, List<String>> generatedPaths)
         implements ConfigAuditSnapshot {
     boolean sameRolloutPolicyAs(PracticeReviewSnapshot other) {
         return (java.util.Objects.equals(deliverToMerged, other.deliverToMerged)
                 && java.util.Objects.equals(reviewScope, other.reviewScope)
                 && java.util.Objects.equals(deliveryStatus, other.deliveryStatus)
-                && java.util.Objects.equals(defaultAutonomy, other.defaultAutonomy));
+                && java.util.Objects.equals(defaultAutonomy, other.defaultAutonomy)
+                && java.util.Objects.equals(generatedPaths, other.generatedPaths));
     }
 
-    static PracticeReviewSnapshot of(PracticeReviewSettings s, WorkspaceReviewScope scope) {
+    static PracticeReviewSnapshot of(
+            PracticeReviewSettings s, WorkspaceReviewScope scope, Map<String, List<String>> generatedPaths) {
         return new PracticeReviewSnapshot(
                 s.getDeliverToMerged(),
                 s.getCooldownMinutes(),
                 scope,
                 s.getDeliveryStatus().name(),
                 s.getRolloutRevision(),
-                s.getDefaultAutonomy());
+                s.getDefaultAutonomy(),
+                generatedPaths);
     }
 }

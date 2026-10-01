@@ -193,6 +193,7 @@ class AgentJobServiceTest extends BaseUnitTest {
     private JobSubmission createSubmission() {
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("pr_number", 42);
+        metadata.put("repository_full_name", "owner/repo");
         // 5-segment key grammar: <type>:<nameWithOwner>:<number>:<phase>:<freshness>
         // (PullRequestReviewHandler emits the trigger-event phase before the head SHA).
         return new JobSubmission(metadata, "pr_review:owner/repo:42:authoring:abc123");
@@ -478,6 +479,11 @@ class AgentJobServiceTest extends BaseUnitTest {
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
+            var monitor = new de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor();
+            monitor.setWorkspace(workspace);
+            monitor.setNameWithOwner("owner/repo");
+            monitor.setGeneratedPaths(List.of("generated/**"));
+            workspace.getRepositoriesToMonitor().add(monitor);
             var submission = createSubmission();
             when(handler.createSubmission(any())).thenReturn(submission);
             when(agentJobRepository.findRecentJobByKeyPrefix(eq(1L), any(), any()))
@@ -496,6 +502,12 @@ class AgentJobServiceTest extends BaseUnitTest {
                             .path(AgentJob.SIGNAL_REVISION_METADATA_KEY)
                             .asString())
                     .isEqualTo(key.revision().value());
+            assertThat(java.util.Objects.requireNonNull(job.getMetadata())
+                            .path("generated_path_patterns")
+                            .get(0)
+                            .asString())
+                    .isEqualTo("generated/**");
+            assertThat(submission.metadata().has("generated_path_patterns")).isFalse();
             assertThat(submission.metadata().has(AgentJob.SIGNAL_REVISION_METADATA_KEY))
                     .isFalse();
         }

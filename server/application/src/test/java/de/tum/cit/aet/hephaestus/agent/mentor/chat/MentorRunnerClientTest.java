@@ -44,6 +44,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
     private final CopyOnWriteArrayList<JsonNode> events = new CopyOnWriteArrayList<>();
     private final AtomicInteger streamLost = new AtomicInteger();
     private final AtomicReference<MentorRunnerClient.FetchContextRequest> lastFetchContext = new AtomicReference<>();
+    private final AtomicReference<MentorRunnerClient.LinkObservationRequest> lastLink = new AtomicReference<>();
     private ScheduledExecutorService scheduler;
     private UUID threadId;
 
@@ -60,6 +61,10 @@ class MentorRunnerClientTest extends BaseUnitTest {
                 req -> {
                     lastFetchContext.set(req);
                     return mapper.createObjectNode().put("ok", true);
+                },
+                link -> {
+                    lastLink.set(link);
+                    return false;
                 },
                 scheduler,
                 threadId);
@@ -90,7 +95,14 @@ class MentorRunnerClientTest extends BaseUnitTest {
     @Test
     void shouldSettleOnlyItsOwnCallWhenClientsShareASandbox() throws Exception {
         MentorRunnerClient other = new MentorRunnerClient(
-                sandbox, mapper, e -> {}, () -> {}, req -> mapper.nullNode(), scheduler, UUID.randomUUID());
+                sandbox,
+                mapper,
+                e -> {},
+                () -> {},
+                req -> mapper.nullNode(),
+                link -> false,
+                scheduler,
+                UUID.randomUUID());
         other.start();
         CompletableFuture<JsonNode> mine = client.hello();
         long myId = sandbox.takeFrame().get("id").asLong();
@@ -209,6 +221,7 @@ class MentorRunnerClientTest extends BaseUnitTest {
                 otherEvents::add,
                 otherLost::incrementAndGet,
                 req -> mapper.nullNode(),
+                link -> false,
                 scheduler,
                 UUID.randomUUID());
         other.start();
@@ -280,6 +293,32 @@ class MentorRunnerClientTest extends BaseUnitTest {
         assertThat(response.get("id").isString()).as("id must remain a string").isTrue();
         assertThat(response.get("id").asString()).isEqualTo(callbackId);
         assertThat(response.get("result").get("content").get("ok").asBoolean()).isTrue();
+    }
+
+    /** Fields of any other shape are refused at once, the same way as an unknown observation, never left to time out. */
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{\"threadId\":\"%s\",\"observationId\":{\"id\":\"3ec24178-2219-4af4-bebf-077c73a0435e\"}}",
+                "{\"threadId\":[\"%s\"],\"observationId\":\"3ec24178-2219-4af4-bebf-077c73a0435e\"}",
+                "{\"threadId\":\"%s\",\"observationId\":7}",
+                "{\"threadId\":\"%s\",\"observationId\":\"not-a-uuid\"}",
+                "[\"%s\"]"
+            })
+    void shouldRefuseALinkWhoseFieldsAreNotUuidStrings(String params) {
+        ObjectNode callback = mapper.createObjectNode();
+        callback.put("jsonrpc", "2.0");
+        callback.put("id", "cb-malformed");
+        callback.put("method", "link_observation");
+        callback.set("params", mapper.readTree(params.formatted(threadId)));
+
+        sandbox.pushFrame(callback);
+
+        JsonNode response = sandbox.takeFrame();
+        assertThat(response.get("id").asString()).isEqualTo("cb-malformed");
+        assertThat(response.path("error").path("message").asString()).isEqualTo(MentorRunnerClient.LINK_REFUSED);
+        assertThat(response.has("result")).isFalse();
+        assertThat(lastLink.get()).isNull();
     }
 
     @Test

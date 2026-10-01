@@ -148,6 +148,9 @@ public class PracticeReviewDetectionGate {
             @NonNull SignalName signal,
             @NonNull TriggerMode triggerMode,
             @NonNull ReviewSubject subject) {
+        if (subject.actorId() != null && !subject.human()) {
+            return botRefusal(subject);
+        }
         var coverage = coverageService.assessRepositoryless(workspace, subject);
         GateDecision.@Nullable Skip scopeSkip = coverage.admitted()
                 ? null
@@ -192,6 +195,9 @@ public class PracticeReviewDetectionGate {
             boolean allowOutsideCoverage,
             ReviewSubject subject,
             boolean recheck) {
+        if (subject.actorId() != null && !subject.human()) {
+            return botRefusal(subject);
+        }
         String nameWithOwner =
                 reviewable.getRepository() != null ? reviewable.getRepository().getNameWithOwner() : null;
 
@@ -287,8 +293,15 @@ public class PracticeReviewDetectionGate {
         }
         return switch (coverage.subjectStatus()) {
             case MISSING, UNLINKED -> SignalStateReason.SUBJECT_UNLINKED;
-            case NON_HUMAN, RESOLVED_LINKED_HUMAN -> SignalStateReason.OUT_OF_REVIEW_SCOPE;
+            case NON_HUMAN -> SignalStateReason.BOT_AUTHOR;
+            case RESOLVED_LINKED_HUMAN -> SignalStateReason.OUT_OF_REVIEW_SCOPE;
         };
+    }
+
+    private static GateDecision.Skip botRefusal(ReviewSubject subject) {
+        SignalStateReason reason =
+                subject.role() == ActorRole.REVIEWER ? SignalStateReason.BOT_REVIEWER : SignalStateReason.BOT_AUTHOR;
+        return new GateDecision.Skip(reason.describe(), reason);
     }
 
     private GateDecision evaluateWorkspaceAndSignal(

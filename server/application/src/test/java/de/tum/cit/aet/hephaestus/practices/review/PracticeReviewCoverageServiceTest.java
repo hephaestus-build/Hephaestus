@@ -49,6 +49,43 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRetainGeneratedPathsWhenCoverageResetsAndClearOnlyTheRequestedRepository() {
+        var first = monitor(11L, "owner/first");
+        var second = monitor(12L, "group/second");
+        when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(first, second));
+        service.patchGeneratedPaths(
+                workspace,
+                java.util.Map.of("owner/first", List.of("generated/**"), "group/second", List.of("client/**")));
+        service.replace(workspace, WorkspaceReviewScope.ALL);
+        assertThat(service.generatedPaths(workspace))
+                .containsEntry("owner/first", List.of("generated/**"))
+                .containsEntry("group/second", List.of("client/**"));
+        service.patchGeneratedPaths(workspace, java.util.Map.of("owner/first", List.of()));
+        assertThat(service.generatedPaths(workspace)).containsOnlyKeys("group/second");
+    }
+
+    @Test
+    void shouldRejectGeneratedPathsForAnotherWorkspaceWithoutChangingAnyRepository() {
+        var local = monitor(11L, "owner/local");
+        when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(local));
+        assertThatThrownBy(() -> service.patchGeneratedPaths(
+                        workspace,
+                        java.util.Map.of("owner/local", List.of("generated/**"), "other/tenant", List.of("**"))))
+                .isInstanceOf(InvalidReviewCoverageException.class);
+        assertThat(local.getGeneratedPaths()).isEmpty();
+    }
+
+    @Test
+    void shouldRefuseBotSubjectEvenWhenWorkspaceMembershipExists() {
+        org.mockito.Mockito.lenient()
+                .when(membershipService.isPracticeReviewEligible(1L, 8L))
+                .thenReturn(true);
+        var assessment = service.assess(workspace, "owner/repo", "main", new ReviewSubject(8L, false), true);
+        assertThat(assessment.subjectStatus()).isEqualTo(ReviewSubjectStatus.NON_HUMAN);
+        assertThat(assessment.admitted()).isFalse();
+    }
+
+    @Test
     void selectedRepositoryFromAnotherTenantIsRejected() {
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(monitor(11L, "owner/local")));
         WorkspaceReviewScope crossTenant = new WorkspaceReviewScope(
