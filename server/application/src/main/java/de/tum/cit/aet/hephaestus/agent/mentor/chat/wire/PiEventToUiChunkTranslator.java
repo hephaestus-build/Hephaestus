@@ -438,6 +438,11 @@ public class PiEventToUiChunkTranslator {
         if (observationId == null || text == null || text.isBlank()) {
             return failTurn(state, "a link_observation without a readable observationId and text");
         }
+        // The runner emits a link only after the server admitted it, once per admission, so any other is a runner that
+        // broke the protocol.
+        if (!state.consumeLinkAdmission(observationId)) {
+            return failTurn(state, "a link_observation the server did not admit");
+        }
         UIMessageChunk.DataObservation observation = UIMessageChunk.DataObservation.of(observationId, text);
         state.recordDataObservation(observation);
         return List.of(observation);

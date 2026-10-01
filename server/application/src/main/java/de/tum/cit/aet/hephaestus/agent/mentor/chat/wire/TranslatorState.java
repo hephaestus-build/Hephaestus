@@ -4,7 +4,9 @@ import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.mentor.ChatThread;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
@@ -44,6 +46,12 @@ public final class TranslatorState {
 
     /** Final texts of the assistant messages verified this turn, in order; empty texts are not kept. */
     private final List<String> verifiedTexts = new ArrayList<>();
+
+    /**
+     * Links the server admitted this turn and the runner has not emitted yet, one per admission: a link to any other
+     * observation, or a second one an admission did not cover, is never shown or stored.
+     */
+    private final Map<UUID, Integer> admittedLinks = new HashMap<>();
 
     /** Index in {@link #partsAccumulator} where the unverified assistant message's parts begin. */
     private int messagePartsStart;
@@ -276,6 +284,24 @@ public final class TranslatorState {
         // doesn't render an in-progress streaming cursor.
         part.put("state", "done");
         return part;
+    }
+
+    public synchronized void admitLink(UUID observationId) {
+        admittedLinks.merge(observationId, 1, Integer::sum);
+    }
+
+    /** Spends one admission of a link to {@code observationId}; false when none is left. */
+    public synchronized boolean consumeLinkAdmission(UUID observationId) {
+        Integer left = admittedLinks.get(observationId);
+        if (left == null) {
+            return false;
+        }
+        if (left == 1) {
+            admittedLinks.remove(observationId);
+        } else {
+            admittedLinks.put(observationId, left - 1);
+        }
+        return true;
     }
 
     /** Stores the part exactly as {@code observation} went on the wire, so the reloaded reply matches the live one. */

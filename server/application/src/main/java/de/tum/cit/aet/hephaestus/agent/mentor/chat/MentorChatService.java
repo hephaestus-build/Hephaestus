@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MentorContextKeys;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
@@ -55,6 +56,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -101,6 +103,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final MemberAiPreferences memberAiPreferences;
     private final MergeReadinessContentSource mergeReadiness;
     private final ObservationHistoryContentSource observationHistory;
+    private final ConversationalDeliveryReconciler conversationalDeliveryReconciler;
 
     /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
     @Override
@@ -322,6 +325,14 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             Map<String, byte[]> contextInputs = buildMentorContext(request, user, cookie.userMessageId());
             Function<MentorRunnerClient.FetchContextRequest, JsonNode> fetchContext =
                     callback -> handleFetchContext(callback, contextInputs, request.workspaceId(), user.getId());
+            Predicate<MentorRunnerClient.LinkObservationRequest> linkObservation = link -> {
+                boolean admitted = conversationalDeliveryReconciler.admits(
+                        request.workspaceId(), user.getId(), link.observationId());
+                if (admitted) {
+                    state.admitLink(link.observationId());
+                }
+                return admitted;
+            };
             MentorAgentRequest agentRequest = new MentorAgentRequest(request.workspaceId(), user.getId());
             InteractiveSandboxService sandboxService = interactiveSandboxServiceProvider.getObject();
             InteractiveSandboxSpec spec = mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig);
@@ -345,7 +356,16 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                 try {
                     sandbox = attachSandbox(
                             sandboxService, spec, () -> mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig));
-                    client = startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, fetchContext);
+                    client = startRunner(
+                            sandbox,
+                            request,
+                            channel,
+                            clientHolder,
+                            state,
+                            cookie,
+                            turn,
+                            fetchContext,
+                            linkObservation);
                     try {
                         client.openThread(request.threadId(), priorSession).get(10, TimeUnit.SECONDS);
                     } catch (Exception openFailure) {
@@ -364,8 +384,16 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                         Supplier<InteractiveSandboxSpec> freshSpec =
                                 () -> mentorPiAdapter.buildSandboxSpec(agentRequest, llmConfig);
                         sandbox = attachSandbox(sandboxService, freshSpec.get(), freshSpec);
-                        client =
-                                startRunner(sandbox, request, channel, clientHolder, state, cookie, turn, fetchContext);
+                        client = startRunner(
+                                sandbox,
+                                request,
+                                channel,
+                                clientHolder,
+                                state,
+                                cookie,
+                                turn,
+                                fetchContext,
+                                linkObservation);
                         client.openThread(request.threadId(), null).get(10, TimeUnit.SECONDS);
                     }
                     metrics.recordRuntimeReady(Duration.ofNanos(System.nanoTime() - turn.acceptedAt));
@@ -518,7 +546,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             TranslatorState state,
             MentorTurnPersistence.TurnPersistenceCookie cookie,
             Turn turn,
-            Function<MentorRunnerClient.FetchContextRequest, JsonNode> fetchContext)
+            Function<MentorRunnerClient.FetchContextRequest, JsonNode> fetchContext,
+            Predicate<MentorRunnerClient.LinkObservationRequest> linkObservation)
             throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
         if (channel.isClientGone()) {
             throw new ClientDisconnectedException("Client disconnected during sandbox attach");
@@ -540,6 +569,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     }
                 },
                 fetchContext,
+                linkObservation,
                 runnerTimeoutScheduler.scheduler(),
                 // Per-thread event filter: the sandbox is shared by (userId, workspaceId), so
                 // a second tab in the same workspace would otherwise see this tab's events.
