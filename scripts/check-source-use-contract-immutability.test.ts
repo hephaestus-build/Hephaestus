@@ -7,9 +7,9 @@ import { test } from "node:test";
 
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 
-const CHECKER = path.join(import.meta.dirname, "check-artifact-source-contract-immutability.ts");
+const CHECKER = path.join(import.meta.dirname, "check-source-use-contract-immutability.ts");
 
-const CONTRACTS = "server/application/src/main/resources/contracts/artifact-source";
+const CONTRACTS = "server/application/src/main/resources/contracts/source-use";
 
 type Git = (...args: string[]) => string;
 
@@ -126,4 +126,22 @@ await test("runs from a subdirectory", (t) => {
 	git("commit", "--quiet", "-m", "mutate published contract");
 
 	assert.throws(() => runChecker(path.join(repo, "server")), /1\.0\.0 is immutable/u);
+});
+
+await test("a contract-root move preserves historical bytes and only retires the capture schema", (t) => {
+	const { repo, git } = repoWithPublishedContract();
+	t.after(() => rmSync(repo, { recursive: true, force: true }));
+	const legacy = "server/application/src/main/resources/contracts/artifact-source";
+	git("checkout", "main");
+	git("mv", CONTRACTS, legacy);
+	writeFileSync(path.join(repo, legacy, "1.0.0", "artifact-source-manifest.schema.json"), "{}\n");
+	git("add", "-A");
+	git("commit", "--quiet", "-m", "publish legacy root");
+	git("checkout", "-b", "migration");
+	git("mv", legacy, CONTRACTS);
+	git("commit", "--quiet", "-m", "move source-use records");
+	git("rm", path.join(CONTRACTS, "1.0.0", "artifact-source-manifest.schema.json"));
+	assert.match(runChecker(repo), /1 published version\(s\) unchanged/u);
+	writeFileSync(path.join(repo, CONTRACTS, "1.0.0", "catalog.json"), '{"changed":true}\n');
+	assert.throws(() => runChecker(repo), /1\.0\.0 is immutable/u);
 });

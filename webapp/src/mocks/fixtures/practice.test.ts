@@ -22,7 +22,7 @@ const catalog = z
 	.parse(
 		JSON.parse(
 			readFileSync(
-				`../server/application/src/main/resources/contracts/artifact-source/${mockPracticeDefinitionOptions.sourceContractVersion}/catalog.json`,
+				`../server/application/src/main/resources/contracts/source-use/${mockPracticeDefinitionOptions.sourceContractVersion}/catalog.json`,
 				"utf8",
 			),
 		),

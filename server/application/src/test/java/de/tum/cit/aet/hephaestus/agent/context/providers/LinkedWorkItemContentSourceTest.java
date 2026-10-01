@@ -521,52 +521,32 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldFailTheCaptureRatherThanDropAReferenceTheAuthorWrote() {
+        void shouldKeepReferencesBeyondTheFormerCaptureCap() throws Exception {
             StringBuilder body = new StringBuilder();
-            for (int i = 1; i <= LinkedWorkItemContentSource.MAX_ITEMS + 1; i++)
-                body.append('#').append(i).append(' ');
+            for (int i = 1; i <= 10_001; i++) body.append('#').append(i).append(' ');
             pullRequestWithBody(body.toString());
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
-
-            assertThatExceptionOfType(EvidenceCollectionException.class)
-                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
-            verify(gitRepositoryManager, never()).forEachCommitMessage(any(), any(), any(), any());
-            verify(issueRepository, never()).findByRepositoryIdAndNumber(eq(REPO_ID), anyInt());
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> Optional.of(issue(inv.getArgument(1), "Issue", "")));
+            JsonNode root = payload(sampleMetadata());
+            assertThat(itemNumbers(root)).hasSize(10_001);
+            assertThat(root.get("truncated").asBoolean()).isFalse();
         }
 
         @Test
-        void shouldFailTheCaptureRatherThanLoadMoreProviderClosingIssuesThanItHolds() {
+        void shouldKeepAllProviderClosingIssues() throws Exception {
             var pr = new PullRequest();
             pr.setId(PR_ID);
             when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-            when(pullRequestRepository.countClosingIssuesById(PR_ID))
-                    .thenReturn((long) LinkedWorkItemContentSource.MAX_ITEMS + 1);
-
-            assertThatExceptionOfType(EvidenceCollectionException.class)
-                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
-            verify(pullRequestRepository, never()).findClosingIssuesById(any());
-        }
-
-        @Test
-        void shouldFailTheCaptureWhenASyncAddsClosingIssuesPastTheBoundAfterTheCount() {
-            int max = LinkedWorkItemContentSource.MAX_ITEMS;
-            var pr = new PullRequest();
-            pr.setId(PR_ID);
-            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-            when(pullRequestRepository.countClosingIssuesById(PR_ID)).thenReturn((long) max);
             when(pullRequestRepository.findClosingIssuesById(PR_ID))
-                    .thenReturn(java.util.stream.IntStream.rangeClosed(1, max + 1)
+                    .thenReturn(java.util.stream.IntStream.rangeClosed(1, 10_001)
                             .mapToObj(number -> issue(number, "Issue", ""))
                             .toList());
-
-            assertThatExceptionOfType(EvidenceCollectionException.class)
-                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
-            verify(issueRepository, never()).findByRepositoryIdAndNumber(eq(REPO_ID), anyInt());
+            assertThat(itemNumbers(payload(sampleMetadata()))).hasSize(10_001);
         }
 
         @Test
-        void shouldCutOffOnlyCommitHistoryAtTheMemoryBoundAndSaySo() throws Exception {
-            int max = LinkedWorkItemContentSource.MAX_ITEMS;
+        void shouldKeepCommitReferencesBeyondTheFormerCap() throws Exception {
+            int max = 10_000;
             pullRequestWithBody("Related to #" + (max + 1));
             StringBuilder history = new StringBuilder();
             for (int i = 1; i <= max; i++) history.append('#').append(i).append(' ');
@@ -576,9 +556,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
             JsonNode root = payload(sampleMetadata());
 
-            assertThat(root.get("truncated").asBoolean()).isTrue();
-            assertThat(itemNumbers(root)).hasSize(max).first().isEqualTo(max + 1);
-            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, max);
+            assertThat(root.get("truncated").asBoolean()).isFalse();
+            assertThat(itemNumbers(root)).hasSize(max + 1).first().isEqualTo(max + 1);
         }
     }
 

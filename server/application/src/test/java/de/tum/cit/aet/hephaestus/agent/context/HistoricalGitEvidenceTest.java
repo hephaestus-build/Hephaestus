@@ -62,7 +62,9 @@ class HistoricalGitEvidenceTest extends BaseUnitTest {
                 new FabricLayout(temporary.resolve("fabric").toString()));
         manager.ensureRepository(KEY, source.toUri().toString(), null);
         snapshot = manager.readTreeSnapshot(KEY, head);
-        when(files.repositoryForVerification(job, "head-digest", "refs-digest")).thenReturn(snapshot.stagingDir());
+        org.mockito.Mockito.lenient()
+                .when(files.repositoryForVerification(job, "head-digest", "refs-digest"))
+                .thenReturn(snapshot.stagingDir());
     }
 
     @Test
@@ -101,6 +103,21 @@ class HistoricalGitEvidenceTest extends BaseUnitTest {
     void shouldVerifyNothingWithoutCitations() {
         assertThat(verifier.verifyAll(job, "head-digest", "refs-digest", head, List.of()))
                 .isEmpty();
+    }
+
+    @Test
+    void verifiesOlderReachableCommitsInAnotherPermittedRepository() {
+        when(files.repositoryForVerification(job, "repos/42/", "head-digest", "refs-digest"))
+                .thenReturn(snapshot.stagingDir());
+        var earlier = new HistoricalGitEvidence.Citation(first, "one.java", "same quote", 2, 2);
+        var outside = new HistoricalGitEvidence.Citation(unreachable, "three.java", "never captured", 1, 1);
+        var result =
+                verifier.verifyAllAt(job, "repos/42/", "head-digest", "refs-digest", head, List.of(earlier, outside));
+        assertThat(java.util.Objects.requireNonNull(result.get(earlier)).matches())
+                .isTrue();
+        assertThat(result.get(outside)).isEqualTo(JobEvidenceFiles.QuoteMatch.absent());
+        org.mockito.Mockito.verify(files, org.mockito.Mockito.never())
+                .repositoryForVerification(job, "head-digest", "refs-digest");
     }
 
     private static String commit(Git git, String message) throws Exception {

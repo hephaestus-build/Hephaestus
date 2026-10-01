@@ -3,13 +3,13 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
@@ -44,7 +44,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
     void shouldReadBackTheManifestAnAttemptRecorded() {
         Instant capturedAt = Instant.parse("2026-08-03T00:00:00Z");
         String head = "b".repeat(40);
-        var manifest = new ArtifactSourceManifest(
+        var manifest = new JobFolderIndex(
                 ArtifactSourceCatalogRegistry.CURRENT_VERSION,
                 "0".repeat(64),
                 ArtifactKinds.PULL_REQUEST.value(),
@@ -98,7 +98,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
     @Test
     void shouldRefuseASnapshotWhoseManifestThisRuntimeCannotRead() {
         ObjectNode snapshot = mapper.createObjectNode();
-        snapshot.putObject("manifest").put("contractVersion", "1.2.0").putArray("sources");
+        snapshot.putObject("manifest").put("contractVersion", "1.3.0").putArray("sources");
 
         assertThatThrownBy(() -> CapturedEvidence.of(jobWith(snapshot), mapper))
                 .isInstanceOf(JobDeliveryException.class)
@@ -109,23 +109,26 @@ class CapturedEvidenceTest extends BaseUnitTest {
     void shouldRefuseAnArtifactClaimedByTwoSources() {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
         EvidenceSnapshotFixtures.artifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
-                "inputs/context/shared.json",
+                "context/shared.json",
                 "a".repeat(64));
         EvidenceSnapshotFixtures.artifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.comments", null),
-                "inputs/context/shared.json",
+                "context/shared.json",
                 "b".repeat(64));
 
         assertThatThrownBy(() -> CapturedEvidence.of(jobWith(snapshot), mapper))
                 .isInstanceOf(JobDeliveryException.class)
-                .hasMessageContaining("multiple sources");
+                .hasMessageContaining("not a readable manifest");
     }
 
     @Test
     void shouldRefuseAMisattributedArtifactWhileNamingTheSource() {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
         EvidenceSnapshotFixtures.artifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, "scm.pull-request.core", null),
                 SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD",
                 "a".repeat(64));
@@ -146,6 +149,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
         String head = "b".repeat(40);
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
         EvidenceSnapshotFixtures.artifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(
                         snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), base + ":" + head),
                 PullRequestContentSource.CHANGE_FILE,
@@ -159,7 +163,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
         ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
                 snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), "a".repeat(40) + ":" + "b".repeat(40));
-        EvidenceSnapshotFixtures.unavailable(diff);
+        EvidenceSnapshotFixtures.unavailable(snapshot, diff);
 
         assertThatThrownBy(() -> CapturedEvidence.of(jobWith(snapshot), mapper).reviewRange())
                 .isInstanceOf(JobDeliveryException.class)
@@ -176,6 +180,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
         for (@Nullable String identity : identities) {
             ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
             EvidenceSnapshotFixtures.artifact(
+                    snapshot,
                     EvidenceSnapshotFixtures.availableSource(
                             snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), identity),
                     PullRequestContentSource.CHANGE_FILE,

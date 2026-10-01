@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.WorkspaceFolderRenderer;
+import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
@@ -43,12 +46,12 @@ public class WorkspaceContextBuilder {
     private final List<ContentSource> providers;
     private final MeterRegistry meterRegistry;
 
-    private final @Nullable ContextManifestBuilder manifestBuilder;
+    private final @Nullable JobFolderIndexBuilder manifestBuilder;
 
     public WorkspaceContextBuilder(
             List<ContentSource> providers,
             MeterRegistry meterRegistry,
-            @Nullable ContextManifestBuilder manifestBuilder) {
+            @Nullable JobFolderIndexBuilder manifestBuilder) {
         List<ContentSource> sorted = new ArrayList<>(providers);
         AnnotationAwareOrderComparator.sort(sorted);
         this.providers = List.copyOf(sorted);
@@ -67,6 +70,10 @@ public class WorkspaceContextBuilder {
         return buildWithoutManifest(request);
     }
 
+    @org.springframework.transaction.annotation.Transactional(
+            readOnly = true,
+            isolation = org.springframework.transaction.annotation.Isolation.REPEATABLE_READ,
+            propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public PreparedEvidence prepare(ContextRequest request, EvidencePlan evidencePlan) {
         long startNs = System.nanoTime();
         try {
@@ -92,8 +99,8 @@ public class WorkspaceContextBuilder {
      *               evidence rather than put to the model; pass {@link PreparedEvidence#files()}
      * @param change the reviewed change, for the subjects declared over it; null leaves them undecided
      */
-    public ContextManifestBuilder.PreparedAutomatedReviewReadiness prepareAutomatedReviewReadiness(
-            ArtifactSourceManifest manifest,
+    public JobFolderIndexBuilder.PreparedAutomatedReviewReadiness prepareAutomatedReviewReadiness(
+            JobFolderIndex manifest,
             List<Practice> practices,
             Instant temporalAnchor,
             Function<Practice, @Nullable SignalName> occasion,
@@ -124,7 +131,7 @@ public class WorkspaceContextBuilder {
             Map<String, java.nio.file.Path> filesOnDisk,
             List<EvidenceDirectory> directories,
             List<AutoCloseable> cleanups,
-            @Nullable ArtifactSourceManifest manifest) {}
+            @Nullable JobFolderIndex manifest) {}
 
     private BuildResult buildInputs(ContextRequest request, @Nullable EvidencePlan evidencePlan) {
         // Capture scope follows the source contract, not the practices later selected by readiness.
@@ -149,8 +156,10 @@ public class WorkspaceContextBuilder {
         Map<String, java.nio.file.Path> filesOnDisk = new LinkedHashMap<>();
         List<EvidenceDirectory> directories = new ArrayList<>();
         List<AutoCloseable> cleanups = new ArrayList<>();
+        List<WorkspaceRefusal> refusals = new ArrayList<>();
         try {
             int contributed = 0;
+            JobFolderIndex primary = null;
             for (ContentSource provider : providers) {
                 if (!provider.supports(request)) {
                     continue;
@@ -158,6 +167,25 @@ public class WorkspaceContextBuilder {
                 if (evidencePlan != null && !(provider instanceof EvidenceSource)) {
                     throw new IllegalStateException("Detector context provider must declare source kinds: "
                             + provider.getClass().getSimpleName());
+                }
+                if (provider instanceof WorkspaceFolderRenderer && evidencePlan != null && manifestBuilder != null) {
+                    AgentJob job = reviewJob(request);
+                    if (job == null) throw new IllegalStateException("Review folder has no job");
+                    primary = manifestBuilder.augment(
+                            new LinkedHashMap<>(files),
+                            filesOnDisk,
+                            keySourceKind,
+                            job.getId().toString(),
+                            evidencePlan,
+                            new JobFolderIndexBuilder.CaptureMetadata(
+                                    completeness,
+                                    contentStates,
+                                    immutableIdentities,
+                                    observedAt,
+                                    sourceEffectiveAt,
+                                    stateOverrides,
+                                    captureLimitations,
+                                    attemptedKinds));
                 }
                 String providerName = provider.getClass().getSimpleName();
                 Map<String, byte[]> contributionFiles;
@@ -181,7 +209,8 @@ public class WorkspaceContextBuilder {
                             attemptedKinds,
                             filesOnDisk,
                             directories,
-                            cleanups);
+                            cleanups,
+                            refusals);
                 } else {
                     try {
                         Map<String, byte[]> localFiles = new LinkedHashMap<>();
@@ -245,7 +274,7 @@ public class WorkspaceContextBuilder {
                 }
                 contributed++;
             }
-            ArtifactSourceManifest manifest = null;
+            JobFolderIndex manifest = null;
             if (manifestBuilder != null && evidencePlan != null) {
                 AgentJob job = reviewJob(request);
                 if (job != null) {
@@ -255,7 +284,7 @@ public class WorkspaceContextBuilder {
                             keySourceKind,
                             String.valueOf(job.getId()),
                             evidencePlan,
-                            new ContextManifestBuilder.CaptureMetadata(
+                            new JobFolderIndexBuilder.CaptureMetadata(
                                     completeness,
                                     contentStates,
                                     immutableIdentities,
@@ -265,6 +294,22 @@ public class WorkspaceContextBuilder {
                                     captureLimitations,
                                     attemptedKinds));
                 }
+            }
+            if (manifest != null && manifestBuilder != null) {
+                if (request instanceof ContextRequest.PracticeReviewRequest
+                        && directories.stream().noneMatch(d -> d.target().equals(SandboxLayout.REPO_MOUNT_RELATIVE))) {
+                    refusals.add(new WorkspaceRefusal(
+                            WorkspaceRefusal.Target.REPOSITORY, "reviewed", SourceAbsenceReason.NO_WORKING_COPY));
+                }
+                manifest = new JobFolderIndex(
+                        manifest.contractVersion(),
+                        manifest.catalogDigest(),
+                        manifest.artifactKind(),
+                        manifest.capturedAt(),
+                        primary == null ? manifest.sources() : mergeReadinessSources(primary, manifest),
+                        refusals,
+                        manifestBuilder.folderArtifacts(files, filesOnDisk, keySourceKind));
+                manifestBuilder.writeIndex(files, manifest, directories);
             }
             log.debug(
                     "Workspace context built: {} files ({} staged from disk) from {} provider(s)",
@@ -300,7 +345,8 @@ public class WorkspaceContextBuilder {
             Set<SourceKind> attemptedKinds,
             Map<String, java.nio.file.Path> filesOnDisk,
             List<EvidenceDirectory> directories,
-            List<AutoCloseable> cleanups) {
+            List<AutoCloseable> cleanups,
+            List<WorkspaceRefusal> refusals) {
         Map<String, byte[]> files = new LinkedHashMap<>();
         Set<SourceKind> selectedKinds = new HashSet<>(source.sourceKinds());
         selectedKinds.retainAll(stagedSources);
@@ -313,13 +359,20 @@ public class WorkspaceContextBuilder {
                 }
             }
         }
+        boolean folder = source instanceof WorkspaceFolderRenderer;
+        boolean capturedFolder = false;
         for (SourceKind kind : source.sourceKinds()) {
             if (!selectedKinds.contains(kind)) continue;
-            attemptedKinds.add(kind);
+            if (folder && capturedFolder) break;
+            capturedFolder = folder;
+            Set<SourceKind> collecting = folder ? selectedKinds : Set.of(kind);
+            attemptedKinds.addAll(collecting);
             EvidenceContribution contribution;
             try {
-                contribution = source.capture(request, Set.of(kind));
+                contribution = source.capture(request, collecting);
             } catch (RuntimeException e) {
+                if (e instanceof WorkspaceBudgetExceededException) throw e;
+                if (folder) throw new JobPreparationException("Workspace folder rendering failed", e);
                 // Collector failures affect only their source; contribution validation failures propagate.
                 stateOverrides.put(kind, new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE));
                 meterRegistry
@@ -337,7 +390,8 @@ public class WorkspaceContextBuilder {
             if (contribution.cleanup() != null) {
                 cleanups.add(contribution.cleanup());
             }
-            validateContribution(source, Set.of(kind), contribution);
+            refusals.addAll(contribution.refusals());
+            validateContribution(source, collecting, contribution);
             contribution.files().forEach((path, bytes) -> {
                 if (files.put(path, bytes) != null) {
                     throw new IllegalStateException(providerName + " emitted duplicate file " + path);
@@ -365,6 +419,19 @@ public class WorkspaceContextBuilder {
             captureLimitations.putAll(contribution.captureLimitations());
         }
         return files;
+    }
+
+    /** Workspace-wide sources come from the folder; other work cannot repair missing reviewed-work evidence. */
+    private static List<SourceCapture> mergeReadinessSources(JobFolderIndex primary, JobFolderIndex folder) {
+        var workspaceSources = Set.of("outline.documents", "workspace.project-inventory");
+        var rendered = folder.sources().stream()
+                .collect(
+                        java.util.stream.Collectors.toMap(SourceCapture::kind, java.util.function.Function.identity()));
+        return primary.sources().stream()
+                .map(source -> workspaceSources.contains(source.kind().value())
+                        ? java.util.Objects.requireNonNull(rendered.get(source.kind()))
+                        : source)
+                .toList();
     }
 
     private static void validateContribution(

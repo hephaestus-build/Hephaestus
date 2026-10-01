@@ -85,8 +85,8 @@ class DocumentContentSourceTest extends BaseUnitTest {
         source.contribute(new ContextRequest.DocumentReviewRequest(job()), files);
 
         assertThat(files).containsOnlyKeys(DocumentContentSource.BODY_KEY, DocumentContentSource.METADATA_KEY);
-        assertThat(DocumentContentSource.BODY_KEY).isEqualTo("inputs/context/document.md");
-        assertThat(DocumentContentSource.METADATA_KEY).isEqualTo("inputs/context/document.json");
+        assertThat(DocumentContentSource.BODY_KEY).isEqualTo("context/document.md");
+        assertThat(DocumentContentSource.METADATA_KEY).isEqualTo("context/document.json");
         assertThat(new String(files.get(DocumentContentSource.BODY_KEY), StandardCharsets.UTF_8))
                 .isEqualTo(body);
 
@@ -221,6 +221,8 @@ class DocumentContentSourceTest extends BaseUnitTest {
                 null,
                 List.of(),
                 false,
-                "Engineering");
+                "Engineering",
+                null,
+                null);
     }
 }

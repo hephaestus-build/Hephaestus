@@ -818,6 +818,13 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(
 						nodePath.join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
+							artifacts: [
+								{ kind: "scm.pull-request.core", artifact: { path: "evidence/metadata.json" } },
+								{ kind: "scm.pull-request.diff", artifact: { path: "evidence/change.json" } },
+								...(stage === "tree-citation"
+									? [{ kind: "scm.repository.tree", artifact: { path: "repos/primary/.git/HEAD" } }]
+									: []),
+							],
 							sources: [
 								{
 									kind: "scm.pull-request.core",
@@ -859,17 +866,15 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(
 						nodePath.join(cwd, "task.json"),
 						JSON.stringify({
-							schemaVersion: 2,
-							paths: {
-								contextRoot: "evidence",
-								repositoryRoot: "repos/primary",
-								manifest: "evidence/manifest.json",
-								practiceIndex: "catalog/practices/index.json",
-								compositionRequest: "evidence/composition.json",
-								preparedFeedback: "history/prepared.json",
-								precomputeScripts: "scripts/practices",
-							},
-							task: { kind: "practice_review", prompt: "Review the practice." },
+							schemaVersion: 3,
+							contextRoot: "evidence",
+							repositoryRoot: "repos/primary",
+							manifest: "evidence/manifest.json",
+							practiceIndex: "catalog/practices/index.json",
+							compositionRequest: "evidence/composition.json",
+							preparedFeedback: "history/prepared.json",
+							precomputeScripts: "scripts/practices",
+							prompt: "Review the practice.",
 						}),
 					);
 					let budgetMs = "10000";

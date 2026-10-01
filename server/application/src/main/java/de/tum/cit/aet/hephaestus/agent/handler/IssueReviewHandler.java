@@ -163,7 +163,7 @@ public class IssueReviewHandler implements JobTypeHandler {
                         EnumSet.of(FeedbackCompositionInputs.InContextPlacementKind.ARTIFACT)));
         log.info(
                 "Issue context preparation complete: {} files, issueNumber={}, jobId={}",
-                inputs.files().size(),
+                inputs.filesOnDisk().size(),
                 metadata.path("issue_number").asInt(),
                 job.getId());
         return inputs;
@@ -175,7 +175,7 @@ public class IssueReviewHandler implements JobTypeHandler {
         }
         int issueNumber = requireInt(metadata, "issue_number");
         String repoName = requireText(metadata, "repository_full_name");
-        Task task = new Task.PracticeReview(buildPrompt(issueNumber, repoName, job), issueNumber, repoName);
+        Task task = new Task(buildPrompt(issueNumber, repoName, job), issueNumber, repoName);
         return TaskEnvelope.of(job.getId(), job.getWorkspace().getId(), task);
     }
 

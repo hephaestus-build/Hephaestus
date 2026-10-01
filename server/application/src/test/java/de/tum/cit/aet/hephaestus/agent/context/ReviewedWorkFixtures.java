@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.context.providers.IssueContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
@@ -27,8 +26,7 @@ public final class ReviewedWorkFixtures {
     private ReviewedWorkFixtures() {}
 
     /** A pull request capture staging {@code body} as its description, with the change pinned at {@code base:head}. */
-    public static ArtifactSourceManifest pullRequestManifest(
-            Instant capturedAt, @Nullable String body, @Nullable String head) {
+    public static JobFolderIndex pullRequestManifest(Instant capturedAt, @Nullable String body, @Nullable String head) {
         List<SourceCapture> sources = new ArrayList<>();
         sources.add(core(PullRequestContentSource.CORE, capturedAt, body));
         if (head != null) {
@@ -41,7 +39,7 @@ public final class ReviewedWorkFixtures {
                     List.of(new SourceArtifact(
                             PullRequestContentSource.CHANGE_FILE, "application/json", "c".repeat(64), 1))));
         }
-        return new ArtifactSourceManifest(
+        return new JobFolderIndex(
                 ArtifactSourceCatalogRegistry.CURRENT_VERSION,
                 "0".repeat(64),
                 ArtifactKinds.PULL_REQUEST.value(),
@@ -49,8 +47,8 @@ public final class ReviewedWorkFixtures {
                 sources);
     }
 
-    public static ArtifactSourceManifest issueManifest(Instant capturedAt, @Nullable String body) {
-        return new ArtifactSourceManifest(
+    public static JobFolderIndex issueManifest(Instant capturedAt, @Nullable String body) {
+        return new JobFolderIndex(
                 ArtifactSourceCatalogRegistry.CURRENT_VERSION,
                 "0".repeat(64),
                 ArtifactKinds.ISSUE.value(),

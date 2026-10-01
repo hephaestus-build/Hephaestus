@@ -47,9 +47,7 @@ public record ArtifactSourceCatalog(SourceContractVersion version, List<Artifact
         Objects.requireNonNull(artifactKind, "artifactKind");
         Set<SourceKind> kinds = new LinkedHashSet<>();
         for (ArtifactSourceContract source : sources) {
-            if (source.appliesTo(artifactKind)) {
-                kinds.add(source.kind());
-            }
+            if (source.appliesTo(artifactKind)) kinds.add(source.kind());
         }
         return Set.copyOf(kinds);
     }

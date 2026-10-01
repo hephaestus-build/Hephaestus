@@ -56,7 +56,7 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
      * the only way a developer's own observation is withheld from them for its evidence rather than its age.
      */
     private static final String UNKNOWN_SOURCE_EVIDENCE_JSON =
-            "{\"citations\":[{\"sourceKind\":\"scm.repository.secrets\",\"artifactPath\":\"inputs/context/secrets.txt\","
+            "{\"citations\":[{\"sourceKind\":\"scm.repository.secrets\",\"artifactPath\":\"context/secrets.txt\","
                     + "\"path\":\"secrets.txt\",\"startLine\":1,\"endLine\":1,\"quote\":\"example\","
                     + "\"quoteRedacted\":false}]}";
 

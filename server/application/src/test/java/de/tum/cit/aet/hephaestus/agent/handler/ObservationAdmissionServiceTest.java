@@ -61,6 +61,10 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     private final Map<AgentJobType, JobTypeHandler> handlers = new EnumMap<>(AgentJobType.class);
     private final JsonMapper mapper = JsonMapper.builder().build();
     private final JsonNode NO_FAILURES = mapper.createArrayNode();
+
+    @Mock
+    private de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles evidenceFiles;
+
     private ObservationAdmissionService service;
     private AgentJob job;
     private ObservationAdmissionService.AdmissionIdentity identity;
@@ -81,7 +85,8 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 observations,
                 new JobTypeHandlerRegistry(List.copyOf(handlers.values())),
                 mapper,
-                transactionManager);
+                transactionManager,
+                evidenceFiles);
         job = new AgentJob();
         job.setId(UUID.randomUUID());
         job.setStatus(AgentJobStatus.RUNNING);
@@ -129,6 +134,26 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 .path(ObservationAdmissionService.REFUSAL_METADATA_KEY)
                 .path("reasonCode")
                 .asString();
+    }
+
+    @Test
+    void shouldRemoveEvidenceOnlyAfterAdmissionCommits() {
+        var committed = new java.util.concurrent.atomic.AtomicBoolean();
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    committed.set(true);
+                    return null;
+                })
+                .when(transactionManager)
+                .commit(any());
+        org.mockito.Mockito.doAnswer(invocation -> {
+                    assertThat(committed).isTrue();
+                    assertThat(ObservationAdmissionService.isAdmitted(job)).isTrue();
+                    return null;
+                })
+                .when(evidenceFiles)
+                .discardAdmittedAttempt(identity);
+        service.admit(identity, mapper.createObjectNode());
+        verify(evidenceFiles).discardAdmittedAttempt(identity);
     }
 
     @Test

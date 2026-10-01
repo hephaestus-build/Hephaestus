@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceContract;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceState;
@@ -55,7 +54,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-class ContextManifestBuilderTest extends BaseUnitTest {
+class JobFolderIndexBuilderTest extends BaseUnitTest {
 
     private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final SourceKind CORE = new SourceKind("scm.pull-request.core");
@@ -66,14 +65,14 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     private static final SourceKind OUTLINE = new SourceKind("outline.documents");
     private static final SourceKind PROJECT_INVENTORY = new SourceKind("workspace.project-inventory");
     private static final Instant NOW = Instant.parse("2026-09-11T10:00:00Z");
-    private static final String CHANGE_PATH = "inputs/context/change.json";
+    private static final String CHANGE_PATH = "context/change.json";
     private static final byte[] CHANGE_JSON =
             "{\"base_sha\":\"abc123\",\"head_sha\":\"def456\"}".getBytes(StandardCharsets.UTF_8);
 
     private static final AutomatedReviewFence NO_FENCE = new AutomatedReviewFence(Map.of());
 
     private final JsonMapper mapper = JsonMapper.builder().build();
-    private ContextManifestBuilder builder;
+    private JobFolderIndexBuilder builder;
 
     @BeforeEach
     void setUp() {
@@ -91,7 +90,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 Map.of(CHANGE_PATH, DIFF),
                 "job-42",
                 plan,
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(DIFF, SourceCompleteness.COMPLETE),
                         Map.of(DIFF, "abc123"),
                         Map.of(),
@@ -99,8 +98,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Map.of(),
                         Set.of(DIFF)));
 
-        JsonNode visible = mapper.readTree(files.get("inputs/manifest.json"));
-        assertThat(visible.path("contractVersion").asString()).isEqualTo("1.2.0");
+        JsonNode visible = mapper.readTree(files.get("INDEX.json"));
+        assertThat(visible.path("contractVersion").asString()).isEqualTo("1.3.0");
         assertThat(visible.toString()).doesNotContain("job-42").doesNotContain("workspaceId");
         JsonNode diffSource = findSource(visible, DIFF.value());
         assertThat(diffSource.path("state").path("availability").asString()).isEqualTo("AVAILABLE");
@@ -115,7 +114,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
         builder.augment(files, Map.of(), "job-7", plan(), metadata(COMMENTS, NOW));
 
-        JsonNode visible = mapper.readTree(files.get("inputs/manifest.json"));
+        JsonNode visible = mapper.readTree(files.get("INDEX.json"));
         JsonNode diff = findSource(visible, DIFF.value());
         assertThat(diff.path("state").path("availability").asString()).isEqualTo("UNAVAILABLE");
         assertThat(diff.path("state").path("reasonCode").asString()).isEqualTo("NO_PROVIDER");
@@ -142,9 +141,9 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldAuthorizeCaptureForTheDetectionAudience() {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
-        ContextManifestBuilder target = new ContextManifestBuilder(
+        JobFolderIndexBuilder target = new JobFolderIndexBuilder(
                 mapper, catalogs, new PracticeSubjectEvaluator(mapper), NO_FENCE, Clock.systemUTC());
-        SourceContractVersion version = new SourceContractVersion("1.2.0");
+        SourceContractVersion version = new SourceContractVersion("1.3.0");
 
         target.isSourceUsePermitted(version, DIFF);
 
@@ -160,7 +159,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 Map.of(),
                 "job-redacted",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(),
                         Map.of(),
                         Map.of(),
@@ -168,7 +167,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Map.of(COMMENTS, new SourceCaptureState.Redacted(SourceAbsenceReason.CONSENT_NOT_ACTIVE)),
                         Set.of(COMMENTS)));
 
-        JsonNode source = findSource(mapper.readTree(files.get("inputs/manifest.json")), COMMENTS.value());
+        JsonNode source = findSource(mapper.readTree(files.get("INDEX.json")), COMMENTS.value());
         assertThat(source.path("state").path("availability").asString()).isEqualTo("REDACTED");
         assertThat(source.has("paths")).isFalse();
     }
@@ -190,12 +189,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         // range is pinned either way; that nothing changed inside it is the reported content state.
         Map<String, byte[]> files = new LinkedHashMap<>();
         files.put(CHANGE_PATH, CHANGE_JSON);
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 files,
                 Map.of(CHANGE_PATH, DIFF),
                 "job-empty-diff",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(DIFF, SourceCompleteness.COMPLETE),
                         Map.of(DIFF, SourceContentState.EMPTY),
                         Map.of(DIFF, "abc123"),
@@ -216,12 +215,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldNotTreatFailedDiffCaptureAsVerifiedEmpty() {
         var failed = new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE);
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 new LinkedHashMap<>(),
                 Map.of(),
                 "job-failed-diff",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(DIFF, failed), Set.of(DIFF)));
         var readiness =
                 builder.checkAutomatedReviewReadinessAsOfNow(manifest, List.of(practiceRequiring(DIFF, "needs-diff")));
@@ -237,7 +236,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Map.of(CHANGE_PATH, DIFF),
                         "job-partial-empty-diff",
                         plan(),
-                        new ContextManifestBuilder.CaptureMetadata(
+                        new JobFolderIndexBuilder.CaptureMetadata(
                                 Map.of(DIFF, SourceCompleteness.PARTIAL),
                                 Map.of(DIFF, SourceContentState.EMPTY),
                                 Map.of(DIFF, "abc123"),
@@ -255,12 +254,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
      */
     @Test
     void shouldNameOnlyAbsenceWhenNothingWasCaptured() {
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 new LinkedHashMap<>(),
                 Map.of(),
                 "job-absent-diff",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Set.of()));
+                new JobFolderIndexBuilder.CaptureMetadata(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Set.of()));
 
         AutomatedReviewReadinessResult refused =
                 builder.checkAutomatedReviewReadinessAsOfNow(manifest, List.of(practiceRequiring(DIFF, "needs-diff")));
@@ -273,12 +272,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldRefuseReadinessWhenCoreReportsAnUpstreamDeletion() {
         var unavailable = new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND);
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 new LinkedHashMap<>(),
                 Map.of(),
                 "job-deleted-core",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(CORE, unavailable), Set.of(CORE)));
 
         var readiness =
@@ -293,12 +292,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     void shouldNameNoReasonWhenACompleteCaptureHeldSomething() {
         Map<String, byte[]> files = new LinkedHashMap<>();
         files.put(CHANGE_PATH, CHANGE_JSON);
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 files,
                 Map.of(CHANGE_PATH, DIFF),
                 "job-good-diff",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(DIFF, SourceCompleteness.COMPLETE),
                         Map.of(DIFF, SourceContentState.NON_EMPTY),
                         Map.of(DIFF, "abc123"),
@@ -321,14 +320,14 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldReviewAnEmptyCaptureOfASourceThatMayBeEmpty() {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        String path = "inputs/context/comments.json";
+        String path = "context/comments.json";
         files.put(path, "[]".getBytes(StandardCharsets.UTF_8));
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 files,
                 Map.of(path, COMMENTS),
                 "job-empty-comments",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(COMMENTS, SourceCompleteness.COMPLETE),
                         Map.of(COMMENTS, SourceContentState.EMPTY),
                         Map.of(),
@@ -349,14 +348,14 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldRefuseAnAbsenceClaimOnAPartialCapture() {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        String path = "inputs/context/comments.json";
+        String path = "context/comments.json";
         files.put(path, "[{}]".getBytes(StandardCharsets.UTF_8));
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 files,
                 Map.of(path, COMMENTS),
                 "job-partial-comments",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(COMMENTS, SourceCompleteness.PARTIAL),
                         Map.of(COMMENTS, SourceContentState.NON_EMPTY),
                         Map.of(),
@@ -386,12 +385,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         Map<String, byte[]> files = new LinkedHashMap<>();
         String path = "inputs/sources/scm/repo/src/App.java";
         files.put(path, "class App {}".getBytes(StandardCharsets.UTF_8));
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 files,
                 Map.of(path, REPOSITORY_TREE),
                 "job-truncated-tree",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(REPOSITORY_TREE, SourceCompleteness.PARTIAL),
                         Map.of(REPOSITORY_TREE, SourceContentState.NON_EMPTY),
                         Map.of(),
@@ -438,7 +437,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Map.of(path, REPOSITORY_TREE),
                         "job-contradictory-tree",
                         plan(),
-                        new ContextManifestBuilder.CaptureMetadata(
+                        new JobFolderIndexBuilder.CaptureMetadata(
                                 Map.of(REPOSITORY_TREE, SourceCompleteness.COMPLETE),
                                 Map.of(REPOSITORY_TREE, SourceContentState.NON_EMPTY),
                                 Map.of(),
@@ -453,7 +452,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldSkipAutomatedReviewsThatCannotRun() {
-        ArtifactSourceManifest manifest = coreManifest(builder, "job-unsupported-assessment", NOW);
+        JobFolderIndex manifest = coreManifest(builder, "job-unsupported-assessment", NOW);
         List<PracticeAutomatedReview> configurations = List.of(
                 new PracticeAutomatedReview(
                         PracticeAutomatedReviewMode.LANGUAGE_MODEL,
@@ -508,7 +507,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldKeepACaptureFailureAsItsOwnReasonWhenThePracticeAlsoNeedsHumanReview() {
-        ArtifactSourceManifest manifest = coreManifest(builder, "job-human-review-failed-capture", NOW);
+        JobFolderIndex manifest = coreManifest(builder, "job-human-review-failed-capture", NOW);
         Practice practice = practiceRequiringComments();
         PracticeAutomatedReviewPolicy policy = practice.getAutomatedReviewPolicy();
         practice.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(
@@ -536,7 +535,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldReviewWorkUnchangedUpstreamSinceTheLastSynchronization() {
         // A mirrored record upstream has not touched is current, however old the last write is.
-        ArtifactSourceManifest manifest = coreManifest(builder, "job-quiet-mirror", NOW.minusSeconds(14 * 86_400));
+        JobFolderIndex manifest = coreManifest(builder, "job-quiet-mirror", NOW.minusSeconds(14 * 86_400));
 
         assertThat(builder.checkAutomatedReviewReadiness(
                                 manifest, List.of(practiceRequiring(CORE, "pr-core")), NOW, null)
@@ -546,7 +545,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldProduceTheSameReadinessResultWhenReplayed() {
-        ArtifactSourceManifest manifest = coreManifest(builder, "job-replay", NOW);
+        JobFolderIndex manifest = coreManifest(builder, "job-replay", NOW);
         List<Practice> practices = List.of(practiceRequiring(CORE, "pr-core"));
 
         var original = builder.checkAutomatedReviewReadiness(manifest, practices, NOW, null);
@@ -564,7 +563,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldReturnEvidenceRefusalsAsTypedDecisions() {
-        ArtifactSourceManifest manifest = coreManifest(builder, "job-refused", NOW);
+        JobFolderIndex manifest = coreManifest(builder, "job-refused", NOW);
 
         var prepared = builder.prepareAutomatedReviewReadiness(
                 manifest, List.of(practiceRequiringComments()), NOW, practice -> null, Map.of(), null);
@@ -596,16 +595,15 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         Map<String, byte[]> files = new LinkedHashMap<>();
         builder.augment(files, Map.of(), "job-invalid-empty", plan(), metadata(CORE, NOW));
 
-        JsonNode core = findSource(mapper.readTree(files.get("inputs/manifest.json")), CORE.value());
+        JsonNode core = findSource(mapper.readTree(files.get("INDEX.json")), CORE.value());
         assertThat(core.path("state").path("availability").asString()).isEqualTo("UNAVAILABLE");
     }
 
     @Test
     void shouldRejectAReplayAgainstDifferentContractBytes() {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        ArtifactSourceManifest manifest =
-                builder.augment(files, Map.of(), "job-old-contract", plan(), metadata(COMMENTS, NOW));
-        ArtifactSourceManifest changedContract = new ArtifactSourceManifest(
+        JobFolderIndex manifest = builder.augment(files, Map.of(), "job-old-contract", plan(), metadata(COMMENTS, NOW));
+        JobFolderIndex changedContract = new JobFolderIndex(
                 manifest.contractVersion(),
                 "0".repeat(64),
                 manifest.artifactKind(),
@@ -622,12 +620,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     void shouldReviewAConversationWithoutAFreshnessWatermark() {
         Map<String, byte[]> files = new LinkedHashMap<>();
         Instant eventTime = NOW.minusSeconds(1);
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 files,
                 Map.of(),
                 "job-event-time",
                 conversationPlan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(CONVERSATION, SourceCompleteness.COMPLETE),
                         Map.of(),
                         Map.of(),
@@ -643,8 +641,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldAcceptMirrorWatermarkThatCoversTheRequestedSnapshot() {
-        ContextManifestBuilder laterBuilder = builderAt(NOW.plusSeconds(60));
-        ArtifactSourceManifest manifest = coreManifest(laterBuilder, "job-future-watermark", NOW.plusSeconds(60));
+        JobFolderIndexBuilder laterBuilder = builderAt(NOW.plusSeconds(60));
+        JobFolderIndex manifest = coreManifest(laterBuilder, "job-future-watermark", NOW.plusSeconds(60));
 
         Practice practice = practiceRequiring(CORE, "pr-core");
         assertThat(laterBuilder
@@ -655,7 +653,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldTreatAnIncoherentWatermarkAsUnknownRatherThanStale() {
-        ArtifactSourceManifest manifest = coreManifest(builder, "job-invalid-watermark", NOW.plusSeconds(60));
+        JobFolderIndex manifest = coreManifest(builder, "job-invalid-watermark", NOW.plusSeconds(60));
 
         // The mirror records when a row last changed, not when it was last checked, so nothing here can
         // show the copy is behind.
@@ -666,11 +664,11 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldAssessDelayedWorkAgainstSubmissionTime() {
-        ContextManifestBuilder delayedBuilder = builderAt(NOW.plusSeconds(3_600));
+        JobFolderIndexBuilder delayedBuilder = builderAt(NOW.plusSeconds(3_600));
         Map<String, byte[]> files = new LinkedHashMap<>();
-        files.put("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
-        ArtifactSourceManifest manifest = delayedBuilder.augment(
-                files, Map.of("inputs/context/metadata.json", CORE), "job-delayed", plan(), metadata(CORE, NOW));
+        files.put("context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
+        JobFolderIndex manifest = delayedBuilder.augment(
+                files, Map.of("context/metadata.json", CORE), "job-delayed", plan(), metadata(CORE, NOW));
         Practice practice = practiceRequiring(CORE, "pr-core");
 
         var prepared = delayedBuilder.prepareAutomatedReviewReadiness(
@@ -689,25 +687,25 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     @Test
     void shouldNotInferCompleteFromSourceCapabilityAlone() {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        files.put("inputs/context/linked_work_items.json", "{\"workItems\":[{}]}".getBytes(StandardCharsets.UTF_8));
-        ArtifactSourceManifest manifest = builder.augment(
+        files.put("context/linked_work_items.json", "{\"workItems\":[{}]}".getBytes(StandardCharsets.UTF_8));
+        JobFolderIndex manifest = builder.augment(
                 files,
-                Map.of("inputs/context/linked_work_items.json", LINKED_ITEMS),
+                Map.of("context/linked_work_items.json", LINKED_ITEMS),
                 "job-unreported-completeness",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Set.of(LINKED_ITEMS)));
 
-        JsonNode source = findSource(mapper.readTree(files.get("inputs/manifest.json")), LINKED_ITEMS.value());
+        JsonNode source = findSource(mapper.readTree(files.get("INDEX.json")), LINKED_ITEMS.value());
         assertThat(source.path("state").path("completeness").asString()).isEqualTo("PARTIAL");
     }
 
     @Test
-    void shouldRejectCaptureFactsForSourcesThatDoNotApplyToTheReviewedKind() {
-        assertThatThrownBy(() -> builder.augment(
-                        new LinkedHashMap<>(), Map.of(), "job-invalid-plan", plan(), metadata(CONVERSATION, NOW)))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("do not apply to scm.pull_request");
+    void shouldAcceptAWorkspaceSourceBeyondTheReviewedWorkKind() {
+        var index = builder.augment(
+                new LinkedHashMap<>(), Map.of(), "cross-source-review", plan(), metadata(CONVERSATION, NOW));
+        assertThat(index.sources())
+                .anySatisfy(source -> assertThat(source.kind()).isEqualTo(CONVERSATION));
     }
 
     @Test
@@ -732,14 +730,11 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 diff.useDecisionIds());
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         when(catalogs.current()).thenReturn(realCatalogs.current());
-        when(catalogs.requireSourcesFor(any(), any()))
-                .thenAnswer(invocation ->
-                        realCatalogs.requireSourcesFor(invocation.getArgument(0), invocation.getArgument(1)));
         when(catalogs.requireSource(any(), any())).thenAnswer(invocation -> {
             SourceKind kind = invocation.getArgument(1);
             return kind.equals(DIFF) ? restrictedDiff : realCatalogs.requireSource(invocation.getArgument(0), kind);
         });
-        ContextManifestBuilder restrictedBuilder = new ContextManifestBuilder(
+        JobFolderIndexBuilder restrictedBuilder = new JobFolderIndexBuilder(
                 mapper, catalogs, new PracticeSubjectEvaluator(mapper), NO_FENCE, Clock.systemUTC());
 
         // The live NOT_COLLECTED path: governance refused the source, and this contract says the diff may
@@ -749,7 +744,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Map.of(),
                         "job-unsupported-absence-state",
                         plan(),
-                        new ContextManifestBuilder.CaptureMetadata(
+                        new JobFolderIndexBuilder.CaptureMetadata(
                                 Map.of(),
                                 Map.of(),
                                 Map.of(),
@@ -765,7 +760,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldRejectPracticeEvidenceFromAnotherProfile() {
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 new LinkedHashMap<>(), Map.of(), "job-profile-mismatch", plan(), metadata(COMMENTS, NOW));
 
         assertThatThrownBy(() -> builder.checkAutomatedReviewReadinessAsOfNow(
@@ -776,8 +771,8 @@ class ContextManifestBuilderTest extends BaseUnitTest {
 
     @Test
     void shouldRejectManifestThatOmitsAnApplicableSource() {
-        ArtifactSourceManifest manifest = coreManifest(builder, "job-incomplete-sources", NOW);
-        ArtifactSourceManifest incomplete = new ArtifactSourceManifest(
+        JobFolderIndex manifest = coreManifest(builder, "job-incomplete-sources", NOW);
+        JobFolderIndex incomplete = new JobFolderIndex(
                 manifest.contractVersion(),
                 manifest.catalogDigest(),
                 manifest.artifactKind(),
@@ -789,7 +784,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         assertThatThrownBy(() -> builder.checkAutomatedReviewReadinessAsOfNow(
                         incomplete, List.of(practiceRequiring(CORE, "pr-core"))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("do not match the sources its artifact kind applies to");
+                .hasMessageContaining("do not match the complete source catalog");
     }
 
     @Test
@@ -800,7 +795,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 Map.of(),
                 "job-empty-tree",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(REPOSITORY_TREE, SourceCompleteness.COMPLETE),
                         Map.of(REPOSITORY_TREE, "commit:tree"),
                         Map.of(),
@@ -808,27 +803,27 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         Map.of(),
                         Set.of(REPOSITORY_TREE)));
 
-        JsonNode source = findSource(mapper.readTree(files.get("inputs/manifest.json")), REPOSITORY_TREE.value());
+        JsonNode source = findSource(mapper.readTree(files.get("INDEX.json")), REPOSITORY_TREE.value());
         assertThat(source.path("state").path("availability").asString()).isEqualTo("AVAILABLE");
         assertThat(source.path("state").path("content").asString()).isEqualTo("EMPTY");
         assertThat(source.path("state").path("completeness").asString()).isEqualTo("COMPLETE");
     }
 
     @Test
-    void shouldTreatEmptyOutlineEvidenceAsPartial() throws Exception {
+    void shouldTreatTheFullPermittedOutlineCorpusAsComplete() throws Exception {
         Map<String, byte[]> files = new LinkedHashMap<>();
         builder.augment(
                 files,
                 Map.of(),
                 "job-empty-outline",
                 plan(),
-                new ContextManifestBuilder.CaptureMetadata(
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Set.of(OUTLINE)));
 
-        JsonNode source = findSource(mapper.readTree(files.get("inputs/manifest.json")), OUTLINE.value());
+        JsonNode source = findSource(mapper.readTree(files.get("INDEX.json")), OUTLINE.value());
         assertThat(source.path("state").path("availability").asString()).isEqualTo("AVAILABLE");
         assertThat(source.path("state").path("content").asString()).isEqualTo("EMPTY");
-        assertThat(source.path("state").path("completeness").asString()).isEqualTo("PARTIAL");
+        assertThat(source.path("state").path("completeness").asString()).isEqualTo("COMPLETE");
     }
 
     @Test
@@ -861,11 +856,11 @@ class ContextManifestBuilderTest extends BaseUnitTest {
     }
 
     private static EvidencePlan plan() {
-        return new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
+        return new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
     }
 
-    private ContextManifestBuilder builderAt(Instant instant) {
-        return new ContextManifestBuilder(
+    private JobFolderIndexBuilder builderAt(Instant instant) {
+        return new JobFolderIndexBuilder(
                 mapper,
                 new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                 new PracticeSubjectEvaluator(mapper),
@@ -873,19 +868,19 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                 Clock.fixed(instant, java.time.ZoneOffset.UTC));
     }
 
-    private ArtifactSourceManifest coreManifest(ContextManifestBuilder target, String jobId, Instant observedAt) {
+    private JobFolderIndex coreManifest(JobFolderIndexBuilder target, String jobId, Instant observedAt) {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        String path = "inputs/context/metadata.json";
+        String path = "context/metadata.json";
         files.put(path, "{}".getBytes(StandardCharsets.UTF_8));
         return target.augment(files, Map.of(path, CORE), jobId, plan(), metadata(CORE, observedAt));
     }
 
     private static EvidencePlan conversationPlan() {
-        return new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.CONVERSATION_THREAD);
+        return new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.CONVERSATION_THREAD);
     }
 
-    private static ContextManifestBuilder.CaptureMetadata metadata(SourceKind kind, Instant observedAt) {
-        return new ContextManifestBuilder.CaptureMetadata(
+    private static JobFolderIndexBuilder.CaptureMetadata metadata(SourceKind kind, Instant observedAt) {
+        return new JobFolderIndexBuilder.CaptureMetadata(
                 Map.of(kind, SourceCompleteness.COMPLETE),
                 Map.of(),
                 Map.of(kind, observedAt),
@@ -968,12 +963,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
          */
         @Test
         void shouldNotJudgeTheSubjectOfAPracticeWhoseEvidenceCouldNotBeRead() {
-            ArtifactSourceManifest manifest = builder.augment(
+            JobFolderIndex manifest = builder.augment(
                     new LinkedHashMap<>(),
                     Map.of(),
                     "job-unreadable",
                     plan(),
-                    new ContextManifestBuilder.CaptureMetadata(
+                    new JobFolderIndexBuilder.CaptureMetadata(
                             Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Set.of()));
 
             AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadiness(
@@ -996,12 +991,12 @@ class ContextManifestBuilderTest extends BaseUnitTest {
         private PreparedDiff changeCapture(String jobId) {
             Map<String, byte[]> files = new LinkedHashMap<>();
             files.put(CHANGE_PATH, CHANGE_JSON);
-            ArtifactSourceManifest manifest = builder.augment(
+            JobFolderIndex manifest = builder.augment(
                     files,
                     Map.of(CHANGE_PATH, DIFF),
                     jobId,
                     plan(),
-                    new ContextManifestBuilder.CaptureMetadata(
+                    new JobFolderIndexBuilder.CaptureMetadata(
                             Map.of(DIFF, SourceCompleteness.COMPLETE),
                             Map.of(DIFF, SourceContentState.NON_EMPTY),
                             Map.of(DIFF, "abc123"),
@@ -1012,7 +1007,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
             return new PreparedDiff(manifest, files);
         }
 
-        private record PreparedDiff(ArtifactSourceManifest manifest, Map<String, byte[]> files) {}
+        private record PreparedDiff(JobFolderIndex manifest, Map<String, byte[]> files) {}
 
         private static ReviewChange change(Set<String> paths) {
             return new ReviewChange() {
@@ -1060,7 +1055,7 @@ class ContextManifestBuilderTest extends BaseUnitTest {
                         conversation ? ArtifactKinds.CONVERSATION_THREAD : ArtifactKinds.PULL_REQUEST),
                 List.of(new PracticeEvidenceRequirement(sourceKind, stance)))));
         practice.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(
-                new SourceContractVersion("1.2.0"),
+                new SourceContractVersion("1.3.0"),
                 new PracticeAutomatedReview(
                         PracticeAutomatedReviewMode.LANGUAGE_MODEL,
                         PracticeEvidenceSufficiency.SUFFICIENT_WHEN_REQUIREMENTS_MET),

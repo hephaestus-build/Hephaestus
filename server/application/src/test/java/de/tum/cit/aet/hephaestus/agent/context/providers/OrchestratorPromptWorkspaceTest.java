@@ -36,8 +36,6 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             DocumentContentSource.BODY_KEY,
             DocumentContentSource.METADATA_KEY,
             // Workspace-wide, staged for every review whose artifact kind the source applies to
-            WorkspaceInventoryContentSource.OUTPUT_FILE,
-            OutlineDocumentContentSource.REVIEW_INDEX_KEY,
             ReviewHistoryContentSource.OBSERVATIONS_FILE,
             ReviewHistoryContentSource.FEEDBACK_FILE,
             SandboxLayout.MANIFEST_PATH));
@@ -47,10 +45,8 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
             Set.of("work/change/diff.patch", "work/change/diff_stat.txt", "work/change/files.json");
 
     /** Directories and templated paths the prompt names as prefixes rather than as concrete files. */
-    private static final Set<String> STAGED_INPUT_PREFIXES = Set.of(
-            SandboxLayout.REPO_MOUNT_RELATIVE,
-            SandboxLayout.PRACTICES_PREFIX,
-            OutlineDocumentContentSource.REVIEW_PREFIX);
+    private static final Set<String> STAGED_INPUT_PREFIXES =
+            Set.of(SandboxLayout.REPO_MOUNT_RELATIVE, SandboxLayout.PRACTICES_PREFIX, "context/docs/");
 
     @Test
     @DisplayName("the prompt states the observation contract the runtime and the server enforce")
@@ -83,7 +79,7 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
                 .as("the workspace section must describe each file of the derived change view")
                 .allSatisfy(path ->
                         assertThat(prompt).as("prompt mentions %s", path).contains(path));
-        assertThat(prompt).doesNotContain("inputs/context/diff", "context-map", "diff_summary");
+        assertThat(prompt).doesNotContain("context/diff", "context-map", "diff_summary");
     }
 
     @Test

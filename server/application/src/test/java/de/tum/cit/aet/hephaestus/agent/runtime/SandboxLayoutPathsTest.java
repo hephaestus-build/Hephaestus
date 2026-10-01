@@ -15,11 +15,11 @@ import org.junit.jupiter.api.Test;
  * Guardrail for the workspace ABI context prefix. Scans the bundled Pi runtime resources
  * (orchestrator + runner) for any legacy {@code .context/} reference that would violate the
  * rolling-deploy contract documented in {@code docs/developer/agent/workspace-abi.mdx}; the
- * canonical prefix is {@code inputs/context/}.
+ * canonical prefix is {@code context/}.
  */
 class SandboxLayoutPathsTest extends HephaestusArchitectureTest {
 
-    /** Matches references to the legacy {@code .context/} prefix that are NOT {@code inputs/context/}. */
+    /** Matches references to the legacy {@code .context/} prefix that are NOT {@code context/}. */
     private static final Pattern LEGACY_CONTEXT_PREFIX = Pattern.compile("(?<![A-Za-z0-9_/.])\\.context/");
 
     @Test

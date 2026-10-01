@@ -73,6 +73,35 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldStreamOnlyCurrentPermittedWorkspaceMessages() {
+        long workspace = newWorkspace();
+        long otherWorkspace = newWorkspace();
+        seedChannel(workspace, "C1", "ACTIVE");
+        seedChannel(workspace, "C2", "REVOKED");
+        seedChannel(otherWorkspace, "C1", "ACTIVE");
+        seedMessage(workspace, "C1", "1704067200.0", null, "permitted");
+        seedMessage(workspace, "C1", "1704067201.0", null, "deleted");
+        seedMessage(workspace, "C2", "1704067202.0", null, "revoked");
+        seedMessage(otherWorkspace, "C1", "1704067203.0", null, "foreign");
+        messageRepository.tombstone(workspace, "T1", "C1", "1704067201.0", java.time.Instant.now());
+        var captured = new java.util.ArrayList<ObjectNode>();
+        projector.forEachWorkspaceMessage(workspace, captured::add);
+        assertThat(captured).singleElement().satisfies(record -> {
+            assertThat(record.path("text").asString()).isEqualTo("permitted");
+            assertThat(record.path("month").asString()).isEqualTo("2024-01");
+            assertThat(record.path("synced_at").asString()).isNotBlank();
+        });
+        assertThat(projector.isMessageReadable(workspace, "C1", "1704067200.0")).isTrue();
+        jdbc.update(
+                "UPDATE slack_monitored_channel SET consent_state='REVOKED' WHERE workspace_id=? AND slack_channel_id='C1'",
+                workspace);
+        assertThat(projector.isMessageReadable(workspace, "C1", "1704067200.0")).isFalse();
+        captured.clear();
+        projector.forEachWorkspaceMessage(workspace, captured::add);
+        assertThat(captured).isEmpty();
+    }
+
+    @Test
     @DisplayName("participant firewall: a non-participant never sees the thread; a participant does")
     void participantFirewall() {
         long ws = newWorkspace();

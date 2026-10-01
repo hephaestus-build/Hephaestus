@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 /**
  * Keystone anti-drift guard for the practice catalogue's references to materialised agent context.
  *
- * <p>Providers materialise their output under {@code inputs/context/}. If the criteria cite a path that
+ * <p>Providers materialise their output under {@code context/}. If the criteria cite a path that
  * does not exist (e.g. the prefix {@code context/target/}), the agent is told to read files that are not
  * there and silently returns NOT_APPLICABLE. Criteria prose is not type-checked, so this test is the
  * contract: every context path the catalogue names MUST be a path the providers actually emit, and the
@@ -24,7 +24,7 @@ import org.junit.jupiter.api.Test;
  */
 class CatalogContextPathConsistencyTest extends BaseUnitTest {
 
-    /** Workspace-relative files the ContentSources actually write under {@code inputs/context/}. */
+    /** Workspace-relative files the ContentSources actually write under {@code context/}. */
     private static final Set<String> REAL_CONTEXT_FILES = Set.of(
             "metadata.json",
             "description.md", // PullRequestContentSource.DESCRIPTION_FILE — the description as written, for quoting
@@ -49,12 +49,12 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
     private static final Set<String> REAL_CHANGE_FILES =
             Set.of("diff.patch", "diff_stat.txt", "files.json", "description.authored.md");
 
-    private static final Pattern CONTEXT_PATH = Pattern.compile("inputs/context/([a-z_]+\\.[a-z]+)");
+    private static final Pattern CONTEXT_PATH = Pattern.compile("context/([a-z_]+\\.[a-z]+)");
 
     private static final Pattern CHANGE_PATH = Pattern.compile("work/change/([a-z_.]+\\.[a-z]+)");
 
     @Test
-    @DisplayName("default-catalog.json names no fictional context/target/ paths and every inputs/context/ path is real")
+    @DisplayName("default-catalog.json names no fictional context/target/ paths and every context/ path is real")
     void catalogueContextPathsResolveToRealProviderOutputs() throws IOException {
         String catalogue = readCatalogue();
 
@@ -71,9 +71,7 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
                 .as("catalogue should cite at least the enrichment context files")
                 .isNotEmpty();
         assertThat(REAL_CONTEXT_FILES)
-                .as(
-                        "every inputs/context/<file> the catalogue cites must be a file a ContentSource emits — cited=%s",
-                        cited)
+                .as("every context/<file> the catalogue cites must be a file a ContentSource emits — cited=%s", cited)
                 .containsAll(cited);
         Set<String> citedChange = new TreeSet<>();
         Matcher change = CHANGE_PATH.matcher(catalogue);

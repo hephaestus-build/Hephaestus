@@ -6,8 +6,11 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -28,6 +31,7 @@ public class ReviewRepositoryPreparer {
     private final RepositoryToMonitorRepository monitors;
     private final ConnectionService connections;
     private final List<ScmTokenSource> tokenSources;
+    private final RepositoryRepository repositories;
 
     private record AuthorizedRepository(
             RepositoryKey key,
@@ -39,6 +43,32 @@ public class ReviewRepositoryPreparer {
 
     public RepositoryKey authorize(AgentJob job) {
         return authorizedRepository(job).key();
+    }
+
+    public List<Repository> monitoredRepositories(long workspaceId) {
+        return repositories.findAllByWorkspaceMonitors(workspaceId);
+    }
+
+    /** Uses the same active connection and provider-origin gate as pinned reviewed-work preparation. */
+    public List<Repository> permittedRepositories(long workspaceId) {
+        var kind = connections.findActiveProviderKind(workspaceId).orElse(null);
+        if (kind == null) return List.of();
+        var source = tokenSources.stream()
+                .filter(candidate -> candidate.kind() == kind)
+                .findFirst()
+                .orElse(null);
+        if (source == null) return List.of();
+        var serverUrl = source.serverUrl(workspaceId).orElse(null);
+        if (serverUrl == null) return List.of();
+        return monitoredRepositories(workspaceId).stream()
+                .filter(repository -> matchesOrigin(repository, kind, serverUrl))
+                .toList();
+    }
+
+    private static boolean matchesOrigin(Repository repository, IntegrationKind kind, String serverUrl) {
+        return repository.getProvider().kind() == kind
+                && URI.create(serverUrl)
+                        .equals(URI.create(repository.getProvider().getServerUrl()));
     }
 
     private AuthorizedRepository authorizedRepository(AgentJob job) {
@@ -65,9 +95,7 @@ public class ReviewRepositoryPreparer {
                 .orElseThrow(() -> new JobPreparationException("SCM Git preparation is unavailable"));
         String serverUrl = source.serverUrl(workspaceId)
                 .orElseThrow(() -> new JobPreparationException("SCM server is unavailable"));
-        if (repository.getProvider().kind() != kind
-                || !URI.create(serverUrl)
-                        .equals(URI.create(repository.getProvider().getServerUrl()))) {
+        if (!matchesOrigin(repository, kind, serverUrl)) {
             throw new JobPreparationException("Repository and workspace SCM provider do not match");
         }
         String[] segments = repository.getNameWithOwner().split("/", -1);

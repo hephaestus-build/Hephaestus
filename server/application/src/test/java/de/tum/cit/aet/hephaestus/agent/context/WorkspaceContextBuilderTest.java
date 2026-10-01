@@ -148,7 +148,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
 
                 @Override
                 public void contribute(ContextRequest request, Map<String, byte[]> files) {
-                    files.put("inputs/context/should-not-appear.txt", new byte[0]);
+                    files.put("context/should-not-appear.txt", new byte[0]);
                 }
             };
             Map<String, byte[]> files = builderOf(skips, supports).build(reviewRequest());
@@ -197,10 +197,10 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
         @Test
         void rejectsDetectorProviderWithoutSourceKinds() {
             ContentSource provider = stubProvider(true, "untracked.json", new byte[0], false);
-            ContextManifestBuilder manifests = mock(ContextManifestBuilder.class);
+            JobFolderIndexBuilder manifests = mock(JobFolderIndexBuilder.class);
             when(manifests.stagedSources(any())).thenReturn(Set.of(new SourceKind("scm.pull-request.core")));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -250,14 +250,14 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 }
             };
             JsonMapper mapper = JsonMapper.builder().build();
-            ContextManifestBuilder manifestBuilder = new ContextManifestBuilder(
+            JobFolderIndexBuilder manifestBuilder = new JobFolderIndexBuilder(
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC()),
                     new PracticeSubjectEvaluator(mapper),
                     new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(bad), new SimpleMeterRegistry(), manifestBuilder);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
             ContextRequest.PracticeReviewRequest request = reviewRequest();
 
             PreparedEvidence prepared = builder.prepare(request, plan);
@@ -268,7 +268,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     .orElseThrow();
             assertThat(capture.state())
                     .isEqualTo(new SourceCaptureState.CollectionError(SourceAbsenceReason.PROVIDER_FAILURE));
-            assertThat(prepared.files()).containsKey("inputs/manifest.json");
+            assertThat(prepared.files()).containsKey("INDEX.json");
         }
 
         /**
@@ -294,7 +294,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 @Override
                 public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
                     return new EvidenceContribution(
-                            Map.of("inputs/context/diff.patch", new byte[] {1}),
+                            Map.of("context/diff.patch", new byte[] {1}),
                             Map.of(diff, SourceCompleteness.COMPLETE),
                             Map.of(),
                             Map.of(),
@@ -328,7 +328,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
                     // The same path the first source already owns: a wiring bug the build must refuse.
                     return new EvidenceContribution(
-                            Map.of("inputs/context/diff.patch", new byte[] {2}),
+                            Map.of("context/diff.patch", new byte[] {2}),
                             Map.of(comments, SourceCompleteness.COMPLETE));
                 }
 
@@ -340,11 +340,11 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 @Override
                 public void contribute(ContextRequest request, Map<String, byte[]> files) {}
             };
-            ContextManifestBuilder manifests = mock(ContextManifestBuilder.class);
+            JobFolderIndexBuilder manifests = mock(JobFolderIndexBuilder.class);
             when(manifests.isSourceUsePermitted(any(), any())).thenReturn(true);
             when(manifests.stagedSources(any())).thenReturn(Set.of(diff, comments));
             var builder = new WorkspaceContextBuilder(List.of(staged, clashing), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -369,7 +369,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 @Override
                 public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
                     return new EvidenceContribution(
-                            Map.of("inputs/context/diff.patch", new byte[0]),
+                            Map.of("context/diff.patch", new byte[0]),
                             Map.of(diff, SourceCompleteness.COMPLETE),
                             Map.of(),
                             Map.of(),
@@ -386,14 +386,14 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 public void contribute(ContextRequest request, Map<String, byte[]> files) {}
             };
             JsonMapper mapper = JsonMapper.builder().build();
-            ContextManifestBuilder manifests = new ContextManifestBuilder(
+            JobFolderIndexBuilder manifests = new JobFolderIndexBuilder(
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                     new PracticeSubjectEvaluator(mapper),
                     new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
 
             var capture =
                     java.util.Objects.requireNonNull(
@@ -409,7 +409,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     .isInstanceOfSatisfying(
                             SourceCaptureState.Available.class,
                             available -> assertThat(available.content()).isEqualTo(SourceContentState.EMPTY));
-            assertThat(capture.artifacts()).extracting("path").containsExactly("inputs/context/diff.patch");
+            assertThat(capture.artifacts()).extracting("path").containsExactly("context/diff.patch");
         }
 
         @Test
@@ -440,11 +440,11 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 @Override
                 public void contribute(ContextRequest request, Map<String, byte[]> files) {}
             };
-            ContextManifestBuilder manifests = mock(ContextManifestBuilder.class);
+            JobFolderIndexBuilder manifests = mock(JobFolderIndexBuilder.class);
             when(manifests.isSourceUsePermitted(any(), any())).thenReturn(true);
             when(manifests.stagedSources(any())).thenReturn(Set.of(comments, core));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -469,7 +469,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 @Override
                 public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
                     return new EvidenceContribution(
-                            Map.of("inputs/context/core.json", new byte[] {1}),
+                            Map.of("context/core.json", new byte[] {1}),
                             Map.of(),
                             Map.of(),
                             Map.of(),
@@ -485,11 +485,11 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                 @Override
                 public void contribute(ContextRequest request, Map<String, byte[]> files) {}
             };
-            ContextManifestBuilder manifests = mock(ContextManifestBuilder.class);
+            JobFolderIndexBuilder manifests = mock(JobFolderIndexBuilder.class);
             when(manifests.isSourceUsePermitted(any(), any())).thenReturn(true);
             when(manifests.stagedSources(any())).thenReturn(Set.of(comments, core));
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
-            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST);
+            EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
 
             assertThatThrownBy(() -> builder.prepare(reviewRequest(), plan))
                     .isInstanceOf(IllegalStateException.class)
@@ -584,7 +584,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
     class PrefixEnforcement {
 
         @Test
-        @DisplayName("rejects providers that write outside inputs/context/")
+        @DisplayName("rejects providers that write outside context/")
         void rejectsBadPrefix() {
             var wrong = new ContentSource() {
                 @Override

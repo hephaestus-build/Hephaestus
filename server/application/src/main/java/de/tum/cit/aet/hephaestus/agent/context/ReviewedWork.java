@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -65,9 +64,9 @@ public record ReviewedWork(
      */
     public static Optional<ReviewedWork> captured(
             byte[] manifestBytes, Map<String, byte[]> staged, long artifactId, ObjectMapper mapper) {
-        ArtifactSourceManifest manifest;
+        JobFolderIndex manifest;
         try {
-            manifest = mapper.readValue(manifestBytes, ArtifactSourceManifest.class);
+            manifest = mapper.readValue(manifestBytes, JobFolderIndex.class);
         } catch (JacksonException | IllegalArgumentException e) {
             return Optional.empty();
         }
@@ -132,12 +131,12 @@ public record ReviewedWork(
                 : null;
     }
 
-    private static @Nullable String pinnedHead(ArtifactSourceManifest manifest) {
+    private static @Nullable String pinnedHead(JobFolderIndex manifest) {
         SourceCaptureState.Available diff = available(manifest, PullRequestContentSource.DIFF);
         return diff == null ? null : headOf(diff.facts().immutableIdentity());
     }
 
-    private static SourceCaptureState.@Nullable Available available(ArtifactSourceManifest manifest, SourceKind kind) {
+    private static SourceCaptureState.@Nullable Available available(JobFolderIndex manifest, SourceKind kind) {
         for (SourceCapture source : manifest.sources()) {
             if (source.kind().equals(kind) && source.state() instanceof SourceCaptureState.Available available) {
                 return available;

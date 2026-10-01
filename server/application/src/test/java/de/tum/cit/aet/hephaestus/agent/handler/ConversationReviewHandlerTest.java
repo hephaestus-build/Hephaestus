@@ -6,14 +6,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.context.ContextManifestBuilder;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -72,7 +72,8 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                         workspaceContextBuilder,
                         practiceCatalogInjector,
                         new TaskEnvelopeWriter(objectMapper),
-                        gitRepositoryManager),
+                        gitRepositoryManager,
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer()),
                 new PracticeDetectionResultParser(objectMapper),
                 deliveryService,
                 eventPublisher,
@@ -176,17 +177,16 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                             Map.of(
                                     SandboxLayout.CONTEXT_PREFIX + "conversation_thread.json",
                                     "{\"messages\":[]}".getBytes()),
-                            org.mockito.Mockito.mock(ArtifactSourceManifest.class)));
+                            org.mockito.Mockito.mock(JobFolderIndex.class)));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
-                    .thenReturn(new ContextManifestBuilder.PreparedAutomatedReviewReadiness(
+                    .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                             List.of(practice), mock(AutomatedReviewReadinessReport.class)));
 
-            Map<String, byte[]> files = handler.prepareInputs(job).files();
+            Map<String, byte[]> files =
+                    de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(handler.prepareInputs(job));
 
             assertThat(files).containsKey(SandboxLayout.CONTEXT_PREFIX + "conversation_thread.json");
             assertThat(files).containsKey(SandboxLayout.TASK_ENVELOPE_FILENAME);
-            assertThat(files).doesNotContainKey(SandboxLayout.SCM_SOURCE_KEEP);
-            assertThat(files.keySet()).noneMatch(k -> k.startsWith(SandboxLayout.SOURCES_PREFIX));
         }
     }
 

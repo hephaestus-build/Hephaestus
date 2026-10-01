@@ -250,8 +250,7 @@ public class AgentJob {
 
     /**
      * Digest over every file materialised into the sandbox workspace, with the job's own id elided so two
-     * runs over identical work agree. The read-only repo mount is NOT hashed — its state is pinned by
-     * {@code metadata.commit_sha}.
+     * runs over identical work agree. Files and full-history repository checkouts are streamed into the digest.
      */
     @Column(name = "inputs_digest", length = 64)
     private String inputsDigest;

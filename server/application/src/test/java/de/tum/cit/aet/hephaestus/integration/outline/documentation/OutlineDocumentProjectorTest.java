@@ -366,35 +366,6 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 .satisfies(projected -> assertThat(projected.collaborators()).isEmpty());
     }
 
-    // --- extractReferences (the vendor link grammar behind the vendor-neutral SPI) ---
-
-    @Test
-    @DisplayName("extractReferences pulls doc and share links out of free text, capped and insertion-ordered")
-    void extractReferences_findsOutlineLinks() {
-        String text = "See https://wiki.example.com/doc/onboarding-guide-a1b2c3 and the share "
-                + "https://wiki.example.com/s/shareId9 (twice: https://wiki.example.com/doc/onboarding-guide-a1b2c3). "
-                + "Not a doc link: https://example.com/blog/post-1.";
-
-        Set<String> refs = projector.extractReferences(text);
-
-        assertThat(refs)
-                .containsExactly(
-                        "https://wiki.example.com/doc/onboarding-guide-a1b2c3", "https://wiki.example.com/s/shareId9");
-    }
-
-    @Test
-    @DisplayName("extractReferences tolerates null/blank input and caps the fan-out")
-    void extractReferences_nullBlankAndCap() {
-        assertThat(projector.extractReferences(null)).isEmpty();
-        assertThat(projector.extractReferences("   ")).isEmpty();
-
-        StringBuilder many = new StringBuilder();
-        for (int i = 0; i < OutlineDocumentProjector.MAX_REFERENCES + 5; i++) {
-            many.append("https://wiki.example.com/doc/doc-").append(i).append(" ");
-        }
-        assertThat(projector.extractReferences(many.toString())).hasSize(OutlineDocumentProjector.MAX_REFERENCES);
-    }
-
     @Test
     @DisplayName("documentsByReference expands a URL reference to its trailing path segment before querying")
     void documentsByReference_expandsUrlToTrailingSegment() {

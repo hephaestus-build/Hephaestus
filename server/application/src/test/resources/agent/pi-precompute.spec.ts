@@ -89,16 +89,14 @@ export default (repo, diff, metadata, context, change, reference) => ({
 			writeFileSync(
 				path.join(root, "task.json"),
 				JSON.stringify({
-					schemaVersion: 2,
-					paths: {
-						contextRoot: context,
-						repositoryRoot: "repos/project with spaces",
-						manifest: "manifest.json",
-						practiceIndex: "catalog/index.json",
-						compositionRequest: "composition.json",
-						preparedFeedback: "history/prepared.json",
-						precomputeScripts: scripts,
-					},
+					schemaVersion: 3,
+					contextRoot: context,
+					repositoryRoot: "repos/project with spaces",
+					manifest: "manifest.json",
+					practiceIndex: "catalog/index.json",
+					compositionRequest: "composition.json",
+					preparedFeedback: "history/prepared.json",
+					precomputeScripts: scripts,
 				}),
 			);
 			mkdirSync(path.join(root, "work/precompute-stage"), { recursive: true });

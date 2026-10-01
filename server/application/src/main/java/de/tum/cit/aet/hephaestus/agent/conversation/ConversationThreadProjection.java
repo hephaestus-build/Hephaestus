@@ -17,6 +17,12 @@ import tools.jackson.databind.node.ObjectNode;
  * quarantine envelope.
  */
 public interface ConversationThreadProjection {
+    /** Streams all permitted messages from this workspace; no review history window applies. */
+    void forEachWorkspaceMessage(long workspaceId, java.util.function.Consumer<ObjectNode> consumer);
+
+    /** The message still passes the source owner's consent, participant and erasure gates. */
+    boolean isMessageReadable(long workspaceId, String channelId, String messageTs);
+
     /**
      * The Slack threads the requesting developer participated in, from channels whose consent is
      * {@code ACTIVE}, non-tombstoned messages only. Wrapped in the untrusted-content quarantine envelope.

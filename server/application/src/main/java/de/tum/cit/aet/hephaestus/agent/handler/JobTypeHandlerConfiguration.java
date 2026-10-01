@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -92,9 +93,15 @@ public class JobTypeHandlerConfiguration {
 
     @Bean
     PracticeReviewPreparation practiceReviewPreparation(
-            PracticeCatalogInjector practiceCatalogInjector, GitRepositoryManager gitRepositoryManager) {
+            PracticeCatalogInjector practiceCatalogInjector,
+            GitRepositoryManager gitRepositoryManager,
+            JobEvidenceFiles evidenceFiles) {
         return new PracticeReviewPreparation(
-                workspaceContextBuilder, practiceCatalogInjector, taskEnvelopeWriter, gitRepositoryManager);
+                workspaceContextBuilder,
+                practiceCatalogInjector,
+                taskEnvelopeWriter,
+                gitRepositoryManager,
+                evidenceFiles);
     }
 
     @Bean

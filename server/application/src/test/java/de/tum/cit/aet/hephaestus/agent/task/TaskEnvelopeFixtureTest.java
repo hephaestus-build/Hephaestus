@@ -14,24 +14,22 @@ import tools.jackson.databind.json.JsonMapper;
 /** JSON contract fixture shared with the TypeScript runner tests. */
 class TaskEnvelopeFixtureTest extends BaseUnitTest {
 
-    private static final String FIXTURE_PATH = "task-fixtures/v2/practice-review.json";
+    private static final String FIXTURE_PATH = "task-fixtures/v3/practice-review.json";
 
     @Test
     void matchesFixture() throws IOException {
         JsonMapper mapper = JsonMapper.builder().build();
         TaskEnvelopeWriter writer = new TaskEnvelopeWriter(mapper);
 
-        TaskEnvelope envelope = new TaskEnvelope(
-                TaskEnvelope.SCHEMA_VERSION,
+        TaskEnvelope envelope = TaskEnvelope.of(
                 UUID.fromString("00000000-0000-0000-0000-00000000abcd"),
                 99L,
-                new Task.PracticeReview(
+                new Task(
                         "Review merge request #42 in owner/repo. Read the context files, "
                                 + "then persist every justified observation via the report_observation tool. "
                                 + "Follow .pi/AGENTS.md for the schema and rules.",
                         42,
-                        "owner/repo"),
-                TaskPaths.capturedInputs());
+                        "owner/repo"));
 
         String actual = writer.writeAsString(envelope);
 

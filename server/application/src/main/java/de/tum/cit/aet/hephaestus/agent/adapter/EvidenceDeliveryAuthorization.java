@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
+import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -25,11 +26,15 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
 
     private final AgentJobRepository jobRepository;
     private final ArtifactSourceCatalogRegistry sourceCatalogs;
+    private final CitedSourceAccess citedSourceAccess;
 
     public EvidenceDeliveryAuthorization(
-            AgentJobRepository jobRepository, ArtifactSourceCatalogRegistry sourceCatalogs) {
+            AgentJobRepository jobRepository,
+            ArtifactSourceCatalogRegistry sourceCatalogs,
+            CitedSourceAccess citedSourceAccess) {
         this.jobRepository = jobRepository;
         this.sourceCatalogs = sourceCatalogs;
+        this.citedSourceAccess = citedSourceAccess;
     }
 
     @Override
@@ -45,7 +50,7 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
         }
         return jobRepository
                 .findEvidenceContractVersion(jobId, workspaceId)
-                .map(contractVersion -> permits(contractVersion, citations, requestedPurpose))
+                .map(contractVersion -> permits(workspaceId, contractVersion, citations, requestedPurpose))
                 .orElse(false);
     }
 
@@ -97,7 +102,7 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
             if (newDelivery && !CitationVerification.isVerified(entry.jobId(), row.getAttempt(), entry.citations())) {
                 continue;
             }
-            if (permits(row.getContractVersion(), entry.citations(), requestedPurpose)) {
+            if (permits(workspaceId, row.getContractVersion(), entry.citations(), requestedPurpose)) {
                 permitted.add(entry.observationId());
             }
         }
@@ -115,14 +120,16 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
         return citations.isArray() && !citations.isEmpty() ? citations : null;
     }
 
-    private boolean permits(String contractVersion, JsonNode citations, SourceUsePurpose requestedPurpose) {
+    private boolean permits(
+            long workspaceId, String contractVersion, JsonNode citations, SourceUsePurpose requestedPurpose) {
         try {
             SourceContractVersion version = new SourceContractVersion(contractVersion);
             for (JsonNode citation : citations) {
                 JsonNode sourceKind = citation.path("sourceKind");
                 if (!sourceKind.isString()
                         || !sourceCatalogs.isSourceUsePermitted(
-                                version, new SourceKind(sourceKind.asString()), requestedPurpose)) {
+                                version, new SourceKind(sourceKind.asString()), requestedPurpose)
+                        || !citedSourceAccess.permits(workspaceId, citation, requestedPurpose)) {
                     return false;
                 }
             }

@@ -33,6 +33,95 @@ class SandboxGatewaySessionsTest {
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
 
     @Test
+    void shouldServeOnlyFrozenSelectedBytesAndRetryWithoutSpendingAgain() throws Exception {
+        Path archive = workspaceArchive();
+        long bytes = Files.size(archive);
+        var bounded = new SandboxGatewaySessions(bytes * 2);
+        Path selection;
+        try (var session = bounded.register("token", archive, "out")) {
+            byte[] first;
+            try (var download = session.download("area", "chat")) {
+                first = download.input().readAllBytes();
+                assertThat(first.length).isEqualTo(download.bytes());
+                try (var tar = new org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
+                        new ByteArrayInputStream(first))) {
+                    assertThat(tar.getNextEntry().getName()).isEqualTo("context/chat/channel/2026-09.jsonl");
+                    assertThat(new String(tar.readAllBytes(), StandardCharsets.UTF_8))
+                            .isEqualTo("message");
+                    assertThat(tar.getNextEntry()).isNull();
+                }
+            }
+            try (var retry = session.download("area", "chat")) {
+                assertThat(retry.input().readAllBytes()).isEqualTo(first);
+            }
+            assertThatThrownBy(() -> session.download("repo", "7"))
+                    .isInstanceOf(WorkspaceBudgetExceededException.class);
+            try (var paths = Files.list(temporary)) {
+                selection = paths.filter(path -> path.getFileName().toString().startsWith("workspace-selection-"))
+                        .findFirst()
+                        .orElseThrow();
+            }
+        }
+        assertThat(selection).doesNotExist();
+        assertThat(archive).doesNotExist();
+    }
+
+    @Test
+    void shouldNotRegisterAnOverBudgetWorkspace() throws Exception {
+        Path archive = Files.writeString(temporary.resolve("large.tar"), "12345");
+        var bounded = new SandboxGatewaySessions(4);
+        UUID id = UUID.randomUUID();
+        assertThatThrownBy(() -> bounded.register(id, "token", archive, "out"))
+                .isInstanceOfSatisfying(WorkspaceBudgetExceededException.class, refusal -> {
+                    assertThat(refusal.getBody().getProperties())
+                            .containsEntry("reasonCode", "WORKSPACE_BUDGET_EXCEEDED");
+                    assertThat(refusal.getStatusCode()).isEqualTo(HttpStatus.CONTENT_TOO_LARGE);
+                });
+        assertThatThrownBy(() -> bounded.require(id, "Bearer token")).isInstanceOf(ResponseStatusException.class);
+    }
+
+    @Test
+    void shouldRefuseAbsentAndUnsafeSelectionsWithoutLeavingFiles() throws Exception {
+        Path archive = workspaceArchive();
+        try (var session = sessions.register("token", archive, "out")) {
+            for (String repository : java.util.List.of("8", "../7", "7/../8", "7%2fsecret")) {
+                assertThatThrownBy(() -> session.download("repo", repository))
+                        .isInstanceOfSatisfying(
+                                ResponseStatusException.class,
+                                refusal -> assertThat(refusal.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+            }
+            assertThatThrownBy(() -> session.download("area", "docs")).isInstanceOf(ResponseStatusException.class);
+            try (var paths = Files.list(temporary)) {
+                assertThat(paths.toList()).containsExactly(archive);
+            }
+            try (var download = session.download("repo", "7");
+                    var tar = new org.apache.commons.compress.archivers.tar.TarArchiveInputStream(download.input())) {
+                assertThat(tar.getNextEntry().getName()).isEqualTo("repos/7/README.md");
+                assertThat(new String(tar.readAllBytes(), StandardCharsets.UTF_8))
+                        .isEqualTo("repository");
+                assertThat(tar.getNextEntry()).isNull();
+            }
+        }
+    }
+
+    private Path workspaceArchive() throws IOException {
+        Path archive = temporary.resolve("workspace.tar");
+        try (var tar = new TarArchiveOutputStream(Files.newOutputStream(archive))) {
+            for (var file : java.util.Map.of(
+                            "context/chat/channel/2026-09.jsonl", "message", "repos/7/README.md", "repository")
+                    .entrySet()) {
+                byte[] content = file.getValue().getBytes(StandardCharsets.UTF_8);
+                var entry = new TarArchiveEntry(file.getKey());
+                entry.setSize(content.length);
+                tar.putArchiveEntry(entry);
+                tar.write(content);
+                tar.closeArchiveEntry();
+            }
+        }
+        return archive;
+    }
+
+    @Test
     void shouldNotReplaceAnActiveJobSession() throws Exception {
         UUID jobId = UUID.randomUUID();
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");

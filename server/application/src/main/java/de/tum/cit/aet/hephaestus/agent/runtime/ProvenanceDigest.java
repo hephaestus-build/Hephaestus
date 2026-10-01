@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -52,6 +53,63 @@ public final class ProvenanceDigest {
     public static String inputsDigestHex(Map<String, byte[]> files, UUID jobId) {
         byte[] jobIdBytes = jobId.toString().getBytes(StandardCharsets.UTF_8);
         return rootDigestHex(files, content -> elidedContentDigestHex(content, jobIdBytes));
+    }
+
+    /** Hashes the complete folder, including every object of its full-history repository checkouts. */
+    public static String inputsDigestHex(
+            Map<String, byte[]> scaffolding,
+            Map<String, java.nio.file.Path> files,
+            java.util.List<EvidenceDirectory> directories,
+            UUID jobId) {
+        var paths = new TreeMap<>(files);
+        try {
+            for (var directory : directories) {
+                try (var entries = java.nio.file.Files.walk(directory.source())) {
+                    for (var file : entries.filter(path ->
+                                    java.nio.file.Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS))
+                            .toList()) {
+                        String path = directory.target()
+                                + directory.source().relativize(file).toString().replace('\\', '/');
+                        var previous = paths.putIfAbsent(path, file);
+                        if (previous != null && !previous.equals(file)) {
+                            throw new IllegalArgumentException("Conflicting folder input: " + path);
+                        }
+                    }
+                }
+            }
+            var hashes = new TreeMap<String, String>();
+            for (var entry : paths.entrySet()) {
+                try (var input = java.nio.file.Files.newInputStream(entry.getValue())) {
+                    // Attempt-specific task metadata is small; source records and Git objects are streamed exactly.
+                    hashes.put(
+                            entry.getKey(),
+                            entry.getKey().equals(SandboxLayout.TASK_ENVELOPE_FILENAME)
+                                    ? elidedContentDigestHex(
+                                            input.readAllBytes(),
+                                            jobId.toString().getBytes(StandardCharsets.UTF_8))
+                                    : sha256Hex(input));
+                }
+            }
+            for (var entry : scaffolding.entrySet()) {
+                if (hashes.putIfAbsent(
+                                entry.getKey(),
+                                elidedContentDigestHex(
+                                        entry.getValue(), jobId.toString().getBytes(StandardCharsets.UTF_8)))
+                        != null) {
+                    throw new IllegalArgumentException("Scaffolding overlaps the job folder: " + entry.getKey());
+                }
+            }
+            MessageDigest digest = newSha256();
+            for (var entry : hashes.entrySet()) {
+                digest.update(entry.getKey().getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) 0);
+                digest.update(entry.getValue().getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) '\n');
+            }
+            return hex(digest);
+        } catch (IOException exception) {
+            throw new java.io.UncheckedIOException(exception);
+        }
     }
 
     private static String rootDigestHex(Map<String, byte[]> files, ContentDigest contentDigest) {

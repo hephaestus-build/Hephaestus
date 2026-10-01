@@ -34,7 +34,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
 
-    private static final String FILE_KEY = "inputs/context/general_comments.json";
+    private static final String FILE_KEY = "context/general_comments.json";
     private static final Long PR_ID = 456L;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -205,8 +205,8 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void contribute_overCap_keepsNewestAndFlagsTruncated() throws Exception {
-        int total = GeneralReviewCommentContentSource.MAX_COMMENTS + 5;
+    void shouldKeepAllGeneralCommentsAboveTheFormerCaptureLimit() throws Exception {
+        int total = 10_000 + 5;
         List<IssueComment> comments = new ArrayList<>();
         Instant base = Instant.parse("2025-06-01T00:00:00Z");
         for (int i = 0; i < total; i++) {
@@ -220,14 +220,11 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         provider.contribute(request(metadataWithPr()), files);
 
         JsonNode out = objectMapper.readTree(files.get(FILE_KEY));
-        assertThat(out.get("truncated").asBoolean()).isTrue();
+        assertThat(out.get("truncated").asBoolean()).isFalse();
         JsonNode bodies = out.get("comments");
-        assertThat(bodies).hasSize(GeneralReviewCommentContentSource.MAX_COMMENTS);
-        assertThat(bodies.get(0).get("body").asString()).isEqualTo("comment-5");
+        assertThat(bodies).hasSize(total);
+        assertThat(bodies.get(0).get("body").asString()).isEqualTo("comment-0");
         assertThat(bodies.get(bodies.size() - 1).get("body").asString()).isEqualTo("comment-" + (total - 1));
-        for (JsonNode c : bodies) {
-            assertThat(c.get("body").asString()).isNotEqualTo("comment-0");
-        }
     }
 
     @Test

@@ -204,7 +204,7 @@ export default defineConfig({
 				"node scripts/check-env-defaults.ts && node scripts/check-env-roles.ts && node --test scripts/check-env-roles.test.ts scripts/self-host-setup.test.ts",
 			),
 			"gate:contracts": run(
-				"node scripts/validate-artifact-source-contracts.ts && node scripts/check-artifact-source-contract-immutability.ts && node --test scripts/check-artifact-source-contract-immutability.test.ts",
+				"node scripts/validate-source-use-contracts.ts && node scripts/check-source-use-contract-immutability.ts && node --test scripts/check-source-use-contract-immutability.test.ts",
 			),
 			"gate:instructions": run(
 				"node scripts/check-agent-instructions.ts && node --test scripts/check-agent-instructions.test.ts",

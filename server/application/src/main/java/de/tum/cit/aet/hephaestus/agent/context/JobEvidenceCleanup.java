@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -17,6 +19,11 @@ class JobEvidenceCleanup {
 
     JobEvidenceCleanup(JobEvidenceFiles evidenceFiles) {
         this.evidenceFiles = evidenceFiles;
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    void cleanAfterRestart() {
+        evidenceFiles.cleanAfterRestart();
     }
 
     @Scheduled(fixedDelay = 60000)

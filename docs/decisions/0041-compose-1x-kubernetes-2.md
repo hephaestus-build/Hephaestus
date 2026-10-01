@@ -192,11 +192,11 @@ fence. Result upload does not bypass this check. Delivery reads persisted verdic
 storage.
 
 The guarantee is **byte-exact citation verification against captured evidence**. **No replay is
-offered.** Inputs remain available through attempt completion, including feedback composition after
-observation admission. The worker deletes a completed attempt’s folder when retiring it if its
-observations were admitted; a sweep retries missed cleanup. Other ended or orphaned attempts become
-eligible for deletion one hour after the worker first records that they have ended, and are removed
-by a successful cleanup sweep. Running attempts are not swept. There are no keep-refs,
+offered.** The worker deletes its evidence folder after observation admission commits; feedback
+composition uses the sandbox's already downloaded read-only workspace and the persisted verdicts.
+A sweep retries missed cleanup. Other ended attempts become eligible for deletion one hour after
+the worker first records that they have ended. On restart, the worker deletes folders for unknown
+or finished attempts immediately and preserves matching running attempts. There are no keep-refs,
 content-addressed store, evidence payload rows, shared volume, or retained replay copies. Snapshot
 repositories under the fabric root are released by the process that created them; age-based cleanup
 reclaims only leftovers of a previous process.

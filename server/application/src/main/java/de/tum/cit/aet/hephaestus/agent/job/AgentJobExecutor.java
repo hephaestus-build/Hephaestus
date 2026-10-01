@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
+import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -31,7 +32,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
-import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
@@ -654,6 +654,19 @@ public class AgentJobExecutor {
             log.info("Agent job completed: jobId={}, duration={}", jobId, Duration.between(startTime, Instant.now()));
         } catch (SandboxCancelledException e) {
             metricOutcome = handleCancellation(jobId, job) ? AgentJobStatus.CANCELLED.name() : "OWNERSHIP_LOST";
+        } catch (WorkspaceBudgetExceededException e) {
+            ObjectNode output = objectMapper
+                    .createObjectNode()
+                    .put("outcome", "WORKSPACE_REFUSED")
+                    .put("reasonCode", "WORKSPACE_BUDGET_EXCEEDED");
+            output.set("details", objectMapper.valueToTree(e.getBody().getProperties()));
+            Integer updated = transactionTemplate.execute(status -> jobRepository.transitionToEvidenceRefused(
+                    jobId, workerId, job.getRetryCount(), Instant.now(), output));
+            metricOutcome = updated != null && updated == 1 ? "WORKSPACE_BUDGET_EXCEEDED" : "OWNERSHIP_LOST";
+            if (updated != null && updated == 1) {
+                recordPracticeReviewRefusal(job, "workspace_budget_exceeded");
+                jobTelemetry.terminal(job, AgentJobStatus.COMPLETED, AgentJobTelemetry.age(job));
+            }
         } catch (InsufficientEvidenceException e) {
             // The evidence it carries was never staged for an attempt, so nothing else releases it.
             try (PreparedJobInputs refused = e.preparedInputs()) {
@@ -755,7 +768,6 @@ public class AgentJobExecutor {
         AgentJob preparedJob = jobRepository.findByIdWithWorkspace(jobId).orElse(job);
         PreparedJobInputs preparedInputs = handler.prepareInputs(preparedJob);
 
-        preparedInputs = evidenceFiles.prepare(job, preparedInputs);
         try {
             // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
             Instant workDeadline = Instant.now()
@@ -778,7 +790,7 @@ public class AgentJobExecutor {
             PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
             SandboxSpec sandboxSpec = buildSandboxSpec(
                     jobId,
-                    preparedInputs.files(),
+                    Map.of(),
                     preparedInputs.filesOnDisk(),
                     preparedInputs.directories(),
                     agentSpec,
@@ -789,6 +801,8 @@ public class AgentJobExecutor {
                     job.getJobType(),
                     agentSpec.promptDigest(),
                     sandboxSpec.inputFiles(),
+                    preparedInputs.filesOnDisk(),
+                    preparedInputs.directories(),
                     job.getRetryCount(),
                     preparedInputs.automatedReviewReadinessReport(),
                     reviewedArtifactId(job));
@@ -805,7 +819,9 @@ public class AgentJobExecutor {
                 jobId,
                 jobType,
                 null,
-                preparedInputs.files(),
+                Map.of(),
+                preparedInputs.filesOnDisk(),
+                preparedInputs.directories(),
                 retryCount,
                 preparedInputs.automatedReviewReadinessReport(),
                 null);
@@ -820,11 +836,14 @@ public class AgentJobExecutor {
             AgentJobType jobType,
             @Nullable String promptDigest,
             Map<String, byte[]> inputFiles,
+            Map<String, java.nio.file.Path> inputPaths,
+            List<EvidenceDirectory> inputDirectories,
             int retryCount,
             @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
             @Nullable Long reviewedArtifactId) {
-        String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, jobId);
-        JsonNode evidenceSnapshot = evidenceSnapshot(inputFiles, automatedReviewReadinessReport, reviewedArtifactId);
+        String inputsDigest = ProvenanceDigest.inputsDigestHex(inputFiles, inputPaths, inputDirectories, jobId);
+        JsonNode evidenceSnapshot = evidenceSnapshot(
+                snapshotMetadata(inputFiles, inputPaths), automatedReviewReadinessReport, reviewedArtifactId);
         Integer updated = transactionTemplate.execute(status -> jobRepository.updateProvenanceDigests(
                 jobId,
                 workerId,
@@ -843,6 +862,27 @@ public class AgentJobExecutor {
     }
 
     /** The manifest and admitted practices as the sandbox sees them, and the core of the work it staged. */
+    private static Map<String, byte[]> snapshotMetadata(
+            Map<String, byte[]> scaffolding, Map<String, java.nio.file.Path> paths) {
+        var metadata = new HashMap<>(scaffolding);
+        for (String path : List.of(
+                SandboxLayout.MANIFEST_PATH,
+                SandboxLayout.PRACTICES_PREFIX + "index.json",
+                SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+                SandboxLayout.CONTEXT_PREFIX + "issue_metadata.json",
+                GeneratedPathReviewDTO.INPUT_PATH)) {
+            java.nio.file.Path source = paths.get(path);
+            if (source != null) {
+                try {
+                    metadata.put(path, java.nio.file.Files.readAllBytes(source));
+                } catch (java.io.IOException exception) {
+                    throw new java.io.UncheckedIOException(exception);
+                }
+            }
+        }
+        return metadata;
+    }
+
     private @Nullable JsonNode evidenceSnapshot(
             Map<String, byte[]> inputFiles,
             @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
@@ -1322,11 +1362,11 @@ public class AgentJobExecutor {
             return AgentJobStatus.COMPLETED;
         }
         // Distinguish envelope drift (exit 42) from generic failure — the runner emits this when
-        // the task.json schemaVersion / kind doesn't match this image. Operators need to see
+        // the task.json schemaVersion doesn't match this image. Operators need to see
         // this distinctly from agent crashes; the secondary metric also alerts on image drift.
         if (sandboxResult.exitCode() == SandboxLayout.EXIT_ENVELOPE_MISMATCH) {
             log.error(
-                    "Pi runner rejected task envelope (exit {}) — server/image schemaVersion or kind drift. "
+                    "Pi runner rejected task envelope (exit {}) — server/image schemaVersion drift. "
                             + "Rebuild the agent-pi image or roll back the server.",
                     SandboxLayout.EXIT_ENVELOPE_MISMATCH);
             meterRegistry.counter(AgentMetrics.AGENT_PI_ENVELOPE_MISMATCH).increment();
@@ -1449,7 +1489,7 @@ public class AgentJobExecutor {
 
     /**
      * A job whose purpose or binding is gone yields {@code null}, which
-     * {@link LlmBudgetDecision#forFunding} judges against BOTH caps: an unattributable job must not be
+     * {@link de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision#forFunding} judges against BOTH caps: an unattributable job must not be
      * a way around either one.
      */
     private @Nullable FundingSource claimedFundingSource(AgentJob job) {

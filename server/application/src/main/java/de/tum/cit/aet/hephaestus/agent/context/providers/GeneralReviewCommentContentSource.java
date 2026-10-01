@@ -3,12 +3,12 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
-import de.tum.cit.aet.hephaestus.agent.context.EvidenceLimits;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -46,8 +46,6 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
     private static final Logger log = LoggerFactory.getLogger(GeneralReviewCommentContentSource.class);
 
     static final String FILE_NAME = "general_comments.json";
-
-    static final int MAX_COMMENTS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
 
     private final ObjectMapper objectMapper;
     private final IssueCommentRepository issueCommentRepository;
@@ -75,7 +73,7 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
     /**
      * Derives completeness/emptiness from the payload itself rather than the default: the file is
      * always written, even with zero comments, so the default's file-presence check would report
-     * NON_EMPTY on an empty result and COMPLETE past the truncation cap.
+     * NON_EMPTY on an empty result.
      */
     @Override
     public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {
@@ -124,18 +122,12 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
         try {
             List<IssueComment> comments =
                     new java.util.ArrayList<>(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
-                            pullRequestId,
-                            ReviewThreadContentSource.HEPHAESTUS_MARKER,
-                            PageRequest.of(0, MAX_COMMENTS + 1)));
+                            pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
             comments.removeIf(comment -> {
                 String body = comment == null ? null : comment.getBody();
-                return body == null || body.isBlank() || body.contains(ReviewThreadContentSource.HEPHAESTUS_MARKER);
+                return body == null || body.isBlank() || body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER);
             });
-            if (comments.size() > MAX_COMMENTS + 1) {
-                comments = new java.util.ArrayList<>(comments.subList(0, MAX_COMMENTS + 1));
-            }
-            boolean truncated = comments.size() > MAX_COMMENTS;
-            if (truncated) comments.remove(comments.size() - 1);
+            boolean truncated = false;
             comments.sort(
                     Comparator.comparing(IssueComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
 
