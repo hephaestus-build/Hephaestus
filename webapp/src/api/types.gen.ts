@@ -336,6 +336,10 @@ export type AgentJob = {
    */
   exitCode?: number;
   /**
+   * Frozen generated-path policy and changed paths marked generated; available on review detail after evidence capture
+   */
+  generatedPaths?: GeneratedPathReview;
+  /**
    * Why a QUEUED job is waiting rather than eligible, when the reason is one an admin can undo. BUDGET = the payer is over its monthly LLM cap and the job resumes by itself once the cap is raised or the month rolls over. Absent means no such hold — a future availableAt is then an ordinary retry backoff.
    */
   holdReason?: string;
@@ -1873,6 +1877,17 @@ export type FxRateInfo = {
    * Who published the rate, so a disclosure can name it instead of saying "a reference rate". ECB = the European Central Bank's daily euro foreign-exchange reference rates.
    */
   source: 'ECB';
+};
+
+/**
+ * Generated-path policy used by this review, not the repository's current settings
+ */
+export type GeneratedPathReview = {
+  /**
+   * Changed paths marked generated, including both names of a rename
+   */
+  paths: Array<string>;
+  patterns: Array<string>;
 };
 
 /**
@@ -3795,6 +3810,12 @@ export type PracticeReviewSettings = {
    */
   etag: string;
   /**
+   * Repository-root Ant-style generated-path patterns, keyed by monitored repository name
+   */
+  generatedPaths: {
+    [key: string]: Array<string>;
+  };
+  /**
    * Explicit all-or-selected repository and person coverage. Selected-empty means nobody.
    */
   reviewScope: WorkspaceReviewScope;
@@ -4925,7 +4946,7 @@ export type ReviewRequestOutcome = {
   /**
    * The controlled-vocabulary reason nothing was started; absent when a review was started
    */
-  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  reason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'BOT_AUTHOR' | 'BOT_REVIEWER' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * The reason as one sentence for the person who asked. Render it verbatim: it is written next to the reason it explains so that every surface says the same thing, and a re-worded copy is how a screen and a support answer come to disagree.
    */
@@ -5661,7 +5682,7 @@ export type TracedSignal = {
   /**
    * Why it ended in that state; null once it triggered a review
    */
-  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
+  stateReason?: 'GATE_SKIPPED' | 'COOLDOWN_ACTIVE' | 'REQUEST_COOLDOWN_ACTIVE' | 'REQUESTER_QUOTA_EXHAUSTED' | 'CONCURRENT_DUPLICATE' | 'COALESCED' | 'OUT_OF_REVIEW_SCOPE' | 'BOT_AUTHOR' | 'BOT_REVIEWER' | 'STALE_ROLLOUT_REVISION' | 'WORKSPACE_INACTIVE' | 'PRACTICES_DISABLED' | 'NO_ACTIVE_PRACTICE' | 'REVIEW_MODEL_UNBOUND' | 'MEMBER_AI_DECLINED' | 'PRACTICE_AUTONOMY_OFF' | 'BUDGET_EXHAUSTED' | 'SUBJECT_UNLINKED' | 'MERGE_ACTOR_UNAVAILABLE' | 'MODEL_UNAVAILABLE' | 'ARTIFACT_NOT_VISIBLE' | 'PENDING_DEADLINE_EXCEEDED' | 'ARTIFACT_GONE';
   /**
    * That reason as one sentence for a reader. Render it verbatim: it is written next to the reason it explains, so every surface that explains a silence says the same thing
    */
@@ -6041,6 +6062,12 @@ export type UpdatePracticeReviewSettingsRequest = {
    * Pause or activate external feedback. Resume never releases work from an older revision.
    */
   deliveryStatus?: 'ACTIVE' | 'PAUSED';
+  /**
+   * Patch generated-path patterns per monitored repository. An empty list clears that repository. Null leaves all unchanged.
+   */
+  generatedPaths?: {
+    [key: string]: Array<string>;
+  };
   /**
    * Fields to reset back to inherit
    */

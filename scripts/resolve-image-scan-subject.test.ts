@@ -28,6 +28,35 @@ for (const scenario of [
 		expected: amd64,
 	},
 	{
+		name: "selects arm64 without scanning the host platform or an attestation",
+		platform: "linux/arm64",
+		raw: {
+			manifests: [
+				{ digest: index, platform: { os: "unknown", architecture: "unknown" } },
+				{ digest: amd64, platform: { os: "linux", architecture: "amd64" } },
+				{ digest: arm64, platform: { os: "linux", architecture: "arm64" } },
+			],
+		},
+		expected: arm64,
+	},
+	{
+		name: "rejects a missing arm64 manifest instead of scanning amd64",
+		platform: "linux/arm64",
+		raw: { manifests: [{ digest: amd64, platform: { os: "linux", architecture: "amd64" } }] },
+	},
+	{
+		name: "rejects an unsupported scan platform before inspecting the image",
+		platform: "linux/386",
+		raw: {},
+		noInspect: true,
+	},
+	{
+		name: "requires an explicit scan platform",
+		platform: "",
+		raw: {},
+		noInspect: true,
+	},
+	{
 		name: "resolves a single manifest through the original immutable reference",
 		raw: { config: {}, layers: [] },
 		expected: index,
@@ -95,12 +124,14 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 		writeFileSync(output, "");
 		writeFileSync(callLog, "");
 		const imageRef = "imageRef" in scenario ? scenario.imageRef : reference;
+		const platform = ("platform" in scenario ? scenario.platform : undefined) ?? "linux/amd64";
 		const result = spawnSync(process.execPath, [checker], {
 			encoding: "utf8",
 			env: {
 				...process.env,
 				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 				IMAGE_REF: imageRef,
+				SCAN_PLATFORM: platform,
 				INPUT_IMAGE_NAME: "imageName" in scenario ? scenario.imageName : "example/webapp",
 				GITHUB_OUTPUT: output,
 				RAW: "rawText" in scenario ? scenario.rawText : JSON.stringify(scenario.raw),
@@ -113,7 +144,10 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 		const calls = readFileSync(callLog, "utf8");
 		if ("expected" in scenario) {
 			assert.equal(result.status, 0, result.stderr);
-			assert.equal(emitted, `image=webapp\ndigest=${scenario.expected}\n`);
+			assert.equal(
+				emitted,
+				`image=webapp\ndigest=${scenario.expected}\nreport-stem=webapp-${platform.replaceAll("/", "-")}\n`,
+			);
 		} else {
 			assert.notEqual(result.status, 0);
 			assert.equal(emitted, "", "failed resolution must publish no usable scan subject");
@@ -143,6 +177,7 @@ void test("the image workflow shares the resolver and retains its immutable subj
 	);
 	const steps = workflow.getIn(["jobs", "scan", "steps"]);
 	assert.ok(isSeq(steps));
+	assert.equal(workflow.getIn(["jobs", "scan", "env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
 	const subject = steps.items.find((item) => isMap(item) && item.get("id") === "subject");
 	assert.ok(isMap(subject));
 	assert.equal(subject.get("run"), "node scripts/resolve-image-scan-subject.ts");

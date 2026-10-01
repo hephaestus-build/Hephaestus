@@ -60,6 +60,38 @@ export function ReviewRunCard({ job }: ReviewRunCardProps) {
 					)}
 				</ReviewFact>
 			</ReviewFactGrid>
+			{job.generatedPaths && (
+				<section aria-labelledby="run-generated-heading" className="space-y-2">
+					<h4 id="run-generated-heading" className="font-medium">
+						Generated paths used by this review
+					</h4>
+					<p className="text-sm text-muted-foreground">
+						These paths were kept as generated output, not judged as hand-written work.
+					</p>
+					<p className="text-sm break-all">
+						Patterns:{" "}
+						{job.generatedPaths.patterns.length > 0
+							? job.generatedPaths.patterns.join(", ")
+							: "None configured"}
+					</p>
+					{job.generatedPaths.paths.length > 0 ? (
+						<ul className="list-inside list-disc text-sm">
+							{job.generatedPaths.paths.map((path) => (
+								<li key={path}>
+									<code className="break-all">{path}</code>
+								</li>
+							))}
+						</ul>
+					) : (
+						<p className="text-sm text-muted-foreground">No changed paths matched.</p>
+					)}
+				</section>
+			)}
+			{job.jobType === "PULL_REQUEST_REVIEW" && !job.generatedPaths && (
+				<p className="text-sm text-muted-foreground">
+					Generated-path classification was not captured for this review.
+				</p>
+			)}
 			{hasText(job.errorMessage) && <RunFailure job={job} message={job.errorMessage} />}
 		</section>
 	);

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ConversationConsentGate;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChannel.DeliveryOutcome;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -155,7 +156,8 @@ class ConversationalDeliveryBatchAuthorizationTest extends BaseUnitTest {
                                         call -> call.getMethod().getName().equals("permits")
                                                 ? true
                                                 : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call))),
-                        mock(ObservationInvalidationRepository.class)));
+                        mock(ObservationInvalidationRepository.class)),
+                mock(ConversationConsentGate.class));
 
         UUID actedOn =
                 switch (ending) {

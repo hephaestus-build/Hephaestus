@@ -181,6 +181,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                 false,
                 "https://github.com/owner/repo/pull/42#pullrequestreview-100",
                 200L,
+                true,
                 PR_ID,
                 Instant.now(),
                 100L);
@@ -602,7 +603,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             workspace.setId(WORKSPACE_ID);
             var detect = automaticDetection(workspace, List.of());
             when(practiceReviewDetectionGate.evaluate(
-                            pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, new ReviewSubject(200L, true)))
+                            pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, ReviewSubject.reviewer(200L, true)))
                     .thenReturn(detect);
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
@@ -725,7 +726,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
             lenient()
                     .when(practiceReviewDetectionGate.evaluate(
-                            pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, new ReviewSubject(200L, true)))
+                            pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, ReviewSubject.reviewer(200L, true)))
                     .thenReturn(new GateDecision.Skip("no matching practices"));
 
             listener.onReviewSubmitted(event);
@@ -752,7 +753,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
             when(practiceReviewDetectionGate.evaluate(
-                            pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, new ReviewSubject(200L, true)))
+                            pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, ReviewSubject.reviewer(200L, true)))
                     .thenReturn(automaticDetection(workspace, List.of()));
             when(agentJobService.submit(any(), any(), any(), any(), any()))
                     .thenThrow(new RuntimeException("submission failed"));
@@ -769,7 +770,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
             lenient()
                     .when(practiceReviewDetectionGate.evaluate(
-                            pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, new ReviewSubject(200L, true)))
+                            pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, ReviewSubject.reviewer(200L, true)))
                     .thenThrow(new RuntimeException("unexpected gate error"));
 
             // Should not throw — outer catch handles gate exceptions

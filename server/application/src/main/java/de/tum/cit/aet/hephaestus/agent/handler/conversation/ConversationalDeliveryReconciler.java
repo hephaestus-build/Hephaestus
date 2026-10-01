@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler.conversation;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ConversationConsentGate;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
@@ -7,6 +8,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacement;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -34,18 +36,33 @@ public class ConversationalDeliveryReconciler {
     private final FeedbackPlacementRepository feedbackPlacementRepository;
     private final ObservationRepository observationRepository;
     private final ObservationVisibilityPolicy visibilityPolicy;
+    private final ConversationConsentGate consentGate;
 
     public ConversationalDeliveryReconciler(
             FeedbackRepository feedbackRepository,
             FeedbackObservationRepository feedbackObservationRepository,
             FeedbackPlacementRepository feedbackPlacementRepository,
             ObservationRepository observationRepository,
-            ObservationVisibilityPolicy visibilityPolicy) {
+            ObservationVisibilityPolicy visibilityPolicy,
+            ConversationConsentGate consentGate) {
         this.feedbackRepository = feedbackRepository;
         this.feedbackObservationRepository = feedbackObservationRepository;
         this.feedbackPlacementRepository = feedbackPlacementRepository;
         this.observationRepository = observationRepository;
         this.visibilityPolicy = visibilityPolicy;
+        this.consentGate = consentGate;
+    }
+
+    /**
+     * Whether the mentor may show {@code recipientUserId} feedback about this observation now: one {@link #admitted}
+     * would act on, and about the recipient. Asked while the turn runs, before the link is acknowledged, shown or
+     * stored, so an id the model invented or borrowed never reaches the developer; {@link #reconcile} still settles
+     * the ledger once the reply is stored.
+     */
+    @Transactional(readOnly = true)
+    public boolean admits(long workspaceId, long recipientUserId, UUID observationId) {
+        Observation observation = admitted(workspaceId, List.of(observationId)).get(observationId);
+        return observation != null && Long.valueOf(recipientUserId).equals(observation.getAboutUserId());
     }
 
     public int reconcile(long workspaceId, long recipientUserId, UUID chatMessageId, List<UUID> linkedObservationIds) {
@@ -85,14 +102,13 @@ public class ConversationalDeliveryReconciler {
 
     /**
      * The linked observations this turn may act on: the observations this workspace can read whose claim and
-     * evidence the visibility policy still permits for mentoring, keyed by id, in the mentor's emission
-     * order.
+     * evidence the visibility policy still permits for mentoring and, for one drawn from a conversation, whose
+     * conversation is still consented to, keyed by id, in the mentor's emission order. Pausing a channel erases
+     * nothing, so its consent is read here, not inferred from the evidence.
      *
-     * <p>{@code linkedObservationIds} is the mentor's raw tool output — {@code link_observation} carries whatever
-     * UUID the model emitted, and nothing between the tool call and here checks it against the observations the
-     * turn's context was actually served ({@code PiEventToUiChunkTranslator} only parses it as a UUID). This
-     * gate is therefore the only thing standing between a model-chosen id and a write to the feedback
-     * ledger, and <em>both</em> endings of a turn are ledger writes — one flips a unit to DELIVERED, the
+     * <p>{@code linkedObservationIds} are the links the stored reply shows. {@link #admits} already checked each one
+     * while the turn ran, but authorization can change between that check and the end of the turn, so the ledger is
+     * gated again here, and <em>both</em> endings of a turn are ledger writes — one flips a unit to DELIVERED, the
      * other burns it to SUPPRESSED — so both are gated here rather than at one call site.
      *
      * <p>A refused id is left alone rather than settled. Refusal is not always terminal (an evidence
@@ -101,8 +117,8 @@ public class ConversationalDeliveryReconciler {
      * spend the developer's coaching on a condition that may lift tomorrow. The unit behind a refused id is
      * still settled, by {@link ConversationFeedbackTtlSweeper} at the end of its window.
      *
-     * <p>Two queries for the whole turn, not one per linked id — nothing caps how many observations a mentor
-     * turn links (the reply stores a part per {@code link_observation} tool call).
+     * <p>Each check is one batch for the whole turn, not one query per linked id — nothing caps how many
+     * observations a mentor turn links (the reply stores a part per {@code link_observation} tool call).
      */
     private Map<UUID, Observation> admitted(long workspaceId, List<UUID> linkedObservationIds) {
         if (linkedObservationIds == null || linkedObservationIds.isEmpty()) {
@@ -118,15 +134,27 @@ public class ConversationalDeliveryReconciler {
         }
         Set<UUID> visible = visibilityPolicy.permitsForNewDelivery(
                 workspaceId, byId.values(), SourceUsePurpose.CONVERSATIONAL_MENTORING);
+        Set<Long> consentedThreads = consentGate.activeThreadIds(
+                workspaceId,
+                byId.values().stream()
+                        .filter(ConversationalDeliveryReconciler::fromConversation)
+                        .map(Observation::getArtifactId)
+                        .toList());
         Map<UUID, Observation> admitted = new LinkedHashMap<>();
         for (UUID observationId : observationIds) {
             Observation observation = byId.get(observationId);
-            // Absent from either batch means refused.
-            if (observation != null && visible.contains(observationId)) {
+            // Absent from any batch means refused.
+            if (observation != null
+                    && visible.contains(observationId)
+                    && (!fromConversation(observation) || consentedThreads.contains(observation.getArtifactId()))) {
                 admitted.put(observationId, observation);
             }
         }
         return admitted;
+    }
+
+    private static boolean fromConversation(Observation observation) {
+        return ArtifactKinds.CONVERSATION_THREAD.equals(observation.getArtifactKind());
     }
 
     /**

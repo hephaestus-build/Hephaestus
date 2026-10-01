@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ConversationConsentGate;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -36,6 +38,8 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -86,6 +90,9 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     @Mock
     private ObservationVisibilityPolicy visibilityPolicy;
+
+    @Mock
+    private ConversationConsentGate consentGate;
 
     /**
      * Only consulted by {@code admit(...)}, which resolves the workspace's defaults before routing. These
@@ -144,7 +151,59 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
                 feedbackObservationRepository,
                 feedbackPlacementRepository,
                 observationRepository,
-                visibilityPolicy);
+                visibilityPolicy,
+                consentGate);
+    }
+
+    @Test
+    void admitsALinkOnlyToAnObservationAboutTheRecipientThatThePolicyStillPermits() {
+        UUID owned = UUID.randomUUID();
+        UUID foreign = UUID.randomUUID();
+        UUID withdrawn = UUID.randomUUID();
+        Observation aboutSomeoneElse = problem(null, null, foreign);
+        when(aboutSomeoneElse.getAboutUserId()).thenReturn(RECIPIENT + 1);
+        Map<UUID, Observation> stored = Map.of(
+                owned, problem(null, null, owned),
+                foreign, aboutSomeoneElse,
+                withdrawn, problem(null, null, withdrawn));
+        doAnswer(invocation -> invocation.<Collection<UUID>>getArgument(0).stream()
+                        .map(stored::get)
+                        .filter(Objects::nonNull)
+                        .toList())
+                .when(observationRepository)
+                .findAllByIdInAndWorkspaceId(any(), anyLong());
+        doAnswer(invocation -> invocation.<Collection<Observation>>getArgument(1).stream()
+                        .map(Observation::getId)
+                        .filter(id -> !id.equals(withdrawn))
+                        .collect(Collectors.toSet()))
+                .when(visibilityPolicy)
+                .permitsForNewDelivery(anyLong(), any(), eq(SourceUsePurpose.CONVERSATIONAL_MENTORING));
+
+        assertThat(reconciler().admits(WS, RECIPIENT, owned)).isTrue();
+        assertThat(reconciler().admits(WS, RECIPIENT, UUID.randomUUID()))
+                .as("no such observation")
+                .isFalse();
+        assertThat(reconciler().admits(WS, RECIPIENT, foreign))
+                .as("about another developer")
+                .isFalse();
+        assertThat(reconciler().admits(WS, RECIPIENT, withdrawn))
+                .as("refused by policy")
+                .isFalse();
+    }
+
+    @Test
+    void admitsALinkToAConversationObservationOnlyWhileItsConversationIsConsentedTo() {
+        UUID observationId = UUID.randomUUID();
+        Observation fromConversation = problem(null, null, observationId);
+        when(fromConversation.getArtifactKind()).thenReturn(ArtifactKinds.CONVERSATION_THREAD);
+        when(fromConversation.getArtifactId()).thenReturn(55L);
+        doReturn(List.of(fromConversation)).when(observationRepository).findAllByIdInAndWorkspaceId(any(), anyLong());
+
+        when(consentGate.activeThreadIds(WS, List.of(55L))).thenReturn(Set.of());
+        assertThat(reconciler().admits(WS, RECIPIENT, observationId)).isFalse();
+
+        when(consentGate.activeThreadIds(WS, List.of(55L))).thenReturn(Set.of(55L));
+        assertThat(reconciler().admits(WS, RECIPIENT, observationId)).isTrue();
     }
 
     @Test

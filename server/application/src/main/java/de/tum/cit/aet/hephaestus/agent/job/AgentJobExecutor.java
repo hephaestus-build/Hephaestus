@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -895,6 +896,8 @@ public class AgentJobExecutor {
         }
         ObjectNode snapshot = objectMapper.createObjectNode();
         snapshot.set("manifest", objectMapper.readTree(manifest));
+        byte[] generatedPaths = inputFiles.get(GeneratedPathReviewDTO.INPUT_PATH);
+        if (generatedPaths != null) snapshot.set("generatedPaths", objectMapper.readTree(generatedPaths));
         if (practices != null) {
             snapshot.set("practices", objectMapper.readTree(practices));
         }

@@ -464,3 +464,36 @@ run themselves once a sync finds the work again, and are dropped if it does not 
 The per-workspace review list, the **Reviews** tab under Administration → **Practices → Practice
 reviews**, shows each review's status; open a review to see the model it ran on and its error message —
 the fastest way to tell "never submitted" from "submitted and failed".
+
+## Generated paths
+
+In **Review settings**, set generated paths separately for each monitored GitHub or GitLab repository.
+Enter one pattern per line. Clear the list and save to stop marking paths as generated. This setting is
+independent of repository and branch coverage. Changing coverage does not clear generated paths.
+Slack conversations and Outline documents have no repository paths, so this setting does not apply.
+
+Patterns use case-sensitive, repository-root Ant-style globs: `*` matches within one path segment,
+`?` matches one character, and `**` matches zero or more directories. For example, `webapp/src/api/**`
+marks all files below the committed API client, and `**/*.generated.ts` matches that suffix at any depth.
+Use `/` separators. A bare filename matches only at the repository root. There is no negation, leading
+`/`, parent traversal, URI variable, or automatic import from `.gitattributes` or other tools. Each
+repository accepts at most 100 patterns, with at most 512 characters per pattern.
+
+**Generated content is kept, not removed.** The review receives the matched changed paths as trusted
+workspace policy. It must not judge those paths as hand-written work or count them toward hand-written
+review size. The `excludes-generated-and-build-artifacts` practice does not treat intentionally
+committed output on those paths as unwanted artifacts; it can still assess artifacts outside them.
+If a practice requires hand-written changes and none remain, the result is **Not applicable**, not a
+strength or a problem. Other evidence, such as the title, body, commits and review comments, remains
+available. Mark only paths your repository generates intentionally; a broad pattern can hide useful
+practice feedback.
+
+Under **Practice reviews**, open a review to see the generated-path patterns and matched changed paths
+used for that run. Both names of a renamed file are checked separately. Patterns are fixed when a
+review is admitted, and matched paths are recorded when evidence is captured. Later settings changes
+do not rewrite old review records. A review without a captured classification does not claim that no
+paths matched.
+
+The matcher follows [Spring's AntPathMatcher semantics](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/util/AntPathMatcher.html),
+not `.gitignore` or `.gitattributes` syntax. GitHub also supports [marking generated files for diff presentation](https://docs.github.com/en/repositories/working-with-files/managing-files/customizing-how-changed-files-appear-on-github),
+but Hephaestus uses the workspace admin's explicit per-repository setting.

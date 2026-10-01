@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -50,6 +51,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -329,6 +331,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                             false,
                             null,
                             200L,
+                            true,
                             456L,
                             null,
                             123L));
@@ -352,6 +355,48 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
     @Nested
     class PrepareInputs {
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+        void shouldStageGeneratedPathPolicyWithUnmodifiedEvidenceForMixedAndGeneratedOnlyChanges(
+                boolean generatedOnly) {
+            stubDefaults();
+            var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey(WORKSPACE_ID, 123L);
+            var preparer = mock(de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer.class);
+            when(preparer.prepare(any()))
+                    .thenReturn(
+                            new de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer
+                                    .PreparedReview(key, "head", "base"));
+            byte[] raw = "{\"title\":\"Original evidence\"}".getBytes(StandardCharsets.UTF_8);
+            when(workspaceContextBuilder.prepare(
+                            any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
+                    .thenAnswer(invocation -> {
+                        ContextRequest.PracticeReviewRequest request = invocation.getArgument(0);
+                        request.preparation().prepare(preparer, request.job());
+                        return prepared(Map.of("inputs/context/metadata.json", raw));
+                    });
+            when(gitRepositoryManager.changedPaths(key, "base", "head"))
+                    .thenReturn(
+                            generatedOnly
+                                    ? Set.of("generated/client.ts")
+                                    : Set.of("generated/client.ts", "src/service.ts"));
+            var metadata = sampleJobMetadata();
+            metadata.putArray("generated_path_patterns").add("generated/**");
+            var files = handler.prepareInputs(jobWithMetadata(metadata)).files();
+            var policy = objectMapper.readTree(
+                    files.get(de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO.INPUT_PATH));
+            assertThat(policy.path("patterns").get(0).asString()).isEqualTo("generated/**");
+            assertThat(policy.path("paths")).hasSize(1);
+            assertThat(policy.path("paths").get(0).asString()).isEqualTo("generated/client.ts");
+            assertThat(files.get("inputs/context/metadata.json")).isEqualTo(raw);
+            assertThat(new String(
+                            files.get(SandboxLayout.PRACTICES_PREFIX + "pr-description-quality.md"),
+                            StandardCharsets.UTF_8))
+                    .contains(
+                            "Repository generated-path policy",
+                            "NOT_APPLICABLE",
+                            "excludes-generated-and-build-artifacts");
+        }
 
         @Test
         void delegatesToWorkspaceContextBuilder() {

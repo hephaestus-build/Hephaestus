@@ -728,7 +728,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         }
 
         @Test
-        void stampTheTitleDescriptionAndHeadThePullRequestCaptureStaged() {
+        void stampTheTitleDescriptionHeadAndGeneratedPathsThePullRequestCaptureStaged() {
             stubClaimableJob();
             job.setMetadata(objectMapper.createObjectNode().put("pull_request_id", 42L));
             stubCapture(HEAD_SHA);
@@ -745,6 +745,10 @@ class AgentJobExecutorTest extends BaseUnitTest {
             JsonNode reviewed = snapshot.path(ReviewedWork.SNAPSHOT_KEY);
             assertThat(reviewed.path("artifactId").asLong()).isEqualTo(42L);
             assertThat(reviewed.path("head").asString()).isEqualTo(HEAD_SHA);
+            assertThat(snapshot.path("generatedPaths").path("patterns").get(0).asString())
+                    .isEqualTo("generated/**");
+            assertThat(snapshot.path("generatedPaths").path("paths").get(0).asString())
+                    .isEqualTo("generated/client.ts");
             assertThat(reviewed.path("titleAndDescriptionRevision").asString())
                     .isEqualTo(ReviewedWork.revision(ArtifactKinds.PULL_REQUEST, "MR !2", "No issue link"));
         }
@@ -2567,6 +2571,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 capturedAt,
                 List.of(new AutomatedReviewReadinessDecision("example", capturedAt, true, List.of(), List.of(check))));
         Map<String, byte[]> files = Map.of(
+                de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO.INPUT_PATH,
+                objectMapper.writeValueAsBytes(new de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO(
+                        List.of("generated/**"), List.of("generated/client.ts"))),
                 SandboxLayout.MANIFEST_PATH,
                 objectMapper.writeValueAsBytes(manifest),
                 SandboxLayout.CONTEXT_PREFIX + "metadata.json",

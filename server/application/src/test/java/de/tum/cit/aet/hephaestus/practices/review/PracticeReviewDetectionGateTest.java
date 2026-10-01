@@ -173,6 +173,36 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
         return workspace;
     }
 
+    @Test
+    void shouldRefuseBotReviewerBeforeMembershipOrPracticeLookup() {
+        PullRequest pr = createPullRequest();
+        Workspace workspace = createWorkspace();
+        when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
+        var decision = (GateDecision.Skip) gate.evaluate(
+                pr,
+                de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals.PULL_REQUEST_REVIEWED,
+                TriggerMode.AUTO,
+                de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject.reviewer(8L, false));
+        assertThat(decision.resolvedSignalReason()).isEqualTo(SignalStateReason.BOT_REVIEWER);
+        assertThat(decision.resolvedSignalReason().describe()).contains("reviewer is a bot");
+        verifyNoInteractions(coverageService, practiceRepository);
+    }
+
+    @Test
+    void shouldRefuseBotAuthorEvenWhenAdministrativeReviewBypassesCoverage() {
+        PullRequest pr = createPullRequest();
+        var author = new de.tum.cit.aet.hephaestus.integration.scm.domain.user.User();
+        author.setId(8L);
+        author.setType(de.tum.cit.aet.hephaestus.integration.scm.domain.user.User.Type.BOT);
+        pr.setAuthor(author);
+        Workspace workspace = createWorkspace();
+        when(workspaceResolver.resolveForRepository("ls1intum/Hephaestus")).thenReturn(Optional.of(workspace));
+        var decision = (GateDecision.Skip) gate.evaluateAdministrative(pr, SIGNAL);
+        assertThat(decision.resolvedSignalReason()).isEqualTo(SignalStateReason.BOT_AUTHOR);
+        assertThat(decision.resolvedSignalReason().describe()).contains("author is a bot");
+        verifyNoInteractions(coverageService, practiceRepository);
+    }
+
     /**
      * A review somebody asked for by hand. No bundled practice binds {@code scm.pull_request.manual_review},
      * so matching a request by signal would refuse every one of them with "no matching practices". The
@@ -706,7 +736,7 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
             assertThat(((GateDecision.Skip) gate.evaluate(pr, SIGNAL, TriggerMode.AUTO)).resolvedSignalReason())
                     .isEqualTo(SignalStateReason.OUT_OF_REVIEW_SCOPE);
             assertThat(((GateDecision.Skip) gate.evaluate(pr, SIGNAL, TriggerMode.AUTO)).resolvedSignalReason())
-                    .isEqualTo(SignalStateReason.OUT_OF_REVIEW_SCOPE);
+                    .isEqualTo(SignalStateReason.BOT_AUTHOR);
         }
 
         @Test

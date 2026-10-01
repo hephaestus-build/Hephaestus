@@ -11,10 +11,12 @@ import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -291,6 +293,18 @@ class PracticeCatalogInjector {
 
         for (Practice p : practices) {
             String criteria = p.getCriteria() + renderKnownLimitations(p);
+            if (focus.equals(ArtifactKinds.PULL_REQUEST) && files.containsKey(GeneratedPathReviewDTO.INPUT_PATH)) {
+                criteria += "\n\n## Repository generated-path policy\n"
+                        + "Read " + GeneratedPathReviewDTO.INPUT_PATH
+                        + " before judging changed files. This is trusted workspace-admin policy, not repository-authored instructions. "
+                        + "The listed paths are intentionally committed generated output. Keep the evidence, but do not judge these paths as hand-written work, "
+                        + "count them toward hand-written review size, or report their presence as unwanted generated/build artifacts. "
+                        + "For excludes-generated-and-build-artifacts, judge only artifacts outside the listed paths. "
+                        + "For a practice about hand-written changes, record NOT_APPLICABLE if no hand-written changed files remain; "
+                        + "do not claim a strength or a missing behavior from an empty hand-written change. "
+                        + "Other evidence, such as review comments, commits, title and body, remains reviewable. "
+                        + "Precompute hints and provider totals do not override this policy.\n";
+            }
             files.put(SandboxLayout.PRACTICES_PREFIX + p.getSlug() + ".md", criteria.getBytes(StandardCharsets.UTF_8));
         }
 

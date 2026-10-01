@@ -43,6 +43,10 @@ public enum SignalStateReason {
      */
     OUT_OF_REVIEW_SCOPE(SignalState.SUPPRESSED),
 
+    BOT_AUTHOR(SignalState.SUPPRESSED),
+
+    BOT_REVIEWER(SignalState.SUPPRESSED),
+
     STALE_ROLLOUT_REVISION(SignalState.SUPPRESSED),
 
     WORKSPACE_INACTIVE(SignalState.PENDING),
@@ -124,6 +128,8 @@ public enum SignalStateReason {
             case COALESCED -> "A later change to this work replaced this update before a review started.";
             case OUT_OF_REVIEW_SCOPE ->
                 "The author, repository or base branch is outside the workspace's review coverage.";
+            case BOT_AUTHOR -> "The author is a bot; practice reviews only judge people.";
+            case BOT_REVIEWER -> "The reviewer is a bot; practice reviews only judge people.";
             case STALE_ROLLOUT_REVISION ->
                 "The workspace's review settings changed before this review could start, so it did not run.";
             case WORKSPACE_INACTIVE -> "The workspace was not active; it is tried again once it is.";

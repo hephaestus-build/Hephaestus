@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -372,6 +373,15 @@ public class AgentJobService {
                     var rechecked = objectMetadata.putArray(AgentJob.RECHECKED_PRACTICES_METADATA_KEY);
                     admission.recheckedPractices().stream().sorted().forEach(rechecked::add);
                 }
+            }
+            if (jobType == AgentJobType.PULL_REQUEST_REVIEW && metadata instanceof ObjectNode objectMetadata) {
+                String repository = objectMetadata.path("repository_full_name").asString();
+                var patterns = currentWorkspace.getRepositoriesToMonitor().stream()
+                        .filter(monitor -> monitor.getNameWithOwner().equals(repository))
+                        .findFirst()
+                        .map(monitor -> List.copyOf(monitor.getGeneratedPaths()))
+                        .orElseGet(List::of);
+                objectMetadata.set("generated_path_patterns", objectMapper.valueToTree(patterns));
             }
             job.setMetadata(metadata);
             job.setIdempotencyKey(detectionKey);

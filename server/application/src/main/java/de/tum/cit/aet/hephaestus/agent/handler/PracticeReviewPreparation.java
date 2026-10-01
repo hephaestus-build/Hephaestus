@@ -15,7 +15,9 @@ import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,8 +26,12 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 final class PracticeReviewPreparation {
+
+    private static final JsonMapper JSON = JsonMapper.builder().build();
 
     private static final Logger log = LoggerFactory.getLogger(PracticeReviewPreparation.class);
 
@@ -65,13 +71,14 @@ final class PracticeReviewPreparation {
         PreparedEvidence prepared = workspaceContextBuilder.prepare(request, EvidencePlan.compile(eligible));
         try {
             JobFolderIndex manifest = Objects.requireNonNull(prepared.manifest(), "manifest");
+            var change = ReviewChange.of(gitRepositoryManager, request);
             var readiness = workspaceContextBuilder.prepareAutomatedReviewReadiness(
                     manifest,
                     eligible,
                     job.getCreatedAt(),
                     practice -> PracticeCatalogInjector.occasionOf(job, practice.getSlug()),
                     prepared.files(),
-                    ReviewChange.of(gitRepositoryManager, request));
+                    change);
             List<Practice> ready = readiness.readyPractices();
             if (ready.size() < eligible.size()) {
                 log.info(
@@ -90,6 +97,15 @@ final class PracticeReviewPreparation {
                         evidenceFiles.prepare(job, prepared, readiness.report()));
             }
             Map<String, byte[]> files = new LinkedHashMap<>(prepared.files());
+            if (artifactKind.equals(ArtifactKinds.PULL_REQUEST) && change != null) {
+                var metadata = java.util.Objects.requireNonNull(job.getMetadata());
+                var patterns = java.util.stream.StreamSupport.stream(
+                                metadata.path("generated_path_patterns").spliterator(), false)
+                        .map(JsonNode::asString)
+                        .toList();
+                var policy = GeneratedPathReviewDTO.of(patterns, change.changedPaths());
+                files.put(GeneratedPathReviewDTO.INPUT_PATH, JSON.writeValueAsBytes(policy));
+            }
             files.put(SandboxLayout.TASK_ENVELOPE_FILENAME, taskEnvelopeWriter.write(envelope.get()));
             practiceCatalogInjector.inject(files, job, artifactKind, ready);
             staging.accept(files);
