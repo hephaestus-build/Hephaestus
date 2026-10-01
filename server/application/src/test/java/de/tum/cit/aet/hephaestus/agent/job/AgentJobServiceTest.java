@@ -108,9 +108,6 @@ class AgentJobServiceTest extends BaseUnitTest {
     @Mock
     private SignalRecorder signalRecorder;
 
-    @Mock
-    private de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService coverageService;
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private AgentJobService service;
@@ -132,8 +129,7 @@ class AgentJobServiceTest extends BaseUnitTest {
                 practiceRepository,
                 llmBudgetService,
                 llmModelResolver,
-                signalRecorder,
-                coverageService);
+                signalRecorder);
 
         workspace = new Workspace();
         workspace.setId(1L);
@@ -483,7 +479,11 @@ class AgentJobServiceTest extends BaseUnitTest {
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
-            when(coverageService.generatedPaths(workspace, "owner/repo")).thenReturn(List.of("generated/**"));
+            var monitor = new de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor();
+            monitor.setWorkspace(workspace);
+            monitor.setNameWithOwner("owner/repo");
+            monitor.setGeneratedPaths(List.of("generated/**"));
+            workspace.getRepositoriesToMonitor().add(monitor);
             var submission = createSubmission();
             when(handler.createSubmission(any())).thenReturn(submission);
             when(agentJobRepository.findRecentJobByKeyPrefix(eq(1L), any(), any()))

@@ -30,7 +30,6 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision.Detect;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaults;
@@ -38,6 +37,7 @@ import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -74,7 +74,6 @@ public class AgentJobService {
     private final LlmBudgetService llmBudgetService;
     private final LlmModelResolver llmModelResolver;
     private final SignalRecorder signalRecorder;
-    private final PracticeReviewCoverageService coverageService;
 
     public AgentJobService(
             AgentJobRepository agentJobRepository,
@@ -88,8 +87,7 @@ public class AgentJobService {
             PracticeRepository practiceRepository,
             LlmBudgetService llmBudgetService,
             LlmModelResolver llmModelResolver,
-            SignalRecorder signalRecorder,
-            PracticeReviewCoverageService coverageService) {
+            SignalRecorder signalRecorder) {
         this.agentJobRepository = agentJobRepository;
         this.memberAiPolicy = memberAiPolicy;
         this.workspaceRepository = workspaceRepository;
@@ -102,7 +100,6 @@ public class AgentJobService {
         this.llmBudgetService = llmBudgetService;
         this.llmModelResolver = llmModelResolver;
         this.signalRecorder = signalRecorder;
-        this.coverageService = coverageService;
     }
 
     @Transactional(readOnly = true)
@@ -379,9 +376,12 @@ public class AgentJobService {
             }
             if (jobType == AgentJobType.PULL_REQUEST_REVIEW && metadata instanceof ObjectNode objectMetadata) {
                 String repository = objectMetadata.path("repository_full_name").asString();
-                objectMetadata.set(
-                        "generated_path_patterns",
-                        objectMapper.valueToTree(coverageService.generatedPaths(currentWorkspace, repository)));
+                var patterns = currentWorkspace.getRepositoriesToMonitor().stream()
+                        .filter(monitor -> monitor.getNameWithOwner().equals(repository))
+                        .findFirst()
+                        .map(monitor -> List.copyOf(monitor.getGeneratedPaths()))
+                        .orElseGet(List::of);
+                objectMetadata.set("generated_path_patterns", objectMapper.valueToTree(patterns));
             }
             job.setMetadata(metadata);
             job.setIdempotencyKey(detectionKey);

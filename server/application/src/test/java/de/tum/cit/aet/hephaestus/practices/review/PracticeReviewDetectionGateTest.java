@@ -182,7 +182,7 @@ class PracticeReviewDetectionGateTest extends BaseUnitTest {
                 pr,
                 de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals.PULL_REQUEST_REVIEWED,
                 TriggerMode.AUTO,
-                new de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject(8L, false));
+                de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject.reviewer(8L, false));
         assertThat(decision.resolvedSignalReason()).isEqualTo(SignalStateReason.BOT_REVIEWER);
         assertThat(decision.resolvedSignalReason().describe()).contains("reviewer is a bot");
         verifyNoInteractions(coverageService, practiceRepository);

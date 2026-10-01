@@ -106,7 +106,7 @@ public class PullRequestSignalResubmitter {
                 key.workspaceId(),
                 key.signalName(),
                 reviewData != null
-                        ? new ReviewSubject(reviewData.authorId(), reviewData.humanAuthor())
+                        ? ReviewSubject.reviewer(reviewData.authorId(), reviewData.humanAuthor())
                         : pr.reviewSubject(),
                 PullRequestPushCoalescer.SIGNALS.contains(key.signalName()));
         switch (decision) {

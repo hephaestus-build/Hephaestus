@@ -251,7 +251,7 @@ public class AgentJobEventListener {
                             pr,
                             key.signalName(),
                             TriggerMode.AUTO,
-                            new ReviewSubject(reviewData.authorId(), reviewData.humanAuthor()));
+                            ReviewSubject.reviewer(reviewData.authorId(), reviewData.humanAuthor()));
             switch (decision) {
                 case GateDecision.Skip skip -> {
                     log.debug(

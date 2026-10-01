@@ -44,14 +44,6 @@ public class PracticeReviewCoverageService {
                         RepositoryToMonitor::getNameWithOwner, monitor -> List.copyOf(monitor.getGeneratedPaths())));
     }
 
-    @Transactional(readOnly = true)
-    public List<String> generatedPaths(Workspace workspace, String repository) {
-        return monitorRepository
-                .findByWorkspaceIdAndNameWithOwner(workspace.getId(), repository)
-                .map(monitor -> List.copyOf(monitor.getGeneratedPaths()))
-                .orElseGet(List::of);
-    }
-
     @Transactional
     public void patchGeneratedPaths(Workspace workspace, Map<String, List<String>> requested) {
         Map<String, RepositoryToMonitor> monitors = monitorRepository.findByWorkspaceId(workspace.getId()).stream()

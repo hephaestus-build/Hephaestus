@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
@@ -150,7 +149,7 @@ public class PracticeReviewDetectionGate {
             @NonNull TriggerMode triggerMode,
             @NonNull ReviewSubject subject) {
         if (subject.actorId() != null && !subject.human()) {
-            return botRefusal(signal);
+            return botRefusal(subject);
         }
         var coverage = coverageService.assessRepositoryless(workspace, subject);
         GateDecision.@Nullable Skip scopeSkip = coverage.admitted()
@@ -197,7 +196,7 @@ public class PracticeReviewDetectionGate {
             ReviewSubject subject,
             boolean recheck) {
         if (subject.actorId() != null && !subject.human()) {
-            return botRefusal(signal);
+            return botRefusal(subject);
         }
         String nameWithOwner =
                 reviewable.getRepository() != null ? reviewable.getRepository().getNameWithOwner() : null;
@@ -299,10 +298,9 @@ public class PracticeReviewDetectionGate {
         };
     }
 
-    private static GateDecision.Skip botRefusal(SignalName signal) {
-        SignalStateReason reason = signal.equals(ScmSignals.PULL_REQUEST_REVIEWED)
-                ? SignalStateReason.BOT_REVIEWER
-                : SignalStateReason.BOT_AUTHOR;
+    private static GateDecision.Skip botRefusal(ReviewSubject subject) {
+        SignalStateReason reason =
+                subject.role() == ActorRole.REVIEWER ? SignalStateReason.BOT_REVIEWER : SignalStateReason.BOT_AUTHOR;
         return new GateDecision.Skip(reason.describe(), reason);
     }
 

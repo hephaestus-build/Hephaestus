@@ -49,15 +49,6 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReadOnlyTheWorkspaceRepositoryWhenFreezingGeneratedPaths() {
-        var local = monitor(11L, "owner/local");
-        local.setGeneratedPaths(List.of("generated/**"));
-        when(monitors.findByWorkspaceIdAndNameWithOwner(1L, "owner/local")).thenReturn(java.util.Optional.of(local));
-        assertThat(service.generatedPaths(workspace, "owner/local")).containsExactly("generated/**");
-        assertThat(service.generatedPaths(workspace, "other/tenant")).isEmpty();
-    }
-
-    @Test
     void shouldRetainGeneratedPathsWhenCoverageResetsAndClearOnlyTheRequestedRepository() {
         var first = monitor(11L, "owner/first");
         var second = monitor(12L, "group/second");
