@@ -5,8 +5,10 @@ import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.RepositoryNotFoundOnGitProviderException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabExceptionClassifier;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -144,7 +146,11 @@ public class GitLabProjectSyncService {
 
     /** Stores {@code project} and its group as GitLab reported them, in the caller's transaction when there is one. */
     public Optional<Repository> persistProject(GitLabProjectResponse project) {
-        IdentityProvider provider = resolveProvider();
+        return persistProject(project, resolveProvider());
+    }
+
+    /** Keeps a fetched project on the caller's provider, including self-hosted GitLab instances. */
+    public Optional<Repository> persistProject(GitLabProjectResponse project, IdentityProvider provider) {
         Organization organization = null;
         GitLabGroupResponse groupData = project.group();
         if (groupData != null) {
@@ -179,8 +185,12 @@ public class GitLabProjectSyncService {
                 .variable(name, value)
                 .execute()
                 .block(gitLabProperties.graphqlTimeout());
-        if (responseHandler.handle(response, context, log).action()
-                        != GitLabGraphQlResponseHandler.HandleResult.Action.CONTINUE
+        var handled = responseHandler.handle(response, context, log);
+        var classification = handled.classification();
+        if (classification != null && classification.category() == GitLabExceptionClassifier.Category.NOT_FOUND) {
+            throw new RepositoryNotFoundOnGitProviderException(context);
+        }
+        if (handled.action() != GitLabGraphQlResponseHandler.HandleResult.Action.CONTINUE
                 || (complete && !Objects.requireNonNull(response).getErrors().isEmpty())) {
             GitLabSyncException failure = new GitLabSyncException("Invalid GraphQL response");
             graphQlClientProvider.recordFailure(failure);

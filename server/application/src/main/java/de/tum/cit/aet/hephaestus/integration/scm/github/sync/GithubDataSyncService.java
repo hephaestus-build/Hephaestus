@@ -185,6 +185,23 @@ public class GithubDataSyncService {
         this.monitoringExecutor = monitoringExecutor;
     }
 
+    private Optional<Repository> fetchRepositoryMetadata(SyncTarget target, IdentityProvider provider) {
+        if (target.nativeId() != null && syncTargetProvider.isRepositoryUnavailable(target.scopeId(), target.id())) {
+            // A reused old name must not replace the identity of an unavailable monitor.
+            String currentName = repositorySyncService.resolveRepositoryNameById(target.scopeId(), target.nativeId());
+            return repositorySyncService.syncRepository(target.scopeId(), currentName, provider);
+        }
+        try {
+            return repositorySyncService.syncRepository(target.scopeId(), target.repositoryNameWithOwner(), provider);
+        } catch (RepositoryNotFoundOnGitProviderException e) {
+            if (target.nativeId() == null) {
+                throw e;
+            }
+            String currentName = repositorySyncService.resolveRepositoryNameById(target.scopeId(), target.nativeId());
+            return repositorySyncService.syncRepository(target.scopeId(), currentName, provider);
+        }
+    }
+
     /** Submits {@link #syncSyncTarget} to the monitoring executor. */
     public void syncSyncTargetAsync(SyncTarget syncTarget) {
         monitoringExecutor.submit(() -> syncSyncTarget(syncTarget));
@@ -193,8 +210,7 @@ public class GithubDataSyncService {
     /**
      * Syncs a single repository's metadata, issues, PRs, and related data via GraphQL.
      *
-     * @return true if the sync succeeded or the target was legitimately removed (repository gone
-     *         upstream); false on a transient failure that should be retried next cycle
+     * @return true if the sync succeeded; false if the target was skipped or failed
      */
     public boolean syncSyncTarget(SyncTarget syncTarget) {
         Long scopeId = syncTarget.scopeId();
@@ -203,6 +219,10 @@ public class GithubDataSyncService {
 
         if (!syncTargetProvider.isScopeActiveForSync(scopeId)) {
             log.debug("Skipped sync: reason=scopeNotActive, scopeId={}, repoName={}", scopeId, safeNameWithOwner);
+            return false;
+        }
+
+        if (syncTargetProvider.deferUnavailableRepository(scopeId, syncTarget.id())) {
             return false;
         }
 
@@ -225,31 +245,19 @@ public class GithubDataSyncService {
                     safeNameWithOwner);
             Optional<Repository> syncedRepository;
             try {
-                syncedRepository = repositorySyncService.syncRepository(scopeId, nameWithOwner, provider);
+                syncedRepository = fetchRepositoryMetadata(syncTarget, provider);
             } catch (RepositoryNotFoundOnGitProviderException e) {
-                // A definitive name-404. A repository with a stable native id almost certainly renamed
-                // or transferred (the id still resolves upstream) rather than being deleted — deleting
-                // the monitor here would lose data on every rename. Preserve the monitor and retry next
-                // cycle; a real deletion is caught by the repository.deleted webhook. Only legacy rows
-                // with no stable id fall back to removal.
-                if (syncTarget.nativeId() != null) {
-                    log.warn(
-                            "Preserving sync target despite name-404: reason=stableIdPresent(likelyRenameOrTransfer), scopeId={}, repoName={}, nativeId={}",
-                            scopeId,
-                            safeNameWithOwner,
-                            syncTarget.nativeId());
-                    syncTargetProvider.updateSyncError(
-                            syncTarget.id(), SyncPass.RECENT, "Repository metadata unavailable");
-                    return false;
-                }
-                log.info(
-                        "Removing sync target: reason=repositoryNotFoundOnGitHub, scopeId={}, repoName={}",
-                        scopeId,
-                        safeNameWithOwner);
-                syncTargetProvider.removeSyncTarget(syncTarget.id());
-                return true;
+                syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
+                return false;
+            } catch (InstallationNotFoundException e) {
+                throw e;
+            } catch (Exception e) {
+                syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
+                syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, "Repository metadata sync failed");
+                return false;
             }
             if (syncedRepository.isEmpty()) {
+                syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
                 // Transient failure (auth, transport, rate limit, classification). Leave the
                 // RTM in place so the next cycle retries. See ADR-0012.
                 log.debug(
@@ -260,15 +268,14 @@ public class GithubDataSyncService {
                 return false;
             }
             repository = syncedRepository.get();
+            syncTargetProvider.clearRepositoryUnavailable(scopeId, syncTarget.id());
             repositoryCreatedDuringSync = true;
             syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
         }
 
         Long repositoryId = repository.getId();
 
-        // Backfill the monitor's stable native id (legacy/PAT rows start null) and re-key its name if
-        // the domain repository already reflects an upstream rename. Once the id is captured, the
-        // NOT_FOUND handlers can distinguish a rename (heal) from a real deletion (remove).
+        // Capture stable identity and heal names already updated by a webhook or another workspace.
         syncTargetProvider.reconcileSyncTargetIdentity(
                 syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
 
@@ -279,19 +286,25 @@ public class GithubDataSyncService {
                 safeNameWithOwner);
 
         try {
-            boolean metadataFailed = false;
             if (!repositoryCreatedDuringSync) {
-                var syncedRepository = repositorySyncService.syncRepository(scopeId, nameWithOwner, provider);
+                var syncedRepository = fetchRepositoryMetadata(syncTarget, provider);
                 if (syncedRepository.isPresent()) {
                     repository = syncedRepository.get();
+                    syncTargetProvider.clearRepositoryUnavailable(scopeId, syncTarget.id());
+                    syncTargetProvider.reconcileSyncTargetIdentity(
+                            syncTarget.id(), repository.getNativeId(), repository.getNameWithOwner());
+                    if (!repository.getNameWithOwner().equals(nameWithOwner)) {
+                        // The next pass uses the healed monitor name for all child requests.
+                        syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, null);
+                        return true;
+                    }
                     log.debug("Synced repository metadata: scopeId={}, repoId={}", scopeId, repositoryId);
                     syncTargetProvider.updateSyncTimestamp(syncTarget.id(), SyncType.FULL_REPOSITORY, Instant.now());
                 } else {
-                    metadataFailed = true;
-                    log.warn(
-                            "Failed to sync repository metadata, continuing: scopeId={}, repoId={}",
-                            scopeId,
-                            repositoryId);
+                    syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
+                    syncTargetProvider.updateSyncError(
+                            syncTarget.id(), SyncPass.RECENT, "Repository metadata sync failed");
+                    return false;
                 }
             }
 
@@ -415,7 +428,7 @@ public class GithubDataSyncService {
                     discussionResult.count(),
                     issueResult.status(),
                     prResult.status());
-            String error = metadataFailed ? "Repository metadata sync failed" : null;
+            String error = null;
             if (error == null && issueResult.status() != SyncResult.Status.COMPLETED) {
                 error = "Issue sync: " + issueResult.status();
             }
@@ -440,37 +453,23 @@ public class GithubDataSyncService {
             // Re-throw to abort the entire sync operation
             throw e;
         } catch (Exception e) {
-            ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
+            ClassificationResult classification = e instanceof RepositoryNotFoundOnGitProviderException
+                    ? ClassificationResult.of(Category.NOT_FOUND, "Repository not found or not accessible")
+                    : exceptionClassifier.classifyWithDetails(e);
             Category category = classification.category();
 
             syncTargetProvider.updateSyncError(syncTarget.id(), SyncPass.RECENT, "Repository sync failed: " + category);
 
-            boolean removed = false;
+            if (category != Category.NOT_FOUND) {
+                syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
+            }
             switch (category) {
                 case NOT_FOUND -> {
-                    if (syncTarget.nativeId() != null) {
-                        // Stable id present → treat a name-404 as a rename/transfer, not a deletion.
-                        // Preserve both the repository and the monitor; a real deletion is caught by the
-                        // repository.deleted webhook, and deleting here on a rename would lose data. See
-                        // the create-block handler above for the full rationale.
-                        log.warn(
-                                "Preserving repository and sync target despite NOT_FOUND: reason=stableIdPresent(likelyRenameOrTransfer), scopeId={}, repoId={}, repoName={}, nativeId={}",
-                                scopeId,
-                                repositoryId,
-                                safeNameWithOwner,
-                                syncTarget.nativeId());
+                    if (e instanceof RepositoryNotFoundOnGitProviderException) {
+                        syncTargetProvider.recordRepositoryUnavailable(scopeId, syncTarget.id());
                     } else {
-                        log.warn(
-                                "Repository sync skipped - resource not found, cleaning up orphan: scopeId={}, repoId={}, repoName={}, error={}",
-                                scopeId,
-                                repositoryId,
-                                safeNameWithOwner,
-                                classification.message());
-                        // The repository no longer exists on GitHub; delete it locally so sync doesn't
-                        // fail indefinitely, and remove the sync target to stop perpetual retries.
-                        cleanupOrphanedRepository(repositoryId, safeNameWithOwner);
-                        syncTargetProvider.removeSyncTarget(syncTarget.id());
-                        removed = true;
+                        // A missing child resource is not evidence that its repository is unavailable.
+                        syncTargetProvider.retryUnavailableRepository(scopeId, syncTarget.id());
                     }
                 }
                 case AUTH_ERROR ->
@@ -516,7 +515,7 @@ public class GithubDataSyncService {
                             classification.message(),
                             e);
             }
-            return removed;
+            return false;
         }
     }
 
@@ -1194,33 +1193,6 @@ public class GithubDataSyncService {
         } catch (Exception e) {
             log.warn("Commit metadata enrichment failed: repoId={}, error={}", repository.getId(), e.getMessage());
             return -1;
-        }
-    }
-
-    /**
-     * Cleans up an orphaned repository that no longer exists on GitHub.
-     * <p>
-     * This method is called when a sync fails with NOT_FOUND, indicating the repository
-     * has been deleted from GitHub. We delete it locally to prevent permanent sync errors.
-     *
-     * @param repositoryId the repository ID
-     * @param safeNameWithOwner sanitized name for logging
-     */
-    private void cleanupOrphanedRepository(Long repositoryId, String safeNameWithOwner) {
-        try {
-            repositoryRepository.findById(repositoryId).ifPresent(repository -> {
-                repositoryRepository.delete(repository);
-                log.info(
-                        "Deleted orphaned repository after NOT_FOUND: repoId={}, repoName={}",
-                        repositoryId,
-                        safeNameWithOwner);
-            });
-        } catch (Exception cleanupException) {
-            log.warn(
-                    "Failed to cleanup orphaned repository: repoId={}, repoName={}, error={}",
-                    repositoryId,
-                    safeNameWithOwner,
-                    cleanupException.getMessage());
         }
     }
 

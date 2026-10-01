@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.framework.SyncSchedulerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
@@ -38,8 +39,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncServiceHolder;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabProjectResponse;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.label.GitLabLabelSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabGroupSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.organization.GitLabSyncResult;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.subissue.GitLabSubIssueSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRepositoryMonitors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspaceInitializationService;
@@ -58,7 +63,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 @Tag("unit")
 class GitlabDataSyncSchedulerTest extends BaseUnitTest {
@@ -99,6 +106,7 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
     @Mock
     private SyncJobHandle syncJobHandle;
 
+    private final GitLabProjectSyncService projectSyncService = mock(GitLabProjectSyncService.class);
     private GitlabDataSyncScheduler scheduler;
     private SyncSession session;
 
@@ -133,7 +141,8 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 initializationService,
                 mock(GitLabRepositoryMonitors.class),
                 mock(WorkspaceRepository.class),
-                mock(WorkspaceActorSelector.class));
+                mock(WorkspaceActorSelector.class),
+                projectSyncService);
 
         // syncScope's first real step: no GitLabSyncServiceHolder available -> it logs and returns
         // immediately. This isolates the job-recording wrapper from the sync pipeline itself.
@@ -369,6 +378,71 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
         verify(syncTargetProvider, never()).updateSyncTimestamp(eq(77L), eq(SyncType.LABELS), any());
     }
 
+    @Test
+    void shouldPreserveWorkAndMonitorWhenProjectIsNoLongerAccessible() {
+        var holder = mockHolder();
+        prepareProject(holder);
+        var groupSync = mock(GitLabGroupSyncService.class);
+        when(holder.getGroupSyncService()).thenReturn(groupSync);
+        when(groupSync.syncGroupProjects(WORKSPACE_ID, "my-group", "https://gitlab.com"))
+                .thenReturn(GitLabSyncResult.completed(List.of(), 1, 0, 0));
+        when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project")).thenReturn(Optional.empty());
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider).recordRepositoryUnavailable(WORKSPACE_ID, 77L);
+        verify(repositoryRepository, never()).delete(any());
+        verify(syncTargetProvider, never()).removeSyncTarget(any());
+        verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
+    }
+
+    @Test
+    void shouldSkipMetadataAndCommitFetchWhenRecheckIsNotDue() {
+        var holder = mockHolder();
+        prepareProject(holder);
+        when(syncTargetProvider.deferUnavailableRepository(WORKSPACE_ID, 77L)).thenReturn(true);
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(projectSyncService, never()).fetchProject(any(), any());
+        verify(syncTargetProvider, never()).clearRepositoryUnavailable(any(), any());
+    }
+
+    @Test
+    void shouldRecoverWhenProjectReappears() {
+        var holder = mockHolder();
+        prepareProject(holder);
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider).clearRepositoryUnavailable(WORKSPACE_ID, 77L);
+    }
+
+    @Test
+    void shouldNotStartRepositoryBackoffWhenTokenIsRefusedOrRateLimited() {
+        var holder = mockHolder();
+        prepareProject(holder);
+        when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project"))
+                .thenThrow(WebClientResponseException.create(401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], null))
+                .thenThrow(WebClientResponseException.create(
+                        429, "Too Many Requests", HttpHeaders.EMPTY, new byte[0], null));
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider, never()).recordRepositoryUnavailable(any(), any());
+        verify(syncTargetProvider, org.mockito.Mockito.times(2)).retryUnavailableRepository(WORKSPACE_ID, 77L);
+    }
+
+    @Test
+    void shouldResolveRenamedProjectByStableId() {
+        var holder = mockHolder();
+        var project = prepareProject(holder);
+        project.setNativeId(123L);
+        var metadata = mock(GitLabProjectResponse.class);
+        when(projectSyncService.fetchProjectById(WORKSPACE_ID, 123L)).thenReturn(Optional.of(metadata));
+        when(projectSyncService.persistProject(metadata, project.getProvider())).thenAnswer(invocation -> {
+            project.setNameWithOwner("course/renamed");
+            return Optional.of(project);
+        });
+        scheduler.syncWorkspaceNow(WORKSPACE_ID, syncJobHandle, SyncJobType.INITIAL);
+        verify(syncTargetProvider).reconcileSyncTargetIdentity(77L, 123L, "course/renamed");
+        verify(syncTargetProvider).clearRepositoryUnavailable(WORKSPACE_ID, 77L);
+        verify(repositoryRepository, never()).delete(any());
+    }
+
     private Repository prepareProject(GitLabSyncServiceHolder holder) {
         when(syncServiceHolderProvider.getIfAvailable()).thenReturn(holder);
         Repository project = new Repository();
@@ -390,6 +464,15 @@ class GitlabDataSyncSchedulerTest extends BaseUnitTest {
                 List.of(target),
                 session.syncContext());
         when(syncTargetProvider.getSyncSessions(IntegrationKind.GITLAB)).thenReturn(List.of(session));
+        when(syncTargetProvider.getSyncTargetsForScope(WORKSPACE_ID)).thenReturn(List.of(target));
+        project.setProvider(mock(IdentityProvider.class));
+        var metadata = mock(GitLabProjectResponse.class);
+        org.mockito.Mockito.lenient()
+                .when(projectSyncService.fetchProject(WORKSPACE_ID, "course/project"))
+                .thenReturn(Optional.of(metadata));
+        org.mockito.Mockito.lenient()
+                .when(projectSyncService.persistProject(metadata, project.getProvider()))
+                .thenReturn(Optional.of(project));
         return project;
     }
 

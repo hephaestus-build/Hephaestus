@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncTargetTestBuilder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitAuthorResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitContributorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetailsPersister;
@@ -26,6 +28,30 @@ import org.junit.jupiter.api.Test;
 
 class GitLabCommitBackfillServiceTest extends BaseUnitTest {
     @Test
+    void shouldSkipGitFetchWhenWorkspaceMonitorIsUnavailable() {
+        var git = mock(GitRepositoryManager.class);
+        var targets = mock(SyncTargetProvider.class);
+        var target = SyncTargetTestBuilder.syncTarget()
+                .id(7L)
+                .scopeId(100L)
+                .repositoryNameWithOwner("owner/repo")
+                .build();
+        when(targets.getSyncTargetsForScope(100L)).thenReturn(List.of(target));
+        when(targets.isRepositoryUnavailable(100L, 7L)).thenReturn(true);
+        var service = new GitLabCommitBackfillService(
+                git,
+                mock(GitLabTokenService.class),
+                mock(CommitRepository.class),
+                mock(CommitDetailsPersister.class),
+                mock(CommitContributorRepository.class),
+                mock(CommitAuthorResolver.class),
+                targets);
+        assertThat(service.backfillCommits(100L, TestEntities.repository(1L, "owner/repo", "main")))
+                .isEqualTo(SyncResult.abortedError(0));
+        verify(git, org.mockito.Mockito.never()).ensureRepository(any(), any(), any());
+    }
+
+    @Test
     void shouldCheckAllBranchesWithoutUsingTheLatestStoredCommitAsAnAncestryCutoff() {
         GitRepositoryManager git = mock(GitRepositoryManager.class);
         GitLabTokenService tokens = mock(GitLabTokenService.class);
@@ -38,7 +64,8 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
                 commits,
                 mock(CommitDetailsPersister.class),
                 mock(CommitContributorRepository.class),
-                mock(CommitAuthorResolver.class));
+                mock(CommitAuthorResolver.class),
+                org.mockito.Mockito.mock(SyncTargetProvider.class));
         when(git.isEnabled()).thenReturn(true);
         when(git.resolveBranchHead(new RepositoryKey(100L, 1L), "main")).thenReturn("unchanged-head");
         when(tokens.resolveServerUrl(100L)).thenReturn("https://gitlab.example.com");
@@ -69,7 +96,8 @@ class GitLabCommitBackfillServiceTest extends BaseUnitTest {
                 mock(CommitRepository.class),
                 mock(CommitDetailsPersister.class),
                 mock(CommitContributorRepository.class),
-                mock(CommitAuthorResolver.class));
+                mock(CommitAuthorResolver.class),
+                org.mockito.Mockito.mock(SyncTargetProvider.class));
         when(git.isEnabled()).thenReturn(true);
         when(git.resolveBranchHead(new RepositoryKey(100L, 1L), "main")).thenReturn("head");
         when(tokens.resolveServerUrl(100L)).thenReturn("https://gitlab.example.com");

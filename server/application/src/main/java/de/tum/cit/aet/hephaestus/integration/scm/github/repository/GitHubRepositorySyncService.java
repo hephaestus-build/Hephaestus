@@ -6,6 +6,7 @@ import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSync
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_BACKOFF;
 import static de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncConstants.TRANSPORT_MAX_RETRIES;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
@@ -32,10 +33,13 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
@@ -59,6 +63,7 @@ public class GitHubRepositorySyncService {
     private final GitHubExceptionClassifier exceptionClassifier;
     private final GitHubGraphQlSyncCoordinator graphQlSyncHelper;
     private static final int MAX_RETRY_ATTEMPTS = 3;
+    private final WebClient restClient;
 
     public GitHubRepositorySyncService(
             GitHubGraphQlClientProvider graphQlClientProvider,
@@ -66,7 +71,9 @@ public class GitHubRepositorySyncService {
             OrganizationRepository organizationRepository,
             GitHubSyncProperties syncProperties,
             GitHubExceptionClassifier exceptionClassifier,
-            GitHubGraphQlSyncCoordinator graphQlSyncHelper) {
+            GitHubGraphQlSyncCoordinator graphQlSyncHelper,
+            @Qualifier("gitHubGraphQlWebClient") WebClient webClient) {
+        this.restClient = webClient.mutate().baseUrl("https://api.github.com").build();
         this.graphQlClientProvider = graphQlClientProvider;
         this.repositoryRepository = repositoryRepository;
         this.organizationRepository = organizationRepository;
@@ -81,12 +88,38 @@ public class GitHubRepositorySyncService {
      * @param scopeId the scope ID for authentication
      * @param nameWithOwner the full repository name (owner/repo)
      * @param provider the IdentityProvider entity representing the GitHub provider instance
-     * @return the synced Repository entity, or empty if not found
+     * @return the synced repository, or empty on a transient or incomplete response
      */
     @Transactional
     public Optional<Repository> syncRepository(Long scopeId, String nameWithOwner, IdentityProvider provider) {
         return syncRepositoryWithRetry(scopeId, nameWithOwner, provider, 0);
     }
+
+    /** Resolves a renamed repository through its stable REST id using this scope's credential. */
+    public String resolveRepositoryNameById(Long scopeId, long nativeId) {
+        try {
+            var identity = restClient
+                    .get()
+                    .uri("/repositories/{id}", nativeId)
+                    .header("X-GitHub-Api-Version", "2022-11-28")
+                    .headers(headers -> headers.setBearerAuth(graphQlClientProvider.getToken(scopeId)))
+                    .retrieve()
+                    .bodyToMono(RepositoryIdentity.class)
+                    .block(syncProperties.graphqlTimeout());
+            if (identity == null
+                    || identity.id() != nativeId
+                    || identity.fullName() == null
+                    || identity.fullName().isBlank()) {
+                throw new IllegalStateException("Incomplete repository identity response");
+            }
+            return identity.fullName();
+        } catch (WebClientResponseException.NotFound e) {
+            throw new RepositoryNotFoundOnGitProviderException(Long.toString(nativeId), e);
+        }
+    }
+
+    private record RepositoryIdentity(
+            long id, @JsonProperty("full_name") @Nullable String fullName) {}
 
     /**
      * Internal implementation with retry counter to prevent infinite recursion.
@@ -125,6 +158,9 @@ public class GitHubRepositorySyncService {
             if (response == null || !response.isValid()) {
                 ClassificationResult classification = graphQlSyncHelper.classifyGraphQlErrors(response);
                 if (classification != null) {
+                    if (classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND) {
+                        throw new RepositoryNotFoundOnGitProviderException(nameWithOwner);
+                    }
                     if (graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
                             classification,
                             retryAttempt,
@@ -158,10 +194,8 @@ public class GitHubRepositorySyncService {
             // Use typed GraphQL model for type-safe parsing
             var repoData = response.field("repository").toEntity(GHRepository.class);
             if (repoData == null) {
-                // Definitive provider response: this repository does not exist. Distinct from
-                // a transient inability to ask GitHub (handled by Optional.empty below). The
-                // caller relies on the exception to decide whether it is safe to remove a
-                // user-configured monitoring row. See ADR-0012 and pass-14 incident.
+                // A missing repository can also mean lost access. Preserve that distinction from
+                // a failed request so callers can pause retries without deleting retained work.
                 log.warn(
                         "Skipped repository sync: reason=notFoundOnGitHub, scopeId={}, repoName={}",
                         scopeId,
@@ -235,11 +269,13 @@ public class GitHubRepositorySyncService {
 
             return Optional.of(repository);
         } catch (InstallationNotFoundException | RepositoryNotFoundOnGitProviderException e) {
-            // Re-throw: install-gone aborts the entire scope sync; repo-gone signals
-            // definitive deletion so the caller can clean up its monitoring row.
+            // Installation failure aborts the scope. Repository absence pauses only its monitor.
             throw e;
         } catch (Exception e) {
             ClassificationResult classification = exceptionClassifier.classifyWithDetails(e);
+            if (classification.category() == GitHubExceptionClassifier.Category.NOT_FOUND) {
+                throw new RepositoryNotFoundOnGitProviderException(nameWithOwner, e);
+            }
             graphQlSyncHelper.handleGraphQlClassification(new GraphQlClassificationContext(
                     classification,
                     retryAttempt,

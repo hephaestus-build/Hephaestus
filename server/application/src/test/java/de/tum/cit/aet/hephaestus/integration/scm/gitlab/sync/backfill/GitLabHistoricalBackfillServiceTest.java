@@ -111,6 +111,14 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldSkipHistoricalFetchWhenRepositoryIsUnavailable() {
+        when(syncTargetProvider.isRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID))
+                .thenReturn(true);
+        assertThat(service.runBackfillPass(SCOPE_ID, handle)).isZero();
+        verify(issueSyncService, org.mockito.Mockito.never()).backfillIssues(any(), any(), any(), anyInt());
+    }
+
+    @Test
     void scheduledPassAfterAProductiveOneIsGatedByTheSuccessCooldown() {
         // One page of issues with more to come: the repository is nowhere near backfilled.
         when(issueSyncService.backfillIssues(eq(SCOPE_ID), any(), any(), anyInt()))

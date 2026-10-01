@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationSyncRunner;
+import de.tum.cit.aet.hephaestus.integration.core.spi.RepositoryAvailabilityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncResourceState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJob;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobConflictException;
@@ -46,6 +47,7 @@ import org.springframework.stereotype.Service;
 public class SyncStatusService {
 
     private final ConnectionAdminService connectionAdminService;
+    private final RepositoryAvailabilityProvider repositoryAvailabilityProvider;
     private final SyncJobService syncJobService;
     private final SyncJobRepository syncJobRepository;
     private final ConnectionActivityRepository connectionActivityRepository;
@@ -60,7 +62,9 @@ public class SyncStatusService {
             ConnectionActivityRepository connectionActivityRepository,
             @Qualifier("syncJobExecutor") AsyncTaskExecutor taskExecutor,
             List<ConnectionSyncStateProvider> providers,
-            List<IntegrationSyncRunner> runners) {
+            List<IntegrationSyncRunner> runners,
+            RepositoryAvailabilityProvider repositoryAvailabilityProvider) {
+        this.repositoryAvailabilityProvider = repositoryAvailabilityProvider;
         this.connectionAdminService = connectionAdminService;
         this.syncJobService = syncJobService;
         this.syncJobRepository = syncJobRepository;
@@ -232,6 +236,11 @@ public class SyncStatusService {
                     workspaceId, connectionId, connection.getKind(), type, SyncJobTrigger.MANUAL, triggeredByUserId));
             try {
                 taskExecutor.execute(() -> syncJobService.executeBody(started, handle -> {
+                    if (type == SyncJobType.RECONCILIATION
+                            && (connection.getKind() == IntegrationKind.GITHUB
+                                    || connection.getKind() == IntegrationKind.GITLAB)) {
+                        repositoryAvailabilityProvider.recheckUnavailableRepositories(workspaceId);
+                    }
                     if (type == SyncJobType.BACKFILL) {
                         runner.backfill(ref, handle);
                     } else {

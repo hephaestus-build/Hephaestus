@@ -73,7 +73,16 @@ public class RepositoryToMonitor {
     @Column(length = 2048)
     private @Nullable String historicalBackfillSyncError;
 
+    /** First confirmed unavailable response; scoped to this monitor, never the shared repository. */
+    private @Nullable Instant unavailableSince;
+
+    /** Earliest metadata recheck after consecutive unavailable responses. */
+    private @Nullable Instant unavailableRetryAt;
+
     public @Nullable String getSyncErrorSummary() {
+        if (unavailableSince != null) {
+            return "Repository not found or not accessible";
+        }
         if (recentSyncError == null) {
             return historicalBackfillSyncError;
         }
