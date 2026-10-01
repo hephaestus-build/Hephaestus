@@ -66,7 +66,7 @@ public final class SandboxLayout {
      * Workspace-relative prefix for what earlier reviews recorded and already said.
      *
      * <p>Separate from {@link #CONTEXT_PREFIX} because it is the one part of the sandbox that is not
-     * about the artifact under review: {@code inputs/context/} is this event, {@code inputs/history/} is
+     * about the artifact under review: {@code context/} is this event, {@code inputs/history/} is
      * every event before it. Both files below it are always present — an empty one is the review saying
      * it looked and there was nothing, which is a different fact from never having looked.
      */

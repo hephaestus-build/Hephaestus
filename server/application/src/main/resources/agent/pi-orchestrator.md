@@ -109,7 +109,7 @@ directory of `preparedFeedback`.
 - `<contextRoot>/conversation_thread.json` — (CONVERSATION) the ordered verbatim turns of one thread, `_meta.trustLevel: "UNTRUSTED_EXTERNAL"`
 - `<contextRoot>/document.md`, `<contextRoot>/document.json` — (DOCUMENT) the wiki document and its metadata
 - `<repositoryRoot>/` — (PR, when the manifest lists `scm.repository.tree`) the checkout; `.git` supports log, blame and show through bash; no remote, no credentials
-- `<historyRoot>/observations.json`, `<historyRoot>/feedback.json` — earlier observations about this person and what was already said, newest first; bounded windows
+- `<historyRoot>/observations.json`, `<historyRoot>/feedback.json` — earlier observations about this person and what was already said, newest first; all currently authorized records
 - `<practiceIndex>` — the practices with `readsSources` and `exhaustiveSources`
 
 ## Tools

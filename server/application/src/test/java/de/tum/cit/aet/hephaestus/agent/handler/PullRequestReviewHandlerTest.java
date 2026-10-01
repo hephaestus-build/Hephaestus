@@ -382,7 +382,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                                     : Set.of("generated/client.ts", "src/service.ts"));
             var metadata = sampleJobMetadata();
             metadata.putArray("generated_path_patterns").add("generated/**");
-            var files = handler.prepareInputs(jobWithMetadata(metadata)).files();
+            var files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
+                    handler.prepareInputs(jobWithMetadata(metadata)));
             var policy = objectMapper.readTree(
                     files.get(de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO.INPUT_PATH));
             assertThat(policy.path("patterns").get(0).asString()).isEqualTo("generated/**");

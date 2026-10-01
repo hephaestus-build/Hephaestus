@@ -50,14 +50,9 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Stages the bounded record of prior observations, delivered feedback and prepared feedback for the
- * developer. Recorded observations retain their own evidence and outcome; a shared practice or file
- * locates work but does not establish that two observations describe the same behavior.
- *
- * <p>Each selected file is written even for an empty history, distinguishing a read empty record from
- * unavailable evidence. History is partial and can guide inspection; current observations must cite
- * the current reviewed work. Developer reactions remain outside the review's evidence context. A row from a Slack
- * conversation, or bound to an observation of one, is staged only while its channel still consents.
+ * Projects visible observations and feedback through the shared currentness, withdrawal and consent checks.
+ * History guides inspection; it does not establish that two observations describe the same behavior.
+ * Developer reactions are not review evidence.
  */
 @Component
 @Order(500)
@@ -72,17 +67,6 @@ public class ReviewHistoryContentSource implements EvidenceSource {
     static final String FEEDBACK_FILE = SandboxLayout.HISTORY_PREFIX + "feedback.json";
     static final String PREPARED_FILE = SandboxLayout.HISTORY_PREFIX + "prepared.json";
 
-    /** Exposure bounds, not cost bounds — they cap how much of a contributor's record can anchor a model. */
-
-    /**
-     * Caps each practice so repeated observations cannot crowd other practices out of the history.
-     */
-
-    /**
-     * Queued messages staged for supersession. Smaller than the delivered window because it is not a
-     * record: a recipient holding more than this many unread messages has a delivery problem, not a
-     * history to reason over.
-     */
     private final ObservationRepository observationRepository;
 
     private final FeedbackRepository feedbackRepository;
@@ -129,7 +113,7 @@ public class ReviewHistoryContentSource implements EvidenceSource {
         return FEEDBACK_FILE.equals(path) || PREPARED_FILE.equals(path) ? FEEDBACK_HISTORY : OBSERVATION_HISTORY;
     }
 
-    /** Owns {@code inputs/history/}, not the per-event {@code inputs/context/} namespace. */
+    /** Owns the normalized {@code inputs/history/} view used by readiness and composition. */
     @Override
     public boolean ownsPath(String path) {
         return path.startsWith(SandboxLayout.HISTORY_PREFIX);

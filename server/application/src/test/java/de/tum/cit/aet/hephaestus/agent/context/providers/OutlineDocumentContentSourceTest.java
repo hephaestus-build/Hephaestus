@@ -23,7 +23,6 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -189,10 +188,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
                 collectionName,
                 null,
                 null);
-    }
-
-    private void extractsReferences(String body, String... refs) {
-        when(projection.extractReferences(body)).thenReturn(new LinkedHashSet<>(List.of(refs)));
     }
 
     @Test

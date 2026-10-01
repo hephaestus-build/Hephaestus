@@ -486,8 +486,15 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                 for (String type : List.of("ISSUE", "PULL_REQUEST")) {
                     generator.writeArrayPropertyStart(type.equals("ISSUE") ? "issues" : "pullRequests");
                     for (var repository : repositoryPreparer.permittedRepositories(workspace)) {
-                        scmProjection.forEachInventoryRecord(
-                                workspace, repository.getId(), type, record -> generator.writeTree(record));
+                        scmProjection.forEachInventoryRecord(workspace, repository.getId(), type, record -> {
+                            generator.writeTree(record);
+                            generator.flush();
+                            try {
+                                files.require(Files.size(target));
+                            } catch (IOException exception) {
+                                throw new UncheckedIOException(exception);
+                            }
+                        });
                     }
                     generator.writeEndArray();
                 }
@@ -544,7 +551,11 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
         void addDirectory(Path directory) {
             try (var paths = Files.walk(directory)) {
                 long size = 0;
-                for (Path file : paths.filter(Files::isRegularFile).toList()) size += Files.size(file);
+                var files = paths.filter(Files::isRegularFile).iterator();
+                while (files.hasNext()) {
+                    size = Math.addExact(size, Files.size(files.next()));
+                    require(size);
+                }
                 require(size);
                 bytes += size;
             } catch (IOException exception) {

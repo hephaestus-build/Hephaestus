@@ -5,7 +5,7 @@
       "kind": "scm.pull-request.core",
       "displayName": "Pull request details",
       "description": "The pull request record: its fields as the provider holds them.",
-      "selectionScope": "Every permitted pull request details record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "Every permitted pull request in monitored workspace repositories, with its mirrored fields. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request"
       ],
@@ -75,7 +75,7 @@
       "kind": "scm.pull-request.comments",
       "displayName": "Inline review comments",
       "description": "Review comments left on specific lines of the pull request.",
-      "selectionScope": "Every permitted inline review comments record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "All permitted inline review comments on workspace pull requests. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request"
       ],
@@ -110,7 +110,7 @@
       "kind": "scm.repository.tree",
       "displayName": "Repository files and history",
       "description": "Repository files and reachable Git history, supplied as context for reading the change. Not reviewed on their own.",
-      "selectionScope": "Every permitted repository files and history record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "Full reachable Git history and a working copy of each permitted repository, copied from the worker's bare mirrors. The reviewed repository is pinned to the job's commit. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request"
       ],
@@ -145,7 +145,7 @@
       "kind": "scm.issue.core",
       "displayName": "Issue details",
       "description": "The issue record: title, description, author, state, labels, and assignees.",
-      "selectionScope": "Every permitted issue details record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "Every permitted issue in monitored workspace repositories, with its mirrored fields. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.issue"
       ],
@@ -180,7 +180,7 @@
       "kind": "scm.issue.comments",
       "displayName": "Issue comments",
       "description": "The discussion recorded on the issue.",
-      "selectionScope": "Every permitted issue comments record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "All permitted comments on workspace issues. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.issue"
       ],
@@ -215,7 +215,7 @@
       "kind": "docs.document.core",
       "displayName": "Document under review",
       "description": "The written document a review is about: its prose, title, collection, author, and upstream timestamps.",
-      "selectionScope": "Every permitted document under review record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "The permitted mirrored document selected as the reviewed work, with its current body and metadata. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "docs.document"
       ],
@@ -250,7 +250,7 @@
       "kind": "slack.conversation.thread",
       "displayName": "Slack thread",
       "description": "One Slack thread in chronological order, read only from channels whose consent is active.",
-      "selectionScope": "Every permitted slack thread record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "All retained, non-deleted messages in workspace Slack channels with active consent, excluding opted-out authors. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "chat.conversation_thread"
       ],
@@ -285,7 +285,7 @@
       "kind": "scm.linked-work-items",
       "displayName": "Linked work items",
       "description": "Issues the pull request refers to by number in its description, branch name or commit subjects, as this repository stores them.",
-      "selectionScope": "Every permitted linked work items record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "Every permitted linked work items record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering.",
       "artifactKinds": [
         "scm.pull_request"
       ],
@@ -320,7 +320,7 @@
       "kind": "scm.review-threads",
       "displayName": "Review threads and decisions",
       "description": "Review conversations on the pull request, whether each was resolved, and each reviewer's decision.",
-      "selectionScope": "Every permitted review threads and decisions record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "All permitted review threads in workspace pull requests, including resolution state. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request"
       ],
@@ -355,7 +355,7 @@
       "kind": "scm.general-review-comments",
       "displayName": "General review comments",
       "description": "Review comments addressing the pull request as a whole rather than a specific line.",
-      "selectionScope": "Every permitted general review comments record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "All permitted pull-request discussion comments and submitted reviews in the workspace. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request"
       ],
@@ -390,7 +390,7 @@
       "kind": "workspace.project-inventory",
       "displayName": "Related workspace work",
       "description": "Other work items in the same workspace, supplied so a change can be read against related work.",
-      "selectionScope": "Every permitted related workspace work record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "All permitted issues, pull requests, workspace member profiles and practice definitions. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request",
         "scm.issue",
@@ -425,9 +425,9 @@
     },
     {
       "kind": "outline.documents",
-      "displayName": "Referenced Outline documents",
-      "description": "Outline documents the reviewed work references.",
-      "selectionScope": "Every permitted referenced outline documents record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "displayName": "Outline documents",
+      "description": "Mirrored documents in permitted workspace Outline collections.",
+      "selectionScope": "Every permitted mirrored Outline document in the workspace. Deleted documents are excluded; an evicted body is an explicit refusal, not an empty document. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request",
         "scm.issue"
@@ -463,7 +463,7 @@
       "kind": "hephaestus.observation-history",
       "displayName": "Earlier observations about this person",
       "description": "Observations earlier reviews in this workspace recorded about the person whose work is under review, with the practice, presence, assessment and recurrence key each was filed under.",
-      "selectionScope": "Every permitted earlier observations about this person record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "All currently visible prior observations about permitted workspace members, after currentness, withdrawal and consent checks. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request",
         "scm.issue",
@@ -501,7 +501,7 @@
       "kind": "hephaestus.feedback-history",
       "displayName": "Feedback already delivered to this person",
       "description": "Feedback earlier reviews already delivered to the person whose work is under review, with the channel it went to and the recurrence keys it spoke to.",
-      "selectionScope": "Every permitted feedback already delivered to this person record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering. Repository working copies include full reachable history from worker-owned bare mirrors. Maintainer engineering approval: https://github.com/hephaestus-build/Hephaestus/issues/1732 (2026-10-01); no controller or DPO approval is recorded.",
+      "selectionScope": "All currently visible delivered feedback about permitted workspace members, plus prepared feedback for the reviewed developer, after currentness, withdrawal and consent checks. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
       "artifactKinds": [
         "scm.pull_request",
         "scm.issue",

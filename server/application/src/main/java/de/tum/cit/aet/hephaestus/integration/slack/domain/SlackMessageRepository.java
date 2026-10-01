@@ -26,13 +26,36 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
         """;
 
     @Query("""
-        SELECT m FROM SlackMessage m JOIN SlackMonitoredChannel c
+        SELECT m.id AS id, m.slackChannelId AS slackChannelId, m.slackTs AS slackTs,
+          m.slackThreadTs AS slackThreadTs, m.authorMemberId AS authorMemberId,
+          m.text AS text, m.ingestedAt AS ingestedAt
+        FROM SlackMessage m JOIN SlackMonitoredChannel c
           ON c.workspaceId=m.workspaceId AND c.slackChannelId=m.slackChannelId
         WHERE m.workspaceId=:workspaceId
         """ + MESSAGE_READ_GUARD + " ORDER BY m.slackChannelId,m.slackTs,m.id")
     @org.springframework.data.jpa.repository.QueryHints(
             @jakarta.persistence.QueryHint(name = org.hibernate.jpa.HibernateHints.HINT_FETCH_SIZE, value = "256"))
-    java.util.stream.Stream<SlackMessage> streamWorkspaceMessages(@Param("workspaceId") long workspaceId);
+    java.util.stream.Stream<WorkspaceMessage> streamWorkspaceMessages(@Param("workspaceId") long workspaceId);
+
+    /** Scalar projection keeps the full-folder stream out of Hibernate's managed-entity cache. */
+    interface WorkspaceMessage {
+        Long getId();
+
+        String getSlackChannelId();
+
+        String getSlackTs();
+
+        @Nullable
+        String getSlackThreadTs();
+
+        @Nullable
+        Long getAuthorMemberId();
+
+        @Nullable
+        String getText();
+
+        Instant getIngestedAt();
+    }
 
     @Query("""
         SELECT COUNT(m)>0 FROM SlackMessage m JOIN SlackMonitoredChannel c

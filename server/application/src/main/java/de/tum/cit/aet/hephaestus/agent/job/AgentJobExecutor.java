@@ -869,7 +869,8 @@ public class AgentJobExecutor {
                 SandboxLayout.MANIFEST_PATH,
                 SandboxLayout.PRACTICES_PREFIX + "index.json",
                 SandboxLayout.CONTEXT_PREFIX + "metadata.json",
-                SandboxLayout.CONTEXT_PREFIX + "issue_metadata.json")) {
+                SandboxLayout.CONTEXT_PREFIX + "issue_metadata.json",
+                GeneratedPathReviewDTO.INPUT_PATH)) {
             java.nio.file.Path source = paths.get(path);
             if (source != null) {
                 try {

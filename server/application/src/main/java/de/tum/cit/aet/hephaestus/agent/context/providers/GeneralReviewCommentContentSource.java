@@ -73,7 +73,7 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
     /**
      * Derives completeness/emptiness from the payload itself rather than the default: the file is
      * always written, even with zero comments, so the default's file-presence check would report
-     * NON_EMPTY on an empty result and COMPLETE past the truncation cap.
+     * NON_EMPTY on an empty result.
      */
     @Override
     public EvidenceContribution capture(ContextRequest request, Set<SourceKind> selectedKinds) {

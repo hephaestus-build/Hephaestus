@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -38,13 +37,6 @@ public interface DocumentProjection {
      * @param queryText free text describing what is relevant (websearch syntax; {@code OR}-joined terms)
      */
     List<ProjectedDocument> searchDocuments(long workspaceId, String queryText, int limit);
-
-    /**
-     * Pulls documentation references — ids, slugs, links — out of free text. What counts as a reference is
-     * the implementation's vendor knowledge; the consumer stays vendor-blind and feeds the result into
-     * {@link #documentsByReference}.
-     */
-    Set<String> extractReferences(@Nullable String text);
 
     /**
      * The agent-facing view of one mirrored document. {@code bodyMarkdown} is {@code null} when the

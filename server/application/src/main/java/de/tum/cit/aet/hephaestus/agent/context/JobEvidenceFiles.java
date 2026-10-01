@@ -169,9 +169,10 @@ public class JobEvidenceFiles {
             for (byte[] value : inputs.files().values()) bytes = Math.addExact(bytes, value.length);
             for (var directory : inputs.directories()) {
                 try (var entries = Files.walk(directory.source())) {
-                    for (Path entry : entries.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-                            .toList()) {
-                        bytes = Math.addExact(bytes, Files.size(entry));
+                    var files = entries.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+                            .iterator();
+                    while (files.hasNext()) {
+                        bytes = Math.addExact(bytes, Files.size(files.next()));
                         checkBudget(bytes);
                     }
                 }

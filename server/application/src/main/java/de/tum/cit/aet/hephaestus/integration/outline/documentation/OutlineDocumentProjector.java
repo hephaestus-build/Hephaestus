@@ -19,8 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -41,22 +39,6 @@ import org.springframework.transaction.annotation.Transactional;
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
 @Transactional(readOnly = true)
 public class OutlineDocumentProjector implements DocumentProjection {
-
-    /** Cap on documents surfaced to the mentor per turn — the corpus-breadth envelope. */
-
-    /** Cap on references extracted from one artifact body — bounds the review-path fan-out. */
-    static final int MAX_REFERENCES = 20;
-
-    /**
-     * Outline document / share link, e.g. {@code https://wiki.example.com/doc/onboarding-guide-a1b2c3} or
-     * {@code https://wiki.example.com/s/shareId} — the vendor link grammar that
-     * {@link #extractReferences} hides behind the vendor-neutral SPI. The full match feeds
-     * {@link #documentsByReference} verbatim (which derives the id/slug token from the last path
-     * segment); a non-Outline URL that happens to match resolves to no row, so no foreign document is
-     * materialised.
-     */
-    private static final Pattern OUTLINE_LINK =
-            Pattern.compile("https?://[\\w.-]+(?::\\d+)?/(?:doc|s)/[A-Za-z0-9._~-]+");
 
     private final OutlineDocumentRepository documentRepository;
     private final OutlineCollectionRepository collectionRepository;
@@ -158,19 +140,6 @@ public class OutlineDocumentProjector implements DocumentProjection {
         AuthorContext authors = authorContext(workspaceId);
         Map<String, String> collectionNames = collectionNames(workspaceId);
         return hits.stream().map(doc -> project(doc, authors, collectionNames)).toList();
-    }
-
-    @Override
-    public Set<String> extractReferences(@Nullable String text) {
-        Set<String> references = new LinkedHashSet<>();
-        if (text == null || text.isBlank()) {
-            return references;
-        }
-        Matcher matcher = OUTLINE_LINK.matcher(text);
-        while (matcher.find() && references.size() < MAX_REFERENCES) {
-            references.add(matcher.group());
-        }
-        return references;
     }
 
     private boolean isOriginApproved(long workspaceId) {
