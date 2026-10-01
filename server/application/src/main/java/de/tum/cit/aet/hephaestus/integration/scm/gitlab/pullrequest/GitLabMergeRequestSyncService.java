@@ -56,6 +56,7 @@ public class GitLabMergeRequestSyncService {
     private final GitLabMergeRequestProcessor mergeRequestProcessor;
     private final GitLabDiscussionSyncService discussionSyncService;
     private final GitLabClosingIssueClient closingIssueClient;
+    private final GitLabApprovalClient approvalClient;
     private final GitLabProperties gitLabProperties;
 
     public GitLabMergeRequestSyncService(
@@ -64,13 +65,15 @@ public class GitLabMergeRequestSyncService {
             GitLabMergeRequestProcessor mergeRequestProcessor,
             GitLabDiscussionSyncService discussionSyncService,
             GitLabClosingIssueClient closingIssueClient,
-            GitLabProperties gitLabProperties) {
+            GitLabProperties gitLabProperties,
+            GitLabApprovalClient approvalClient) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.mergeRequestProcessor = mergeRequestProcessor;
         this.discussionSyncService = discussionSyncService;
         this.closingIssueClient = closingIssueClient;
         this.gitLabProperties = gitLabProperties;
+        this.approvalClient = approvalClient;
     }
 
     public SyncResult syncMergeRequests(Long scopeId, Repository repository, @Nullable OffsetDateTime updatedAfter) {
@@ -465,6 +468,13 @@ public class GitLabMergeRequestSyncService {
             closingIssueNumbers = closingIssueClient.closesIssues(scopeId, repository.getNativeId(), iid);
         }
 
+        var approvalRows = iid != null
+                        && syncApprovers != null
+                        && "merged".equalsIgnoreCase(fields.state())
+                        && !GitLabMergeRequestProcessor.isSettling(fields.detailedMergeStatus())
+                ? approvalClient.read(scopeId, repository.getNativeId(), iid)
+                : null;
+
         var syncData = new GitLabMergeRequestProcessor.SyncMergeRequestData(
                 fields.globalId(),
                 fields.iid(),
@@ -512,7 +522,8 @@ public class GitLabMergeRequestSyncService {
                 syncParticipants,
                 milestoneIid,
                 headPipeline,
-                closingIssueNumbers);
+                closingIssueNumbers,
+                approvalRows);
         PullRequest pr = mergeRequestProcessor.processFromSync(
                 syncData, ProcessingContext.forSync(scopeId, repository).withObservedAt(fetchedAt));
 

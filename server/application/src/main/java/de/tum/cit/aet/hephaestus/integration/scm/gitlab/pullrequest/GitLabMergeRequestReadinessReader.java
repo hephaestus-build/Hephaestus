@@ -41,14 +41,17 @@ public class GitLabMergeRequestReadinessReader {
     private final GitLabGraphQlClientProvider graphQlClientProvider;
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabProperties gitLabProperties;
+    private final GitLabApprovalClient approvalClient;
 
     public GitLabMergeRequestReadinessReader(
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
-            GitLabProperties gitLabProperties) {
+            GitLabProperties gitLabProperties,
+            GitLabApprovalClient approvalClient) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.gitLabProperties = gitLabProperties;
+        this.approvalClient = approvalClient;
     }
 
     /**
@@ -71,7 +74,25 @@ public class GitLabMergeRequestReadinessReader {
             GitLabHeadPipeline headPipeline,
             @Nullable List<GitLabMergeRequestProcessor.SyncReviewerData> reviewers,
             @Nullable List<GitLabMergeRequestProcessor.SyncUserData> approvers,
-            Merge merge) {}
+            Merge merge,
+            GitLabApprovalClient.@Nullable Snapshot approvalRows) {
+        Facts withApprovalRows(GitLabApprovalClient.@Nullable Snapshot rows) {
+            return new Facts(
+                    projectNativeId,
+                    mergeRequestNativeId,
+                    state,
+                    updatedAt,
+                    headSha,
+                    mergeable,
+                    detailedMergeStatus,
+                    approved,
+                    headPipeline,
+                    reviewers,
+                    approvers,
+                    merge,
+                    rows);
+        }
+    }
 
     /**
      * What GitLab says about a merged merge request's merge: who merged it, when, and the commit it left. Each is
@@ -126,6 +147,12 @@ public class GitLabMergeRequestReadinessReader {
                 Facts facts = decode(Objects.requireNonNull(response));
                 if (facts == null) {
                     log.warn("GitLab did not describe the merge request whole: context={}", context);
+                }
+                if (facts != null
+                        && "merged".equalsIgnoreCase(facts.state())
+                        && facts.approvers() != null
+                        && !GitLabMergeRequestProcessor.isSettling(facts.detailedMergeStatus())) {
+                    facts = facts.withApprovalRows(approvalClient.read(scopeId, facts.projectNativeId(), iid));
                 }
                 return facts;
             }
@@ -184,7 +211,8 @@ public class GitLabMergeRequestReadinessReader {
                         response, MERGE_REQUEST, node, "reviewers", GitLabMergeRequestFields::reviewer),
                 GitLabMergeRequestFields.wholePage(
                         response, MERGE_REQUEST, node, "approvedBy", GitLabMergeRequestFields::user),
-                merge(response, node));
+                merge(response, node),
+                null);
     }
 
     /** The merge's facts, each read without an error or left unknown. */

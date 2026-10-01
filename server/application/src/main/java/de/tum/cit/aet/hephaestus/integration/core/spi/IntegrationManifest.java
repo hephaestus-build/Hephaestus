@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Per-kind capability declaration validated at application-server startup: every declared {@link Capability}
@@ -46,6 +47,11 @@ public interface IntegrationManifest {
      */
     default Set<ActorRole> rolesNamedAfterTheOccasion() {
         return Set.of();
+    }
+
+    /** Whether a stored native review commit identifies the current work head; unknown without that authority. */
+    default String reviewCommitFor(@Nullable String recordedCommit, @Nullable String currentHead) {
+        return "UNKNOWN";
     }
 
     /**

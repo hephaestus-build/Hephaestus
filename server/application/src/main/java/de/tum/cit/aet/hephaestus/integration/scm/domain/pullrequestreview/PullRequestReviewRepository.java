@@ -76,7 +76,7 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
         ORDER BY CASE WHEN
             prr.provider.type = de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.GITLAB
             AND prr.state = de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview$State.APPROVED
-            AND prr.isDismissed = false AND prr.submittedAt IS NULL
+            AND prr.isDismissed = false
             THEN 0 ELSE 1 END,
             prr.submittedAt DESC NULLS LAST, prr.id DESC
         """)

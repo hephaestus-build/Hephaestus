@@ -30,7 +30,7 @@ class MentorTurnEvidenceTest extends BaseUnitTest {
                 {"readAt":"2026-10-01T12:01:00Z","providerFreshness":"UNKNOWN","pullRequests":[
                  {"artifactId":11,"headSha":"new-head","checks":"FAILURE","checksFor":"CURRENT_HEAD",
                   "description":"BODY-NOT-IN-RECEIPT","latestReviews":[{"reviewer":"service-account","bot":true,
-                   "state":"APPROVED","commitFor":"OTHER_HEAD","body":"COMMENT-NOT-IN-RECEIPT"}]}]}
+                   "state":"APPROVED","commit":"recorded-associated-head","commitFor":"UNKNOWN","body":"COMMENT-NOT-IN-RECEIPT"}]}]}
                 """;
         String receipt = MentorTurnEvidence.forRunner(
                 mapper,
@@ -71,6 +71,13 @@ class MentorTurnEvidenceTest extends BaseUnitTest {
                         .path("bot")
                         .asBoolean())
                 .isTrue();
+        var review = parsed.path("mergeReadiness")
+                .path("pullRequests")
+                .path(0)
+                .path("latestReviews")
+                .path(0);
+        assertThat(review.path("commit").asString()).isEqualTo("recorded-associated-head");
+        assertThat(review.path("commitFor").asString()).isEqualTo("UNKNOWN");
         assertThat(receipt).doesNotContain("SOURCE-PROSE", "BODY-NOT", "COMMENT-NOT", "PRIVATE-HISTORY");
         assertThat(parsed.path("providerFreshness").asString()).isEqualTo("UNKNOWN");
     }
