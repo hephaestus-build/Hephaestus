@@ -182,7 +182,8 @@ class GitLabMergeRequestReadinessReaderTest extends BaseUnitTest {
                         Duration.ofSeconds(30),
                         Duration.ofSeconds(60),
                         Duration.ZERO,
-                        Duration.ofMinutes(5)));
+                        Duration.ofMinutes(5)),
+                mock(GitLabApprovalClient.class));
 
         assertThat(reader.read(1L, "hephaestustest/demo-repository", 4)).isNull();
         verify(provider).recordFailure(unreachable);

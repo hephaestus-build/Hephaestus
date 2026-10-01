@@ -28,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.MergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.ReviewDecision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -46,6 +47,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +57,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -1516,7 +1519,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     null,
                     pipeline,
-                    closing);
+                    closing,
+                    null);
         }
 
         @Test
@@ -1584,7 +1588,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     3,
                     GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
-                    );
+                    ,
+                    null);
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(pullRequestRepository)
@@ -1686,7 +1691,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     99,
                     GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
-                    );
+                    ,
+                    null);
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             verify(pullRequestRepository)
@@ -1790,7 +1796,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
-                    );
+                    ,
+                    null);
             PullRequest result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             assertThat(result).isNull();
@@ -1846,7 +1853,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
-                    );
+                    ,
+                    null);
             PullRequest result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             assertThat(result).isNull();
@@ -1953,7 +1961,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
-                    );
+                    ,
+                    null);
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             // Verify new approval was created (save called for new review)
@@ -2017,6 +2026,205 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
     }
 
     // Detailed Merge Status Mapping
+
+    @Nested
+    class MergedApprovalDates {
+        private final Instant materialVersion = Instant.parse("2026-10-01T14:43:40.080Z");
+        private final Instant readAt = Instant.parse("2026-10-01T17:33:52Z");
+        private final Instant actualApproval = Instant.parse("2026-10-01T14:11:19.087Z");
+        private PullRequest pr;
+        private PullRequestReview review;
+
+        @BeforeEach
+        void setUpMergedApproval() {
+            testRepo.setNativeId(273327L);
+            pr = createPullRequestEntity();
+            pr.setState(Issue.State.MERGED);
+            pr.setHeadRefOid(APPROVAL_HEAD);
+            pr.setUpdatedAt(materialVersion);
+            var approver = createApproverEntity();
+            approver.setProvider(gitLabProvider);
+            pr.setBody("Why this change is needed");
+            review = new PullRequestReview();
+            review.setId(500L);
+            review.setNativeId(GitLabMergeRequestProcessor.generateApprovalNativeId(RAW_MR_ID, RAW_APPROVER_ID));
+            review.setProvider(gitLabProvider);
+            review.setAuthor(approver);
+            review.setState(PullRequestReview.State.APPROVED);
+            review.setPullRequest(pr);
+            review.setCommitId(APPROVAL_HEAD);
+            pr.addReview(review);
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+        }
+
+        @Test
+        void shouldCorrectAStandingDateWithoutPublishingAnotherApprovalAndKeepItThroughAReadFailure() {
+            stubSnapshotWrite();
+            review.setSubmittedAt(materialVersion);
+            assertThat(read(snapshot(actualApproval), readAt)).isTrue();
+            assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
+            assertThat(review.getCommitId()).isEqualTo(APPROVAL_HEAD);
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.ReviewSubmitted.class));
+
+            assertThat(read(null, readAt.plusSeconds(1))).isTrue();
+            assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
+            assertThat(read(snapshot(null), readAt.plusSeconds(2))).isTrue();
+            assertThat(review.getSubmittedAt()).isNull();
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.ReviewSubmitted.class));
+        }
+
+        @Test
+        void shouldNotCarryAWithdrawnApprovalDateIntoAnUndatedRenewal() {
+            stubSnapshotWrite();
+            review.setSubmittedAt(actualApproval);
+            review.setState(PullRequestReview.State.DISMISSED);
+            review.setDismissed(true);
+            assertThat(read(null, readAt)).isTrue();
+            assertThat(review.getSubmittedAt()).isNull();
+            assertThat(review.isDismissed()).isFalse();
+            assertThat(review.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+        }
+
+        @Test
+        void shouldNotReplaceADateUsingAnOldSnapshotOrAnotherHead() {
+            stubSnapshotWrite();
+            review.setSubmittedAt(actualApproval);
+            assertThat(processor.applyReadiness(
+                            testRepo,
+                            MR_IID,
+                            facts(snapshot(materialVersion), "b".repeat(40), materialVersion),
+                            readAt,
+                            ProcessingContext.forSync(1L, testRepo)))
+                    .isFalse();
+            assertThat(processor.applyReadiness(
+                            testRepo,
+                            MR_IID,
+                            facts(
+                                    snapshot(materialVersion, materialVersion.minusSeconds(1)),
+                                    APPROVAL_HEAD,
+                                    materialVersion.minusSeconds(1)),
+                            readAt,
+                            ProcessingContext.forSync(1L, testRepo)))
+                    .isFalse();
+            read(null, readAt);
+            read(snapshot(materialVersion), readAt.minusSeconds(1));
+            assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
+        }
+
+        @Test
+        void shouldRecoverOnlyTheStandingDateAcrossWebhookPrecisionAndOrderAcceptedDateReads() {
+            stubSnapshotWrite();
+            pr.setMergeable(false);
+            pr.setReviewDecision(ReviewDecision.REVIEW_REQUIRED);
+            var seconds = materialVersion.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            assertThat(processor.applyReadiness(
+                            testRepo,
+                            MR_IID,
+                            facts(snapshot(actualApproval), APPROVAL_HEAD, seconds),
+                            readAt,
+                            ProcessingContext.forSync(1L, testRepo)))
+                    .isTrue();
+            assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
+            assertThat(pr.getMergeable()).isFalse();
+            assertThat(pr.getReviewDecision()).isEqualTo(ReviewDecision.REVIEW_REQUIRED);
+            assertThat(pr.getReviewersObservedAt()).isEqualTo(readAt);
+            assertThat(processor.applyReadiness(
+                            testRepo,
+                            MR_IID,
+                            facts(snapshot(materialVersion), APPROVAL_HEAD, seconds),
+                            readAt.minusSeconds(1),
+                            ProcessingContext.forSync(1L, testRepo)))
+                    .isFalse();
+            assertThat(review.getSubmittedAt()).isEqualTo(actualApproval);
+            assertThat(read(snapshot(actualApproval), readAt.plusSeconds(1))).isTrue();
+            assertThat(pr.getMergeable()).isTrue();
+            assertThat(pr.getReviewDecision()).isEqualTo(ReviewDecision.APPROVED);
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.ReviewSubmitted.class));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"metadata", "version", "title", "body", "missingBody", "actors", "withdrawn"})
+        void shouldLeaveUnboundDateReadsAndTheirAuthorityUnknown(String mismatch) {
+            var nativeVersion = "version".equals(mismatch) ? materialVersion.minusSeconds(1) : materialVersion;
+            var rows = new GitLabApprovalClient.Snapshot(
+                    "metadata".equals(mismatch) ? null : RAW_MR_ID,
+                    MR_IID,
+                    testRepo.getNativeId(),
+                    "merged",
+                    nativeVersion,
+                    "title".equals(mismatch) ? "Another title" : pr.getTitle(),
+                    "missingBody".equals(mismatch) ? null : "body".equals(mismatch) ? "Another reason" : pr.getBody(),
+                    List.of(new GitLabApprovalClient.Approval(
+                            new GitLabApprovalClient.Approver(
+                                    "actors".equals(mismatch) ? RAW_APPROVER_ID + 1 : RAW_APPROVER_ID),
+                            actualApproval)));
+            if ("withdrawn".equals(mismatch)) review.setDismissed(true);
+            assertThat(processor.applyReadiness(
+                            testRepo,
+                            MR_IID,
+                            facts(
+                                    rows,
+                                    APPROVAL_HEAD,
+                                    materialVersion.truncatedTo(java.time.temporal.ChronoUnit.SECONDS)),
+                            readAt,
+                            ProcessingContext.forSync(1L, testRepo)))
+                    .isFalse();
+            assertThat(review.getSubmittedAt()).isNull();
+            assertThat(pr.getReviewersObservedAt()).isNull();
+        }
+
+        private void stubSnapshotWrite() {
+            when(pullRequestRepository.save(pr)).thenReturn(pr);
+            when(gitLabUserService.findOrCreateUser(any(GitLabUserLookup.class), eq(PROVIDER_ID)))
+                    .thenReturn(Objects.requireNonNull(review.getAuthor()));
+        }
+
+        private boolean read(GitLabApprovalClient.@Nullable Snapshot rows, Instant observedAt) {
+            return processor.applyReadiness(
+                    testRepo,
+                    MR_IID,
+                    facts(rows, APPROVAL_HEAD, materialVersion),
+                    observedAt,
+                    ProcessingContext.forSync(1L, testRepo));
+        }
+
+        private GitLabMergeRequestReadinessReader.Facts facts(
+                GitLabApprovalClient.@Nullable Snapshot rows, String head, Instant updatedAt) {
+            return new GitLabMergeRequestReadinessReader.Facts(
+                    testRepo.getNativeId(),
+                    RAW_MR_ID,
+                    "merged",
+                    updatedAt,
+                    head,
+                    true,
+                    "mergeable",
+                    true,
+                    GitLabHeadPipeline.NOT_CAPTURED,
+                    List.of(),
+                    List.of(new GitLabMergeRequestProcessor.SyncUserData(
+                            "gid://gitlab/User/11111", "approver", null, null, null, null, false)),
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                    rows);
+        }
+
+        private GitLabApprovalClient.Snapshot snapshot(@Nullable Instant date) {
+            return snapshot(date, materialVersion);
+        }
+
+        private GitLabApprovalClient.Snapshot snapshot(@Nullable Instant date, Instant version) {
+            return new GitLabApprovalClient.Snapshot(
+                    RAW_MR_ID,
+                    MR_IID,
+                    testRepo.getNativeId(),
+                    "merged",
+                    version,
+                    pr.getTitle(),
+                    pr.getBody(),
+                    List.of(new GitLabApprovalClient.Approval(
+                            new GitLabApprovalClient.Approver(RAW_APPROVER_ID), date)));
+        }
+    }
 
     @Nested
     class DetailedMergeStatusMapping {
@@ -2119,7 +2327,8 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null,
                     GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                     null // closingIssueNumbers
-                    );
+                    ,
+                    null);
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
             // Recorded with the review snapshot the page was read at, not through the upsert.
@@ -2442,6 +2651,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                 null,
                 GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
                 null // closingIssueNumbers
-                );
+                ,
+                null);
     }
 }

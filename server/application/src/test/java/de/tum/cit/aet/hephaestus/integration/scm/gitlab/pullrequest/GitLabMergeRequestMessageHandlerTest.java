@@ -217,8 +217,8 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             InOrder order = inOrder(readinessReader, mergeRequestProcessor);
             order.verify(readinessReader).read(eq(1L), anyString(), eq(5));
             order.verify(mergeRequestProcessor).applyTerminalFacts(any(), eq(5), eq(facts));
+            order.verify(mergeRequestProcessor).applyReadiness(any(), eq(5), eq(facts), any(), any());
             order.verify(mergeRequestProcessor).offerMerge(any(), eq(5), any());
-            verify(mergeRequestProcessor, never()).applyReadiness(any(), anyInt(), any(), any(), any());
             verify(closingIssueClient, never()).closesIssues(any(), anyLong(), anyInt());
         }
 
@@ -295,7 +295,8 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                     GitLabHeadPipeline.NO_PIPELINE,
                     List.of(),
                     List.of(),
-                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                    null);
         }
 
         @Test

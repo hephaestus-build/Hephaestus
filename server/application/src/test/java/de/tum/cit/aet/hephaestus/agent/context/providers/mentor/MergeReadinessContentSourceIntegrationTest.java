@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
@@ -73,7 +74,6 @@ import org.springframework.transaction.annotation.AnnotationTransactionAttribute
 import org.springframework.transaction.interceptor.TransactionInterceptor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 /** What Heph reads before merge advice, against a real schema: the staged MR !1 and its neighbours. */
 class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewIntegrationTest {
@@ -99,6 +99,9 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
 
     @Autowired
     private PullRequestReviewRepository reviewRepository;
+
+    @Autowired
+    private IntegrationManifestRegistry manifests;
 
     @Autowired
     private IssueCommentRepository commentRepository;
@@ -159,7 +162,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         note(mr, tutor, "Looks good. Please merge only once the CI pipeline is green.", at("10:01"));
         note(mr, tutor, "Reminder: a green pipeline is required before merging.", at("10:05"));
 
-        JsonNode payload = source.buildPayload(workspace.getId(), student.getId());
+        JsonNode payload = payload(workspace.getId(), student.getId());
 
         assertThat(payload.path("notLoaded")).isEmpty();
         JsonNode entry = payload.path("pullRequests").get(0);
@@ -206,13 +209,33 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
     }
 
     @Test
+    void shouldKeepADatedStandingGitLabApprovalWhenTheSameReviewerCommentsAfterwards() {
+        PullRequest mr = mergeRequest(course, 25, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
+        PullRequestReview approval = review(mr, tutor, PullRequestReview.State.APPROVED, "", at("10:00"));
+        approval.setCommitId(HEAD);
+        reviewRepository.save(approval);
+        review(mr, tutor, PullRequestReview.State.COMMENTED, "Follow-up note.", at("10:02"));
+
+        JsonNode standing = inspect(mr).path("latestReviews").get(0);
+        assertThat(standing.path("state").asString()).isEqualTo("APPROVED");
+        assertThat(standing.path("submittedAt").asString())
+                .isEqualTo(at("10:00").toString());
+        assertThat(standing.path("commitFor").asString()).isEqualTo("UNKNOWN");
+
+        approval.setDismissed(true);
+        approval.setState(PullRequestReview.State.DISMISSED);
+        reviewRepository.save(approval);
+        assertThat(inspect(mr).path("latestReviews").get(0).path("state").asString())
+                .isEqualTo("COMMENTED");
+    }
+
+    @Test
     void shouldReportAGreenMergeRequestWithNoReviewerNotes() {
         PullRequest mr = mergeRequest(course, 2, true, MergeStateStatus.CLEAN, CheckState.SUCCESS, HEAD);
         review(mr, tutor, PullRequestReview.State.APPROVED, "", at("10:00"));
 
-        JsonNode entry = source.buildPayload(workspace.getId(), student.getId())
-                .path("pullRequests")
-                .get(0);
+        JsonNode entry =
+                payload(workspace.getId(), student.getId()).path("pullRequests").get(0);
 
         assertThat(entry.path("mergeable").asString()).isEqualTo("YES");
         assertThat(entry.path("mergeStateStatus").asString()).isEqualTo("CLEAN");
@@ -239,9 +262,8 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         PullRequestReviewThread own = thread(mr, PullRequestReviewThread.State.UNRESOLVED);
         posted(mr, "gid://gitlab/DiffNote/" + reply(own, tutor, NOTE).getNativeId());
 
-        JsonNode entry = source.buildPayload(workspace.getId(), student.getId())
-                .path("pullRequests")
-                .get(0);
+        JsonNode entry =
+                payload(workspace.getId(), student.getId()).path("pullRequests").get(0);
 
         assertThat(entry.path("threadsStatus").asString()).isEqualTo("COMPLETE");
         assertThat(entry.path("threads")).hasSize(2);
@@ -273,9 +295,8 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         posted(mr, "gid://gitlab/DiffNote/" + reply(thread, tutor, NOTE).getNativeId());
         reply(thread, tutor, "> " + NOTE + "\n\nPlease set up CI before merging.");
 
-        JsonNode entry = source.buildPayload(workspace.getId(), student.getId())
-                .path("pullRequests")
-                .get(0);
+        JsonNode entry =
+                payload(workspace.getId(), student.getId()).path("pullRequests").get(0);
 
         assertThat(entry.path("generalNotesStatus").asString()).isEqualTo("COMPLETE");
         assertThat(entry.path("generalNotes")
@@ -318,7 +339,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                         .map(r -> r.path("reviewer").asString() + " "
                                 + r.path("state").asString() + " bot="
                                 + r.path("bot").asBoolean()))
-                .containsExactly("tutor COMMENTED bot=false", "ci-bot APPROVED bot=true");
+                .containsExactlyInAnyOrder("tutor COMMENTED bot=false", "ci-bot APPROVED bot=true");
         assertThat(entry.path("generalNotes")
                         .valueStream()
                         .map(n -> n.path("author").asString() + " "
@@ -367,9 +388,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                     + note(mr, tutor, NOTE, start.plusSeconds(i + 1)).getNativeId();
         }
         posted(mr, refs);
-        return source.buildPayload(workspace.getId(), student.getId())
-                .path("pullRequests")
-                .get(0);
+        return payload(workspace.getId(), student.getId()).path("pullRequests").get(0);
     }
 
     @Test
@@ -403,7 +422,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                     }
                 });
         ProxyFactory transactional = new ProxyFactory(new MergeReadinessContentSource(
-                actorSelector, reopenBeforeSecondPage, reviewRepository, commentRepository, objectMapper));
+                actorSelector, reopenBeforeSecondPage, reviewRepository, commentRepository, objectMapper, manifests));
         transactional.setProxyTargetClass(true);
         transactional.addAdvice(
                 new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
@@ -447,7 +466,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
             thread(mr, PullRequestReviewThread.State.UNRESOLVED, tutor, "open thread " + t);
         }
 
-        JsonNode payload = source.buildPayload(workspace.getId(), student.getId());
+        JsonNode payload = payload(workspace.getId(), student.getId());
         JsonNode entry = payload.path("pullRequests").get(0);
 
         assertThat(entry.path("number").asInt()).isEqualTo(3);
@@ -481,7 +500,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
 
         Workspace disconnected = createWorkspace("no-connection", "No connection", "other", AccountType.ORG, student);
         monitor(disconnected, "course/intro");
-        JsonNode unavailable = source.buildPayload(disconnected.getId(), student.getId());
+        JsonNode unavailable = payload(disconnected.getId(), student.getId());
         assertThat(unavailable.path("status").asString()).isEqualTo("UNAVAILABLE");
         assertThat(unavailable.has("pullRequests")).isFalse();
     }
@@ -497,7 +516,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         approval.setDismissed(true);
         reviewRepository.save(approval);
 
-        JsonNode payload = source.buildPayload(workspace.getId(), student.getId());
+        JsonNode payload = payload(workspace.getId(), student.getId());
         JsonNode entry = payload.path("pullRequests").get(0);
 
         assertThat(payload.path("providerFreshness").asString()).isEqualTo("UNKNOWN");
@@ -528,7 +547,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         Workspace other = createWorkspace("other-course", "Other course", "other-course", AccountType.ORG, student);
         connect(other, INSTANCE);
 
-        JsonNode payload = source.buildPayload(workspace.getId(), student.getId());
+        JsonNode payload = payload(workspace.getId(), student.getId());
 
         assertThat(payload.path("pullRequests")
                         .valueStream()
@@ -573,7 +592,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         abandoned.setState(PullRequest.State.CLOSED);
         pullRequestRepository.save(abandoned);
 
-        JsonNode payload = source.buildPayload(workspace.getId(), student.getId());
+        JsonNode payload = payload(workspace.getId(), student.getId());
         JsonNode entry = inspect(mr);
         JsonNode closed = inspect(abandoned);
 
@@ -614,9 +633,8 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         review(mr, tutor, PullRequestReview.State.APPROVED, "", at("10:00"));
         note(mr, tutor, "z".repeat(1_000) + " Do not merge until CI is configured.", at("10:01"));
 
-        JsonNode entry = source.buildPayload(workspace.getId(), student.getId())
-                .path("pullRequests")
-                .get(0);
+        JsonNode entry =
+                payload(workspace.getId(), student.getId()).path("pullRequests").get(0);
 
         assertThat(entry.path("generalNotesStatus").asString()).isEqualTo("TRUNCATED");
         assertThat(entry.path("generalNotes").get(0).path("body").asString()).doesNotContain("Do not merge");
@@ -642,7 +660,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
             }
         }
 
-        ObjectNode payload = source.buildPayload(workspace.getId(), student.getId());
+        JsonNode payload = payload(workspace.getId(), student.getId());
         String json = objectMapper.writeValueAsString(payload);
 
         assertThat(json.length()).isLessThanOrEqualTo(MentorContextKeys.FETCH_CONTEXT_MAX_CHARS);
@@ -688,6 +706,12 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         pr.setAuthor(author);
         pr.setBody("Fixes #2");
         closes(pr, issue(app, 2, "Acceptance: the login page shows an error message."));
+        User reviewer =
+                userRepository.save(TestUserFactory.createUser(nativeIds.incrementAndGet(), "gh-tutor", github));
+        review(pr, reviewer, PullRequestReview.State.APPROVED, "", at("10:00"));
+        PullRequestReview comment = review(pr, reviewer, PullRequestReview.State.COMMENTED, "Follow-up.", at("10:02"));
+        comment.setCommitId("b".repeat(40));
+        reviewRepository.save(comment);
 
         JsonNode entry = source.inspect(team.getId(), author.getId(), pr.getId())
                 .path("pullRequests")
@@ -698,6 +722,10 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                 .isEqualTo("Acceptance: the login page shows an error message.");
         assertThat(entry.path("checks").asString()).isEqualTo("NONE");
         assertThat(entry.path("checksObserved").asString()).isEqualTo("NONE_REPORTED");
+        JsonNode latest = entry.path("latestReviews").get(0);
+        assertThat(latest.path("state").asString()).isEqualTo("COMMENTED");
+        assertThat(latest.path("commit").asString()).isEqualTo("b".repeat(40));
+        assertThat(latest.path("commitFor").asString()).isEqualTo("OTHER_COMMIT");
     }
 
     @Test
@@ -748,7 +776,7 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
     }
 
     @Test
-    void shouldSayWhatWasObservedForTheCurrentHeadAndWhichCommitEachReviewWasFor() {
+    void shouldDistinguishCurrentChecksFromGitLabRecordedReviewCommitAssociations() {
         PullRequest noPipeline = mergeRequest(course, 15, true, MergeStateStatus.CLEAN, CheckState.NO_PIPELINE, HEAD);
         PullRequestReview earlier = review(noPipeline, tutor, PullRequestReview.State.APPROVED, "", at("10:00"));
         earlier.setCommitId("b".repeat(40));
@@ -763,7 +791,15 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         JsonNode approval = none.path("latestReviews").get(0);
         assertThat(approval.path("state").asString()).isEqualTo("APPROVED");
         assertThat(approval.path("commit").asString()).isEqualTo("b".repeat(40));
-        assertThat(approval.path("commitFor").asString()).isEqualTo("OTHER_COMMIT");
+        assertThat(approval.path("commitFor").asString()).isEqualTo("UNKNOWN");
+        earlier.setCommitId(HEAD);
+        reviewRepository.save(earlier);
+        assertThat(inspect(noPipeline)
+                        .path("latestReviews")
+                        .get(0)
+                        .path("commitFor")
+                        .asString())
+                .isEqualTo("UNKNOWN");
         assertThat(inspect(skipped).path("checksObserved").asString()).isEqualTo("SKIPPED_PIPELINE_REPORTED");
         JsonNode stale = inspect(otherCommit);
         assertThat(stale.path("checks").asString()).isEqualTo("FAILURE");
@@ -793,7 +829,8 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
                         GitLabHeadPipeline.NO_PIPELINE,
                         List.of(),
                         List.of(),
-                        GitLabMergeRequestReadinessReader.Merge.UNKNOWN),
+                        GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                        null),
                 readAt,
                 ProcessingContext.forSync(null, course));
 
@@ -803,6 +840,13 @@ class MergeReadinessContentSourceIntegrationTest extends AbstractPracticeReviewI
         assertThat(entry.path("checksFor").asString()).isEqualTo("CURRENT_HEAD");
         assertThat(entry.path("checksObserved").asString()).isEqualTo("NO_PIPELINE_REPORTED");
         assertThat(entry.path("mergeable").asString()).isEqualTo("YES");
+    }
+
+    private JsonNode payload(long workspaceId, long developerId) {
+        Map<String, byte[]> files = new HashMap<>();
+        source.contribute(
+                new ContextRequest.MentorChatRequest(workspaceId, developerId, UUID.randomUUID(), null), files);
+        return objectMapper.readTree(Objects.requireNonNull(files.get(MergeReadinessContentSource.OUTPUT_KEY)));
     }
 
     private JsonNode inspect(PullRequest pr) {
