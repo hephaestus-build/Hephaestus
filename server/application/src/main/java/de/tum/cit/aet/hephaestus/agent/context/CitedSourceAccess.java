@@ -181,7 +181,6 @@ public class CitedSourceAccess {
             return !path.equals("context/document.md")
                     && !path.equals("context/document.json")
                     && !path.equals("context/conversation_thread.json")
-                    && !citation.path("sourceKind").asString("").startsWith("scm.")
                     && !path.startsWith("context/chat/")
                     && !path.startsWith("context/docs/")
                     && !path.startsWith("context/people/")

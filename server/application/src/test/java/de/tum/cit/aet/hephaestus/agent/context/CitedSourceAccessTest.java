@@ -230,4 +230,100 @@ class CitedSourceAccessTest extends BaseUnitTest {
         assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isFalse();
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"observations.jsonl", "feedback.jsonl", "person.json"})
+    void canonicalPersonReferencesReuseVisibilityAndRecordWithdrawal(String filename) {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+        var job = job();
+        String path = "context/people/42/" + filename;
+        UUID recordId = UUID.randomUUID();
+        byte[] bytes = ("{\"id\":\"" + recordId + "\",\"synced_at\":null}\n").getBytes(StandardCharsets.UTF_8);
+        when(memberPolicy.allowsPerson(job, 42L)).thenReturn(true);
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        var member = new de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership();
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(java.util.Optional.of(member));
+        String type = filename.startsWith("observations") ? "observation" : "feedback";
+        when(history.permitsHistoryRecord(1L, type, recordId, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                .thenReturn(true);
+        when(history.permitsHistoryRecord(1L, type, recordId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(true);
+        try (var prepared = files.prepare(job, new PreparedEvidence(Map.of(path, bytes), null), null)) {
+            assertThat(prepared.filesOnDisk()).containsKey(path);
+            var citation = mapper.createObjectNode().put("artifactPath", path).put("startLine", 1);
+            var access = access(files);
+            access.bind(job, citation, ProvenanceDigest.sha256Hex(bytes));
+            assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isTrue();
+            if (!filename.equals("person.json")) {
+                when(history.permitsHistoryRecord(1L, type, recordId, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                        .thenReturn(false);
+                assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                        .isFalse();
+            }
+            member.setHidden(true);
+            assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isFalse();
+            member.setHidden(false);
+            when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L)).thenReturn(java.util.Optional.empty());
+            assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isFalse();
+        }
+    }
+
+    @Test
+    void canonicalDocumentRechecksItsSourceIdentityAndLocation() {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+        var job = job();
+        String path = "context/docs/engineering/design.md";
+        byte[] bytes = "---\nsynced_at: null\nsource_id: \"source-7\"\n---\nquote\n".getBytes(StandardCharsets.UTF_8);
+        var doc = mock(DocumentProjection.ProjectedDocument.class);
+        when(doc.sourceId()).thenReturn("source-7");
+        when(doc.slug()).thenReturn("design");
+        when(doc.collectionSlug()).thenReturn("engineering");
+        when(doc.bodyMarkdown()).thenReturn("quote");
+        when(documents.documentsByReference(1L, java.util.List.of("source-7"))).thenReturn(java.util.List.of(doc));
+        try (var prepared = files.prepare(job, new PreparedEvidence(Map.of(path, bytes), null), null)) {
+            assertThat(prepared.filesOnDisk()).containsKey(path);
+            var citation = mapper.createObjectNode().put("artifactPath", path);
+            var access = access(files);
+            access.bind(job, citation, ProvenanceDigest.sha256Hex(bytes));
+            assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isTrue();
+            when(doc.deleted()).thenReturn(true);
+            assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isFalse();
+            when(doc.deleted()).thenReturn(false);
+            when(doc.bodyMarkdown()).thenReturn(null);
+            assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isFalse();
+            when(doc.bodyMarkdown()).thenReturn("quote");
+            when(doc.sourceId()).thenReturn("another-source");
+            assertThat(access.permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                    .isFalse();
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {
+                "[]",
+                "{}",
+                "{\"records\":[]}",
+                "{\"records\":[{\"type\":\"unknown\"}]}",
+                "{\"records\":[{\"type\":\"observation\",\"person\":42,\"id\":\"invalid\"}]}"
+            })
+    void malformedPersistedReferencesFailClosed(String reference) {
+        var files = new JobEvidenceFiles(
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+        when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
+        when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L))
+                .thenReturn(java.util.Optional.of(new de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership()));
+        var citation = mapper.createObjectNode().put("artifactPath", "context/people/42/observations.jsonl");
+        citation.set("sourceReference", mapper.readTree(reference));
+        assertThat(access(files).permits(1L, citation, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .isFalse();
+    }
 }

@@ -46,23 +46,30 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
     private final ReviewRepositoryPreparer repositories = mock(ReviewRepositoryPreparer.class);
     private final GitRepositoryManager git = mock(GitRepositoryManager.class);
 
+    private final WorkspaceScmProjection scm = mock(WorkspaceScmProjection.class);
+    private final ConversationThreadProjection conversations = mock(ConversationThreadProjection.class);
+    private final ReviewHistoryContentSource history = mock(ReviewHistoryContentSource.class);
+    private final ReviewMemberAiPolicy memberPolicy = mock(ReviewMemberAiPolicy.class);
+    private final WorkspaceMembershipRepository memberships = mock(WorkspaceMembershipRepository.class);
+    private final PracticeRepository practices = mock(PracticeRepository.class);
+
     private WorkspaceFolderRenderer renderer() {
         when(policies.current())
                 .thenReturn(new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()).current());
         return new WorkspaceFolderRenderer(
-                mock(WorkspaceScmProjection.class),
+                scm,
                 mapper,
                 documents,
-                mock(ConversationThreadProjection.class),
+                conversations,
                 policies,
                 git,
                 new JobEvidenceFiles(
                         new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC()),
                 repositories,
-                mock(ReviewHistoryContentSource.class),
-                mock(ReviewMemberAiPolicy.class),
-                mock(WorkspaceMembershipRepository.class),
-                mock(PracticeRepository.class));
+                history,
+                memberPolicy,
+                memberships,
+                practices);
     }
 
     private AgentJob job() {
@@ -220,6 +227,214 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
             org.mockito.Mockito.verify(documents, org.mockito.Mockito.never()).documentsForWorkspace(1L);
         } finally {
             java.util.Objects.requireNonNull(captured.cleanup()).close();
+        }
+    }
+
+    @Test
+    void rendersCanonicalRecordsAndOmitsHiddenOrNonConsentingPeople() throws Exception {
+        var source = renderer();
+        Set<SourceKind> selected = Set.of(
+                new SourceKind("workspace.project-inventory"),
+                new SourceKind("slack.conversation.thread"),
+                new SourceKind("hephaestus.observation-history"),
+                new SourceKind("hephaestus.feedback-history"),
+                PullRequestContentSource.CORE);
+        for (var kind : selected)
+            when(policies.isSourceUsePermitted(
+                            policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                    .thenReturn(true);
+        var repo = new Repository();
+        repo.setId(2L);
+        repo.setNameWithOwner("org/reviewed");
+        repo.setDefaultBranch("main");
+        repo.setLastSyncAt(Instant.EPOCH);
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(repo));
+        var job = job();
+        job.setMetadata(mapper.createObjectNode().put("repository_id", 2L));
+        org.mockito.Mockito.doAnswer(call -> {
+                    java.util.function.Consumer<WorkspaceScmProjection.ProjectedRecord> output = call.getArgument(3);
+                    var record =
+                            mapper.createObjectNode().put("body", "SCM prose").putNull("synced_at");
+                    for (var format : WorkspaceScmProjection.Format.values())
+                        output.accept(new WorkspaceScmProjection.ProjectedRecord(
+                                "pulls/1/" + format.name(), PullRequestContentSource.CORE, format, record));
+                    return null;
+                })
+                .when(scm)
+                .forEachRecord(
+                        org.mockito.ArgumentMatchers.eq(1L),
+                        org.mockito.ArgumentMatchers.eq(2L),
+                        org.mockito.ArgumentMatchers.anySet(),
+                        org.mockito.ArgumentMatchers.any());
+        org.mockito.Mockito.doAnswer(call -> {
+                    java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> output = call.getArgument(1);
+                    output.accept(mapper.createObjectNode()
+                            .put("channel", "..")
+                            .put("month", "2026-10")
+                            .put("text", "chat quote")
+                            .putNull("synced_at"));
+                    output.accept(mapper.createObjectNode()
+                            .put("channel", ".")
+                            .put("month", "2026-10")
+                            .put("text", "second quote")
+                            .putNull("synced_at"));
+                    return null;
+                })
+                .when(conversations)
+                .forEachWorkspaceMessage(org.mockito.ArgumentMatchers.eq(1L), org.mockito.ArgumentMatchers.any());
+        var visible = new de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership();
+        var user = new de.tum.cit.aet.hephaestus.integration.scm.domain.user.User();
+        user.setId(42L);
+        user.setLogin("author");
+        visible.setUser(user);
+        var denied = new de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership();
+        var deniedUser = new de.tum.cit.aet.hephaestus.integration.scm.domain.user.User();
+        deniedUser.setId(43L);
+        denied.setUser(deniedUser);
+        var hidden = new de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership();
+        hidden.setHidden(true);
+        when(memberships.findByWorkspace_Id(1L)).thenReturn(List.of(visible, denied, hidden));
+        when(memberPolicy.allowsPerson(job, 42L)).thenReturn(true);
+        org.mockito.Mockito.doAnswer(call -> {
+                    java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> observations =
+                            call.getArgument(4);
+                    java.util.function.Consumer<tools.jackson.databind.node.ObjectNode> feedback = call.getArgument(5);
+                    observations.accept(mapper.createObjectNode()
+                            .put("summary", "prior observation")
+                            .putNull("synced_at"));
+                    feedback.accept(mapper.createObjectNode()
+                            .put("body", "prior feedback")
+                            .putNull("synced_at"));
+                    return null;
+                })
+                .when(history)
+                .renderPersonHistory(
+                        org.mockito.ArgumentMatchers.eq(1L),
+                        org.mockito.ArgumentMatchers.eq(42L),
+                        org.mockito.ArgumentMatchers.anySet(),
+                        org.mockito.ArgumentMatchers.eq(job.getId()),
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+        var practice = new de.tum.cit.aet.hephaestus.practices.model.Practice();
+        practice.setSlug("review quality");
+        practice.setCriteria("Practice prose");
+        practice.setUpdatedAt(Instant.EPOCH);
+        when(practices.findByWorkspaceId(1L)).thenReturn(List.of(practice));
+        var captured = source.capture(new ContextRequest.ConversationReviewRequest(job), selected);
+        try {
+            assertThat(captured.filesOnDisk())
+                    .containsKeys(
+                            "context/scm/reviewed/repository.json",
+                            "context/scm/reviewed/pulls/1/JSON",
+                            "context/scm/reviewed/pulls/1/JSONL",
+                            "context/scm/reviewed/pulls/1/MARKDOWN",
+                            "context/chat/%2E%2E/2026-10.jsonl",
+                            "context/chat/%2E/2026-10.jsonl",
+                            "context/people/42/person.json",
+                            "context/people/42/observations.jsonl",
+                            "context/people/42/feedback.jsonl",
+                            "context/practices/review%20quality.md",
+                            "context/project_inventory.json");
+            assertThat(Files.readString(captured.filesOnDisk().get("context/people/42/observations.jsonl")))
+                    .contains("prior observation", "synced_at");
+            assertThat(Files.readString(captured.filesOnDisk().get("context/people/42/feedback.jsonl")))
+                    .contains("prior feedback", "synced_at");
+            assertThat(captured.filesOnDisk().keySet()).noneMatch(path -> path.startsWith("context/people/43/"));
+            assertThat(captured.refusals())
+                    .contains(new WorkspaceRefusal(
+                            WorkspaceRefusal.Target.RECORD, "people/43", SourceAbsenceReason.CONSENT_NOT_ACTIVE));
+        } finally {
+            java.util.Objects.requireNonNull(captured.cleanup()).close();
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void repositorySnapshotsAreCopiedOnlyWhenComplete(boolean complete) throws Exception {
+        var source = renderer();
+        var kind = new SourceKind("scm.repository.tree");
+        when(policies.isSourceUsePermitted(
+                        policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                .thenReturn(true);
+        var repo = new Repository();
+        repo.setId(2L);
+        repo.setDefaultBranch("main");
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(repo));
+        var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey(1L, 2L);
+        when(git.isEnabled()).thenReturn(true);
+        when(git.isRepositoryCloned(key)).thenReturn(true);
+        when(git.resolveBranchHead(key, "main")).thenReturn("head");
+        Path snapshot = Files.createDirectory(root.resolve("snapshot"));
+        Files.createDirectories(snapshot.resolve(".git"));
+        Files.writeString(snapshot.resolve(".git/HEAD"), "head");
+        Files.writeString(snapshot.resolve(".git/hephaestus-captured-refs"), "head");
+        Files.writeString(snapshot.resolve("file.txt"), "repository quote");
+        when(git.readTreeSnapshot(key, "head"))
+                .thenReturn(
+                        new GitRepositoryManager.GitTreeSnapshot(snapshot, "head", "tree", 100, 3, complete, Set.of()));
+        var captured = source.capture(new ContextRequest.DocumentReviewRequest(job()), Set.of(kind));
+        try {
+            assertThat(snapshot).doesNotExist();
+            if (complete) {
+                assertThat(captured.directories()).hasSize(1);
+                assertThat(Files.readString(
+                                captured.directories().getFirst().source().resolve("file.txt")))
+                        .isEqualTo("repository quote");
+                assertThat(captured.filesOnDisk())
+                        .containsKeys("repos/2/.git/HEAD", "repos/2/.git/hephaestus-captured-refs");
+            } else {
+                assertThat(captured.directories()).isEmpty();
+                assertThat(captured.refusals())
+                        .contains(new WorkspaceRefusal(
+                                WorkspaceRefusal.Target.REPOSITORY, "2", SourceAbsenceReason.PROVIDER_FAILURE));
+            }
+        } finally {
+            java.util.Objects.requireNonNull(captured.cleanup()).close();
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"oversized", "symlink"})
+    void unsafeRepositorySnapshotRefusesRenderingAndDeletesBothCopies(String failure) throws Exception {
+        var source = renderer();
+        var kind = new SourceKind("scm.repository.tree");
+        when(policies.isSourceUsePermitted(
+                        policies.current().version(), kind, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                .thenReturn(true);
+        var repo = new Repository();
+        repo.setId(2L);
+        repo.setDefaultBranch("main");
+        when(repositories.permittedRepositories(1L)).thenReturn(List.of(repo));
+        var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey(1L, 2L);
+        when(git.isEnabled()).thenReturn(true);
+        when(git.isRepositoryCloned(key)).thenReturn(true);
+        when(git.resolveBranchHead(key, "main")).thenReturn("head");
+        Path snapshot = Files.createDirectory(root.resolve("snapshot"));
+        if (failure.equals("oversized")) {
+            try (var file =
+                    new java.io.RandomAccessFile(snapshot.resolve("blob").toFile(), "rw")) {
+                file.setLength(
+                        de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET + 1);
+            }
+        } else {
+            Files.createSymbolicLink(snapshot.resolve("outside"), root.resolve("outside"));
+        }
+        when(git.readTreeSnapshot(key, "head"))
+                .thenReturn(new GitRepositoryManager.GitTreeSnapshot(snapshot, "head", "tree", 0, 1, true, Set.of()));
+        var job = job();
+        var error = org.assertj.core.api.Assertions.catchThrowable(
+                () -> source.capture(new ContextRequest.IssueReviewRequest(job), Set.of(kind)));
+        if (failure.equals("oversized"))
+            assertThat(error)
+                    .isInstanceOf(de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException.class);
+        else
+            assertThat(error).isInstanceOf(java.io.UncheckedIOException.class).hasMessageContaining("non-regular file");
+        assertThat(snapshot).doesNotExist();
+        try (var remnants = Files.list(new FabricLayout(root.toString())
+                .jobsRoot()
+                .resolve("1")
+                .resolve(job.getId().toString()))) {
+            assertThat(remnants.toList()).isEmpty();
         }
     }
 }

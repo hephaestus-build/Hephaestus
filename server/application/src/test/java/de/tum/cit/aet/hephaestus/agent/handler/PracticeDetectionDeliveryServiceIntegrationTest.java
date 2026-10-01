@@ -127,6 +127,12 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
     private RepositoryRepository repositoryRepository;
 
     @Autowired
+    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository connections;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository monitors;
+
+    @Autowired
     private PullRequestRepository pullRequestRepository;
 
     @Autowired
@@ -206,6 +212,16 @@ class PracticeDetectionDeliveryServiceIntegrationTest extends BaseIntegrationTes
         repo.setHtmlUrl("https://github.com/org/test-repo");
         repo.setDefaultBranch("main");
         repo = repositoryRepository.save(repo);
+        monitors.save(WorkspaceTestFixtures.repositoryMonitor(workspace, repo.getNameWithOwner()));
+        var connection = new de.tum.cit.aet.hephaestus.integration.core.connection.Connection(
+                workspace,
+                de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind.GITHUB,
+                "1732",
+                new de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig.GitHubAppConfig(
+                        1732L, workspace.getAccountLogin(), null, java.util.Set.of()));
+        org.springframework.test.util.ReflectionTestUtils.setField(
+                connection, "state", de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState.ACTIVE);
+        connections.save(connection);
 
         Instant now = Instant.now();
         Long providerId = java.util.Objects.requireNonNull(provider.getId());
