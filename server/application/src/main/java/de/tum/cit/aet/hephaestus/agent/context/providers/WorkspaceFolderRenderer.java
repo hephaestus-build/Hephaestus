@@ -38,14 +38,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.commons.io.FileUtils;
-import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /** The workspace file read model. Integration-owned projections retain their consent and erasure gates. */
 @Component
-@Order(1100)
 public class WorkspaceFolderRenderer implements EvidenceSource {
     private final WorkspaceScmProjection scmProjection;
     private final WorkspaceMembershipRepository memberships;

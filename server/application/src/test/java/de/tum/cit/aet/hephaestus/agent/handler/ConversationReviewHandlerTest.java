@@ -182,11 +182,22 @@ class ConversationReviewHandlerTest extends BaseUnitTest {
                     .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                             List.of(practice), mock(AutomatedReviewReadinessReport.class)));
 
-            Map<String, byte[]> files =
-                    de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(handler.prepareInputs(job));
+            try (var prepared = handler.prepareInputs(job)) {
+                Map<String, byte[]> files =
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(prepared);
 
-            assertThat(files).containsKey(SandboxLayout.CONTEXT_PREFIX + "conversation_thread.json");
-            assertThat(files).containsKey(SandboxLayout.TASK_ENVELOPE_FILENAME);
+                assertThat(files).containsKey(SandboxLayout.CONTEXT_PREFIX + "conversation_thread.json");
+                assertThat(files).containsKey(SandboxLayout.TASK_ENVELOPE_FILENAME);
+                String prompt = objectMapper
+                        .readTree(files.get(SandboxLayout.TASK_ENVELOPE_FILENAME))
+                        .path("prompt")
+                        .asString();
+                assertThat(prompt)
+                        .contains(
+                                SandboxLayout.CONTEXT_PREFIX + "conversation_thread.json",
+                                SandboxLayout.CONTEXT_PREFIX + "project_inventory.json")
+                        .doesNotContain("inputs/context/");
+            }
         }
     }
 

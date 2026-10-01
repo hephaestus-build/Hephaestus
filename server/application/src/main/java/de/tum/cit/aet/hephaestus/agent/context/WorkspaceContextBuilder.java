@@ -18,6 +18,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -54,6 +55,8 @@ public class WorkspaceContextBuilder {
             @Nullable JobFolderIndexBuilder manifestBuilder) {
         List<ContentSource> sorted = new ArrayList<>(providers);
         AnnotationAwareOrderComparator.sort(sorted);
+        // The folder snapshots the primary capture, so it must follow every other source.
+        sorted.sort(Comparator.comparing(provider -> provider instanceof WorkspaceFolderRenderer));
         this.providers = List.copyOf(sorted);
         this.meterRegistry = meterRegistry;
         this.manifestBuilder = manifestBuilder;
