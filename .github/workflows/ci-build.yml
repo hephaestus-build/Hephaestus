@@ -332,7 +332,7 @@ jobs:
           mapfile -t SERVER_JARS < <(find server/application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar')
           (( ${#SERVER_JARS[@]} == 1 ))
           SERVER_JAR=${SERVER_JARS[0]}
-          SERVER_PORT=8080 MANAGEMENT_PORT=8080 POSTGRES_PORT=5432 \
+          SERVER_PORT=8080 MANAGEMENT_PORT=9090 POSTGRES_PORT=5432 \
             SPRING_DOCKER_COMPOSE_ENABLED=false APPLICATION_HOST_URL=http://localhost:4200 \
             setsid java -jar "$SERVER_JAR" --spring.profiles.active=e2e,playwright \
             --hephaestus.integration.gitlab.enabled=true > e2e-server.log 2>&1 &
