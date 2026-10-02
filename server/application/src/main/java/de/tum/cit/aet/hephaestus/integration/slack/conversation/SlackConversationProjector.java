@@ -109,9 +109,10 @@ public class SlackConversationProjector implements ConversationThreadProjection 
                 conv.put("channelName", key.channelName());
             }
             conv.put("threadTs", key.threadTs());
-            conv.put("messageCount", key.messageCount());
             ArrayNode messages = conv.putArray("messages");
-            appendThreadMessages(workspaceId, key, messages);
+            boolean truncated = appendThreadMessages(workspaceId, key, messages);
+            conv.put("messageCount", messages.size());
+            conv.put("truncated", truncated);
         }
         root.put("totalThreads", conversations.size());
         return root;

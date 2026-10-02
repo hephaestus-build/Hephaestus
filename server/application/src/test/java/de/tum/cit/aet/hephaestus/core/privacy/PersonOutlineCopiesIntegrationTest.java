@@ -24,6 +24,9 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private IdentityProviderRepository providers;
 
+    @Autowired
+    private de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository documents;
+
     @Test
     void exactEditorAndCollaboratorKeysCoverBodyCopiesWithoutExportingOtherProfiles() {
         databaseTestUtils.cleanDatabase();
@@ -104,5 +107,20 @@ class PersonOutlineCopiesIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("[\"" + other + "\"]");
         assertThat(jdbc.queryForObject("SELECT body_markdown FROM outline_document WHERE id=995705", String.class))
                 .isEqualTo("Unrelated body canary");
+        // Upstream sync is allowed to mirror the work again, but every AI projection stays suppressed.
+        jdbc.update(
+                "UPDATE outline_document SET updated_by_subject=?,body_markdown='Restored copied body' WHERE id=995703",
+                target);
+        jdbc.update(
+                "UPDATE outline_document SET collaborator_subjects=CAST(? AS jsonb),body_markdown='Restored copied body' WHERE id=995704",
+                "[\"" + target + "\",\"" + other + "\"]");
+        assertThat(documents.findForProjection(995701L, org.springframework.data.domain.Pageable.unpaged()))
+                .extracting(de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument::getId)
+                .containsExactly(995705L);
+        assertThat(documents.findByWorkspaceIdAndIdForProjection(995701L, 995703L))
+                .isEmpty();
+        assertThat(documents.searchByRelevance(995701L, "body", 10))
+                .extracting(de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument::getId)
+                .containsExactly(995705L);
     }
 }

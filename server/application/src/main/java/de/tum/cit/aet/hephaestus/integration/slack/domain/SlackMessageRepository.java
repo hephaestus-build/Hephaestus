@@ -23,6 +23,12 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
           AND m.deletedAt IS NULL AND NOT EXISTS
             (SELECT 1 FROM SlackParticipantConsent p WHERE p.workspaceId=:workspaceId
              AND p.slackUserId=m.authorSlackUserId AND p.ingestionOptedOut=TRUE)
+          AND NOT EXISTS (
+            SELECT 1 FROM PersonSuppression s, IdentityProvider provider
+            WHERE s.providerId=provider.id
+              AND provider.type=de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.SLACK
+              AND provider.serverUrl='https://slack.com'
+              AND s.subject=m.authorSlackUserId AND s.teamKey=m.slackTeamId)
         """;
 
     @Query("""

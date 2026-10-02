@@ -83,8 +83,7 @@ public class OutlineDocumentProjector implements DocumentProjection {
     public Optional<ProjectedDocument> documentById(long workspaceId, long documentId) {
         if (!isOriginApproved(workspaceId)) return Optional.empty();
         return documentRepository
-                .findById(documentId)
-                .filter(doc -> doc.getWorkspaceId() != null && doc.getWorkspaceId() == workspaceId)
+                .findByWorkspaceIdAndIdForProjection(workspaceId, documentId)
                 .map(doc -> project(doc, authorContext(workspaceId), collectionNames(workspaceId)));
     }
 

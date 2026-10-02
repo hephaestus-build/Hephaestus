@@ -135,3 +135,8 @@ arbitrary error metadata and hidden reasoning are excluded: they can contain cre
 profiles from another person. The projection is implemented in
 `server/application/src/main/java/de/tum/cit/aet/hephaestus/mentor/MentorMessagePersonDataStore.java`;
 canonical stored messages are not changed by export.
+
+Slack AI projections check the native author and Slack team in SQL. Outline AI projections check
+native creator, editor and collaborator subjects in the document's provider instance. These checks
+apply to direct reads, workspace inputs and ranked search before its result limit. Provider sync may
+still mirror upstream records; the controlled rows do not return to these AI input queries.
