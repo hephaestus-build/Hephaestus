@@ -53,7 +53,7 @@ export function tilesHint(
 		observedDevelopers === undefined
 			? "the developers here"
 			: `${developerCount(observedDevelopers)} observed ${windowPhrase(window)}`;
-	return `The grey band shows the middle half of ${of}, and your marker shows you. A tile compares you once at least ${2 * minimumOthers} other developers have reviewed work in this window; until then it shows only your own value.`;
+	return `The typical range is the middle half of ${of}; your marker shows you. A tile compares you once at least ${2 * minimumOthers} other developers have reviewed work in this window; until then it shows only your own value.`;
 }
 
 /**

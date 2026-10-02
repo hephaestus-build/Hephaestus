@@ -73,7 +73,7 @@ export function WorkspaceTile({
 								"Needs more data before the workspace shows here."
 							) : (
 								<>
-									Middle half here:{" "}
+									Typical range:{" "}
 									<span className="font-semibold text-foreground tabular-nums">
 										{middle.low === middle.high ? middle.low : `${middle.low} to ${middle.high}`}
 									</span>
@@ -109,7 +109,7 @@ function RangeBar({ yours, middle }: { yours: number; middle?: MiddleHalf }) {
 	const range =
 		middle === undefined
 			? ""
-			: ` The middle half of developers here: ${middle.low === middle.high ? middle.low : `${middle.low} to ${middle.high}`}.`;
+			: ` Typical range here: ${middle.low === middle.high ? middle.low : `${middle.low} to ${middle.high}`}.`;
 	return (
 		<div role="img" aria-label={`You: ${yours}.${range}`} className="relative mb-5 h-4 w-full">
 			<span aria-hidden className="absolute inset-x-0 top-1.5 h-1 rounded-full bg-muted" />
