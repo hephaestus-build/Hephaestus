@@ -94,6 +94,7 @@ not enough. Shared provider metadata has an explicit empty person selection, not
 | `agent_job`, `llm_usage_event`, `instance_llm_settings`, `review_backfill_run`, `review_sweep_schedule` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/AgentPersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/agent/AgentPersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
 | `account` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CoreAccountPersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CoreAccountPersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
 | `account_feature`, `identity_link`, `issued_jwt`, `client_session`, `client_sign_in_handoff`, `account_export`, `consent_decision`, `auth_event`, `config_audit_event`, `config_audit_event_acting_account`, `config_audit_event_membership_subject`, `instance_settings`, `event_publication`, `person_data_request`, `person_data_request_administration`, `person_suppression` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CorePrivacyPersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/CorePrivacyPersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
+| `git_repository_history` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/IntegrationCoreConnectionPersonDataCatalog.java` (`GitRepositoryHistoryPersonDataStore.select`, repository references only) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/IntegrationCoreConnectionPersonDataCatalog.java` (`GitRepositoryHistoryPersonDataStore.erase`, preserves upstream caches; affected attempt folders use the evidence-erasure hook) |
 | `oauth_state_nonce`, `user`, `organization_membership`, `team_membership`, `repository_collaborator`, `issue_assignee`, `pull_request_requested_reviewers`, `organization`, `team`, `team_repository_permission`, `repository`, `milestone`, `issue_comment`, `pull_request_review`, `pull_request_review_comment`, `discussion_comment`, `issue`, `pull_request_review_thread`, `discussion`, `git_commit`, `commit_contributor`, `commit_file_change`, `project`, `project_item`, `project_status_update`, `project_field_value`, `connection_audit`, `sync_job`, `artifact_signal`, `git_commit_committer`, `git_commit_authored_content`, `issue_merger`, `discussion_answer_actor`, `artifact_signal_requester` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/IntegrationCoreConnectionPersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/IntegrationCoreConnectionPersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
 | `outline_document`, `outline_document_event`, `outline_collection`, `outline_document_editor`, `outline_document_content`, `outline_document_collaborator` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/outline/IntegrationOutlinePersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/outline/IntegrationOutlinePersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
 | `slack_thread`, `slack_message`, `mentor_slack_thread`, `slack_participant_consent`, `slack_channel_consent_event`, `slack_monitored_channel` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/slack/IntegrationSlackPersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/slack/IntegrationSlackPersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
@@ -153,3 +154,21 @@ the activity ledger and does not prevent other authors in the same batch from be
 An activity row with no resolved actor is still included when its stable work reference identifies
 the person's authored commit, issue, pull request or comment. Another person's resolved actor is
 not replaced or removed by that source-based selection.
+
+## Git repository history and short-lived attempts
+
+Person export lists repositories whose history may contain the person's commits under
+`git_repository_history`, using exact stored provider-user references for authors, committers and
+contributors. It never matches Git names or email addresses. The list includes provider and native
+repository IDs and the repository URL, not another person's profile.
+
+Raw Git objects in mirrors and job folders are caches of the upstream repository controlled by the
+workspace's organization. Hephaestus does not rewrite Git history: that would change commit IDs, break
+citations and be undone by the next fetch. Git authorship inside repository history must be erased
+at the source repository by its owner. Sync can still mirror records that remain upstream.
+
+Hephaestus erases its own person records, derived data and collected copies. Person erasure cancels
+affected in-flight attempts and deletes their evidence folders through the evidence-erasure hook.
+The job-folder contract does not change: admission deletes the verified folder, ended attempts have
+a one-hour cleanup grace, and restart cleanup removes abandoned folders. Repository history is not
+exported as an unfiltered Git object archive.

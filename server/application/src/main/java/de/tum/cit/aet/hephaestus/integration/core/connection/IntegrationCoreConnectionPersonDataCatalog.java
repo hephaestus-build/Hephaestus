@@ -41,6 +41,7 @@ import tools.jackson.databind.ObjectMapper;
     "connection_audit",
     "sync_job",
     "artifact_signal",
+    "git_repository_history",
     "git_commit_committer",
     "git_commit_authored_content",
     "issue_merger",
@@ -54,6 +55,7 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
+                new GitRepositoryHistoryPersonDataStore(jdbc, mapper),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

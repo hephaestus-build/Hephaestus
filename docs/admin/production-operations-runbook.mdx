@@ -283,6 +283,26 @@ reconciliation procedure above before processing resumes. Do not claim selective
 The [personal-data map](./dsms/personal-data-map) owns store-specific export, removal and residual
 retention. The [record of processing](./dsms/record-of-processing) owns the legal and retention record.
 
+### Git history and repository owners
+
+The JSON export's `git_repository_history` section lists repositories whose history may contain the
+person's commits, using exact stored provider identities and contributor references. Do not use
+names, logins or email addresses to infer ownership. This list is not a proof of every author string
+in raw Git history: some Git attribution has no native provider person ID.
+
+Raw Git objects in mirrors and job folders cache the upstream repository controlled by the
+workspace's organization. Hephaestus does not rewrite them or refuse capture. Rewriting changes
+commit IDs, breaks citations, and is undone by a later fetch. If Git authorship must be erased, ask
+the source repository's owner to remove it there and to apply their repository retention procedure.
+Sync can mirror records that still exist upstream.
+
+Hephaestus erases what it derives and records about the person. The erasure job cancels affected
+in-flight review attempts and removes their evidence folders through the evidence-erasure hook.
+It must not report completion without proof of removal for the affected copies. Normal job-folder
+retention stays unchanged: admission removes the verified folder, ended attempts have a one-hour
+cleanup grace, and restart cleanup removes abandoned folders. No unfiltered Git object archive is
+placed in a person export.
+
 ## Un-deliver external feedback, then purge
 
 Deleting in-app data does not delete a provider comment. If external copies must be scrubbed,

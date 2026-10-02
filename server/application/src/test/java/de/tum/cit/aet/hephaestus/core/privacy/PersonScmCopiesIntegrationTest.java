@@ -148,6 +148,15 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
         var preview = service.preview(
                 adminId, null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)));
         var export = service.export(preview.request().getId()).path("stores");
+        assertThat(export.path("git_repository_history").size()).isEqualTo(1);
+        assertThat(export.path("git_repository_history").get(0).path("id").asLong())
+                .isEqualTo(995601L);
+        assertThat(export.path("git_repository_history")
+                        .get(0)
+                        .path("provider_id")
+                        .asLong())
+                .isEqualTo(provider.getId());
+        assertThat(export.path("git_repository_history").toString()).doesNotContain("author_email", "committer_email");
         assertThat(export.path("milestone").size()).isEqualTo(1);
         assertThat(export.path("milestone").get(0).path("description").asString())
                 .isEqualTo("Target milestone content");
@@ -169,6 +178,8 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
         assertThat(jdbc.queryForObject("SELECT description FROM milestone WHERE id=995603", String.class))
                 .isEqualTo("Other milestone content");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM repository WHERE id=995601", Long.class))
+                .isEqualTo(1L);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM commit_file_change WHERE id=995606", Long.class))
                 .isZero();
         assertThat(jdbc.queryForObject("SELECT filename FROM commit_file_change WHERE id=995607", String.class))

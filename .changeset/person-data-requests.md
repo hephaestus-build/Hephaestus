@@ -37,3 +37,8 @@ requires those old journals; the cleared hidden memory cannot be restored from t
 
 Your past conversations stay visible. Heph starts with fresh hidden memory after this upgrade, so you
 may need to repeat context from an earlier conversation.
+
+Person exports list repositories whose history may contain the person's commits. Git history is
+not rewritten: repository mirrors and short-lived job folders cache the organization's upstream
+repository. The repository owner must remove Git authorship at the source. Hephaestus removes its
+own person records and derived data and removes affected attempt folders during erasure.

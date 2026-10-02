@@ -299,3 +299,12 @@ Markdown source under `webapp/public/legal/profiles/tumaet/`.
 ```text
 Bitte folgende Auftragsverarbeiter zum AET-Pool hinzufügen, soweit noch nicht vorhanden: GitHub Inc. (USA), Microsoft Corp. (Azure OpenAI Service, USA/EU), OpenAI OpCo, LLC (USA) ggf. mit OpenAI Ireland Ltd. (Irland) als EWR-Vertragspartner, Salesforce / Slack Technologies, LLC (USA). Beschreibungen unter "Recipient Categories"; Drittlandtransfers durch das EU–US Data Privacy Framework und Standardvertragsklauseln Modul 2 (jeweils im Rahmen des einschlägigen Enterprise-AVV) abgedeckt; DPF-Status pro Empfänger vor Anbindung verifizieren.
 ```
+
+### Git history during person erasure
+
+Raw Git objects in repository mirrors and short-lived job folders are an upstream cache controlled
+by the workspace's organization. Hephaestus erases what it derives and records about the person and
+cancels affected in-flight attempts before their evidence folders are removed. It does not rewrite
+Git history. The repository owner must remove Git authorship at the source; a later fetch can mirror
+any records that remain there. Person exports list repositories whose history may contain the
+person's commits, selected through exact native identity references, never names or email addresses.
