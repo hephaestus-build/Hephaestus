@@ -1,13 +1,13 @@
 import { CircleAlertIcon, CircleCheckIcon, GitPullRequestIcon } from "lucide-react";
-import type { ReactNode } from "react";
 
-import type { PracticesAcrossWorkspace, WorkspaceTile } from "@/api/types.gen";
+import { cn } from "cn";
+import type { PracticesAcrossWorkspace } from "@/api/types.gen";
 import { statusToneClass } from "@/components/common/status-def";
+import { FEEDBACK_STATE_DEFS } from "@/components/practice-vocabulary/feedback-state-defs";
 import { PRACTICE_GROUP_STANDING_DEFS } from "@/components/practice-vocabulary/practice-group-standing-defs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 
 import { windowPhrase } from "./across-workspace-copy";
+import { WorkspaceTile, WorkspaceTileSkeleton } from "./WorkspaceTile";
 
 export interface WorkspaceTilesProps {
 	/** The overview the tiles read; without it they draw their loading shape. */
@@ -16,27 +16,24 @@ export interface WorkspaceTilesProps {
 	showWorkspace: boolean;
 }
 
+const TILE_COUNT = 4;
+
+const GRID = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3";
+
+const OpenFeedbackIcon = FEEDBACK_STATE_DEFS.open.icon;
+
 /**
- * Three figures, each the reader's own first and the workspace's middle half after, as Apple
- * Health's highlights set a value against "your typical range". There is no tile for feedback: how
- * feedback closes is a read model per card, and a count over it would be a second truth.
+ * The reader's figures beside the workspace's middle half, three to a row so the grid has room for
+ * more: reviewed work, practices going well and needing attention, and the feedback open now.
  */
 export function WorkspaceTiles({ overview, showWorkspace }: WorkspaceTilesProps) {
 	if (overview === undefined) {
 		return (
 			<div>
-				<ul aria-busy className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-					{[0, 1, 2].map((index) => (
+				<ul aria-busy className={GRID}>
+					{Array.from({ length: TILE_COUNT }, (_, index) => (
 						<li key={index} className="flex">
-							<Card size="sm" className="w-full" aria-hidden>
-								<CardHeader>
-									<Skeleton className="h-4 w-36" />
-								</CardHeader>
-								<CardContent className="flex flex-col gap-2">
-									<Skeleton className="h-7 w-20" />
-									<Skeleton className="h-4 w-44" />
-								</CardContent>
-							</Card>
+							<WorkspaceTileSkeleton />
 						</li>
 					))}
 				</ul>
@@ -44,94 +41,71 @@ export function WorkspaceTiles({ overview, showWorkspace }: WorkspaceTilesProps)
 			</div>
 		);
 	}
+	const shared = {
+		observedDevelopers: overview.observedDevelopers,
+		window: overview.window,
+		showWorkspace,
+	};
 	const of = `of your ${overview.yourPractices} practices`;
+	const open = overview.openFeedback.yours;
 	return (
-		<ul className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-			<Tile
-				title="Pieces of work reviewed"
-				icon={<GitPullRequestIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
-				tile={overview.reviewedWork}
-				qualifier={windowPhrase(overview.window)}
-				showWorkspace={showWorkspace}
-			/>
-			<Tile
-				title="Practices going well"
-				icon={
-					<CircleCheckIcon
-						className={`size-4 shrink-0 ${statusToneClass(PRACTICE_GROUP_STANDING_DEFS.STRENGTH.badgeVariant)}`}
-						aria-hidden
-					/>
-				}
-				tile={overview.practicesGoingWell}
-				qualifier={of}
-				showWorkspace={showWorkspace}
-			/>
-			<Tile
-				title="Practices needing attention"
-				icon={
-					<CircleAlertIcon
-						className={`size-4 shrink-0 ${statusToneClass(PRACTICE_GROUP_STANDING_DEFS.DEVELOPING.badgeVariant)}`}
-						aria-hidden
-					/>
-				}
-				tile={overview.practicesNeedingAttention}
-				qualifier={of}
-				note="Based on your latest four pieces of reviewed work."
-				showWorkspace={showWorkspace}
-			/>
-		</ul>
-	);
-}
-
-function Tile({
-	title,
-	icon,
-	tile,
-	qualifier,
-	note,
-	showWorkspace,
-}: {
-	title: string;
-	icon: ReactNode;
-	tile: WorkspaceTile;
-	qualifier: string;
-	note?: string;
-	showWorkspace: boolean;
-}) {
-	return (
-		<li className="flex">
-			<Card size="sm" className="w-full">
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2 text-sm font-medium">
-						{icon}
-						{title}
-					</CardTitle>
-				</CardHeader>
-				<CardContent className="flex flex-1 flex-col gap-1.5">
-					<p className="flex items-baseline gap-1.5">
-						<span className="text-2xl leading-none font-semibold tabular-nums">{tile.yours}</span>
-						<span className="text-sm text-muted-foreground">{qualifier}</span>
-					</p>
-					{note !== undefined && <p className="text-xs text-muted-foreground">{note}</p>}
-					{showWorkspace && (
-						<p className="mt-auto pt-1 text-sm text-muted-foreground">
-							{typeof tile.middleLow === "number" && typeof tile.middleHigh === "number" ? (
-								<>
-									Most developers here have{" "}
-									<span className="font-semibold text-foreground tabular-nums">
-										{tile.middleLow === tile.middleHigh
-											? tile.middleLow
-											: `${tile.middleLow} to ${tile.middleHigh}`}
-									</span>
-									.
-								</>
-							) : (
-								"Needs more data before the workspace shows here."
+		<ul className={GRID}>
+			<li className="flex">
+				<WorkspaceTile
+					{...shared}
+					title="Pieces of work reviewed"
+					icon={
+						<GitPullRequestIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+					}
+					figure={overview.reviewedWork}
+					qualifier={windowPhrase(overview.window)}
+				/>
+			</li>
+			<li className="flex">
+				<WorkspaceTile
+					{...shared}
+					title="Practices going well"
+					icon={
+						<CircleCheckIcon
+							className={cn(
+								"size-4 shrink-0",
+								statusToneClass(PRACTICE_GROUP_STANDING_DEFS.STRENGTH.badgeVariant),
 							)}
-						</p>
-					)}
-				</CardContent>
-			</Card>
-		</li>
+							aria-hidden
+						/>
+					}
+					figure={overview.practicesGoingWell}
+					qualifier={of}
+				/>
+			</li>
+			<li className="flex">
+				<WorkspaceTile
+					{...shared}
+					title="Practices needing attention"
+					icon={
+						<CircleAlertIcon
+							className={cn(
+								"size-4 shrink-0",
+								statusToneClass(PRACTICE_GROUP_STANDING_DEFS.DEVELOPING.badgeVariant),
+							)}
+							aria-hidden
+						/>
+					}
+					figure={overview.practicesNeedingAttention}
+					qualifier={of}
+					note="Based on your latest four pieces of reviewed work."
+				/>
+			</li>
+			<li className="flex">
+				<WorkspaceTile
+					{...shared}
+					title="Open feedback"
+					icon={<OpenFeedbackIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+					figure={overview.openFeedback}
+					qualifier={`${open === 1 ? "piece" : "pieces"} open now`}
+					note="Counted as your Practice profile shows it open, whatever the range."
+				/>
+			</li>
+		</ul>
 	);
 }

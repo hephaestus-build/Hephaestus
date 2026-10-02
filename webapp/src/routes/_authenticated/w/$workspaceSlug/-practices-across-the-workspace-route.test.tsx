@@ -20,21 +20,18 @@ const wire = (window: PracticesAcrossWorkspace["window"]): Wire<PracticesAcrossW
 	window,
 	since: ACROSS_WORKSPACE.since.toISOString(),
 	until: ACROSS_WORKSPACE.until.toISOString(),
+	// The trend's support carries dates on the wire; no assertion here reads it.
+	groups: ACROSS_WORKSPACE.groups.map(({ yourTrendSupport: _support, ...group }) => group),
 });
 
-/** Every request the page made, method and address, so a test can say what never left the browser. */
-let requests: { method: string; url: URL; body: string }[] = [];
+/** Every request the page made, so a test can count the reads. */
+let requests: { url: URL }[] = [];
 
 beforeEach(() => {
 	requests = [];
 	window.localStorage.clear();
 	server.events.on("request:start", ({ request }) => {
-		void request
-			.clone()
-			.text()
-			.then((body) => {
-				requests.push({ method: request.method, url: new URL(request.url), body });
-			});
+		requests.push({ url: new URL(request.url) });
 	});
 	server.use(
 		http.get("*/workspaces", () =>
@@ -65,7 +62,11 @@ async function renderPage(path = PAGE) {
 		{ level: 1, name: "Practices across the workspace" },
 		ROUTE_RENDER_WAIT,
 	);
-	await screen.findByRole("list", { name: "All practice groups" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole(
+		"link",
+		{ name: "Open group Packaging work for review" },
+		ROUTE_RENDER_WAIT,
+	);
 	return router;
 }
 
@@ -88,35 +89,10 @@ describe("Practices across the workspace", () => {
 		expect(router.state.location.search).toMatchObject({ window: "DAYS_30" });
 	});
 
-	it("keeps an estimate in this browser and never sends it", async () => {
-		await renderPage();
-		const question = screen.getByRole("group", {
-			name: "Your estimate for Packaging work for review",
-		});
-		await userEvent.click(within(question).getByRole("button", { name: "Going well" }));
-
-		await screen.findByText(
-			"You expected Going well; your latest reviewed work reads Needs attention.",
-		);
-		expect(
-			window.localStorage.getItem(
-				"hephaestus:practices-across-the-workspace:estimate:acme:review-ready-work",
-			),
-		).toBe("STRENGTH");
-		// Nothing the page asked for carries the estimate: every request is a read without a body.
-		for (const request of requests) {
-			expect(request.method).toBe("GET");
-			expect(request.body).toBe("");
-			expect(request.url.search).not.toContain("STRENGTH");
-		}
-	});
-
-	it("opens the reader's own group on the practice profile from the group's name", async () => {
+	it("opens the reader's own group on the practice profile from Open group", async () => {
 		const router = await renderPage();
 		await userEvent.click(
-			screen.getByRole("link", {
-				name: "Packaging work for review, open your own group on your Practice profile",
-			}),
+			screen.getByRole("link", { name: "Open group Packaging work for review" }),
 		);
 
 		await waitFor(() => {
@@ -124,6 +100,37 @@ describe("Practices across the workspace", () => {
 		});
 		expect(router.state.location.search).toMatchObject({
 			detail: ["practice-group:review-ready-work"],
+		});
+	});
+
+	it("opens a group's practices over the page and each practice on the practice profile", async () => {
+		const router = await renderPage();
+		await userEvent.click(
+			screen.getByRole("button", { name: "See practices of the group Packaging work for review" }),
+		);
+
+		await waitFor(() => {
+			expect(router.state.location.search).toMatchObject({
+				detail: ["practice-group:review-ready-work"],
+			});
+		});
+		expect(router.state.location.pathname).toBe(PAGE);
+		const level = await screen.findByRole(
+			"table",
+			{ name: "Practices of Packaging work for review" },
+			ROUTE_RENDER_WAIT,
+		);
+		// The level asks for nothing of its own: the page's one read carries every practice's split.
+		expect(overviewReads()).toHaveLength(1);
+		await userEvent.click(
+			within(level).getByRole("link", { name: "View practice Scope the change to one concern" }),
+		);
+
+		await waitFor(() => {
+			expect(router.state.location.pathname).toBe("/w/acme/practice-profile");
+		});
+		expect(router.state.location.search).toMatchObject({
+			detail: ["practice-group:review-ready-work", "practice:scope-to-one-concern"],
 		});
 	});
 
