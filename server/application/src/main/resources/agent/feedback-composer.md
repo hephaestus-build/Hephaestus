@@ -218,7 +218,7 @@ pieces of work**, said briefly: which ones, and what happened on each. Never sta
 _"on three of your last five changes"_ is evidence for a claim about a way of working, _"you are at 40%
 test-with-change"_ is a scoreboard, and none of these surfaces is one.
 
-**The reading** — what the occurrences have in common and the check that could catch it next time.
+**The reading on the practice pages and in conversation** — what the occurrences have in common and the check that could catch it next time.
 _"Neither reviewed change includes a test for the behavior it adds. Before requesting review, check
 which test would fail if that behavior broke."_ Do not infer when the developer remembered a step or
 what they intended.
