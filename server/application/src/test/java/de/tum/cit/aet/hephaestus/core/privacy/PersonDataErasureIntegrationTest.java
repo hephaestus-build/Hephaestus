@@ -5,12 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.account.*;
 import de.tum.cit.aet.hephaestus.agent.*;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.*;
 import de.tum.cit.aet.hephaestus.core.auth.domain.*;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.integration.core.connection.*;
+import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.*;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.*;
@@ -24,16 +29,37 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRe
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.*;
 import de.tum.cit.aet.hephaestus.workspace.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
+    @TempDir
+    private Path evidenceRoot;
+
+    @Autowired
+    private NamedParameterJdbcTemplate namedJdbc;
+
+    @Autowired
+    private PersonDataCopyFence copyFence;
+
+    @Autowired
+    private ObjectProvider<AgentJobLifecycleService> lifecycles;
+
     @Autowired
     private PersonDataService personData;
 
@@ -296,7 +322,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
             long administratorId, long providerId, long workspaceId, UUID jobId, UUID dispatchId) {}
 
     @Test
-    void erasesTargetAcrossTwoWorkspacesAndEveryRegisteredStoreWithoutTouchingAnotherPerson() {
+    void erasesTargetAcrossTwoWorkspacesAndEveryRegisteredStoreWithoutTouchingAnotherPerson() throws Exception {
         IdentityProvider scm = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://privacy-gitlab.example.com"));
         IdentityProvider slack =
@@ -345,6 +371,18 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         link(otherAccount, scm, "84", null, other.getId());
         preference(target);
         preference(other);
+        var recorder = new ExactPersonDataCopyRecorder(jdbc);
+        var worker = new EvidenceFolderPersonDataCatalog(
+                new FabricLayout(evidenceRoot.toString()),
+                jdbc,
+                namedJdbc,
+                mapper,
+                recorder,
+                copyFence,
+                new DefaultListableBeanFactory().getBeanProvider(AgentJobExecutor.class),
+                lifecycles);
+        List<Path> targetFolders = new ArrayList<>();
+        List<Path> otherFolders = new ArrayList<>();
         List<DerivedConversation> targetDerived = new ArrayList<>();
         List<DerivedConversation> otherDerived = new ArrayList<>();
         List<ConversationFeedbackCopy> copiedFeedback = new ArrayList<>();
@@ -390,6 +428,8 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
             targetDerived.add(seedDerivedConversation(workspace, shared.getId(), target));
             otherDerived.add(seedDerivedConversation(workspace, unrelated.getId(), other));
             copiedFeedback.add(seedFeedbackCopy(targetDerived.getLast(), otherDerived.getLast()));
+            targetFolders.add(captureMountedEvidence(worker, recorder, targetDerived.getLast(), target));
+            otherFolders.add(captureMountedEvidence(worker, recorder, otherDerived.getLast(), other));
         }
         for (var derived : targetDerived) {
             invalidations.saveAndFlush(new ObservationInvalidation(
@@ -425,6 +465,18 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(export.path("stores").path("client_sign_in_handoff").toString())
                 .doesNotContain(targetSession.toString(), "code_hash", "code_challenge");
 
+        assertThat(counts.get("person_evidence_copy")).isEqualTo(2L);
+        assertThat(export.path("stores").path("agent_job")).hasSize(2);
+        for (var row : export.path("stores").path("agent_job")) {
+            assertThat(row.path("evidence_snapshot").path("manifest").path("sources"))
+                    .hasSize(1);
+            assertThat(row.path("evidence_snapshot").path("manifest").path("artifacts"))
+                    .hasSize(1);
+        }
+        assertThat(export.toString())
+                .doesNotContain("MOUNTED-PROFILE-CANARY", "credential-canary", "unrelated-profile-canary");
+        targetFolders.forEach(path -> assertThat(path).exists());
+        otherFolders.forEach(path -> assertThat(path).exists());
         assertThat(counts.get("feedback")).isEqualTo(6L);
         assertThat(preview.externalDeliveries()).hasSize(2);
         assertThat(preview.externalDeliveries())
@@ -493,7 +545,29 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
             assertThat(suppression.isArtifactSuppressed(-1L, "chat.conversation_thread", threadId))
                     .isFalse();
         }
-        personData.run(requestId);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            var erasure = executor.submit(() -> personData.run(requestId));
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+            while (!erasure.isDone()) {
+                worker.removeLocalRequests();
+                if (System.nanoTime() > deadline) throw new AssertionError("Mounted worker did not complete erasure");
+                Thread.sleep(20);
+            }
+            erasure.get(10, TimeUnit.SECONDS);
+        }
+        targetFolders.forEach(path -> assertThat(path).doesNotExist());
+        otherFolders.forEach(path -> assertThat(path).exists());
+        for (var derived : targetDerived) {
+            var job = agentJobRepository.findById(derived.jobId()).orElseThrow();
+            assertThat(job.getStatus()).isEqualTo(AgentJobStatus.CANCELLED);
+            assertThat(job.getEvidenceSnapshot()).isNull();
+            assertThat(jdbc.queryForObject(
+                            "SELECT payload::text FROM person_evidence_copy WHERE job_id=?",
+                            String.class,
+                            derived.jobId()))
+                    .isEqualTo("{}");
+        }
+
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM oauth_state_nonce WHERE nonce='nonce-credential-canary'", Long.class))
                 .isZero();
@@ -861,7 +935,35 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         return new ConversationFeedbackCopy(copied.getId(), reply.getId(), thread.getId());
     }
 
-    private record DerivedConversation(List<UUID> observationIds, UUID preparedId, UUID deliveredId, UUID messageId) {}
+    private Path captureMountedEvidence(
+            EvidenceFolderPersonDataCatalog worker,
+            PersonDataCopyRecorder recorder,
+            DerivedConversation derived,
+            User owner)
+            throws Exception {
+        var job = agentJobRepository.findById(derived.jobId()).orElseThrow();
+        job.setStatus(AgentJobStatus.RUNNING);
+        job.setWorkerId("mounted-privacy-worker");
+        agentJobRepository.saveAndFlush(job);
+        var files = new JobEvidenceFiles(
+                new FabricLayout(evidenceRoot.toString()), agentJobRepository, Clock.systemUTC(), worker);
+        files.beginPersonCapture(job);
+        recorder.recordUser(owner.getId());
+        try (var prepared = files.prepare(
+                job,
+                new PreparedEvidence(
+                        Map.of("context/person.json", "MOUNTED-PROFILE-CANARY".getBytes(StandardCharsets.UTF_8)), null),
+                null)) {
+            assertThat(prepared.filesOnDisk()).isNotEmpty();
+        }
+        return evidenceRoot
+                .resolve("jobs")
+                .resolve(job.getWorkspace().getId().toString())
+                .resolve(job.getId().toString());
+    }
+
+    private record DerivedConversation(
+            List<UUID> observationIds, UUID preparedId, UUID deliveredId, UUID messageId, UUID jobId) {}
 
     private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId, User owner) {
         ChatThread chatThread = new ChatThread();
@@ -913,6 +1015,10 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         job.setStatus(AgentJobStatus.COMPLETED);
         job.setConfigSnapshot(mapper.valueToTree(Map.of("model", "test", "apiKey", "credential-canary")));
         job.setContainerLogs("credential-canary unrelated-profile-canary");
+        var snapshot = EvidenceSnapshotFixtures.snapshot(mapper, ArtifactKinds.CONVERSATION_THREAD.value());
+        var source = EvidenceSnapshotFixtures.availableSource(snapshot, "slack.conversation.thread", null);
+        EvidenceSnapshotFixtures.artifact(snapshot, source, "context/conversation.json", "0".repeat(64));
+        job.setEvidenceSnapshot(snapshot);
         job.setMetadata(mapper.valueToTree(Map.of(
                 "slack_thread_id",
                 threadId,
@@ -1007,6 +1113,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         "https://team-" + workspace.getId() + ".slack.com/archives/C1/p1700000000" + owner.getId())
                 .createdAt(Instant.now())
                 .build());
-        return new DerivedConversation(observationIds, prepared.getId(), delivered.getId(), message.getId());
+        return new DerivedConversation(
+                observationIds, prepared.getId(), delivered.getId(), message.getId(), job.getId());
     }
 }
