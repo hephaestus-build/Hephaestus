@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import type { PracticeStanding } from "@/api/types.gen";
 import {
@@ -69,6 +69,8 @@ export interface PracticeDetailLevelProps {
 	isLoading: boolean;
 	error?: unknown;
 	onRetry?: () => void;
+	/** Beside the title, where a page over the profile sets this practice beside its workspace. */
+	aside?: ReactElement;
 }
 
 /**
@@ -106,6 +108,7 @@ export function PracticeDetailLevel({
 	isLoading,
 	error,
 	onRetry,
+	aside,
 }: PracticeDetailLevelProps) {
 	// The server narrows which runs reached the practice; the level narrows the same way and shows
 	// only that practice's observations instead of everything the run found.
@@ -287,6 +290,7 @@ export function PracticeDetailLevel({
 				path={path}
 				current="Practice"
 				title={practice?.name ?? "Practice"}
+				aside={aside}
 				chips={
 					practice && (
 						<>

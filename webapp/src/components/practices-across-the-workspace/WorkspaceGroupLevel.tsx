@@ -2,6 +2,7 @@ import type { WorkspaceGroupSplit } from "@/api/types.gen";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
+import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
@@ -12,19 +13,22 @@ import { ProfileLevelLink } from "./ProfileLevelLink";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
-/** How many practices the level lists before it shows more as the reader reaches the end. */
+/** How many practices the level lists before it offers more. */
 export const PRACTICES_PAGE_SIZE = 20;
+
+/** The open group while the page loads, when the page lists no group by its slug, or ready. */
+export type WorkspaceGroupLevelState =
+	| { status: "loading" }
+	| { status: "missing" }
+	| { status: "ready"; group: WorkspaceGroupSplit; context: SplitContext };
 
 export interface WorkspaceGroupLevelProps {
 	nested?: boolean;
 	path: LevelPath;
 	workspaceSlug: string;
-	/** The open group; absent while the page loads, or when no group by its slug is shown. */
-	group?: WorkspaceGroupSplit;
-	/** The split's reference group and its rule; absent while the page loads. */
-	context?: SplitContext;
-	showWorkspace: boolean;
-	isLoading?: boolean;
+	state: WorkspaceGroupLevelState;
+	/** Opens a practice of the group on the reader's own Practice profile, over its group. */
+	onViewPractice: (groupSlug: string, practiceSlug: string) => void;
 }
 
 /**
@@ -37,11 +41,10 @@ export function WorkspaceGroupLevel({
 	nested,
 	path,
 	workspaceSlug,
-	group,
-	context,
-	showWorkspace,
-	isLoading = false,
+	state,
+	onViewPractice,
 }: WorkspaceGroupLevelProps) {
+	const group = state.status === "ready" ? state.group : undefined;
 	return (
 		<>
 			<LevelHeader
@@ -49,7 +52,7 @@ export function WorkspaceGroupLevel({
 				path={path}
 				current="Group"
 				title={group?.groupName ?? "Practice group"}
-				loading={isLoading}
+				loading={state.status === "loading"}
 				mark={
 					group && (
 						<GroupPill
@@ -74,31 +77,30 @@ export function WorkspaceGroupLevel({
 					)
 				}
 				aside={
-					group && (
+					state.status === "ready" ? (
 						<div className="flex w-full flex-col items-stretch gap-3 sm:w-72 sm:items-end">
 							<ProfileLevelLink
 								workspaceSlug={workspaceSlug}
-								groupSlug={group.groupSlug}
+								groupSlug={state.group.groupSlug}
 								placement="level"
-								aria-label={`Open the group ${group.groupName} on your Practice profile`}
+								aria-label={`Open the group ${state.group.groupName} on your Practice profile`}
 							>
 								Open the group
 							</ProfileLevelLink>
-							{showWorkspace && context !== undefined && (
-								<div className="w-full">
-									<WorkspaceSplitBar
-										split={group.split}
-										yourStanding={group.yourStanding}
-										{...context}
-									/>
-								</div>
-							)}
+							<div className="w-full">
+								<WorkspaceSplitBar
+									split={state.group.split}
+									yourStanding={state.group.yourStanding}
+									showYourWord={false}
+									{...state.context}
+								/>
+							</div>
 						</div>
-					)
+					) : undefined
 				}
 			/>
 			<DrawerBody className="flex flex-col gap-4 pt-2">
-				{group === undefined && !isLoading ? (
+				{state.status === "missing" ? (
 					<Empty variant="outlined">
 						<EmptyHeader>
 							<EmptyTitle>No practice group here by that name</EmptyTitle>
@@ -109,13 +111,7 @@ export function WorkspaceGroupLevel({
 						</EmptyHeader>
 					</Empty>
 				) : (
-					<GroupPractices
-						key={group?.groupSlug}
-						workspaceSlug={workspaceSlug}
-						group={group}
-						context={context}
-						showWorkspace={showWorkspace}
-					/>
+					<GroupPractices key={group?.groupSlug} state={state} onViewPractice={onViewPractice} />
 				)}
 			</DrawerBody>
 		</>
@@ -124,20 +120,17 @@ export function WorkspaceGroupLevel({
 
 /** The group's practices, keyed on the group so a new group starts from its first page. */
 function GroupPractices({
-	workspaceSlug,
-	group,
-	context,
-	showWorkspace,
+	state,
+	onViewPractice,
 }: {
-	workspaceSlug: string;
-	group?: WorkspaceGroupSplit;
-	context?: SplitContext;
-	showWorkspace: boolean;
+	state: Exclude<WorkspaceGroupLevelState, { status: "missing" }>;
+	onViewPractice: (groupSlug: string, practiceSlug: string) => void;
 }) {
+	const group = state.status === "ready" ? state.group : undefined;
 	const rows: ComparisonRow[] = (group?.practices ?? []).map((practice) => ({
 		key: practice.practiceSlug,
 		name: practice.practiceName,
-		subject: <span className="font-medium">{practice.practiceName}</span>,
+		subject: <PracticePill name={practice.practiceName} />,
 		yourStanding: practice.yourStanding,
 		split: practice.split,
 	}));
@@ -146,30 +139,24 @@ function GroupPractices({
 		<WorkspaceComparisonTable
 			aria-label={group === undefined ? "Practices" : `Practices of ${group.groupName}`}
 			subjectHead="Practice"
-			rows={shown}
-			scope="practice"
-			context={context}
-			showWorkspace={showWorkspace}
-			isLoading={group === undefined}
-			more={more}
+			state={
+				state.status === "ready"
+					? { status: "ready", rows: shown, context: state.context, more }
+					: { status: "loading" }
+			}
 			noun="practices"
 			empty={{
 				title: "No practices here yet",
 				description: "Once your workspace reviews a practice in this group, it appears here.",
 			}}
-			actions={(row) =>
-				group && (
-					<ProfileLevelLink
-						workspaceSlug={workspaceSlug}
-						groupSlug={group.groupSlug}
-						practiceSlug={row.key}
-						placement="row"
-						aria-label={`View practice ${row.name}`}
-					>
-						View practice
-					</ProfileLevelLink>
-				)
-			}
+			rowLink={(row) => ({
+				text: "View practice",
+				onOpen: () => {
+					if (group !== undefined) {
+						onViewPractice(group.groupSlug, row.key);
+					}
+				},
+			})}
 		/>
 	);
 }

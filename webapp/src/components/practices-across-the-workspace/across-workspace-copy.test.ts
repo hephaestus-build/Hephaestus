@@ -1,57 +1,84 @@
 import { describe, expect, it } from "vitest";
 
-import { heldBackSentence, type SplitContext, splitDescription } from "./across-workspace-copy";
+import {
+	groupsHint,
+	type SplitContext,
+	splitDescription,
+	tilesHint,
+} from "./across-workspace-copy";
 
 const context: SplitContext = {
-	window: "TERM",
+	window: "ALL_TIME",
 	readerCounted: true,
-	observedDevelopers: 24,
+	observedDevelopers: 28,
 	minimumOthers: 5,
 };
 
 describe("splitDescription", () => {
-	it("names the reference group, every count and the rest without a standing", () => {
+	it("names the reference group and every count the bar shows, and nothing it does not", () => {
 		expect(
 			splitDescription(
-				{ shape: "SPLIT", needsAttention: 5, mixedFeedback: 7, goingWell: 7 },
+				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7 },
 				"MIXED",
 				context,
 			),
 		).toBe(
-			"24 developers observed in this workspace this term: 5 Needs attention, 7 Mixed feedback, 7 Going well, 5 none yet. You: Mixed feedback.",
+			"28 developers observed in this workspace so far: 6 Needs attention, 7 Mixed feedback, 7 Going well. You: Mixed feedback.",
 		);
 	});
 
-	it("says the reader is not counted when their standing is no part of the split", () => {
+	it("says the reader is not counted when they are not among the observed developers", () => {
 		expect(
 			splitDescription(
-				{ shape: "SPLIT", needsAttention: 5, mixedFeedback: 7, goingWell: 7 },
+				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
 				"NOT_OBSERVED",
-				{ ...context, window: "DAYS_30" },
+				{ ...context, window: "DAYS_30", readerCounted: false },
 			),
-		).toMatch(/in the last 30 days: .* You: Not observed yet, not counted in the split\.$/u);
+		).toMatch(
+			/in the last 30 days: .*, 8 none yet\. You: Not observed yet, not counted in the split\.$/u,
+		);
 	});
 
 	it("gives the two parts of a collapsed split and why it collapsed", () => {
 		expect(
-			splitDescription({ shape: "COLLAPSED", hasStanding: 19, noneYet: 5 }, "STRENGTH", context),
+			splitDescription({ shape: "COLLAPSED", hasStanding: 22, noneYet: 6 }, "STRENGTH", context),
 		).toBe(
-			"24 developers observed in this workspace this term: 19 have a standing, 5 none yet. The split is held back while one standing would cover fewer than 5 developers other than you. You: Going well.",
+			"28 developers observed in this workspace so far: 22 have a standing, 6 none yet. The split is held back while one standing would cover 5 developers or fewer. You: Going well.",
 		);
 	});
 });
 
-describe("heldBackSentence", () => {
-	it("keeps the observed total while it holds enough others", () => {
-		expect(heldBackSentence(context)).toBe("Split held back: 24 developers observed this term.");
+describe("a split held back", () => {
+	it("gives one short reason and the reader's word, never the total", () => {
+		expect(splitDescription({ shape: "WITHHELD" }, "MIXED", context)).toBe(
+			"Held back: too few developers to compare yet. You: Mixed feedback.",
+		);
 	});
 
-	it("drops the total when the others in it are fewer than K", () => {
-		expect(heldBackSentence({ ...context, observedDevelopers: 5 })).toBe(
-			"Too few developers observed to compare yet.",
+	it("names no total the server held back", () => {
+		expect(
+			splitDescription({ shape: "COLLAPSED", hasStanding: 22, noneYet: 6 }, "MIXED", {
+				...context,
+				observedDevelopers: undefined,
+			}),
+		).toMatch(/^Developers observed in this workspace so far: /u);
+	});
+});
+
+describe("the hints", () => {
+	it("names who the band is of once, with the count and window the response gives", () => {
+		expect(tilesHint(5, "DAYS_90", 41)).toBe(
+			"The grey band shows the middle half of 41 developers observed in the last 90 days, and your marker shows you. A tile compares you once at least 10 other developers have reviewed work in this window; until then it shows only your own value.",
 		);
-		expect(heldBackSentence({ ...context, observedDevelopers: 5, readerCounted: false })).toBe(
-			"Split held back: 5 developers observed this term.",
+	});
+
+	it("names no count the server held back", () => {
+		expect(tilesHint(5, "DAYS_30")).toMatch(
+			/^The grey band shows the middle half of the developers here, /u,
 		);
+	});
+
+	it("takes the part size from K", () => {
+		expect(groupsHint(5)).toContain("A part shows only when it holds at least 5 other developers");
 	});
 });

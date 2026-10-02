@@ -1,7 +1,11 @@
 import type { ReactNode } from "react";
 
 import type { Practice } from "@/api/types.gen";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
+import {
+	ACTIVITY_RANGE_DEFS,
+	type ActivityRange,
+	ACTIVITY_RANGE_OPTIONS,
+} from "@/components/activity/activity-range";
 import { RangeControls } from "@/components/activity/RangeControls";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { Section } from "@/components/layout/Section";
@@ -50,6 +54,7 @@ export function PracticeReviewOverviewPage({
 			<div className="space-y-4">
 				<div className="flex justify-end">
 					<RangeControls
+						options={ACTIVITY_RANGE_OPTIONS}
 						range={range}
 						onRangeChange={onRangeChange}
 						updating={overview.status === "ready" && overview.stale}

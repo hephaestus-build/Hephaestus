@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Navigate, stripSearchParams } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -7,6 +7,7 @@ import type { PracticesAcrossWorkspace } from "@/api/types.gen";
 import {
 	combinePanelStates,
 	type LoadState,
+	loadProps,
 	type PanelState,
 	queryLoadState,
 } from "@/components/common/panel-state";
@@ -17,29 +18,55 @@ import {
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { levelPathAt } from "@/components/layout/detail-drawer/level-path";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
-import type { AcrossWorkspaceWindow } from "@/components/practices-across-the-workspace/across-workspace-copy";
+import {
+	DEFAULT_PRACTICE_TAB,
+	PRACTICE_TABS,
+} from "@/components/practice-profile/practice-profile-search";
+import { PracticeDetailLevel } from "@/components/practice-profile/PracticeDetailLevel";
+import {
+	type AcrossWorkspaceWindow,
+	DEFAULT_WINDOW,
+} from "@/components/practices-across-the-workspace/across-workspace-copy";
 import {
 	PracticesAcrossTheWorkspacePage,
 	splitContextOf,
 } from "@/components/practices-across-the-workspace/PracticesAcrossTheWorkspacePage";
-import { WorkspaceGroupLevel } from "@/components/practices-across-the-workspace/WorkspaceGroupLevel";
-import { useAcrossWorkspaceMemory } from "@/hooks/use-across-workspace-memory";
+import {
+	WorkspaceGroupLevel,
+	type WorkspaceGroupLevelState,
+} from "@/components/practices-across-the-workspace/WorkspaceGroupLevel";
+import { WorkspaceSplitBar } from "@/components/practices-across-the-workspace/WorkspaceSplitBar";
+import { useInAppFeedback } from "@/hooks/use-in-app-feedback";
+import { REVIEW_RUN_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
+import { usePracticeStandings } from "@/hooks/use-practice-standings";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { pageHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
+import { useAuth } from "@/runtime/auth/AuthContext";
 
-const WINDOWS = ["TERM", "DAYS_30", "DAYS_90"] as const satisfies readonly AcrossWorkspaceWindow[];
+const WINDOWS = [
+	"ALL_TIME",
+	"DAYS_30",
+	"DAYS_90",
+] as const satisfies readonly AcrossWorkspaceWindow[];
 
-/** The one level the page opens over itself: a practice group's practices. */
-const LEVEL_KINDS = ["practice-group"] as const;
+/**
+ * The levels the page opens over itself: a practice group's practices, and one practice over its
+ * group, as the profile drills down.
+ */
+const LEVEL_KINDS = ["practice-group", "practice"] as const;
+
+/** What only the practice level reads, cleared when the stack changes. */
+const LEVEL_PARAMS = ["practiceTab"] as const;
 
 const searchSchema = z
 	.object({
-		window: z.enum(WINDOWS).default("TERM").catch("TERM"),
+		window: z.enum(WINDOWS).default(DEFAULT_WINDOW).catch(DEFAULT_WINDOW),
+		practiceTab: z.enum(PRACTICE_TABS).default(DEFAULT_PRACTICE_TAB).catch(DEFAULT_PRACTICE_TAB),
 	})
 	.extend(detailStackSchema(LEVEL_KINDS).shape);
 
-/** The page under the level, as the first crumb of its path. */
+/** The page under the levels, as the first crumb of their path. */
 const PAGE_LABEL = "Across the workspace";
 
 export const Route = createFileRoute(
@@ -48,12 +75,15 @@ export const Route = createFileRoute(
 	component: PracticesAcrossTheWorkspace,
 	head: pageHead("Practices across the workspace"),
 	validateSearch: searchSchema,
-	search: { middlewares: [stripSearchParams({ window: "TERM" })] },
+	search: {
+		middlewares: [stripSearchParams({ window: DEFAULT_WINDOW, practiceTab: DEFAULT_PRACTICE_TAB })],
+	},
 });
 
 function PracticesAcrossTheWorkspace() {
 	const { workspaceSlug } = Route.useParams();
-	const { window, detail } = Route.useSearch();
+	const { window, detail, practiceTab } = Route.useSearch();
+	const readOnly = useAuth().userView !== undefined;
 	const setSearch = useSearchState();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	// Read only where this workspace reviews practices, and only the window shown: each window is
@@ -61,10 +91,28 @@ function PracticesAcrossTheWorkspace() {
 	const query = useQuery({
 		...getPracticesAcrossWorkspaceOptions({ path: { workspaceSlug }, query: { window } }),
 		enabled: featureState.practicesEnabled === true,
+		// A new window keeps the last one's figures on screen, marked busy, until its own are in.
+		placeholderData: keepPreviousData,
 	});
-	const memory = useAcrossWorkspaceMemory();
 	const stack = parseDetailStack(detail, LEVEL_KINDS);
-	const stackControls = useDetailStack(stack);
+	const stackControls = useDetailStack(stack, { levelParams: LEVEL_PARAMS });
+	const openGroupSlug = stack.find((entry) => entry.kind === "practice-group")?.id;
+	const openPracticeSlug = stack.find((entry) => entry.kind === "practice")?.id;
+	// The practice level shows the reader's own practice as the profile does, from the same reads,
+	// and only while it is open: reading the cards is what delivers them.
+	const practiceOpen = openPracticeSlug !== undefined;
+	const standings = usePracticeStandings(workspaceSlug);
+	const feedback = useInAppFeedback({
+		workspaceSlug,
+		groups: standings.groups,
+		enabled: practiceOpen && featureState.practicesEnabled === true,
+	});
+	const practiceDetail = usePracticeGroupDetail({
+		workspaceSlug,
+		groupSlug: openGroupSlug,
+		practiceSlug: openPracticeSlug,
+		practiceStandings: standings.practiceStandings,
+	});
 
 	if (featureState.practicesEnabled === false) {
 		return <Navigate to="/w/$workspaceSlug" params={{ workspaceSlug }} replace />;
@@ -74,29 +122,27 @@ function PracticesAcrossTheWorkspace() {
 		queryLoadState({ ...featureState, isPending: featureState.isLoading }),
 		queryLoadState(query),
 	]);
-	const state: PanelState<{ overview: PracticesAcrossWorkspace }> =
+	const state: PanelState<{ overview: PracticesAcrossWorkspace; stale: boolean }> =
 		loadState.status === "ready" && query.data !== undefined
-			? { status: "ready", overview: query.data }
+			? { status: "ready", overview: query.data, stale: query.isPlaceholderData }
 			: settling(loadState);
 	const overview = state.status === "ready" ? state.overview : undefined;
-	const openGroupSlug = stack[0]?.id;
+	const group = overview?.groups.find((each) => each.groupSlug === openGroupSlug);
 	const pathAt = levelPathAt(stack, {
 		pageLabel: PAGE_LABEL,
-		labelOf: () => "Group",
+		labelOf: (entry) => (entry.kind === "practice" ? "Practice" : (group?.groupName ?? "Group")),
 		onClose: stackControls.close,
 	});
+	const practiceLoad = loadProps(combinePanelStates([standings.state, feedback.state]));
 
 	return (
 		<>
 			<PracticesAcrossTheWorkspacePage
-				workspaceSlug={workspaceSlug}
 				state={state}
 				window={window}
 				onWindowChange={(next) => {
 					void setSearch((previous) => ({ ...previous, window: next }), { replace: true });
 				}}
-				showWorkspace={memory.showWorkspace}
-				onShowWorkspaceChange={memory.setShowWorkspace}
 				openGroupSlug={openGroupSlug}
 				onOpenGroup={(groupSlug) => stackControls.open({ kind: "practice-group", id: groupSlug })}
 			/>
@@ -106,21 +152,77 @@ function PracticesAcrossTheWorkspace() {
 				size="detailWide"
 				onClose={stackControls.close}
 			>
-				{(entry, level) => (
-					<WorkspaceGroupLevel
-						key={entry.id}
-						nested={level.nested}
-						path={pathAt(level.depth)}
-						workspaceSlug={workspaceSlug}
-						group={overview?.groups.find((group) => group.groupSlug === entry.id)}
-						context={overview && splitContextOf(overview)}
-						showWorkspace={memory.showWorkspace}
-						isLoading={overview === undefined}
-					/>
-				)}
+				{(entry, level) => {
+					if (entry.kind === "practice") {
+						const split = group?.practices.find((each) => each.practiceSlug === entry.id);
+						return (
+							<PracticeDetailLevel
+								key={entry.id}
+								nested={level.nested}
+								path={pathAt(level.depth)}
+								practice={practiceDetail.practice}
+								feed={practiceDetail.feed}
+								feedbackCards={feedback.cards}
+								ratingProps={readOnly ? undefined : feedback.ratingProps}
+								skeletonRows={REVIEW_RUN_PAGE_SIZE}
+								onOpenGroup={group && (() => stackControls.close(level.depth))}
+								tab={practiceTab}
+								onTabChange={(tab) => {
+									void setSearch((previous) => ({ ...previous, practiceTab: tab }), {
+										replace: true,
+									});
+								}}
+								observations={{
+									onRespond: readOnly ? undefined : practiceDetail.respond,
+									pendingResponses: practiceDetail.pendingResponses,
+								}}
+								// Where the group level shows the group's split, the practice shows its own.
+								aside={
+									overview && split ? (
+										<div className="w-full sm:w-72">
+											<WorkspaceSplitBar
+												split={split.split}
+												yourStanding={split.yourStanding}
+												showYourWord={false}
+												{...splitContextOf(overview)}
+											/>
+										</div>
+									) : undefined
+								}
+								{...practiceLoad}
+							/>
+						);
+					}
+					return (
+						<WorkspaceGroupLevel
+							key={entry.id}
+							nested={level.nested}
+							path={pathAt(level.depth)}
+							workspaceSlug={workspaceSlug}
+							state={levelState(overview, entry.id)}
+							onViewPractice={(_groupSlug, practiceSlug) =>
+								stackControls.open({ kind: "practice", id: practiceSlug })
+							}
+						/>
+					);
+				}}
 			</DetailDrawerStack>
 		</>
 	);
+}
+
+/** The open group's level: loading with the page, missing from it, or the group and its context. */
+function levelState(
+	overview: PracticesAcrossWorkspace | undefined,
+	groupSlug: string,
+): WorkspaceGroupLevelState {
+	if (overview === undefined) {
+		return { status: "loading" };
+	}
+	const group = overview.groups.find((each) => each.groupSlug === groupSlug);
+	return group === undefined
+		? { status: "missing" }
+		: { status: "ready", group, context: splitContextOf(overview) };
 }
 
 /** The page's state while its data is not in: failed with its retry, or still loading. */

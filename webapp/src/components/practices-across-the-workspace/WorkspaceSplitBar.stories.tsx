@@ -22,11 +22,11 @@ const meta = {
 		),
 	],
 	args: {
-		split: threeWay([5, 7, 7]),
+		split: threeWay([6, 7, 7]),
 		yourStanding: "MIXED",
-		window: "TERM",
+		window: "DAYS_30",
 		readerCounted: true,
-		observedDevelopers: 24,
+		observedDevelopers: 28,
 		minimumOthers: 5,
 	},
 } satisfies Meta<typeof WorkspaceSplitBar>;
@@ -37,7 +37,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			"24 developers observed in this workspace this term: 5 Needs attention, 7 Mixed feedback, 7 Going well, 5 none yet. You: Mixed feedback.",
+			"28 developers observed in this workspace in the last 30 days: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. You: Mixed feedback.",
 		);
 		await expect(canvas.getByText("You")).toBeVisible();
 		// The marker carries the word, so no caption repeats it.
@@ -59,32 +59,34 @@ export const ReaderNotCounted: Story = {
 
 /** Collapsed: has a standing against none yet, the marker on the reader's part and the word under it. */
 export const Collapsed: Story = {
-	args: { split: collapsed(19, 5), yourStanding: "DEVELOPING" },
+	args: { split: collapsed(22, 6), yourStanding: "DEVELOPING" },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("You")).toBeVisible();
-		await expect(canvas.getByText("19 have a standing, 5 none yet; split held back")).toBeVisible();
+		// The counts say it; the merged part's pointer cannot say the standing, so the word does.
+		await expect(canvas.getByText("22")).toBeVisible();
+		await expect(canvas.getByText("You:")).toBeVisible();
 		await expect(canvas.getByText("Needs attention")).toBeVisible();
 	},
 };
 
-/** Held back with its total: has a standing or none yet holds too few, so only the total shows. */
-export const CollapsedTotalOnly: Story = {
-	args: { split: WITHHELD, yourStanding: "STRENGTH" },
+/** Beside a standing badge, as in a level's head, the bar leaves the reader's word out. */
+export const BesideABadge: Story = {
+	args: { split: collapsed(22, 6), yourStanding: "DEVELOPING", showYourWord: false },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("img")).toBeNull();
-		await expect(
-			canvas.getByText("Split held back: 24 developers observed this term."),
-		).toBeVisible();
-		await expect(canvas.getByText("Going well")).toBeVisible();
+		await expect(canvas.queryByText("You:")).toBeNull();
 	},
 };
 
-/** Withheld: too few others observed for even the total, so the reader's word is all there is. */
+/**
+ * Held back: an empty track where the bar would be, one short reason and the reader's word. The
+ * total is said once above the table, never on the row.
+ */
 export const Withheld: Story = {
-	args: { split: WITHHELD, yourStanding: "NOT_OBSERVED", observedDevelopers: 5 },
+	args: { split: WITHHELD, yourStanding: "NOT_OBSERVED" },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Too few developers observed to compare yet.")).toBeVisible();
-		await expect(canvas.queryByText(/developers observed this term/u)).toBeNull();
+		await expect(canvas.queryByRole("img")).toBeNull();
+		await expect(canvas.getByText("Held back: too few developers to compare yet.")).toBeVisible();
+		await expect(canvas.queryByText(/developers observed/u)).toBeNull();
 		await expect(canvas.getByText("Not observed yet")).toBeVisible();
 	},
 };
