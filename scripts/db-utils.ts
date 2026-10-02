@@ -2,15 +2,20 @@ import { access, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
+import { parseArgs } from "node:util";
+
+import { XMLParser } from "fast-xml-parser";
+import { SyntaxValidator } from "fast-xml-validator";
 
 import { isSet, positivePort, readEnvFile } from "./lib/env.ts";
+import { asArray, asRecord } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
 const root = path.join(import.meta.dirname, "..");
 const server = path.join(root, "server");
 const dataDirectory = path.join(server, "postgres-data");
-const changelogDirectory = path.join(server, "application/src/main/resources/db/changelog");
-const master = path.join(server, "application/src/main/resources/db/master.xml");
+const changelogDirectory = "server/application/src/main/resources/db/changelog";
+const master = "server/application/src/main/resources/db/master.xml";
 // liquibaseDiff produces no file when the schema matches.
 const draft = path.join(server, "application/build/changelog_new.xml");
 
@@ -146,6 +151,78 @@ ${body}${closingTag}
 `;
 }
 
+const draftParser = new XMLParser({
+	ignoreAttributes: false,
+	isArray: (name) => name === "changeSet",
+});
+// The declarations the promoted changelog root carries; its schemaLocation is the promoter's own.
+const rootNamespaces = new Map([
+	["xmlns", "http://www.liquibase.org/xml/ns/dbchangelog"],
+	["xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance"],
+]);
+
+/**
+ * Checks an author-written draft before promotion. Promotion keeps only each change set's body and
+ * replaces its opening tag and the changelog root, so anything else in the draft, a root attribute
+ * other than the root's own namespace declarations and `xsi:schemaLocation`, or a change-set
+ * attribute other than `id` and `author` would be dropped or changed without a trace: all are
+ * refused instead.
+ */
+export function validateDraft(draftXml: string): void {
+	if (/<!DOCTYPE/iu.test(draftXml)) {
+		throw new Error("The draft must not declare a DOCTYPE");
+	}
+	SyntaxValidator.validate(draftXml);
+	const parsed: unknown = draftParser.parse(draftXml);
+	const document = asRecord(parsed, "draft");
+	const rootElement = document.databaseChangeLog;
+	if (
+		rootElement === undefined ||
+		Object.keys(document).some((key) => !["?xml", "databaseChangeLog"].includes(key))
+	) {
+		throw new Error("The draft must be one <databaseChangeLog>");
+	}
+	const changelog: Record<string, unknown> =
+		rootElement === "" ? {} : asRecord(rootElement, "databaseChangeLog");
+	const rootDropped = Object.entries(changelog)
+		.filter(([key]) => key.startsWith("@_"))
+		.map(([key, value]) => [key.slice(2), value] as const)
+		.filter(([name, value]) => name !== "xsi:schemaLocation" && rootNamespaces.get(name) !== value)
+		.map(([name]) => name);
+	if (rootDropped.length > 0) {
+		throw new Error(
+			`Promotion writes the standard Liquibase <databaseChangeLog> and would drop or change: ${rootDropped.join(", ")}`,
+		);
+	}
+	const sets = asArray(changelog.changeSet ?? [], "change sets");
+	const matched = draftXml.match(changeSetPattern) ?? [];
+	if (sets.length === 0 || matched.length !== sets.length) {
+		throw new Error("The draft contains no change sets, or one without a closing tag");
+	}
+	const outside = draftXml
+		.replace(changeSetPattern, "")
+		.replace(/^<\?xml[^>]*\?>/u, "")
+		.replaceAll(/<databaseChangeLog\b[^>]*>|<\/databaseChangeLog>/gu, "")
+		.trim();
+	if (outside !== "") {
+		throw new Error(`Only change sets are promoted; move or remove: ${outside}`);
+	}
+	for (const set of sets) {
+		const keys = Object.keys(asRecord(set, "change set"));
+		const dropped = keys
+			.filter((key) => key.startsWith("@_") && key !== "@_id" && key !== "@_author")
+			.map((key) => key.slice(2));
+		if (dropped.length > 0) {
+			throw new Error(
+				`Promotion keeps only id and author on a change set and would drop: ${dropped.join(", ")}`,
+			);
+		}
+		if (!keys.some((key) => !key.startsWith("@_"))) {
+			throw new Error("A change set in the draft makes no change");
+		}
+	}
+}
+
 /** Appends the include for `fileName` unless master.xml already lists it; the list is append-only. */
 export function appendInclude(masterXml: string, fileName: string): string {
 	const include = `    <include file="./changelog/${fileName}" relativeToChangelogFile="true"/>\n`;
@@ -156,25 +233,29 @@ export function appendInclude(masterXml: string, fileName: string): string {
 }
 
 /** The changelog this branch added and main does not have, if there is exactly one. */
-async function branchChangelog(): Promise<string | undefined> {
-	const directory = path.relative(root, changelogDirectory);
-	const mergeBase = await output("git", ["merge-base", "HEAD", "origin/main"], { cwd: root }).catch(
-		async () => output("git", ["merge-base", "HEAD", "main"], { cwd: root }),
-	);
+async function branchChangelog(repository: string): Promise<string | undefined> {
+	const mergeBase = await output("git", ["merge-base", "HEAD", "origin/main"], {
+		cwd: repository,
+	}).catch(async () => output("git", ["merge-base", "HEAD", "main"], { cwd: repository }));
 	const base = mergeBase.trim();
 	const added = await output(
 		"git",
-		["diff", "--name-only", "--diff-filter=A", base, "HEAD", "--", directory],
-		{ cwd: root },
+		["diff", "--name-only", "--diff-filter=A", base, "HEAD", "--", changelogDirectory],
+		{ cwd: repository },
+	);
+	const staged = await output(
+		"git",
+		["diff", "--cached", "--name-only", "--diff-filter=A", "--", changelogDirectory],
+		{ cwd: repository },
 	);
 	const untracked = await output(
 		"git",
-		["ls-files", "--others", "--exclude-standard", "--", directory],
+		["ls-files", "--others", "--exclude-standard", "--", changelogDirectory],
 		{
-			cwd: root,
+			cwd: repository,
 		},
 	);
-	const files = `${added}\n${untracked}`
+	const files = `${added}\n${staged}\n${untracked}`
 		.split("\n")
 		.map((line) => line.trim())
 		.filter((line) => line.endsWith("_changelog.xml"));
@@ -182,12 +263,12 @@ async function branchChangelog(): Promise<string | undefined> {
 	if (unique.length > 1) {
 		throw new Error(`This branch adds several changelogs: ${unique.join(", ")}`);
 	}
-	return unique[0] === undefined ? undefined : path.join(root, unique[0]);
+	return unique[0] === undefined ? undefined : path.join(repository, unique[0]);
 }
 
 /** Writes the drift into this branch's changelog and wires it; returns the file it wrote. */
-async function promote(draftXml: string): Promise<string> {
-	const existing = await branchChangelog().catch(() => undefined);
+export async function promote(draftXml: string, repository = root): Promise<string> {
+	const existing = await branchChangelog(repository);
 	if (existing !== undefined) {
 		await writeFile(
 			existing,
@@ -200,9 +281,10 @@ async function promote(draftXml: string): Promise<string> {
 		return existing;
 	}
 	const fileName = `${Date.now()}_changelog.xml`;
-	const target = path.join(changelogDirectory, fileName);
+	const target = path.join(repository, changelogDirectory, fileName);
+	const masterFile = path.join(repository, master);
 	await writeFile(target, promoteDraft(draftXml, Number(fileName.split("_")[0])));
-	await writeFile(master, appendInclude(await readFile(master, "utf8"), fileName));
+	await writeFile(masterFile, appendInclude(await readFile(masterFile, "utf8"), fileName));
 	return target;
 }
 
@@ -296,22 +378,52 @@ const commands = {
 } as const;
 
 function usage(): string {
-	return `Usage: node scripts/db-utils.ts <command>\n${Object.entries(commands)
+	return `Usage: node scripts/db-utils.ts <command> [--from-draft <file>]\n${Object.entries(
+		commands,
+	)
 		.map(([name, help]) => `  ${name.padEnd(16)} ${help}`)
-		.join("\n")}`;
+		.join(
+			"\n",
+		)}\n  --from-draft     draft-changelog only: promote this hand-written draft instead of the JPA diff`;
+}
+
+/** The command and its draft file; `--from-draft` belongs to `draft-changelog` alone. */
+export function parseCommand(args: string[]): {
+	command: string | undefined;
+	help: boolean;
+	fromDraft: string | undefined;
+} {
+	const { positionals, values } = parseArgs({
+		args,
+		allowPositionals: true,
+		options: { help: { type: "boolean", short: "h" }, "from-draft": { type: "string" } },
+	});
+	const [command, ...extra] = positionals;
+	if (extra.length > 0) {
+		throw new Error(`Unexpected arguments: ${extra.join(" ")}`);
+	}
+	const fromDraft = values["from-draft"];
+	if (fromDraft !== undefined && command !== "draft-changelog") {
+		throw new Error("--from-draft applies only to draft-changelog");
+	}
+	return { command, help: values.help === true || command === "help", fromDraft };
 }
 
 async function main(): Promise<void> {
-	const command = process.argv[2];
-	if (command === undefined || ["help", "-h", "--help"].includes(command)) {
+	const { command, help, fromDraft } = parseCommand(process.argv.slice(2));
+	if (command === undefined || help) {
 		console.log(usage());
-		process.exitCode = command === undefined ? 1 : 0;
+		process.exitCode = help ? 0 : 1;
 		return;
 	}
 	if (!(command in commands)) {
 		console.error(`Unknown command: ${command}\n${usage()}`);
 		process.exitCode = 1;
 		return;
+	}
+	const authored = fromDraft === undefined ? undefined : await readFile(fromDraft, "utf8");
+	if (authored !== undefined) {
+		validateDraft(authored);
 	}
 	const value = await config();
 	await checkEnvironment(value);
@@ -341,7 +453,7 @@ async function main(): Promise<void> {
 	log("Drafting the changelog...");
 	let written: string | undefined;
 	await withDatabase(value, async (signal) => {
-		const drift = await diffSchema(value, signal);
+		const drift = authored ?? (await diffSchema(value, signal));
 		if (!isSet(drift)) {
 			return;
 		}

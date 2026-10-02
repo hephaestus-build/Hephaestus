@@ -476,6 +476,11 @@ function rehomed(observation: Record<string, unknown>, notes: string[]): Record<
 	}
 	const loose = (key: string) => beside.has(key) || evidence.has(key);
 	const take = (key: string) => {
+		if (beside.has(key) && evidence.has(key)) {
+			throw new Error(
+				`${key} was sent both beside the observation and under evidence; send one value`,
+			);
+		}
 		const value = beside.has(key) ? beside.get(key) : evidence.get(key);
 		beside.delete(key);
 		evidence.delete(key);

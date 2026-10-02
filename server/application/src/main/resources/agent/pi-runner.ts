@@ -324,7 +324,7 @@ interface AdmittedCitation {
 interface AdmittedObservation {
 	id: string;
 	practiceSlug: string;
-	outcome: Outcome | null;
+	outcome: Outcome;
 	citations: AdmittedCitation[];
 	[key: string]: unknown;
 }
@@ -338,7 +338,7 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 		isRecord(value) &&
 		typeof value.id === "string" &&
 		typeof value.practiceSlug === "string" &&
-		(value.outcome === "MET" || value.outcome === "NOT_MET" || value.outcome === null) &&
+		OUTCOME_VALUES.some((outcome) => outcome === value.outcome) &&
 		Array.isArray(value.citations) &&
 		value.citations.every(isAdmittedCitation)
 	);
@@ -461,9 +461,8 @@ function readPracticeIndex(): PracticeIndexEntry[] {
 	});
 }
 
-const { availableSourceKinds, artifactSources } = folderCitationIndex(
-	parseJson(readFileSync(INPUT_PATHS.manifest, "utf8")),
-);
+const folderIndex = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
+const { availableSourceKinds, artifactSources } = folderCitationIndex(folderIndex);
 const availableSourceKindValues = [...availableSourceKinds].toSorted();
 const stagedArtifactPaths = [...artifactSources.keys()].toSorted();
 const practiceIndex = readPracticeIndex();
@@ -2476,14 +2475,30 @@ function listOrSingle(value: unknown): unknown[] {
 	return value === undefined || value === null ? [] : [value];
 }
 
-/** The reviewed work as history names it — its container and number — when the task names both. */
-const THIS_WORK = ((): string => {
-	const { repositoryFullName, pullRequestNumber } = taskEnvelope;
-	return typeof repositoryFullName === "string" &&
-		repositoryFullName !== "" &&
-		typeof pullRequestNumber === "number"
-		? `${repositoryFullName}#${pullRequestNumber}`
-		: "this work";
+/** Kind and provider URL distinguish work without treating a display number as its identity. */
+function workIdentity(kind: unknown, url: unknown): string | undefined {
+	return typeof kind === "string" &&
+		kind.trim() !== "" &&
+		typeof url === "string" &&
+		url.trim() !== ""
+		? `${kind}:${url}`
+		: undefined;
+}
+
+const THIS_WORK = ((): string | undefined => {
+	const metadataPath = nodePath.join(INPUT_PATHS.contextRoot, "metadata.json");
+	if (!existsSync(metadataPath) || !isRecord(folderIndex)) {
+		return undefined;
+	}
+	const metadata = parseJson(readFileSync(metadataPath, "utf8"));
+	if (!isRecord(metadata)) {
+		return undefined;
+	}
+	const kind = folderIndex.artifactKind;
+	if (kind !== "scm.pull_request" && kind !== "scm.issue") {
+		return undefined;
+	}
+	return workIdentity(kind, metadata[kind === "scm.pull_request" ? "pr_url" : "html_url"]);
 })();
 
 // Enforce snapshot-dependent constraints here for fast model correction; Java rechecks them.
@@ -2497,6 +2512,7 @@ function negativePiecesOfWork(
 ): number {
 	const pieces = new Set<string>();
 	if (
+		THIS_WORK !== undefined &&
 		current.some(
 			(observation) =>
 				observation.practiceSlug === practiceSlug && observation.outcome === "NOT_MET",
@@ -2516,15 +2532,9 @@ function negativePiecesOfWork(
 			continue;
 		}
 		const artifact = isRecord(entry.artifact) ? entry.artifact : {};
-		if (typeof artifact.container === "string" && typeof artifact.number === "number") {
-			pieces.add(`${artifact.container}#${artifact.number}`);
-			continue;
-		}
-		const name = [artifact.url, artifact.number, artifact.title].find(
-			(value) => typeof value === "string" || typeof value === "number",
-		);
-		if (name !== undefined) {
-			pieces.add(`${typeof artifact.kind === "string" ? artifact.kind : ""}:${name}`);
+		const identity = workIdentity(artifact.kind, artifact.url);
+		if (identity !== undefined) {
+			pieces.add(identity);
 		}
 	}
 	return pieces.size;

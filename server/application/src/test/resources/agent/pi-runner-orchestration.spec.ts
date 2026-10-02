@@ -66,6 +66,18 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 	};
 }
 
+function feedbackUnit(practiceSlug: string, observationId: string) {
+	return {
+		channel: "IN_CONTEXT",
+		practiceSlug,
+		basedOn: [observationId],
+		action: "NEW",
+		title: "On this change",
+		nextStep: "Keep the check in place.",
+		placement: { kind: "ARTIFACT" },
+	};
+}
+
 /** An observation that decides nothing; it must show it read the change, as admission demands. */
 const undecided = (consulted: string[]) => ({
 	practiceSlug: "test-practice",
@@ -126,22 +138,46 @@ if (scenario !== undefined && scenario !== "") {
 	let now = 1_000_000;
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
+	const admitted = (): unknown[] => {
+		switch (scenario) {
+			case "compose-abstention": {
+				// Admission answers with every recorded outcome, abstentions included, as it was measured.
+				return readObservations(nodePath.join(cwd, "admission.json")).map((posted, index) => ({
+					...posted,
+					id: `observation-${index + 1}`,
+					citations: [],
+					anchorable: false,
+				}));
+			}
+			case "compose-fold": {
+				return [
+					admittedObservation,
+					{ ...admittedObservation, id: "observation-2", practiceSlug: "second-practice" },
+				];
+			}
+			case "compose-quiet": {
+				return [{ ...admittedObservation, outcome: "MET", severity: null }];
+			}
+			case "compose-unknown-outcome": {
+				return [{ ...admittedObservation, outcome: "PASSED" }];
+			}
+			case "compose-null-outcome": {
+				return [{ ...admittedObservation, outcome: null }];
+			}
+			default: {
+				return [admittedObservation];
+			}
+		}
+	};
 	mock.method(globalThis, "fetch", async (_input: unknown, init?: RequestInit) => {
-		if (scenario === "draft-revision") {
+		if (scenario === "draft-revision" || scenario === "compose-abstention") {
 			assert.ok(typeof init?.body === "string");
 			writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
 		}
 		return Response.json({
 			schemaVersion: 1,
 			admissionDigest: "admitted-digest",
-			observations: [
-				scenario === "compose-quiet"
-					? { ...admittedObservation, outcome: "MET", severity: null }
-					: admittedObservation,
-				...(scenario === "compose-fold"
-					? [{ ...admittedObservation, id: "observation-2", practiceSlug: "second-practice" }]
-					: []),
-			],
+			observations: admitted(),
 		});
 	});
 	const manager = { getSessionFile: () => undefined, getSessionId: () => "test-session" };
@@ -422,6 +458,18 @@ if (scenario !== undefined && scenario !== "") {
 									record(`feedback-quiet:${quiet}`);
 									return;
 								}
+								if (scenario === "compose-abstention") {
+									// An abstention is no primary evidence; the MET strength beside it still is.
+									const reply = await tool("report_feedback").execute("f-a", {
+										units: [
+											feedbackUnit("second-practice", "observation-2"),
+											feedbackUnit("third-practice", "observation-3"),
+											feedbackUnit("test-practice", "observation-1"),
+										],
+									});
+									record(`feedback-abstention:${JSON.stringify(reply)}`);
+									return;
+								}
 								if (scenario === "compose-silent") {
 									// A composer that reads its way through the practice files: at the twelfth call
 									// without a recording call it is told to persist, once.
@@ -521,6 +569,7 @@ if (scenario !== undefined && scenario !== "") {
 													kind: "scm.pull_request",
 													container: "group/repo",
 													number: 3,
+													url: "https://gitlab.example/group/repo/-/merge_requests/3",
 													title: "This change, reviewed before",
 												},
 											},
@@ -541,7 +590,38 @@ if (scenario !== undefined && scenario !== "") {
 											{
 												practiceSlug: "test-practice",
 												outcome: "NOT_MET",
-												artifact: { kind: "scm.pull_request", number: 7, title: "Earlier change" },
+												artifact: { kind: "scm.issue", number: 7, title: "Unresolved work" },
+											},
+										],
+									}),
+								);
+								const unresolved = await feedback
+									.execute("f-u", { units: [card] })
+									.then(() => "accepted")
+									.catch((error: unknown) =>
+										error instanceof Error ? error.message : String(error),
+									);
+								record(`feedback-unresolved:${unresolved}`);
+								writeFileSync(
+									nodePath.join(cwd, "history/observations.json"),
+									JSON.stringify({
+										observations: [
+											{
+												practiceSlug: "test-practice",
+												outcome: "NOT_MET",
+												artifact: {
+													kind:
+														scenario === "compose-foreign-provider"
+															? "scm.pull_request"
+															: "scm.issue",
+													container: "group/repo",
+													number: 3,
+													url:
+														scenario === "compose-foreign-provider"
+															? "https://github.com/group/repo/pull/3"
+															: "https://gitlab.example/group/repo/-/issues/3",
+													title: "Earlier work",
+												},
 											},
 										],
 									}),
@@ -862,6 +942,34 @@ if (scenario !== undefined && scenario !== "") {
 								);
 								return;
 							}
+							if (scenario === "compose-abstention") {
+								await report.execute("o-mixed", {
+									observations: [
+										{
+											...observation("test-practice", "Authentication call"),
+											outcome: "MET",
+											severity: null,
+										},
+										{
+											...undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
+											practiceSlug: "second-practice",
+										},
+										{
+											...observation("third-practice", "Whether the call is reachable"),
+											outcome: "UNDETERMINED",
+											severity: null,
+											evidence: {
+												citations: [changeCitation],
+												undecidability: {
+													openQuestion: "Is insecure() reachable from the login flow?",
+													wouldSettleIt: "The callers of Auth outside this change.",
+												},
+											},
+										},
+									],
+								});
+								return;
+							}
 							if (scenario !== "batch") {
 								if (scenario === "finish") {
 									// The message carrying this recording spent 1200 output tokens; the pace is read from it.
@@ -1033,11 +1141,15 @@ if (scenario !== undefined && scenario !== "") {
 		"repeat",
 		"tree-citation",
 		"compose",
+		"compose-foreign-provider",
 		"compose-overflow",
 		"compose-silent",
 		"compose-loop",
 		"compose-quiet",
 		"compose-fold",
+		"compose-abstention",
+		"compose-unknown-outcome",
+		"compose-null-outcome",
 	]) {
 		void test(
 			{
@@ -1063,7 +1175,9 @@ if (scenario !== undefined && scenario !== "") {
 				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
 				"tree-citation":
 					"verifies a HEAD repository citation against the checkout and finalizes out/",
-				compose: "composes feedback in the same session from the admitted observations",
+				compose: "counts an issue and a merge request with the same number as distinct work",
+				"compose-foreign-provider":
+					"counts matching work numbers at different providers as distinct work",
 				"compose-overflow":
 					"compacts the session before a composition prompt that would not fit beside what it holds",
 				"compose-silent":
@@ -1073,6 +1187,12 @@ if (scenario !== undefined && scenario !== "") {
 				"compose-quiet": "skips a WITHHOLD on a practice with nothing to withhold and asks no more",
 				"compose-fold":
 					"counts a NOT_MET practice folded into another practice's unit as decided and asks no more",
+				"compose-abstention":
+					"composes from admitted NOT_APPLICABLE and UNDETERMINED observations without basing feedback on them",
+				"compose-unknown-outcome":
+					"refuses an admitted outcome outside the vocabulary before composing",
+				"compose-null-outcome":
+					"refuses an admitted observation without an outcome before composing",
 			}[stage] ?? stage,
 			() => {
 				const cwd = mkdtempSync(nodePath.join(tmpdir(), "pi-orchestration-"));
@@ -1088,7 +1208,10 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(nodePath.join(cwd, "events"), "");
 					writeFileSync(
 						nodePath.join(cwd, "evidence/metadata.json"),
-						JSON.stringify({ title: "Add login" }),
+						JSON.stringify({
+							title: "Add login",
+							pr_url: "https://gitlab.example/group/repo/-/merge_requests/3",
+						}),
 					);
 					writeFileSync(
 						nodePath.join(cwd, "evidence/change.json"),
@@ -1161,6 +1284,7 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(
 						nodePath.join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
+							artifactKind: "scm.pull_request",
 							artifacts: [
 								{ kind: "scm.pull-request.core", artifact: { path: "evidence/metadata.json" } },
 								{ kind: "scm.pull-request.diff", artifact: { path: "evidence/change.json" } },
@@ -1197,10 +1321,14 @@ if (scenario !== undefined && scenario !== "") {
 							stage === "finish" ||
 								stage === "batch" ||
 								stage === "draft-revision" ||
-								stage === "compose-fold"
+								stage === "compose-fold" ||
+								stage === "compose-abstention"
 								? [
 										{ slug: "test-practice", group: "code" },
 										{ slug: "second-practice", group: "code" },
+										...(stage === "compose-abstention"
+											? [{ slug: "third-practice", group: "code" }]
+											: []),
 									]
 								: [{ slug: "test-practice", group: "code" }],
 						),
@@ -1620,7 +1748,8 @@ if (scenario !== undefined && scenario !== "") {
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
-						case "compose": {
+						case "compose":
+						case "compose-foreign-provider": {
 							assert.equal(child.status, 0, child.stderr);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
@@ -1637,6 +1766,10 @@ if (scenario !== undefined && scenario !== "") {
 								events.find((event) => event.startsWith("feedback-same-work:")) ?? "",
 								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
 								child.stderr,
+							);
+							assert.match(
+								events.find((event) => event.startsWith("feedback-unresolved:")) ?? "",
+								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
 							);
 							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
 							// The composition turn goes on to its summary; only the retry ends on its last decision.
@@ -1816,6 +1949,59 @@ if (scenario !== undefined && scenario !== "") {
 								["prompt:1", "prompt:2", "prompt:3"],
 							);
 							assert.doesNotMatch(child.stderr, /asking once more/u);
+							break;
+						}
+						case "compose-abstention": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1", "prompt:2"],
+							);
+							const reply = events.find((event) => event.startsWith("feedback-abstention:")) ?? "";
+							for (const [index, practice] of ["second-practice", "third-practice"].entries()) {
+								assert.match(
+									reply,
+									new RegExp(
+										`#${index + 1}: At least one basedOn observation must have a MET or NOT_MET outcome for the primary practice '${practice}'`,
+										"u",
+									),
+									child.stderr,
+								);
+							}
+							assert.match(reply, /#3: stored a IN_CONTEXT unit for test-practice \(NEW\)/u);
+							for (const file of ["out/result.json", "out/feedback.json"]) {
+								const payload: unknown = JSON.parse(readFileSync(nodePath.join(cwd, file), "utf8"));
+								assert.ok(isRecord(payload));
+								assert.equal(payload.admissionDigest, "admitted-digest");
+								assert.deepEqual(
+									readObservations(nodePath.join(cwd, file)).map((item) => item.outcome),
+									["MET", "NOT_APPLICABLE", "UNDETERMINED"],
+								);
+							}
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback) && Array.isArray(feedback.units));
+							assert.deepEqual(
+								feedback.units.map((unit: unknown) => (isRecord(unit) ? unit.practiceSlug : unit)),
+								["test-practice"],
+							);
+							reached({
+								"test-practice": "EVALUATED",
+								"second-practice": "EVALUATED",
+								"third-practice": "EVALUATED",
+							});
+							break;
+						}
+						case "compose-unknown-outcome":
+						case "compose-null-outcome": {
+							assert.equal(child.status, 2, child.stderr);
+							assert.match(child.stderr, /observation admission returned an invalid contract/u);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1"],
+							);
+							assert.ok(!existsSync(nodePath.join(cwd, "out/feedback.json")));
 							break;
 						}
 						case "compose-loop": {

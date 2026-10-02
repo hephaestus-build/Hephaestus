@@ -41,6 +41,25 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    without one. Keep the summary user-facing; the release notes flag the migration automatically.
 5. Commit the changelog, the `master.xml` edit, the changeset, and `docs/contributor/erd/schema.mmd`.
 
+## Native objects the JPA diff does not cover
+
+The JPA diff does not cover native `CHECK` constraints or triggers in this repository. For such a
+change, write the change set as a draft in an ignored scratch directory, then promote it through the
+same command:
+
+```bash
+node scripts/db-utils.ts draft-changelog --from-draft .context/<name>.xml
+```
+
+The draft is one `<databaseChangeLog>` holding only change sets. Promotion writes them into this
+branch's changelog with the usual ids and author, replays the whole chain on a disposable database
+and refreshes the ERD, as above. It refuses a draft that is malformed, declares a DOCTYPE, contains
+anything outside a change set, sets a root attribute other than the standard Liquibase and XML Schema
+namespaces and `xsi:schemaLocation`, or sets a change-set attribute other than `id` and `author`,
+because promotion would drop it: state conditions as `preConditions` inside the change set. Review the
+result as in step 3, and add the database-level test that the paragraph on populated tables below
+calls for.
+
 ## Data corrections
 
 A fix that leaves wrong rows behind corrects them in the code that writes them, so the next sync or event heals

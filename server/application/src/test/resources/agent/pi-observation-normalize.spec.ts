@@ -1019,6 +1019,25 @@ void test("a field sent where it does not belong is read from there and named", 
 	);
 });
 
+void test("loose warrant fields sent in both places are refused without choosing a claim", () => {
+	for (const [field, beside, underEvidence] of [
+		["lookedFor", "a human approval", "a regression test"],
+		["subject", "a review request", "an acceptance check"],
+		["openQuestion", "whether approval is current", "whether a test ran"],
+	] as const) {
+		assert.throws(
+			() =>
+				normalizeObservation(
+					baseObservation({
+						[field]: beside,
+						evidence: { citations: baseObservation().evidence.citations, [field]: underEvidence },
+					}),
+				),
+			new RegExp(`${field} was sent both beside the observation and under evidence`, "u"),
+		);
+	}
+});
+
 void test("the wire contract rejects outcome aliases and text coerced from numbers", () => {
 	for (const outcome of ["met", "NOT-MET", "not met", " MET "]) {
 		assert.throws(() => normalizeObservation(baseObservation({ outcome })), /invalid outcome/u);

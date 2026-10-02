@@ -34,8 +34,9 @@ Near the end of its budget the model is asked to record what it has; the group e
 that spends the budget. Composition gets at most one full group's worth. Raise the output tokens for a
 model that reasons at length.
 
-The timeout of the workspace's practice-review model binding is a safety ceiling, not a budget: it
-stops a review that is stuck. A review that shows no sign of life for five minutes — no streamed
+The timeout of the workspace's practice-review model binding is the whole-run safety ceiling. It
+can stop a productive review too, leaving later practices `NOT_REACHED`; independent group budgets
+do not reserve time for every group. A review that shows no sign of life for five minutes — no streamed
 token, no tool progress — has that group stopped; two such stalls in a row end the review with what
 it has recorded.
 

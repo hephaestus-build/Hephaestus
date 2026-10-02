@@ -1,8 +1,8 @@
 // How one review session spends its practices and its work: practices go to the model in turns, a
 // turn per catalog group (chunked when a group is large), and each turn may spend model calls and output
 // tokens in proportion to the practices it carries — its own budget, whatever the other turns spent.
-// Time bounds nothing here but a run that stops responding. Pure rules, so a test can call them;
-// pi-runner.ts reads the workspace at module scope.
+// The whole-run safety ceiling still applies, so later practices may not be reached.
+// Pure rules, so a test can call them; pi-runner.ts reads the workspace at module scope.
 
 export interface TurnPractice {
 	slug: string;
@@ -58,7 +58,7 @@ export interface ReviewWindows {
 const COMPOSITION_SHARE = 0.15;
 
 /**
- * How the run's safety ceiling — the time after which a stuck run is stopped — is split, so measuring
+ * How the run's safety ceiling is split, so measuring
  * hands in early enough for admission and composition. Not a budget: work is bounded by {@link turnBudget}.
  */
 export function deriveWindows(budgetMs: number, compositionRequested: boolean): ReviewWindows {
