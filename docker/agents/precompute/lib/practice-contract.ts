@@ -33,7 +33,7 @@ function isString(value: unknown): value is string {
 }
 
 /**
- * A hint is rendered into summary.md field by field (`file:line`, `context.slice(...)`,
+ * A hint is rendered into its practice's section field by field (`file:line`, `context.slice(...)`,
  * `Object.entries(flags)`), and that rendering happens AFTER the per-practice error boundary — so an
  * incomplete hint that slips through here takes the whole run down instead of one practice.
  */

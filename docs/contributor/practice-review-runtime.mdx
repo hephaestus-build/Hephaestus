@@ -55,16 +55,52 @@ sequenceDiagram
   transaction, and a failed write fails the run before any model cost accrues. The result is a separate,
   later transaction.
 - **One session per review, inside the sandbox.** `pi-runner.ts` loads a brief from the captured record
-  and derived change view, then supplies criteria one practice group per turn. Recording tools validate
-  each item separately so one invalid item does not discard valid siblings. Refusals return correction
-  reasons; progress and repetition limits stop unproductive turns. Recorded results are carried into
-  later turns and saved under `work/notes/` for context compaction.
-- **The review deadline bounds all turns.** A timed-out turn must become idle before another turn starts.
-  Missing results can receive a finishing turn within the same session and budget; they are not treated
-  as completed reviews. See [recorded-result coverage](./practice-review-pipeline.mdx#recorded-result-coverage).
+  and derived change view, then supplies criteria and each practice's precomputed leads one practice
+  group per turn; a turn ends once each of its practices has a recorded result. The session carries
+  every turn's reading of the work into the next, which keeps practices that share an occasion
+  consistent. The first turn carries the task, the brief and three example observations; when the
+  context fills and is compacted, the next turn carries them again with what was recorded so far, so the
+  model quotes the captured text rather than a summary of it. The brief numbers the lines of captured
+  files only; the derived change files are shown as written and marked not citable, and `files.json`
+  gives each file's lines in `diff.patch` so a large diff can be read a file at a time. Recording tools
+  validate each item separately so one invalid item does not discard valid siblings: their schemas
+  carry no list or object type the SDK could check all or nothing, so each item is answered on its own;
+  scalar types stay, because they tell the model what a value is.
+  What the run already knows is filled in and reported rather than refused — a source kind or artifact
+  from the manifest, a line written as `L12`, a line number of `diff.patch` itself that names one line of
+  the cited file, an empty stray field, a WITHHOLD's own NOT_MET observations. A refusal names every
+  problem of an item at once, with the field, the value received and what would be accepted, and states
+  facts rather than doubting the outcome. A resend of what is already recorded is an error that names what is still owed, an
+  identical resend of a refused item gets the same answer at once, and a third identical send ends the
+  turn. An unreadable list shows where it breaks and is charged to no practice. A call cut off at the model's output limit reaches its tool incomplete: the model is told that the error is the cut, and a second cut in the turn ends it. Progress and repetition
+  limits stop unproductive turns. Recorded results are saved under `work/notes/`.
+  The session is Pi's coding-agent `AgentSession`. Pi 1.0 also ships `pi-durable`, an experimental
+  harness that checkpoints every model call and tool call so a crashed run can resume; it is not used.
+  A review runs once in a sandbox that is discarded with its storage, a run that fails is retried by
+  the server from the captured evidence, and `pi-durable` has no codemode.
+- **Work, not time, bounds a turn.** Each turn gets its own budget of model calls and output tokens:
+  `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` per practice it
+  carries, never less than three practices' worth, whatever earlier turns spent
+  ([practice-review operations](/admin/practice-review-operations)). The turn text does not
+  state the budget: told its call budget up front, an open model read less and missed more negatives.
+  A turn is asked once to record when two calls are left, or when its tokens left only pay for
+  the observations it still owes at the tokens per observation the session has shown. It ends at the
+  first turn boundary after the call that spends the budget, so the tools of that call, a recording
+  among them, have run; an aborted call records nothing. The budget is a cap on a turn that runs away,
+  several times what a turn normally spends, not a pace. Composition gets one unit per NOT_MET
+  practice, at most a full turn's worth. Time is used for liveness only: a turn with no session event for five minutes
+  is aborted as stalled, two stalls in a row end measuring, and the binding's timeout is a safety
+  ceiling, split so measuring stops early enough for admission and composition to land. An aborted turn
+  must become idle before another turn starts. Practices still missing get a finishing turn with their
+  criteria and their own budget; they are not treated as completed reviews. See
+  [recorded-result coverage](./practice-review-pipeline.mdx#recorded-result-coverage).
 - **Composition follows durable admission.** The same session composes feedback from the admitted
-  projection and bounded history, with compaction when needed. It cannot add observations during
-  composition. There is no separate reconnaissance, per-practice or retry session.
+  projection and bounded history, making room by compaction first when the turn would not fit. The turn
+  shows NOT_MET observations with their rationale and cited coordinates and the others by what they
+  found; after a compaction it carries the task and the brief again, not the measuring examples. An
+  earlier review of the same work is the same piece of work when a pattern is counted, as the server
+  counts it. It cannot add observations during composition. There is no separate reconnaissance,
+  per-practice or retry session.
 - **The worker posts public feedback.** It validates sandbox output, persists observations and feedback,
   and applies delivery policy before calling the provider. Model composition runs in the sandbox.
 - **Control never returns to the server between claim and completion.** The only server-to-worker push is

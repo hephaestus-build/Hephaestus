@@ -45,6 +45,10 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
 
     private static final Pattern CHANGE_PATH = Pattern.compile("work/change/([a-z_.]+\\.[a-z]+)");
 
+    private static final Pattern PRECOMPUTE_PATH = Pattern.compile("work/precompute-out/([a-z0-9_.-]+)");
+
+    private static final Pattern SLUG = Pattern.compile("\"slug\"\\s*:\\s*\"([a-z0-9-]+)\"");
+
     @Test
     @DisplayName("default-catalog.json names no fictional context/target/ paths and every context/ path is real")
     void catalogueContextPathsResolveToRealProviderOutputs() throws IOException {
@@ -75,6 +79,30 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
                         "every work/change/<file> the catalogue cites must be a file pi-change.ts derives — cited=%s",
                         citedChange)
                 .containsAll(citedChange);
+    }
+
+    @Test
+    @DisplayName("every work/precompute-out/ file the catalogue names is one practice's own precompute output")
+    void cataloguePrecomputePathsNameOnePracticesOutput() throws IOException {
+        String catalogue = readCatalogue();
+        Set<String> outputs = new TreeSet<>();
+        Matcher slug = SLUG.matcher(catalogue);
+        while (slug.find()) {
+            outputs.add(slug.group(1) + ".json");
+            outputs.add(slug.group(1) + ".md");
+        }
+        // The precompute runner writes one JSON and one section per practice and nothing else: a criterion
+        // that names another file there sends the model looking for a file that is not written.
+        Set<String> cited = new TreeSet<>();
+        Matcher precompute = PRECOMPUTE_PATH.matcher(catalogue);
+        while (precompute.find()) {
+            cited.add(precompute.group(1));
+        }
+        assertThat(outputs)
+                .as(
+                        "every work/precompute-out/<file> the catalogue cites must be a practice's output — cited=%s",
+                        cited)
+                .containsAll(cited);
     }
 
     private static String readCatalogue() throws IOException {

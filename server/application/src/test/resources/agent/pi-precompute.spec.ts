@@ -155,9 +155,10 @@ export default (repo, diff, metadata, context, change, reference) => ({
 				assert.equal(Reflect.get(failure, "status"), "error");
 				assert.deepEqual(Reflect.get(failure, "hints"), []);
 			}
+			// A failed script's practice is said to be the model's to analyze, in its own section.
 			assert.match(
-				readFileSync(path.join(root, "work/precompute-out/summary.md"), "utf8"),
-				/3 script\(s\) failed/u,
+				readFileSync(path.join(root, "work/precompute-out/throws.md"), "utf8"),
+				/^> \*\*Script failed\.\*\* Agent must analyze this practice manually\./u,
 			);
 
 			assert.throws(

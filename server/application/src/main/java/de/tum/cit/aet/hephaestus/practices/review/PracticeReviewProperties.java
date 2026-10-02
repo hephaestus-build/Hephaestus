@@ -18,6 +18,10 @@ import org.springframework.validation.annotation.Validated;
  * @param maxRequestsPerRequesterPerHour
  *                            manual review requests per person, workspace and hour. 0 disables the limit.
  * @param samplingTemperature requested model sampling temperature, or null for the provider default.
+ * @param practiceModelCalls  the model calls one practice is owed in a review turn; a turn gets this per
+ *                            practice it carries, and never less than three practices' worth.
+ * @param practiceOutputTokens
+ *                            the output tokens one practice is owed in a review turn, counted the same way.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.practice-review")
@@ -25,4 +29,6 @@ public record PracticeReviewProperties(
         @DefaultValue("false") boolean deliverToMerged,
         @Min(0) @DefaultValue("15") int cooldownMinutes,
         @Min(0) @DefaultValue("5") int maxRequestsPerRequesterPerHour,
-        @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature) {}
+        @Nullable @DecimalMin("0.0") @DecimalMax("2.0") Double samplingTemperature,
+        @Min(1) @DefaultValue("12") int practiceModelCalls,
+        @Min(1000) @DefaultValue("16000") int practiceOutputTokens) {}

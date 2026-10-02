@@ -34,8 +34,14 @@ export default async function readyAndTraceableHandoff(
 	const unticked = (description.match(/^\s*[-*]\s*\[ \]/gmu) ?? []).length;
 	const draftMarker = /\b(?:wip|do not merge|draft)\b/iu.test(m.title ?? "");
 	if (ticked + unticked > 0) {
+		// Whether the list is a real Definition of Done or a template left in place matters only when none
+		// of it is ticked; a ticked item already shows the author worked the list.
+		const untouched =
+			ticked === 0
+				? " Read the lines in description.md to tell a real Definition of Done from a template that was left in place."
+				: "";
 		directions.push(
-			`Checklist fact: the description carries ${ticked} ticked and ${unticked} unticked checkbox line(s)${draftMarker ? "; the title carries a draft-style word" : ""}. Read the lines in description.md to tell a real Definition of Done from a template that was left in place.`,
+			`Checklist fact: the description carries ${ticked} ticked and ${unticked} unticked checkbox line(s)${draftMarker ? "; the title carries a draft-style word" : ""}.${untouched}`,
 		);
 	} else if (draftMarker) {
 		directions.push(

@@ -535,6 +535,11 @@ hephaestus:
         # own default. A review classifies work against fixed criteria, so a low value keeps the same
         # work landing in the same cell run after run.
         sampling-temperature: ${PRACTICE_REVIEW_SAMPLING_TEMPERATURE:}
+        # The work one practice is owed in a review turn, whatever else the review carries: a turn of n
+        # practices may make n times these model calls and output tokens (never less than three
+        # practices' worth). The binding's timeout is only the safety ceiling of the whole run.
+        practice-model-calls: ${PRACTICE_REVIEW_PRACTICE_MODEL_CALLS:12}
+        practice-output-tokens: ${PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS:16000}
         # Fleet-wide limits on backfill campaigns (ReviewBackfillProperties). max-window and
         # max-artifacts are the spend guard rails: a campaign wider than either is refused at preflight,
         # before anything is confirmed and before anything is paid for.

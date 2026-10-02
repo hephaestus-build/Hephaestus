@@ -62,6 +62,7 @@ void test("a subject's shape is a fact — bare, repeated, listed, cut off — a
 			"Refactor ProfileViewModel\n\n- remove stored context\n- add logging\n- add enum\n",
 		),
 		commit("8888888", "update readme\n"),
+		commit("9999999", "Show loading indicator. Implement feedback from review\n"),
 	]);
 	const by = Object.fromEntries(facts.map((f) => [f.sha, f]));
 	assert.deepEqual(
@@ -72,6 +73,8 @@ void test("a subject's shape is a fact — bare, repeated, listed, cut off — a
 	assert.equal(by["4444444"]?.joinedClauses, true);
 	assert.equal(by["7777777"]?.joinedClauses, true);
 	assert.equal(by["1111111"]?.joinedClauses, false);
+	// Two sentences in one subject are two clauses joined by a full stop.
+	assert.equal(by["9999999"]?.joinedClauses, true);
 	assert.equal(by["5555555"]?.cutOff, true);
 	assert.equal(by["6666666"]?.merge, true);
 });

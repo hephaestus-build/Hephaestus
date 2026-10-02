@@ -125,7 +125,7 @@ class AgentJobServiceTest extends BaseUnitTest {
                 handlerRegistry,
                 objectMapper,
                 transactionTemplate,
-                new PracticeReviewProperties(false, 15, 5, null),
+                new PracticeReviewProperties(false, 15, 5, null, 12, 16000),
                 practiceRepository,
                 llmBudgetService,
                 llmModelResolver,

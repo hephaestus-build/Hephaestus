@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
+import de.tum.cit.aet.hephaestus.testconfig.PiSdkInstallation;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -67,12 +68,8 @@ import tools.jackson.databind.node.ObjectNode;
 class MentorLiveLlmTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String PI_SDK_VERSION = "0.84.4";
 
     private static final Duration TURN_TIMEOUT = Duration.ofSeconds(90);
-
-    /** Project-relative location of the SDK install. Build output, never vendored. Gitignored. */
-    private static final Path SDK_DIR = Path.of("target", "pi-sdk").toAbsolutePath();
 
     private static final Path RUNNER =
             Path.of("src", "main", "resources", "agent", "pi-mentor-runner.ts").toAbsolutePath();
@@ -81,50 +78,9 @@ class MentorLiveLlmTest {
     private @Nullable Path workspaceDir;
     private @Nullable StdioAttachedSandbox sandbox;
 
-    // Closing the scope is the operation; its binding is intentionally unread.
-    @SuppressWarnings("try")
     @BeforeAll
     static void installPiSdk() throws Exception {
-        // The marker avoids repeat installs; the sibling lock serializes concurrent JVMs.
-        Files.createDirectories(SDK_DIR);
-        Path marker = SDK_DIR.resolve(".installed-" + PI_SDK_VERSION);
-        if (Files.exists(marker)) {
-            return;
-        }
-        Path lockFile = SDK_DIR.resolve(".install.lock");
-        try (var raf = new java.io.RandomAccessFile(lockFile.toFile(), "rw");
-                var channel = raf.getChannel();
-                var lock = channel.lock()) {
-            // Re-check under lock — a parallel JVM may have just finished.
-            if (Files.exists(marker)) {
-                return;
-            }
-            // Keep live-test dependencies isolated from the repository install.
-            Files.writeString(
-                    SDK_DIR.resolve("package.json"),
-                    "{\"name\":\"pi-sdk-test-deps\",\"private\":true,\"dependencies\":{\"@earendil-works/pi-coding-agent\":\""
-                            + PI_SDK_VERSION
-                            + "\"}}");
-            ProcessBuilder pb = new ProcessBuilder(
-                    "pnpm",
-                    "install",
-                    "--dir",
-                    SDK_DIR.toString(),
-                    "--ignore-workspace",
-                    "--ignore-scripts",
-                    "--reporter=silent");
-            pb.redirectErrorStream(true);
-            pb.inheritIO();
-            Process p = pb.start();
-            if (!p.waitFor(180, TimeUnit.SECONDS)) {
-                p.destroyForcibly();
-                throw new IllegalStateException("pnpm install for Pi SDK timed out after 180s");
-            }
-            if (p.exitValue() != 0) {
-                throw new IllegalStateException("pnpm install for Pi SDK failed; see stderr above");
-            }
-            Files.writeString(marker, "ok\n");
-        }
+        PiSdkInstallation.ensureInstalled();
     }
 
     @AfterEach
@@ -566,7 +522,7 @@ class MentorLiveLlmTest {
         // (see PiRuntimeFactory). We mirror both moves here: symlink node_modules under the
         // workspace, and copy the runner into the workspace so resolution finds the symlink.
         Path nodeModulesLink = tmp.resolve("node_modules");
-        Path sdkNodeModules = SDK_DIR.resolve("node_modules");
+        Path sdkNodeModules = PiSdkInstallation.SDK_DIR.resolve("node_modules");
         Files.createSymbolicLink(nodeModulesLink, sdkNodeModules);
         Files.copy(RUNNER, tmp.resolve("pi-mentor-runner.ts"));
         for (String sidecar : new MentorRunnerProfile().sidecarScripts()) {

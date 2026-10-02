@@ -45,7 +45,8 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
     private Workspace workspace;
     private WorkspaceContext context;
 
-    private final PracticeReviewProperties reviewProperties = new PracticeReviewProperties(false, 15, 5, null);
+    private final PracticeReviewProperties reviewProperties =
+            new PracticeReviewProperties(false, 15, 5, null, 12, 16000);
 
     @BeforeEach
     void setUp() {

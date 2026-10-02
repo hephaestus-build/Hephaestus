@@ -11,6 +11,9 @@ x-practice-review-env:
   PRACTICE_REVIEW_PROGRESS_FOOTER: ${PRACTICE_REVIEW_PROGRESS_FOOTER:-false}
   # The sampling temperature of every review model call; unset leaves the model's own default.
   PRACTICE_REVIEW_SAMPLING_TEMPERATURE: ${PRACTICE_REVIEW_SAMPLING_TEMPERATURE:-}
+  # The work one practice is owed in a review turn: model calls and output tokens.
+  PRACTICE_REVIEW_PRACTICE_MODEL_CALLS: ${PRACTICE_REVIEW_PRACTICE_MODEL_CALLS:-12}
+  PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS: ${PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS:-16000}
   # Spend guardrails for reviewing past work. A campaign is priced before it runs; these bound what
   # an administrator can confirm in one.
   PRACTICE_REVIEW_BACKFILL_MAX_WINDOW: ${PRACTICE_REVIEW_BACKFILL_MAX_WINDOW:-400d}

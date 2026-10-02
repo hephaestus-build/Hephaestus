@@ -5,10 +5,13 @@ import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { errorText } from "./pi-error-text.ts";
 import { hasText } from "./pi-text.ts";
 
-/** One model as {@link ModelRuntime.registerProvider} takes it; the extension-facing type omits sampling. */
-export type RegisteredModel = NonNullable<
-	Extract<Parameters<ModelRuntime["registerProvider"]>[1], { models?: unknown }>["models"]
->[number];
+/** One chat model as {@link ModelRuntime.registerProvider} takes it; the extension-facing type omits sampling. */
+export type RegisteredModel = Extract<
+	NonNullable<
+		Extract<Parameters<ModelRuntime["registerProvider"]>[1], { models?: unknown }>["models"]
+	>[number],
+	{ reasoning: boolean }
+>;
 
 /** The server's `ReasoningEffort`: OpenAI's effort scale, which the providers that take an effort share. */
 export const REASONING_EFFORTS = [

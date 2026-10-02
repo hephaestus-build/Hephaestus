@@ -15,6 +15,13 @@ const LANG_PATTERNS: Record<string, [string, RegExp][]> = {
 		["empty catch", /\bcatch\s*\{\s*\}/u],
 		["catch with only print", /\bcatch\s*\{\s*print\s*\([^)]*\)\s*\}/u],
 		["error ignored: if let error {}", /\bif\s+let\s+error\b[^{]*\{\s*\}/u],
+		// Constructs the criteria ask to classify, not swallows in themselves: a fallback on a failable
+		// conversion and a bare early return are where a failure is most often dropped quietly.
+		[
+			"?? fallback on a failable conversion",
+			/\b(?:Int|Double|Float|Decimal|Bool|URL|UUID)\s*\([^)]*\)\s*\?\?/u,
+		],
+		["guard … else { return }", /\bguard\b[^{]*\belse\s*\{\s*return\s*\}/u],
 	],
 	typescript: [
 		["empty catch", /\bcatch\s*(?:\([^)]*\))?\s*\{\s*\}/u],
