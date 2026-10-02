@@ -4,6 +4,7 @@ import { http, HttpResponse } from "msw";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import type { ChatThreadDetail } from "@/api/types.gen";
+import { mentorThreadOptions } from "@/hooks/use-mentor-chat";
 import type { Wire } from "@/lib/dates";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
@@ -108,13 +109,18 @@ it.each([
 		),
 	);
 
-	renderRouteAt(`/w/acme/mentor/${threadId}`);
+	const queryClient = renderRouteAt(`/w/acme/mentor/${threadId}`);
 	// A vote reads the conversation again for the stored votes.
 	await userEvent.click(
 		await screen.findByRole("button", { name: "Good response" }, ROUTE_RENDER_WAIT),
 	);
 
 	await waitFor(() => expect(laterRead).toHaveBeenCalledOnce());
+	await waitFor(() =>
+		expect(
+			queryClient.getQueryState(mentorThreadOptions("acme", threadId).queryKey)?.fetchStatus,
+		).toBe("idle"),
+	);
 	screen.getByText("Here is a plan.");
 	expect(screen.queryByText("This conversation could not be opened")).toBeNull();
 });
