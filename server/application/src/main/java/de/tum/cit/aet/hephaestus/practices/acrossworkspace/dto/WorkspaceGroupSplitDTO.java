@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto;
 
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Shape;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO.Standing;
+import de.tum.cit.aet.hephaestus.practices.observation.trend.TrendDirection;
+import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.TrendSupportDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -16,20 +18,17 @@ public record WorkspaceGroupSplitDTO(
         @NonNull @Schema(description = "The reader's own standing in the group, shown in every shape")
         Standing yourStanding,
 
-        @NonNull @Schema(description = "How the split may be shown")
-        Shape shape,
+        @Nullable @Schema(description = "The direction of the reader's own standing in the group, read over the window")
+        TrendDirection yourDirection,
 
-        @Nullable @Schema(description = "Developers at Needs attention; set only for SPLIT")
-        Integer needsAttention,
+        @Nullable @Schema(description = "Evidence support and provenance for the reader's direction")
+        TrendSupportDTO yourTrendSupport,
 
-        @Nullable @Schema(description = "Developers at Mixed feedback; set only for SPLIT")
-        Integer mixedFeedback,
+        @NonNull @Schema(description = "How the observed developers split across the group")
+        WorkspaceSplitDTO split,
 
-        @Nullable @Schema(description = "Developers at Going well; set only for SPLIT")
-        Integer goingWell,
-
-        @Nullable @Schema(description = "Developers with a standing; set only for COLLAPSED")
-        Integer hasStanding,
-
-        @Nullable @Schema(description = "Observed developers without one; set only for COLLAPSED")
-        Integer noneYet) {}
+        @NonNull
+        @Schema(
+                description = "The group's practices on the reader's own profile, each split on its own, in the"
+                        + " profile's order")
+        List<WorkspacePracticeSplitDTO> practices) {}

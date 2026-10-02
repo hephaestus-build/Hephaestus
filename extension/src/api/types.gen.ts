@@ -4221,6 +4221,10 @@ export type PracticesAcrossWorkspace = {
    */
   observedDevelopers: number;
   /**
+   * The reader's open feedback, counted by the rule the practice profile shows it open by; the feedback open now, whatever the window
+   */
+  openFeedback: WorkspaceTile;
+  /**
    * The reader's practices going well
    */
   practicesGoingWell: WorkspaceTile;
@@ -6779,10 +6783,6 @@ export type WorkspaceAiOption = {
  */
 export type WorkspaceGroupSplit = {
   /**
-   * Developers at Going well; set only for SPLIT
-   */
-  goingWell?: number;
-  /**
    * Group colour name
    */
   groupColor?: string;
@@ -6799,29 +6799,25 @@ export type WorkspaceGroupSplit = {
    */
   groupSlug: string;
   /**
-   * Developers with a standing; set only for COLLAPSED
+   * The group's practices on the reader's own profile, each split on its own, in the profile's order
    */
-  hasStanding?: number;
+  practices: Array<WorkspacePracticeSplit>;
   /**
-   * Developers at Mixed feedback; set only for SPLIT
+   * How the observed developers split across the group
    */
-  mixedFeedback?: number;
+  split: WorkspaceSplit;
   /**
-   * Developers at Needs attention; set only for SPLIT
+   * The direction of the reader's own standing in the group, read over the window
    */
-  needsAttention?: number;
-  /**
-   * Observed developers without one; set only for COLLAPSED
-   */
-  noneYet?: number;
-  /**
-   * How the split may be shown
-   */
-  shape: 'SPLIT' | 'COLLAPSED' | 'WITHHELD';
+  yourDirection?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
   /**
    * The reader's own standing in the group, shown in every shape
    */
   yourStanding: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  /**
+   * Evidence support and provenance for the reader's direction
+   */
+  yourTrendSupport?: TrendSupport;
 };
 
 /**
@@ -7166,6 +7162,28 @@ export type WorkspaceOnboardingSettings = {
 };
 
 /**
+ * One practice of a group: the reader's own standing and how the observed developers split
+ */
+export type WorkspacePracticeSplit = {
+  /**
+   * Practice name
+   */
+  practiceName: string;
+  /**
+   * Practice slug
+   */
+  practiceSlug: string;
+  /**
+   * How the observed developers split across the practice
+   */
+  split: WorkspaceSplit;
+  /**
+   * The reader's own standing in the practice
+   */
+  yourStanding: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+};
+
+/**
  * Available workspace creation providers and their configuration
  */
 export type WorkspaceProviders = {
@@ -7191,6 +7209,36 @@ export type WorkspaceReviewScope = {
   personUserIds: Array<number>;
   repositories: Array<ReviewRepositoryTarget>;
   repositoryMode: 'ALL_MONITORED' | 'SELECTED';
+};
+
+/**
+ * How the observed developers split across one practice group or one practice, counted in developers; every count is absent outside the shape that shows it
+ */
+export type WorkspaceSplit = {
+  /**
+   * Developers at Going well; set only for SPLIT
+   */
+  goingWell?: number;
+  /**
+   * Developers with a standing; set only for COLLAPSED
+   */
+  hasStanding?: number;
+  /**
+   * Developers at Mixed feedback; set only for SPLIT
+   */
+  mixedFeedback?: number;
+  /**
+   * Developers at Needs attention; set only for SPLIT
+   */
+  needsAttention?: number;
+  /**
+   * Observed developers without one; set only for COLLAPSED
+   */
+  noneYet?: number;
+  /**
+   * How the split may be shown
+   */
+  shape: 'SPLIT' | 'COLLAPSED' | 'WITHHELD';
 };
 
 /**

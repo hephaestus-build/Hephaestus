@@ -99,6 +99,37 @@ public class InAppFeedbackService {
             // First, so what this read shows and what it records as delivered agree with any withdrawal.
             feedbackRepository.lockPreparedInAppForRecipient(workspaceId, recipientUserId);
         }
+        Page page = page(workspaceId, recipientUserId, now);
+        Set<UUID> prepared = page.rows().stream()
+                .filter(feedback -> delivering && feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
+                .map(Feedback::getId)
+                .collect(Collectors.toSet());
+        List<UUID> toMarkDelivered = page.cards().stream()
+                .map(InAppFeedbackDTO::id)
+                .filter(prepared::contains)
+                .toList();
+        if (!toMarkDelivered.isEmpty()) {
+            feedbackRepository.markInAppDelivered(workspaceId, toMarkDelivered, now);
+        }
+        return page.cards();
+    }
+
+    /**
+     * How many cards the developer's practice pages show open now: on the page, neither closed nor withdrawn. The
+     * same page {@link #getInAppFeedback} returns, read without delivering anything, so the count is the one the
+     * developer sees under Open.
+     */
+    @Transactional(readOnly = true)
+    public int countOpen(Long workspaceId, Long recipientUserId) {
+        return (int) page(workspaceId, recipientUserId, clock.instant()).cards().stream()
+                .filter(card -> card.closedAt() == null && card.withdrawnAt() == null)
+                .count();
+    }
+
+    /** The readable rows behind a page, and the cards the page shows from them, newest first. */
+    private record Page(List<Feedback> rows, List<InAppFeedbackDTO> cards) {}
+
+    private Page page(Long workspaceId, Long recipientUserId, Instant now) {
         // Every readable row, not a page of them: a run of closed cards must not crowd an older open one off it.
         // A withdrawn card nobody was shown is not on the page at all; one already shown says it was withdrawn.
         List<Feedback> readable = feedbackRepository.findReadableInAppForRecipient(workspaceId, recipientUserId);
@@ -117,18 +148,7 @@ public class InAppFeedbackService {
                 .sorted(Comparator.comparing(InAppFeedbackService::pageTime).reversed())
                 .limit(MAX_CARDS)
                 .toList();
-        Set<UUID> prepared = rows.stream()
-                .filter(feedback -> delivering && feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
-                .map(Feedback::getId)
-                .collect(Collectors.toSet());
-        List<UUID> toMarkDelivered = onThePage.stream()
-                .map(InAppFeedbackDTO::id)
-                .filter(prepared::contains)
-                .toList();
-        if (!toMarkDelivered.isEmpty()) {
-            feedbackRepository.markInAppDelivered(workspaceId, toMarkDelivered, now);
-        }
-        return onThePage;
+        return new Page(rows, onThePage);
     }
 
     private static Instant pageTime(InAppFeedbackDTO card) {

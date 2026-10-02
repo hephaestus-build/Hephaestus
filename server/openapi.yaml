@@ -7967,9 +7967,9 @@ paths:
   /workspaces/{workspaceSlug}/practices/workspace-overview:
     get:
       description: "Counts developers, never names them: a count is shown only when\
-        \ it holds at least 5 developers other than the reader, a group's split collapses\
-        \ to has a standing against none yet before it is withheld, and each window\
-        \ is checked on its own."
+        \ it holds at least 5 developers other than the reader, a group's or a practice's\
+        \ split collapses to has a standing against none yet before it is withheld,\
+        \ and each window is checked on its own."
       operationId: getPracticesAcrossWorkspace
       parameters:
       - description: Workspace slug
@@ -7996,8 +7996,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/PracticesAcrossWorkspace"
           description: Practices across the workspace returned
-      summary: The reader's practice group standings beside how the workspace's developers
-        split
+      summary: The reader's practice group and practice standings beside how the workspace's
+        developers split
       tags:
       - Practices Across The Workspace
   /workspaces/{workspaceSlug}/practices/{practiceSlug}:
@@ -16030,6 +16030,10 @@ components:
           format: int32
           description: Eligible developers with at least one practice standing in
             the window
+        openFeedback:
+          $ref: "#/components/schemas/WorkspaceTile"
+          description: "The reader's open feedback, counted by the rule the practice\
+            \ profile shows it open by; the feedback open now, whatever the window"
         practicesGoingWell:
           $ref: "#/components/schemas/WorkspaceTile"
           description: The reader's practices going well
@@ -16068,6 +16072,7 @@ components:
       - groups
       - minimumOthers
       - observedDevelopers
+      - openFeedback
       - practicesGoingWell
       - practicesNeedingAttention
       - readerCounted
@@ -19987,10 +19992,6 @@ components:
       description: "One practice group: the reader's own standing and how the observed\
         \ developers split across it"
       properties:
-        goingWell:
-          type: integer
-          format: int32
-          description: Developers at Going well; set only for SPLIT
         groupColor:
           type: string
           description: Group colour name
@@ -20003,29 +20004,24 @@ components:
         groupSlug:
           type: string
           description: Group slug
-        hasStanding:
-          type: integer
-          format: int32
-          description: Developers with a standing; set only for COLLAPSED
-        mixedFeedback:
-          type: integer
-          format: int32
-          description: Developers at Mixed feedback; set only for SPLIT
-        needsAttention:
-          type: integer
-          format: int32
-          description: Developers at Needs attention; set only for SPLIT
-        noneYet:
-          type: integer
-          format: int32
-          description: Observed developers without one; set only for COLLAPSED
-        shape:
+        practices:
+          type: array
+          description: "The group's practices on the reader's own profile, each split\
+            \ on its own, in the profile's order"
+          items:
+            $ref: "#/components/schemas/WorkspacePracticeSplit"
+        split:
+          $ref: "#/components/schemas/WorkspaceSplit"
+          description: How the observed developers split across the group
+        yourDirection:
           type: string
-          description: How the split may be shown
+          description: "The direction of the reader's own standing in the group, read\
+            \ over the window"
           enum:
-          - SPLIT
-          - COLLAPSED
-          - WITHHELD
+          - IMPROVING
+          - DECLINING
+          - UNCERTAIN
+          - INSUFFICIENT_EVIDENCE
         yourStanding:
           type: string
           description: "The reader's own standing in the group, shown in every shape"
@@ -20035,10 +20031,14 @@ components:
           - MIXED
           - NOT_OBSERVED
           - NO_OPPORTUNITY
+        yourTrendSupport:
+          $ref: "#/components/schemas/TrendSupport"
+          description: Evidence support and provenance for the reader's direction
       required:
       - groupName
       - groupSlug
-      - shape
+      - practices
+      - split
       - yourStanding
     WorkspaceListItem:
       type: object
@@ -20535,6 +20535,34 @@ components:
       - enabled
       - requiredConnectionIds
       - revision
+    WorkspacePracticeSplit:
+      type: object
+      description: "One practice of a group: the reader's own standing and how the\
+        \ observed developers split"
+      properties:
+        practiceName:
+          type: string
+          description: Practice name
+        practiceSlug:
+          type: string
+          description: Practice slug
+        split:
+          $ref: "#/components/schemas/WorkspaceSplit"
+          description: How the observed developers split across the practice
+        yourStanding:
+          type: string
+          description: The reader's own standing in the practice
+          enum:
+          - DEVELOPING
+          - STRENGTH
+          - MIXED
+          - NOT_OBSERVED
+          - NO_OPPORTUNITY
+      required:
+      - practiceName
+      - practiceSlug
+      - split
+      - yourStanding
     WorkspaceProviders:
       type: object
       description: Available workspace creation providers and their configuration
@@ -20582,6 +20610,41 @@ components:
       - personUserIds
       - repositories
       - repositoryMode
+    WorkspaceSplit:
+      type: object
+      description: "How the observed developers split across one practice group or\
+        \ one practice, counted in developers; every count is absent outside the shape\
+        \ that shows it"
+      properties:
+        goingWell:
+          type: integer
+          format: int32
+          description: Developers at Going well; set only for SPLIT
+        hasStanding:
+          type: integer
+          format: int32
+          description: Developers with a standing; set only for COLLAPSED
+        mixedFeedback:
+          type: integer
+          format: int32
+          description: Developers at Mixed feedback; set only for SPLIT
+        needsAttention:
+          type: integer
+          format: int32
+          description: Developers at Needs attention; set only for SPLIT
+        noneYet:
+          type: integer
+          format: int32
+          description: Observed developers without one; set only for COLLAPSED
+        shape:
+          type: string
+          description: How the split may be shown
+          enum:
+          - SPLIT
+          - COLLAPSED
+          - WITHHELD
+      required:
+      - shape
     WorkspaceTeamRepositorySettings:
       type: object
       description: Repository contribution visibility settings for a specific team

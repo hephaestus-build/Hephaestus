@@ -44,5 +44,11 @@ public record PracticesAcrossWorkspaceDTO(
         @NonNull @Schema(description = "The reader's practices needing attention")
         WorkspaceTileDTO practicesNeedingAttention,
 
+        @NonNull
+        @Schema(
+                description = "The reader's open feedback, counted by the rule the practice profile shows it open by;"
+                        + " the feedback open now, whatever the window")
+        WorkspaceTileDTO openFeedback,
+
         @NonNull @Schema(description = "One row per practice group shown on the practice pages, in catalog order")
         List<WorkspaceGroupSplitDTO> groups) {}

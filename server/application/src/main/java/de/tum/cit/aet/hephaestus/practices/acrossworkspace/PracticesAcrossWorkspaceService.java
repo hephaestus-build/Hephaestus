@@ -1,12 +1,15 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Bucket;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
-import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Split;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceTileDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
+import de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackService;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
@@ -26,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Composes Practices across the workspace from the standings that already exist: every eligible developer's
  * snapshot read off one scan of the workspace, rolled up to practice groups by the same classifier the practice
- * profile uses, then counted per group under {@link CohortPrivacyPolicy}.
+ * profile uses, then counted per group and per practice under {@link CohortPrivacyPolicy}.
  */
 @Service
 @RequiredArgsConstructor
@@ -49,6 +53,7 @@ public class PracticesAcrossWorkspaceService {
     private final PracticeGroupService practiceGroupService;
     private final WorkspaceMembershipService membershipService;
     private final CurrentDeveloperLookup currentDeveloperLookup;
+    private final InAppFeedbackService inAppFeedbackService;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -80,34 +85,56 @@ public class PracticesAcrossWorkspaceService {
         for (Long developer : observed) {
             groupStandings.put(developer, groupStandings(groups, snapshots.getOrDefault(developer, NOTHING_READ)));
         }
-        Map<String, PracticeGroupStandingDTO.Standing> yourGroups = groupStandings(groups, yours);
+        Map<String, PracticeGroupStandingDTO> yourGroups =
+                practiceGroupStandingService.summarize(groups, yours).stream()
+                        .collect(Collectors.toMap(
+                                PracticeGroupStandingDTO::groupSlug, Function.identity(), (a, b) -> a));
+        Cohort cohort = new Cohort(observed, readerCounted ? reader : null);
 
         List<WorkspaceGroupSplitDTO> rows = new ArrayList<>();
         for (PracticeGroup group : groups) {
-            List<PracticeGroupStandingDTO.Standing> othersInGroup = observed.stream()
-                    .filter(developer -> !developer.equals(reader))
-                    .map(developer -> Objects.requireNonNull(
-                            groupStandings.getOrDefault(developer, Map.of()).get(group.getSlug())))
+            PracticeGroupStandingDTO yourGroup = Objects.requireNonNull(yourGroups.get(group.getSlug()));
+            WorkspaceSplitDTO groupSplit = cohort.split(developer -> Bucket.of(Objects.requireNonNull(
+                    groupStandings.getOrDefault(developer, Map.of()).get(group.getSlug()))));
+            List<WorkspacePracticeSplitDTO> practices = yours.practices().values().stream()
+                    .map(StandingSnapshot.PracticeStanding::dto)
+                    .filter(practice -> group.getSlug().equals(practice.groupSlug()))
+                    .map(practice -> new WorkspacePracticeSplitDTO(
+                            practice.slug(),
+                            practice.name(),
+                            practice.standing(),
+                            cohort.split(developer ->
+                                    practiceBucket(snapshots.getOrDefault(developer, NOTHING_READ), practice.slug()))))
                     .toList();
-            PracticeGroupStandingDTO.Standing yourStanding = Objects.requireNonNull(yourGroups.get(group.getSlug()));
-            Split split = CohortPrivacyPolicy.split(othersInGroup, readerCounted ? yourStanding : null);
             rows.add(new WorkspaceGroupSplitDTO(
                     group.getSlug(),
                     group.getName(),
                     group.getIcon(),
                     group.getColor(),
-                    yourStanding,
-                    split.shape(),
-                    split.needsAttention(),
-                    split.mixedFeedback(),
-                    split.goingWell(),
-                    split.hasStanding(),
-                    split.noneYet()));
+                    yourGroup.standing(),
+                    yourGroup.direction(),
+                    yourGroup.trendSupport(),
+                    groupSplit,
+                    practices));
         }
 
         List<StandingSnapshot> observedSnapshots = observed.stream()
                 .map(developer -> snapshots.getOrDefault(developer, NOTHING_READ))
                 .toList();
+        // Counted per developer by the profile's own rule, so the reader's figure is the one their profile shows.
+        Map<Long, Integer> openFeedback = new HashMap<>();
+        for (Long developer : observed) {
+            openFeedback.put(developer, inAppFeedbackService.countOpen(workspaceId, developer));
+        }
+        int yourOpenFeedback = reader == null
+                ? 0
+                : openFeedback.computeIfAbsent(
+                        reader, developer -> inAppFeedbackService.countOpen(workspaceId, developer));
+        MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(
+                observed.stream()
+                        .map(developer -> openFeedback.getOrDefault(developer, 0))
+                        .toList(),
+                others);
         return new PracticesAcrossWorkspaceDTO(
                 window,
                 since,
@@ -128,7 +155,33 @@ public class PracticesAcrossWorkspaceService {
                         observedSnapshots,
                         others,
                         snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.DEVELOPING)),
+                new WorkspaceTileDTO(
+                        yourOpenFeedback,
+                        openMiddle == null ? null : openMiddle.low(),
+                        openMiddle == null ? null : openMiddle.high()),
                 rows);
+    }
+
+    /**
+     * The observed developers one split is counted over, and the reader among them when counted. Every split on the
+     * page, a group's or a practice's, is taken here, so each counts the same developers under the same rule.
+     */
+    private record Cohort(List<Long> observed, @Nullable Long reader) {
+
+        WorkspaceSplitDTO split(Function<Long, Bucket> bucketOf) {
+            List<Bucket> others = observed.stream()
+                    .filter(developer -> !developer.equals(reader))
+                    .map(bucketOf)
+                    .toList();
+            return WorkspaceSplitDTO.from(
+                    CohortPrivacyPolicy.split(others, reader == null ? null : bucketOf.apply(reader)));
+        }
+    }
+
+    /** A practice the developer's snapshot does not list is one nothing reached for them: none yet. */
+    private static Bucket practiceBucket(StandingSnapshot snapshot, String practiceSlug) {
+        StandingSnapshot.PracticeStanding practice = snapshot.practices().get(practiceSlug);
+        return practice == null ? Bucket.NONE_YET : Bucket.of(practice.dto().standing());
     }
 
     private Map<String, PracticeGroupStandingDTO.Standing> groupStandings(
