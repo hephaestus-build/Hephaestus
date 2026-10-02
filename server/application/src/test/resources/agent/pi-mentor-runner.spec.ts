@@ -172,6 +172,7 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 	const child = spawn(process.execPath, [RUNNER], {
 		env: {
 			...process.env,
+			AGENT_BUDGET_MS: "120000",
 			MENTOR_RUNNER_PROTOCOL_ONLY: "1",
 			MENTOR_RUNNER_STUB_DELAY_MS: "5",
 			MENTOR_RUNNER_SESSIONS_DIR: SESSIONS_TMPDIR,
@@ -196,7 +197,7 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 				}
 				const message = line.replace(/^\[pi-mentor-runner [\dT:.Z-]+\] /u, "");
 				if (
-					hasText(env.MENTOR_TURN_BUDGET_MS) &&
+					hasText(env.AGENT_BUDGET_MS) &&
 					/^watchdog fired: rebuilding session for thread=[\da-f-]+$/u.test(message)
 				) {
 					continue;
@@ -589,7 +590,7 @@ void test("watchdog cross-thread rebind: no event leakage from concurrently-boun
 	const threadB = "44444444-4444-4444-4444-444444444444";
 	const runner = spawnRunner(t, {
 		MENTOR_RUNNER_STUB_DELAY_MS: "100",
-		MENTOR_TURN_BUDGET_MS: "50",
+		AGENT_BUDGET_MS: "50",
 		MENTOR_TURN_GRACE_MS: "30",
 	});
 	try {
@@ -668,7 +669,7 @@ void test("a timed-out turn whose abort rejects fails once and leaves no runtime
 	const threadId = "55555555-5555-5555-5555-555555555555";
 	const runner = spawnRunner(t, {
 		MENTOR_RUNNER_STUB_DELAY_MS: "400",
-		MENTOR_TURN_BUDGET_MS: "50",
+		AGENT_BUDGET_MS: "50",
 		MENTOR_TURN_GRACE_MS: "30",
 		MENTOR_RUNNER_STUB_ABORT_REJECTS: "1",
 	});

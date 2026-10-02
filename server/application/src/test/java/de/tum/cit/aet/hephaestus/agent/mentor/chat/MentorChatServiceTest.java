@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorStreamLostException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
@@ -70,13 +72,16 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
@@ -115,6 +120,116 @@ class MentorChatServiceTest extends BaseUnitTest {
 
     /** The disconnect index follows the orchestrator preamble and translator start frames. */
     private static final int PREAMBLE_SEND_COUNT = 4;
+
+    @Test
+    void shouldWaitTheTurnBudgetAfterAcknowledgement() throws Exception {
+        var acknowledgement = new CompletableFuture<JsonNode>();
+        var terminal = new CompletableFuture<Void>();
+        scheduler.schedule(
+                () -> {
+                    acknowledgement.complete(mapper.createObjectNode());
+                    scheduler.schedule(() -> terminal.complete(null), 20, TimeUnit.MILLISECONDS);
+                },
+                100,
+                TimeUnit.MILLISECONDS);
+
+        MentorChatService.awaitTurn(acknowledgement, terminal, Duration.ofMillis(50));
+
+        assertThat(terminal).isCompletedWithValue(null);
+    }
+
+    @Test
+    void shouldAcceptATerminalEventThatArrivesBeforeAcknowledgement() throws Exception {
+        var acknowledgement = new CompletableFuture<JsonNode>();
+
+        MentorChatService.awaitTurn(acknowledgement, CompletableFuture.completedFuture(null), Duration.ofMillis(50));
+
+        assertThat(acknowledgement).isNotDone();
+    }
+
+    @Test
+    void shouldPreserveTheRecordedFailureWhenTheTurnSettlesWhileWaitingForAcknowledgement() {
+        var terminal = new CompletableFuture<Void>() {
+            @Override
+            public boolean isDone() {
+                boolean done = super.isDone();
+                // Settle after the initial state check, before the acknowledgement wait is registered.
+                completeExceptionally(new MentorStreamLostException());
+                return done;
+            }
+        };
+        CompletableFuture<JsonNode> acknowledgement =
+                CompletableFuture.failedFuture(new InteractiveSandboxException("Runner event stream lost"));
+
+        assertThatThrownBy(() -> MentorChatService.awaitTurn(acknowledgement, terminal, Duration.ofMillis(50)))
+                .hasCauseInstanceOf(MentorStreamLostException.class);
+    }
+
+    @Test
+    void shouldBoundWaitingForAMissingTerminalEvent() {
+        var terminal = new CompletableFuture<Void>();
+
+        assertThatThrownBy(() -> MentorChatService.awaitTurn(
+                        CompletableFuture.completedFuture(mapper.createObjectNode()), terminal, Duration.ofMillis(10)))
+                .isInstanceOf(TimeoutException.class);
+        assertThat(terminal).isNotDone();
+    }
+
+    @Test
+    void shouldDiscardTheRuntimeUnderItsLockWhenThePromptAcknowledgementIsLost() {
+        scheduler.shutdownNow();
+        scheduler = org.mockito.Mockito.mock(ScheduledExecutorService.class);
+        var timeoutTask = new java.util.concurrent.atomic.AtomicReference<Runnable>();
+        when(scheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
+                .thenAnswer(inv -> {
+                    if (inv.getArgument(1, Long.class) == MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis()) {
+                        timeoutTask.set(inv.getArgument(0, Runnable.class));
+                    }
+                    return org.mockito.Mockito.mock(ScheduledFuture.class);
+                });
+        service = serviceWithExecutor(turnExec);
+        scheduleResponses(
+                sandbox,
+                prompt -> java.util.Objects.requireNonNull(timeoutTask.get()).run());
+
+        runTurnSync();
+
+        assertThat(closedUnderSandboxLock).containsExactly(true);
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        verify(persistence, never()).complete(any(), any(), any());
+        verify(persistence).interrupt(any(), any(), any());
+        assertThat(turnLock.activeSandboxKeys()).isZero();
+    }
+
+    @Test
+    void shouldDiscardTheRuntimeUnderItsLockWhenOpeningTheThreadTimesOut() {
+        scheduler.shutdownNow();
+        scheduler = org.mockito.Mockito.mock(ScheduledExecutorService.class);
+        var timeoutTask = new AtomicReference<Runnable>();
+        when(scheduler.schedule(any(Runnable.class), anyLong(), any(TimeUnit.class)))
+                .thenAnswer(inv -> {
+                    timeoutTask.set(inv.getArgument(0, Runnable.class));
+                    return org.mockito.Mockito.mock(ScheduledFuture.class);
+                });
+        service = serviceWithExecutor(turnExec);
+        sandbox.onSend = frame -> {
+            if ("hello".equals(frame.path("method").asString())) {
+                sandbox.push(jsonRpcResult(
+                        frame.path("id").asLong(), mapper.createObjectNode().put("protocolVersion", 1)));
+            } else if ("open_thread".equals(frame.path("method").asString())) {
+                Objects.requireNonNull(timeoutTask.get()).run();
+            }
+        };
+
+        runTurnSync();
+
+        assertThat(closedUnderSandboxLock).containsExactly(true);
+        assertThat(sandbox.methodsSent()).doesNotContain("prompt");
+        assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+        verify(persistence, never()).complete(any(), any(), any());
+        verify(persistence).interrupt(any(), any(), any());
+        assertThat(turnLock.activeSandboxKeys()).isZero();
+    }
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final List<Boolean> closedUnderSandboxLock = new CopyOnWriteArrayList<>();

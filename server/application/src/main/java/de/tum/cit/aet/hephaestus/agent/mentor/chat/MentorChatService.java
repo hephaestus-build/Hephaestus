@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.ClientDisconnectedE
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRefusedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerException;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRunnerTimeoutException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorStreamLostException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
@@ -415,8 +416,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                             }
                         });
 
-                        turn.done.get(
-                                MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis() + 30_000, TimeUnit.MILLISECONDS);
+                        awaitTurn(prompt, turn.done, Duration.ofSeconds(llmConfig.timeoutSeconds()));
                     } finally {
                         sandbox.unbindTurn(assistantMessageId);
                     }
@@ -424,8 +424,8 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     poisoning = isPoisoning(failure);
                     throw failure;
                 } finally {
-                    // A runner with a broken stream may still be generating and cannot confirm an abort; a
-                    // poisoned one has corrupt state. Either way no later turn may reuse it.
+                    // A timed-out control call may still be changing the session, and a broken stream cannot
+                    // confirm an abort. Neither uncertain nor corrupt runtime state may reach a later turn.
                     if (sandbox != null && (poisoning || state.isStreamBroken())) {
                         discardRunner(client, sandbox);
                     }
@@ -435,7 +435,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
                     ? MentorChatMetrics.Outcome.ERROR
                     : MentorChatMetrics.Outcome.SUCCESS;
         } catch (TimeoutException timeout) {
-            // Interrupt persistence here; the runner watchdog reclaims the session after a missing terminal event.
+            // A missing terminal event leaves the runtime's state unknown; it was discarded under the sandbox lock.
             log.warn(
                     "Mentor turn timed out waiting for agent_end (threadId={}): {}",
                     request.threadId(),
@@ -673,6 +673,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         Throwable cur = e;
         int depth = 0;
         while (cur != null && depth++ < MAX_CAUSE_DEPTH) {
+            if (cur instanceof TimeoutException || cur instanceof MentorRunnerTimeoutException) {
+                return true;
+            }
             if (cur instanceof MentorRunnerException mre && mre.poisonsSandbox()) {
                 return true;
             }
@@ -681,6 +684,24 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             cur = next;
         }
         return false;
+    }
+
+    static void awaitTurn(
+            CompletableFuture<JsonNode> acknowledgement, CompletableFuture<Void> terminal, Duration timeout)
+            throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
+        // Events can finish a turn before its acknowledgement arrives. Acknowledgement has its own deadline;
+        // the frozen turn timeout includes PiRuntimeFactory's reserve for native abort and terminal delivery.
+        if (!terminal.isDone()) {
+            try {
+                CompletableFuture.anyOf(acknowledgement, terminal)
+                        .get(MentorRunnerClient.DEFAULT_PROMPT_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (java.util.concurrent.ExecutionException failure) {
+                if (!terminal.isDone()) {
+                    throw failure;
+                }
+            }
+        }
+        terminal.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private void handleEvent(
