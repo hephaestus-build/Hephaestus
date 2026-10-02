@@ -74,12 +74,6 @@ export const threeWay = ([needsAttention, mixedFeedback, goingWell]: [
 	noneYet: STORY_OBSERVED - needsAttention - mixedFeedback - goingWell,
 });
 
-export const collapsed = (hasStanding: number, noneYet: number): WorkspaceSplit => ({
-	shape: "COLLAPSED",
-	hasStanding,
-	noneYet,
-});
-
 export const WITHHELD: WorkspaceSplit = { shape: "WITHHELD" };
 
 const practice = (
@@ -97,7 +91,7 @@ const group = (
 ): WorkspaceGroupSplit => ({ ...of, yourStanding, split, practices });
 
 /**
- * Packaging's five practices: two split, one collapsed, one held back with its total, one more.
+ * Packaging's five practices: three split and two held back.
  * Every part shown holds at least six of the 28 observed developers, the reader counted.
  */
 export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
@@ -113,7 +107,7 @@ export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 		"MIXED",
 		threeWay([6, 7, 8]),
 	),
-	practice("scope-to-one-concern", "Scope the change to one concern", "STRENGTH", collapsed(20, 8)),
+	practice("scope-to-one-concern", "Scope the change to one concern", "STRENGTH", WITHHELD),
 	practice(
 		"mark-ready-and-link",
 		"Mark the change ready and link its issue",
@@ -151,7 +145,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	window: "DAYS_30",
 	since: daysBefore(30),
 	until: new Date(STORY_NOW),
-	minimumOthers: 5,
+	minimumOthers: 3,
 	eligibleDevelopers: 33,
 	observedDevelopers: 28,
 	readerCounted: true,
@@ -163,7 +157,7 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	groups: [
 		group(ACTING, "MIXED", threeWay([6, 7, 7])),
 		group(COMMUNICATION, "DEVELOPING", threeWay([7, 7, 6])),
-		group(FAILURE, "MIXED", collapsed(22, 6)),
+		group(FAILURE, "MIXED", WITHHELD),
 		PACKAGING_GROUP,
 		group(REVIEWING, "STRENGTH", threeWay([6, 6, 8])),
 		group(TESTING, "NOT_OBSERVED", threeWay([6, 6, 7])),
@@ -188,13 +182,7 @@ export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	})),
 };
 
-/** Enough developers for the tiles, but every group's three way split holds too few somewhere. */
-export const COLLAPSED_WORKSPACE: PracticesAcrossWorkspace = {
-	...ACROSS_WORKSPACE,
-	groups: ACROSS_WORKSPACE.groups.map((each) => ({ ...each, split: collapsed(21, 7) })),
-};
-
-/** Every group held back with only the observed total: has a standing or none yet holds too few. */
+/** Every group held back: a part of each split holds too few. */
 export const TOTAL_ONLY_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
 	groups: ACROSS_WORKSPACE.groups.map((each) => ({ ...each, split: WITHHELD })),

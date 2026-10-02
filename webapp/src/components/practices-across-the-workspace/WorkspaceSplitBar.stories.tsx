@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { collapsed, threeWay, WITHHELD } from "@/stories/practices-across-the-workspace-story-data";
+import { threeWay, WITHHELD } from "@/stories/practices-across-the-workspace-story-data";
 
 import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
@@ -27,7 +27,7 @@ const meta = {
 		window: "DAYS_30",
 		readerCounted: true,
 		observedDevelopers: 28,
-		minimumOthers: 5,
+		minimumOthers: 3,
 	},
 } satisfies Meta<typeof WorkspaceSplitBar>;
 
@@ -57,21 +57,9 @@ export const ReaderNotCounted: Story = {
 	},
 };
 
-/** Collapsed: has a standing against none yet, the marker on the reader's part and the word under it. */
-export const Collapsed: Story = {
-	args: { split: collapsed(22, 6), yourStanding: "DEVELOPING" },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("You")).toBeVisible();
-		// The counts say it; the merged part's pointer cannot say the standing, so the word does.
-		await expect(canvas.getByText("22")).toBeVisible();
-		await expect(canvas.getByText("You:")).toBeVisible();
-		await expect(canvas.getByText("Needs attention")).toBeVisible();
-	},
-};
-
 /** Beside a standing badge, as in a level's head, the bar leaves the reader's word out. */
 export const BesideABadge: Story = {
-	args: { split: collapsed(22, 6), yourStanding: "DEVELOPING", showYourWord: false },
+	args: { readerCounted: false, showYourWord: false },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("You:")).toBeNull();
 	},

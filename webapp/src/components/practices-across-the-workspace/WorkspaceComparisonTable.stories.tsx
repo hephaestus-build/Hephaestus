@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
-import { collapsed, threeWay, WITHHELD } from "@/stories/practices-across-the-workspace-story-data";
+import { threeWay, WITHHELD } from "@/stories/practices-across-the-workspace-story-data";
 
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 
@@ -22,7 +22,7 @@ const onOpen = fn();
 
 const ROWS: ComparisonRow[] = [
 	row("acting", "Acting on review feedback", "MIXED", threeWay([6, 7, 7])),
-	row("failure", "Handling failure well", "DEVELOPING", collapsed(22, 6)),
+	row("failure", "Handling failure well", "DEVELOPING", threeWay([4, 9, 9])),
 	row("craft", "Writing maintainable code", "STRENGTH", WITHHELD),
 	row("testing", "Testing your changes", "NOT_OBSERVED", threeWay([6, 6, 8])),
 ];
@@ -31,7 +31,7 @@ const CONTEXT = {
 	window: "DAYS_30",
 	readerCounted: true,
 	observedDevelopers: 28,
-	minimumOthers: 5,
+	minimumOthers: 3,
 } as const;
 
 /**
@@ -56,7 +56,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Every shape in one table: split, collapsed, held back, and a reader not counted. */
+/** Both shapes in one table: split and held back, with a reader not counted. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("table", { name: "All practice groups" })).toBeVisible();
@@ -64,27 +64,18 @@ export const Default: Story = {
 			canvas.getByRole("columnheader", { name: "Developers in this workspace" }),
 		).toBeVisible();
 		await expect(canvas.getAllByRole("img")).toHaveLength(3);
+		// A split and a held back track fill the same width, the whole bar column.
+		const split = canvas.getAllByRole("img")[0]?.getBoundingClientRect().width;
+		const heldBack = canvas
+			.getByText("Held back: too few developers to compare yet.")
+			.parentElement?.getBoundingClientRect().width;
+		await expect(split).toBe(heldBack);
 		await expect(
-			canvas.getByRole("img", { name: /22 merged standings, 6 none yet/u }),
+			canvas.getByRole("img", { name: /4 Needs attention, 9 Mixed feedback, 9 Going well/u }),
 		).toBeVisible();
 		await expect(canvas.getByText("Held back: too few developers to compare yet.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Open group Handling failure well" }));
 		await expect(onOpen).toHaveBeenCalledOnce();
-	},
-};
-
-export const Collapsed: Story = {
-	args: {
-		state: {
-			status: "ready",
-			rows: ROWS.map((each) => ({ ...each, split: collapsed(21, 7) })),
-			context: CONTEXT,
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(
-			canvas.getAllByRole("img", { name: /21 merged standings, 7 none yet/u }),
-		).toHaveLength(4);
 	},
 };
 

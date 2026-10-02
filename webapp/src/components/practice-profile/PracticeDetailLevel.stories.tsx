@@ -339,7 +339,7 @@ export const BesideTheWorkspace: Story = {
 					window="DAYS_30"
 					readerCounted
 					observedDevelopers={28}
-					minimumOthers={5}
+					minimumOthers={3}
 				/>
 			</div>
 		),

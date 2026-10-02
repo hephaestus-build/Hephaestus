@@ -14,7 +14,7 @@ const CONTEXT = {
 	window: "DAYS_30",
 	readerCounted: true,
 	observedDevelopers: 28,
-	minimumOthers: 5,
+	minimumOthers: 3,
 } as const;
 
 /**
@@ -86,10 +86,11 @@ export const Default: Story = {
 			"review-ready-work",
 			"scope-to-one-concern",
 		);
-		await expect(
-			table.getByRole("img", { name: /20 merged standings, 8 none yet/u }),
-		).toBeVisible();
-		await expect(table.getByText("Held back: too few developers to compare yet.")).toBeVisible();
+		await expect(table.getAllByText("Held back: too few developers to compare yet.")).toHaveLength(
+			2,
+		);
+		// The page's legend sits above the practices it explains.
+		await expect(level.getByRole("list", { name: "What the bars show" })).toBeVisible();
 		await expect(level.queryByText(/See practices/u)).toBeNull();
 	},
 };

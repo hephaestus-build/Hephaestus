@@ -3,7 +3,6 @@ import { expect, fn, userEvent, within } from "storybook/test";
 
 import {
 	ACROSS_WORKSPACE,
-	COLLAPSED_WORKSPACE,
 	EMPTY_WORKSPACE,
 	GATED_WORKSPACE,
 	MANY_GROUPS_WORKSPACE,
@@ -48,21 +47,15 @@ export const Default: Story = {
 		await expect(
 			canvas.getByRole("heading", { level: 2, name: "All practice groups" }),
 		).toBeVisible();
-		// The merged part says what it merges where the reader asks.
-		await expect(
-			canvas.getByRole("button", {
-				name: "Merged standings: Needs attention, mixed feedback and going well counted together, because one of them was too small to show on its own.",
-			}),
-		).toBeVisible();
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
-				"The typical range is the middle half of 28 developers observed in the last 30 days; your marker shows you. A tile compares you once at least 10 other developers have reviewed work in this window; until then it shows only your own value.",
+				"The typical range is the middle half of 28 developers observed in the last 30 days; your marker shows you. A tile compares you once at least 6 other developers have reviewed work in this window; until then it shows only your own value.",
 			),
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Each bar counts developers by their standing in the group, and You marks yours. A part shows only when it holds at least 5 other developers; otherwise it is merged or held back, so no one can be singled out.",
+				"Each bar counts developers by their standing in the group, and You marks yours. A part shows only when it holds at least 3 other developers; otherwise it is merged or held back, so no one can be singled out.",
 			),
 		).toBeVisible();
 		const table = groupsTable(canvas);
@@ -90,16 +83,8 @@ export const GroupOpen: Story = {
 	},
 };
 
-/** Each split collapses to has a standing against none yet. */
-export const Collapsed: Story = {
-	args: { state: { status: "ready", overview: COLLAPSED_WORKSPACE } },
-	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("img", { name: /21 merged standings/u })).toHaveLength(8);
-	},
-};
-
-/** Has a standing or none yet holds too few in every group: an empty track, the total said once. */
-export const CollapsedTotalOnly: Story = {
+/** A part holds too few in every group: a dashed track in every row, the total said once. */
+export const AllHeldBack: Story = {
 	args: { state: { status: "ready", overview: TOTAL_ONLY_WORKSPACE } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getAllByText("Held back: too few developers to compare yet.")).toHaveLength(
