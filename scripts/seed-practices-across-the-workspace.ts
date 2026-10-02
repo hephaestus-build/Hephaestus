@@ -8,15 +8,17 @@ import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
 
 /**
  * Seeds the development database with a workspace of synthetic developers, so Practices across the
- * workspace has a split to show: 24 members with clearly synthetic logins, each with completed
+ * workspace has a split to show: 40 members with clearly synthetic logins, each with completed
  * practice reviews of pull requests and issues already synced into the workspace and the
  * observations those reviews recorded. Every run is complete and no feedback is written, so no
  * sweeper, dispatcher or worker picks any of it up and nothing reaches a provider.
  *
  * An observation counts only against the revision its practice is reviewed under now, and only the
  * server fingerprints a revision, so the seed asks the running server for the revision a review would
- * pin, through dev sign-in, before it writes. A revision that request appended is removed again with
- * the seed once no observation pins it.
+ * pin, through dev sign-in, before it writes. The server says which revisions that request appended,
+ * and the seed keeps their ids on its own first job, so removing the seed rewinds exactly those and
+ * no revision a real review appended. Nothing is written before dev sign-in has answered and the
+ * account it signed in is found in this database, which proves the server and the seed share it.
  *
  *     node scripts/seed-practices-across-the-workspace.ts          # remove the seed's rows, then insert them
  *     node scripts/seed-practices-across-the-workspace.ts remove   # remove the seed's rows only
@@ -29,9 +31,12 @@ import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
  * on the tiles. Their observations say they are synthetic and carry the seed's ids, so removing the
  * seed removes them and leaves every real observation about the reader in place.
  *
- * Each practice group gets its own split of the 24 developers over Needs attention, Mixed feedback,
+ * Each practice group gets its own split of the 40 developers over Needs attention, Mixed feedback,
  * Going well and no standing, chosen so the page shows every shape the privacy rule allows: most
- * groups split, one collapses to has a standing against none yet, and one is withheld. The
+ * groups and practices split, two groups collapse to has a standing against none yet, and two are
+ * withheld. A part shows with six developers in it, the reader counted. In a group with several
+ * practices, about six of its developers each leave one practice unreviewed, so the group less any
+ * practice, and the practices less the group, count at least five whatever real reviews add. The
  * developers' runs reach back up to about 75 days, so the 30 day window reads fewer of them than the
  * term does.
  */
@@ -62,7 +67,7 @@ const ISSUE_REPOSITORY = setting(
 
 const READER_LOGIN = setting("reader", "SEED_READER_LOGIN", "ValentinGruener");
 
-const DEVELOPERS = 24;
+const DEVELOPERS = 40;
 /** Logins no provider hands out to a person, so a synthetic developer is never mistaken for one. */
 const LOGIN_PREFIX = "synthetic-developer-";
 /** Provider ids far above any real account's, so the seed never collides with a synced user. */
@@ -70,31 +75,36 @@ const NATIVE_ID_BASE = 990_000_000;
 /** A UUID v4 prefix no real row carries; the fourth group says which table the row is in. */
 const ID_PREFIX = "5eed0000-ac05-4000";
 const TABLE = { job: "8000", observation: "8001" } as const;
+/** The seed's first job, which keeps the ids of the revisions the server appended for the seed. */
+const FIRST_JOB = `${ID_PREFIX}-${TABLE.job}-${(1).toString(16).padStart(12, "0")}`;
 const EVIDENCE_CONTRACT_VERSION = "1.0.0";
 
 type Bucket = "needs" | "mixed" | "well" | "none";
 
 /**
- * How the 24 developers split in each group: Needs attention, Mixed feedback, Going well, none.
+ * How the 40 developers split in each group: Needs attention, Mixed feedback, Going well, none.
  * A group not listed here has no practice a pull request or issue review can observe, so nobody
  * gets a standing in it and the page withholds its split.
  */
 const SPLITS: Record<string, [number, number, number, number]> = {
-	"acting-on-review-feedback": [6, 7, 6, 5],
-	"delivery-and-version-control-discipline": [5, 7, 7, 5],
-	// Two at Needs attention: the split collapses to has a standing against none yet.
-	"robust-error-handling": [2, 9, 8, 5],
-	"secure-by-default-changes": [6, 6, 5, 7],
-	"review-ready-work": [7, 6, 6, 5],
-	"decisions-and-documentation": [5, 6, 6, 7],
-	"constructive-code-review": [6, 6, 7, 5],
-	"testing-discipline": [5, 6, 8, 5],
-	// Every standing holds five, but the three without one are what the observed total leaves over:
-	// not even the collapsed split holds.
-	"issue-traceability-and-lifecycle": [6, 7, 8, 3],
-	"actionable-issue-authoring": [5, 7, 6, 6],
-	"code-craftsmanship": [6, 6, 7, 5],
+	"acting-on-review-feedback": [9, 9, 9, 13],
+	"delivery-and-version-control-discipline": [9, 10, 9, 12],
+	// Three at Needs attention: the split collapses to has a standing against none yet.
+	"robust-error-handling": [3, 12, 12, 13],
+	"secure-by-default-changes": [10, 9, 9, 12],
+	"review-ready-work": [9, 9, 10, 12],
+	"decisions-and-documentation": [9, 9, 9, 13],
+	"constructive-code-review": [10, 10, 9, 11],
+	// Two at Needs attention: collapses too.
+	"testing-discipline": [2, 12, 13, 13],
+	// Three with a standing: not even the collapsed split holds.
+	"issue-traceability-and-lifecycle": [1, 1, 1, 37],
+	"actionable-issue-authoring": [9, 9, 10, 12],
+	"code-craftsmanship": [10, 9, 9, 12],
 };
+
+/** How many developers with a standing in a group leave each of its practices unreviewed. */
+const SKIPPERS_PER_PRACTICE = 6;
 
 /**
  * The reader's own bucket per group, in the order of `SPLITS`: every standing and a group with none,
@@ -231,14 +241,27 @@ async function artifactsOf(
 }
 
 async function removeSeed(client: Client, workspaceId: number): Promise<void> {
+	const busy = await client.query<{ count: string }>(
+		"SELECT count(*) AS count FROM agent_job WHERE workspace_id = $1 AND status IN ('RUNNING', 'QUEUED')",
+		[workspaceId],
+	);
+	if (Number(busy.rows[0]?.count ?? 0) > 0) {
+		throw new Error(
+			`${WORKSPACE_SLUG} has a review running or queued; run the seed once it is done`,
+		);
+	}
+	const appended = await client.query<{ ids: number[] | null }>(
+		`SELECT ARRAY(SELECT jsonb_array_elements_text(config_snapshot -> 'seedAppendedRevisionIds')::bigint)
+		   AS ids
+		 FROM agent_job WHERE id = $1`,
+		[FIRST_JOB],
+	);
 	const pattern = `${ID_PREFIX}-%`;
 	await client.query("DELETE FROM observation WHERE id::text LIKE $1", [pattern]);
 	await client.query("DELETE FROM agent_job WHERE id::text LIKE $1", [pattern]);
-	// A revision the server appended for the seed differs from the one before it only in its
-	// fingerprint. Once no observation pins it, the practice goes back to the one before, which is the
-	// revision the next review would replace with this same one.
-	const practices = await seedPractices(client, workspaceId);
-	const practiceIds = practices.map((practice) => practice.id);
+	// Only a revision the server appended for the seed, still current, still differing from the one
+	// before it only in its fingerprint, and pinned by no observation goes back to the one before it,
+	// which is the revision the next review would replace with this same one.
 	const rewound = await client.query<{ id: number }>(
 		`WITH appended AS (
 			SELECT p.id AS practice_id, cur.id AS current_id, prev.id AS previous_id
@@ -246,14 +269,19 @@ async function removeSeed(client: Client, workspaceId: number): Promise<void> {
 			JOIN practice_revision cur ON cur.id = p.current_revision_id
 			JOIN practice_revision prev ON prev.practice_id = p.id
 			 AND prev.revision_number = cur.revision_number - 1
-			WHERE p.id = ANY($1::bigint[])
-			  AND to_jsonb(cur) - $2::text[] = to_jsonb(prev) - $2::text[]
+			WHERE p.workspace_id = $1
+			  AND cur.id = ANY($2::bigint[])
+			  AND to_jsonb(cur) - $3::text[] = to_jsonb(prev) - $3::text[]
 			  AND NOT EXISTS (SELECT 1 FROM observation o WHERE o.practice_revision_id = cur.id)
 		)
 		UPDATE practice p SET current_revision_id = appended.previous_id
 		FROM appended WHERE p.id = appended.practice_id
 		RETURNING appended.current_id AS id`,
-		[practiceIds, ["id", "revision_number", "review_rule_fingerprint", "created_at"]],
+		[
+			workspaceId,
+			appended.rows[0]?.ids ?? [],
+			["id", "revision_number", "review_rule_fingerprint", "created_at"],
+		],
 	);
 	await client.query("DELETE FROM practice_revision WHERE id = ANY($1::bigint[])", [
 		rewound.rows.map((row) => row.id),
@@ -310,26 +338,25 @@ async function insertDevelopers(client: Client, workspaceId: number): Promise<nu
 }
 
 /**
- * Asks the running server for the revision a review would pin for each practice: it keeps one under
- * the current fingerprint scheme and appends one otherwise. The server signs in an existing dev
- * administrator, or `seed-admin` when there is none.
+ * Signs in at the running server as an existing dev administrator, or `seed-admin` when there is
+ * none, and proves the server reads this database: the account it signed in must be here. Nothing is
+ * written before this answers, so a database that is not a dev server's is never touched.
  */
-async function pinReviewRevisions(
+async function devSignIn(
 	client: Client,
 	env: Record<string, string | undefined>,
-	workspaceId: number,
-	practices: SeedPractice[],
-): Promise<string> {
+): Promise<DevServer> {
 	const admin = await client.query<{ username: string }>(
 		`SELECT split_part(primary_email::text, '@', 1) AS username FROM account
 		 WHERE primary_email::text LIKE '%@dev.invalid' AND app_role = 'APP_ADMIN' AND deleted_at IS NULL
 		 ORDER BY id LIMIT 1`,
 	);
+	const username = admin.rows[0]?.username ?? "seed-admin";
 	const server = `http://localhost:${positivePort(env.SERVER_PORT ?? "8080", "SERVER_PORT")}`;
 	const login = await fetch(`${server}/auth/dev-login`, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify({ username: admin.rows[0]?.username ?? "seed-admin", admin: true }),
+		body: JSON.stringify({ username, admin: true }),
 		signal: AbortSignal.timeout(10_000),
 	}).catch((error: unknown) => {
 		throw new Error(`The server at ${server} must be running for the seed`, { cause: error });
@@ -340,6 +367,53 @@ async function pinReviewRevisions(
 	if (!login.ok || token === undefined) {
 		throw new Error(`Dev sign-in at ${server} failed with ${login.status}`);
 	}
+	const signedIn = await client.query(
+		"SELECT 1 FROM account WHERE primary_email::text = $1 AND deleted_at IS NULL",
+		[`${username}@dev.invalid`],
+	);
+	if (signedIn.rowCount !== 1) {
+		throw new Error(`The server at ${server} does not read the database the seed would write`);
+	}
+	return { server, token };
+}
+
+interface DevServer {
+	server: string;
+	token: string;
+}
+
+/** One practice's revision as the server pins it for a review. */
+interface PinnedRevision {
+	slug: string;
+	revisionId: number;
+	revisionNumber: number;
+	appended: boolean;
+}
+
+function isPinnedRevision(value: unknown): value is PinnedRevision {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		"slug" in value &&
+		typeof value.slug === "string" &&
+		"revisionId" in value &&
+		typeof value.revisionId === "number" &&
+		"revisionNumber" in value &&
+		typeof value.revisionNumber === "number" &&
+		"appended" in value &&
+		typeof value.appended === "boolean"
+	);
+}
+
+/**
+ * Asks the running server for the revision a review would pin for each practice: it keeps one under
+ * the current fingerprint scheme and appends one otherwise, and says which it appended.
+ */
+async function pinReviewRevisions(
+	{ server, token }: DevServer,
+	workspaceId: number,
+	practices: SeedPractice[],
+): Promise<PinnedRevision[]> {
 	const query = new URLSearchParams({ workspaceId: String(workspaceId) });
 	for (const practice of practices) {
 		query.append("slug", practice.slug);
@@ -350,9 +424,15 @@ async function pinReviewRevisions(
 		signal: AbortSignal.timeout(30_000),
 	});
 	if (!response.ok) {
-		throw new Error(`The server refused the practice revisions with ${response.status}`);
+		throw new Error(
+			`The server refused the practice revisions with ${response.status}; is HEPHAESTUS_DEV_SEED_ENABLED set?`,
+		);
 	}
-	return response.text();
+	const body: unknown = await response.json();
+	if (!Array.isArray(body) || !body.every(isPinnedRevision)) {
+		throw new Error("The server answered the practice revisions in a shape the seed does not know");
+	}
+	return body;
 }
 
 /** The member whose page the seed is for; they must already belong to the workspace. */
@@ -372,6 +452,7 @@ async function readerOf(client: Client, workspaceId: number): Promise<number> {
 async function seed(
 	client: Client,
 	workspaceId: number,
+	appendedRevisionIds: number[],
 ): Promise<{ jobs: number; observations: number }> {
 	const practices = await seedPractices(client, workspaceId);
 	const groupIndex = new Map(Object.keys(SPLITS).map((slug, index) => [slug, index]));
@@ -382,16 +463,48 @@ async function seed(
 	// The reader reviews last, so every synthetic developer keeps the runs and ordinals it had before.
 	const readerIndex = developers.length;
 
+	/** Each group's seeded practices, in one order, so a developer's skipped practice is stable. */
+	const practicesOf = new Map<string, string[]>();
+	for (const practice of practices) {
+		practicesOf.set(practice.groupSlug, [
+			...(practicesOf.get(practice.groupSlug) ?? []),
+			practice.slug,
+		]);
+	}
+	for (const slugs of practicesOf.values()) {
+		slugs.sort();
+	}
+
 	/** The bucket developer `index` falls in for one practice's group; the reader's is fixed. */
-	const bucketFor = (practice: SeedPractice, index: number): Bucket => {
-		const split = SPLITS[practice.groupSlug];
-		const group = groupIndex.get(practice.groupSlug);
+	const groupBucketFor = (groupSlug: string, index: number): Bucket => {
+		const split = SPLITS[groupSlug];
+		const group = groupIndex.get(groupSlug);
 		if (split === undefined || group === undefined) {
 			return "none";
 		}
 		return index === readerIndex
 			? (READER_BUCKETS[group % READER_BUCKETS.length] ?? "none")
 			: bucketOf(split, group, index);
+	};
+
+	/**
+	 * The bucket developer `index` falls in for one practice: their group's, except in a group of
+	 * several practices, where the m-th developer with a standing leaves practice m modulo their
+	 * count unreviewed, the first `SKIPPERS_PER_PRACTICE` times round.
+	 */
+	const bucketFor = (practice: SeedPractice, index: number): Bucket => {
+		const bucket = groupBucketFor(practice.groupSlug, index);
+		const slugs = practicesOf.get(practice.groupSlug) ?? [];
+		if (bucket === "none" || index === readerIndex || slugs.length < 2) {
+			return bucket;
+		}
+		const ordinal = Array.from({ length: index }, (_, earlier) => earlier).filter(
+			(earlier) => groupBucketFor(practice.groupSlug, earlier) !== "none",
+		).length;
+		const skips =
+			ordinal < SKIPPERS_PER_PRACTICE * slugs.length &&
+			slugs[ordinal % slugs.length] === practice.slug;
+		return skips ? "none" : bucket;
 	};
 
 	let jobs = 0;
@@ -416,6 +529,12 @@ async function seed(
 				jobs += 1;
 				const jobId = seedId(TABLE.job, jobs);
 				await insertJob(client, workspaceId, jobId, artifact, at);
+				if (jobId === FIRST_JOB) {
+					await client.query("UPDATE agent_job SET config_snapshot = $2 WHERE id = $1", [
+						jobId,
+						JSON.stringify({ seedAppendedRevisionIds: appendedRevisionIds }),
+					]);
+				}
 				for (const { practice, bucket } of observed) {
 					observations += 1;
 					await insertObservation(client, {
@@ -568,6 +687,8 @@ async function main(): Promise<void> {
 		if (workspaceId === undefined) {
 			throw new Error(`No workspace with slug ${WORKSPACE_SLUG}`);
 		}
+		// Before any write: the server must answer dev sign-in from this very database.
+		const devServer = await devSignIn(client, env);
 		await client.query("BEGIN");
 		await removeSeed(client, workspaceId);
 		await client.query("COMMIT");
@@ -579,14 +700,20 @@ async function main(): Promise<void> {
 		}
 		// Outside a transaction: the server locks each practice row to append its revision.
 		const pinned = await pinReviewRevisions(
-			client,
-			env,
+			devServer,
 			workspaceId,
 			await seedPractices(client, workspaceId),
 		);
-		console.log(`Practice revisions a review would pin: ${pinned}`);
+		const appended = pinned.filter((revision) => revision.appended);
+		console.log(
+			`Practice revisions a review would pin: ${pinned.map((revision) => `${revision.slug}@${revision.revisionNumber}`).join(" ")}; ${appended.length} appended for the seed`,
+		);
 		await client.query("BEGIN");
-		const counts = await seed(client, workspaceId);
+		const counts = await seed(
+			client,
+			workspaceId,
+			appended.map((revision) => revision.revisionId),
+		);
 		await client.query("COMMIT");
 		console.log(
 			`Seeded ${DEVELOPERS} synthetic developers and synthetic reviews of ${READER_LOGIN} in ${WORKSPACE_SLUG}: ${counts.jobs} agent_job, ${counts.observations} observation`,
