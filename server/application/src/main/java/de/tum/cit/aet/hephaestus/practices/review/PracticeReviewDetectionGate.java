@@ -343,7 +343,7 @@ public class PracticeReviewDetectionGate {
      * choice, and terminal like a repository.
      */
     private static SignalStateReason scopeSkipReason(PracticeReviewCoverageService.CoverageAssessment coverage) {
-        if (!coverage.repositoryMatched() || !coverage.branchMatched()) {
+        if (Boolean.FALSE.equals(coverage.repositoryMatched()) || Boolean.FALSE.equals(coverage.branchMatched())) {
             return SignalStateReason.OUT_OF_REVIEW_SCOPE;
         }
         return switch (coverage.subjectStatus()) {

@@ -126,6 +126,8 @@ describe("PracticeReviewSettings", () => {
 
 		fireEvent.click(screen.getByRole("radio", { name: "Selected repositories" }));
 		fireEvent.click(screen.getByRole("radio", { name: "Selected people" }));
+		screen.getByText(/An empty repository selection covers no repository work/u);
+		screen.getByText(/An empty people selection covers nobody/u);
 		fireEvent.click(screen.getByRole("button", { name: "Review changes" }));
 
 		await act(async () => {

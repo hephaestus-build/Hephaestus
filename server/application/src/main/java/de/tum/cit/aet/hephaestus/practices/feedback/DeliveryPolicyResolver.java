@@ -6,7 +6,7 @@ import org.jspecify.annotations.Nullable;
 
 public final class DeliveryPolicyResolver {
 
-    public static final String VERSION = "1";
+    public static final String VERSION = "2";
 
     private DeliveryPolicyResolver() {}
 
