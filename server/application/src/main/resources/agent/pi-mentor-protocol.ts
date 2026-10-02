@@ -33,6 +33,7 @@ export const FETCH_CONTEXT_ALLOWED = new Set([
 	"inputs/context/delivered_feedback.json",
 	"inputs/context/recent_authored_work.json",
 	"inputs/context/merge_readiness.json",
+	"inputs/context/review_attempts.json",
 	"inputs/context/slack_conversations.json",
 	"inputs/context/prepared_conversation_feedback.json",
 	"inputs/context/current_thread_history.json",
@@ -43,10 +44,16 @@ const MERGE_READINESS_ITEM = /^inputs\/context\/merge_readiness\/\d{1,18}\.json$
 // One listed observation's evidence by its canonical id; mirrors ObservationHistoryContentSource.DETAIL_KEY.
 const OBSERVATION_DETAIL =
 	/^inputs\/context\/observations_history\/[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}\.json$/u;
+// One authored pull request's or issue's retained reviews by artifactId; mirrors ReviewAttemptsContentSource.WORK_KEY.
+const REVIEW_ATTEMPTS_ITEM =
+	/^inputs\/context\/review_attempts\/(?:pull_request|issue)\/\d{1,18}\.json$/u;
 
 export function isFetchContextKey(key: string): boolean {
 	return (
-		FETCH_CONTEXT_ALLOWED.has(key) || MERGE_READINESS_ITEM.test(key) || OBSERVATION_DETAIL.test(key)
+		FETCH_CONTEXT_ALLOWED.has(key) ||
+		MERGE_READINESS_ITEM.test(key) ||
+		OBSERVATION_DETAIL.test(key) ||
+		REVIEW_ATTEMPTS_ITEM.test(key)
 	);
 }
 
