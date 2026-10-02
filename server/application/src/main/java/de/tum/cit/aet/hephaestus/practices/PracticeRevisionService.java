@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.practices;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import java.util.Collection;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -26,6 +28,14 @@ public class PracticeRevisionService {
             return current;
         }
         return appendLocked(locked);
+    }
+
+    /** {@link #forReview(Practice)} for each practice of the workspace with one of these slugs. */
+    @Transactional
+    public List<PracticeRevision> forReview(Long workspaceId, Collection<String> slugs) {
+        return practiceRepository.findByWorkspaceIdAndSlugIn(workspaceId, slugs).stream()
+                .map(this::forReview)
+                .toList();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

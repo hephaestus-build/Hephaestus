@@ -13,6 +13,11 @@ import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
  * observations those reviews recorded. Every run is complete and no feedback is written, so no
  * sweeper, dispatcher or worker picks any of it up and nothing reaches a provider.
  *
+ * An observation counts only against the revision its practice is reviewed under now, and only the
+ * server fingerprints a revision, so the seed asks the running server for the revision a review would
+ * pin, through dev sign-in, before it writes. A revision that request appended is removed again with
+ * the seed once no observation pins it.
+ *
  *     node scripts/seed-practices-across-the-workspace.ts          # remove the seed's rows, then insert them
  *     node scripts/seed-practices-across-the-workspace.ts remove   # remove the seed's rows only
  *
@@ -67,19 +72,20 @@ type Bucket = "needs" | "mixed" | "well" | "none";
  * gets a standing in it and the page withholds its split.
  */
 const SPLITS: Record<string, [number, number, number, number]> = {
-	"acting-on-review-feedback": [6, 8, 7, 3],
-	"delivery-and-version-control-discipline": [5, 9, 8, 2],
+	"acting-on-review-feedback": [6, 7, 6, 5],
+	"delivery-and-version-control-discipline": [5, 7, 7, 5],
 	// Two at Needs attention: the split collapses to has a standing against none yet.
 	"robust-error-handling": [2, 9, 8, 5],
-	"secure-by-default-changes": [7, 7, 5, 5],
-	"review-ready-work": [7, 6, 9, 2],
+	"secure-by-default-changes": [6, 6, 5, 7],
+	"review-ready-work": [7, 6, 6, 5],
 	"decisions-and-documentation": [5, 6, 6, 7],
-	"constructive-code-review": [6, 8, 7, 3],
-	"testing-discipline": [5, 6, 9, 4],
-	// Three at Needs attention and four without a standing: not even the collapsed split holds.
-	"issue-traceability-and-lifecycle": [3, 8, 9, 4],
+	"constructive-code-review": [6, 6, 7, 5],
+	"testing-discipline": [5, 6, 8, 5],
+	// Every standing holds five, but the three without one are what the observed total leaves over:
+	// not even the collapsed split holds.
+	"issue-traceability-and-lifecycle": [6, 7, 8, 3],
 	"actionable-issue-authoring": [5, 7, 6, 6],
-	"code-craftsmanship": [6, 7, 8, 3],
+	"code-craftsmanship": [6, 6, 7, 5],
 };
 
 /** Which bucket developer `index` falls in for the group at `groupIndex`, shuffled per group. */
@@ -135,9 +141,41 @@ interface Artifact {
 
 interface SeedPractice {
 	id: number;
+	slug: string;
 	revisionId: number;
 	groupSlug: string;
 	kind: Artifact["kind"];
+}
+
+/** The practices a pull request or issue review observes in a group the seed splits. */
+async function seedPractices(client: Client, workspaceId: number): Promise<SeedPractice[]> {
+	const rows = await client.query<{
+		id: number;
+		slug: string;
+		revision_id: number | null;
+		group_slug: string;
+		applies_to: string;
+	}>(
+		`SELECT p.id, p.slug, p.current_revision_id AS revision_id, g.slug AS group_slug, p.applies_to
+		 FROM practice p JOIN practice_group g ON g.id = p.practice_group_id
+		 WHERE p.workspace_id = $1
+		   AND p.applies_to IN ('scm.pull_request', 'scm.issue')
+		   AND (p.autonomy IS NULL OR p.autonomy <> 'OFF')`,
+		[workspaceId],
+	);
+	return rows.rows.flatMap((row) =>
+		row.revision_id === null || !(row.group_slug in SPLITS)
+			? []
+			: [
+					{
+						id: row.id,
+						slug: row.slug,
+						revisionId: row.revision_id,
+						groupSlug: row.group_slug,
+						kind: row.applies_to === "scm.issue" ? "scm.issue" : "scm.pull_request",
+					},
+				],
+	);
 }
 
 async function artifactsOf(
@@ -174,6 +212,30 @@ async function removeSeed(client: Client, workspaceId: number): Promise<void> {
 	const pattern = `${ID_PREFIX}-%`;
 	await client.query("DELETE FROM observation WHERE id::text LIKE $1", [pattern]);
 	await client.query("DELETE FROM agent_job WHERE id::text LIKE $1", [pattern]);
+	// A revision the server appended for the seed differs from the one before it only in its
+	// fingerprint. Once no observation pins it, the practice goes back to the one before, which is the
+	// revision the next review would replace with this same one.
+	const practices = await seedPractices(client, workspaceId);
+	const practiceIds = practices.map((practice) => practice.id);
+	const rewound = await client.query<{ id: number }>(
+		`WITH appended AS (
+			SELECT p.id AS practice_id, cur.id AS current_id, prev.id AS previous_id
+			FROM practice p
+			JOIN practice_revision cur ON cur.id = p.current_revision_id
+			JOIN practice_revision prev ON prev.practice_id = p.id
+			 AND prev.revision_number = cur.revision_number - 1
+			WHERE p.id = ANY($1::bigint[])
+			  AND to_jsonb(cur) - $2::text[] = to_jsonb(prev) - $2::text[]
+			  AND NOT EXISTS (SELECT 1 FROM observation o WHERE o.practice_revision_id = cur.id)
+		)
+		UPDATE practice p SET current_revision_id = appended.previous_id
+		FROM appended WHERE p.id = appended.practice_id
+		RETURNING appended.current_id AS id`,
+		[practiceIds, ["id", "revision_number", "review_rule_fingerprint", "created_at"]],
+	);
+	await client.query("DELETE FROM practice_revision WHERE id = ANY($1::bigint[])", [
+		rewound.rows.map((row) => row.id),
+	]);
 	const synthetic = `SELECT id FROM "user" WHERE login LIKE '${LOGIN_PREFIX}%' AND native_id >= ${NATIVE_ID_BASE}`;
 	await client.query(
 		`DELETE FROM workspace_membership WHERE workspace_id = $1 AND user_id IN (${synthetic})`,
@@ -225,35 +287,57 @@ async function insertDevelopers(client: Client, workspaceId: number): Promise<nu
 	return ids;
 }
 
+/**
+ * Asks the running server for the revision a review would pin for each practice: it keeps one under
+ * the current fingerprint scheme and appends one otherwise. The server signs in an existing dev
+ * administrator, or `seed-admin` when there is none.
+ */
+async function pinReviewRevisions(
+	client: Client,
+	env: Record<string, string | undefined>,
+	workspaceId: number,
+	practices: SeedPractice[],
+): Promise<string> {
+	const admin = await client.query<{ username: string }>(
+		`SELECT split_part(primary_email::text, '@', 1) AS username FROM account
+		 WHERE primary_email::text LIKE '%@dev.invalid' AND app_role = 'APP_ADMIN' AND deleted_at IS NULL
+		 ORDER BY id LIMIT 1`,
+	);
+	const server = `http://localhost:${positivePort(env.SERVER_PORT ?? "8080", "SERVER_PORT")}`;
+	const login = await fetch(`${server}/auth/dev-login`, {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({ username: admin.rows[0]?.username ?? "seed-admin", admin: true }),
+		signal: AbortSignal.timeout(10_000),
+	}).catch((error: unknown) => {
+		throw new Error(`The server at ${server} must be running for the seed`, { cause: error });
+	});
+	const token = /(?:__Host-)?HEPHAESTUS_AT=(?<token>[^;]+)/u.exec(
+		login.headers.get("set-cookie") ?? "",
+	)?.groups?.token;
+	if (!login.ok || token === undefined) {
+		throw new Error(`Dev sign-in at ${server} failed with ${login.status}`);
+	}
+	const query = new URLSearchParams({ workspaceId: String(workspaceId) });
+	for (const practice of practices) {
+		query.append("slug", practice.slug);
+	}
+	const response = await fetch(`${server}/api/dev/practice-revisions?${query}`, {
+		method: "POST",
+		headers: { authorization: `Bearer ${token}` },
+		signal: AbortSignal.timeout(30_000),
+	});
+	if (!response.ok) {
+		throw new Error(`The server refused the practice revisions with ${response.status}`);
+	}
+	return response.text();
+}
+
 async function seed(
 	client: Client,
 	workspaceId: number,
 ): Promise<{ jobs: number; observations: number }> {
-	const practiceRows = await client.query<{
-		id: number;
-		revision_id: number | null;
-		group_slug: string;
-		applies_to: string;
-	}>(
-		`SELECT p.id, p.current_revision_id AS revision_id, g.slug AS group_slug, p.applies_to
-		 FROM practice p JOIN practice_group g ON g.id = p.practice_group_id
-		 WHERE p.workspace_id = $1
-		   AND p.applies_to IN ('scm.pull_request', 'scm.issue')
-		   AND (p.autonomy IS NULL OR p.autonomy <> 'OFF')`,
-		[workspaceId],
-	);
-	const practices: SeedPractice[] = practiceRows.rows.flatMap((row) =>
-		row.revision_id === null || !(row.group_slug in SPLITS)
-			? []
-			: [
-					{
-						id: row.id,
-						revisionId: row.revision_id,
-						groupSlug: row.group_slug,
-						kind: row.applies_to === "scm.issue" ? "scm.issue" : "scm.pull_request",
-					},
-				],
-	);
+	const practices = await seedPractices(client, workspaceId);
 	const groupIndex = new Map(Object.keys(SPLITS).map((slug, index) => [slug, index]));
 	const pullRequests = await artifactsOf(client, PULL_REQUEST_REPOSITORY, "scm.pull_request");
 	const issues = await artifactsOf(client, ISSUE_REPOSITORY, "scm.issue");
@@ -442,11 +526,20 @@ async function main(): Promise<void> {
 		}
 		await client.query("BEGIN");
 		await removeSeed(client, workspaceId);
+		await client.query("COMMIT");
 		if (mode === "remove") {
-			await client.query("COMMIT");
 			console.log(`Removed the synthetic developers from ${WORKSPACE_SLUG}.`);
 			return;
 		}
+		// Outside a transaction: the server locks each practice row to append its revision.
+		const pinned = await pinReviewRevisions(
+			client,
+			env,
+			workspaceId,
+			await seedPractices(client, workspaceId),
+		);
+		console.log(`Practice revisions a review would pin: ${pinned}`);
+		await client.query("BEGIN");
 		const counts = await seed(client, workspaceId);
 		await client.query("COMMIT");
 		console.log(

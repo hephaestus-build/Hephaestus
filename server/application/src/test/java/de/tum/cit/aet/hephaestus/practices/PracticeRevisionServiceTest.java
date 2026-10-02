@@ -67,6 +67,26 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldGiveEachNamedPracticeTheRevisionAReviewWouldPinWhenAskedForAWorkspace() {
+        PracticeRevision historical = mock(PracticeRevision.class);
+        when(historical.getReviewRuleFingerprint()).thenReturn("v4:" + "a".repeat(64));
+        when(historical.getRevisionNumber()).thenReturn(4);
+        practice.setCurrentRevision(historical);
+        when(revisionRepository.findFirstByPracticeIdOrderByRevisionNumberDesc(42L))
+                .thenReturn(Optional.of(historical));
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(7L, List.of("clear-feedback")))
+                .thenReturn(List.of(practice));
+
+        List<PracticeRevision> pinned = service.forReview(7L, List.of("clear-feedback"));
+
+        assertThat(pinned).singleElement().satisfies(revision -> {
+            assertThat(revision.getRevisionNumber()).isEqualTo(5);
+            assertThat(revision.getReviewRuleFingerprint()).startsWith("v5:");
+            assertThat(revision.getCriteria()).isEqualTo("Give specific feedback");
+        });
+    }
+
+    @Test
     void numbersEachRevisionAfterTheLast() {
         when(revisionRepository.findFirstByPracticeIdOrderByRevisionNumberDesc(42L))
                 .thenReturn(Optional.of(new PracticeRevision(practice, 4)));
