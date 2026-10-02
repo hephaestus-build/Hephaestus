@@ -409,7 +409,8 @@ class GitLabMembershipReconciliationIntegrationTest extends BaseIntegrationTest 
 
         var beforeSync = coverage.assess(workspace, project, ready.getBaseRefName(), ready.reviewSubject(), true);
         assertThat(beforeSync.admitted()).isFalse();
-        assertThat(beforeSync.repositoryMatched() && beforeSync.branchMatched()).isTrue();
+        assertThat(beforeSync.repositoryMatched()).isTrue();
+        assertThat(beforeSync.branchMatched()).isTrue();
         assertThat(beforeSync.subjectStatus()).isEqualTo(ReviewSubjectStatus.UNLINKED);
 
         answer("GetGroupMembers " + COURSE, page(false, member(STUDENT, "student", 30)));

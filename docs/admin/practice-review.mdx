@@ -259,10 +259,12 @@ Three independent controls answer different questions; confusing them is the mos
   the mentor are written regardless, because nobody but the developer reads them and only on request.
   **Send automatically** lets new feedback onto the work proceed without that decision, subject to the same
   delivery policy. Changing the setting never releases an existing proposal.
-- **Coverage**, under **What gets reviewed**, is one workspace-wide intersection: all or selected monitored
-  repositories × all or selected people. A selected list left empty covers nobody, which is why the screen
-  warns you when one is. The people side is linked human workspace membership — see
-  [Who counts as a person](#who-counts-as-a-person).
+- **Coverage**, under **What gets reviewed**, combines all or selected monitored repositories with all or
+  selected people for repository work. An empty repository selection covers no repository work. Slack
+  conversations and Outline documents have no repository; they follow the people selection and their own
+  collection permissions. An empty people selection covers nobody, across every kind of work. To stop all
+  new practice reviews, turn **Start practice reviews** off. The people side is linked human workspace
+  membership — see [Who counts as a person](#who-counts-as-a-person).
 - **Send feedback**, under **Sending feedback**, controls whether feedback may leave Hephaestus. It stops
   comments on connected work and the mentor; it does not stop measurement, does not discard configuration, and
   does not blank the developer's own feedback pages here, which are not something leaving. Pausing is the

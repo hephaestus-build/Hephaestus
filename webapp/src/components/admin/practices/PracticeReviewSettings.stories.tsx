@@ -264,6 +264,10 @@ export const NarrowingAppliesAfterOnePreview: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("radio", { name: "Selected repositories" }));
 		await userEvent.click(canvas.getByRole("radio", { name: "Selected people" }));
+		await expect(
+			canvas.getByText(/An empty repository selection covers no repository work/u),
+		).toBeVisible();
+		await expect(canvas.getByText(/An empty people selection covers nobody/u)).toBeVisible();
 		await expect(args.coverage.preview).not.toHaveBeenCalled();
 		await userEvent.click(canvas.getByRole("button", { name: "Review changes" }));
 		await expect(args.coverage.preview).toHaveBeenCalledTimes(1);

@@ -147,14 +147,18 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     @Mock
     private FeedbackApprovalRepository approvalRepository;
 
-    @Test
-    void compositionIsAllowedBeforeAnyPracticeSetIsKnown() {
+    @ParameterizedTest
+    @EnumSource(
+            value = DeliveryPolicySurface.class,
+            names = {"IN_APP", "CONVERSATION"})
+    void shouldRecordRepositoryCoverageAsNotApplicableBeforeAnyPracticeSetIsKnown(DeliveryPolicySurface surface) {
         AgentJob job = conversationJob();
 
-        assertThat(policy().allowsComposition(job, DeliveryPolicySurface.IN_APP))
-                .isTrue();
-        assertThat(policy().allowsComposition(job, DeliveryPolicySurface.CONVERSATION))
-                .isTrue();
+        assertThat(policy().allowsComposition(job, surface)).isTrue();
+        var facts = recordedEvaluation().facts();
+        assertThat(facts.repositoryMatched()).isNull();
+        assertThat(facts.branchMatched()).isNull();
+        assertThat(facts.personMatched()).isTrue();
     }
 
     @Test
@@ -465,6 +469,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         Workspace workspace = WorkspaceTestFixtures.activeWorkspace("compose");
         workspace.setId(WORKSPACE_ID);
         workspace.getFeatures().setPracticesEnabled(true);
+        workspace.getReviewSettings().applyRollout(ReviewRepositoryMode.SELECTED, ReviewPersonMode.ALL_ELIGIBLE, null);
         lenient().when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
 
         AgentJob job = new AgentJob();
@@ -481,7 +486,16 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 .when(conversationSourceLiveness.isDeliverableThread(WORKSPACE_ID, 50L, "C123", "123.456", AUTHOR_ID))
                 .thenReturn(true);
         job.setMetadata(metadata);
-        lenient().when(coverageService.assessRepositoryless(any(), any())).thenReturn(coverage(true));
+        lenient()
+                .when(coverageService.assessRepositoryless(any(), any()))
+                .thenReturn(new PracticeReviewCoverageService.CoverageAssessment(
+                        ReviewRepositoryMode.SELECTED,
+                        ReviewPersonMode.ALL_ELIGIBLE,
+                        ReviewSubjectStatus.RESOLVED_LINKED_HUMAN,
+                        null,
+                        null,
+                        true,
+                        true));
         lenient()
                 .when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(AUTHOR_ID))
                 .thenReturn(true);
