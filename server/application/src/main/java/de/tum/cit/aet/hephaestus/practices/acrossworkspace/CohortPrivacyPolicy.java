@@ -4,25 +4,34 @@ import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 
 /**
  * What the page may say about the developers other than its reader, and the only place that decides it.
  *
- * <p>Every figure about other developers is a count of developers, and a count is shown only when it holds at
- * least {@link #MINIMUM_OTHERS} developers other than the reader. The reader is left out of that test because the
- * reader knows their own standing: a part of five that includes the reader hides only four others.
+ * <p>Every figure about other developers is a count of developers. A part of a split is shown only when it holds
+ * more than {@link #MINIMUM_OTHERS} developers, counted over every observed developer: whoever reads it, that part
+ * holds at least {@link #MINIMUM_OTHERS} others, and every reader sees the same shape.
  *
- * <p>A practice group and a practice are split by the same rule, over the same observed developers: each
- * developer falls in one {@link Bucket}, read off their group standing or their practice standing.
+ * <p>The observed total shows only while it holds {@link #MINIMUM_OTHERS} others, and the eligible total beside it
+ * only while the others without a standing are none or {@link #MINIMUM_OTHERS}. A practice group and a practice are
+ * split by the same rule, over the same observed developers: each developer falls in one {@link Bucket}, read off
+ * their group standing or their practice standing. A split is checked on "has a standing" against "none yet" first,
+ * and both parts must hold enough before any split shows. When that holds, the split shows Needs attention, Mixed
+ * feedback and Going well, or collapses to the two parts when one of the three holds too few. When it fails, the
+ * split is withheld. Collapse before omit, and omit rather than show a zero. The reader's own standing is shown in
+ * every case, since it is theirs.
  *
- * <p>A split is checked on "has a standing" against "none yet" first, and both parts must hold
- * enough others before any split shows. The page states how many developers were observed, so a three way split
- * also states "none yet" as the rest: 23 at a standing among 24 observed names the one without. When that holds,
- * the split shows Needs attention, Mixed feedback and Going well, or collapses to the two parts when one of the
- * three holds too few. When it fails, the group shows no split and the page's total is the only count left.
- * Collapse before omit, and omit rather than show a zero. The reader's own standing is shown as a word in every
- * case, since it is theirs.
+ * <p>A group's standing is read off its practices, so its has a standing is everyone with a standing in any of
+ * them, and its split and its practices' splits can be subtracted from each other: two practices of sixteen and a
+ * group of thirty one name the one developer with a standing in both. A practice therefore shows only while the
+ * developers its group has and it lacks are none or {@link #MINIMUM_OTHERS}, and a group's practices show only
+ * while the overlap they add up to beyond the group is none or {@link #MINIMUM_OTHERS} ({@link #group}).
+ *
+ * <p>Each window is checked on its own and the figures are live, so two windows, or two reads at different times,
+ * can still be subtracted from each other; ADR 0051 records that limit.
  */
 public final class CohortPrivacyPolicy {
 
@@ -57,13 +66,13 @@ public final class CohortPrivacyPolicy {
         }
     }
 
-    /** How one split is shown. */
+    /** How one split is shown, finest first. */
     public enum Shape {
-        /** Needs attention, Mixed feedback and Going well, each counted. */
+        /** Needs attention, Mixed feedback, Going well and none yet, each counted. */
         SPLIT,
-        /** Only "has a standing" against "none yet": one of the three would cover too few others. */
+        /** Only "has a standing" against "none yet": one of the three would cover too few. */
         COLLAPSED,
-        /** No split, only the observed total: "has a standing" or "none yet" would cover too few others. */
+        /** No split: "has a standing" or "none yet" would cover too few. */
         WITHHELD,
     }
 
@@ -82,38 +91,117 @@ public final class CohortPrivacyPolicy {
         static final Split WITHHELD = new Split(Shape.WITHHELD, null, null, null, null, null);
     }
 
+    /** The page's two totals, the reader included where the reader belongs; each null while held back. */
+    public record Totals(
+            @Nullable Integer eligible, @Nullable Integer observed) {}
+
     /**
-     * The split of one practice group or one practice.
+     * The eligible and observed totals as they may be shown: the observed total only while it holds K others, and
+     * the eligible total only while the others it adds to the observed total are none or K.
      *
-     * @param others the bucket of every observed developer other than the reader, none yet included
-     * @param reader the reader's bucket when the reader is one of the observed developers, else null
+     * @param eligibleOthers eligible developers other than the reader
+     * @param observedOthers observed developers other than the reader
      */
-    public static Split split(Collection<Bucket> others, @Nullable Bucket reader) {
-        int needs = count(others, Bucket.NEEDS_ATTENTION);
-        int mixed = count(others, Bucket.MIXED_FEEDBACK);
-        int well = count(others, Bucket.GOING_WELL);
+    public static Totals totals(int eligibleOthers, int observedOthers, boolean readerEligible, boolean readerCounted) {
+        int unobservedOthers = eligibleOthers - observedOthers;
+        boolean observedShows = observedOthers >= MINIMUM_OTHERS;
+        boolean eligibleShows = !observedShows || unobservedOthers == 0 || unobservedOthers >= MINIMUM_OTHERS;
+        return new Totals(
+                eligibleShows ? eligibleOthers + (readerEligible ? 1 : 0) : null,
+                observedShows ? observedOthers + (readerCounted ? 1 : 0) : null);
+    }
+
+    /**
+     * One developer's buckets in a practice group and in each of its practices, the practices in the order the
+     * page lists them.
+     */
+    public record Row(Bucket group, List<Bucket> practices) {}
+
+    /** A practice group's split and its practices' splits, in the order of the rows' practices. */
+    public record GroupRelease(Split group, List<Split> practices) {}
+
+    /**
+     * The splits of one practice group and its practices.
+     *
+     * <p>Each split is first decided on its own. Then the cells a reader can work out by inclusion and exclusion
+     * must each hold none or K developers: a practice is withheld where its has a standing falls short of its
+     * group's by 1 to K - 1, and every practice of the group is withheld where the practices shown add up to 1 to
+     * K - 1 more developers with a standing than the group has, which is how many hold a standing in more than
+     * one of them. The group's own split stands, since on its own every part it shows already holds enough.
+     *
+     * @param observed every observed developer's buckets, the reader's included when the reader is observed
+     */
+    public static GroupRelease group(List<Row> observed) {
+        List<Bucket> groupBuckets = observed.stream().map(Row::group).toList();
+        Split group = split(groupBuckets, Shape.SPLIT);
+        int practiceCount =
+                observed.isEmpty() ? 0 : observed.getFirst().practices().size();
+        List<Split> practices = IntStream.range(0, practiceCount)
+                .mapToObj(index -> {
+                    Split practice = split(
+                            observed.stream()
+                                    .map(row -> row.practices().get(index))
+                                    .toList(),
+                            Shape.SPLIT);
+                    return safeCell(hasStanding(group) - hasStanding(practice), group, practice)
+                            ? practice
+                            : Split.WITHHELD;
+                })
+                .toList();
+        List<Split> shown = practices.stream()
+                .filter(practice -> practice.shape() != Shape.WITHHELD)
+                .toList();
+        if (group.shape() != Shape.WITHHELD && shown.size() > 1) {
+            int overlap =
+                    shown.stream().mapToInt(CohortPrivacyPolicy::hasStanding).sum() - hasStanding(group);
+            if (!safeCell(overlap, group, group)) {
+                return new GroupRelease(
+                        group,
+                        practices.stream().map(practice -> Split.WITHHELD).toList());
+            }
+        }
+        return new GroupRelease(group, practices);
+    }
+
+    /** Whether a cell two shown splits let a reader work out is none or K, or not worked out at all. */
+    private static boolean safeCell(int developers, Split one, Split other) {
+        if (one.shape() == Shape.WITHHELD || other.shape() == Shape.WITHHELD) {
+            return true;
+        }
+        int size = Math.abs(developers);
+        return size == 0 || size >= MINIMUM_OTHERS;
+    }
+
+    /** How many a shown split counts with a standing. */
+    private static int hasStanding(Split split) {
+        return switch (split.shape()) {
+            case SPLIT ->
+                Objects.requireNonNull(split.needsAttention())
+                        + Objects.requireNonNull(split.mixedFeedback())
+                        + Objects.requireNonNull(split.goingWell());
+            case COLLAPSED -> Objects.requireNonNull(split.hasStanding());
+            case WITHHELD -> 0;
+        };
+    }
+
+    /**
+     * One split, no finer than {@code finest}, counted over every observed developer, the reader included when
+     * observed; a part shows only when it holds more than K of them.
+     */
+    static Split split(Collection<Bucket> observed, Shape finest) {
+        int needs = count(observed, Bucket.NEEDS_ATTENTION);
+        int mixed = count(observed, Bucket.MIXED_FEEDBACK);
+        int well = count(observed, Bucket.GOING_WELL);
         int has = needs + mixed + well;
-        int none = others.size() - has;
-        if (!shows(has) || !shows(none)) {
+        int none = observed.size() - has;
+        if (!shows(has) || !shows(none) || finest == Shape.WITHHELD) {
             return Split.WITHHELD;
         }
-        if (shows(needs) && shows(mixed) && shows(well)) {
-            return new Split(
-                    Shape.SPLIT,
-                    needs + (reader == Bucket.NEEDS_ATTENTION ? 1 : 0),
-                    mixed + (reader == Bucket.MIXED_FEEDBACK ? 1 : 0),
-                    well + (reader == Bucket.GOING_WELL ? 1 : 0),
-                    null,
-                    null);
+        if (finest == Shape.SPLIT && shows(needs) && shows(mixed) && shows(well)) {
+            // None yet already holds enough to pass the check above, so it is a fourth part, not a rest.
+            return new Split(Shape.SPLIT, needs, mixed, well, null, none);
         }
-        boolean readerHas = reader != null && reader != Bucket.NONE_YET;
-        return new Split(
-                Shape.COLLAPSED,
-                null,
-                null,
-                null,
-                has + (readerHas ? 1 : 0),
-                none + (reader != null && !readerHas ? 1 : 0));
+        return new Split(Shape.COLLAPSED, null, null, null, has, none);
     }
 
     /** The middle half of a figure across the workspace, as the two values that bound it. */
@@ -121,23 +209,33 @@ public final class CohortPrivacyPolicy {
 
     /**
      * The middle half of one figure across the observed developers, the reader's own value among them, or null when
-     * fewer than {@link #MINIMUM_OTHERS} others are observed. Only the quartiles leave: a minimum, a maximum or a
-     * count of developers at one value would single someone out.
+     * fewer than twice {@link #MINIMUM_OTHERS} others are observed. Only the quartiles leave, each interpolated
+     * between the two values around it and rounded, so a quartile falls on one developer's value only where the
+     * values around it agree: a minimum, a maximum or a count of developers at one value would single someone out.
      *
      * @param values the figure for every observed developer, the reader's included when the reader is observed
      * @param others how many of {@code values} are other developers'
      */
     public static @Nullable MiddleHalf middleHalf(List<Integer> values, int others) {
-        if (!shows(others)) {
+        if (others < 2 * MINIMUM_OTHERS) {
             return null;
         }
         List<Integer> sorted = values.stream().sorted().toList();
-        int last = sorted.size() - 1;
-        return new MiddleHalf(sorted.get((int) Math.floor(last * 0.25)), sorted.get((int) Math.ceil(last * 0.75)));
+        return new MiddleHalf(quartile(sorted, 0.25), quartile(sorted, 0.75));
     }
 
-    private static boolean shows(int others) {
-        return others >= MINIMUM_OTHERS;
+    /** The value at {@code fraction} of the way through {@code sorted}, interpolated linearly and rounded. */
+    private static int quartile(List<Integer> sorted, double fraction) {
+        double position = (sorted.size() - 1) * fraction;
+        int below = (int) Math.floor(position);
+        int above = (int) Math.ceil(position);
+        double value = sorted.get(below) + (position - below) * (sorted.get(above) - sorted.get(below));
+        return (int) Math.round(value);
+    }
+
+    /** Whether a part counted over every observed developer holds K others whoever reads it. */
+    private static boolean shows(int developers) {
+        return developers > MINIMUM_OTHERS;
     }
 
     private static int count(Collection<Bucket> buckets, Bucket bucket) {

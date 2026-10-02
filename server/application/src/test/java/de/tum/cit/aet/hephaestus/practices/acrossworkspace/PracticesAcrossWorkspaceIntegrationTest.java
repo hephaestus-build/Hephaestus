@@ -32,15 +32,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * {@code GET /practices/workspace-overview} over a workspace this class seeds: twenty developers besides the
- * reader, split evenly over one group, thinly over a second, barely over a third and over all but one in a fourth,
- * so the three shapes the privacy rule allows appear, the last for both of its reasons. Every count asserted is one
- * of these rows.
+ * {@code GET /practices/workspace-overview} over a workspace this class seeds: the owner and twenty six developers
+ * besides the reader, split evenly over one group, thinly over a second, barely over a third and over all but four
+ * in a fourth, so the three shapes the privacy rule allows appear, the last for both of its reasons. A part shows
+ * only with six developers in it, the reader counted, so every reader sees the same shape. Every count asserted is
+ * one of these rows.
  */
 class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
     private static final String URI = "/workspaces/{workspaceSlug}/practices/workspace-overview";
 
+    private static final int DEVELOPERS = 26;
     private static final Instant OLDEST = NOW.minus(Duration.ofDays(20));
     private static final Instant MIDDLE = NOW.minus(Duration.ofDays(10));
     private static final Instant NEWEST = NOW.minus(Duration.ofDays(2));
@@ -72,33 +74,27 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
         reader = member("testuser"); // matches @WithUser
         strength(packaging, reader, NEWEST);
-        for (int index = 0; index < 20; index++) {
+        // The owner has a standing too, so every eligible developer is observed.
+        strength(issues, owner, MIDDLE);
+        for (int index = 0; index < DEVELOPERS; index++) {
             User developer = member("across-dev-" + index);
-            // Packaging: five each at Needs attention, Mixed feedback and Going well, five with none.
-            if (index < 15) {
-                switch (index % 3) {
-                    case 0 -> problem(packaging, developer, NEWEST);
-                    case 1 -> mixed(packaging, developer);
-                    default -> strength(packaging, developer, NEWEST);
-                }
+            // Packaging: six each at Needs attention, Mixed feedback and Going well, eight with none.
+            if (index < 18) {
+                standing(packaging, developer, index);
             }
-            // Testing: five with a standing, none at Mixed feedback, fifteen with none.
-            if (index >= 18) {
+            // Testing: nine with a standing, three of them at Needs attention and none at Mixed feedback.
+            if (index >= 20) {
                 strength(testing, developer, MIDDLE);
-            } else if (index >= 15) {
+            } else if (index >= 17) {
                 problem(testing, developer, MIDDLE);
             }
-            // Issues: three with a standing, so not even the collapsed split.
+            // Issues: three and the owner with a standing, so not even the collapsed split.
             if (index < 3) {
                 strength(issues, developer, MIDDLE);
             }
-            // Craft: six or seven at each standing and one with none, whom the observed total would name.
-            if (index > 0) {
-                switch (index % 3) {
-                    case 0 -> problem(craft, developer, NEWEST);
-                    case 1 -> mixed(craft, developer);
-                    default -> strength(craft, developer, NEWEST);
-                }
+            // Craft: eight at each standing and four with none, so the collapsed split fails on none yet.
+            if (index > 1) {
+                standing(craft, developer, index);
             }
         }
     }
@@ -107,17 +103,17 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @WithUser
     @DisplayName(
             "an even group splits with the reader counted; a thin one collapses; a bare or nearly full one is withheld")
-    void shouldSplitCollapseAndWithholdByTheCountsOfOtherDevelopers() {
-        read("TERM")
+    void shouldSplitCollapseAndWithholdByTheCountsOfObservedDevelopers() {
+        read("ALL_TIME")
                 .jsonPath("$.window")
-                .isEqualTo("TERM")
+                .isEqualTo("ALL_TIME")
                 .jsonPath("$.minimumOthers")
                 .isEqualTo(5)
-                // The owner, the reader and twenty developers are eligible; the owner was never reviewed.
+                // The owner, the reader and twenty six developers are eligible, and every one of them was reviewed.
                 .jsonPath("$.eligibleDevelopers")
-                .isEqualTo(22)
+                .isEqualTo(28)
                 .jsonPath("$.observedDevelopers")
-                .isEqualTo(21)
+                .isEqualTo(28)
                 .jsonPath("$.readerCounted")
                 .isEqualTo(true)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
@@ -125,33 +121,36 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
                 .isEqualTo("STRENGTH")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.needsAttention")
-                .isEqualTo(5)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.mixedFeedback")
-                .isEqualTo(5)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.goingWell")
                 .isEqualTo(6)
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.mixedFeedback")
+                .isEqualTo(6)
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.goingWell")
+                .isEqualTo(7)
+                // The eight developers and the owner without a standing are a fourth part of their own.
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.noneYet")
+                .isEqualTo(9)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
                 .isEqualTo("COLLAPSED")
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].yourStanding")
                 .isEqualTo("NOT_OBSERVED")
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.hasStanding")
-                .isEqualTo(5)
+                .isEqualTo(9)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.noneYet")
-                .isEqualTo(16)
+                .isEqualTo(19)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.goingWell")
                 .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.shape")
                 .isEqualTo("WITHHELD")
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].split.hasStanding")
                 .doesNotExist()
-                // Every standing holds six others, but 19 of 21 with one would leave a single other at none yet.
+                // Every standing holds eight, but only four are left at none yet, the reader among them.
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.shape")
                 .isEqualTo("WITHHELD")
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.goingWell")
                 .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].split.noneYet")
                 .doesNotExist()
-                // The reader's own figures, then the middle half of all twenty one.
+                // The reader's own figures, then the middle half of all twenty eight.
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
                 .jsonPath("$.practicesGoingWell.yours")
@@ -167,12 +166,13 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @DisplayName("each practice of a group splits on its own over the same developers, the reader in their own bucket")
     void shouldSplitEachPracticeOfAGroupOnItsOwn() {
         Practice small = persistPractice(workspace, packagingGroup, "small", "Small", null);
-        // Ten others are Going well on the second practice and nobody else has a standing in it, the reader neither.
-        for (int index = 0; index < 10; index++) {
-            strength(small, developer("across-dev-" + index), MIDDLE);
+        // The second practice says of everyone what the first says, so together they single nobody out.
+        strength(small, reader, NEWEST);
+        for (int index = 0; index < 18; index++) {
+            standing(small, developer("across-dev-" + index), index);
         }
 
-        read("TERM")
+        read("ALL_TIME")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices.length()")
                 .isEqualTo(2)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
@@ -183,28 +183,43 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
                         + ".split.goingWell")
-                .isEqualTo(6)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".yourStanding")
-                .isEqualTo("NOT_OBSERVED")
-                // Nobody at Needs attention or Mixed feedback: the split collapses, the reader among none yet.
+                .isEqualTo(7)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
                         + ".split.shape")
-                .isEqualTo("COLLAPSED")
+                .isEqualTo("SPLIT")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".split.hasStanding")
-                .isEqualTo(10)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".split.noneYet")
-                .isEqualTo(11)
-                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
-                        + ".split.goingWell")
-                .doesNotExist()
+                        + ".split.needsAttention")
+                .isEqualTo(6)
                 // A group with one practice names it, split as the group is.
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].practices[0].split.shape")
                 .isEqualTo("WITHHELD")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourDirection")
                 .exists();
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("a practice whose split falls short of its group's by fewer than five is held back")
+    void shouldHoldBackAPracticeThatFallsShortOfItsGroupByFewerThanFive() {
+        Practice small = persistPractice(workspace, packagingGroup, "small", "Small", null);
+        // The second practice says of seventeen developers what the first says and nothing of the eighteenth or the
+        // reader: on its own a split, but the group less it would count the two it leaves out.
+        for (int index = 0; index < 17; index++) {
+            standing(small, developer("across-dev-" + index), index);
+        }
+
+        read("ALL_TIME")
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
+                .isEqualTo("SPLIT")
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'explain')]"
+                        + ".split.shape")
+                .isEqualTo("SPLIT")
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
+                        + ".yourStanding")
+                .isEqualTo("NOT_OBSERVED")
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].practices[?(@.practiceSlug == 'small')]"
+                        + ".split.shape")
+                .isEqualTo("WITHHELD");
     }
 
     @Test
@@ -231,10 +246,10 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         bind(addressed, slip);
         markAddressed(addressed, reader, NEWEST.plus(Duration.ofHours(1)));
 
-        read("TERM")
+        read("ALL_TIME")
                 .jsonPath("$.openFeedback.yours")
                 .isEqualTo(1)
-                // Nobody else has feedback, so the middle half of the twenty one is none.
+                // Nobody else has feedback, so the middle half of every eligible developer is none, now.
                 .jsonPath("$.openFeedback.middleLow")
                 .isEqualTo(0)
                 .jsonPath("$.openFeedback.middleHigh")
@@ -259,6 +274,11 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         read("DAYS_30")
                 .jsonPath("$.window")
                 .isEqualTo("DAYS_30")
+                // The owner's only standing moved out of the window: one other unobserved holds the eligible total.
+                .jsonPath("$.observedDevelopers")
+                .isEqualTo(27)
+                .jsonPath("$.eligibleDevelopers")
+                .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
                 .isEqualTo("WITHHELD")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
@@ -270,17 +290,37 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
     @Test
     @WithUser
+    @DisplayName("all time reads evidence older than ninety days, which the ninety day window leaves out")
+    void shouldReadEveryObservationWhenTheWindowIsAllTime() {
+        jdbc.update(
+                "UPDATE observation SET observed_at = ? WHERE workspace_id = ? AND practice_id = ?",
+                Timestamp.from(NOW.minus(Duration.ofDays(200))),
+                workspace.getId(),
+                testing.getId());
+
+        read("DAYS_90")
+                .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
+                .isEqualTo("WITHHELD");
+        read("ALL_TIME")
+                .jsonPath("$.since")
+                .doesNotExist()
+                .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].split.shape")
+                .isEqualTo("COLLAPSED");
+    }
+
+    @Test
+    @WithUser
     @DisplayName("the reader is not one of the five: four others and the reader leave every figure withheld")
     void shouldWithholdEverythingWhenOnlyFourOthersAreObserved() {
         jdbc.update("""
                 DELETE FROM observation WHERE workspace_id = ? AND about_user_id IN (
-                    SELECT id FROM "user" WHERE login LIKE 'across-dev-%' AND login NOT IN
+                    SELECT id FROM "user" WHERE login LIKE 'across-%' AND login NOT IN
                     ('across-dev-0', 'across-dev-1', 'across-dev-2', 'across-dev-3'))
                 """, workspace.getId());
 
-        read("TERM")
+        read("ALL_TIME")
                 .jsonPath("$.observedDevelopers")
-                .isEqualTo(5)
+                .doesNotExist()
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
                 .jsonPath("$.reviewedWork.middleLow")
@@ -310,19 +350,19 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
             observe(elsewherePractice, run, nextNumber++, developer, NOT_MET, Severity.MAJOR, NEWEST);
         }
 
-        read("TERM")
+        read("ALL_TIME")
                 .jsonPath("$.eligibleDevelopers")
-                .isEqualTo(20)
+                .isEqualTo(26)
                 .jsonPath("$.observedDevelopers")
-                .isEqualTo(19)
-                // Two of the five at Needs attention are hidden, so the split no longer holds five there and
-                // collapses: thirteen others and the reader with a standing, five others with none.
+                .isEqualTo(26)
+                // Two of the six at Needs attention are hidden, so the split no longer holds six there and
+                // collapses: seventeen with a standing, the reader among them, and nine with none.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.shape")
                 .isEqualTo("COLLAPSED")
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.hasStanding")
-                .isEqualTo(14)
+                .isEqualTo(17)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].split.noneYet")
-                .isEqualTo(5);
+                .isEqualTo(9);
     }
 
     @Test
@@ -387,6 +427,15 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     private void problem(Practice practice, User developer, Instant at) {
         AgentJob run = persistPullRequestReview(workspace, nextNumber, at);
         observe(practice, run, nextNumber++, developer, NOT_MET, Severity.MAJOR, at);
+    }
+
+    /** Needs attention, Mixed feedback or Going well by {@code index}, a third of the developers each. */
+    private void standing(Practice practice, User developer, int index) {
+        switch (index % 3) {
+            case 0 -> problem(practice, developer, NEWEST);
+            case 1 -> mixed(practice, developer);
+            default -> strength(practice, developer, NEWEST);
+        }
     }
 
     /** Clean, then a slip, then clean again on the newest: a share between the two bars. */

@@ -7984,9 +7984,9 @@ paths:
         required: false
         schema:
           type: string
-          default: TERM
+          default: DAYS_30
           enum:
-          - TERM
+          - ALL_TIME
           - DAYS_30
           - DAYS_90
       responses:
@@ -16013,7 +16013,8 @@ components:
           type: integer
           format: int32
           description: "Members practice review is eligible for, hidden members left\
-            \ out"
+            \ out; absent while the eligible developers without a standing other than\
+            \ the reader would be 1 to minimumOthers - 1"
         groups:
           type: array
           description: "One row per practice group shown on the practice pages, in\
@@ -16028,12 +16029,14 @@ components:
         observedDevelopers:
           type: integer
           format: int32
-          description: Eligible developers with at least one practice standing in
-            the window
+          description: Eligible developers with a standing in a practice group shown
+            in the window; absent while fewer than minimumOthers of them are other
+            than the reader
         openFeedback:
           $ref: "#/components/schemas/WorkspaceTile"
           description: "The reader's open feedback, counted by the rule the practice\
-            \ profile shows it open by; the feedback open now, whatever the window"
+            \ profile shows it open by, beside the middle half of every eligible developer's:\
+            \ both open now, whatever the window"
         practicesGoingWell:
           $ref: "#/components/schemas/WorkspaceTile"
           description: The reader's practices going well
@@ -16050,7 +16053,7 @@ components:
         since:
           type: string
           format: date-time
-          description: Start of the window
+          description: "Start of the window; absent for ALL_TIME, which has none"
         until:
           type: string
           format: date-time
@@ -16059,7 +16062,7 @@ components:
           type: string
           description: The window the evidence was read over
           enum:
-          - TERM
+          - ALL_TIME
           - DAYS_30
           - DAYS_90
         yourPractices:
@@ -16068,16 +16071,13 @@ components:
           description: "The practices the reader's profile lists, the denominator\
             \ of the practice tiles"
       required:
-      - eligibleDevelopers
       - groups
       - minimumOthers
-      - observedDevelopers
       - openFeedback
       - practicesGoingWell
       - practicesNeedingAttention
       - readerCounted
       - reviewedWork
-      - since
       - until
       - window
       - yourPractices
@@ -20635,7 +20635,7 @@ components:
         noneYet:
           type: integer
           format: int32
-          description: Observed developers without one; set only for COLLAPSED
+          description: Observed developers without one; set for SPLIT and COLLAPSED
         shape:
           type: string
           description: How the split may be shown

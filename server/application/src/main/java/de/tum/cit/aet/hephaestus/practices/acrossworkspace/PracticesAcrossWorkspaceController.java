@@ -37,7 +37,7 @@ public class PracticesAcrossWorkspaceController {
                     + " is checked on its own.")
     @ApiResponse(responseCode = "200", description = "Practices across the workspace returned")
     public ResponseEntity<PracticesAcrossWorkspaceDTO> getPracticesAcrossWorkspace(
-            WorkspaceContext context, @RequestParam(defaultValue = "TERM") PracticesAcrossWorkspaceWindow window) {
+            WorkspaceContext context, @RequestParam(defaultValue = "DAYS_30") PracticesAcrossWorkspaceWindow window) {
         return ResponseEntity.ok(service.read(context, window));
     }
 }

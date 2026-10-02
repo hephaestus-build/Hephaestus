@@ -115,7 +115,7 @@ public class PracticeStandingService {
     }
 
     /**
-     * Every given developer's standings as they stand at {@code until}, over the evidence observed from
+     * Every given developer's standings as they stood at {@code until}, over the evidence observed from
      * {@code since}, read off one scan of the workspace rather than one query per developer. A developer with no
      * evidence in the span gets the snapshot of someone nothing reached: every eligible practice silent.
      *
@@ -124,13 +124,15 @@ public class PracticeStandingService {
      */
     public Map<Long, StandingSnapshot> getWorkspaceStandingSnapshots(
             Long workspaceId, Set<Long> developerIds, Instant since, Instant until) {
-        List<Observation> window = observationRepository.findByWorkspaceBetween(workspaceId, since, until);
+        // First, so the practices every observation points at are already loaded when the gate reads them.
+        Eligibility eligibility = eligibility(workspaceId);
+        List<Observation> window = developerIds.isEmpty()
+                ? List.of()
+                : observationRepository.findByWorkspaceBetween(workspaceId, developerIds, since, until);
         Set<UUID> visible =
                 visibilityPolicy.permitsAll(workspaceId, window, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        Map<Long, List<Observation>> byDeveloper = window.stream()
-                .filter(observation -> developerIds.contains(observation.getAboutUserId()))
-                .collect(Collectors.groupingBy(Observation::getAboutUserId));
-        Eligibility eligibility = eligibility(workspaceId);
+        Map<Long, List<Observation>> byDeveloper =
+                window.stream().collect(Collectors.groupingBy(Observation::getAboutUserId));
         Map<Long, StandingSnapshot> snapshots = new LinkedHashMap<>();
         for (Long developerId : developerIds) {
             snapshots.put(
