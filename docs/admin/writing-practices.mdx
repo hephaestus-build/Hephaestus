@@ -40,7 +40,7 @@ enter:
 
 ```json
 {
-  "skipReason": "the change has no Swift code",
+  "skipReason": "the change touches no Swift source file",
   "anyOf": [{ "changedPathMatches": ["**/*.swift"] }]
 }
 ```
@@ -49,6 +49,10 @@ enter:
 or `evidenceHasItems`. The explanation in `skipReason` appears when complete evidence proves that none
 of the alternatives is present. Clear the field only when the practice must apply to all work. Saving a
 name or wording change leaves both the gate and the person judged unchanged.
+
+A gate must be a necessary condition for the practice to apply. A keyword list that misses unfamiliar
+APIs or file names cannot establish that no relevant behavior exists. Leave such a gate empty and let
+the review criteria decide applicability from the complete captured evidence.
 
 ## Write the review criteria
 
@@ -99,6 +103,10 @@ Required evidence that is missing, failed or truncated stops assessment: record 
 not an observation about the developer. With qualified evidence, use UNDETERMINED for a material
 question that remains unresolved. Inability to find a quotation does not itself prove absence.
 A previous observation records an earlier judgment; it is not independent proof that judgment was right.
+
+Separate recorded facts from the events they approximate. A commit timestamp records a commit, not
+the moment development began. A pull request creation time records a handoff, not an earlier start
+time. Do not replace an unknown deciding timestamp with a different event merely to produce a verdict.
 
 ## Write the criteria as a decision procedure
 
@@ -155,6 +163,8 @@ validation, and neither a successful run nor valid citations authorizes automati
 
 [Google's code-review guidance](https://google.github.io/eng-practices/review/reviewer/looking-for.html)
 supports checking real functionality, justified complexity, useful tests and explanatory comments.
+[Its guidance on small changes](https://google.github.io/eng-practices/review/developer/small-cls.html)
+uses review burden and context rather than a universal line or file limit.
 [Artstein and Poesio's survey](https://aclanthology.org/J08-4004/) explains agreement measures and their
 assumptions. [Datasheets for Datasets](https://doi.org/10.1145/3458723) motivates recording composition,
 collection and limitations. These sources inform review and evaluation design; they do not prove

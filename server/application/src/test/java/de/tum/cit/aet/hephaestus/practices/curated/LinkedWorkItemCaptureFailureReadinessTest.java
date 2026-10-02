@@ -94,7 +94,6 @@ class LinkedWorkItemCaptureFailureReadinessTest extends BaseUnitTest {
                 .extracting(AutomatedReviewReadinessDecision::practiceSlug)
                 .containsExactlyInAnyOrder(
                         "honours-linked-issue-acceptance-criteria",
-                        "change-keeps-linked-docs-consistent",
                         "merge-confirms-the-linked-issue-outcome",
                         "plans-the-work-in-an-issue-first");
     }

@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -52,7 +53,9 @@ class CatalogCriteriaShapeTest extends BaseUnitTest {
                 }
                 String judge = sectionOf(criteria, "## Judge");
                 for (String outcome : List.of("MET", "NOT_MET")) {
-                    if (!judge.contains(outcome)) {
+                    if (!Pattern.compile("(?m)^- " + outcome + "(?:[: ]|$)")
+                            .matcher(judge)
+                            .find()) {
                         failures.add(slug + ": the Judge section does not decide " + outcome);
                     }
                 }

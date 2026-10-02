@@ -13,15 +13,7 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-/**
- * Keystone anti-drift guard for the practice catalogue's references to materialised agent context.
- *
- * <p>Providers materialise their output under {@code context/}. If the criteria cite a path that
- * does not exist (e.g. the prefix {@code context/target/}), the agent is told to read files that are not
- * there and silently returns NOT_APPLICABLE. Criteria prose is not type-checked, so this test is the
- * contract: every context path the catalogue names MUST be a path the providers actually emit, and the
- * {@code context/target/} prefix must never appear.
- */
+/** Guards static context filenames and retired directory prefixes in authored criteria. */
 class CatalogContextPathConsistencyTest extends BaseUnitTest {
 
     /** Workspace-relative files the ContentSources actually write under {@code context/}. */
@@ -59,8 +51,8 @@ class CatalogContextPathConsistencyTest extends BaseUnitTest {
         String catalogue = readCatalogue();
 
         assertThat(catalogue)
-                .as("the dead pre-rename prefix 'context/target/' must never reappear in the catalogue")
-                .doesNotContain("context/target/");
+                .as("criteria must use captured context directories, not retired or fictional wiki prefixes")
+                .doesNotContain("context/target/", "context/outline/", "context/wiki/");
 
         Set<String> cited = new TreeSet<>();
         Matcher m = CONTEXT_PATH.matcher(catalogue);

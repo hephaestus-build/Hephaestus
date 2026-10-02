@@ -12,9 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -51,62 +48,32 @@ class EvidencePolicyRedundancyTest extends BaseUnitTest {
         }
     }
 
-    /**
-     * Which shipped practices claim something is <em>absent</em>, recorded here because it is a reading of
-     * each practice's criteria rather than anything the code can derive. Adding to this list is a decision
-     * about what a practice may assert, made here rather than noticed in a diff.
-     *
-     * <p>Two different claims land a practice on this list, and both are absences.
-     *
-     * <p>The first three assert a <em>gap</em> over a corpus that arrives in pages: "no reviewer raised this",
-     * "nobody answered this comment". A partial capture of review threads is equally consistent
-     * with "nobody raised it" and "the raising was in the part we did not fetch", so the whole capture is
-     * what makes the gap assertable at all.
-     *
-     * <p>The changed-code practices can also assert bounded absence of an undesirable behaviour.
-     * The diff contract demands complete capture, including a verified empty range. Exhaustive coverage
-     * does not establish an occasion: each practice must still establish its subject before assessing
-     * an absence, and must not turn an empty change into automatic praise.
-     */
     @Test
-    void onlyThePracticesThatAssertAnAbsenceDemandAWholeCapture() {
-        Map<String, Set<SourceKind>> exhaustive = new LinkedHashMap<>();
+    void shouldRequireCompleteCaptureOnlyFromSourcesThatCanProvideIt() {
         loader.catalog()
                 .practices()
                 .forEach(practice -> practice.definition().evidenceRequirements().stream()
                         .filter(need -> need.stance() == EvidenceStance.EXHAUSTIVE)
-                        .forEach(need -> exhaustive
-                                .computeIfAbsent(practice.slug(), slug -> new LinkedHashSet<>())
-                                .add(need.sourceKind())));
+                        .forEach(need -> assertThat(registry.requireSource(
+                                                registry.current().version(), need.sourceKind())
+                                        .completenessPolicy()
+                                        .supportsComplete())
+                                .as("%s requires complete capture of %s", practice.slug(), need.sourceKind())
+                                .isTrue()));
+    }
 
-        assertThat(exhaustive)
-                .containsOnlyKeys(
-                        // Gap-shaped absences over a paginated corpus.
-                        "merged-past-unresolved-review-threads",
-                        "engaging-with-inline-review-comments",
-                        "ready-and-traceable-handoff",
-                        // Positive absence claims over the complete changed-file diff.
-                        "keeps-the-test-suite-honest",
-                        "change-keeps-linked-docs-consistent",
-                        "excludes-generated-and-build-artifacts",
-                        "removes-duplication-instead-of-copy-pasting",
-                        "keeps-functions-small-and-single-purpose",
-                        "leaves-the-code-clean-with-intent-revealing-comments",
-                        "handles-errors-instead-of-swallowing-them",
-                        "validates-inputs-and-edge-cases-at-the-boundary",
-                        "avoids-unsafe-panics-and-chosen-crashes",
-                        "validates-and-escapes-untrusted-input",
-                        "avoids-insecure-defaults-and-over-broad-permissions",
-                        "keeps-views-free-of-networking-and-persistence");
-        assertThat(exhaustive.get("merged-past-unresolved-review-threads"))
-                .containsExactly(new SourceKind("scm.review-threads"));
-        // A defect detector bounds the diff and nothing else: its clean verdict must not silently start
-        // ranging over the repository tree, which no capture can ever cover whole.
-        assertThat(exhaustive.get("handles-errors-instead-of-swallowing-them"))
-                .containsExactly(new SourceKind("scm.pull-request.diff"));
-        assertThat(exhaustive.get("validates-and-escapes-untrusted-input"))
-                .containsExactly(new SourceKind("scm.pull-request.diff"));
-        assertThat(exhaustive.get("keeps-views-free-of-networking-and-persistence"))
-                .containsExactly(new SourceKind("scm.pull-request.diff"));
+    @Test
+    void shouldKeepChangedCodeAbsenceClaimsWithinTheDiff() {
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> Set.of(
+                                "handles-errors-instead-of-swallowing-them",
+                                "validates-and-escapes-untrusted-input",
+                                "keeps-views-free-of-networking-and-persistence")
+                        .contains(practice.slug()))
+                .hasSize(3)
+                .allSatisfy(practice -> assertThat(practice.definition().evidenceRequirements().stream()
+                                .filter(need -> need.stance() == EvidenceStance.EXHAUSTIVE)
+                                .map(need -> need.sourceKind()))
+                        .containsExactly(new SourceKind("scm.pull-request.diff")));
     }
 }

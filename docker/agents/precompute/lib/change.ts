@@ -71,13 +71,24 @@ function changedFiles(value: unknown): ChangedFile[] {
  * (`commits.json` in the task-declared context); empty when the record was not captured.
  */
 export async function readCommits(contextDir: string | undefined): Promise<ChangeCommit[]> {
+	return (await readCapturedCommits(contextDir)) ?? [];
+}
+
+/** Null means missing or malformed capture; an empty array is a captured empty range. */
+export async function readCapturedCommits(
+	contextDir: string | undefined,
+): Promise<ChangeCommit[] | null> {
 	const source = await readChangeText(contextDir, "commits.json");
 	const parsed = parseJson(source);
-	if (!isJsonObject(parsed) || !Array.isArray(parsed.commits)) {
-		return [];
+	if (
+		!isJsonObject(parsed) ||
+		!Array.isArray(parsed.commits) ||
+		!parsed.commits.every(isJsonObject)
+	) {
+		return null;
 	}
 	const lines = (source ?? "").split("\n");
-	return parsed.commits.filter(isJsonObject).map((commit) => {
+	return parsed.commits.map((commit) => {
 		const sha = text(commit.sha);
 		return {
 			sha,

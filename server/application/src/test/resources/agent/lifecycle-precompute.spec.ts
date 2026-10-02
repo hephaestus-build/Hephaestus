@@ -154,6 +154,113 @@ void test("plans-first puts the issue's opening beside the earliest commit, neve
 	}
 });
 
+void test("plans-first preserves the exact recorded order before, at, and after the first commit", async () => {
+	for (const [openedAt, hours] of [
+		["2026-04-12T17:00:00Z", "1.0"],
+		["2026-04-12T18:00:00Z", "0.0"],
+		["2026-04-12T18:30:00Z", "-0.5"],
+	]) {
+		const { root, script, contextDir, changeDir } = await stage(
+			"plans-the-work-in-an-issue-first",
+			{ "linked_work_items.json": { workItems: [{ number: 18, createdAt: openedAt }] } },
+			[{ sha: "f46a897aaaa", message: "Add ingredients", authoredAt: "2026-04-12T18:00:00Z" }],
+		);
+		try {
+			const result = await script(
+				nodePath.join(root, "repo"),
+				new Map(),
+				metadata,
+				contextDir,
+				changeDir,
+			);
+			const hint = result.hints[0];
+			assert.ok(hint);
+			assert.equal(hint.flags.openedAt, openedAt);
+			assert.equal(hint.flags.firstCommitAuthoredAt, "2026-04-12T18:00:00Z");
+			assert.equal(hint.flags.hoursFromIssueToFirstCommit, hours);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	}
+});
+
+void test("plans-first cannot replace unknown authored dates with a later handoff", async () => {
+	for (const commits of [
+		[{ sha: "f46a897aaaa", message: "Add ingredients", authoredAt: "" }],
+		[{ sha: "f46a897aaaa", message: "Add ingredients", authoredAt: "not-a-date" }],
+		[
+			{ sha: "f46a897aaaa", message: "Add ingredients", authoredAt: "" },
+			{ sha: "dd6e2f5bbbb", message: "Wire it", authoredAt: "2026-04-12T17:38:00Z" },
+		],
+	]) {
+		const { root, script, contextDir, changeDir } = await stage(
+			"plans-the-work-in-an-issue-first",
+			{
+				"linked_work_items.json": {
+					workItems: [{ number: 18, title: "Add ingredients", createdAt: "2026-04-13T09:35:24Z" }],
+				},
+			},
+			commits,
+		);
+		try {
+			const result = await script(
+				nodePath.join(root, "repo"),
+				new Map(),
+				metadata,
+				contextDir,
+				changeDir,
+			);
+			assert.equal(result.hints.length, 1);
+			assert.match(
+				result.hints[0]?.context ?? "",
+				/do not establish the earliest authored time; the order is UNDETERMINED/u,
+			);
+			assert.equal(result.hints[0]?.flags.firstCommit, undefined);
+			assert.equal(result.hints[0]?.flags.hoursFromIssueToFirstCommit, undefined);
+			assert.equal(result.hints[0]?.flags.hoursFromIssueToPullRequest, undefined);
+			assert.match(
+				result.directions.join("\n"),
+				/creation dates the handoff, not the start of work/u,
+			);
+			assert.match(
+				result.directions.join("\n"),
+				/Missing commit capture is a collection gap, not UNDETERMINED/u,
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	}
+});
+
+void test("plans-first keeps missing commit capture separate from unknown authored dates", async () => {
+	const { root, script, contextDir, changeDir } = await stage("plans-the-work-in-an-issue-first", {
+		"linked_work_items.json": { workItems: [{ number: 18, createdAt: "2026-04-13T09:35:24Z" }] },
+	});
+	try {
+		rmSync(nodePath.join(contextDir, "commits.json"));
+		for (const malformed of [undefined, "{", '{"commits":[null]}']) {
+			if (malformed !== undefined) {
+				writeFileSync(nodePath.join(contextDir, "commits.json"), malformed);
+			}
+			const result = await script(
+				nodePath.join(root, "repo"),
+				new Map(),
+				metadata,
+				contextDir,
+				changeDir,
+			);
+			assert.match(
+				result.directions.join("\n"),
+				/collection gap and record no observation, never UNDETERMINED/u,
+			);
+			assert.match(result.hints[0]?.context ?? "", /commit record is missing or malformed/u);
+			assert.equal(result.hints[0]?.flags.firstCommit, undefined);
+		}
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 /** GitLab's partial workflow: the issue is named only by `Related to` in the description. */
 const partial = {
 	...unmerged,
@@ -826,7 +933,7 @@ void test("a comments file that was not captured is told apart from one with no 
 				staged.changeDir,
 			);
 		const noFile = await run(absent);
-		assert.match(noFile.directions[0] ?? "", /^No comments file was captured/u);
+		assert.match(noFile.directions[0] ?? "", /collection gap and record no observation/u);
 		assert.equal(noFile.metrics.commentsFileAbsent, 1);
 		const noOthers = await run(empty);
 		assert.match(
@@ -845,6 +952,52 @@ void test("a comments file that was not captured is told apart from one with no 
 		for (const staged of [absent, empty, engagingAbsent, engagingEmpty]) {
 			rmSync(staged.root, { recursive: true, force: true });
 		}
+	}
+});
+
+void test("one missing comments surface cannot prove no deferred ask", async () => {
+	for (const context of [{ "comments.json": [] }, { "general_comments.json": { comments: [] } }]) {
+		const staged = await stage("defers-review-asks-into-tracked-work", context);
+		try {
+			const result = await staged.script(
+				nodePath.join(staged.root, "repo"),
+				new Map(),
+				metadata,
+				staged.contextDir,
+				staged.changeDir,
+			);
+			assert.match(result.directions.join("\n"), /collection gap and record no observation/u);
+			assert.doesNotMatch(result.directions.join("\n"), /occasion did not arise/u);
+		} finally {
+			rmSync(staged.root, { recursive: true, force: true });
+		}
+	}
+});
+
+void test("current unresolved threads do not establish their state at an earlier merge", async () => {
+	const staged = await stage("merged-past-unresolved-review-threads", {
+		"review_threads.json": {
+			threads: [
+				{ id: 1, state: "UNRESOLVED", createdAt: "2026-04-13T16:00:00Z" },
+				{ id: 2, state: "UNRESOLVED" },
+			],
+			reviewDecisions: [],
+		},
+	});
+	try {
+		const result = await staged.script(
+			nodePath.join(staged.root, "repo"),
+			new Map(),
+			metadata,
+			staged.contextDir,
+			staged.changeDir,
+		);
+		assert.equal(result.hints[1]?.flags.createdAt, "2026-04-13T16:00:00Z");
+		assert.equal(result.hints[2]?.flags.createdAt, "");
+		assert.match(result.directions.join("\n"), /not proven open at merge/u);
+		assert.match(result.directions.join("\n"), /unknown historical order as UNDETERMINED/u);
+	} finally {
+		rmSync(staged.root, { recursive: true, force: true });
 	}
 });
 
@@ -939,7 +1092,7 @@ void test("the merge practices read the threads and decisions as rows against th
 		assert.equal(late.flags.resolvedAt, "2026-04-13T16:00:00Z");
 		assert.match(
 			unresolved.directions[0] ?? "",
-			/^Merged by ada \(the author\); 3 thread\(s\) captured, 2 open at the merge/u,
+			/^Merged by ada \(the author\); 3 thread\(s\) captured, 2 candidate thread\(s\)/u,
 		);
 
 		const decisions = await approval.script(
