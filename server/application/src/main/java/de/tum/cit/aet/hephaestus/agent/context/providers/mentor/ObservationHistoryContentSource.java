@@ -320,7 +320,13 @@ public class ObservationHistoryContentSource implements ContentSource {
         root.set("coverage", objectMapper.valueToTree(Coverage.of(preparedAt)));
         root.putObject("detail")
                 .put("loaded", false)
-                .set("adds", objectMapper.createArrayNode().add("evidence").add("evidenceRationale"));
+                .set(
+                        "adds",
+                        objectMapper
+                                .createArrayNode()
+                                .add("evidence")
+                                .add("evidenceRationale")
+                                .add("criteria"));
 
         ObjectNode summary = root.putObject("summary");
         summary.put("includedObservations", recent.size());
@@ -420,6 +426,13 @@ public class ObservationHistoryContentSource implements ContentSource {
     }
 
     private static void describeEvidence(ObjectNode node, Observation o) {
+        var revision = o.getPracticeRevision();
+        node.put("practiceRevisionId", revision == null ? null : revision.getId());
+        if (revision == null) {
+            node.put("criteriaNotLoaded", true);
+        } else {
+            node.put("criteria", revision.getCriteria());
+        }
         if (o.getEvidence() != null && !o.getEvidence().isNull()) {
             node.set("evidence", o.getEvidence().deepCopy());
         }
@@ -429,13 +442,21 @@ public class ObservationHistoryContentSource implements ContentSource {
     /**
      * Fits one detail by shortening its longest free text, halving it each time and marking it with
      * {@code <field>Truncated} and its full length, so a shortened quote or warrant never reads as complete. Source
-     * locations stay whole. A detail that cannot fit even so drops its evidence and says so.
+     * locations stay whole. Evaluated criteria stay whole or are left out, marked, before evidence that cannot fit
+     * is left out too.
      */
     private ObjectNode fittedDetail(ObjectNode root, ObjectNode row) {
         while (objectMapper.writeValueAsString(root).length() > DETAIL_MAX_CHARS) {
             Optional<ProseField> longest = proseFields(row).stream()
                     .filter(field -> field.length() > MIN_TEXT_PREFIX)
                     .max(Comparator.comparingInt(ProseField::length));
+            if (row.has("criteria")
+                    && (objectMapper.writeValueAsString(row.get("criteria")).length() > DETAIL_MAX_CHARS
+                            || longest.isEmpty())) {
+                row.remove("criteria");
+                row.put("criteriaNotLoaded", true);
+                continue;
+            }
             if (longest.isEmpty()) {
                 row.remove(List.of("evidence", "evidenceRationale"));
                 row.put("evidenceLoaded", false);

@@ -291,6 +291,10 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
 
         ObjectNode current = contentSource.inspect(workspace.getId(), recipient.getId(), latest);
         assertThat(current.get("list").asString()).isEqualTo("recentObservations");
+        assertThat(current.get("observation").get("practiceRevisionId").asLong())
+                .isEqualTo(practice.getCurrentRevision().getId());
+        assertThat(current.get("observation").get("criteria").asString())
+                .isEqualTo(practice.getCurrentRevision().getCriteria());
         assertThat(current.get("observation").get("evidence").get("citations")).hasSize(1);
         assertThat(contentSource
                         .inspect(workspace.getId(), recipient.getId(), earlier)
@@ -319,6 +323,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
 
         ObjectNode active = contentSource.inspect(workspace.getId(), recipient.getId(), conversation.getId());
         assertThat(active.get("_meta").get("trustLevel").asString()).isEqualTo("UNTRUSTED_EXTERNAL");
+        assertThat(active.get("observation").get("criteria").asString()).isEqualTo("Test description");
         assertThat(active.get("observation").get("evidence").get("citations")).hasSize(1);
 
         slackMonitoredChannelRepository.findAll().stream()
