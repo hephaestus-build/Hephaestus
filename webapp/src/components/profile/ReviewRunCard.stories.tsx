@@ -52,6 +52,7 @@ const run: PracticeGroupReviewRun = {
 			evidenceRationale:
 				"The page the description links still calls the component by the name this change retires.",
 			deliveredFeedback: "Rename it on the linked page in the same change.",
+			nextStep: "Rename it on the linked page in the same change.",
 		},
 	],
 };
@@ -172,6 +173,7 @@ const soleRun: PracticeGroupReviewRun = {
 			evidenceRationale:
 				"The package move and the caching change land in one diff, so neither can be reverted alone.",
 			deliveredFeedback: "Land the rename on its own first.",
+			nextStep: "Land the rename on its own first.",
 		},
 	],
 };
