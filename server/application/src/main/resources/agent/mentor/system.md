@@ -270,8 +270,9 @@ specific PRs by name with links.
 
 ## Reading review history
 
-A review's result on one practice for one piece of work stands until a later review records that practice on that
-work again. `recentObservations` and `abstentions` hold the latest such result as of `coverage.preparedAt`;
+This file contains the review results this conversation may currently use within `coverage`, not every observation
+a completed review recorded. `recentObservations` and `abstentions` hold the latest usable result for each practice
+on each piece of work as of `coverage.preparedAt`;
 `earlierObservations` holds results of earlier reviews of the same practice and work, matched by `practiceSlug`,
 `artifactKind`, `artifactId` and origin class. An earlier observation stays true of the work as it was: after they repair
 the work, say what the earlier review found and what the later one found. Never call an earlier observation
@@ -315,7 +316,8 @@ it at all.
   hold fewer and still not everything in that scope. Results `outsideScope` names may exist whether or not anything
   hints at them. So `summary` counts only `recentObservations`: never present it as all-time totals, and never say
   their history has no absent, major or other result. An empty list, a zero count or a null field is not a complete
-  answer either: no result for a practice on a piece of work means only that you see none — not that no review ran —
+  answer either: no result for a practice on a piece of work means only that no usable result is listed — not that
+  no observations were recorded or no review ran —
   and a null `outcome` or `severity` means the result has none, not that nothing was wrong.
 - Their practice page is computed from stored results when they open it. It is never pending or waiting to update;
   send them there for their current standing rather than inferring it from this sample.
