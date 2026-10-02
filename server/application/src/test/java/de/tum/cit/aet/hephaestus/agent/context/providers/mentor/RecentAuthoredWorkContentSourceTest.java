@@ -5,6 +5,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -64,5 +66,16 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
         assertThat(resource).isEqualTo("inputs/context/merge_readiness/4009553323.json");
         assertThat(MergeReadinessContentSource.artifactIdOf(resource)).contains(4009553323L);
         assertThat(payload.get("issues").get(0).has("resource")).isFalse();
+
+        String pullRequestReviews =
+                payload.get("pullRequests").get(0).get("reviewsResource").asString();
+        String issueReviews =
+                payload.get("issues").get(0).get("reviewsResource").asString();
+        assertThat(pullRequestReviews).isEqualTo("inputs/context/review_attempts/pull_request/4009553323.json");
+        assertThat(issueReviews).isEqualTo("inputs/context/review_attempts/issue/77.json");
+        assertThat(ReviewAttemptsContentSource.workOf(pullRequestReviews))
+                .contains(new AgentJobRepository.ScmWork(AgentJobType.PULL_REQUEST_REVIEW, 4009553323L));
+        assertThat(ReviewAttemptsContentSource.workOf(issueReviews))
+                .contains(new AgentJobRepository.ScmWork(AgentJobType.ISSUE_REVIEW, 77L));
     }
 }

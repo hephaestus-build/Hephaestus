@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -95,6 +96,7 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
             ObjectNode node = prArr.addObject();
             node.put("artifactId", pr.getId());
             node.put("resource", MergeReadinessContentSource.resourceOf(pr.getId()));
+            node.put("reviewsResource", ReviewAttemptsContentSource.resourceOf(ArtifactKinds.PULL_REQUEST, pr.getId()));
             node.put("number", pr.getNumber());
             node.put("title", pr.getTitle());
             if (pr.getHtmlUrl() != null) {
@@ -115,6 +117,7 @@ public class RecentAuthoredWorkContentSource implements ContentSource {
         for (Issue issue : issues) {
             ObjectNode node = issueArr.addObject();
             node.put("artifactId", issue.getId());
+            node.put("reviewsResource", ReviewAttemptsContentSource.resourceOf(ArtifactKinds.ISSUE, issue.getId()));
             node.put("number", issue.getNumber());
             node.put("title", issue.getTitle());
             if (issue.getHtmlUrl() != null) {

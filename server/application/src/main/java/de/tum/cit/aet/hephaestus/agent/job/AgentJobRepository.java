@@ -97,6 +97,128 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
         String getDeliveryCommentId();
     }
 
+    /**
+     * The work a retained-attempt read may name: a pull request or issue the developer authored, not tombstoned, in a
+     * repository this workspace monitors on its connected provider and no team here hides from contributions.
+     * Requires the aliases {@code i} (the work) and {@code r} (its repository).
+     */
+    String OWN_SCM_WORK = """
+              AND i.author_id = :developerId
+              AND i.deleted_at IS NULL
+              AND r.provider_id = :providerId
+              AND EXISTS (
+                  SELECT 1 FROM repository_to_monitor rtm
+                  WHERE rtm.workspace_id = :workspaceId AND rtm.name_with_owner = r.name_with_owner)
+              AND NOT EXISTS (
+                  SELECT 1 FROM workspace_team_repository_settings wtrs
+                  WHERE wtrs.workspace_id = :workspaceId
+                    AND wtrs.repository_id = r.id
+                    AND wtrs.hidden_from_contributions = true)
+        """;
+
+    /**
+     * A practice review of exactly the work {@code i}, created since {@code :since}. The job type picks both the work's
+     * discriminator and the metadata key naming it, and the key must hold that id as a JSON number, so a string or
+     * malformed id matches nothing and an issue's id never answers for a pull request. Requires the aliases {@code j}
+     * (the job) and {@code i} (the work).
+     */
+    String PRACTICE_REVIEW_OF_WORK = """
+              j.workspace_id = :workspaceId
+              AND j.purpose = 'PRACTICE_REVIEW'
+              AND j.job_type IN ('PULL_REQUEST_REVIEW', 'ISSUE_REVIEW')
+              AND j.created_at >= :since
+              AND i.issue_type = CASE j.job_type WHEN 'ISSUE_REVIEW' THEN 'ISSUE' ELSE 'PULL_REQUEST' END
+              AND j.metadata -> (CASE j.job_type WHEN 'ISSUE_REVIEW' THEN 'issue_id' ELSE 'pull_request_id' END)
+                  = to_jsonb(i.id)
+        """;
+
+    /**
+     * The developer's newest retained practice reviews of their own pull requests and issues, newest first; a caller
+     * passes its cap plus one to learn whether more exist. Identities and timestamps only: what a run concluded is
+     * not read here.
+     */
+    @Query(value = """
+        SELECT j.id AS "reviewId", i.issue_type AS "workType", i.id AS "artifactId", i.number AS "number",
+               i.html_url AS "url", i.state AS "state", j.created_at AS "createdAt", j.completed_at AS "completedAt"
+        FROM agent_job j
+        JOIN issue i ON
+        """ + PRACTICE_REVIEW_OF_WORK + """
+        JOIN repository r ON r.id = i.repository_id
+        WHERE TRUE
+        """ + OWN_SCM_WORK + """
+        ORDER BY j.created_at DESC, j.id DESC
+        LIMIT :limit
+        """, nativeQuery = true)
+    List<ReviewAttemptRow> findOwnScmReviewAttempts(
+            @Param("workspaceId") long workspaceId,
+            @Param("developerId") long developerId,
+            @Param("providerId") long providerId,
+            @Param("since") Instant since,
+            @Param("limit") int limit);
+
+    /** One pull request or issue, by the practice review type that reviews it. */
+    record ScmWork(AgentJobType jobType, long artifactId) {}
+
+    /**
+     * {@link #findOwnScmReviewAttempts} for one work of its review type's kind. No row means the work is not one the
+     * developer may read here; an eligible work with no retained review is one row whose review columns are null.
+     */
+    @Query(value = """
+        SELECT attempt.id AS "reviewId", i.issue_type AS "workType", i.id AS "artifactId", i.number AS "number",
+               i.html_url AS "url", i.state AS "state", attempt.created_at AS "createdAt",
+               attempt.completed_at AS "completedAt"
+        FROM issue i
+        JOIN repository r ON r.id = i.repository_id
+        LEFT JOIN LATERAL (
+            SELECT j.id, j.created_at, j.completed_at
+            FROM agent_job j
+            WHERE j.job_type = :#{#work.jobType().name()}
+              AND
+        """ + PRACTICE_REVIEW_OF_WORK + """
+            ORDER BY j.created_at DESC, j.id DESC
+            LIMIT :limit
+        ) attempt ON TRUE
+        WHERE i.id = :#{#work.artifactId()}
+          AND i.issue_type = CASE CAST(:#{#work.jobType().name()} AS varchar)
+                                 WHEN 'ISSUE_REVIEW' THEN 'ISSUE'
+                                 WHEN 'PULL_REQUEST_REVIEW' THEN 'PULL_REQUEST'
+                             END
+        """ + OWN_SCM_WORK + """
+        ORDER BY attempt.created_at DESC NULLS LAST, attempt.id DESC NULLS LAST
+        """, nativeQuery = true)
+    List<ReviewAttemptRow> findOwnScmReviewAttemptsOfWork(
+            @Param("workspaceId") long workspaceId,
+            @Param("developerId") long developerId,
+            @Param("providerId") long providerId,
+            @Param("work") ScmWork work,
+            @Param("since") Instant since,
+            @Param("limit") int limit);
+
+    interface ReviewAttemptRow {
+        /** Null only for an eligible work {@link #findOwnScmReviewAttemptsOfWork} found no retained review of. */
+        @Nullable
+        UUID getReviewId();
+
+        /** The work's discriminator: {@code ISSUE} or {@code PULL_REQUEST}. */
+        String getWorkType();
+
+        Long getArtifactId();
+
+        Integer getNumber();
+
+        @Nullable
+        String getUrl();
+
+        @Nullable
+        String getState();
+
+        @Nullable
+        Instant getCreatedAt();
+
+        @Nullable
+        Instant getCompletedAt();
+    }
+
     interface ReviewRunNarrativeRow {
         UUID getId();
 

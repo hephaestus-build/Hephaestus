@@ -790,7 +790,8 @@ void test("a path built from a pull request number is refused before the server,
 	const refusal =
 		'fetch_context: "inputs/context/merge_readiness/!9.json" is not a context resource. For one item, copy the ' +
 		"`resource` value exactly as a context file gives it: a pull request's from its entry in " +
-		"recent_authored_work.json or merge_readiness.json, an observation's from its row in observations_history.json. " +
+		"recent_authored_work.json or merge_readiness.json, an observation's from its row in observations_history.json, " +
+		"and a pull request's or issue's reviews from its `reviewsResource`. " +
 		"Never build one from a pull request number or another id.";
 	const ended = runner.events.find((e) => e.type === "tool_execution_end");
 	assert.ok(ended !== undefined);

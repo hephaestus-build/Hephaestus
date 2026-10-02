@@ -53,6 +53,15 @@ void test("fetch_context admits canonical keys and one item by its canonical id,
 	);
 	assert.equal(isFetchContextKey("inputs/context/observations_history/../user.json"), false);
 	assert.equal(isFetchContextKey("inputs/context/observations_history/42.json"), false);
+	assert.equal(isFetchContextKey("inputs/context/review_attempts.json"), true);
+	assert.equal(isFetchContextKey("inputs/context/review_attempts/issue/21.json"), true);
+	assert.equal(
+		isFetchContextKey("inputs/context/review_attempts/pull_request/4009553323.json"),
+		true,
+	);
+	assert.equal(isFetchContextKey("inputs/context/review_attempts/21.json"), false);
+	assert.equal(isFetchContextKey("inputs/context/review_attempts/conversation/21.json"), false);
+	assert.equal(isFetchContextKey("inputs/context/review_attempts/issue/../user.json"), false);
 });
 
 const SESSIONS_TMPDIR = mkdtempSync(path.join(tmpdir(), "pi-mentor-runner-spec-"));
