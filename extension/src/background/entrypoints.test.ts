@@ -7,6 +7,10 @@ vi.mock("@wxt-dev/browser", () => ({ browser: fakeBrowser }));
 vi.mock("~/background/storage", () => ({ restrictSessionStorage: async () => undefined }));
 vi.mock("~/background/worker", () => ({
 	handleMessage: async () => undefined,
+	onActionClicked: async () => fakeBrowser.runtime.openOptionsPage(),
+	onTabUpdated: async () => undefined,
+	onTabRemoved: async () => undefined,
+	onMentorPort: () => undefined,
 	onSiteAccessAdded: async () => undefined,
 	onSiteAccessRemoved: async () => undefined,
 	reconcile: async () => undefined,
@@ -14,6 +18,7 @@ vi.mock("~/background/worker", () => ({
 
 beforeEach(() => {
 	fakeBrowser.reset();
+	vi.spyOn(fakeBrowser.runtime.onConnect, "addListener").mockReturnValue(undefined);
 	vi.spyOn(fakeBrowser.permissions.onAdded, "addListener").mockReturnValue(undefined);
 	vi.spyOn(fakeBrowser.permissions.onRemoved, "addListener").mockReturnValue(undefined);
 });

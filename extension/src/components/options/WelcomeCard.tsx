@@ -56,12 +56,13 @@ export function WelcomeCard({
 			<div className="flex flex-col gap-3">
 				<HephMark className="size-12" />
 				<h2 id={titleId} className="text-2xl font-semibold tracking-display">
-					Practice reviews, in context.
+					Your work. Your mentor.
 				</h2>
 				<p className="max-w-prose text-base text-muted-foreground">
 					See the practice review of the pull request, merge request or issue you open on GitHub or
 					GitLab in the page, right after its description: the comments Hephaestus posted for you,
-					with the way to each, and what the review concluded about your work.
+					with the way to each, and what the review concluded about your work. Ask Heph about it in
+					a private conversation beside the page.
 				</p>
 			</div>
 			<div className="flex flex-col gap-2">

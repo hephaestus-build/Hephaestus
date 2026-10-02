@@ -45,6 +45,10 @@ export interface PageReportProps {
 	onChooseWorkspace: (slug: string) => void;
 	/** Opens the extension's confirmation window; nothing changes in the page. */
 	onAction: (action: ReviewAction) => void;
+	/** Opens Heph in Chrome's side panel beside this tab; nothing is sent to Heph by opening it. */
+	onAskHeph: () => void;
+	/** Why the Heph panel did not open, when it did not. */
+	askHephError?: string;
 	/** What became of the last request to open the confirmation window. */
 	action?: ActionState;
 	/** A refresh failed while an earlier answer is on screen. */
@@ -72,10 +76,12 @@ function Footer({
 	context,
 	webAppOrigin,
 	request,
+	onAskHeph,
 }: {
 	context: ReadyContext;
 	webAppOrigin: string;
 	request: ReactNode;
+	onAskHeph: () => void;
 }) {
 	return (
 		<div
@@ -88,6 +94,14 @@ function Footer({
 				{reviewedSentence(context)}
 			</span>
 			{request}
+			{/* A conversation needs a surface the page cannot cover, so Heph opens in Chrome's side panel. */}
+			<button
+				type="button"
+				onClick={onAskHeph}
+				className="text-link rounded-sm font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+			>
+				Ask Heph
+			</button>
 			<ExternalLink href={context.links.trace} allowedOrigin={webAppOrigin} tone="link">
 				Open in Hephaestus
 			</ExternalLink>
@@ -161,6 +175,7 @@ function Ready({
 			<Footer
 				context={context}
 				webAppOrigin={webAppOrigin}
+				onAskHeph={props.onAskHeph}
 				request={
 					offer ? (
 						// The line carries the request; only where the line is too narrow for it does it move here.
@@ -181,6 +196,11 @@ function Ready({
 					{action.message}
 				</p>
 			) : null}
+			{props.askHephError === undefined ? null : (
+				<p role="alert" className={cn(INDENT, "pb-2 text-xs text-destructive")}>
+					{props.askHephError}
+				</p>
+			)}
 		</>
 	);
 }

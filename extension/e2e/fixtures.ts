@@ -29,7 +29,10 @@ import {
 declare const chrome: {
 	scripting: { getRegisteredContentScripts: () => Promise<unknown[]> };
 	tabs: { query: (query: { url: string }) => Promise<{ id?: number }[]> };
-	runtime: { sendMessage: (message: unknown) => Promise<unknown> };
+	runtime: {
+		sendMessage: (message: unknown) => Promise<unknown>;
+		getContexts: (filter: { contextTypes: string[] }) => Promise<{ documentUrl?: string }[]>;
+	};
 	permissions: { remove: (permissions: { origins: string[] }) => Promise<boolean> };
 };
 
@@ -142,6 +145,14 @@ export async function tabIdOf(worker: Worker, url: string): Promise<number> {
 	return id;
 }
 
+/** Chrome's own inventory, rather than opening the private mentor page as a test tab. */
+export async function mentorPanels(worker: Worker): Promise<string[]> {
+	return worker.evaluate(async () => {
+		const panels = await chrome.runtime.getContexts({ contextTypes: ["SIDE_PANEL"] });
+		return panels.flatMap((panel) => (panel.documentUrl === undefined ? [] : [panel.documentUrl]));
+	});
+}
+
 /** The report's host in the provider page. */
 export function reportHost(page: Page) {
 	return page.locator("hephaestus-report");
@@ -172,6 +183,14 @@ export async function openInline(page: Page): Promise<Frame> {
 		await toggle.click();
 	}
 	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+	// Expansion renders before its measured height reaches the parent. Wait until the frame exposes
+	// every control; scrolling a still-collapsed iframe can move a click during that resize.
+	await expect
+		.poll(async () => {
+			const content = await frame.locator("#root").evaluate((element) => element.scrollHeight);
+			return (await reportHeight(page)) >= content;
+		})
+		.toBe(true);
 	return frame;
 }
 

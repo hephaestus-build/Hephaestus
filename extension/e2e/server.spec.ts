@@ -1,4 +1,4 @@
-import type { Frame, Locator, Page, Request } from "@playwright/test";
+import type { BrowserContext, Frame, Locator, Page, Request } from "@playwright/test";
 
 import { required } from "~/testing/required";
 
@@ -6,6 +6,7 @@ import {
 	acceptNotice,
 	expect,
 	holdServer,
+	mentorPanels,
 	openInline,
 	OPTIONS_URL,
 	reportFrame,
@@ -30,6 +31,16 @@ const QUEUED_JOB = "7d5e0c3a-1b2c-4d3e-8f40-000000000001";
 const FAILED_JOB = "7d5e0c3a-1b2c-4d3e-8f40-000000000002";
 const MR4_WORK_ID = "920010";
 const TRACE_URL = `${WEB_APP_URL}/w/ext-e2e/feedback/scm.pull_request/${MR4_WORK_ID}`;
+
+function watchMentorTurns(context: BrowserContext): string[] {
+	const turns: string[] = [];
+	context.on("request", (request) => {
+		if (request.method() === "POST" && new URL(request.url()).pathname.endsWith("/mentor/chat")) {
+			turns.push(request.url());
+		}
+	});
+	return turns;
+}
 
 async function expectSafeLink(link: Locator, href: string): Promise<void> {
 	await expect(link).toHaveAttribute("href", href);
@@ -72,6 +83,31 @@ test.beforeAll(async () => {
 	if (!(await serverAvailable())) {
 		throw new Error(`No Hephaestus server answers at ${SERVER_URL}; the server project needs one.`);
 	}
+});
+
+test("opens Heph on a real report gesture without sending a turn, and refuses a copied panel URL", async ({
+	context,
+	worker,
+}) => {
+	await acceptNotice("e2e", { admin: true });
+	await signIn(context, "e2e", { admin: true });
+	const turns = watchMentorTurns(context);
+	const page = await context.newPage();
+	await providerTab(page, GITLAB_MR);
+	const frame = await openInline(page);
+	const tabId = await tabIdOf(worker, GITLAB_MR);
+	await frame.getByRole("button", { name: "Ask Heph", exact: true }).click();
+	const panelUrl = OPTIONS_URL.replace("options.html", `mentor.html?tab=${tabId}`);
+	await expect.poll(async () => mentorPanels(worker)).toContain(panelUrl);
+	expect(turns).toStrictEqual([]);
+	// A URL alone is not a side panel: Chrome must attest the sender as outside any tab.
+	const copied = await context.newPage();
+	await copied.goto(panelUrl);
+	await expect(sendAs(copied, { type: "get-mentor-panel" })).resolves.toMatchObject({
+		ok: false,
+		error: { code: "forbidden" },
+	});
+	expect(turns).toStrictEqual([]);
 });
 
 test.describe("signing in", () => {

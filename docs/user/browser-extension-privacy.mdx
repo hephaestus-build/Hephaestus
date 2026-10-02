@@ -5,8 +5,9 @@ description: What the Hephaestus Chrome extension reads, sends and stores, and h
 ---
 
 The Hephaestus Chrome extension has one purpose: show the practice review of the GitHub or GitLab
-work you are viewing, in that work's page. You choose the Hephaestus instance that receives your
-requests and each provider site where the extension may run.
+work you are viewing, in that work's page, and let you talk with Heph about that work beside it. You
+choose the Hephaestus instance that receives your requests and each provider site where the extension
+may run.
 
 The default instance is [hephaestus.build](https://hephaestus.build). Its
 [Privacy notice](https://hephaestus.build/privacy) identifies the operator, legal bases, recipients,
@@ -39,10 +40,18 @@ extension's behaviour across instances.
   administrators included, and never the text of any feedback; other developers' records are in the
   Hephaestus web app, for those allowed to see them. Everything the report shows stays inside the
   extension's own frame; none of it is inserted into the provider page's document.
-- **Review requests.** Asking for a review is the only change the extension makes, and it happens
-  only in the extension's own confirmation window, after it re-checks the work and your access with
-  the instance and you confirm there. Cancelling a review, retrying its results and approving or
-  rejecting feedback happen in the Hephaestus web app.
+- **Review requests.** Asking for a review is the only change to the work's review the extension
+  makes, and it happens only in the extension's own confirmation window, after it re-checks the work
+  and your access with the instance and you confirm there. Cancelling a review, retrying its results
+  and approving or rejecting feedback happen in the Hephaestus web app.
+- **Messages to Heph.** When you choose **Ask Heph**, Heph opens in Chrome's side panel, an extension
+  page the provider site cannot see or cover. Nothing is sent until you send a message. Then the
+  extension sends what you wrote to your chosen instance, which keeps it as a conversation with Heph,
+  like any conversation in the web app, and streams Heph's reply back. A conversation's first message
+  starts with a line naming the work — its kind, number, repository and canonical address — which
+  you see before sending; nothing else is added, and nothing from the page is read. The extension
+  shows the conversation's earlier messages when you reopen the panel, by asking the instance for
+  them.
 
 The practice review's box, and on a list each row's Hephaestus button, are visible to the page that
 hosts them, and the page can observe the box's size, which is the same in every state until you open
@@ -54,8 +63,10 @@ is installed.
 The chosen instance is stored locally in your Chrome profile. Chrome also
 remembers the site permissions you grant. These preferences are not synced by the extension.
 Credentials stay in Chrome's session memory, restricted from page content scripts, and are removed
-when Chrome closes or you sign out. Displayed account and review data are held in memory rather than
-saved as a persistent extension cache.
+when Chrome closes or you sign out. So does the one fact the side panel keeps — which conversation
+each tab holds, by its identifier and the work's address, never its text — which is also removed when
+the tab closes. Displayed account, review and conversation data are held in memory rather than saved
+as a persistent extension cache.
 
 The instance keeps its own session and security records, including authentication events; ending a
 browser session is not erasure of those records. The instance's Privacy notice covers their retention
@@ -65,7 +76,10 @@ but does not erase server records or work in GitHub or GitLab.
 ## AI processing and other recipients
 
 The extension does not call an AI provider. Looking up a practice review does not start an AI
-review. If you request a review and confirm it, the Hephaestus server may process evidence from its connected
+review, and opening the Heph panel does not start a conversation. When you send Heph a message, the
+Hephaestus server answers it with the workspace's configured AI provider, exactly as it answers Heph
+in the web app, subject to your AI choice and the workspace's controls; if you chose *No AI*, Heph
+does not answer and the panel does not let you send. If you request a review and confirm it, the Hephaestus server may process evidence from its connected
 sources using the workspace's configured AI provider, subject to your AI choice and the workspace's
 controls. Feedback may subsequently be delivered through the configured channels. A self-hosted
 instance can use an external AI provider; self-hosting does not imply that all processing stays on
@@ -79,7 +93,8 @@ visits the named website under that site's own privacy terms.
 
 The Hephaestus extension's use of information adheres to the
 [Chrome Web Store User Data Policy, including the Limited Use requirements](https://developer.chrome.com/docs/webstore/program-policies/limited-use).
-Extension data is used only to provide and secure the in-page practice review described here.
+Extension data is used only to provide and secure the in-page practice review and the
+conversation with Heph described here.
 It is not sold, used for advertising, used to determine creditworthiness or lending eligibility,
 or repurposed for unrelated profiling or research. The platform's optional academic-research
 participation does not authorise collecting or reusing your extension browsing activity for research.

@@ -130,6 +130,80 @@ describe("authorize", () => {
 	});
 });
 
+describe("the Heph panel", () => {
+	const panel = { id: ID, url: `chrome-extension://${ID}/mentor.html?tab=42` };
+
+	it("counts only outside any tab, at exactly a panel address of this extension", () => {
+		expect(classifySender(panel, ID)).toBe("mentor");
+		// The same page opened as a tab is not a side panel.
+		expect(classifySender({ ...panel, frameId: 0, tab: { id: 42 } }, ID)).toBeUndefined();
+		expect(
+			classifySender({ ...panel, url: `chrome-extension://${ID}/mentor.html` }, ID),
+		).toBeUndefined();
+		for (const search of [
+			"?tab=0",
+			"?tab=42&tab=7",
+			"?tab=-1",
+			"?tab=4x",
+			"?tab=42#x",
+			"?tab=12345678901",
+		]) {
+			expect(
+				classifySender({ ...panel, url: `chrome-extension://${ID}/mentor.html${search}` }, ID),
+			).toBeUndefined();
+		}
+		expect(
+			classifySender({ ...panel, url: "chrome-extension://dynamic-guid/mentor.html?tab=42" }, ID),
+		).toBeUndefined();
+		expect(
+			classifySender({ ...panel, id: "otherextensionidaaaaaaaaaaaaaaaa" }, ID),
+		).toBeUndefined();
+	});
+
+	it("is about the tab its address names, and talks with Heph only", () => {
+		expect(authorize(request({ type: "get-mentor-panel" }), panel, ID)).toStrictEqual({
+			allowed: true,
+			surface: "mentor",
+			tabId: 42,
+		});
+		for (const value of [
+			{ type: "get-context" },
+			{ type: "get-state" },
+			{ type: "open-action", workspaceSlug: "team", action: { kind: "request-review" } },
+			{ type: "open-mentor" },
+		]) {
+			expect(authorize(request(value), panel, ID).allowed).toBe(false);
+		}
+	});
+
+	it("is opened by the report frame and by nothing else", () => {
+		expect(authorize(request({ type: "open-mentor" }), inline, ID)).toStrictEqual({
+			allowed: true,
+			surface: "inline",
+			tabId: 42,
+		});
+		for (const sender of [options, action, sidepanel]) {
+			expect(authorize(request({ type: "open-mentor" }), sender, ID).allowed).toBe(false);
+		}
+		for (const value of [
+			{ type: "get-mentor-panel" },
+			{ type: "get-mentor-thread", threadId: JOB },
+			{ type: "new-mentor-conversation" },
+		]) {
+			expect(authorize(request(value), inline, ID).allowed).toBe(false);
+		}
+	});
+
+	it.each([
+		{ type: "open-mentor", tabId: 7 },
+		{ type: "get-mentor-panel", tabId: 7 },
+		{ type: "get-mentor-thread", threadId: "not-a-uuid" },
+		{ type: "new-mentor-conversation", workspaceSlug: "team" },
+	])("refuses %o", (value) => {
+		expect(requestSchema.safeParse(value).success).toBe(false);
+	});
+});
+
 describe("requestSchema", () => {
 	it.each([
 		{ type: "fetch", url: "https://evil.example" },

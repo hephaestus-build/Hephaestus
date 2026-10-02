@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import type { ChatMessage as ThreadMessage } from "@/api/types.gen";
 import { hasText } from "@/lib/text";
 import type { ChatMessage } from "@/lib/types";
 
@@ -34,6 +33,11 @@ export function shownFeedbackText(part: ChatMessage["parts"][number]): string | 
 	return parsed.success && hasText(parsed.data.text?.trim()) ? parsed.data.text : undefined;
 }
 
+/** What a part shows the reader: its text, or the feedback it carries; nothing for any other kind. */
+export function visiblePartText(part: ChatMessage["parts"][number]): string | undefined {
+	return part.type === "text" ? part.text : shownFeedbackText(part);
+}
+
 /**
  * Unknown keys survive: the mentor streams part kinds this client does not model, and stripping
  * their payload would leave the renderer nothing to narrow on. `text` is the one payload checked,
@@ -51,7 +55,9 @@ const chatMessageSchema = z.looseObject({
 	id: z.uuid(),
 	role: z.enum(["system", "user", "assistant"]),
 	parts: z.array(messagePartSchema),
-	createdAt: z.date().optional() satisfies z.ZodType<ThreadMessage["createdAt"]>,
+	// The SPA client revives dates; extension messaging carries the wire’s ISO timestamp.
+	// UIMessage does not use this extra field, so both validated representations are preserved.
+	createdAt: z.union([z.date(), z.iso.datetime({ offset: true })]).optional(),
 });
 
 const chatMessagesArraySchema = z.array(chatMessageSchema);

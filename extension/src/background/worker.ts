@@ -21,6 +21,17 @@ import {
 } from "~/background/context";
 import { toRpcError, WorkerError } from "~/background/errors";
 import { discoverInstance } from "~/background/instance";
+import {
+	attestPanel,
+	configurePanel,
+	type MentorDependencies,
+	mentorPanel,
+	mentorThread,
+	newConversation,
+	openPanel,
+	prepareTurn,
+	relayTurn,
+} from "~/background/mentor";
 import { type Credentials, SessionStore } from "~/background/session";
 import { signIn, type SignInMethod } from "~/background/sign-in";
 import {
@@ -34,11 +45,15 @@ import {
 	clearLocal,
 	type InstanceConfig,
 	readInstance,
+	readMentorBinding,
 	readReportView,
 	writeInstance,
+	writeMentorBinding,
 	writeReportView,
 } from "~/background/storage";
+import { WORK_PARAMETER } from "~/shared/frame-messages";
 import { originPattern } from "~/shared/instance-url";
+import { MENTOR_TURN_PORT, panelTabOf, type TurnEvent, turnRequestSchema } from "~/shared/mentor";
 import type { ReviewContext, WorkSubject } from "~/shared/review-context";
 import {
 	type AccountSummary,
@@ -51,7 +66,7 @@ import {
 	type RpcResult,
 	type SessionSummary,
 } from "~/shared/rpc";
-import { authorize, type SenderFacts } from "~/shared/sender-policy";
+import { authorize, classifySender, type SenderFacts } from "~/shared/sender-policy";
 import { parseWorkPage } from "~/shared/work-url";
 
 export const DEVELOPMENT_BUILD = import.meta.env.MODE !== "production";
@@ -69,6 +84,18 @@ function broadcast(event: RpcEvent): void {
 
 const directory = new WorkspaceDirectory();
 
+/** The one mentor turn each tab's Heph panel may have in flight. */
+interface ActiveTurn {
+	controller: AbortController;
+	workUrl?: string;
+}
+const turns = new Map<number, ActiveTurn>();
+
+function abortTurn(tabId: number): void {
+	turns.get(tabId)?.controller.abort();
+	turns.delete(tabId);
+}
+
 export const session = new SessionStore({
 	storage: chromeSessionStorage,
 	refresh: async (issuer, refreshToken) => publicApi.refresh(issuer.apiBase, refreshToken),
@@ -76,6 +103,10 @@ export const session = new SessionStore({
 	now: () => Date.now(),
 	onChange(generation) {
 		directory.clear();
+		// A reply streaming under the old session stops with it; the server ends the turn.
+		for (const tabId of turns.keys()) {
+			abortTurn(tabId);
+		}
 		broadcast({ type: "state-changed", generation });
 	},
 });
@@ -285,12 +316,56 @@ async function openConfirmation(intentId: string): Promise<void> {
 	}
 }
 
-/** A closed tab takes its report view with it; a closed confirmation window, its pending intent. */
+/**
+ * A closed tab takes its report view and its Heph panel's conversation binding with it; a closed
+ * confirmation window, its pending intent.
+ */
 export async function onTabRemoved(tabId: number): Promise<void> {
+	abortTurn(tabId);
 	await Promise.all([
 		confirmationClosed(actions, tabId),
 		withReportViews(async () => writeReportView(tabId, undefined)),
+		writeMentorBinding(tabId, undefined),
 	]);
+}
+
+/** Configure eligible granted tabs before a press, and end a turn when its work is left. */
+export async function onTabUpdated(tabId: number, change: { url?: string }): Promise<void> {
+	if (change.url === undefined) {
+		return;
+	}
+	const page = parseWorkPage(change.url);
+	const turn = turns.get(tabId);
+	if (turn !== undefined && (turn.workUrl === undefined || turn.workUrl !== page?.canonicalUrl)) {
+		abortTurn(tabId);
+	}
+	await configureTabPanel(tabId, change.url);
+}
+
+async function configureTabPanel(tabId: number, url: string | undefined): Promise<void> {
+	try {
+		if (parseWorkPage(url) === undefined) {
+			await browser.sidePanel.setOptions({ tabId, enabled: false });
+		} else {
+			await configurePanel(tabId);
+		}
+	} catch {
+		// A closed tab needs no panel.
+	}
+}
+
+/** The toolbar is the same contextual entry, including pages with no supported inline slot. */
+export async function onActionClicked(tab: { id?: number; url?: string }): Promise<void> {
+	if (tab.id === undefined || parseWorkPage(tab.url) === undefined) {
+		await browser.runtime.openOptionsPage();
+		return;
+	}
+	try {
+		// No awaits before Chrome's gesture-bound API.
+		await openPanel(tab.id);
+	} catch {
+		await browser.runtime.openOptionsPage();
+	}
 }
 
 /** The work a tab shows now, read from Chrome; the key a report view is kept under. */
@@ -350,6 +425,48 @@ async function context(
 				throw error;
 			}
 		}
+	}
+}
+
+/** The workspace the reader chose in this tab's report, while the tab still shows that work. */
+async function reportWorkspace(tabId: number): Promise<string | undefined> {
+	const [generation, pageUrl, view] = await Promise.all([
+		session.generation(),
+		tabWork(tabId),
+		readReportView(tabId),
+	]);
+	return view !== undefined && view.generation === generation && view.pageUrl === pageUrl
+		? view.workspaceSlug
+		: undefined;
+}
+
+const mentorDependencies: MentorDependencies = {
+	context: async (tabId) => context(tabId, await reportWorkspace(tabId)),
+	async environment() {
+		const env = await environment();
+		return { api: env.api, webAppOrigin: env.instance.webAppOrigin, tabUrl: env.tabUrl };
+	},
+	readBinding: readMentorBinding,
+	writeBinding: writeMentorBinding,
+};
+
+/**
+ * Starts opening the Heph panel for the tab whose report the reader pressed it in. It runs before the
+ * worker awaits anything, because Chrome opens a side panel only while handling that press. Only the
+ * report on a work's own page may ask — a list row's preview is about another page's work — and the
+ * tab's address, which Chrome reports, must be such a page.
+ */
+async function startOpeningMentor(sender: SenderFacts): Promise<unknown> {
+	const tabId = sender.tab?.id;
+	const preview = sender.url === undefined || new URL(sender.url).searchParams.has(WORK_PARAMETER);
+	if (tabId === undefined || preview || parseWorkPage(sender.tab?.url) === undefined) {
+		return new WorkerError("invalid", "Heph opens beside a pull request, merge request or issue.");
+	}
+	try {
+		await openPanel(tabId);
+		return undefined;
+	} catch {
+		return new WorkerError("stale", "Chrome did not open the Heph panel. Try again.");
 	}
 }
 
@@ -441,8 +558,19 @@ const handlers: { [K in keyof RpcResponses]: Handler<K> } = {
 		return siteAccessEntries(sites, await grantedPatterns());
 	},
 
-	"get-context": async (request, tabId) =>
-		context(requireTab(tabId), request.workspaceSlug, request.subject),
+	async "get-context"(request, tabId) {
+		const tab = requireTab(tabId);
+		const answer = await context(tab, request.workspaceSlug, request.subject);
+		// A work page the reader can see gets its Heph panel ready, so a later press opens it at once.
+		if (answer.status === "ready" && (request.subject?.kind ?? "page") === "page") {
+			try {
+				await configurePanel(tab);
+			} catch {
+				// The tab may have closed; its read-only report does not depend on a chat panel.
+			}
+		}
+		return answer;
+	},
 
 	async "get-work-feedback"(request, tabId) {
 		return workFeedback(
@@ -514,6 +642,31 @@ const handlers: { [K in keyof RpcResponses]: Handler<K> } = {
 		await discardAction(actions, request.intent, requireTab(tabId));
 		return null;
 	},
+
+	// Opened by `startOpeningMentor` before dispatch; nothing is left to do here.
+	"open-mentor": async () => null,
+
+	async "get-mentor-panel"(_request, tabId) {
+		const tab = requireTab(tabId);
+		await attestPanel(tab);
+		return mentorPanel(mentorDependencies, tab);
+	},
+
+	async "get-mentor-thread"(request, tabId) {
+		const tab = requireTab(tabId);
+		await attestPanel(tab);
+		return mentorThread(mentorDependencies, tab, request.threadId);
+	},
+
+	async "new-mentor-conversation"(_request, tabId) {
+		const tab = requireTab(tabId);
+		await attestPanel(tab);
+		if (turns.has(tab)) {
+			throw new WorkerError("conflict", "Stop Heph's reply before starting a new conversation.");
+		}
+		await newConversation(mentorDependencies, tab);
+		return null;
+	},
 };
 
 const GENERATION_MOVING = new Set<RpcRequest["type"]>([
@@ -556,17 +709,116 @@ export async function handleMessage(
 			generation: await session.generation(),
 		};
 	}
+	// Before the first await: Chrome opens a side panel only while it handles the reader's press.
+	const opening = parsed.data.type === "open-mentor" ? startOpeningMentor(sender) : undefined;
 	const startedAt = await session.generation();
 	// A read is only as current as the generation it began under; a command that moves the
 	// generation itself answers with the one it produced.
 	const stamp = async () =>
 		GENERATION_MOVING.has(parsed.data.type) ? session.generation() : startedAt;
 	try {
+		const failure = await opening;
+		if (failure instanceof WorkerError) {
+			throw failure;
+		}
 		const data = await dispatch(parsed.data, decision.tabId);
 		return { ok: true, data, generation: await stamp() };
 	} catch (error) {
 		return { ok: false, error: toRpcError(error), generation: await stamp() };
 	}
+}
+
+type Port = ReturnType<typeof browser.runtime.connect>;
+
+/** One turn from an attested panel: checked, fenced, sent, relayed, and always let go of. */
+async function runTurn(
+	tabId: number,
+	message: unknown,
+	controller: AbortController,
+	post: (event: TurnEvent) => void,
+): Promise<void> {
+	const request = turnRequestSchema.safeParse(message);
+	if (!request.success) {
+		post({ type: "failed", message: "That message cannot be sent." });
+		return;
+	}
+	if (turns.has(tabId)) {
+		post({ type: "failed", message: "Heph is still answering in this panel." });
+		return;
+	}
+	const active: ActiveTurn = { controller };
+	turns.set(tabId, active);
+	try {
+		await attestPanel(tabId);
+		const prepared = await prepareTurn(mentorDependencies, tabId, request.data);
+		active.workUrl = prepared.workUrl;
+		const turn = await prepared.api.mentorTurn(
+			prepared.workspaceSlug,
+			prepared.body,
+			controller.signal,
+		);
+		await relayTurn(turn, post, controller.signal);
+	} catch (error) {
+		if (!controller.signal.aborted) {
+			post({ type: "failed", message: toRpcError(error).message });
+		}
+	} finally {
+		if (turns.get(tabId) === active) {
+			turns.delete(tabId);
+		}
+	}
+}
+
+/**
+ * The door for mentor turns: a port from a Heph panel, which carries one turn's request and its
+ * streamed response. The panel closing the port is the reader stopping the reply — the request is
+ * aborted, so the server ends the turn — and the worker closes it once the reply has ended.
+ */
+export function onMentorPort(port: Port): void {
+	if (port.name !== MENTOR_TURN_PORT) {
+		return;
+	}
+	const sender: SenderFacts = port.sender ?? {};
+	const tabId =
+		classifySender(sender, browser.runtime.id) === "mentor" && sender.url !== undefined
+			? panelTabOf(new URL(sender.url).search)
+			: undefined;
+	if (tabId === undefined) {
+		port.disconnect();
+		return;
+	}
+	const controller = new AbortController();
+	let open = true;
+	const post = (event: TurnEvent) => {
+		if (!open) {
+			return;
+		}
+		try {
+			port.postMessage(event);
+		} catch {
+			open = false;
+			controller.abort();
+		}
+	};
+	port.onDisconnect.addListener(() => {
+		open = false;
+		controller.abort();
+	});
+	const finish = async (message: unknown) => {
+		port.onMessage.removeListener(start);
+		try {
+			await runTurn(tabId, message, controller, post);
+		} finally {
+			if (open) {
+				open = false;
+				port.disconnect();
+			}
+		}
+	};
+	const start = (message: unknown) => {
+		void finish(message);
+	};
+	port.onMessage.addListener(start);
 }
 
 export async function reconcile(): Promise<void> {
@@ -576,6 +828,14 @@ export async function reconcile(): Promise<void> {
 		const instance = await readInstance();
 		await reconcileProviderScript(instance?.origin);
 	});
+	const tabs = await browser.tabs.query({});
+	await Promise.all(
+		tabs.map(async (tab) => {
+			if (tab.id !== undefined) {
+				await configureTabPanel(tab.id, tab.url);
+			}
+		}),
+	);
 }
 
 export async function onSiteAccessRemoved(): Promise<void> {

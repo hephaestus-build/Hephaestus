@@ -12,6 +12,7 @@ there for them, with a link to each, when the work was reviewed, and what the re
 their own work. It shows every reader only their own records; a workspace admin gets a **Review
 details** link to the web app for every developer's observations, the feedback's delivery and the
 review runs. On a repository's list, a person can preview one row's work as one line inside the row.
+From the report, a person can also talk with Heph about the work in Chrome's side panel.
 [The user guide](/user/browser-extension) describes what they see. It runs on desktop Chrome only.
 
 The extension is not yet published in the Chrome Web Store. Until it is, you distribute a build
@@ -98,6 +99,17 @@ same endpoints the web app uses, under the same permissions,
 cooldowns and rate limits; a refusal comes back in your instance's words. Approving or rejecting
 feedback stays in the web app.
 
+## Heph in the side panel
+
+A person can talk with Heph from the extension's side panel. It is the same Heph as in the web app:
+the extension sends each message to the same mentor endpoint, as the signed-in member, so the
+workspace's Heph models, each member's AI choice, the consent notice, LLM budgets and the mentor's
+limits apply exactly as they do in the web app, and an instance administrator gets no more there than
+any member. Conversations are stored on your instance with the person's other conversations and
+continue in the web app. There is nothing to configure on your instance. In Chrome, the extension
+declares the `sidePanel` permission for it and has no default panel: the panel exists only for a tab
+whose report the person opened it from.
+
 ## Deploy it to your users
 
 How you get a build onto your users' machines depends on how their Chrome is managed:
@@ -153,7 +165,9 @@ Once a user allows a provider site, the extension sends your instance the canoni
 supported pull request, merge request or issue they open there, as soon as it opens, and again while
 the page is open and a review may still change. On a repository's list it sends a row's work address
 only when the user presses that row's Hephaestus button. It sends no page content and looks up no
-other page.
+other page. In the Heph side panel, it sends only what the user writes, after they press Send; a
+conversation's first message starts with a visible line naming the work by its kind, number,
+repository and canonical address.
 It does not read cookies, and its API calls carry its own session rather than the browser's cookies.
 Signing in happens in the user's normal Chrome profile, so an existing sign-in at the provider or at
 your instance may be reused there, exactly as for the web app. Your instance resolves the address

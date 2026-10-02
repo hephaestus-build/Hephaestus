@@ -37,8 +37,13 @@ describe("parseThreadMessages", () => {
 		expect(parseThreadMessages([stored])).toStrictEqual([stored]);
 	});
 
+	it("accepts the ISO timestamp carried by Chrome runtime messaging", () => {
+		const stored = { ...msg(UUID, "user"), createdAt: "2026-09-24T09:15:04.512Z" };
+		expect(parseThreadMessages([stored])).toStrictEqual([stored]);
+	});
+
 	it.each([
-		["an ISO string", "2026-09-24T09:15:04.512Z"],
+		["an invalid string", "not-a-date"],
 		["an Invalid Date", new Date("not a timestamp")],
 	])("rejects a createdAt that is %s", (_name, createdAt) => {
 		expect(parseThreadMessages([{ ...msg(UUID, "user"), createdAt }])).toBeUndefined();

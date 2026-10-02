@@ -4,7 +4,9 @@ import {
 	getClientSignInConfiguration,
 	getConsentStatus,
 	getCurrentUser,
+	getMemberOnboarding,
 	getOwnDeliveredWorkFeedback,
+	getThread,
 	getWorkspace,
 	listIdentityProviders,
 	listObservations,
@@ -17,6 +19,7 @@ import {
 } from "~/api/sdk.gen";
 import type {
 	ArtifactTrace,
+	ChatThreadDetail,
 	ConsentStatus,
 	CurrentUserView,
 	DeliveredWorkFeedback,
@@ -26,6 +29,7 @@ import type {
 	ReviewContext as ReviewContextDTO,
 	Workspace,
 	WorkspaceListItem,
+	WorkspaceOnboarding,
 } from "~/api/types.gen";
 import {
 	consentRequired,
@@ -67,7 +71,16 @@ export function clientFor(apiBase: string, token?: string): Client {
 
 interface CallResult<T> {
 	data?: T;
+	error?: unknown;
 	response?: Response;
+}
+
+/** One mentor turn's response: a stream when the server accepted it, its parsed refusal otherwise. */
+export interface MentorTurn {
+	status: number;
+	contentType: string;
+	stream: ReadableStream<Uint8Array> | null;
+	error: unknown;
 }
 
 /** Awaits one generated call, turning a thrown fetch (offline, DNS, CORS) into a coded error. */
@@ -305,6 +318,53 @@ export class AuthenticatedApi {
 				getOwnDeliveredWorkFeedback({ client, path: { workspaceSlug }, query: { url: workUrl } }),
 			),
 		);
+	}
+
+	/** The reader's AI choice and the workspace's model readiness, which decide whether Heph answers. */
+	async onboarding(workspaceSlug: string): Promise<WorkspaceOnboarding> {
+		return body(
+			await this.#call(async (client) => getMemberOnboarding({ client, path: { workspaceSlug } })),
+		);
+	}
+
+	/** One of the reader's own conversations; the server answers 404 for anyone else's. */
+	async thread(workspaceSlug: string, threadId: string): Promise<ChatThreadDetail | undefined> {
+		return bodyOrMissing(
+			await this.#call(async (client) => getThread({ client, path: { workspaceSlug, threadId } })),
+		);
+	}
+
+	/**
+	 * Sends one mentor turn through the generated client and hands back its body unread, so it streams.
+	 * The endpoint is the workspace's mentor chat, hidden from the published spec because it speaks the
+	 * AI SDK's stream protocol rather than JSON; the address is fixed here and the body is the panel's,
+	 * validated. Like every call, it retries once with a refreshed token after a 401 — the server starts
+	 * no turn on a 401 — and is refused once the generation it was built under has passed.
+	 */
+	async mentorTurn(workspaceSlug: string, turn: object, signal: AbortSignal): Promise<MentorTurn> {
+		const result = await this.#call(async (client) =>
+			client.post<{ 200: ReadableStream<Uint8Array> | null }>({
+				url: "/workspaces/{workspaceSlug}/mentor/chat",
+				path: { workspaceSlug },
+				body: turn,
+				headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+				parseAs: "stream",
+				signal,
+			}),
+		);
+		const { response } = result;
+		if (response === undefined) {
+			if (signal.aborted) {
+				throw new WorkerError("cancelled", "The reply was stopped.");
+			}
+			throw network();
+		}
+		return {
+			status: response.status,
+			contentType: response.headers.get("Content-Type") ?? "",
+			stream: response.ok ? (result.data ?? null) : null,
+			error: response.ok ? undefined : result.error,
+		};
 	}
 
 	/**

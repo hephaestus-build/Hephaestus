@@ -50,8 +50,9 @@ const webappInputsOfTheExtension = [
 	/^webapp\/brand\/hephaestus-mark\.svg$/u,
 	/^webapp\/src\/components\/icons\/brand\.tsx$/u,
 	/^webapp\/src\/components\/practice-vocabulary\//u,
-	/^webapp\/src\/components\/common\/(?:status-def\.ts|FacetMultiSelect\.tsx)$/u,
-	/^webapp\/src\/lib\/(?:artifact-kind-slugs|artifact-kinds|sign-in-providers)\.ts$/u,
+	/^webapp\/src\/components\/mentor\/(?:MessageText\.tsx|InterruptedReplyNote\.tsx|sanitize-message-text\.ts)$/u,
+	/^webapp\/src\/components\/common\/(?:status-def\.ts|FacetMultiSelect\.tsx|MarkdownCode\.tsx)$/u,
+	/^webapp\/src\/lib\/(?:artifact-kind-slugs|artifact-kinds|sign-in-providers|chat-validation|mentor-turn|mentor-preference|text|types)\.ts$/u,
 	/^webapp\/src\/styles\.css$/u,
 ];
 

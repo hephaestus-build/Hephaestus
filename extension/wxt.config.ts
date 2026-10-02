@@ -46,12 +46,14 @@ export default defineConfig({
 		return {
 			name: "Hephaestus",
 			description:
-				"See Hephaestus practice reviews for the pull request, merge request or issue you are viewing on GitHub or GitLab.",
+				"See practice reviews on GitHub and GitLab, and talk privately with Heph about the work beside the page.",
 			version: rootPackage.version,
 			version_name: development ? `${rootPackage.version}-${mode}` : rootPackage.version,
 			// Chrome 130 serves `use_dynamic_url` resources through `runtime.getURL`.
 			minimum_chrome_version: "130",
-			permissions: ["storage", "identity", "scripting"],
+			// `sidePanel` hosts Heph beside one tab's work (`mentor.html`); there is no default panel, so
+			// the worker configures it per tab and it opens only when the reader asks.
+			permissions: ["storage", "identity", "scripting", "sidePanel"],
 			optional_host_permissions: webOrigins,
 			...(mode === "e2e"
 				? { host_permissions: [...E2E_FIXTURE_ORIGINS, ...LOOPBACK_ORIGINS] }

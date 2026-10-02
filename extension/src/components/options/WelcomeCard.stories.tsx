@@ -24,9 +24,7 @@ type Story = StoryObj<typeof meta>;
 /** The hosted service is one click; the address form stays out of the way until asked for. */
 export const Default: Story = {
 	play: async ({ canvas, userEvent, args }) => {
-		await expect(
-			canvas.getByRole("heading", { name: "Practice reviews, in context." }),
-		).toBeVisible();
+		await expect(canvas.getByRole("heading", { name: "Your work. Your mentor." })).toBeVisible();
 		await expect(canvas.getByText("hephaestus.build")).toBeVisible();
 		await expect(canvas.getByLabelText("Hephaestus address")).not.toBeVisible();
 		await expect(

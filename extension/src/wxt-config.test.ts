@@ -60,8 +60,10 @@ describe("WXT development-server permissions", () => {
 		const manifest = await manifestFor(mode, "build");
 		const before = structuredClone(manifest);
 		expect(generated("build", manifest)).toStrictEqual(before);
-		expect(manifest.permissions).toStrictEqual(["storage", "identity", "scripting"]);
+		expect(manifest.permissions).toStrictEqual(["storage", "identity", "scripting", "sidePanel"]);
 		expect(manifest.optional_host_permissions).toStrictEqual(optionalHosts);
 		expect(manifest.host_permissions).toStrictEqual(hosts);
+		// No default side panel: Heph's panel exists only for a tab the worker configured.
+		expect(Object.hasOwn(manifest, "side_panel")).toBe(false);
 	});
 });
