@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -52,9 +53,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.jspecify.annotations.Nullable;
@@ -82,6 +83,9 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewOutputService deliveryService;
+
+    @Autowired
+    private ObservationAdmissionService admission;
 
     @Autowired
     private ObservationRepository observationRepository;
@@ -597,26 +601,41 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Nested
-    class DuplicatePracticeResults {
+    class OneResultPerPractice {
 
         @Test
-        void shouldRejectDuplicatePracticeResultsWithoutPersistingAny() {
-            var observations = new ArrayList<ValidatedObservation>();
-            for (int i = 0; i < 7; i++) {
-                observations.add(new ValidatedObservation(
-                        "pr-description-quality",
-                        "Negative observation " + i,
-                        Outcome.NOT_MET,
-                        Severity.MINOR,
-                        evidence(Outcome.NOT_MET),
-                        null));
+        void shouldRefuseOpposingResultsBeforeAnyObservationIsRecorded() {
+            var submitted = OBJECT_MAPPER.createArrayNode();
+            for (Outcome outcome : List.of(Outcome.MET, Outcome.NOT_MET)) {
+                var observation = submitted.addObject();
+                observation.put("practiceSlug", "pr-description-quality");
+                observation.put("summary", "Test: pr-description-quality");
+                observation.put("outcome", outcome.name());
+                observation.put("severity", outcome == Outcome.NOT_MET ? "MINOR" : null);
+                observation.put("evidenceRationale", "The captured diff is the scope of this observation.");
+                observation.set("evidence", evidence(outcome));
             }
 
-            assertThatThrownBy(() -> publishVerified(agentJob, observations))
-                    .isInstanceOf(JobDeliveryException.class)
-                    .hasMessageContaining("one outcome per practice");
-            assertThat(observationRepository.findAll())
-                    .filteredOn(Observation::getAgentJobId, agentJob.getId())
+            agentJob.setStatus(AgentJobStatus.RUNNING);
+            agentJob = agentJobRepository.saveAndFlush(agentJob);
+            var identity = new ObservationAdmissionService.AdmissionIdentity(
+                    Objects.requireNonNull(agentJob.getId()),
+                    Objects.requireNonNull(workspace.getId()),
+                    agentJob.getRetryCount(),
+                    "test-worker");
+            assertThatThrownBy(() -> admission.admit(identity, submitted))
+                    .isInstanceOfSatisfying(
+                            ObservationsRefusedException.class,
+                            refusal -> assertThat(refusal.reasonCode()).isEqualTo("ambiguous_practice_observations"));
+            var storedJob = agentJobRepository.findById(identity.jobId()).orElseThrow();
+            assertThat(Objects.requireNonNull(storedJob.getMetadata())
+                            .path(ObservationAdmissionService.REFUSAL_METADATA_KEY)
+                            .path("reasonCode")
+                            .asString())
+                    .isEqualTo("ambiguous_practice_observations");
+            assertThat(ObservationAdmissionService.isAdmitted(storedJob)).isFalse();
+            assertThat(observationRepository.findByAgentJobId(
+                            Objects.requireNonNull(agentJob.getId()), Objects.requireNonNull(workspace.getId())))
                     .isEmpty();
         }
     }

@@ -13,6 +13,7 @@ import {
 	openProfileRunObservations,
 } from "@/stories/profile-review-runs-story-mock-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
+import { daysBefore } from "@/stories/story-clock";
 
 import { reviewLevel, REVIEWS_LEVEL, REVIEWS_OF_YOUR_WORK } from "./practice-profile-search";
 import { type ProfileReviewDetailState, ProfileReviewLevel } from "./ProfileReviewLevel";
@@ -161,6 +162,38 @@ export const ObservationWithoutASummary: Story = {
 		await expect(
 			within(practiceTable()).getByText(/^Reviewed on the commits pushed/u),
 		).toBeVisible();
+	},
+};
+
+export const MarkedIncorrect: Story = {
+	args: {
+		state: {
+			...loaded,
+			observations: openProfileRunObservations.map((observation, index) =>
+				index === 0
+					? {
+							...observation,
+							outcome: "MET",
+							severity: undefined,
+							summary: "The changes each have a clear purpose",
+							invalidatedAt: daysBefore(1),
+							invalidationReason:
+								"The review imported a reason that is not in the merge request description.",
+						}
+					: observation,
+			),
+		},
+	},
+	play: async () => {
+		const panel = await settledDrawerPanel();
+		const table = within(practiceTable());
+		await expect(table.getByText("The changes each have a clear purpose")).toBeVisible();
+		await expect(table.getAllByText("Marked incorrect")).toHaveLength(1);
+		await expect(table.getByText(/^Reason: The review imported a reason/u)).toBeVisible();
+		await expect(
+			table.getByText("A dependency bump rode along with the behaviour change"),
+		).toBeVisible();
+		await expectNoPanelOverflow(panel);
 	},
 };
 

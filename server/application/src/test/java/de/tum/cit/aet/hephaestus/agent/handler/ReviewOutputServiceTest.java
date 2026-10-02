@@ -1431,24 +1431,24 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     }
 
     @Nested
-    class MultipleNegatives {
+    class OneResultPerPractice {
 
         @Test
         void rejectsMultipleResultsForOnePracticeBeforePersistence() {
             for (Outcome first : Outcome.values()) {
                 for (Outcome second : Outcome.values()) {
                     ValidatedObservation left = validObservation("pr-description-quality", first);
-                    ValidatedObservation right = validObservation("pr-description-quality", second);
+                    ValidatedObservation right = validObservation("PR_DESCRIPTION_QUALITY", second);
                     assertThatThrownBy(() -> service.prepare(testJob, List.of(left, right)))
-                            .isInstanceOf(JobDeliveryException.class)
-                            .hasMessageContaining("one outcome per practice");
+                            .isInstanceOf(ObservationsRefusedException.class)
+                            .hasMessageContaining("one final observation per practice");
                 }
             }
             verifyNoInteractions(observationRepository);
         }
 
         @Test
-        void persistsNegativesIndependentlyPerPractice() {
+        void shouldPersistResultsForDifferentPractices() {
             Practice otherPractice = new Practice();
             ReflectionTestUtils.setField(otherPractice, "id", 20L);
             otherPractice.setSlug("error-handling");

@@ -372,11 +372,28 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 persistInAppFeedback(merged, developer, 1, FeedbackDeliveryState.DELIVERED, "Recorded history", NOW);
         bind(deliveredCard, olderNegative);
         AgentJob laterNegativeRun = admittedLinkedReview(pr, linked);
+        Observation admittedNegative = observationRepository
+                .findByAgentJobId(laterNegativeRun.getId(), workspace.getId())
+                .getFirst();
+        UUID currentNegative = admittedNegative.getId();
+        // Historical reviews could record multiple results for a practice; repairs must retire all of them.
+        UUID secondCurrentNegative = observe(
+                linked,
+                laterNegativeRun,
+                ArtifactKinds.PULL_REQUEST.value(),
+                pr.getId(),
+                developer,
+                "Historical linked-issue confirmation problem",
+                Outcome.NOT_MET,
+                Severity.MINOR,
+                admittedNegative.getObservedAt(),
+                Objects.requireNonNull(admittedNegative.getEvidence()).toString(),
+                admittedNegative.getRecurrenceKey());
         laterNegativeRun.setRetryCount(1);
         laterNegativeRun = agentJobRepository.saveAndFlush(laterNegativeRun);
         List<Observation> admitted =
                 observationRepository.findByAgentJobId(laterNegativeRun.getId(), workspace.getId());
-        UUID currentNegative = admitted.getFirst().getId();
+
         for (AgentJob baseline : List.of(merged, laterNegativeRun)) {
             JsonNode manifest = agentJobRepository
                     .findById(baseline.getId())
@@ -513,7 +530,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 .isEmpty();
         assertThat(feedbackRepository.findById(oldBrief.getId()).orElseThrow().getDeliveryState())
                 .isEqualTo(FeedbackDeliveryState.PREPARED);
-        assertThat(standing(pr)).containsExactly(currentNegative);
+        assertThat(standing(pr)).containsExactlyInAnyOrder(currentNegative, secondCurrentNegative);
 
         SignalKey newerKey = LinkedWorkItemContentSource.currentClosingMaterialKey(
                         workspace.getId(), reload(), pullRequestRepository.findClosingIssuesById(pr.getId()))
@@ -534,6 +551,11 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         assertThat(observationRepository.findById(olderNegative)).isPresent();
         assertThat(observationRepository.findById(currentNegative)).isPresent();
         assertThat(observationRepository.findById(currentNegative).orElseThrow().getSupersededAt())
+                .isNotNull();
+        assertThat(observationRepository
+                        .findById(secondCurrentNegative)
+                        .orElseThrow()
+                        .getSupersededAt())
                 .isNotNull();
         assertThat(observationRepository.findById(olderNegative).orElseThrow().getSupersededAt())
                 .isNull();
@@ -749,6 +771,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                     .put("outcome", "NOT_MET")
                     .put("severity", "MINOR")
                     .put("evidenceRationale", "The captured criterion remains unchecked.");
+            var search = ((tools.jackson.databind.node.ObjectNode) result.path("evidence")).putObject("search");
+            search.putArray("consulted").add("scm.linked-work-items");
+            search.put("lookedFor", "confirmation of the acceptance criterion");
+            search.put("boundary", "the captured closing issue #18");
             observations.add(result);
             admissionService.admit(capture.identity(), observations);
             AgentJob completed =

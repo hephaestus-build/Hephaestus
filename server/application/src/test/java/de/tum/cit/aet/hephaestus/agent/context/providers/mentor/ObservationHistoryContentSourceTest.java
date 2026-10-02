@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
@@ -17,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -33,6 +35,8 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -357,6 +361,77 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCarryTheEvaluatedCriteriaOnlyInTheDetail() {
+        givenDeveloper();
+        var revision = mock(PracticeRevision.class);
+        String criteria = "State why in the title or description. An issue's \"why\" is not enough. 🧭\nOne result.";
+        when(revision.getId()).thenReturn(1731L);
+        when(revision.getCriteria()).thenReturn(criteria);
+        var practice = new Practice();
+        practice.setSlug("describe-what-and-why");
+        practice.setCriteria("Different current criteria");
+        var observation = Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
+                .summary("Reason missing")
+                .practice(practice)
+                .practiceRevision(revision)
+                .outcome(Outcome.NOT_MET)
+                .observedAt(Instant.now())
+                .evidence(citations(1, 10))
+                .build();
+        givenHistory(List.of(observation), List.of());
+
+        ObjectNode overview = provider.buildPayload(1L, 2L);
+        ObjectNode detail = provider.inspect(1L, 2L, observation.getId());
+
+        assertThat(overview.get("recentObservations").get(0).has("criteria")).isFalse();
+        JsonNode row = detail.get("observation");
+        assertThat(row.get("practiceRevisionId").asLong()).isEqualTo(1731L);
+        assertThat(row.get("criteria").asString()).isEqualTo(criteria);
+        assertThat(row.path("criteriaNotLoaded").asBoolean(false)).isFalse();
+        assertThat(row.get("outcome").asString()).isEqualTo("NOT_MET");
+    }
+
+    @ParameterizedTest
+    @CsvSource(
+            value = {"x|50000", "\"|20000"},
+            delimiter = '|')
+    void shouldOmitWholeCriteriaWhenTheirSerializedDetailCannotFit(String character, int length) {
+        var revision = mock(PracticeRevision.class);
+        when(revision.getId()).thenReturn(1731L);
+        when(revision.getCriteria()).thenReturn(character.repeat(length));
+        var practice = new Practice();
+        practice.setSlug("describe-what-and-why");
+        ObjectNode evidence = citations(1, 3_000);
+        String rationale = "r".repeat(4_000);
+        var observation = Observation.builder()
+                .id(UUID.randomUUID())
+                .agentJobId(UUID.randomUUID())
+                .summary("Reason missing")
+                .practice(practice)
+                .practiceRevision(revision)
+                .outcome(Outcome.NOT_MET)
+                .observedAt(Instant.now())
+                .evidence(evidence)
+                .evidenceRationale(rationale)
+                .build();
+        givenHistory(List.of(observation), List.of());
+
+        ObjectNode detail = provider.inspect(1L, 2L, observation.getId());
+
+        assertThat(objectMapper.writeValueAsString(detail))
+                .hasSizeLessThanOrEqualTo(ObservationHistoryContentSource.DETAIL_MAX_CHARS);
+        JsonNode row = detail.get("observation");
+        assertThat(row.get("practiceRevisionId").asLong()).isEqualTo(1731L);
+        assertThat(row.has("criteria")).isFalse();
+        assertThat(row.get("criteriaNotLoaded").asBoolean()).isTrue();
+        assertThat(row.get("evidence")).isEqualTo(evidence);
+        assertThat(row.get("evidenceRationale").asString()).isEqualTo(rationale);
+        assertThat(row.has("evidenceLoaded")).isFalse();
+    }
+
+    @Test
     @DisplayName("an admissible detail near its limits shortens its longest texts, says so, and keeps every location")
     void detailShortensAnOversizedQuoteButKeepsItsSource() {
         // Admission's own bounds: evidence at most 64 KiB, rationale at most 10,000 characters.
@@ -384,6 +459,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(small.get("quote").asString()).isEqualTo("ok()");
         assertThat(small.has("quoteTruncated")).isFalse();
         JsonNode row = detail.get("observation");
+        assertThat(row.get("practiceRevisionId").isNull()).isTrue();
+        assertThat(row.get("criteriaNotLoaded").asBoolean()).isTrue();
         assertThat(rationale).startsWith(row.get("evidenceRationale").asString());
         assertThat(row.path("evidenceRationaleTruncated").asBoolean(false))
                 .isEqualTo(row.get("evidenceRationale").asString().length() < 10_000);

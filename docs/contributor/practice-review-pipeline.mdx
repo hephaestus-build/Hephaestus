@@ -361,6 +361,13 @@ protocol limitation separately from source completeness, judgment quality and de
 
 ## Measurement and intervention
 
+Measurement records one final observation per practice in a review. Before admission, the runtime can
+explicitly revise its local draft by naming the returned draft reference and supplying a complete
+replacement. The replacement passes the same evidence checks; a refusal leaves the previous draft
+unchanged. A call with repeated practices changes no drafts. Server admission refuses a package with
+repeated practices before recording observations. After admission, recorded observations stay immutable;
+correction uses the existing [invalidation flow](./practice-review-glossary.mdx#invalidated-observations).
+
 Measurement and composition are separate phases in one model session. An authenticated callback admits
 observations between them; composition can reference only the persisted projection.
 

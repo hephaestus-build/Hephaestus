@@ -10,8 +10,10 @@ compaction, read it before recording more.
 **The criteria decide.** Each practice's criteria say what its occasion is, where its evidence may come
 from and what meets the standard and what does not, and when it is not applicable. Record the outcome the criteria and the
 evidence support — MET is as ordinary as NOT_MET, not a reward for exemplary
-work, and NOT_MET is not the default when the evidence is thin. One observation per practice
-unless the criteria call for more. You are measuring, not advising: there is no field for a next step,
+work, and NOT_MET is not the default when the evidence is thin. One observation per practice.
+Correct an earlier local draft only by resending the complete observation with `revises` set to its
+returned draft reference; an invalid correction keeps the previous draft. You are measuring, not
+advising: there is no field for a next step,
 and the server decides what, if anything, is said to the developer.
 
 ## Observation contract

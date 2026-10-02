@@ -5,7 +5,6 @@ import test from "node:test";
 import {
 	citationMatchesArtifact,
 	describeCitationMismatch,
-	dedupeKeyForObservation,
 	MAX_SUMMARY_CHARS,
 	type NormalizedCitation,
 	normalizeObservation as normalizeFinalObservation,
@@ -118,20 +117,16 @@ void test("an observation carries no confidence, and one offered is rejected", (
 	}
 });
 
-void test("dedupe key uses the normalized hyphenated slug", () => {
-	const a = dedupeKeyForObservation(
-		normalizeObservation(baseObservation({ practiceSlug: "writes_focused_pull_requests" })),
-	);
-	const b = dedupeKeyForObservation(
-		normalizeObservation(baseObservation({ practiceSlug: "WRITES-FOCUSED-PULL-REQUESTS" })),
-	);
-	assert.equal(a, b, "underscored and upper-hyphenated slugs must dedupe to the same key");
+void test("practice slugs normalize to one canonical identity", () => {
+	const a = normalizeObservation(baseObservation({ practiceSlug: "writes_focused_pull_requests" }));
+	const b = normalizeObservation(baseObservation({ practiceSlug: "WRITES-FOCUSED-PULL-REQUESTS" }));
+	assert.equal(a.practiceSlug, b.practiceSlug);
 });
 
 void test("deduplication does not discard a contradictory outcome", () => {
 	const met = normalizeObservation(baseObservation({ outcome: "MET", severity: null }));
 	const notMet = normalizeObservation(baseObservation({ outcome: "NOT_MET", severity: "MAJOR" }));
-	assert.notEqual(dedupeKeyForObservation(met), dedupeKeyForObservation(notMet));
+	assert.notDeepEqual(met, notMet);
 });
 
 void test("a correction to severity or rationale is not an exact retry", () => {
@@ -142,8 +137,8 @@ void test("a correction to severity or rationale is not an exact retry", () => {
 			evidenceRationale: "The complete captured change establishes a different consequence.",
 		}),
 	);
-	assert.notEqual(dedupeKeyForObservation(initial), dedupeKeyForObservation(changedSeverity));
-	assert.notEqual(dedupeKeyForObservation(initial), dedupeKeyForObservation(changedRationale));
+	assert.notDeepEqual(initial, changedSeverity);
+	assert.notDeepEqual(initial, changedRationale);
 });
 
 void test("a one-word summary is refused, because it names nothing on the practice page", () => {

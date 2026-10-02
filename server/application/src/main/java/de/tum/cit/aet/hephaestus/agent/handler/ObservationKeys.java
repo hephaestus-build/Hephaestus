@@ -11,7 +11,7 @@ import org.jspecify.annotations.Nullable;
  *     the key to use whenever a single observation must be addressed
  * @param recurrenceKey the location this observation shares with other observations across runs
  *     ({@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint}). Deliberately
- *     many-to-one: several observations of one practice in one file collapse to it, so it can never stand in
+ *     many-to-one: observations of one practice in one file across reviews collapse to it, so it can never stand in
  *     for {@code occurrenceKey}.
  * @param id the row's id, which the composition stage cites in {@code basedOn}. Null while admission computes the
  *     keys, before the row exists

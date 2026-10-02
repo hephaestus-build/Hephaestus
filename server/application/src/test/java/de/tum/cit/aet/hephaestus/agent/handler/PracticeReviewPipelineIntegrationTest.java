@@ -933,6 +933,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                     linking.getSlug(),
                     java.util.Objects.requireNonNull(java.util.Objects.requireNonNull(linking.getCurrentRevision())
                             .getId()));
+            agentJob.setEvidenceSnapshot(snapshot);
+            agentJob = agentJobRepository.saveAndFlush(agentJob);
             setJobOutput(FOUR_OBSERVATIONS);
             List<Observation> rows = observationRepository.findByAgentJobId(agentJob.getId(), workspace.getId());
             Observation summarised = row(rows, "The description never says why");

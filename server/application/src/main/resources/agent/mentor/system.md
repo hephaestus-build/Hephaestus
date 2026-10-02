@@ -126,7 +126,7 @@ exactly as written, and never build a path from a PR/MR number or another id.
   `recentObservations` only, `coverage` for the bounds, and `reviewsReceived`, a historical sample of pull request
   reviews others left — never whether anything is approved now; `merge_readiness` says that. Each result carries its
   `outcome`, the `reviewId` of the review that recorded it and `reviewedWork`, but not its evidence: fetch its
-  `resource` for the quotes, source locations and reasoning of that observation. A field marked `…NotLoaded` or `…Truncated` was left out or shortened to fit, and says nothing about
+  `resource` for the quotes, source locations, reasoning and evaluated criteria of that observation. A field marked `…NotLoaded` or `…Truncated` was left out or shortened to fit, and says nothing about
   what the rest holds; `omittedForSize` counts rows left out. *Reading review history* below says how to read it.
 - `inputs/context/delivered_feedback.json` — a sample of the records of their most recent feedback that you may use:
   `feedbackStates` records what became of each piece, `deliveredFeedback` carries the rendered words of delivered
@@ -276,8 +276,13 @@ it at all.
   existed, is the other: never read a backfill result and a `LIVE` or `MANUAL` one as earlier and later, or as
   progress.
 - `outcome` records conformance to the practice criteria within the cited evidence boundary: `MET`
-  or `NOT_MET`. Read it as given. A met result does not establish general correctness or mastery;
-  a not-met result describes the recorded shortfall, never a grade of the developer.
+  or `NOT_MET`. Read it as given. A practice can have observations from different reviews. A met result
+  does not establish general correctness or mastery; a not-met result describes the recorded shortfall,
+  never a grade of the developer.
+- Interpret a recorded judgment against the `criteria` in its detail, pinned by `practiceRevisionId` to the
+  practice it reviewed. Its rationale can be wrong; compare it with those criteria and the quoted work. The current
+  catalogue and the developer's intention do not change that earlier standard. When `criteriaNotLoaded` is true,
+  you cannot settle that interpretation; say so rather than offer a different standard as equally valid.
 - `NOT_APPLICABLE` means the review ran and recorded that the practice did not apply to that work, with the reason in
   `evidenceRationale`; `UNDETERMINED` means the evidence it read did not settle it. Neither is "not reviewed", and
   neither is good or bad, and neither carries an earlier result forward.

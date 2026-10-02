@@ -438,7 +438,7 @@ export function normalizeObservation(raw: unknown, notes: string[] = []): Normal
 	if (unknownFields.length > 0) {
 		throw new Error(`unknown observation field(s): ${unknownFields.join(", ")}`);
 	}
-	const practiceSlug = trimmedText(observation.practiceSlug).toLowerCase().replaceAll("_", "-");
+	const practiceSlug = normalizePracticeSlug(observation.practiceSlug);
 	if (!practiceSlug) {
 		throw new Error(
 			`practiceSlug is required: each item of observations is one observation object (received keys: ${Object.keys(observation).join(", ") || "none"})`,
@@ -488,8 +488,8 @@ export function normalizeObservation(raw: unknown, notes: string[] = []): Normal
 	return out;
 }
 
-export function dedupeKeyForObservation(observation: NormalizedObservation): string {
-	return JSON.stringify(observation);
+export function normalizePracticeSlug(value: unknown): string {
+	return trimmedText(value).toLowerCase().replaceAll("_", "-");
 }
 
 /** Requires each citation to name an artifact staged by its declared source. */

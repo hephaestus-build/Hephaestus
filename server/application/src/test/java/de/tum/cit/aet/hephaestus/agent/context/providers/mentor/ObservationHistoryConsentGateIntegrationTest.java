@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -275,6 +276,9 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
 
         ObjectNode current = contentSource.inspect(workspace.getId(), recipient.getId(), latest);
         assertThat(current.get("list").asString()).isEqualTo("recentObservations");
+        assertThat(current.get("observation").get("practiceRevisionId").asLong())
+                .isEqualTo(Objects.requireNonNull(practice.getCurrentRevision()).getId());
+        assertThat(current.get("observation").get("criteria").asString()).isEqualTo(practice.getCriteria());
         assertThat(current.get("observation").get("evidence").get("citations")).hasSize(1);
         assertThat(contentSource
                         .inspect(workspace.getId(), recipient.getId(), earlier)
@@ -303,6 +307,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
 
         ObjectNode active = contentSource.inspect(workspace.getId(), recipient.getId(), conversation.getId());
         assertThat(active.get("_meta").get("trustLevel").asString()).isEqualTo("UNTRUSTED_EXTERNAL");
+        assertThat(active.get("observation").get("criteria").asString()).isEqualTo("Test description");
         assertThat(active.get("observation").get("evidence").get("citations")).hasSize(1);
 
         slackMonitoredChannelRepository.findAll().stream()
@@ -351,7 +356,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                 job.getId(),
                 job.getWorkspace().getId(),
                 practice.getId(),
-                practice.getCurrentRevision().getId(),
+                Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                 artifactKind,
                 artifactId,
                 recipient.getId(),
@@ -412,7 +417,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                 review.getId(),
                 workspace.getId(),
                 practice.getId(),
-                practice.getCurrentRevision().getId(),
+                Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                 ArtifactKinds.PULL_REQUEST.value(),
                 mergeRequestId,
                 aboutUserId,
