@@ -51,8 +51,7 @@ public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UU
 
     /**
      * Backfills {@code actor_id} for COMMIT_CREATED events whose actor was unresolved at ingest.
-     * Without this, commits ingested before their GitLab authors are resolved via email match
-     * stay unattributed.
+     * Admission uses the commit's stable user reference; names and email addresses are not matched here.
      */
     @WorkspaceAgnostic("Scoped by repository_id (repository belongs to one workspace)")
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -65,10 +64,23 @@ public interface ActivityEventRepository extends JpaRepository<ActivityEvent, UU
           AND activity_event.event_type = 'COMMIT_CREATED'
           AND activity_event.actor_id IS NULL
           AND activity_event.target_id = gc.id
-          AND gc.author_id IS NOT NULL
+          AND gc.author_id IN (:authorIds)
           AND gc.repository_id = :repositoryId
+          AND NOT EXISTS (SELECT 1 FROM person_suppression s JOIN "user" u
+            ON u.provider_id=s.provider_id AND u.native_id::text=s.subject
+            WHERE u.id=gc.author_id AND s.team_key='')
         """, nativeQuery = true)
-    int backfillCommitActors(@Param("repositoryId") Long repositoryId);
+    int backfillCommitActors(
+            @Param("repositoryId") Long repositoryId, @Param("authorIds") java.util.List<Long> authorIds);
+
+    @WorkspaceAgnostic("Repository-bounded ledger maintenance; all selected native authors require write admission")
+    @Query(value = """
+        SELECT DISTINCT gc.author_id FROM git_commit gc JOIN activity_event e ON e.target_id=gc.id
+        WHERE gc.repository_id=:repositoryId AND gc.author_id IS NOT NULL
+          AND e.target_type='commit' AND e.event_type='COMMIT_CREATED' AND e.actor_id IS NULL
+        ORDER BY gc.author_id
+        """, nativeQuery = true)
+    java.util.List<Long> unresolvedCommitAuthors(@Param("repositoryId") Long repositoryId);
 
     @Query(value = "SELECT COUNT(*) FROM activity_event WHERE workspace_id = :workspaceId", nativeQuery = true)
     long countByWorkspaceId(@Param("workspaceId") Long workspaceId);

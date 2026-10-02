@@ -54,6 +54,26 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldAdmitOnlyExistingUnsuppressedUsersFromABatchWithDuplicateAndMissingKeys() {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://batch-fence.example.test"));
+        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", provider));
+        var other = users.saveAndFlush(TestUserFactory.createUser(84L, "other", provider));
+        jdbc.update(
+                "INSERT INTO person_suppression(id,provider_id,subject,team_key) VALUES (?,?,?,?)",
+                UUID.randomUUID(),
+                provider.getId(),
+                "42",
+                "");
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            assertThat(fence.holdForUserWrites(List.of(other.getId(), target.getId(), other.getId(), -1L)))
+                    .containsExactly(other.getId());
+            assertThat(fence.holdForUserWrites(List.of())).isEmpty();
+        });
+    }
+
+    @Test
     void shouldFinishAnAdmittedWriteBeforeErasureChecksItsRows() throws Exception {
         databaseTestUtils.cleanDatabase();
         var provider =

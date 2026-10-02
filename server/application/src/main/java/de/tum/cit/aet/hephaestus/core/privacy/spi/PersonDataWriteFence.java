@@ -11,6 +11,10 @@ public interface PersonDataWriteFence {
     @com.google.errorprone.annotations.CheckReturnValue
     boolean holdForUserWrite(long userId);
 
+    /** Acquire one ordered lock set, then return only the existing, non-suppressed users. */
+    @com.google.errorprone.annotations.CheckReturnValue
+    List<Long> holdForUserWrites(List<Long> userIds);
+
     /** Finish admitted writers before checking the preview and installing permanent controls. */
     void holdForErasure(List<PersonIdentity> identities);
 }

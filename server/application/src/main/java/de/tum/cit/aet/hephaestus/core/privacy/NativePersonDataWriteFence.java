@@ -47,6 +47,29 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public List<Long> holdForUserWrites(List<Long> userIds) {
+        requireFreshControlReads();
+        if (userIds.isEmpty()) return List.of();
+        var users = jdbc.query(
+                "SELECT id,provider_id,native_id::text FROM \"user\" WHERE id=ANY(?) ORDER BY id",
+                (rs, row) -> new NativeUser(
+                        rs.getLong(1),
+                        new PersonIdentity(rs.getLong(2), java.util.Objects.requireNonNull(rs.getString(3)), null)),
+                new org.springframework.jdbc.support.SqlArrayValue("bigint", userIds.toArray()));
+        lock(users.stream().map(NativeUser::identity).toList(), true);
+        return users.stream()
+                .filter(user -> !suppression.isSuppressed(
+                        user.identity().providerId(),
+                        user.identity().subject(),
+                        user.identity().teamId()))
+                .map(NativeUser::userId)
+                .toList();
+    }
+
+    private record NativeUser(long userId, PersonIdentity identity) {}
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void holdForErasure(List<PersonIdentity> identities) {
         requireFreshControlReads();
         lock(identities, false);

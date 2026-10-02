@@ -145,3 +145,11 @@ Feedback copied into another person's Heph conversation is selected from its exa
 ID and workspace. The export includes the copied message, not the other person's profile or replies.
 Erasure replaces the linked copy with a neutral notice and clears that thread's hidden runtime journal.
 It preserves replies, parent links and conversation times. A delivery workspace mismatch stops preview.
+
+Activity reconciliation acquires one ordered set of native-identity transaction locks before filling
+unresolved commit actors. It updates only admitted authors, so an erased author cannot reappear in
+the activity ledger and does not prevent other authors in the same batch from being reconciled.
+
+An activity row with no resolved actor is still included when its stable work reference identifies
+the person's authored commit, issue, pull request or comment. Another person's resolved actor is
+not replaced or removed by that source-based selection.

@@ -56,6 +56,21 @@ public class ActivityEventService implements ActivityRecorder {
         this.meterRegistry = meterRegistry;
     }
 
+    /** One admission set avoids lock-order inversions when a batch includes multiple people. */
+    @Transactional
+    public int backfillCommitActors(Long repositoryId) {
+        var candidates = eventRepository.unresolvedCommitAuthors(repositoryId);
+        if (candidates.isEmpty()) return 0;
+        var admitted = writeFence.holdForUserWrites(candidates);
+        int updated = 0;
+        // Bound SQL bind parameters without releasing any of the batch's native transaction locks.
+        for (int first = 0; first < admitted.size(); first += 1000) {
+            updated += eventRepository.backfillCommitActors(
+                    repositoryId, admitted.subList(first, Math.min(first + 1000, admitted.size())));
+        }
+        return updated;
+    }
+
     private Timer getTimerForEventType(ActivityEventType eventType) {
         return eventTypeTimers.computeIfAbsent(
                 eventType,

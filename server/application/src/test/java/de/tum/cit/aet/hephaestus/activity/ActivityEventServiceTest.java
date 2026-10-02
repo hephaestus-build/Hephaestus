@@ -38,6 +38,26 @@ class ActivityEventServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void backfillAdmitsTheWholeBatchBeforeUpdatingOnlyPermittedAuthors() {
+        when(eventRepository.unresolvedCommitAuthors(200L)).thenReturn(java.util.List.of(42L, 84L));
+        when(writeFence.holdForUserWrites(java.util.List.of(42L, 84L))).thenReturn(java.util.List.of(84L));
+        when(eventRepository.backfillCommitActors(200L, java.util.List.of(84L))).thenReturn(3);
+        assertThat(service.backfillCommitActors(200L)).isEqualTo(3);
+        var order = inOrder(writeFence, eventRepository);
+        order.verify(eventRepository).unresolvedCommitAuthors(200L);
+        order.verify(writeFence).holdForUserWrites(java.util.List.of(42L, 84L));
+        order.verify(eventRepository).backfillCommitActors(200L, java.util.List.of(84L));
+    }
+
+    @Test
+    void backfillDoesNotUpdateAnEntirelySuppressedBatch() {
+        when(eventRepository.unresolvedCommitAuthors(200L)).thenReturn(java.util.List.of(42L));
+        when(writeFence.holdForUserWrites(java.util.List.of(42L))).thenReturn(java.util.List.of());
+        assertThat(service.backfillCommitActors(200L)).isZero();
+        verify(eventRepository, never()).backfillCommitActors(anyLong(), anyList());
+    }
+
+    @Test
     void record_success_savesEvent() {
         when(workspaceRepository.existsById(1L)).thenReturn(true);
         when(eventRepository.insertIfAbsent(

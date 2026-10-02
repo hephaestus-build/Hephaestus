@@ -12,6 +12,8 @@ Shared records retain other people's attribution. Erasure clears the person's ty
 withdrawal, invalidation and restoration attribution while keeping the event and its time.
 
 Erased provider identities cannot create a new linked account or start another practice review.
+Activity reconciliation skips erased authors while keeping other authors in the same batch.
+Export and erasure include unattributed activity for the person's exactly linked authored work.
 AI source queries skip re-mirrored Slack messages and Outline documents associated with erased
 native identities. A Slack control applies only to its exact team.
 Native Slack conversations and Outline documents are included even when the resulting observations
