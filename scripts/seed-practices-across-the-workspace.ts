@@ -386,9 +386,9 @@ async function insertObservation(
 	await client.query(
 		`INSERT INTO observation (
 			id, occurrence_key, agent_job_id, practice_id, artifact_kind, artifact_id, about_user_id,
-			summary, assessment_status, presence, severity, evidence, evidence_rationale, observed_at,
-			practice_revision_id, assessment, origin, workspace_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ASSESSED', $9, $10, $11, NULL, $12, $13, 'GOOD', 'LIVE', $14)`,
+			summary, outcome, severity, evidence, evidence_rationale, observed_at,
+			practice_revision_id, origin, workspace_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, $12, $13, 'LIVE', $14)`,
 		[
 			row.id,
 			`seed-practices-across-${row.ordinal}`,
@@ -398,9 +398,10 @@ async function insertObservation(
 			row.artifact.id,
 			row.developerId,
 			row.problem
-				? "Synthetic observation: the practice was missing from this work."
-				: "Synthetic observation: the practice held in this work.",
-			row.problem ? "ABSENT" : "PRESENT",
+				? "Synthetic observation: this work did not meet the practice."
+				: "Synthetic observation: this work met the practice.",
+			// `Outcome.validate`: a severity exactly on NOT_MET.
+			row.problem ? "NOT_MET" : "MET",
 			row.problem ? "MINOR" : null,
 			JSON.stringify({ citations: [citation] }),
 			row.at,
