@@ -10,6 +10,21 @@ export const observationDataSchema = z.object({
 	text: z.string().optional(),
 });
 
+/** A `data-mentor-status` part's data. */
+export const mentorStatusDataSchema = z.object({
+	state: z.string(),
+	reason: z.string().nullish(),
+});
+
+/** Whether a streamed data part says Heph's sandbox is starting cold, so the reply will be slow. */
+export function isWarmingUp(part: { type: string; data: unknown }): boolean {
+	if (part.type !== "data-mentor-status") {
+		return false;
+	}
+	const parsed = mentorStatusDataSchema.safeParse(part.data);
+	return parsed.success && parsed.data.state === "warming-up";
+}
+
 /** Parsed where it is read, so a streamed part and a stored one pass the same check. */
 export function shownFeedbackText(part: ChatMessage["parts"][number]): string | undefined {
 	if (part.type !== "data-observation") {

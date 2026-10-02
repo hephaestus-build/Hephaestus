@@ -41,17 +41,6 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 
 	const router = useRouter();
 
-	const handleMessageSubmit = ({ text }: { text: string }) => {
-		if (!text.trim()) {
-			return;
-		}
-		mentorChat.sendMessage(text);
-	};
-
-	const handleVote = (messageId: string, isUpvote: boolean) => {
-		mentorChat.voteMessage(messageId, isUpvote);
-	};
-
 	const handleMessageEdit = (messageId: string, content: string) => {
 		const messageIndex = mentorChat.messages.findIndex((message) => message.id === messageId);
 		if (messageIndex === -1) {
@@ -81,10 +70,9 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
 				status={mentorChat.status}
+				warmingUp={mentorChat.warmingUp}
 				errorMessage={mentorChat.error?.message}
-				readonly={false}
-				attachments={[]}
-				onMessageSubmit={handleMessageSubmit}
+				onMessageSubmit={mentorChat.sendMessage}
 				onMessageEdit={handleMessageEdit}
 				onStop={() => {
 					void mentorChat.stop();
@@ -94,9 +82,7 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 					mentorChat.retry();
 				}}
 				onCopy={copyToClipboard}
-				onVote={handleVote}
-				inputPlaceholder="Ask me anything..."
-				className="h-full max-h-none"
+				onVote={mentorChat.voteMessage}
 			/>
 		</Copilot>
 	);

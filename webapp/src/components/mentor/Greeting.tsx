@@ -1,42 +1,14 @@
-import { motion } from "motion/react";
-
 import { HephIcon } from "@/components/brand/HephIcon";
 
+/** Heph's welcome on a conversation that has not started. */
 export function Greeting() {
 	return (
-		<div
-			key="overview"
-			className="mx-auto flex size-full max-w-3xl flex-col justify-center px-4 sm:px-8 md:mt-20"
-		>
+		<div className="mx-auto flex size-full max-w-3xl animate-in flex-col justify-center px-4 duration-300 fade-in slide-in-from-bottom-2 motion-reduce:animate-none sm:px-8 md:mt-20">
 			<div className="mb-4 flex items-center gap-4">
-				<motion.div
-					className="text-muted-foreground"
-					initial={{ opacity: 0, scale: 0.8 }}
-					animate={{ opacity: 1, scale: 1 }}
-					exit={{ opacity: 0, scale: 0.8 }}
-					transition={{ delay: 0.3 }}
-				>
-					<HephIcon size={80} />
-				</motion.div>
-				<div className="flex flex-col">
-					<motion.div
-						initial={{ opacity: 0, y: 10 }}
-						animate={{ opacity: 1, y: 0 }}
-						exit={{ opacity: 0, y: 10 }}
-						transition={{ delay: 0.5 }}
-						className="text-2xl font-semibold"
-					>
-						Hello there!
-					</motion.div>
-					<motion.div
-						initial={{ opacity: 0, y: 10 }}
-						animate={{ opacity: 1, y: 0 }}
-						exit={{ opacity: 0, y: 10 }}
-						transition={{ delay: 0.6 }}
-						className="text-2xl text-muted-foreground"
-					>
-						How can I help you today?
-					</motion.div>
+				<HephIcon className="text-muted-foreground" size={80} />
+				<div className="flex flex-col text-2xl">
+					<p className="font-semibold">Hello there!</p>
+					<p className="text-muted-foreground">How can I help you today?</p>
 				</div>
 			</div>
 		</div>

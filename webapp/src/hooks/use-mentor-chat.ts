@@ -1,21 +1,19 @@
 import { type UseChatHelpers, useChat } from "@ai-sdk/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { DefaultChatTransport } from "ai";
-import { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 
 import {
 	getThreadOptions,
 	getThreadQueryKey,
-	listThreadsOptions,
 	listThreadsQueryKey,
 	voteMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { ChatMessageVote, ChatThreadDetail, ChatThreadSummary } from "@/api/types.gen";
+import type { ChatMessageVote } from "@/api/types.gen";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { parseThreadMessages } from "@/lib/chat-validation";
+import { isWarmingUp } from "@/lib/chat-validation";
 import { hasText } from "@/lib/text";
 import type { ChatMessage } from "@/lib/types";
 import { csrfHeaders } from "@/runtime/auth/auth-client";
@@ -36,15 +34,26 @@ interface UseMentorChatReturn extends Omit<
 	sendMessage: (text: string) => void;
 	/** Answers the latest prompt again, replacing the reply that failed. */
 	retry: () => void;
-	threadDetail: ChatThreadDetail | undefined;
-	isThreadLoading: boolean;
-	threadError: unknown;
-	threads: ChatThreadSummary[] | undefined;
-	isThreadsLoading: boolean;
 	isLoading: boolean;
 	currentThreadId: string | undefined;
 	voteMessage: (messageId: string, isUpvoted: boolean) => void;
 	votes: ChatMessageVote[];
+	/** The turn in flight is waiting for Heph's sandbox to start, so its first words come late. */
+	warmingUp: boolean;
+}
+
+/**
+ * One stored conversation. A conversation is read once and then lives in `useChat`, so neither a
+ * remount nor a focus reads it again.
+ */
+export function mentorThreadOptions(workspaceSlug: string, threadId: string) {
+	return {
+		...getThreadOptions({ path: { workspaceSlug, threadId } }),
+		staleTime: 60_000,
+		refetchOnMount: false,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+	};
 }
 
 export function useMentorChat({
@@ -60,34 +69,9 @@ export function useMentorChat({
 
 	const [stableThreadId] = useState(() => threadId ?? uuidv4());
 
-	const threadQueryKey = getThreadQueryKey({
-		path: { workspaceSlug: slug, threadId: threadId ?? "" },
-	});
-	const threadQuery = useQuery({
-		...getThreadOptions({
-			path: { workspaceSlug: slug, threadId: threadId ?? "" },
-		}),
+	const { data: threadDetail, isLoading: isThreadLoading } = useQuery({
+		...mentorThreadOptions(slug, threadId ?? ""),
 		enabled: Boolean(threadId) && hasWorkspace,
-		initialData: () =>
-			hasWorkspace ? queryClient.getQueryData<ChatThreadDetail>(threadQueryKey) : undefined,
-		staleTime: 60_000,
-		refetchOnMount: false,
-		refetchOnWindowFocus: false,
-		refetchOnReconnect: false,
-	});
-
-	const { data: threadDetail, isLoading: isThreadLoading, error: threadError } = threadQuery;
-
-	const threadsKey = listThreadsQueryKey({ path: { workspaceSlug: slug } });
-	const { data: threads, isLoading: isThreadsLoading } = useQuery({
-		...listThreadsOptions({ path: { workspaceSlug: slug } }),
-		enabled: hasWorkspace,
-		initialData: () =>
-			hasWorkspace ? queryClient.getQueryData<ChatThreadSummary[]>(threadsKey) : undefined,
-		staleTime: 60_000,
-		refetchOnMount: false,
-		refetchOnWindowFocus: false,
-		refetchOnReconnect: false,
 	});
 
 	const voteMessageMut = useMutation(voteMutation());
@@ -141,9 +125,14 @@ export function useMentorChat({
 		},
 	});
 
+	// The server says so on a transient `data-mentor-status` part, which `useChat` hands to `onData` and
+	// never stores, so it is held here until the turn ends or the next one starts.
+	const [warmingUp, setWarmingUp] = useState(false);
+
 	// Unmemoised on purpose: `useChat` copies both handlers into a ref every render and calls through
 	// it, so each only has to be the current closure — a stable reference would go stale.
 	const handleFinish = () => {
+		setWarmingUp(false);
 		if (hasWorkspace) {
 			void queryClient.invalidateQueries({
 				queryKey: listThreadsQueryKey({ path: { workspaceSlug: slug } }),
@@ -160,6 +149,7 @@ export function useMentorChat({
 	};
 
 	const handleError = (error: Error) => {
+		setWarmingUp(false);
 		onError?.(error);
 	};
 
@@ -178,7 +168,7 @@ export function useMentorChat({
 		id,
 	} = useChat<ChatMessage>({
 		id: stableThreadId,
-		// Only a seed: the server's stored transcript replaces this once the thread query lands.
+		// The stored conversation, read before the chat mounts: `useChat` takes it once, on creation.
 		messages: initialMessages,
 		generateId: () => uuidv4(),
 		// No `experimental_throttle`: the mentor's delta cadence is already LLM-bound, so batching
@@ -187,36 +177,12 @@ export function useMentorChat({
 		transport,
 		onFinish: handleFinish,
 		onError: handleError,
+		onData: (part) => {
+			if (isWarmingUp(part)) {
+				setWarmingUp(true);
+			}
+		},
 	});
-
-	const hydratedRef = useRef<string | null>(null);
-	useEffect(() => {
-		if (!hasText(threadId)) {
-			return;
-		}
-		if (hydratedRef.current === threadId) {
-			return;
-		}
-		if (status === "streaming" || status === "submitted") {
-			return;
-		}
-		if (!threadDetail?.messages) {
-			return;
-		}
-
-		// A transcript that will not parse would otherwise render as an empty conversation with nothing
-		// to explain it. Keyed on the thread, so a re-run of this effect updates one toast, not stacks.
-		const validatedMessages = parseThreadMessages(threadDetail.messages);
-		if (!validatedMessages) {
-			toast.error("Couldn't load this conversation's earlier messages.", {
-				id: `mentor-thread-${threadId}`,
-			});
-			return;
-		}
-
-		setMessages(validatedMessages);
-		hydratedRef.current = threadId;
-	}, [threadId, threadDetail?.messages, status, setMessages]);
 
 	// `regenerate` drops the failed reply before it posts, and only accepts a reply still in the list, so
 	// after a retry refused before a new reply started, the target travels as request metadata.
@@ -228,10 +194,12 @@ export function useMentorChat({
 		}
 
 		retryTarget.current = undefined;
+		setWarmingUp(false);
 		void originalSendMessage({ text });
 	};
 
 	const retry = () => {
+		setWarmingUp(false);
 		const last = messages.at(-1);
 		if (last?.role === "assistant") {
 			retryTarget.current = last.id;
@@ -243,8 +211,7 @@ export function useMentorChat({
 	};
 
 	// No greeting request: the server has no greeting flag, so a POST asking for one comes back
-	// "User message text is empty." The new-thread greeting is static, rendered by the route when
-	// `messages.length === 0`.
+	// "User message text is empty." `Chat` renders a static greeting instead.
 
 	const voteMessage = (messageId: string, isUpvoted: boolean) => {
 		if (!hasWorkspace) {
@@ -301,15 +268,11 @@ export function useMentorChat({
 		clearError,
 		sendMessage,
 		retry,
-		threadDetail,
-		isThreadLoading,
-		threadError,
-		threads,
-		isThreadsLoading,
 		currentThreadId: threadId ?? id,
 		voteMessage,
 		votes,
 		isLoading,
+		warmingUp,
 	};
 
 	return result;

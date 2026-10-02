@@ -1,12 +1,16 @@
 import type { UIMessage } from "ai";
 import type { z } from "zod";
 
-import type { observationDataSchema } from "@/lib/chat-validation";
+import type { mentorStatusDataSchema, observationDataSchema } from "@/lib/chat-validation";
 
-/** Mirrors `UIMessageChunk.DataObservation`; read it through `shownFeedbackText`, which checks the payload. */
+/**
+ * Mirrors `UIMessageChunk.DataObservation` and `UIMessageChunk.DataMentorStatus`; read them through
+ * `shownFeedbackText` and `isWarmingUp`, which check the payload.
+ */
 export interface CustomUIDataTypes {
 	[name: string]: unknown;
 	observation: z.infer<typeof observationDataSchema>;
+	"mentor-status": z.infer<typeof mentorStatusDataSchema>;
 }
 
 /**
@@ -61,9 +65,3 @@ export type ChatTools = Record<string, { input: unknown; output: unknown }>;
  * `lib/chat-validation.ts`.
  */
 export type ChatMessage = UIMessage<MessageMetadata, CustomUIDataTypes, ChatTools>;
-
-export interface Attachment {
-	name: string;
-	url: string;
-	contentType: string;
-}

@@ -319,6 +319,45 @@ describe("useMentorChat", () => {
 		});
 	});
 
+	describe("cold start", () => {
+		const coldStart = {
+			type: "data-mentor-status",
+			data: { state: "warming-up", reason: "container-cold" },
+		} as const;
+
+		it("says Heph is warming up from the server's status until the turn finishes", () => {
+			const { result } = renderHook(() => useMentorChat({}), {
+				wrapper: createWrapper(queryClient),
+			});
+			expect(result.current.warmingUp).toBe(false);
+
+			act(() => {
+				chat.lastOptions.onData?.(coldStart);
+			});
+			expect(result.current.warmingUp).toBe(true);
+
+			act(() => {
+				chat.finishTurn();
+			});
+			expect(result.current.warmingUp).toBe(false);
+		});
+
+		it("stops saying so when the turn fails", () => {
+			const { result } = renderHook(() => useMentorChat({}), {
+				wrapper: createWrapper(queryClient),
+			});
+
+			act(() => {
+				chat.lastOptions.onData?.(coldStart);
+			});
+			act(() => {
+				chat.raiseError(new Error("Streaming error"));
+			});
+
+			expect(result.current.warmingUp).toBe(false);
+		});
+	});
+
 	describe("vote functionality", () => {
 		it("records an upvote optimistically, before the server has answered", async () => {
 			const { result } = renderHook(() => useMentorChat({}), {
@@ -411,80 +450,6 @@ describe("useMentorChat", () => {
 			});
 
 			expect(result.current.votes).toHaveLength(0);
-		});
-	});
-
-	describe("thread hydration", () => {
-		// UUIDs: `parseThreadMessages` rejects the whole thread if any id is another shape.
-		const threadMessages = [
-			createMockMessage("user", "Previous message", "f47ac10b-58cc-4372-a567-0e02b2c3d479"),
-			createMockMessage("assistant", "Previous response", "c9bf9e57-1685-4c89-bafb-ff5af830be8a"),
-		];
-
-		function seedThread() {
-			queryClient.setQueryData(
-				getThreadQueryKey({ path: { workspaceSlug: "test-workspace", threadId: "thread-123" } }),
-				{
-					id: "thread-123",
-					title: "Test Thread",
-					messages: threadMessages,
-				},
-			);
-		}
-
-		it("renders the stored thread once its detail resolves", async () => {
-			seedThread();
-
-			const { result } = renderHook(() => useMentorChat({ threadId: "thread-123" }), {
-				wrapper: createWrapper(queryClient),
-			});
-
-			expect(result.current.currentThreadId).toBe("thread-123");
-			await waitFor(() =>
-				expect(result.current.messages.map((message) => message.id)).toStrictEqual(
-					threadMessages.map((message) => message.id),
-				),
-			);
-			expect(result.current.messages.map(textOf)).toStrictEqual([
-				"Previous message",
-				"Previous response",
-			]);
-		});
-
-		it("keeps an interrupted reply marked as interrupted when it rehydrates", async () => {
-			const interrupted = {
-				...createMockMessage(
-					"assistant",
-					"Link the issue so",
-					"0b6f1c8e-3d2a-4f5b-9c7d-1e2f3a4b5c6d",
-				),
-				metadata: { status: "interrupted" },
-			};
-			queryClient.setQueryData(
-				getThreadQueryKey({ path: { workspaceSlug: "test-workspace", threadId: "thread-123" } }),
-				{ id: "thread-123", title: "Test Thread", messages: [threadMessages[0], interrupted] },
-			);
-
-			const { result } = renderHook(() => useMentorChat({ threadId: "thread-123" }), {
-				wrapper: createWrapper(queryClient),
-			});
-
-			await waitFor(() => expect(result.current.messages).toHaveLength(2));
-			expect(result.current.messages[1]?.metadata?.status).toBe("interrupted");
-		});
-
-		it("does not overwrite an answer that is still streaming", async () => {
-			chat = installFakeChat("streaming");
-			seedThread();
-
-			const { result } = renderHook(() => useMentorChat({ threadId: "thread-123" }), {
-				wrapper: createWrapper(queryClient),
-			});
-
-			// The hydration effect keys on the thread detail, so once that is readable it has had its run.
-			await waitFor(() => expect(result.current.threadDetail?.messages).toBeDefined());
-			expect(result.current.messages).toStrictEqual([]);
-			expect(result.current.status).toBe("streaming");
 		});
 	});
 

@@ -50,7 +50,17 @@
 					"text-[length:inherit]",
 					"opacity-[0.9999]",
 					"opacity-[max(var(--drawer-overlay-min-opacity,0),calc(1-var(--drawer-swipe-progress)))]",
-					"duration-[calc(var(--drawer-swipe-strength)*400ms)]"
+					"duration-[calc(var(--drawer-swipe-strength)*400ms)]",
+					// The message scroller's jump button: its own curves in and out, as the drawer has.
+					"ease-[cubic-bezier(0.7,0,0.84,0)]",
+					"ease-[cubic-bezier(0.23,1,0.32,1)]",
+					// Bubble tones mixed from the theme's own colours.
+					"bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)]",
+					"bg-[color-mix(in_oklch,var(--muted),var(--foreground)_5%)]",
+					"bg-[oklch(from_var(--primary)_0.93_calc(c*0.4)_h)]",
+					"bg-[oklch(from_var(--primary)_0.3_calc(c*0.4)_h)]",
+					"bg-[oklch(from_var(--primary)_0.88_calc(c*0.5)_h)]",
+					"bg-[oklch(from_var(--primary)_0.35_calc(c*0.5)_h)]"
 				]
 			}
 		],
@@ -79,7 +89,7 @@
 					{ "pattern": "^Card$", "allow": ["layout", "effects", "outline-none"] },
 					// A box the caller fills: its padding and gap are the caller's.
 					{
-						"pattern": "^(AlertDescription|CardContent|CardHeader|CardFooter|DialogBody|DialogHeader|DrawerBody|DrawerHeader|FieldGroup|HoverCardContent|ItemActions|ItemContent|ItemGroup|PaginationContent|PopoverContent|QuestionnaireChoices|SidebarGroup|Tabs|TabsList|ToggleGroup)$",
+						"pattern": "^(AlertDescription|CardContent|CardHeader|CardFooter|DialogBody|DialogHeader|DrawerBody|DrawerHeader|FieldGroup|HoverCardContent|ItemActions|ItemContent|ItemGroup|Message|MessageFooter|MessageHeader|MessageScrollerContent|PaginationContent|PopoverContent|QuestionnaireChoices|SidebarGroup|Tabs|TabsList|ToggleGroup)$",
 						"allow": ["layout", "spacing"]
 					},
 					// A layout root — a grid, a flex column, a bare trigger — has nothing to restyle;
