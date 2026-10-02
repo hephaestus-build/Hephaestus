@@ -2,7 +2,6 @@ import { Link, useMatchRoute } from "@tanstack/react-router";
 import {
 	BookUser,
 	BrainCircuit,
-	ChevronRight,
 	CircleDollarSign,
 	ClipboardCheck,
 	Handshake,
@@ -15,12 +14,11 @@ import {
 	Users,
 	Workflow,
 } from "lucide-react";
-import { type ReactElement, type ReactNode, useState } from "react";
 
 import type { IntegrationCatalogEntry } from "@/api/types.gen";
 import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { ADMIN_NAV_LABELS } from "@/components/layout/sidebar/admin-nav-labels";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { NavSection, useSectionOpen } from "@/components/layout/sidebar/NavSection";
 import {
 	SidebarGroup,
 	SidebarGroupLabel,
@@ -28,7 +26,6 @@ import {
 	SidebarMenuBadge,
 	SidebarMenuButton,
 	SidebarMenuItem,
-	SidebarMenuSub,
 	SidebarMenuSubButton,
 	SidebarMenuSubItem,
 	useSidebar,
@@ -41,25 +38,6 @@ export interface NavAdminProps {
 	scmProviderType?: "GITHUB" | "GITLAB";
 	/** Feedback awaiting an admin's approval, shown beside Practice reviews; nothing while unknown. */
 	awaitingApproval?: number;
-}
-
-/**
- * Open state for a nav section, forced open when the user navigates into it and freely collapsible
- * the rest of the time. Adjusted during render, not in an effect, so arriving at an admin page
- * never paints the section collapsed first.
- */
-function useSectionOpen(onSection: boolean) {
-	const [open, setOpen] = useState(onSection);
-	const [wasOnSection, setWasOnSection] = useState(onSection);
-
-	if (onSection !== wasOnSection) {
-		setWasOnSection(onSection);
-		if (onSection) {
-			setOpen(true);
-		}
-	}
-
-	return [open, setOpen] as const;
 }
 
 export function NavAdmin({
@@ -165,7 +143,7 @@ export function NavAdmin({
 						<span>Teams</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
-				<AdminNavSection
+				<NavSection
 					label="Practices"
 					icon={<ClipboardCheck />}
 					active={onSection}
@@ -234,8 +212,8 @@ export function NavAdmin({
 							<span>Review settings</span>
 						</SidebarMenuSubButton>
 					</SidebarMenuSubItem>
-				</AdminNavSection>
-				<AdminNavSection
+				</NavSection>
+				<NavSection
 					label="Integrations"
 					icon={<PlugZapIcon />}
 					active={onIntegrationsSection}
@@ -311,7 +289,7 @@ export function NavAdmin({
 							</SidebarMenuSubButton>
 						</SidebarMenuSubItem>
 					)}
-				</AdminNavSection>
+				</NavSection>
 				<SidebarMenuItem>
 					<SidebarMenuButton
 						tooltip={ADMIN_NAV_LABELS.models}
@@ -346,75 +324,5 @@ export function NavAdmin({
 				</SidebarMenuItem>
 			</SidebarMenu>
 		</SidebarGroup>
-	);
-}
-
-interface AdminNavSectionProps {
-	label: string;
-	icon: ReactNode;
-	active: boolean;
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-	collapsed: boolean;
-	/**
-	 * A count owed somewhere in the section, shown on the section itself while its entries are out of
-	 * sight — closed, or the sidebar down to icons — so it is seen however the sidebar is folded.
-	 */
-	badge?: { count: number; phrase: string };
-	landingLink: ReactElement;
-	children: ReactNode;
-}
-
-function AdminNavSection({
-	label,
-	icon,
-	active,
-	open,
-	onOpenChange,
-	collapsed,
-	badge,
-	landingLink,
-	children,
-}: AdminNavSectionProps) {
-	const shown = collapsed || !open ? badge : undefined;
-	const name = (
-		<span>
-			{label}
-			{shown && <span className="sr-only"> ({shown.phrase})</span>}
-		</span>
-	);
-	// The badge hides itself in the icon-only sidebar, where the tooltip says the count instead.
-	const tooltip = shown ? `${label} (${shown.phrase})` : label;
-	return (
-		<Collapsible open={open} onOpenChange={onOpenChange} render={<SidebarMenuItem />}>
-			{collapsed ? (
-				<SidebarMenuButton tooltip={tooltip} isActive={active} render={landingLink}>
-					{icon}
-					{name}
-				</SidebarMenuButton>
-			) : (
-				<CollapsibleTrigger
-					render={<SidebarMenuButton tooltip={tooltip} isActive={!open && active} />}
-				>
-					{icon}
-					{name}
-					<ChevronRight
-						className="ml-auto transition-transform group-aria-expanded/menu-button:rotate-90"
-						aria-hidden
-					/>
-				</CollapsibleTrigger>
-			)}
-			{shown && (
-				// The button names the count for a screen reader; this is its picture, clear of the chevron.
-				<SidebarMenuBadge aria-hidden className="right-7">
-					{shown.count}
-				</SidebarMenuBadge>
-			)}
-			<CollapsibleContent>
-				{/* The list carries the section's name: a screen reader jumping by list otherwise
-				    announces "list, 3 items" with nothing saying which section it landed in. */}
-				<SidebarMenuSub aria-label={label}>{children}</SidebarMenuSub>
-			</CollapsibleContent>
-		</Collapsible>
 	);
 }

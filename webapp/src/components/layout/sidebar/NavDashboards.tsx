@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { Activity, Building2, ChartNoAxesGantt, Compass, Users } from "lucide-react";
+import { Activity, Building2, ChartNoAxesGantt, Compass, UserRound, Users } from "lucide-react";
 
 import {
 	SidebarGroup,
@@ -7,7 +7,12 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
+	SidebarMenuSubButton,
+	SidebarMenuSubItem,
+	useSidebar,
 } from "@/components/ui/sidebar";
+
+import { NavSection, useSectionOpen } from "./NavSection";
 
 export function NavDashboards({
 	workspaceSlug,
@@ -28,39 +33,54 @@ export function NavDashboards({
 		matchRoute({ to: "/w/$workspaceSlug/workspace-activity", fuzzy: true }),
 	);
 	const onTeams = Boolean(matchRoute({ to: "/w/$workspaceSlug/teams", fuzzy: true }));
+	const onPracticePages = onPracticeProfile || onAcrossTheWorkspace;
+	const [practicesOpen, setPracticesOpen] = useSectionOpen(onPracticePages);
+	const { isMobile, state: sidebarState } = useSidebar();
 
 	return (
 		<SidebarGroup>
 			<SidebarGroupLabel>Dashboards</SidebarGroupLabel>
 			<SidebarMenu>
 				{practicesEnabled && (
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							tooltip="Practice profile"
-							isActive={onPracticeProfile}
-							render={<Link to="/w/$workspaceSlug/practice-profile" params={{ workspaceSlug }} />}
-						>
-							<Compass />
-							<span>Practice profile</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				)}
-				{practicesEnabled && (
-					<SidebarMenuItem>
-						<SidebarMenuButton
-							tooltip="Across the workspace"
-							isActive={onAcrossTheWorkspace}
-							render={
-								<Link
-									to="/w/$workspaceSlug/practices-across-the-workspace"
-									params={{ workspaceSlug }}
-								/>
-							}
-						>
-							<ChartNoAxesGantt />
-							<span>Across the workspace</span>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
+					<NavSection
+						label="Practice profile"
+						icon={<Compass />}
+						active={onPracticePages}
+						open={practicesOpen}
+						onOpenChange={setPracticesOpen}
+						collapsed={!isMobile && sidebarState === "collapsed"}
+						landingLink={
+							<Link
+								to="/w/$workspaceSlug/practice-profile"
+								params={{ workspaceSlug }}
+								aria-current={onPracticeProfile ? "page" : undefined}
+							/>
+						}
+					>
+						<SidebarMenuSubItem>
+							<SidebarMenuSubButton
+								isActive={onPracticeProfile}
+								render={<Link to="/w/$workspaceSlug/practice-profile" params={{ workspaceSlug }} />}
+							>
+								<UserRound aria-hidden />
+								<span>Your profile</span>
+							</SidebarMenuSubButton>
+						</SidebarMenuSubItem>
+						<SidebarMenuSubItem>
+							<SidebarMenuSubButton
+								isActive={onAcrossTheWorkspace}
+								render={
+									<Link
+										to="/w/$workspaceSlug/practices-across-the-workspace"
+										params={{ workspaceSlug }}
+									/>
+								}
+							>
+								<ChartNoAxesGantt aria-hidden />
+								<span>Across the workspace</span>
+							</SidebarMenuSubButton>
+						</SidebarMenuSubItem>
+					</NavSection>
 				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
