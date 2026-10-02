@@ -347,7 +347,8 @@ public class MentorTurnPersistence {
         if (isEmpty(usage)) {
             return new UIMessageChunk.Finish(
                     finish.finishReason(),
-                    UIMessageChunk.MessageMetadata.of(model, existing != null ? existing.usage() : null, null));
+                    UIMessageChunk.MessageMetadata.of(
+                            model, existing != null && !state.retryAttempted() ? existing.usage() : null, null));
         }
         Long wireTotal = turn.provenance() == UsageProvenance.RUNNER ? wireTotalTokens(finish) : null;
         long total = wireTotal != null
@@ -427,13 +428,13 @@ public class MentorTurnPersistence {
     /**
      * The one account of a turn's calls that its row, its cost and its ledger entry all use. The runner's report
      * and the proxy's per-call meter are two views of the SAME calls, so exactly one is used, never their sum. The
-     * runner's is used unless it cannot be complete: when it reported nothing, or when the turn compacted — Pi
-     * reports a compaction's summary calls as one total, and nothing for one that failed partway — in which case
-     * the proxy, which records every call, is the account. Read only after the turn's terminal status is flushed.
+     * runner's is used unless it cannot be complete: when it reported nothing, compacted or retried. Pi reports
+     * summary calls as one total and retries as separate continuations; the proxy records every reported call.
+     * Read only after the turn's terminal status is flushed.
      */
     private TurnUsage turnUsage(UUID assistantId, TranslatorState state) {
         UsageBreakdown runner = extractUsageFromState(state);
-        if (state.compactionAttempted() || isEmpty(runner)) {
+        if (state.compactionAttempted() || state.retryAttempted() || isEmpty(runner)) {
             MentorTurnLlmUsage viaProxy =
                     chatMessageRepository.findLlmUsageById(assistantId).orElse(MentorTurnLlmUsage.NONE);
             if (viaProxy.hasBillableUsage()) {
@@ -447,6 +448,14 @@ public class MentorTurnPersistence {
                         viaProxy.totalCalls(),
                         viaProxy.reasoningTokens(),
                         UsageProvenance.PROXY);
+            }
+            if (state.retryAttempted()) {
+                // The final retry report cannot establish the turn's total without its per-call account.
+                return new TurnUsage(
+                        new UsageBreakdown(runner.model(), 0, 0, 0, 0),
+                        state.observedCallCount(),
+                        0,
+                        UsageProvenance.NONE);
             }
         }
         return new TurnUsage(runner, state.observedCallCount(), 0, UsageProvenance.RUNNER);

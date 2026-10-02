@@ -423,6 +423,43 @@ const bigToolCall: Reply = { toolCall: HISTORY, promptTokens: 105_000 };
 const piError = (runner: Runner) =>
 	String(runner.events.find((e) => e.type === "pi_error")?.event.error);
 
+void test("a native retry exposes its earlier calls but settles only its final continuation", async (t) => {
+	const model = await fakeModel(t, (_kind, index) => {
+		if (index === 0) {
+			return { toolCall: HISTORY, promptTokens: 1000 };
+		}
+		if (index === 1) {
+			return { status: 502 };
+		}
+		return { text: "recovered answer", promptTokens: 200 };
+	});
+	const runner = spawnRealRunner(t, runnerRoot(), model);
+	await openAndPrompt(runner, "what happened in the review?");
+	await answerFetch(runner, 100);
+	await runner.next(isEvent("agent_end"));
+	assert.deepEqual(model.calls, ["turn", "turn", "turn"]);
+	const types = typesOf(runner);
+	assert.ok(types.includes("auto_retry_start"), types.join(", "));
+	assert.ok(!types.includes("compaction_start"), types.join(", "));
+	const reported = runner.events
+		.filter((event) => event.type === "message_end")
+		.map((event) => event.event.message);
+	assert.ok(
+		reported.some(
+			(message) => isRecord(message) && isRecord(message.usage) && message.usage.input === 1000,
+		),
+	);
+	const final = runner.events.filter((event) => event.type === "agent_end");
+	assert.equal(final.length, 1);
+	const messages = final[0]?.event.messages;
+	assert.ok(Array.isArray(messages));
+	assert.equal(messages.length, 1);
+	const answer: unknown = messages[0];
+	assert.ok(isRecord(answer) && isRecord(answer.usage));
+	assert.equal(answer.stopReason, "stop");
+	assert.equal(answer.usage.input, 200);
+});
+
 void test("a completed compaction is checkpointed before the watchdog fails the turn, and restores", async (t) => {
 	const root = runnerRoot();
 	const model = await fakeModel(t, (kind, index) => {

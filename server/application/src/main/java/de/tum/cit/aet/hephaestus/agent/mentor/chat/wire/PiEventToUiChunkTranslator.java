@@ -42,6 +42,10 @@ public class PiEventToUiChunkTranslator {
             case "turn_watchdog_fired" -> handleWatchdogFired(state);
             case "session_persisted" -> handleSessionPersisted(piEvent, state);
             case "compaction_start" -> handleCompactionStart(state);
+            case "auto_retry_start" -> {
+                state.markRetryAttempted();
+                yield List.of();
+            }
             // Every other AgentSessionEvent of the pinned Pi SDK, none of which carries reply content.
             // An event not listed here may, so it fails the turn rather than vanishing: a Pi upgrade that
             // adds one must add it here.
@@ -54,7 +58,6 @@ public class PiEventToUiChunkTranslator {
                     "entry_appended",
                     "session_info_changed",
                     "thinking_level_changed",
-                    "auto_retry_start",
                     "auto_retry_end",
                     "summarization_retry_scheduled",
                     "summarization_retry_attempt_start",
