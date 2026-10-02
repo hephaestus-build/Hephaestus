@@ -64,24 +64,30 @@ public interface ReactionRepository extends JpaRepository<Reaction, UUID> {
     }
 
     /**
-     * The response that currently stands on each of these pieces of feedback, for the ones that have a
-     * response: the batch form of {@link #findCurrentResponse}, so a page of cards is one query rather than one
-     * per card. A piece of feedback whose newest snapshot says nothing — the recipient deleted their response —
-     * is absent here. The caller passes at least one id.
+     * The response that stood at {@code asOf} on each of these pieces of feedback, for the ones that had one: the
+     * newest snapshot its recipient wrote by then, the rule {@link #LATEST_RESPONSE} states, with the recipient of
+     * each piece as its reactor, so the pages of several recipients are one query. A piece of feedback whose newest
+     * snapshot says nothing (the recipient deleted their response) is absent here. The caller passes at least one id.
      */
     @Query(value = """
         SELECT latest.feedback_id AS "feedbackId", latest.usefulness AS "usefulness", latest.action AS "resolution",
                latest.explanation AS "comment", latest.created_at AS "respondedAt"
         FROM (
-        """ + LATEST_RESPONSE + """
+            SELECT DISTINCT ON (r.feedback_id) r.feedback_id, r.usefulness, r.action, r.explanation, r.created_at
+            FROM reaction r
+            JOIN feedback fb ON fb.id = r.feedback_id
+            WHERE r.feedback_id IN (:feedbackIds)
+              AND r.reactor_user_id = fb.recipient_user_id
+              AND fb.workspace_id = :workspaceId
+              AND r.created_at <= :asOf
+            ORDER BY r.feedback_id, r.created_at DESC, r.id DESC
         ) latest
-        WHERE latest.feedback_id IN (:feedbackIds)
-          AND (latest.usefulness IS NOT NULL OR latest.action IS NOT NULL)
+        WHERE latest.usefulness IS NOT NULL OR latest.action IS NOT NULL
         """, nativeQuery = true)
     List<CurrentResponseRow> findCurrentResponses(
-            @Param("reactorUserId") Long reactorUserId,
             @Param("workspaceId") Long workspaceId,
-            @Param("feedbackIds") Collection<UUID> feedbackIds);
+            @Param("feedbackIds") Collection<UUID> feedbackIds,
+            @Param("asOf") Instant asOf);
 
     interface CurrentResponseRow extends CurrentResponseProjection {
         UUID getFeedbackId();

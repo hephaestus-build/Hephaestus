@@ -15,10 +15,11 @@ export const PRACTICE_PROFILE_POLL_MS = 60_000;
  * empty until it loads. The overview is read with no window, so the server compares the latest run
  * with the one before it.
  */
-export function usePracticeProfileOverview(workspaceSlug: string) {
+export function usePracticeProfileOverview(workspaceSlug: string, enabled = true) {
 	const query = useQuery({
 		...getPracticeProfileOverviewOptions({ path: { workspaceSlug } }),
 		refetchInterval: PRACTICE_PROFILE_POLL_MS,
+		enabled,
 	});
 	return { overview: query.data ?? EMPTY_OVERVIEW, state: queryLoadState(query) };
 }

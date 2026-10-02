@@ -1,0 +1,168 @@
+import { ArrowRightIcon } from "lucide-react";
+
+import type { WorkspaceGroupSplit } from "@/api/types.gen";
+import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
+import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
+import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
+import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
+import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
+import { Button } from "@/components/ui/button";
+import { DrawerBody } from "@/components/ui/drawer";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { useRevealedRows } from "@/hooks/use-revealed-rows";
+
+import type { SplitContext } from "./across-workspace-copy";
+import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
+import { SplitLegend, WorkspaceSplitBar } from "./WorkspaceSplitBar";
+
+/** How many practices the level lists before it offers more. */
+export const PRACTICES_PAGE_SIZE = 20;
+
+/** The open group while the page loads, when the page lists no group by its slug, or ready. */
+export type WorkspaceGroupLevelState =
+	| { status: "loading" }
+	| { status: "missing" }
+	| { status: "ready"; group: WorkspaceGroupSplit; context: SplitContext };
+
+export interface WorkspaceGroupLevelProps {
+	nested?: boolean;
+	path: LevelPath;
+	state: WorkspaceGroupLevelState;
+	/** Opens a practice of the group as the next level, the reader's own practice. */
+	onViewPractice: (groupSlug: string, practiceSlug: string) => void;
+	/** Opens the reader's own group as the next level: their standing, trend and practices in it. */
+	onOpenOwnGroup: () => void;
+}
+
+/**
+ * One practice group over Practices across the workspace: the reader's own standing and trend in
+ * it, the way to their own group with the group's split under it, and each practice of the group
+ * beside how the workspace splits across that practice. Both open the next level over this one.
+ */
+export function WorkspaceGroupLevel({
+	nested,
+	path,
+	state,
+	onViewPractice,
+	onOpenOwnGroup,
+}: WorkspaceGroupLevelProps) {
+	const group = state.status === "ready" ? state.group : undefined;
+	return (
+		<>
+			<LevelHeader
+				nested={nested}
+				path={path}
+				current="Group"
+				title={group?.groupName ?? "Practice group"}
+				loading={state.status === "loading"}
+				mark={
+					group && (
+						<GroupPill
+							size="lg"
+							slug={group.groupSlug}
+							name={group.groupName}
+							icon={group.groupIcon}
+							color={group.groupColor}
+						/>
+					)
+				}
+				chips={
+					group && (
+						<span className="flex flex-col items-start gap-1.5">
+							<StandingBadge standing={group.yourStanding} scope="group" />
+							<TrendNote
+								direction={group.yourDirection}
+								support={group.yourTrendSupport}
+								scope="group"
+							/>
+						</span>
+					)
+				}
+				aside={
+					state.status === "ready" ? (
+						<div className="flex w-full flex-col items-stretch gap-3 sm:w-88 sm:items-end">
+							<Button
+								variant="outline"
+								onClick={onOpenOwnGroup}
+								aria-label={`Open your group ${state.group.groupName}`}
+							>
+								Open your group
+								<ArrowRightIcon aria-hidden data-icon="inline-end" />
+							</Button>
+							<div className="w-full">
+								<WorkspaceSplitBar
+									split={state.group.split}
+									yourStanding={state.group.yourStanding}
+									showYourWord={false}
+									{...state.context}
+								/>
+							</div>
+						</div>
+					) : undefined
+				}
+			/>
+			<DrawerBody className="flex flex-col gap-4 pt-2">
+				{state.status === "missing" ? (
+					<Empty variant="outlined">
+						<EmptyHeader>
+							<EmptyTitle>No practice group here by that name</EmptyTitle>
+							<EmptyDescription>
+								It may have been removed from this workspace. Close this panel to see every practice
+								group.
+							</EmptyDescription>
+						</EmptyHeader>
+					</Empty>
+				) : (
+					<GroupPractices key={group?.groupSlug} state={state} onViewPractice={onViewPractice} />
+				)}
+			</DrawerBody>
+		</>
+	);
+}
+
+/** The group's practices, keyed on the group so a new group starts from its first page. */
+function GroupPractices({
+	state,
+	onViewPractice,
+}: {
+	state: Exclude<WorkspaceGroupLevelState, { status: "missing" }>;
+	onViewPractice: (groupSlug: string, practiceSlug: string) => void;
+}) {
+	const group = state.status === "ready" ? state.group : undefined;
+	const rows: ComparisonRow[] = (group?.practices ?? []).map((practice) => ({
+		key: practice.practiceSlug,
+		name: practice.practiceName,
+		subject: <PracticePill name={practice.practiceName} />,
+		yourStanding: practice.yourStanding,
+		split: practice.split,
+	}));
+	const { shown, ...more } = useRevealedRows(rows, PRACTICES_PAGE_SIZE);
+	return (
+		<>
+			{/* What the bars show, the page's own legend, above the table it explains. */}
+			<SplitLegend />
+			<WorkspaceComparisonTable
+				aria-label={group === undefined ? "Practices" : `Practices of ${group.groupName}`}
+				subjectHead="Practice"
+				state={
+					state.status === "ready"
+						? { status: "ready", rows: shown, context: state.context, more }
+						: { status: "loading" }
+				}
+				noun="practices"
+				empty={{
+					title: "No practices here yet",
+					description: "Once your workspace reviews a practice in this group, it appears here.",
+				}}
+				rowLink={(row) => ({
+					text: "View practice",
+					onOpen: () => {
+						if (group !== undefined) {
+							onViewPractice(group.groupSlug, row.key);
+						}
+					},
+				})}
+			/>
+		</>
+	);
+}

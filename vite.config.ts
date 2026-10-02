@@ -432,6 +432,12 @@ export default defineConfig({
 			"dev:e2e:setup": run("node scripts/e2e-setup.ts"),
 			"dev:practice-profile:seed": run("node scripts/seed-practice-profile.ts"),
 			"dev:practice-profile:remove": run("node scripts/seed-practice-profile.ts remove"),
+			"dev:practices-across-the-workspace:seed": run(
+				"node scripts/seed-practices-across-the-workspace.ts",
+			),
+			"dev:practices-across-the-workspace:remove": run(
+				"node scripts/seed-practices-across-the-workspace.ts remove",
+			),
 			"dev:public-test": run("node scripts/jean-public-test.ts"),
 		},
 	},

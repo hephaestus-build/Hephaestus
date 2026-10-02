@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.practices;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import java.util.Collection;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,10 @@ public class PracticeRevisionService {
 
     @Transactional
     public PracticeRevision forReview(Practice practice) {
+        return pin(practice);
+    }
+
+    private PracticeRevision pin(Practice practice) {
         Practice locked = practiceRepository
                 .findByIdForUpdate(practice.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Practice", String.valueOf(practice.getId())));
@@ -26,6 +32,21 @@ public class PracticeRevisionService {
             return current;
         }
         return appendLocked(locked);
+    }
+
+    /** The revision a review pins for one practice, and whether asking for it appended it. */
+    public record ReviewRevision(PracticeRevision revision, boolean appended) {}
+
+    /** {@link #forReview(Practice)} for each practice of the workspace with one of these slugs. */
+    @Transactional
+    public List<ReviewRevision> forReview(Long workspaceId, Collection<String> slugs) {
+        return practiceRepository.findByWorkspaceIdAndSlugIn(workspaceId, slugs).stream()
+                .map(practice -> {
+                    PracticeRevision before = practice.getCurrentRevision();
+                    PracticeRevision pinned = pin(practice);
+                    return new ReviewRevision(pinned, pinned != before);
+                })
+                .toList();
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

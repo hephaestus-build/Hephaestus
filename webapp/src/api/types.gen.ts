@@ -4132,6 +4132,64 @@ export type PracticeWorkTypeDefinitionOptions = {
 };
 
 /**
+ * The reader's own practice group standings beside how the developers observed in the workspace split across the same groups, counted in developers and never naming one
+ */
+export type PracticesAcrossWorkspace = {
+  /**
+   * Members practice review is eligible for, hidden members left out; absent while the eligible developers without a standing other than the reader would be 1 to minimumOthers - 1
+   */
+  eligibleDevelopers?: number;
+  /**
+   * One row per practice group shown on the practice pages, in catalog order
+   */
+  groups: Array<WorkspaceGroupSplit>;
+  /**
+   * The fewest developers other than the reader a shown count stands for
+   */
+  minimumOthers: number;
+  /**
+   * Eligible developers with a standing in a practice group shown in the window; absent while fewer than minimumOthers of them are other than the reader
+   */
+  observedDevelopers?: number;
+  /**
+   * The reader's open feedback, counted by the rule the practice profile shows it open by, beside the middle half of every eligible developer's: both open now, whatever the window
+   */
+  openFeedback: WorkspaceTile;
+  /**
+   * The reader's practices going well
+   */
+  practicesGoingWell: WorkspaceTile;
+  /**
+   * The reader's practices needing attention
+   */
+  practicesNeedingAttention: WorkspaceTile;
+  /**
+   * Whether the reader is one of the observed developers and so inside the counts
+   */
+  readerCounted: boolean;
+  /**
+   * Pieces of the reader's work reviewed in the window
+   */
+  reviewedWork: WorkspaceTile;
+  /**
+   * Start of the window; absent for ALL_TIME, which has none
+   */
+  since?: Date;
+  /**
+   * End of the window, the moment the page was read
+   */
+  until: Date;
+  /**
+   * The window the evidence was read over
+   */
+  window: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
+  /**
+   * The practices the reader's profile lists, the denominator of the practice tiles
+   */
+  yourPractices: number;
+};
+
+/**
  * Draft connection probe using a supplied (never-persisted) credential
  */
 export type ProbeLlmConnectionRequest = {
@@ -6629,6 +6687,48 @@ export type WorkspaceAiOption = {
 };
 
 /**
+ * One practice group: the reader's own standing and how the observed developers split across it
+ */
+export type WorkspaceGroupSplit = {
+  /**
+   * Group colour name
+   */
+  groupColor?: string;
+  /**
+   * Group icon name
+   */
+  groupIcon?: string;
+  /**
+   * Group name
+   */
+  groupName: string;
+  /**
+   * Group slug
+   */
+  groupSlug: string;
+  /**
+   * The group's practices on the reader's own profile, each split on its own, in the profile's order
+   */
+  practices: Array<WorkspacePracticeSplit>;
+  /**
+   * How the observed developers split across the group
+   */
+  split: WorkspaceSplit;
+  /**
+   * The direction of the reader's own standing in the group, read over the window
+   */
+  yourDirection?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
+  /**
+   * The reader's own standing in the group, shown in every shape
+   */
+  yourStanding: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+  /**
+   * Evidence support and provenance for the reader's direction
+   */
+  yourTrendSupport?: TrendSupport;
+};
+
+/**
  * Summary information about a workspace for list views
  */
 export type WorkspaceListItem = {
@@ -6970,6 +7070,28 @@ export type WorkspaceOnboardingSettings = {
 };
 
 /**
+ * One practice of a group: the reader's own standing and how the observed developers split
+ */
+export type WorkspacePracticeSplit = {
+  /**
+   * Practice name
+   */
+  practiceName: string;
+  /**
+   * Practice slug
+   */
+  practiceSlug: string;
+  /**
+   * How the observed developers split across the practice
+   */
+  split: WorkspaceSplit;
+  /**
+   * The reader's own standing in the practice
+   */
+  yourStanding: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
+};
+
+/**
  * Available workspace creation providers and their configuration
  */
 export type WorkspaceProviders = {
@@ -6995,6 +7117,32 @@ export type WorkspaceReviewScope = {
   personUserIds: Array<number>;
   repositories: Array<ReviewRepositoryTarget>;
   repositoryMode: 'ALL_MONITORED' | 'SELECTED';
+};
+
+/**
+ * How the observed developers split across one practice group or one practice, counted in developers; every count is absent outside the shape that shows it
+ */
+export type WorkspaceSplit = {
+  /**
+   * Developers at Going well; set only for SPLIT
+   */
+  goingWell?: number;
+  /**
+   * Developers at Mixed feedback; set only for SPLIT
+   */
+  mixedFeedback?: number;
+  /**
+   * Developers at Needs attention; set only for SPLIT
+   */
+  needsAttention?: number;
+  /**
+   * Observed developers without a standing here; set only for SPLIT
+   */
+  noneYet?: number;
+  /**
+   * How the split may be shown
+   */
+  shape: 'SPLIT' | 'WITHHELD';
 };
 
 /**
@@ -7035,6 +7183,24 @@ export type WorkspaceTeamSettings = {
    * The workspace ID these settings belong to
    */
   workspaceId: number;
+};
+
+/**
+ * One figure: the reader's own value, then the middle half of the observed developers
+ */
+export type WorkspaceTile = {
+  /**
+   * Upper bound of the workspace's middle half; null when too few are observed
+   */
+  middleHigh?: number;
+  /**
+   * Lower bound of the workspace's middle half; null when too few are observed
+   */
+  middleLow?: number;
+  /**
+   * The reader's own value
+   */
+  yours: number;
 };
 
 export type GetJwksData = {
@@ -13280,6 +13446,29 @@ export type GetOwnArtifactTraceResponses = {
 };
 
 export type GetOwnArtifactTraceResponse = GetOwnArtifactTraceResponses[keyof GetOwnArtifactTraceResponses];
+
+export type GetPracticesAcrossWorkspaceData = {
+  body?: never;
+  path: {
+    /**
+     * Workspace slug
+     */
+    workspaceSlug: string;
+  };
+  query?: {
+    window?: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
+  };
+  url: '/workspaces/{workspaceSlug}/practices/workspace-overview';
+};
+
+export type GetPracticesAcrossWorkspaceResponses = {
+  /**
+   * Practices across the workspace returned
+   */
+  200: PracticesAcrossWorkspace;
+};
+
+export type GetPracticesAcrossWorkspaceResponse = GetPracticesAcrossWorkspaceResponses[keyof GetPracticesAcrossWorkspaceResponses];
 
 export type DeletePracticeData = {
   body?: never;
