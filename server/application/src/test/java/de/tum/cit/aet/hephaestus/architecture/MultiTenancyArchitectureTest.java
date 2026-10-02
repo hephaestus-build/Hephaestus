@@ -582,9 +582,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                 // IssueAgentJobEventListener handles ScmDomainEvent.Issue{Created,Labeled} whose EventContext
                 // carries the originating repository → workspaceId is resolved per-event (mirrors the PR listener)
                 "IssueAgentJobEventListener",
-                // MentorContextInvalidator handles ScmDomainEvent.{PullRequest,Issue,Review}* whose
-                // EventContext carries the originating repository → workspaceId is resolved per-event
-                "MentorContextInvalidator",
                 // GitHubProjectActivityListener handles GitHubProjectEvent payloads whose EventContext
                 // carries scopeId (the originating workspace) — same payload-carries-context contract
                 "GitHubProjectActivityListener");

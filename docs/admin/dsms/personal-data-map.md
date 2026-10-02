@@ -91,6 +91,9 @@ Slack workspace keys still distinguish suppression decisions; sharing a lock doe
 Heph conversation admission and runtime preparation also check these exact processing controls.
 An eligible model or a recreated mirrored profile cannot bypass an erased developer identity.
 This entry-point check does not itself remove copies already held by an active runtime.
+The user, workspace and authored-work context sources read their bounded data for each turn.
+They do not retain formatted personal-content caches. The unrelated practice-catalog cache remains;
+it contains workspace practice definitions, not copied developer profiles.
 
 Source connections register their provider instance even when nobody signs in through that provider.
 `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/SourceProviderNamespaces.java`

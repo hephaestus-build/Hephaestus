@@ -89,3 +89,6 @@ waits for an already active provider request to record its outcome before it rem
 Heph refuses new conversations and does not prepare a runtime for an erased identity, even if
 provider sync recreates its profile. The refusal applies to web and Slack entry points and is
 separate from Your AI choice.
+
+Heph reads your current profile and bounded work context for each turn instead of keeping formatted
+personal context in a five-minute cache. This prevents those cached copies from outliving erasure.
