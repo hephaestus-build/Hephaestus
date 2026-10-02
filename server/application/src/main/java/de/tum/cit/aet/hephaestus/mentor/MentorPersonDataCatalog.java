@@ -45,7 +45,7 @@ public class MentorPersonDataCatalog implements PersonDataCatalog {
                         "chat_thread",
                         "chat_thread",
                         "t.user_id = ANY(:users)",
-                        "id,created_at,title,user_id,workspace_id,session_jsonl,surface",
+                        "id,created_at,title,user_id,workspace_id,surface",
                         "id",
                         "",
                         -90));

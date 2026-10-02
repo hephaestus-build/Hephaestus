@@ -14,3 +14,7 @@ withdrawal, invalidation and restoration attribution while keeping the event and
 Erased provider identities cannot create a new linked account or start another practice review.
 Native Slack conversations and Outline documents are included even when the resulting observations
 are about a different participant. Shared Slack conversations retain the other participants' work.
+
+Person exports include authored milestones and commit file-change copies. Applying another
+developer's commit removes only the person's committer attribution, not that developer's work.
+Heph exports structured conversation messages, not internal runtime journals containing tool context.

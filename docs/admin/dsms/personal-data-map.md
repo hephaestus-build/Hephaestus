@@ -102,3 +102,15 @@ not enough. Shared provider metadata has an explicit empty person selection, not
 | `delivery_policy_evaluation`, `feedback_dispatch`, `reaction`, `feedback_placement`, `feedback_observation`, `feedback_approval`, `feedback_withdrawal`, `observation_invalidation`, `feedback`, `observation`, `feedback_approval_actor`, `feedback_withdrawal_actor`, `feedback_restoration_actor`, `observation_invalidation_actor`, `observation_restoration_actor` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/PracticesPersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/PracticesPersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
 | `product_feedback`, `product_survey_participation`, `product_survey_email_invitation`, `product_survey`, `product_feedback_resolver`, `product_survey_invitation_requester` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/ProductfeedbackPersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/productfeedback/ProductfeedbackPersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
 | `workspace_membership`, `workspace_hidden_former_member`, `practice_review_person_target`, `account_ai_choice`, `workspace_member_onboarding`, `workspace_onboarding_settings` | `server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspacePersonDataCatalog.java` (`select`, explicit export fields; `JdbcPersonDataStore.export`) | `server/application/src/main/java/de/tum/cit/aet/hephaestus/workspace/WorkspacePersonDataCatalog.java` (`erase` policy; `JdbcPersonDataStore.erase`) |
+
+### Shared source content and runtime journals
+
+Milestones are selected by their exact creator reference. Commit file-change copies are selected by
+the exact author or co-author reference, never by a path, name or email. Erasure clears milestone
+content and attribution while retaining its operational row, and deletes selected file-change copies
+before contributor attribution is detached. A person who only applied another developer's commit
+loses their committer attribution; the other developer's file-change rows remain.
+
+Heph exports the structured conversation messages and their parts. It does not export the internal
+runtime session journal, which can contain tool context rather than only the person's conversation.
+The journal is removed with an erased person's thread.

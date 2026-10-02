@@ -255,6 +255,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         (long) export.path("stores").path(store).size())
                 .as("Frozen preview/export parity for %s", store)
                 .isEqualTo(count));
+        assertThat(export.path("stores").path("chat_thread").toString()).doesNotContain("session_jsonl");
         assertThat(export.toString())
                 .doesNotContain(
                         "Unrelated conversation",
@@ -470,6 +471,9 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
 
     private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId, User owner) {
         ChatThread chatThread = new ChatThread();
+        chatThread.setSessionJsonl(
+                "{\"type\":\"toolResult\",\"body\":\"runtime-credential-canary unrelated-profile-canary\"}"
+                        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
         chatThread.setId(UUID.randomUUID());
         chatThread.setWorkspace(workspace);
         chatThread.setUser(owner);
