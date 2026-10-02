@@ -103,14 +103,14 @@ const ENVELOPE_MISMATCH_EXIT = 42;
 
 /** How long a tool waits for the server to answer its callback. */
 const CALLBACK_TIMEOUT_MS = 10_000;
-const TURN_BUDGET_MS = (() => {
-	const raw = Number(process.env.MENTOR_TURN_BUDGET_MS);
-	return Number.isFinite(raw) && raw > 0 ? raw : 120_000;
-})();
+const TURN_BUDGET_MS = Number(process.env.AGENT_BUDGET_MS);
+if (!Number.isFinite(TURN_BUDGET_MS) || TURN_BUDGET_MS <= 0) {
+	throw new Error("AGENT_BUDGET_MS must be a positive number");
+}
 // 30 s production grace; small overrides are test-only so watchdog rebind scenarios run in ms.
 const TURN_GRACE_MS = (() => {
 	const raw = Number(process.env.MENTOR_TURN_GRACE_MS);
-	return Number.isFinite(raw) && raw > 0 ? raw : 30_000;
+	return Number.isFinite(raw) && raw > 0 ? Math.min(raw, 30_000) : 30_000;
 })();
 // How long a timed-out turn waits for Pi's abort to settle before it fails anyway; never longer than
 // the grace, so the failure still reaches the server while it waits for one.

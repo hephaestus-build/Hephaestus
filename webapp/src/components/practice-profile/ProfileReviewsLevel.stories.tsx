@@ -195,6 +195,33 @@ export const AskingForAReview: Story = {
 	},
 };
 
+/** A finished review that left a practice undetermined does not claim there is nothing to improve. */
+export const UndeterminedResults: Story = {
+	args: {
+		feed: feedOf([
+			{
+				...openProfileReviewRun,
+				reviewId: "00000000-0000-0000-0000-0000000002b1",
+				practices: { notMet: 0, met: 0, notApplicable: 0, undetermined: 2 },
+				slippedPractices: [],
+			},
+			{
+				...openProfileReviewRun,
+				reviewId: "00000000-0000-0000-0000-0000000002b2",
+				reviewedAt: daysBefore(3),
+				practices: { notMet: 0, met: 1, notApplicable: 0, undetermined: 1 },
+				slippedPractices: [],
+			},
+		]),
+		positions: undefined,
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(screen.getAllByText("Some practices remain undetermined")).toHaveLength(2);
+		await expect(screen.queryByText("Nothing to improve")).toBeNull();
+	},
+};
+
 /** A review still going says so in words and counts nothing yet. */
 export const WhileAReviewIsRunning: Story = {
 	args: { feed: feedOf([runningProfileReviewRun, ...profileReviewRuns]) },

@@ -3718,7 +3718,7 @@ export type PracticeReleaseField = {
  */
 export type PracticeReleaseProposal = {
   base: PracticeDefinition;
-  baseSource: 'EXACT_ADOPTION' | 'BUNDLED_DIGEST_MATCH' | 'BUNDLED_FINGERPRINT_MATCH' | 'CURRENT_DEFINITION';
+  baseSource: 'EXACT_ADOPTION' | 'BUNDLED_DIGEST_MATCH' | 'BUNDLED_FINGERPRINT_MATCH' | 'REVISION_FINGERPRINT_MATCH' | 'CURRENT_DEFINITION';
   current: PracticeDefinition;
   currentRevision?: number;
   etag: string;
@@ -4948,23 +4948,23 @@ export type ReviewPracticeGroup = {
 };
 
 /**
- * What one run decided about each practice it observed for this developer, one outcome per practice however many observations it recorded about it; an invalidated observation decides nothing
+ * What one run decided about each practice it observed for this developer against the practice's whole positive standard, one count per practice however many observations it recorded; an invalidated observation decides nothing, and a met or not-met outcome recorded under an earlier or missing assessment scheme counts as undetermined
  */
 export type ReviewPracticeOutcomes = {
   /**
-   * Practices with a strength observed and no problem
+   * Practices with at least one counted met outcome and none not met
    */
   met: number;
   /**
-   * Practices whose every observation said the practice did not apply to this work
+   * Practices whose every counted outcome was not applicable
    */
   notApplicable: number;
   /**
-   * Practices with at least one problem observed
+   * Practices with at least one counted not-met outcome
    */
   notMet: number;
   /**
-   * Practices the run looked at and could not settle either way: no strength, no problem, and not only a verdict that the practice did not apply
+   * Practices the run could not settle: no counted met or not-met outcome, and not only not-applicable outcomes
    */
   undetermined: number;
 };

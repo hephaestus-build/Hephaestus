@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
 import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
+import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
+import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.usage.AdmittedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
@@ -27,6 +29,12 @@ public record MentorLlmConfig(
         @Nullable LlmPriceSnapshot priceSnapshot,
         boolean allowInternet,
         int timeoutSeconds) {
+    public MentorLlmConfig {
+        // Reserve shutdown time even for bindings persisted below the runnable floor or above the API ceiling.
+        timeoutSeconds = Math.clamp(
+                timeoutSeconds, PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS + 1, AgentBindingLimits.MAX_TIMEOUT_SECONDS);
+    }
+
     public static MentorLlmConfig fromAdmission(ModelBindingSource config, AdmittedLlmModel admitted) {
         ResolvedLlmModel resolved = admitted.resolved();
         LlmModelResolver.ConnectionRef ref = admitted.connection();

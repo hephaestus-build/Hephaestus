@@ -43,8 +43,15 @@ class PracticeOutcomeCutoverMigrationTest {
                         scalar(
                                 "SELECT count(*)::text FROM information_schema.columns WHERE table_name='observation' AND column_name='assessment_status'"))
                 .isEqualTo("1");
+        // A field the closed definition types do not read would otherwise fail every read after commit.
+        execute(
+                "UPDATE curated_practice_override SET bindings='" + BINDINGS + "' WHERE slug='cutover'",
+                "UPDATE curated_practice_override SET bindings = jsonb_set(bindings, '{0,needs,0,quality}', '\"HIGH\"') WHERE slug='cutover'");
+        assertThatThrownBy(PracticeOutcomeCutoverMigrationTest::migrate).hasStackTraceContaining("does not read");
         execute("UPDATE curated_practice_override SET bindings='" + BINDINGS + "' WHERE slug='cutover'");
         migrate();
+        execute(
+                "UPDATE curated_practice_override SET based_on_digest = 'practice:v3:' || repeat('c', 64) WHERE slug='cutover'");
         assertThat(
                         scalar(
                                 "SELECT (review_when = '{\"draftStatus\":[\"NOT_DRAFT\"]}'::jsonb)::text FROM curated_practice_override WHERE slug='non-draft-cutover'"))

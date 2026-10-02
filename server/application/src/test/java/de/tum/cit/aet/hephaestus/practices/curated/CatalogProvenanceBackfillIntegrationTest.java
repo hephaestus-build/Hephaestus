@@ -136,14 +136,47 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
     }
 
     @Test
-    void shouldUseCurrentDefinitionWhenOldFingerprintDoesNotMatch() {
+    void shouldUseCurrentDefinitionWhenNeitherTheCatalogNorTheHistoryRecordsTheSourceFingerprint() {
         seedLegacyWorkspace(
                 matching, "Locally changed criteria", false, shipped().automatedReviewPolicy(), "v3:" + "a".repeat(64));
+        jdbcTemplate.update(
+                "UPDATE practice SET source_curated_fingerprint = ? WHERE workspace_id = ?",
+                "v3:" + "b".repeat(64),
+                matching.getId());
 
         backfill.run();
 
         assertThat(baseSource(matching)).isEqualTo("CURRENT_DEFINITION");
         assertThat(baseCriteria(matching)).isEqualTo("Locally changed criteria");
+    }
+
+    @Test
+    void shouldRecoverTheBaseFromTheRevisionRecordedUnderAReleasedSchemeFingerprint() {
+        String released = "v4:3c6f0e9a1b7d24c58e0f6a2d9b4c1e7f05a8d3b6c9e2f1a4d7b0c3e6f9a2d5b8";
+        seedLegacyWorkspace(
+                matching, "Criteria as the copy recorded them", false, shipped().automatedReviewPolicy(), released);
+        Long practiceId = jdbcTemplate.queryForObject(
+                "SELECT id FROM practice WHERE workspace_id = ?", Long.class, matching.getId());
+        jdbcTemplate.update("UPDATE practice SET criteria = 'Criteria edited here' WHERE id = ?", practiceId);
+        jdbcTemplate.update(
+                "UPDATE practice_revision SET criteria = 'Criteria edited here' WHERE practice_id = ? AND revision_number = 2",
+                practiceId);
+
+        backfill.run();
+
+        assertThat(baseSource(matching)).isEqualTo("REVISION_FINGERPRINT_MATCH");
+        assertThat(baseCriteria(matching)).isEqualTo("Criteria as the copy recorded them");
+        assertThat(sourceFingerprint(matching)).isEqualTo(released);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT review_rule_fingerprint FROM practice_revision WHERE practice_id = ? AND revision_number = 1",
+                        String.class,
+                        practiceId))
+                .isEqualTo(released);
+
+        backfill.run();
+
+        assertThat(baseSource(matching)).isEqualTo("REVISION_FINGERPRINT_MATCH");
+        assertThat(baseCriteria(matching)).isEqualTo("Criteria as the copy recorded them");
     }
 
     @Test

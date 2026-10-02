@@ -217,6 +217,59 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
             Instant observedAt,
             String evidenceJson,
             @Nullable String recurrenceKey) {
+        return observe(
+                practice.getCurrentRevision().getId(),
+                practice,
+                job,
+                artifactKind,
+                artifactId,
+                about,
+                title,
+                kind,
+                severity,
+                observedAt,
+                evidenceJson,
+                recurrenceKey);
+    }
+
+    /** {@link #observe} on a pull request measured against {@code revisionId} rather than the current revision. */
+    protected UUID observeUnder(
+            long revisionId,
+            Practice practice,
+            AgentJob job,
+            long artifactId,
+            User about,
+            Outcome kind,
+            @Nullable Severity severity,
+            Instant observedAt) {
+        return observe(
+                revisionId,
+                practice,
+                job,
+                ArtifactKinds.PULL_REQUEST.value(),
+                artifactId,
+                about,
+                null,
+                kind,
+                severity,
+                observedAt,
+                DIFF_EVIDENCE_JSON,
+                null);
+    }
+
+    private UUID observe(
+            @Nullable Long revisionId,
+            Practice practice,
+            AgentJob job,
+            String artifactKind,
+            long artifactId,
+            User about,
+            @Nullable String title,
+            Outcome kind,
+            @Nullable Severity severity,
+            Instant observedAt,
+            String evidenceJson,
+            @Nullable String recurrenceKey) {
         UUID id = UUID.randomUUID();
         String summary = title == null ? "Observation " + id : title;
         observationRepository.insertIfAbsent(
@@ -225,7 +278,7 @@ public abstract class AbstractPracticeReviewIntegrationTest extends AbstractWork
                 job.getId(),
                 job.getWorkspace().getId(),
                 practice.getId(),
-                practice.getCurrentRevision().getId(),
+                revisionId,
                 artifactKind,
                 artifactId,
                 about.getId(),

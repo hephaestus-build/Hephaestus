@@ -699,6 +699,7 @@ class MentorSandboxStressTest {
         ProcessBuilder pb = new ProcessBuilder();
         Map<String, String> env = pb.environment();
         env.putAll(creds.asProcessEnv());
+        env.put("AGENT_BUDGET_MS", Long.toString(SESSION_BUDGET.toMillis()));
         // No real proxy sits in front of this stress test either, so LLM_PROXY_URL points straight
         // at the upstream gateway.
         env.put("LLM_PROXY_URL", creds.baseUrl());

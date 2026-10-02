@@ -33,7 +33,7 @@ function isRecord(value: unknown): value is Json {
 }
 
 type Reply =
-	| { text: string; promptTokens: number }
+	| { text: string; promptTokens: number; completionDelayMs?: number }
 	| { toolCall: string; promptTokens: number }
 	| { tool: string; arguments: Json; promptTokens: number }
 	| { status: number }
@@ -124,7 +124,13 @@ async function fakeModel(
 					total_tokens: reply.promptTokens + 40,
 				},
 			});
-			res.end("data: [DONE]\n\n");
+			if ("completionDelayMs" in reply && reply.completionDelayMs !== undefined) {
+				setTimeout(() => {
+					res.end("data: [DONE]\n\n");
+				}, reply.completionDelayMs).unref();
+			} else {
+				res.end("data: [DONE]\n\n");
+			}
 		});
 	});
 	server.listen(0, "127.0.0.1");
@@ -180,6 +186,7 @@ function spawnRealRunner(
 	const child = spawn(process.execPath, [RUNNER], {
 		env: {
 			...inherited,
+			AGENT_BUDGET_MS: "120000",
 			MENTOR_RUNNER_CWD: root,
 			MENTOR_RUNNER_SESSIONS_DIR: path.join(root, "sessions"),
 			MENTOR_RUNNER_SYSTEM_PROMPT_PATH: path.join(root, "system.md"),
@@ -469,7 +476,7 @@ void test("a completed compaction is checkpointed before the watchdog fails the 
 		return index === 0 ? bigToolCall : "hang";
 	});
 	const runner = spawnRealRunner(t, root, model, {
-		MENTOR_TURN_BUDGET_MS: "6000",
+		AGENT_BUDGET_MS: "6000",
 		MENTOR_TURN_GRACE_MS: "1000",
 	});
 	await openAndPrompt(runner, "how did my reviews go?", longHistory(root));
@@ -513,6 +520,33 @@ void test("a completed compaction is checkpointed before the watchdog fails the 
 	assert.ok(restoredTurn.includes("SUMMARY-CHECKPOINT") && !restoredTurn.includes(OLDEST));
 });
 
+void test("the configured turn budget covers compaction and the subsequent answer", async (t) => {
+	const root = runnerRoot();
+	const model = await fakeModel(t, (kind, index) => {
+		if (kind === "summary") {
+			return { text: SUMMARY, promptTokens: 3000, completionDelayMs: 100 };
+		}
+		return index === 0
+			? bigToolCall
+			: { text: "answer after compaction", promptTokens: 9000, completionDelayMs: 100 };
+	});
+	const runner = spawnRealRunner(t, root, model, {
+		AGENT_BUDGET_MS: "6000",
+		MENTOR_TURN_GRACE_MS: "1000",
+	});
+	await openAndPrompt(runner, "how did my reviews go?", longHistory(root));
+	await answerFetch(runner, 20_000);
+	const terminal = await runner.next(isEvent("agent_end"));
+
+	assert.ok(JSON.stringify(terminal).includes("answer after compaction"));
+	assert.equal(model.calls.filter((kind) => kind === "turn").length, 2);
+	assert.ok(model.calls.includes("summary"));
+	const types = typesOf(runner);
+	assert.ok(types.includes("compaction_end") && types.includes("session_persisted"));
+	assert.ok(!types.includes("turn_watchdog_fired"), types.join(", "));
+	assert.equal(types.filter((type) => type === "agent_end").length, 1);
+});
+
 void test("a failed compaction is not checkpointed and the restored checkpoint stays in place", async (t) => {
 	const root = runnerRoot();
 	const prior = longHistory(root);
@@ -523,7 +557,7 @@ void test("a failed compaction is not checkpointed and the restored checkpoint s
 		return index === 0 ? bigToolCall : "hang";
 	});
 	const runner = spawnRealRunner(t, root, model, {
-		MENTOR_TURN_BUDGET_MS: "6000",
+		AGENT_BUDGET_MS: "6000",
 		MENTOR_TURN_GRACE_MS: "1000",
 	});
 	await openAndPrompt(runner, "how did my reviews go?", prior);
@@ -546,7 +580,7 @@ void test("a compaction the watchdog interrupts is not checkpointed and the turn
 	const prior = longHistory(root);
 	const model = await fakeModel(t, (kind) => (kind === "summary" ? "hang" : bigToolCall));
 	const runner = spawnRealRunner(t, root, model, {
-		MENTOR_TURN_BUDGET_MS: "5000",
+		AGENT_BUDGET_MS: "5000",
 		MENTOR_TURN_GRACE_MS: "1000",
 	});
 	await openAndPrompt(runner, "how did my reviews go?", prior);

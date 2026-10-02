@@ -159,8 +159,15 @@ certainty or severity. It does not reassess old evidence against the complete pr
 
 Historical revision fingerprints remain unchanged. Earlier fingerprint schemes and missing
 fingerprints are `UNVERIFIABLE` under the current standard, so these observations remain available
-in authorized history but do not count as current evidence. A new review receives a new immutable
-revision under the current fingerprint scheme; old observations retain their original revision.
+in authorized history but do not count as current evidence; a review-run summary counts their met or
+not-met verdict as undecided. A new review receives a new immutable revision under the current
+fingerprint scheme; old observations retain their original revision.
+
+The migration keeps criteria as they were written: installed bundled copies in workspaces, instance
+overrides of bundled practices and custom definitions all keep their pre-cutover criteria, including
+instructions written for the presence and assessment matrix. Keep automated reviews paused until every
+active definition states its positive standard under the new outcome contract: instance overrides
+first, then workspace copies through audited catalogue releases, and custom practices in the editor.
 
 Before upgrading, make and verify a database backup. Upgrade the server, sandbox runtime, webapp
 and custom API consumers together. The migration removes the old assessment axes and nested

@@ -12,10 +12,12 @@ import de.tum.cit.aet.hephaestus.practices.PracticeCatalogInstallationRepository
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeUsageSnapshot;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import java.time.Clock;
 import java.util.List;
@@ -24,6 +26,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -37,6 +40,7 @@ public class CatalogProvenanceBackfill {
     private final PracticeCatalogInstallationRepository installationRepository;
     private final PracticeRepository practiceRepository;
     private final PracticeGroupRepository practiceGroupRepository;
+    private final PracticeRevisionRepository revisionRepository;
     private final CuratedCatalogService curatedCatalogService;
     private final BundledPracticeCatalogLoader bundledCatalogLoader;
     private final CuratedPracticeOverrideRepository practiceOverrideRepository;
@@ -125,13 +129,41 @@ public class CatalogProvenanceBackfill {
 
     private void setRecoveredBase(Practice practice, Map<String, PracticeDefinition> bundled) {
         String slug = Objects.requireNonNull(practice.getSourceCuratedSlug());
+        String sourceFingerprint = practice.getSourceCuratedFingerprint();
         PracticeDefinition candidate = bundled.get(slug);
-        if (candidate != null && candidate.provenanceFingerprint(slug).equals(practice.getSourceCuratedFingerprint())) {
+        if (candidate != null && candidate.provenanceFingerprint(slug).equals(sourceFingerprint)) {
             practice.setAdoptedBase(candidate);
             practice.setAdoptedBaseSource(AdoptedBaseSource.BUNDLED_FINGERPRINT_MATCH);
+            return;
+        }
+        PracticeDefinition recorded =
+                sourceFingerprint == null ? null : recordedSourceBase(practice, sourceFingerprint);
+        if (recorded != null) {
+            practice.setAdoptedBase(recorded);
+            practice.setAdoptedBaseSource(AdoptedBaseSource.REVISION_FINGERPRINT_MATCH);
         } else {
             practice.setAdoptedBase(PracticeDefinition.from(practice));
             practice.setAdoptedBaseSource(AdoptedBaseSource.CURRENT_DEFINITION);
+        }
+    }
+
+    /** Only this practice's own immutable revision under the stored source fingerprint; never a synthetic bundle. */
+    private @Nullable PracticeDefinition recordedSourceBase(Practice practice, String sourceFingerprint) {
+        PracticeRevision revision = revisionRepository
+                .findFirstByPracticeIdAndReviewRuleFingerprintOrderByRevisionNumberAsc(
+                        Objects.requireNonNull(practice.getId()), sourceFingerprint)
+                .orElse(null);
+        if (revision == null) {
+            return null;
+        }
+        try {
+            return PracticeDefinition.recordedBy(revision);
+        } catch (IllegalArgumentException rejected) {
+            log.warn(
+                    "A recorded revision cannot serve as an adopted base: practiceId={}, revisionId={}",
+                    practice.getId(),
+                    revision.getId());
+            return null;
         }
     }
 

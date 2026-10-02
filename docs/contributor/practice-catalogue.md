@@ -218,12 +218,20 @@ follows the bundle. Acknowledging a newer bundle updates the instance base; edit
 does not.
 
 Older copies cannot recover a definition that was never saved. On upgrade, a workspace copy uses the
-current bundled definition only when its saved review-rule fingerprint matches; otherwise it uses its
-current definition. An older instance customization uses the current bundle only when its saved
+current bundled definition only when its saved review-rule fingerprint matches. Otherwise it uses the
+earliest of its own immutable revisions recorded under that exact saved source fingerprint, as that
+revision recorded it, which still works after a fingerprint scheme change; the match proves a
+recorded version, not when it was adopted, and the saved fingerprint is never rewritten. Failing
+both, or when that revision lacks a complete definition, it uses its current definition. An older
+instance customization has no revision history: it uses the current bundle only when its saved
 catalog digest matches; otherwise it uses its current definition. Each saved base records which route
-was used (`EXACT_ADOPTION`, `BUNDLED_DIGEST_MATCH`, `BUNDLED_FINGERPRINT_MATCH`, or
-`CURRENT_DEFINITION`). Neither historical match proves identical content: the review-rule fingerprint
-excludes guidance, and older catalog digests predate the subject field added in
+was used (`EXACT_ADOPTION`, `BUNDLED_DIGEST_MATCH`, `BUNDLED_FINGERPRINT_MATCH`,
+`REVISION_FINGERPRINT_MATCH`, or `CURRENT_DEFINITION`). With `CURRENT_DEFINITION` or
+`REVISION_FINGERPRINT_MATCH` a release review preselects nothing: a local edit cannot be told apart
+from a catalog change, and a revision matched by its assessment fingerprint need not show the
+original guidance or delivery, since early revisions may not have recorded them. No historical match
+proves identical content: the review-rule fingerprint excludes guidance, and older catalog digests
+predate the subject field added in
 [#2160](https://github.com/hephaestus-build/Hephaestus/issues/2160). Release proposals carry the
 base source so an administrator can judge an approximate comparison rather than mistake it for
 the original adopted content.

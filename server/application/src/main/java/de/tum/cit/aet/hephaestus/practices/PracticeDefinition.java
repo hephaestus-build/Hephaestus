@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -117,6 +118,35 @@ public record PracticeDefinition(
                 practice.getWhatGoodLooksLike(),
                 practice.getGroup() == null ? null : practice.getGroup().getSlug(),
                 practice.getDeliveryBehavior());
+    }
+
+    /**
+     * The definition a revision recorded, or null when the revision predates recording a complete one: a
+     * missing field stays unknown rather than borrowing today's value.
+     */
+    public static @Nullable PracticeDefinition recordedBy(PracticeRevision revision) {
+        if (revision.getSlug() == null
+                || revision.getSignals() == null
+                || revision.getEvidenceRequirements() == null
+                || revision.getReviewWhen() == null
+                || revision.getSubject() == null
+                || revision.getAutomatedReviewPolicy() == null) {
+            return null;
+        }
+        return new PracticeDefinition(
+                revision.getName(),
+                revision.getSignals(),
+                revision.getEvidenceRequirements(),
+                revision.getReviewWhen(),
+                revision.getSubject(),
+                revision.getPrecondition(),
+                revision.getCriteria(),
+                revision.getPrecomputeScript(),
+                revision.getAutomatedReviewPolicy(),
+                revision.getWhyItMatters(),
+                revision.getWhatGoodLooksLike(),
+                revision.getGroupSlug(),
+                revision.getDeliveryBehavior());
     }
 
     /**

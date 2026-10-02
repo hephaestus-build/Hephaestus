@@ -81,9 +81,33 @@ export const DeliveryInWords: Story = {
 
 export const RecoveredBase: Story = {
 	args: { proposal: { ...proposal, baseSource: "CURRENT_DEFINITION" } },
-	play: async () => {
-		await expect(screen.getByText(/original adopted version could not be proved/u)).toBeVisible();
+	play: async ({ args }) => {
+		await expect(screen.getByText(/Choose a version for each changed field/u)).toBeVisible();
+		const accept = screen.getByRole("button", { name: "Accept selected fields" });
+		const delivery = within(
+			screen.getByRole("radiogroup", { name: "Use a version for Feedback delivery" }),
+		);
+		await expect(delivery.getByRole("radio", { name: "Offered" })).not.toBeChecked();
+		await expect(delivery.getByRole("radio", { name: "Current" })).not.toBeChecked();
+		await userEvent.click(
+			within(
+				screen.getByRole("radiogroup", { name: "Use a version for Review criteria" }),
+			).getByRole("radio", { name: "Offered" }),
+		);
+		await expect(accept).toBeDisabled();
+		await userEvent.click(delivery.getByRole("radio", { name: "Current" }));
+		await expect(accept).toBeEnabled();
+		await userEvent.click(accept);
+		await expect(args.onAccept).toHaveBeenCalledWith({
+			CRITERIA: "OFFERED",
+			DELIVERY_BEHAVIOR: "CURRENT",
+		});
 	},
+};
+
+export const RecordedVersionBase: Story = {
+	...RecoveredBase,
+	args: { proposal: { ...proposal, baseSource: "REVISION_FINGERPRINT_MATCH" } },
 };
 
 export const Submitting: Story = {

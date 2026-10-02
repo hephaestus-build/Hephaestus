@@ -61,7 +61,8 @@ const NAMED_PRACTICES = 2;
 
 /**
  * What the row leads with: the practices this review recorded a problem about, by name. A review
- * that stopped or is still going says that instead of "Nothing to improve", a claim it never made.
+ * that stopped, is still going or left a practice undetermined says that instead of "Nothing to
+ * improve", a claim it never made.
  */
 function slippedLead(run: ProfileReviewRun): string {
 	const names = run.slippedPractices.map((practice) => practice.practiceName);
@@ -75,6 +76,9 @@ function slippedLead(run: ProfileReviewRun): string {
 	}
 	if (run.status === "IN_PROGRESS") {
 		return "Still running";
+	}
+	if (run.practices.undetermined > 0) {
+		return "Some practices remain undetermined";
 	}
 	return "Nothing to improve";
 }

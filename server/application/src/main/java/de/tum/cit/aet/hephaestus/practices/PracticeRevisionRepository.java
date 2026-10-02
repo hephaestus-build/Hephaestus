@@ -34,6 +34,10 @@ public interface PracticeRevisionRepository
             findFirstByPracticeIdAndRevisionNumberGreaterThanAndReviewRuleFingerprintNotOrderByRevisionNumberAsc(
                     Long practiceId, int revisionNumber, String fingerprint);
 
+    /** The earliest revision of a practice recorded under exactly this review-rule fingerprint. */
+    Optional<PracticeRevision> findFirstByPracticeIdAndReviewRuleFingerprintOrderByRevisionNumberAsc(
+            Long practiceId, String fingerprint);
+
     /**
      * Returns the definition available at {@code asOf}, so an edit during detection cannot change the
      * recorded provenance.

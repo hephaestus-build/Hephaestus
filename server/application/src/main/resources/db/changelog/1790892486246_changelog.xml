@@ -9,6 +9,16 @@
         </preConditions>
         <comment>Replace nested practice occasions and observation axes in one transaction. Keep historical unknown definition metadata unknown; refuse occasions that cannot be flattened without changing their meaning.</comment>
         <sql splitStatements="false"><![CDATA[
+CREATE FUNCTION pg_temp.has_unknown_keys(value jsonb, known text[]) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+    SELECT value IS NOT NULL AND value <> 'null'::jsonb
+        AND (jsonb_typeof(value) <> 'object' OR value - known <> '{}'::jsonb);
+$$;
+CREATE FUNCTION pg_temp.has_unknown_item_keys(items jsonb, known text[]) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+    SELECT items IS NOT NULL AND items <> 'null'::jsonb
+        AND (jsonb_typeof(items) <> 'array'
+            OR EXISTS (SELECT 1 FROM jsonb_array_elements(items) item WHERE pg_temp.has_unknown_keys(item, known)));
+$$;
+
 DO $$
 BEGIN
     IF EXISTS (
@@ -30,6 +40,51 @@ BEGIN
                 OR jsonb_array_length(bindings->0->'appliesWhen'->'anyOf') = 0))
     ) THEN
         RAISE EXCEPTION 'Practice cutover requires one complete occasion per definition; resolve incompatible occasions before upgrading'
+            USING ERRCODE = '23514';
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM (
+            SELECT bindings FROM practice
+            UNION ALL SELECT bindings FROM practice_revision WHERE bindings IS NOT NULL
+            UNION ALL SELECT bindings FROM curated_practice_override WHERE bindings IS NOT NULL
+            UNION ALL SELECT adopted_base->'bindings' FROM practice WHERE adopted_base IS NOT NULL
+            UNION ALL SELECT adopted_base->'bindings' FROM curated_practice_override WHERE adopted_base IS NOT NULL
+        ) definitions
+        WHERE jsonb_typeof(bindings->0->'onDrafts') NOT IN ('boolean', 'null')
+            OR jsonb_typeof(bindings->0->'subject') NOT IN ('string', 'null')
+            OR bindings->0->>'subject' NOT IN ('AUTHOR', 'ASSIGNEE', 'REVIEWER', 'MERGER')
+    ) THEN
+        RAISE EXCEPTION 'Practice cutover requires each occasion to name a known subject and a true or false draft choice; correct the stored occasion before upgrading'
+            USING ERRCODE = '23514';
+    END IF;
+    -- The new definition types reject a field they do not read, so a stored one would fail every later read
+    -- of its row after this transaction commits instead of here.
+    IF EXISTS (
+        SELECT 1 FROM (
+            SELECT bindings, automated_review_policy AS policy, delivery_behavior AS delivery, NULL::jsonb AS definition
+                FROM practice
+            UNION ALL SELECT bindings, automated_review_policy, delivery_behavior, NULL FROM practice_revision
+            UNION ALL SELECT bindings, automated_review_policy, delivery_behavior, NULL FROM curated_practice_override
+            UNION ALL SELECT adopted_base->'bindings', adopted_base->'automatedReviewPolicy', adopted_base->'deliveryBehavior', adopted_base
+                FROM practice WHERE adopted_base IS NOT NULL
+            UNION ALL SELECT adopted_base->'bindings', adopted_base->'automatedReviewPolicy', adopted_base->'deliveryBehavior', adopted_base
+                FROM curated_practice_override WHERE adopted_base IS NOT NULL
+        ) stored
+        WHERE pg_temp.has_unknown_keys(definition, ARRAY['name', 'bindings', 'criteria', 'precomputeScript',
+                'automatedReviewPolicy', 'whyItMatters', 'whatGoodLooksLike', 'groupSlug', 'deliveryBehavior'])
+            OR pg_temp.has_unknown_keys(bindings->0, ARRAY['signals', 'needs', 'onDrafts', 'subject', 'appliesWhen'])
+            OR pg_temp.has_unknown_item_keys(bindings->0->'needs', ARRAY['sourceKind', 'stance'])
+            OR pg_temp.has_unknown_keys(bindings->0->'appliesWhen', ARRAY['absentSays', 'anyOf'])
+            OR pg_temp.has_unknown_item_keys(bindings->0->'appliesWhen'->'anyOf',
+                ARRAY['changedPathMatches', 'diffContains', 'evidenceHasItems'])
+            OR pg_temp.has_unknown_keys(policy, ARRAY['sourceContractVersion', 'automatedReview',
+                'whenEvidenceIsInsufficient', 'knownLimitations', 'insufficiencyReason'])
+            OR pg_temp.has_unknown_keys(policy->'automatedReview', ARRAY['mode', 'evidenceSufficiency'])
+            OR pg_temp.has_unknown_item_keys(policy->'knownLimitations', ARRAY['code', 'description'])
+            OR pg_temp.has_unknown_keys(policy->'insufficiencyReason', ARRAY['code', 'description'])
+            OR pg_temp.has_unknown_keys(delivery, ARRAY['summaryOnly', 'overlapGroup', 'redundantToSlug'])
+    ) THEN
+        RAISE EXCEPTION 'Practice cutover found a stored definition field the new practice contract does not read; remove or convert it before upgrading'
             USING ERRCODE = '23514';
     END IF;
     IF EXISTS (
@@ -110,6 +165,8 @@ UPDATE curated_practice_override SET
 DROP FUNCTION pg_temp.flat_practice_definition(jsonb);
 DROP FUNCTION pg_temp.flat_practice_precondition(jsonb);
 DROP FUNCTION pg_temp.practice_review_when(jsonb);
+DROP FUNCTION pg_temp.has_unknown_item_keys(jsonb, text[]);
+DROP FUNCTION pg_temp.has_unknown_keys(jsonb, text[]);
 
 ALTER TABLE practice
     DROP COLUMN bindings,
@@ -133,6 +190,9 @@ ALTER TABLE practice_revision
             AND evidence_requirements IS NOT NULL AND review_when IS NOT NULL AND subject IS NOT NULL));
 ALTER TABLE curated_practice_override
     DROP COLUMN bindings,
+    DROP CONSTRAINT ck_curated_practice_override_based_on,
+    ADD CONSTRAINT ck_curated_practice_override_based_on CHECK (
+        based_on_digest IS NULL OR based_on_digest ~ '^practice:v[123]:[0-9a-f]{64}$'),
     ADD CONSTRAINT ck_curated_practice_override_signals CHECK (signals IS NULL OR (jsonb_typeof(signals) = 'array' AND jsonb_array_length(signals) > 0)),
     ADD CONSTRAINT ck_curated_practice_override_evidence_requirements CHECK (evidence_requirements IS NULL OR jsonb_typeof(evidence_requirements) = 'array'),
     ADD CONSTRAINT ck_curated_practice_override_review_when CHECK (review_when IS NULL OR jsonb_typeof(review_when) = 'object'),

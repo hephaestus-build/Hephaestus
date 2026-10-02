@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -54,6 +55,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -110,6 +112,9 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private IdentityLinkRepository identityLinks;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private Workspace workspace;
     private User developer;
@@ -479,6 +484,96 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(0)
                 .jsonPath("$.run.slippedPractices[*].practiceSlug")
                 .isEqualTo(List.of("reviewable-diff-size"));
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("a run counts an earlier-standard verdict as undecided and a changed practice's verdict as measured")
+    void shouldCountAnEarlierStandardVerdictAsUndecidedWhenItsRevisionPredatesTheCurrentScheme() {
+        Instant at = LATEST_RUN_AT.plusSeconds(60);
+        AgentJob run = persistPullRequestReview(workspace, 38, at);
+        // The cutover migrated an earlier ABSENT/BAD verdict to MET.
+        UUID migratedMet = observeUnder(
+                historicalRevision(explainChanges, 2, "v4:" + "a".repeat(64)),
+                explainChanges,
+                run,
+                38L,
+                developer,
+                MET,
+                null,
+                at);
+        UUID unfingerprinted = observeUnder(
+                historicalRevision(reviewableDiffSize, 2, null),
+                reviewableDiffSize,
+                run,
+                38L,
+                developer,
+                NOT_MET,
+                Severity.MAJOR,
+                at);
+        Practice earlierNotApplicable = persistPractice(workspace, null, "earlier-not-applicable", "No occasion", null);
+        observeUnder(
+                historicalRevision(earlierNotApplicable, 2, "v4:" + "b".repeat(64)),
+                earlierNotApplicable,
+                run,
+                38L,
+                developer,
+                NOT_APPLICABLE,
+                null,
+                at);
+        Practice changedSince = persistPractice(workspace, null, "changed-since", "Changed since", null);
+        observe(changedSince, run, 38L, developer, NOT_MET, Severity.MINOR, at);
+        changedSince.setCriteria("Criteria the workspace changed after this review");
+        changedSince.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(changedSince, 2)));
+        practiceRepository.saveAndFlush(changedSince);
+
+        readRun(run.getId())
+                .jsonPath("$.run.practices.met")
+                .isEqualTo(0)
+                .jsonPath("$.run.practices.notMet")
+                .isEqualTo(1)
+                .jsonPath("$.run.practices.notApplicable")
+                .isEqualTo(1)
+                .jsonPath("$.run.practices.undetermined")
+                .isEqualTo(2)
+                .jsonPath("$.run.slippedPractices[*].practiceSlug")
+                .isEqualTo(List.of("changed-since"))
+                .jsonPath("$.observations.length()")
+                .isEqualTo(4)
+                .jsonPath("$.observations[?(@.id=='" + migratedMet + "')].outcome")
+                .isEqualTo("MET")
+                .jsonPath("$.observations[?(@.id=='" + migratedMet + "')].claimCurrentness")
+                .isEqualTo("UNVERIFIABLE")
+                .jsonPath("$.observations[?(@.id=='" + unfingerprinted + "')].outcome")
+                .isEqualTo("NOT_MET");
+        readRuns()
+                .jsonPath("$.content[0].reviewId")
+                .isEqualTo(run.getId().toString())
+                .jsonPath("$.content[0].practices.undetermined")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].slippedPractices[*].practiceSlug")
+                .isEqualTo(List.of("changed-since"));
+    }
+
+    /** A copy of the practice's current revision recorded under {@code fingerprint}, as a released build wrote it. */
+    private long historicalRevision(Practice practice, int revisionNumber, @Nullable String fingerprint) {
+        return Objects.requireNonNull(jdbcTemplate.queryForObject(
+                """
+                INSERT INTO practice_revision (
+                    practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, review_when,
+                    subject, precondition, criteria, precompute_script, automated_review_policy, delivery_behavior,
+                    why_it_matters, what_good_looks_like, group_slug, review_rule_fingerprint, created_at
+                )
+                SELECT practice_id, ?, slug, name, applies_to, signals, evidence_requirements, review_when,
+                       subject, precondition, criteria, precompute_script, automated_review_policy, delivery_behavior,
+                       why_it_matters, what_good_looks_like, group_slug, CAST(? AS varchar), created_at
+                FROM practice_revision WHERE id = ?
+                RETURNING id
+                """,
+                Long.class,
+                revisionNumber,
+                fingerprint,
+                practice.getCurrentRevision().getId()));
     }
 
     @Test
