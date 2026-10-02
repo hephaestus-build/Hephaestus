@@ -25,7 +25,7 @@ public record WorkspaceSplitDTO(
         @Nullable @Schema(description = "Developers with a standing; set only for COLLAPSED")
         Integer hasStanding,
 
-        @Nullable @Schema(description = "Observed developers without one; set only for COLLAPSED")
+        @Nullable @Schema(description = "Observed developers without one; set for SPLIT and COLLAPSED")
         Integer noneYet) {
 
     public static WorkspaceSplitDTO from(Split split) {

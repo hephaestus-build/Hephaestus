@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Bucket;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.GroupRelease;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.MiddleHalf;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Row;
+import de.tum.cit.aet.hephaestus.practices.acrossworkspace.CohortPrivacyPolicy.Totals;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspaceGroupSplitDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.WorkspacePracticeSplitDTO;
@@ -21,7 +24,6 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Clock;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -60,7 +62,7 @@ public class PracticesAcrossWorkspaceService {
     public PracticesAcrossWorkspaceDTO read(WorkspaceContext context, PracticesAcrossWorkspaceWindow window) {
         Long workspaceId = context.id();
         Instant until = clock.instant();
-        Instant since = until.minus(window.days(), ChronoUnit.DAYS);
+        @Nullable Instant since = window.since(until);
 
         // Hidden members are left out of every workspace total, so they are left out of these counts too.
         Set<Long> eligible = new LinkedHashSet<>(membershipService.practiceReviewEligibleUserIds(workspaceId));
@@ -70,42 +72,55 @@ public class PracticesAcrossWorkspaceService {
         if (reader != null) {
             read.add(reader);
         }
-        Map<Long, StandingSnapshot> snapshots =
-                practiceStandingService.getWorkspaceStandingSnapshots(workspaceId, read, since, until);
-
-        List<Long> observed = eligible.stream()
-                .filter(developer -> hasStanding(snapshots.getOrDefault(developer, NOTHING_READ)))
-                .toList();
-        boolean readerCounted = reader != null && observed.contains(reader);
-        int others = observed.size() - (readerCounted ? 1 : 0);
+        Map<Long, StandingSnapshot> snapshots = practiceStandingService.getWorkspaceStandingSnapshots(
+                workspaceId, read, since == null ? Instant.EPOCH : since, until);
         StandingSnapshot yours = reader == null ? NOTHING_READ : snapshots.getOrDefault(reader, NOTHING_READ);
 
         List<PracticeGroup> groups = practiceGroupService.listGroups(context, true);
         Map<Long, Map<String, PracticeGroupStandingDTO.Standing>> groupStandings = new HashMap<>();
-        for (Long developer : observed) {
+        for (Long developer : read) {
             groupStandings.put(developer, groupStandings(groups, snapshots.getOrDefault(developer, NOTHING_READ)));
         }
+        // Observed: a verdict in a group the page shows, the same verdicts the group standings are read off.
+        List<Long> observed = eligible.stream()
+                .filter(developer -> Objects.requireNonNull(groupStandings.get(developer)).values().stream()
+                        .anyMatch(PracticeGroupStandingDTO::isVerdict))
+                .toList();
+        boolean readerEligible = reader != null && eligible.contains(reader);
+        boolean readerCounted = reader != null && observed.contains(reader);
+        int others = observed.size() - (readerCounted ? 1 : 0);
+        Totals totals = CohortPrivacyPolicy.totals(
+                eligible.size() - (readerEligible ? 1 : 0), others, readerEligible, readerCounted);
+
         Map<String, PracticeGroupStandingDTO> yourGroups =
                 practiceGroupStandingService.summarize(groups, yours).stream()
                         .collect(Collectors.toMap(
                                 PracticeGroupStandingDTO::groupSlug, Function.identity(), (a, b) -> a));
-        Cohort cohort = new Cohort(observed, readerCounted ? reader : null);
-
         List<WorkspaceGroupSplitDTO> rows = new ArrayList<>();
         for (PracticeGroup group : groups) {
             PracticeGroupStandingDTO yourGroup = Objects.requireNonNull(yourGroups.get(group.getSlug()));
-            WorkspaceSplitDTO groupSplit = cohort.split(developer -> Bucket.of(Objects.requireNonNull(
-                    groupStandings.getOrDefault(developer, Map.of()).get(group.getSlug()))));
-            List<WorkspacePracticeSplitDTO> practices = yours.practices().values().stream()
+            List<PracticeStandingDTO> practices = yours.practices().values().stream()
                     .map(StandingSnapshot.PracticeStanding::dto)
                     .filter(practice -> group.getSlug().equals(practice.groupSlug()))
-                    .map(practice -> new WorkspacePracticeSplitDTO(
-                            practice.slug(),
-                            practice.name(),
-                            practice.standing(),
-                            cohort.split(developer ->
-                                    practiceBucket(snapshots.getOrDefault(developer, NOTHING_READ), practice.slug()))))
                     .toList();
+            Function<Long, Row> rowOf = developer -> new Row(
+                    Bucket.of(Objects.requireNonNull(Objects.requireNonNull(groupStandings.get(developer))
+                            .get(group.getSlug()))),
+                    practices.stream()
+                            .map(practice ->
+                                    practiceBucket(snapshots.getOrDefault(developer, NOTHING_READ), practice.slug()))
+                            .toList());
+            GroupRelease release =
+                    CohortPrivacyPolicy.group(observed.stream().map(rowOf).toList());
+            List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
+            for (int index = 0; index < practices.size(); index++) {
+                PracticeStandingDTO practice = practices.get(index);
+                practiceSplits.add(new WorkspacePracticeSplitDTO(
+                        practice.slug(),
+                        practice.name(),
+                        practice.standing(),
+                        WorkspaceSplitDTO.from(release.practices().get(index))));
+            }
             rows.add(new WorkspaceGroupSplitDTO(
                     group.getSlug(),
                     group.getName(),
@@ -114,34 +129,32 @@ public class PracticesAcrossWorkspaceService {
                     yourGroup.standing(),
                     yourGroup.direction(),
                     yourGroup.trendSupport(),
-                    groupSplit,
-                    practices));
+                    WorkspaceSplitDTO.from(release.group()),
+                    practiceSplits));
         }
 
         List<StandingSnapshot> observedSnapshots = observed.stream()
                 .map(developer -> snapshots.getOrDefault(developer, NOTHING_READ))
                 .toList();
-        // Counted per developer by the profile's own rule, so the reader's figure is the one their profile shows.
-        Map<Long, Integer> openFeedback = new HashMap<>();
-        for (Long developer : observed) {
-            openFeedback.put(developer, inAppFeedbackService.countOpen(workspaceId, developer));
+        // Open now, for the reader and the workspace alike, so the tile sets one moment beside one moment: every
+        // eligible developer, whatever the window, counted by the profile's own rule in one pass.
+        Set<Long> recipients = new LinkedHashSet<>(eligible);
+        if (reader != null) {
+            recipients.add(reader);
         }
-        int yourOpenFeedback = reader == null
-                ? 0
-                : openFeedback.computeIfAbsent(
-                        reader, developer -> inAppFeedbackService.countOpen(workspaceId, developer));
+        Map<Long, Integer> openFeedback = inAppFeedbackService.countOpen(workspaceId, recipients, until);
         MiddleHalf openMiddle = CohortPrivacyPolicy.middleHalf(
-                observed.stream()
+                eligible.stream()
                         .map(developer -> openFeedback.getOrDefault(developer, 0))
                         .toList(),
-                others);
+                eligible.size() - (readerEligible ? 1 : 0));
         return new PracticesAcrossWorkspaceDTO(
                 window,
                 since,
                 until,
                 CohortPrivacyPolicy.MINIMUM_OTHERS,
-                eligible.size(),
-                observed.size(),
+                totals.eligible(),
+                totals.observed(),
                 readerCounted,
                 yours.practices().size(),
                 tile(yours, observedSnapshots, others, PracticesAcrossWorkspaceService::reviewedWork),
@@ -156,26 +169,10 @@ public class PracticesAcrossWorkspaceService {
                         others,
                         snapshot -> practicesAt(snapshot, PracticeStandingDTO.Standing.DEVELOPING)),
                 new WorkspaceTileDTO(
-                        yourOpenFeedback,
+                        reader == null ? 0 : openFeedback.getOrDefault(reader, 0),
                         openMiddle == null ? null : openMiddle.low(),
                         openMiddle == null ? null : openMiddle.high()),
                 rows);
-    }
-
-    /**
-     * The observed developers one split is counted over, and the reader among them when counted. Every split on the
-     * page, a group's or a practice's, is taken here, so each counts the same developers under the same rule.
-     */
-    private record Cohort(List<Long> observed, @Nullable Long reader) {
-
-        WorkspaceSplitDTO split(Function<Long, Bucket> bucketOf) {
-            List<Bucket> others = observed.stream()
-                    .filter(developer -> !developer.equals(reader))
-                    .map(bucketOf)
-                    .toList();
-            return WorkspaceSplitDTO.from(
-                    CohortPrivacyPolicy.split(others, reader == null ? null : bucketOf.apply(reader)));
-        }
     }
 
     /** A practice the developer's snapshot does not list is one nothing reached for them: none yet. */
@@ -200,12 +197,6 @@ public class PracticesAcrossWorkspaceService {
                 observed.stream().map(figure::applyAsInt).toList(), others);
         return new WorkspaceTileDTO(
                 figure.applyAsInt(yours), middle == null ? null : middle.low(), middle == null ? null : middle.high());
-    }
-
-    private static boolean hasStanding(StandingSnapshot snapshot) {
-        return snapshot.practices().values().stream()
-                .anyMatch(
-                        practice -> PracticeStandingDTO.isVerdict(practice.dto().standing()));
     }
 
     /** Distinct pieces of work any practice's latest run looked at, verdict or not: the work that was reviewed. */

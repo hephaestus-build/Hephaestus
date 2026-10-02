@@ -892,6 +892,15 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     // the predicate IS the tenancy boundary — and these rows are the first genuinely private,
     // system-authored text about a named person, so a missing one leaks more than a count.
 
+    /** {@link #READABLE_IN_APP} without the recipient, for a query that names several. */
+    String READABLE_IN_APP_ROW = """
+          AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_APP
+          AND f.deliveryState IN (
+              de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PREPARED,
+              de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
+          )
+        """;
+
     /**
      * What the recipient may read on their own practice pages, as a JPQL predicate over {@code f}: their
      * IN_APP feedback that was prepared or already read. Suppressed and superseded rows are excluded — the
@@ -901,12 +910,7 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
     String READABLE_IN_APP = """
           f.workspaceId = :workspaceId
           AND f.recipientUserId = :recipientUserId
-          AND f.channel = de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel.IN_APP
-          AND f.deliveryState IN (
-              de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.PREPARED,
-              de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState.DELIVERED
-          )
-        """;
+        """ + READABLE_IN_APP_ROW;
 
     /** Everything the recipient may read on their own practice pages ({@link #READABLE_IN_APP}), newest first. */
     @Query("SELECT f FROM Feedback f WHERE " + READABLE_IN_APP + """
@@ -914,6 +918,18 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
         """)
     List<Feedback> findReadableInAppForRecipient(
             @Param("workspaceId") Long workspaceId, @Param("recipientUserId") Long recipientUserId);
+
+    /**
+     * {@link #findReadableInAppForRecipient} for several recipients in one query, each recipient's rows newest
+     * first. The caller passes at least one recipient.
+     */
+    @Query("SELECT f FROM Feedback f WHERE f.workspaceId = :workspaceId AND f.recipientUserId IN :recipientUserIds"
+            + READABLE_IN_APP_ROW
+            + """
+        ORDER BY f.createdAt DESC, f.id DESC
+        """)
+    List<Feedback> findReadableInAppForRecipients(
+            @Param("workspaceId") Long workspaceId, @Param("recipientUserIds") Collection<Long> recipientUserIds);
 
     /**
      * The readable IN_APP feedback about one practice for the recipient, newest first — the cards a new card

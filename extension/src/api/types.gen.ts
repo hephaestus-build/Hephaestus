@@ -4136,9 +4136,9 @@ export type PracticeWorkTypeDefinitionOptions = {
  */
 export type PracticesAcrossWorkspace = {
   /**
-   * Members practice review is eligible for, hidden members left out
+   * Members practice review is eligible for, hidden members left out; absent while the eligible developers without a standing other than the reader would be 1 to minimumOthers - 1
    */
-  eligibleDevelopers: number;
+  eligibleDevelopers?: number;
   /**
    * One row per practice group shown on the practice pages, in catalog order
    */
@@ -4148,9 +4148,9 @@ export type PracticesAcrossWorkspace = {
    */
   minimumOthers: number;
   /**
-   * Eligible developers with at least one practice standing in the window
+   * Eligible developers with a standing in a practice group shown in the window; absent while fewer than minimumOthers of them are other than the reader
    */
-  observedDevelopers: number;
+  observedDevelopers?: number;
   /**
    * The reader's open feedback, counted by the rule the practice profile shows it open by; the feedback open now, whatever the window
    */
@@ -4172,9 +4172,9 @@ export type PracticesAcrossWorkspace = {
    */
   reviewedWork: WorkspaceTile;
   /**
-   * Start of the window
+   * Start of the window; absent for ALL_TIME, which has none
    */
-  since: string;
+  since?: string;
   /**
    * End of the window, the moment the page was read
    */
@@ -4182,7 +4182,7 @@ export type PracticesAcrossWorkspace = {
   /**
    * The window the evidence was read over
    */
-  window: 'TERM' | 'DAYS_30' | 'DAYS_90';
+  window: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
   /**
    * The practices the reader's profile lists, the denominator of the practice tiles
    */
@@ -13460,7 +13460,7 @@ export type GetPracticesAcrossWorkspaceData = {
     workspaceSlug: string;
   };
   query?: {
-    window?: 'TERM' | 'DAYS_30' | 'DAYS_90';
+    window?: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
   };
   url: '/workspaces/{workspaceSlug}/practices/workspace-overview';
 };

@@ -1,26 +1,24 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
-import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import org.jspecify.annotations.Nullable;
 
-/**
- * The span the page reads evidence over. Each window is checked against {@link CohortPrivacyPolicy} on its own.
- *
- * <p>{@link #TERM} is the standing's own look-back for now. Which dates a term spans, and who sets them for a
- * workspace, is an open decision recorded in ADR 0051; until it is taken a term reads the same evidence as
- * {@link #DAYS_90}.
- */
+/** The span the page reads evidence over. Each window is checked against {@link CohortPrivacyPolicy} on its own. */
 public enum PracticesAcrossWorkspaceWindow {
-    TERM(PracticeStandingService.LOOKBACK_DAYS),
+    /** Every observation recorded, with no lower bound. */
+    ALL_TIME(null),
     DAYS_30(30),
     DAYS_90(90);
 
-    private final int days;
+    private final @Nullable Integer days;
 
-    PracticesAcrossWorkspaceWindow(int days) {
+    PracticesAcrossWorkspaceWindow(@Nullable Integer days) {
         this.days = days;
     }
 
-    public int days() {
-        return days;
+    /** Where the window starts when it ends at {@code until}; null for {@link #ALL_TIME}, which has no start. */
+    public @Nullable Instant since(Instant until) {
+        return days == null ? null : until.minus(days, ChronoUnit.DAYS);
     }
 }

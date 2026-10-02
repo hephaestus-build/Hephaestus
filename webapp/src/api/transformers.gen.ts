@@ -1512,7 +1512,9 @@ const workspaceGroupSplitSchemaResponseTransformer = (data: any) => {
 
 const practicesAcrossWorkspaceSchemaResponseTransformer = (data: any) => {
   data.groups = data.groups.map((item: any) => workspaceGroupSplitSchemaResponseTransformer(item));
-  data.since = new Date(data.since);
+  if (data.since) {
+    data.since = new Date(data.since);
+  }
   data.until = new Date(data.until);
   return data;
 };

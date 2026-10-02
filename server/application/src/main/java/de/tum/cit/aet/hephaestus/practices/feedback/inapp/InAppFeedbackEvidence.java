@@ -212,6 +212,46 @@ public class InAppFeedbackEvidence {
     }
 
     /**
+     * {@link #workResolutions} for the feedback of several developers at once, each piece read against its own
+     * recipient's work as it stood at {@code asOf}: one read of the workspace's observations rather than one per
+     * developer. Reading from the oldest piece of anyone's feedback changes no answer, since only work reviewed
+     * after a piece was prepared can resolve it.
+     */
+    public Map<UUID, WorkResolution> workResolutionsAsOf(
+            Long workspaceId,
+            Collection<Feedback> feedback,
+            Map<UUID, List<Observation>> evidenceByFeedback,
+            Map<UUID, Instant> practiceChangedAt,
+            Instant asOf) {
+        List<Feedback> withEvidence = feedback.stream()
+                .filter(piece -> evidenceByFeedback.containsKey(piece.getId()))
+                .toList();
+        Optional<Instant> oldestPreparedAt =
+                withEvidence.stream().map(Feedback::getCreatedAt).min(Comparator.naturalOrder());
+        if (oldestPreparedAt.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<Feedback>> byRecipient =
+                withEvidence.stream().collect(Collectors.groupingBy(Feedback::getRecipientUserId));
+        List<Observation> later = observationRepository.findByWorkspaceBetween(
+                workspaceId, byRecipient.keySet(), oldestPreparedAt.get(), asOf);
+        Set<UUID> visible =
+                visibilityPolicy.permitsAll(workspaceId, later, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        Map<Long, List<Observation>> laterByRecipient = later.stream()
+                .filter(observation -> visible.contains(observation.getId()))
+                .collect(Collectors.groupingBy(Observation::getAboutUserId));
+        Map<UUID, WorkResolution> resolutions = new LinkedHashMap<>();
+        byRecipient.forEach((recipient, pieces) -> resolutions.putAll(workResolutionsFrom(
+                pieces,
+                evidenceByFeedback,
+                practiceChangedAt,
+                LatestRun.perClaim(laterByRecipient.getOrDefault(recipient, List.of())).stream()
+                        .collect(Collectors.groupingBy(
+                                observation -> observation.getPractice().getSlug())))));
+        return resolutions;
+    }
+
+    /**
      * {@link #workResolutions} over observations the caller already holds,
      * per practice slug, each claim at its latest run. Each practice's work is bundled once, however many
      * cards are about it.
