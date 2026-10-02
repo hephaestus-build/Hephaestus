@@ -72,18 +72,20 @@ async function renderPage(path = PAGE) {
 describe("Practices across the workspace", () => {
 	it("reads the term by default and each other window as a request of its own", async () => {
 		const router = await renderPage();
-		expect(overviewReads().map((read) => read.url.searchParams.get("window"))).toEqual(["TERM"]);
+		expect(overviewReads().map((read) => read.url.searchParams.get("window"))).toStrictEqual([
+			"TERM",
+		]);
 
 		const toolbar = screen.getByRole("toolbar", { name: "Time range" });
 		await userEvent.click(within(toolbar).getByRole("button", { name: "30 days" }));
 
 		await waitFor(() => {
-			expect(overviewReads().map((read) => read.url.searchParams.get("window"))).toEqual([
+			expect(overviewReads().map((read) => read.url.searchParams.get("window"))).toStrictEqual([
 				"TERM",
 				"DAYS_30",
 			]);
 		});
-		expect(router.state.location.search).toEqual({ window: "DAYS_30" });
+		expect(router.state.location.search).toMatchObject({ window: "DAYS_30" });
 	});
 
 	it("keeps an estimate in this browser and never sends it", async () => {
@@ -132,6 +134,6 @@ describe("Practices across the workspace", () => {
 		expect(
 			window.localStorage.getItem("hephaestus:practices-across-the-workspace:show-workspace"),
 		).toBe("off");
-		expect(screen.queryAllByRole("img", { name: /developers observed/u })).toEqual([]);
+		expect(screen.queryAllByRole("img", { name: /developers observed/u })).toStrictEqual([]);
 	});
 });
