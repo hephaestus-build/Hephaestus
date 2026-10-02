@@ -58,10 +58,10 @@ describe("orderGroups", () => {
 	];
 
 	it("keeps catalogue order while any row still asks", () => {
-		expect(orderGroups(groups, false).map((each) => each.groupSlug)).toEqual(["a", "b", "c"]);
+		expect(orderGroups(groups, false).map((each) => each.groupSlug)).toStrictEqual(["a", "b", "c"]);
 	});
 
 	it("sorts as the practice profile does once nothing asks", () => {
-		expect(orderGroups(groups, true).map((each) => each.groupSlug)).toEqual(["c", "b", "a"]);
+		expect(orderGroups(groups, true).map((each) => each.groupSlug)).toStrictEqual(["c", "b", "a"]);
 	});
 });
