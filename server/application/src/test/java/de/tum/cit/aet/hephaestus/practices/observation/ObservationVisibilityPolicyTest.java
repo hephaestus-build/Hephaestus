@@ -33,7 +33,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     @ValueSource(booleans = {true, false})
     void answersWhatEvidenceAuthorizationAnswersForACurrentObservation(boolean authorized) {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
-        Observation observation = observation("fingerprint", "fingerprint");
+        Observation observation = observation("v5:fingerprint", "v5:fingerprint");
         when(authorization.permitsAll(7L, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(authorized ? Set.of(observation.getId()) : Set.<UUID>of());
 
@@ -51,8 +51,8 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     @Test
     void authorizesOnlyTheCurrentObservationsOfABatch() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
-        Observation current = observation("fingerprint", "fingerprint");
-        Observation stale = observation("old", "current");
+        Observation current = observation("v5:fingerprint", "v5:fingerprint");
+        Observation stale = observation("v5:old", "v5:current");
         when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(current.getId()));
 
@@ -64,8 +64,8 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     @Test
     void refusesAnInvalidatedObservationWithoutAnEvidenceRead() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
-        Observation current = observation("fingerprint", "fingerprint");
-        Observation invalidated = observation("fingerprint", "fingerprint");
+        Observation current = observation("v5:fingerprint", "v5:fingerprint");
+        Observation invalidated = observation("v5:fingerprint", "v5:fingerprint");
         when(invalidations.findActiveObservationIds(7L, List.of(current.getId(), invalidated.getId())))
                 .thenReturn(Set.of(invalidated.getId()));
         when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.CONVERSATIONAL_MENTORING))
@@ -86,7 +86,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
         assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsAll(
                                 7L,
-                                List.of(observation("old", "current")),
+                                List.of(observation("v5:old", "v5:current")),
                                 SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
         verifyNoInteractions(authorization);
@@ -99,9 +99,9 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     @Test
     void shouldKeepStaleEvidenceAndDropUnverifiableEvidenceWhenFilteringWhatIsShown() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
-        Observation current = observation("fingerprint", "fingerprint");
-        Observation stale = observation("old", "current");
-        Observation unverifiable = observation(null, "current");
+        Observation current = observation("v5:fingerprint", "v5:fingerprint");
+        Observation stale = observation("v5:old", "v5:current");
+        Observation unverifiable = observation(null, "v5:current");
         when(authorization.permitsAll(7L, List.of(current, stale), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of(current.getId(), stale.getId()));
 
@@ -117,7 +117,9 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
 
         assertThat(new ObservationVisibilityPolicy(authorization, invalidations)
                         .permitsShown(
-                                7L, List.of(observation(null, "current")), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                                7L,
+                                List.of(observation(null, "v5:current")),
+                                SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isEmpty();
         verifyNoInteractions(authorization);
     }
@@ -125,7 +127,7 @@ class ObservationVisibilityPolicyTest extends BaseUnitTest {
     @Test
     void shouldHideShownEvidenceWhenEvidenceAuthorizationRefusesIt() {
         EvidenceAuthorization authorization = mock(EvidenceAuthorization.class);
-        Observation current = observation("fingerprint", "fingerprint");
+        Observation current = observation("v5:fingerprint", "v5:fingerprint");
         when(authorization.permitsAll(7L, List.of(current), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of());
 

@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.practices.model;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -26,6 +29,8 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -44,7 +49,7 @@ import org.jspecify.annotations.Nullable;
  * UPDATE names.
  *
  * <p>{@code practice_requires_current_revision_projection} is declared {@code AFTER UPDATE OF slug, name,
- * applies_to, bindings, criteria, …} — and Postgres fires an {@code UPDATE OF} trigger when a column
+ * applies_to, signals, evidence_requirements, review_when, subject, precondition, criteria, …} — and Postgres fires an {@code UPDATE OF} trigger when a column
  * appears in the SET list, whether or not its value changed. Hibernate's default whole-row update names
  * every column on every save, so changing something as unrelated as {@code autonomy} re-asserted the
  * whole projection and had the deferred trigger re-check it at commit. Setting a practice's review autonomy
@@ -111,7 +116,7 @@ public class Practice {
     private String name;
 
     /**
-     * A projection of {@link #bindings}, not a fact — {@link #setBindings} derives it from the bound signals.
+     * A projection of {@link #signals}, not a fact — {@link #setSignals} derives it from the bound signals.
      * It stays a column, rather than folding into the JSONB, because repository queries filter on it and a
      * JSONB predicate would be neither indexable nor readable.
      */
@@ -157,38 +162,50 @@ public class Practice {
     @ColumnDefault("0")
     private int displayOrder = 0;
 
-    /**
-     * The occasions this practice is reviewed on and the evidence each reads, stored as a JSONB array; the
-     * detection gate starts a review only when the observed signal is bound here. Named {@code bindings}
-     * rather than {@code on} because {@code ON} is reserved SQL (the authoring file still spells it {@code on}).
-     */
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "bindings", columnDefinition = "jsonb", nullable = false)
+    @Column(name = "signals", columnDefinition = "jsonb", nullable = false)
     @ToString.Exclude
     @Setter(lombok.AccessLevel.NONE)
-    private List<PracticeBinding> bindings = List.of();
+    private List<SignalName> signals = List.of();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "evidence_requirements", columnDefinition = "jsonb", nullable = false)
+    @ToString.Exclude
+    private List<PracticeEvidenceRequirement> evidenceRequirements = List.of();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "review_when", columnDefinition = "jsonb", nullable = false)
+    private Map<String, Set<String>> reviewWhen = Map.of();
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subject", nullable = false, length = 16)
+    @ColumnDefault("'AUTHOR'")
+    private ActorRole subject = ActorRole.AUTHOR;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "precondition", columnDefinition = "jsonb")
+    @ToString.Exclude
+    private @Nullable PracticePrecondition precondition;
 
     /**
      * The practice criteria the runtime evaluates the reviewed work against; normative text for contextual
-     * behavior assessment, separate from developer-facing guidance.
+     * practice assessment, separate from developer-facing guidance.
      */
     @Column(name = "criteria", columnDefinition = "TEXT", nullable = false)
     @ToString.Exclude
     private String criteria;
 
     /**
-     * Developer-facing rationale for why this practice matters, in plain language — never the detection
-     * rubric. MUST NOT leak detection vocabulary (PRESENT/ABSENT/GOOD/BAD/NOT_APPLICABLE), enforced by the
-     * same authoring guard as {@link #whatGoodLooksLike}.
+     * Developer-facing rationale for why this practice matters, in plain language — never the assessment
+     * criteria. The authoring guard keeps protocol vocabulary out of this guidance.
      */
     @Column(name = "why_it_matters", columnDefinition = "TEXT")
     @ToString.Exclude
     private @Nullable String whyItMatters;
 
     /**
-     * Developer-facing exemplar: a concrete instance of doing this well, not the rubric. MUST NOT restate
-     * {@link #criteria} or leak detection vocabulary (PRESENT/ABSENT/GOOD/BAD/NOT_APPLICABLE), enforced by
-     * an authoring guard.
+     * Developer-facing exemplar: a concrete instance of doing this well, not the criteria. The authoring guard keeps
+     * {@link #criteria} and protocol vocabulary out of this guidance.
      */
     @Column(name = "what_good_looks_like", columnDefinition = "TEXT")
     @ToString.Exclude
@@ -229,14 +246,9 @@ public class Practice {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    /**
-     * Sets the occasions this practice is reviewed on, and re-derives {@link #artifactKind} from them.
-     *
-     * <p>The only writer of the kind, so the projection cannot drift from the bindings it projects.
-     */
-    public void setBindings(List<PracticeBinding> bindings) {
-        this.bindings = List.copyOf(bindings);
-        this.artifactKind = PracticeBinding.artifactKindOf(this.bindings);
+    public void setSignals(List<SignalName> signals) {
+        this.signals = PracticeDefinition.canonicalSignals(signals);
+        this.artifactKind = this.signals.getFirst().artifactKind();
     }
 
     @PrePersist

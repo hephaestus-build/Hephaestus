@@ -6,11 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.evidence.RequiredCaptureQuality;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
@@ -161,15 +163,22 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         "SELECT slug, name, bindings::text, criteria, automated_review_policy::text, area_slug "
                                 + "FROM curated_practice_override ORDER BY slug")) {
             while (rows.next()) {
-                List<PracticeBinding> bindings =
-                        mapper.readValue(rows.getString("bindings"), new TypeReference<List<PracticeBinding>>() {});
+                var occasion = mapper.readTree(rows.getString("bindings")).get(0);
+                List<SignalName> signals =
+                        mapper.convertValue(occasion.get("signals"), new TypeReference<List<SignalName>>() {});
+                List<PracticeEvidenceRequirement> requirements = mapper.convertValue(
+                        occasion.get("needs"), new TypeReference<List<PracticeEvidenceRequirement>>() {});
                 PracticeAutomatedReviewPolicy policy = mapper.readValue(
                         rows.getString("automated_review_policy"), PracticeAutomatedReviewPolicy.class);
                 // Historical definitions remain editable; capture requires an explicitly updated contract.
                 assertThat(policy.sourceContractVersion().value()).isEqualTo("1.0.0");
                 PracticeDefinition historical = new PracticeDefinition(
                         rows.getString("name"),
-                        bindings,
+                        signals,
+                        requirements,
+                        java.util.Map.of(),
+                        ActorRole.AUTHOR,
+                        null,
                         rows.getString("criteria"),
                         null,
                         policy,
@@ -185,7 +194,11 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         policy.insufficiencyReason());
                 validator.validate(new PracticeDefinition(
                         rows.getString("name"),
-                        bindings,
+                        signals,
+                        requirements,
+                        java.util.Map.of(),
+                        ActorRole.AUTHOR,
+                        null,
                         rows.getString("criteria"),
                         null,
                         repinnedPolicy,
@@ -193,7 +206,7 @@ class PracticeCatalogInstallationMigrationIntegrationTest {
                         null,
                         rows.getString("area_slug")));
                 if (rows.getString("slug").equals("real-practice")) {
-                    assertThat(bindings).flatExtracting(PracticeBinding::needs).anySatisfy(need -> {
+                    assertThat(requirements).anySatisfy(need -> {
                         assertThat(need.sourceKind()).isEqualTo(new SourceKind("scm.pull-request.diff"));
                         assertThat(need.stance()).isEqualTo(EvidenceStance.REQUIRED);
                     });

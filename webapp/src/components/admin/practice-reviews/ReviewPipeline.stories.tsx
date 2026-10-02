@@ -23,7 +23,7 @@ if (FROM_DAY === undefined) {
 const PREVIOUS: PracticeReviewOverview = {
 	...quietPracticeReviewOverview,
 	reviews: { completed: 30, failed: 0, timedOut: 0, cancelled: 0, running: 0, queued: 0 },
-	observations: { strengths: 40, problems: 30, notApplicable: 5, undetermined: 3 },
+	observations: { met: 40, notMet: 30, notApplicable: 5, undetermined: 3 },
 	feedback: { ...feedbackCounts([]), delivered: 30 },
 };
 

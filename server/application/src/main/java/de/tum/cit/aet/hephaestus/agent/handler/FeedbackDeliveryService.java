@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -212,7 +212,7 @@ class FeedbackDeliveryService {
                 .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toSet());
         return delivery.diffNotes().stream()
-                .map(PracticeDetectionResultParser.DiffNote::deliveryKey)
+                .map(ReviewResultParser.DiffNote::deliveryKey)
                 .filter(java.util.Objects::nonNull)
                 .filter(key -> !delivered.contains(key))
                 .toList();

@@ -3,19 +3,17 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static java.util.stream.Collectors.joining;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.WithheldObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.WithheldObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.ArrayList;
@@ -112,15 +110,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     private ValidatedObservation positiveObservation(String slug) {
-        return new ValidatedObservation(
-                slug,
-                humanizeTitle(slug) + " (positive)",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
-                null,
-                null,
-                null);
+        return new ValidatedObservation(slug, humanizeTitle(slug) + " (positive)", Outcome.MET, null, null, null);
     }
 
     private ValidatedObservation negativeObservation(
@@ -131,14 +121,7 @@ class DeliveryComposerTest extends BaseUnitTest {
             @Nullable List<String> snippets,
             @Nullable String reasoning) {
         return new ValidatedObservation(
-                slug,
-                title,
-                AssessmentStatus.ASSESSED,
-                Presence.ABSENT,
-                Assessment.GOOD,
-                severity,
-                buildEvidence(locations, snippets),
-                reasoning);
+                slug, title, Outcome.NOT_MET, severity, buildEvidence(locations, snippets), reasoning);
     }
 
     private static ValidatedObservation withBehavior(
@@ -146,9 +129,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         return new ValidatedObservation(
                 observation.practiceSlug(),
                 observation.summary(),
-                observation.assessmentStatus(),
-                observation.presence(),
-                observation.assessment(),
+                observation.outcome(),
                 observation.severity(),
                 observation.evidence(),
                 observation.evidenceRationale(),
@@ -320,9 +301,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     private static final List<ValidatedObservation> ONE_MINOR = List.of(new ValidatedObservation(
             "describe-what-and-why",
             "PR description lacks a rationale sentence",
-            AssessmentStatus.ASSESSED,
-            Presence.ABSENT,
-            Assessment.GOOD,
+            Outcome.NOT_MET,
             Severity.MINOR,
             null,
             "The body lists what changed but not why."));
@@ -405,9 +384,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation observation = new ValidatedObservation(
                 "describe-what-and-why",
                 "The change does not explain the problem it solves",
-                AssessmentStatus.ASSESSED,
-                Presence.ABSENT,
-                Assessment.GOOD,
+                Outcome.NOT_MET,
                 Severity.MINOR,
                 null,
                 "I scanned the project inventory for an artifact (e.g. #21 covers deferred steps). "
@@ -498,9 +475,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation strength = identified(new ValidatedObservation(
                 "error-state-handling",
                 "Error state handling (positive)",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
+                Outcome.MET,
                 null,
                 null,
                 "Network errors are surfaced to the user via an alert."));
@@ -575,18 +550,14 @@ class DeliveryComposerTest extends BaseUnitTest {
             ValidatedObservation broad = identified(new ValidatedObservation(
                     "links-the-change-to-its-issue",
                     "Title, body and branch all name the issue",
-                    AssessmentStatus.ASSESSED,
-                    Presence.PRESENT,
-                    Assessment.GOOD,
+                    Outcome.MET,
                     null,
                     buildEvidence(List.of(new LocationSpec("README.md", 1), new LocationSpec("docs/plan.md", 3)), null),
                     "Three places name it."));
             ValidatedObservation cited = identified(new ValidatedObservation(
                     "links-the-change-to-its-issue",
                     "The closing keyword names the issue",
-                    AssessmentStatus.ASSESSED,
-                    Presence.PRESENT,
-                    Assessment.GOOD,
+                    Outcome.MET,
                     null,
                     buildEvidence(List.of(new LocationSpec("README.md", 1)), null),
                     "One place names it."));
@@ -1050,9 +1021,9 @@ class DeliveryComposerTest extends BaseUnitTest {
     @Test
     void compose_allObservationsNotApplicable_returnsNullNoSpuriousAllClear() {
         ValidatedObservation na1 = new ValidatedObservation(
-                "issue-scoped-to-single-concern", "n/a", AssessmentStatus.NOT_APPLICABLE, null, null, null, null, "");
-        ValidatedObservation na2 = new ValidatedObservation(
-                "issue-has-checkable-outcome", "n/a", AssessmentStatus.NOT_APPLICABLE, null, null, null, null, "");
+                "issue-scoped-to-single-concern", "n/a", Outcome.NOT_APPLICABLE, null, null, "");
+        ValidatedObservation na2 =
+                new ValidatedObservation("issue-has-checkable-outcome", "n/a", Outcome.NOT_APPLICABLE, null, null, "");
 
         assertThat(DeliveryComposer.compose(List.of(na1, na2), ArtifactKinds.ISSUE))
                 .isNull();
@@ -1184,7 +1155,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         assertThat(dc.mrNote()).isNotNull();
         assertThat(dc.diffNotes()).hasSize(2);
         assertThat(dc.diffNotes())
-                .extracting(PracticeDetectionResultParser.DiffNote::filePath)
+                .extracting(ReviewResultParser.DiffNote::filePath)
                 .containsExactlyInAnyOrder("a.swift", "b.swift");
     }
 
@@ -1248,9 +1219,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         return new ValidatedObservation(
                 slug,
                 title,
-                AssessmentStatus.ASSESSED,
-                Presence.ABSENT,
-                Assessment.GOOD,
+                Outcome.NOT_MET,
                 severity,
                 buildEvidence(List.of(new LocationSpec(slug + ".swift", 10)), null),
                 title + " reasoning.");
@@ -1356,18 +1325,14 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation asProblemObservation = new ValidatedObservation(
                 "uses-force-unwrap",
                 "Force-unwrap present in changed code",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.BAD,
+                Outcome.NOT_MET,
                 Severity.MAJOR,
                 evidence,
                 "Force-unwrapping crashes on nil.");
         ValidatedObservation asStrengthObservation = new ValidatedObservation(
                 "uses-force-unwrap",
                 "Force-unwrap present in changed code",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
+                Outcome.MET,
                 null,
                 evidence,
                 "Force-unwrapping crashes on nil.");
@@ -1535,15 +1500,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     private ValidatedObservation positiveWithReasoning(String slug, String reasoning) {
-        return new ValidatedObservation(
-                slug,
-                humanizeTitle(slug) + " (positive)",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
-                null,
-                null,
-                reasoning);
+        return new ValidatedObservation(slug, humanizeTitle(slug) + " (positive)", Outcome.MET, null, null, reasoning);
     }
 
     @Test
@@ -2009,9 +1966,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation f = identified(new ValidatedObservation(
                 "ships-tests-with-the-change",
                 "New branch ships without a test",
-                AssessmentStatus.ASSESSED,
-                Presence.ABSENT,
-                Assessment.GOOD,
+                Outcome.NOT_MET,
                 Severity.MAJOR,
                 buildEvidence(
                         List.of(new LocationSpec("Billing/Invoice.java", 42)),
@@ -2039,9 +1994,7 @@ class DeliveryComposerTest extends BaseUnitTest {
         ValidatedObservation good = identified(new ValidatedObservation(
                 "ships-tests-with-the-change",
                 "Tests ship with the change",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD,
+                Outcome.MET,
                 null,
                 null,
                 "MEASURED REASONING: the new branch is covered."));

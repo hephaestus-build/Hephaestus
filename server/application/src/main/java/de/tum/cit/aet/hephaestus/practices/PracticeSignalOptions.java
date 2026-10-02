@@ -5,9 +5,11 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactDescriptor;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateDimension;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Signal;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -110,6 +112,31 @@ public class PracticeSignalOptions {
                 .flatMap(descriptor -> descriptor.signal(signal))
                 .filter(declared -> !declared.producedBy().isEmpty())
                 .isPresent();
+    }
+
+    public List<ReviewStateDimension> reviewWhenDimensionsFor(ArtifactKind kind) {
+        return artifacts
+                .descriptorFor(kind)
+                .map(descriptor -> descriptor.reviewCapabilities().reviewWhenDimensions())
+                .orElseGet(List::of);
+    }
+
+    public Set<String> preconditionSupportedAspectsFor(ArtifactKind kind) {
+        return artifacts
+                .descriptorFor(kind)
+                .map(descriptor -> descriptor.reviewCapabilities().preconditionSupportedAspects())
+                .orElseGet(Set::of);
+    }
+
+    public Set<String> preconditionEvidenceCollectionsFor(ArtifactKind kind) {
+        return artifacts
+                .descriptorFor(kind)
+                .map(descriptor -> descriptor.reviewCapabilities().preconditionEvidenceCollections())
+                .orElseGet(Set::of);
+    }
+
+    public Map<String, Set<String>> defaultReviewWhenFor(ArtifactKind kind) {
+        return ReviewWhen.recommended(reviewWhenDimensionsFor(kind));
     }
 
     private Stream<Signal> declaredOptions(ArtifactKind kind) {

@@ -277,10 +277,10 @@ it at all.
   class, so a later `MANUAL` result follows an earlier `LIVE` one. `BACKFILL`, a catch-up review of work that already
   existed, is the other: never read a backfill result and a `LIVE` or `MANUAL` one as earlier and later, or as
   progress.
-- `outcome` is the authoritative result of that one observation, about the behavior it names and the evidence it
-  cites: `POSITIVE` or `NEGATIVE` for that behavior, read as given. It says nothing about the rest of the practice or
-  the work — a practice can have observations from different reviews, and one positive result does not make
-  the work correct — and it is never a grade of the developer.
+- `outcome` records conformance to the practice criteria within the cited evidence boundary: `MET`
+  or `NOT_MET`. Read it as given. A practice can have observations from different reviews. A met result
+  does not establish general correctness or mastery; a not-met result describes the recorded shortfall,
+  never a grade of the developer.
 - Interpret a recorded judgment against the `criteria` in its detail, pinned by `practiceRevisionId` to the
   practice it reviewed. Its rationale can be wrong; compare it with those criteria and the quoted work. The current
   catalogue and the developer's intention do not change that earlier standard. When `criteriaNotLoaded` is true,
@@ -507,7 +507,7 @@ does not establish. A stated need does not establish that users encountered or r
 When a rationale is missing, name the decision, need or constraint the developer should explain; do not supply
 a finished sentence for them to paste. Use a shaped blank (`<the constraint that drove this>`) or a grounded
 example that adds no factual premise, using only words you can quote from their work. Do not attach
-generic future-tense advice to an observation that is PRESENT/GOOD — if the review affirmed something, affirm the
+generic future-tense advice to an observation whose outcome is MET — if the review affirmed something, affirm the
 specific strategy and stop; don't manufacture a "next time, make sure to…" nag on work that was already good.
 
 ### Count a fact once — don't double-up co-occurring observations (M4)

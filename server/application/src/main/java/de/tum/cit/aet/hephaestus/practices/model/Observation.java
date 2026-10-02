@@ -33,8 +33,7 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Immutable assessment of one practice on one work artifact. Presence and assessment are separate axes;
- * later reviews append a new row. The recurrence key groups locations, not equivalent behaviors.
+ * Immutable assessment of one practice on one work artifact. Later reviews append a new row. The recurrence key groups locations, not equivalent behaviors.
  */
 @Entity
 @Immutable
@@ -149,8 +148,7 @@ public class Observation {
      * Cross-run location grouping (practice, artifact, subject and file), computed by
      * {@link de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint}. Several different
      * behaviors can share it, so row identity uses the observation itself. A developer's dispute or "not
-     * applicable" carries to a later review's observation with this key and the same presence and assessment
-     * (ADR 0022, update of 2026-09-28); within one review it binds only the observations its feedback was written
+     * applicable" carries to a later review's observation with this key and the same outcome; within one review it binds only the observations its feedback was written
      * from. NULL means no grouping was recorded.
      */
     @Column(name = "recurrence_key", length = 64)
@@ -162,18 +160,8 @@ public class Observation {
 
     @NotNull
     @Enumerated(EnumType.STRING)
-    @Column(name = "assessment_status", length = 16, nullable = false)
-    private AssessmentStatus assessmentStatus;
-
-    /** The specified behavior’s presence; null unless assessed. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "presence", length = 16)
-    private Presence presence;
-
-    /** The judgment of the work; null unless assessed. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "assessment", length = 8)
-    private Assessment assessment;
+    @Column(name = "outcome", length = 16, nullable = false)
+    private Outcome outcome;
 
     /**
      * How this measurement was occasioned — see {@link ObservationOrigin}. NOT NULL with a {@code LIVE}
@@ -188,8 +176,8 @@ public class Observation {
     private ObservationOrigin origin = ObservationOrigin.LIVE;
 
     /**
-     * Impact band — required for a {@link Outcome#NEGATIVE} outcome; NULL on a positive or
-     * unassessed row. The database and {@link AssessmentStatus#validate} enforce the same invariant.
+     * Impact band — required for a {@link Outcome#NOT_MET} outcome; NULL on a positive or
+     * undecided row. The database and {@link Outcome#validate} enforce the same invariant.
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "severity", length = 16)
@@ -206,19 +194,6 @@ public class Observation {
     @Column(name = "observed_at", nullable = false)
     private Instant observedAt;
 
-    /** The result is derived, never persisted separately from its axes. */
-    @jakarta.persistence.Transient
-    public @org.jspecify.annotations.Nullable Outcome getOutcome() {
-        return Outcome.of(presence, assessment);
-    }
-
-    /**
-     * JPA-path safety net only: the production write path is the native
-     * {@code ObservationRepository.insertIfAbsent} (this entity is {@code @Immutable}; nothing calls
-     * {@code save()}), so this never fires in prod. Kept so the coherence invariants documented on
-     * {@link #assessment} and {@link #severity} stay enforced for any future caller that does persist
-     * through JPA.
-     */
     @PrePersist
     protected void onCreate() {
         if (id == null) {
@@ -230,9 +205,9 @@ public class Observation {
         if (origin == null) {
             origin = ObservationOrigin.LIVE;
         }
-        if (assessmentStatus == null) {
-            throw new IllegalStateException("Assessment status is required");
+        if (outcome == null) {
+            throw new IllegalStateException("Outcome is required");
         }
-        assessmentStatus.validate(presence, assessment, severity);
+        outcome.validate(severity);
     }
 }

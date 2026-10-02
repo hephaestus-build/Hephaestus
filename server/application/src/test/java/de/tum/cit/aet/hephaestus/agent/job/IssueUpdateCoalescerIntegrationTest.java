@@ -33,8 +33,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -50,6 +50,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
@@ -142,7 +144,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         practice.setName("Issue metadata review");
         practice.setCriteria("Review the issue");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ScmSignals.ISSUE));
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.ISSUE_UPDATED));
+        PracticeTestEvidence.configure(practice, ScmSignals.ISSUE_UPDATED);
         practices.save(practice);
 
         var connection = connections.save(LlmCatalogTestFixtures.connection(slug));
@@ -204,8 +206,18 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         return users.save(user);
     }
 
-    @Test
-    void shouldCommitIntermediateSuppressionAndTheSubmittedJobTogether(CapturedOutput output) {
+    @ParameterizedTest
+    @EnumSource(
+            value = Issue.State.class,
+            names = {"OPEN", "CLOSED"})
+    void shouldCommitIntermediateSuppressionAndTheSubmittedJobTogether(Issue.State state, CapturedOutput output) {
+        issue.setState(state);
+        issue.setBody("The current outcome");
+        current = ScmSignals.issueKey(
+                        workspace.getId(), ScmSignals.ISSUE_UPDATED, ScmEventPayload.IssueData.from(issue))
+                .orElseThrow();
+        transactions.executeWithoutResult(status -> signals.insertDeferred(
+                current, UUID.randomUUID(), NOW.minusSeconds(30), NOW.minusSeconds(30), finalActorId));
         transactions.executeWithoutResult(status -> {
             coalescer.drain(workspace.getId(), current.artifactId(), NOW);
             assertThat(output).doesNotContain("agent.job.queued");
@@ -213,7 +225,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         assertThat(output).containsOnlyOnce("agent.job.queued");
 
         assertThat(signals.findForArtifact(workspace.getId(), ScmSignals.ISSUE.value(), current.artifactId()))
-                .hasSize(2)
+                .hasSize(3)
                 .allSatisfy(signal -> {
                     if (signal.key().equals(current)) {
                         assertThat(signal.getState()).isEqualTo(SignalState.TRIGGERED);
@@ -221,6 +233,10 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                                         Objects.requireNonNull(signal.getJobId()), workspace.getId())
                                 .orElseThrow();
                         assertThat(job.getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+                        assertThat(Objects.requireNonNull(job.getMetadata())
+                                        .path("state")
+                                        .asString())
+                                .isEqualTo(state.name());
                         assertThat(Objects.requireNonNull(job.getMetadata())
                                         .get(AgentJob.SIGNAL_REVISION_METADATA_KEY)
                                         .asString())
@@ -237,6 +253,9 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                         assertThat(signal.getStateReason()).isEqualTo(SignalStateReason.COALESCED);
                     }
                 });
+        transactions.executeWithoutResult(status -> coalescer.drain(workspace.getId(), current.artifactId(), NOW));
+        assertThat(jobs.findListRows(workspace.getId(), null, Pageable.unpaged()))
+                .hasSize(1);
     }
 
     @Test
@@ -423,7 +442,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
                 });
     }
 
-    record Fixture(IssueRepository issues, PracticeReviewDetectionGate gate, WorkspaceResolver workspaceResolver) {}
+    record Fixture(IssueRepository issues, ReviewGate gate, WorkspaceResolver workspaceResolver) {}
 
     @TestConfiguration
     static class Configuration {
@@ -432,7 +451,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
             return new PullRequestSignalResubmitter(
                     mock(AgentJobService.class),
                     mock(PullRequestRepository.class),
-                    mock(PracticeReviewDetectionGate.class),
+                    mock(ReviewGate.class),
                     recorder,
                     mock(PullRequestReviewRepository.class),
                     mock(IntegrationManifestRegistry.class));
@@ -440,10 +459,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
 
         @Bean
         Fixture coalescerFixture() {
-            return new Fixture(
-                    mock(IssueRepository.class),
-                    mock(PracticeReviewDetectionGate.class),
-                    mock(WorkspaceResolver.class));
+            return new Fixture(mock(IssueRepository.class), mock(ReviewGate.class), mock(WorkspaceResolver.class));
         }
 
         @Bean

@@ -28,6 +28,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.Getter;
@@ -65,6 +66,11 @@ public class Issue extends BaseGitServiceEntity {
     @Nullable
     @Column(name = "review_snapshot_digest", length = 128, insertable = false, updatable = false)
     private String reviewSnapshotDigest;
+
+    /** Categorical scheduling facts recorded by the SCM mirror; absent state remains unknown. */
+    public Map<String, String> reviewState() {
+        return state == null ? Map.of() : Map.of("state", state.name());
+    }
 
     public ReviewSubject reviewSubject() {
         return author == null

@@ -304,9 +304,7 @@ class ConversationFeedbackErasureIntegrationTest extends BaseIntegrationTest {
                 artifactId,
                 recipient.getId(),
                 "Observation title",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 null,
                 null,
@@ -335,13 +333,13 @@ class ConversationFeedbackErasureIntegrationTest extends BaseIntegrationTest {
 
     private Practice savePractice(Workspace workspace) {
         Practice practice = new Practice();
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.CONVERSATION_THREAD);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         practice.setWorkspace(workspace);
         practice.setSlug("erasure-practice-" + workspace.getId());
         practice.setName("Erasure Practice");
         practice.setCriteria("Test description");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         return practiceRepository.save(practice);
     }
 

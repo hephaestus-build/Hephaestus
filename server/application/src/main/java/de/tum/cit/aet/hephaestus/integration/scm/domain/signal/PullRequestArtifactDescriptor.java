@@ -15,7 +15,9 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateDimension;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Signal;
 import java.util.List;
 import java.util.Set;
@@ -71,6 +73,32 @@ public class PullRequestArtifactDescriptor implements ArtifactDescriptor {
             declareManualRequest(ScmSignals.PULL_REQUEST_MANUAL_REVIEW, "Review requested by hand"));
 
     @Override
+    public ReviewCapabilities reviewCapabilities() {
+        return new ReviewCapabilities(
+                List.of(new ReviewLimitation(
+                        "RUNTIME_BEHAVIOR_NOT_OBSERVED",
+                        "Repository evidence does not establish behavior in a deployed runtime.")),
+                List.of(
+                        new ReviewStateDimension(
+                                "draftStatus",
+                                "Draft status",
+                                List.of(
+                                        new ReviewStateDimension.Value("DRAFT", "Draft"),
+                                        new ReviewStateDimension.Value("NOT_DRAFT", "Not draft")),
+                                Set.of("NOT_DRAFT")),
+                        new ReviewStateDimension(
+                                "state",
+                                "State",
+                                List.of(
+                                        new ReviewStateDimension.Value("OPEN", "Open"),
+                                        new ReviewStateDimension.Value("CLOSED", "Closed"),
+                                        new ReviewStateDimension.Value("MERGED", "Merged")),
+                                Set.of("OPEN", "CLOSED", "MERGED"))),
+                Set.of("CHANGED_PATH", "DIFF_TEXT", "EVIDENCE_ITEMS"),
+                Set.of("scm.review-threads", "scm.inline-review-comments", "scm.general-review-comments"));
+    }
+
+    @Override
     public ArtifactKind kind() {
         return ScmSignals.PULL_REQUEST;
     }
@@ -94,13 +122,6 @@ public class PullRequestArtifactDescriptor implements ArtifactDescriptor {
     public Set<FeedbackLane> lanes() {
         // A pull request carries a diff, so a finding about it can be anchored to a position in one.
         return Set.of(FeedbackLane.IN_CONTEXT_SUMMARY, FeedbackLane.IN_CONTEXT_INLINE);
-    }
-
-    @Override
-    public List<ReviewLimitation> reviewLimitations() {
-        return List.of(new ReviewLimitation(
-                "RUNTIME_BEHAVIOR_NOT_OBSERVED",
-                "Repository evidence does not establish behavior in a deployed runtime."));
     }
 
     @Override

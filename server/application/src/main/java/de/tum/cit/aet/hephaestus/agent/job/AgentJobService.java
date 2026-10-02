@@ -378,6 +378,9 @@ public class AgentJobService {
                     admission.recheckedPractices().stream().sorted().forEach(rechecked::add);
                 }
             }
+            if (admission != null && metadata instanceof ObjectNode objectMetadata) {
+                objectMetadata.set("review_state", objectMapper.valueToTree(admission.reviewState()));
+            }
             if (jobType == AgentJobType.PULL_REQUEST_REVIEW && metadata instanceof ObjectNode objectMetadata) {
                 String repository = objectMetadata.path("repository_full_name").asString();
                 var patterns = currentWorkspace.getRepositoriesToMonitor().stream()

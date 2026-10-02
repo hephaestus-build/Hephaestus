@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
@@ -18,7 +18,7 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
     @Nested
     class ReadTheDiff {
 
-        private PracticeDetectionResultParser.ValidatedObservation observation(String sourceKind) {
+        private ReviewResultParser.ValidatedObservation observation(String sourceKind) {
             ObjectNode evidence = objectMapper.createObjectNode();
             ArrayNode citations = objectMapper.createArrayNode();
             ObjectNode citation = objectMapper.createObjectNode();
@@ -27,12 +27,10 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
             citation.put("startLine", 1);
             citations.add(citation);
             evidence.set("citations", citations);
-            return new PracticeDetectionResultParser.ValidatedObservation(
+            return new ReviewResultParser.ValidatedObservation(
                     "ships-tests-with-the-change",
                     "Nothing to say here",
-                    AssessmentStatus.NOT_APPLICABLE,
-                    null,
-                    null,
+                    Outcome.NOT_APPLICABLE,
                     null,
                     evidence,
                     "The practice has no subject in this change.");
@@ -67,12 +65,10 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
             consulted.add("scm.pull-request.diff");
             inapplicability.set("consulted", consulted);
             evidence.set("inapplicability", inapplicability);
-            var observation = new PracticeDetectionResultParser.ValidatedObservation(
+            var observation = new ReviewResultParser.ValidatedObservation(
                     "describe-what-and-why",
                     "The change explains itself",
-                    AssessmentStatus.NOT_APPLICABLE,
-                    null,
-                    null,
+                    Outcome.NOT_APPLICABLE,
                     null,
                     evidence,
                     "The practice has no subject in this change.");
@@ -88,12 +84,10 @@ class PullRequestReviewHandlerStaticMethodsTest extends BaseUnitTest {
 
         @Test
         void anObservationCarryingNoEvidenceDoesNot() {
-            var withoutEvidence = new PracticeDetectionResultParser.ValidatedObservation(
+            var withoutEvidence = new ReviewResultParser.ValidatedObservation(
                     "ships-tests-with-the-change",
                     "Nothing to say here",
-                    AssessmentStatus.NOT_APPLICABLE,
-                    null,
-                    null,
+                    Outcome.NOT_APPLICABLE,
                     null,
                     null,
                     "The practice has no subject in this change.");

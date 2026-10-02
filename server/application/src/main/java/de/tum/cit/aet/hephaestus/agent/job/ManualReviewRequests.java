@@ -18,7 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
@@ -66,7 +66,7 @@ public class ManualReviewRequests {
 
     private final ReviewRequestAuthority authority;
     private final ManualReviewRateLimits rateLimits;
-    private final PracticeReviewDetectionGate gate;
+    private final ReviewGate gate;
     private final PracticeSignalOptions signalOptions;
     private final SignalRecorder signalRecorder;
     private final AgentJobService agentJobService;
@@ -75,7 +75,7 @@ public class ManualReviewRequests {
     public ManualReviewRequests(
             ReviewRequestAuthority authority,
             ManualReviewRateLimits rateLimits,
-            PracticeReviewDetectionGate gate,
+            ReviewGate gate,
             PracticeSignalOptions signalOptions,
             SignalRecorder signalRecorder,
             AgentJobService agentJobService,

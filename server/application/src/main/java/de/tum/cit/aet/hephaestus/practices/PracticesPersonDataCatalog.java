@@ -156,7 +156,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                         "observation",
                         "observation",
                         "t.about_user_id = ANY(:users) OR (t.artifact_kind IN ('scm.issue','scm.pull_request') AND t.artifact_id = ANY(:artifacts)) OR (t.artifact_kind='chat.conversation_thread' AND t.artifact_id = ANY(:conversations)) OR (t.artifact_kind='docs.document' AND t.artifact_id = ANY(:documents))",
-                        "id,occurrence_key,agent_job_id,practice_id,artifact_kind,artifact_id,about_user_id,summary,presence,severity,evidence,evidence_rationale,observed_at,recurrence_key,practice_revision_id,assessment,origin,workspace_id,assessment_status,superseded_at",
+                        "id,occurrence_key,agent_job_id,practice_id,artifact_kind,artifact_id,about_user_id,summary,outcome,severity,evidence,evidence_rationale,observed_at,recurrence_key,practice_revision_id,origin,workspace_id,superseded_at",
                         "id",
                         "",
                         -150),

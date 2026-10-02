@@ -4,7 +4,7 @@ import { expect, fn, screen, userEvent } from "storybook/test";
 import type { CatalogGroupAdoptionPreview } from "@/api/types.gen";
 import {
 	mockAuthorDeclaredEvidenceValidation,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { withPageBehind } from "@/stories/decorators";
@@ -25,7 +25,7 @@ const practice = {
 	definition: {
 		name: "Describe what changed and why",
 		artifactKind: "scm.pull_request" as const,
-		bindings: [mockPullRequestBinding],
+		...mockPullRequestReviewFields,
 		criteria: "Confirm the pull request explains both the change and its motivation.",
 		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,

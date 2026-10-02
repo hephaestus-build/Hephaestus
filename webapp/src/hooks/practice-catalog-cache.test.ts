@@ -1,6 +1,8 @@
-import { assert, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type { Practice, PracticeBinding } from "@/api/types.gen";
+import type { Practice } from "@/api/types.gen";
+import { mockAuthorDeclaredEvidenceValidation } from "@/mocks/fixtures/practice";
+
 import {
 	chosenAutonomy,
 	inheritedAutonomy,
@@ -128,14 +130,25 @@ describe("practice catalog cache updates", () => {
 			...practice("edited", "delivery", 4),
 			autonomy: chosenAutonomy("OFF"),
 			name: "Updated",
+			automatedReviewValidation: {
+				...mockAuthorDeclaredEvidenceValidation,
+				reviewRuleFingerprint: `v5:${"1".repeat(64)}`,
+			},
 		};
 
-		expect(selectPracticePatch(updated, { name: "Updated" })).toStrictEqual({ name: "Updated" });
+		expect(selectPracticePatch(updated, { name: "Updated" })).toStrictEqual({
+			name: "Updated",
+			automatedReviewValidation: updated.automatedReviewValidation,
+		});
 		expect(
 			selectPracticePatch(updated, {
 				group: { groupSlug: "delivery" },
 			}),
-		).toStrictEqual({ groupSlug: "delivery", displayOrder: 4 });
+		).toStrictEqual({
+			groupSlug: "delivery",
+			displayOrder: 4,
+			automatedReviewValidation: updated.automatedReviewValidation,
+		});
 		expect(
 			selectPracticePatch({ ...updated, whyItMatters: undefined }, { clear: ["WHY_IT_MATTERS"] }),
 		).toStrictEqual({ whyItMatters: undefined });
@@ -147,16 +160,60 @@ describe("practice catalog cache updates", () => {
 			automatedReviewPolicy: updated.automatedReviewPolicy,
 			automatedReviewValidation: updated.automatedReviewValidation,
 		});
+		expect(selectPracticePatch(updated, { criteria: updated.criteria })).toStrictEqual({
+			criteria: updated.criteria,
+			automatedReviewPolicy: updated.automatedReviewPolicy,
+			automatedReviewValidation: updated.automatedReviewValidation,
+		});
+		expect(selectPracticePatch(updated, { clear: ["PRECOMPUTE_SCRIPT"] })).toStrictEqual({
+			precomputeScript: updated.precomputeScript,
+			automatedReviewPolicy: updated.automatedReviewPolicy,
+			automatedReviewValidation: updated.automatedReviewValidation,
+		});
 		// Replacing the occasion can move the practice to a different kind of work, and with it to that
 		// kind's recommended review settings — so the optimistic patch carries those too.
-		const [replacement] = updated.bindings;
-		assert(replacement);
-		const occasion: [PracticeBinding] = [replacement];
-		expect(selectPracticePatch(updated, { bindings: occasion })).toStrictEqual({
-			bindings: occasion,
+		expect(selectPracticePatch(updated, { signals: updated.signals })).toStrictEqual({
+			signals: updated.signals,
+			evidenceRequirements: updated.evidenceRequirements,
+			reviewWhen: updated.reviewWhen,
+			subject: updated.subject,
+			precondition: updated.precondition,
 			artifactKind: updated.artifactKind,
 			automatedReviewPolicy: updated.automatedReviewPolicy,
 			automatedReviewValidation: updated.automatedReviewValidation,
 		});
 	});
+});
+
+it("reconciles the server’s new assessment basis when signals move work types", () => {
+	const updated = {
+		...mockPractice,
+		artifactKind: "scm.issue",
+		signals: ["scm.issue.opened"],
+		automatedReviewValidation: {
+			...mockAuthorDeclaredEvidenceValidation,
+			reviewRuleFingerprint: `v5:${"3".repeat(64)}`,
+		},
+	};
+	expect(selectPracticePatch(updated, { signals: updated.signals })).toMatchObject({
+		artifactKind: "scm.issue",
+		automatedReviewValidation: updated.automatedReviewValidation,
+	});
+	expect(selectPracticePatch(updated, { reviewWhen: {} })).not.toHaveProperty(
+		"automatedReviewValidation",
+	);
+});
+
+it("retains the returned assessment basis for scheduling changes within one work type", () => {
+	const current = {
+		...mockPractice,
+		automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
+	};
+	expect(
+		selectPracticePatch(current, { signals: ["scm.pull_request.merged"] })
+			.automatedReviewValidation,
+	).toStrictEqual(current.automatedReviewValidation);
+	expect(
+		selectPracticePatch(current, { reviewWhen: { draftStatus: ["DRAFT"] } }),
+	).not.toHaveProperty("automatedReviewValidation");
 });

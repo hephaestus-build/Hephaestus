@@ -86,7 +86,7 @@ The extension boundaries are:
 - **Observations** — the agent reports through `report_observation`; server admission validates it, and
   persistence assigns an occurrence identity and a separate evidence-location grouping key.
 - **Feedback** — after admission, the same agent session reports through `report_feedback` in a closed
-  intervention phase; the runner refuses a practice-page card unless the practice is NEGATIVE on as many
+  intervention phase; the runner refuses a practice-page card unless the practice is NOT_MET on as many
   distinct pieces of work as the composition request's `minDistinctArtifacts`, counting this work and
   the staged history, so one occurrence stays a note on the work.
   Server admission validates the result without invalidating completed measurement. Admitted feedback,

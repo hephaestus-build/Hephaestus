@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
+import { EMPTY_REVIEW_SETTINGS } from "./review-settings";
 
 import {
-	mockMergeBinding,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
@@ -15,15 +15,15 @@ const meta = {
 	component: PracticeEvidenceSummary,
 	args: {
 		policy: mockPullRequestPolicy,
-		bindings: [mockPullRequestBinding, mockMergeBinding],
+		...mockPullRequestReviewFields,
 		sources: mockPullRequestWorkType.allowedSources,
-		signals: mockPullRequestWorkType.signals,
+		signalOptions: mockPullRequestWorkType.signals,
 		workTypeLabel: "Pull or merge request",
 		validation: {
 			status: "AUTHOR_DECLARED",
 			sourceContractVersion: "1.2.0",
 			policyDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			reviewRuleFingerprint: `v4:${"0".repeat(64)}`,
+			reviewRuleFingerprint: `v5:${"0".repeat(64)}`,
 		},
 	},
 	parameters: { layout: "padded" },
@@ -49,21 +49,17 @@ export const AuthorDeclared: Story = {
 };
 
 export const OneOccasion: Story = {
-	args: { bindings: [mockPullRequestBinding] },
+	args: mockPullRequestReviewFields,
 };
 
 export const ScopedReviewer: Story = {
 	args: {
-		bindings: [
-			{
-				...mockPullRequestBinding,
-				subject: "REVIEWER",
-				appliesWhen: {
-					absentSays: "the change has no Swift code",
-					anyOf: [{ changedPathMatches: ["**/*.swift"] }],
-				},
-			},
-		],
+		...mockPullRequestReviewFields,
+		subject: "REVIEWER",
+		precondition: {
+			skipReason: "the change has no Swift code",
+			anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+		},
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Reviewer")).toBeVisible();
@@ -78,16 +74,12 @@ export const ScopedReviewer: Story = {
  */
 export const GatedOnEvidence: Story = {
 	args: {
-		bindings: [
-			{
-				...mockPullRequestBinding,
-				signals: [...mockPullRequestBinding.signals, "scm.pull_request.labeled"],
-				appliesWhen: {
-					absentSays: "nobody has left a review thread yet",
-					anyOf: [{ evidenceHasItems: "scm.review-threads" }],
-				},
-			},
-		],
+		...mockPullRequestReviewFields,
+		signals: [...mockPullRequestReviewFields.signals, "scm.pull_request.labeled"],
+		precondition: {
+			skipReason: "nobody has left a review thread yet",
+			anyOf: [{ evidenceHasItems: "scm.review-threads" }],
+		},
 	},
 	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.getByText("Evidence present: Review threads and decisions")).toBeVisible();
@@ -97,7 +89,7 @@ export const GatedOnEvidence: Story = {
 };
 
 export const NoOccasion: Story = {
-	args: { bindings: [] },
+	args: EMPTY_REVIEW_SETTINGS,
 };
 
 export const NarrowViewport: Story = {

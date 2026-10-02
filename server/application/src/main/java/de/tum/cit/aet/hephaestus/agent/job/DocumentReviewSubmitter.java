@@ -14,7 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -33,7 +33,7 @@ public class DocumentReviewSubmitter implements DocumentReviewTrigger, PendingSi
     private final AgentJobService agentJobService;
     private final DocumentProjection documentProjection;
     private final WorkspaceRepository workspaceRepository;
-    private final PracticeReviewDetectionGate practiceReviewDetectionGate;
+    private final ReviewGate reviewGate;
     private final SignalRecorder signalRecorder;
     private final TransactionTemplate transactionTemplate;
 
@@ -41,13 +41,13 @@ public class DocumentReviewSubmitter implements DocumentReviewTrigger, PendingSi
             AgentJobService agentJobService,
             DocumentProjection documentProjection,
             WorkspaceRepository workspaceRepository,
-            PracticeReviewDetectionGate practiceReviewDetectionGate,
+            ReviewGate reviewGate,
             SignalRecorder signalRecorder,
             TransactionTemplate transactionTemplate) {
         this.agentJobService = agentJobService;
         this.documentProjection = documentProjection;
         this.workspaceRepository = workspaceRepository;
-        this.practiceReviewDetectionGate = practiceReviewDetectionGate;
+        this.reviewGate = reviewGate;
         this.signalRecorder = signalRecorder;
         this.transactionTemplate = transactionTemplate;
     }
@@ -94,8 +94,12 @@ public class DocumentReviewSubmitter implements DocumentReviewTrigger, PendingSi
             return;
         }
 
-        switch (practiceReviewDetectionGate.evaluateSignal(
-                workspace, key.signalName(), TriggerMode.AUTO, new ReviewSubject(aboutUserId, true))) {
+        switch (reviewGate.evaluateSignal(
+                workspace,
+                key.signalName(),
+                TriggerMode.AUTO,
+                new ReviewSubject(aboutUserId, true),
+                java.util.Map.of("state", document.archived() ? "ARCHIVED" : "ACTIVE"))) {
             case GateDecision.Skip skip -> {
                 log.debug(
                         "Document signal skipped by practice gate: documentId={}, reason={}",

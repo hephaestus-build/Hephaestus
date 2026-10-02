@@ -17,7 +17,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -51,7 +51,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
                 capturedAt,
                 List.of(
                         new SourceCapture(
-                                PracticeSubjectClause.DIFF_SOURCE,
+                                PracticePreconditionClause.DIFF_SOURCE,
                                 new SourceCaptureState.Available(
                                         SourceContentState.NON_EMPTY,
                                         SourceCompleteness.PARTIAL,
@@ -82,10 +82,10 @@ class CapturedEvidenceTest extends BaseUnitTest {
 
         assertThat(captured.contractVersion()).isEqualTo(ArtifactSourceCatalogRegistry.CURRENT_VERSION);
         assertThat(captured.availableSources())
-                .containsExactlyInAnyOrder(PracticeSubjectClause.DIFF_SOURCE, RepositoryTreeContentSource.KIND);
+                .containsExactlyInAnyOrder(PracticePreconditionClause.DIFF_SOURCE, RepositoryTreeContentSource.KIND);
         assertThat(captured.artifact(PullRequestContentSource.CHANGE_FILE))
-                .isEqualTo(new CapturedEvidence.Artifact(PracticeSubjectClause.DIFF_SOURCE, "c".repeat(64)));
-        assertThat(captured.immutableIdentity(PracticeSubjectClause.DIFF_SOURCE))
+                .isEqualTo(new CapturedEvidence.Artifact(PracticePreconditionClause.DIFF_SOURCE, "c".repeat(64)));
+        assertThat(captured.immutableIdentity(PracticePreconditionClause.DIFF_SOURCE))
                 .isEqualTo("a".repeat(40) + ":" + head);
         assertThat(captured.pinnedHead()).isEqualTo(head);
         assertThat(captured.reviewRange()).containsExactly("a".repeat(40), head);
@@ -151,7 +151,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
         EvidenceSnapshotFixtures.artifact(
                 snapshot,
                 EvidenceSnapshotFixtures.availableSource(
-                        snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), base + ":" + head),
+                        snapshot, PracticePreconditionClause.DIFF_SOURCE.value(), base + ":" + head),
                 PullRequestContentSource.CHANGE_FILE,
                 "c".repeat(64));
 
@@ -162,7 +162,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
     void shouldRefuseAReviewRangeWhenNoChangeWasCaptured() {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(mapper);
         ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
-                snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), "a".repeat(40) + ":" + "b".repeat(40));
+                snapshot, PracticePreconditionClause.DIFF_SOURCE.value(), "a".repeat(40) + ":" + "b".repeat(40));
         EvidenceSnapshotFixtures.unavailable(snapshot, diff);
 
         assertThatThrownBy(() -> CapturedEvidence.of(jobWith(snapshot), mapper).reviewRange())
@@ -182,7 +182,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
             EvidenceSnapshotFixtures.artifact(
                     snapshot,
                     EvidenceSnapshotFixtures.availableSource(
-                            snapshot, PracticeSubjectClause.DIFF_SOURCE.value(), identity),
+                            snapshot, PracticePreconditionClause.DIFF_SOURCE.value(), identity),
                     PullRequestContentSource.CHANGE_FILE,
                     "c".repeat(64));
 

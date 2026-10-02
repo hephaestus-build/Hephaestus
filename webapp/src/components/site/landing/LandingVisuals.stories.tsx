@@ -24,7 +24,7 @@ type Story = StoryObj<typeof meta>;
  */
 export const Gap: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getByLabelText(OUTCOME_DEFS.NEGATIVE.label)).toBeVisible();
+		await expect(canvas.getByLabelText(OUTCOME_DEFS.NOT_MET.label)).toBeVisible();
 	},
 };
 
@@ -37,7 +37,7 @@ export const Strength: Story = {
 		stance: "strength",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByLabelText(OUTCOME_DEFS.POSITIVE.label)).toBeVisible();
+		await expect(canvas.getByLabelText(OUTCOME_DEFS.MET.label)).toBeVisible();
 	},
 };
 

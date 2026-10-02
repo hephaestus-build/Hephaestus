@@ -1,17 +1,39 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
+import de.tum.cit.aet.hephaestus.agent.context.PracticePreconditionEvaluator;
+import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinitionValidator;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
-import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
 class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
@@ -24,12 +46,84 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
             new PracticeDefinitionValidator(catalogs, PracticeSignalOptionsFixture.real()),
             new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog()));
 
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "engaging-with-inline-review-comments",
+                "merged-past-unresolved-review-threads",
+                "defers-review-asks-into-tracked-work"
+            })
+    void shouldRefuseShippedReviewPracticesWhenEitherCommentCorpusIsPartial(String slug) {
+        var definition = loader.catalog().practices().stream()
+                .filter(entry -> entry.slug().equals(slug))
+                .findFirst()
+                .orElseThrow()
+                .definition();
+        Practice practice = new Practice();
+        practice.setSlug(slug);
+        practice.setSignals(definition.signals());
+        practice.setEvidenceRequirements(definition.evidenceRequirements());
+        practice.setReviewWhen(definition.reviewWhen());
+        practice.setSubject(definition.subject());
+        practice.setAutomatedReviewPolicy(definition.automatedReviewPolicy());
+        Instant now = Instant.parse("2026-10-02T10:00:00Z");
+        var builder = new JobFolderIndexBuilder(
+                objectMapper,
+                catalogs,
+                new PracticePreconditionEvaluator(objectMapper),
+                new AutomatedReviewFence(Map.of()),
+                Clock.fixed(now, java.time.ZoneOffset.UTC));
+        for (String partialKind : List.of("", "scm.pull-request.comments", "scm.general-review-comments")) {
+            var captures = catalogs.current().sources().stream()
+                    .map(source -> new SourceCapture(
+                            source.kind(),
+                            new SourceCaptureState.Available(
+                                    SourceContentState.NON_EMPTY,
+                                    source.kind().value().equals(partialKind)
+                                                    || !source.completenessPolicy()
+                                                            .supportsComplete()
+                                            ? SourceCompleteness.PARTIAL
+                                            : SourceCompleteness.COMPLETE,
+                                    new SourceCaptureFacts(now, null, null, null)),
+                            List.of(new SourceArtifact(
+                                    "context/" + source.kind().value() + ".json",
+                                    "application/json",
+                                    "a".repeat(64),
+                                    2))))
+                    .toList();
+            var manifest = new JobFolderIndex(
+                    catalogs.current().version(),
+                    catalogs.catalogDigest(),
+                    definition.artifactKind().value(),
+                    now,
+                    captures);
+            var result = builder.checkAutomatedReviewReadinessAsOfNow(manifest, List.of(practice));
+            if (partialKind.isEmpty()) {
+                assertThat(result.readyPractices()).containsExactly(practice);
+            } else {
+                assertThat(result.readyPractices()).isEmpty();
+                assertThat(result.decisions().getFirst().sourceChecks())
+                        .filteredOn(check -> check.sourceKind().equals(new SourceKind(partialKind)))
+                        .singleElement()
+                        .satisfies(check -> assertThat(check.reasonCodes())
+                                .containsExactly(SourceReadinessReason.SOURCE_INCOMPLETE));
+            }
+        }
+    }
+
     @Test
-    void shouldDescribeBehaviorsWithoutFixingAssessmentPerPractice() {
+    void shouldDefinePracticeStandardsWithoutLegacyAxes() {
         assertThat(loader.catalog().practices()).allSatisfy(practice -> {
             assertThat(practice.definition().criteria())
-                    .contains("BEHAVIOR FOCUS:")
-                    .doesNotContain("TARGET ASSESSMENT:", "fixed target", "DEFECT-DETECTOR DISCIPLINE");
+                    .contains("REVIEW FOCUS:", "MET", "NOT_MET")
+                    .doesNotContain(
+                            "TARGET ASSESSMENT:",
+                            "fixed target",
+                            "DEFECT-DETECTOR DISCIPLINE",
+                            "PRESENT/GOOD",
+                            "PRESENT/BAD",
+                            "ABSENT/GOOD",
+                            "ABSENT/BAD");
         });
     }
 
@@ -51,33 +145,38 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotCallApplicableGoodWorkNotApplicable() {
+    void shouldDistinguishConformanceFromInapplicability() {
         assertThat(loader.catalog().practices())
                 .filteredOn(practice -> practice.slug().equals("asks-answerable-questions")
                         || practice.slug().equals("posts-clear-status-and-blocker-updates"))
                 .hasSize(2)
-                .allSatisfy(practice ->
-                        assertThat(practice.definition().criteria()).contains("PRESENT/GOOD", "not NOT_APPLICABLE"));
+                .allSatisfy(
+                        practice -> assertThat(practice.definition().criteria()).contains("MET", "not NOT_APPLICABLE"));
     }
 
-    /** Pinned by slug so that shipping another practice without automated review is a decision. */
     @Test
-    void shouldShipOnlyTheCloseOutcomePracticeAsNeedingHumanReview() {
-        assertThat(loader.catalog().practices())
-                .filteredOn(practice -> !practice.definition()
+    void shouldMakeUnsupportedEvidenceBoundariesExplicitForHumanReview() {
+        var humanReview = loader.catalog().practices().stream()
+                .filter(practice -> !practice.definition()
                         .automatedReviewPolicy()
                         .automatedReview()
                         .canAttemptAutomatedReview())
-                .singleElement()
-                .satisfies(practice -> {
-                    assertThat(practice.slug()).isEqualTo("issue-closed-with-unmet-outcome");
-                    assertThat(practice.definition().automatedReviewPolicy().insufficiencyReason())
-                            .isNotNull()
-                            .extracting(PracticeEvidenceLimitation::code)
-                            .isEqualTo("AT_CLOSE_STATE_NOT_CAPTURED");
-                    assertThat(practice.definition().precomputeScript()).isNull();
-                    assertThat(loader.holdsAs(practice.slug())).isEmpty();
-                });
+                .toList();
+        assertThat(humanReview)
+                .extracting(practice -> practice.slug(), practice -> {
+                    var reason = practice.definition().automatedReviewPolicy().insufficiencyReason();
+                    assertThat(reason).isNotNull();
+                    return reason.code();
+                })
+                .containsExactlyInAnyOrder(
+                        tuple("issue-closed-with-unmet-outcome", "AT_CLOSE_STATE_NOT_CAPTURED"),
+                        tuple(
+                                "triages-the-issue-with-labels-and-ownership",
+                                "PROJECT_CLASSIFICATION_SCHEME_NOT_CAPTURED"));
+        assertThat(humanReview).allSatisfy(practice -> {
+            assertThat(practice.definition().precomputeScript()).isNull();
+            assertThat(loader.holdsAs(practice.slug())).isEmpty();
+        });
     }
 
     @Test
@@ -96,25 +195,15 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         assertThat(practice.definition().precomputeScript()).isNotBlank());
     }
 
-    /**
-     * The declarations that stop us spending a model call on a question the staged evidence already
-     * answers. Pinned by slug because the value of each is measured — on the corpus these were written
-     * against, they account for the great majority of every {@code NOT_APPLICABLE} ever recorded — and a
-     * declaration dropped in an edit would restore that cost in silence. The iOS practices are gated on a
-     * Swift file in the change for the same reason: on a repository with no Swift in it they would be
-     * asked on every change and answer nothing.
-     */
+    /** Gates prevent model reviews when complete evidence proves that the subject is absent. */
     @Test
     void shouldShipTheSubjectDeclarationsThatKeepPracticesFromBeingAskedForNothing() {
         BundledPracticeCatalog catalog = loader.catalog();
 
         assertThat(catalog.practices().stream()
-                        .filter(practice ->
-                                practice.definition().bindings().getFirst().appliesWhen() != null)
+                        .filter(practice -> practice.definition().precondition() != null)
                         .map(practice -> practice.slug()))
                 .containsExactlyInAnyOrder(
-                        "changes-dependencies-deliberately",
-                        "keeps-the-test-suite-honest",
                         "engaging-with-inline-review-comments",
                         "keeps-views-free-of-networking-and-persistence",
                         "owns-state-at-the-right-level",
@@ -122,16 +211,13 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         "uses-structured-concurrency-safely",
                         "ships-a-preview-with-each-new-view",
                         "declares-permissions-truthfully-at-point-of-use",
-                        "uses-adaptive-colors-for-every-appearance",
-                        "avoids-insecure-defaults-and-over-broad-permissions",
-                        "validates-and-escapes-untrusted-input");
+                        "uses-adaptive-colors-for-every-appearance");
     }
 
     @Test
     void shouldJudgeReviewersForReviewerPractices() {
         assertThat(loader.catalog().practices().stream()
-                        .filter(practice ->
-                                practice.definition().bindings().getFirst().subject() == ActorRole.REVIEWER)
+                        .filter(practice -> practice.definition().subject() == ActorRole.REVIEWER)
                         .map(practice -> practice.slug()))
                 .containsExactlyInAnyOrder(
                         "leaves-useful-specific-review-comments",
@@ -146,11 +232,11 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     @Test
     void shouldGiveEverySubjectDeclarationASentenceForTheReader() {
         assertThat(loader.catalog().practices()).allSatisfy(practice -> {
-            var subject = practice.definition().bindings().getFirst().appliesWhen();
+            var subject = practice.definition().precondition();
             if (subject == null) {
                 return;
             }
-            assertThat(subject.absentSays())
+            assertThat(subject.skipReason())
                     .as("%s must explain its own silence", practice.slug())
                     .isNotBlank()
                     .doesNotContain("NOT_APPLICABLE");
@@ -159,11 +245,62 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldShipOneOccasionPerPractice() {
+    void shouldPreserveDraftEligibilityAndTheMergeSubjectFromFlatFields() {
         assertThat(loader.catalog().practices())
-                .allSatisfy(practice -> assertThat(practice.definition().bindings())
-                        .as("occasions of '%s'", practice.slug())
-                        .hasSize(1));
+                .filteredOn(practice -> practice.slug().equals("ready-and-traceable-handoff"))
+                .singleElement()
+                .satisfies(practice ->
+                        assertThat(practice.definition().reviewWhen()).isEmpty());
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> practice.slug().equals("merges-only-after-approval"))
+                .singleElement()
+                .satisfies(practice -> {
+                    var occasion = practice.definition();
+                    assertThat(occasion.subject()).isEqualTo(ActorRole.MERGER);
+                    assertThat(occasion.reviewWhen())
+                            .containsExactlyEntriesOf(Map.of("draftStatus", Set.of("NOT_DRAFT")));
+                });
+    }
+
+    @Test
+    void shouldPreserveTheOccasionWhenEvidenceRequirementsAreOmitted() {
+        var occasion = objectMapper.readValue("""
+                {
+                  "signals": ["scm.pull_request.merged"],
+                  "subject": "MERGER",
+                  "reviewWhen": {},
+                  "precondition": {
+                    "skipReason": "the change has no Swift code",
+                    "anyOf": [{"changedPathMatches": ["**/*.swift"]}]
+                  }
+                }
+                """, BundledPracticeCatalogLoader.CatalogOccasion.class);
+
+        assertThat(occasion.evidenceRequirements()).isNull();
+        assertThat(occasion.subject()).isEqualTo(ActorRole.MERGER);
+        assertThat(occasion.reviewWhen()).isEmpty();
+        assertThat(occasion.precondition()).isNotNull().satisfies(precondition -> {
+            assertThat(precondition.skipReason()).isEqualTo("the change has no Swift code");
+            assertThat(precondition.anyOf())
+                    .singleElement()
+                    .satisfies(clause -> assertThat(clause.changedPathMatches()).containsExactly("**/*.swift"));
+        });
+    }
+
+    @Test
+    void shouldKeepCompleteDiffCoverageAndContextualCheckoutRequirements() {
+        assertThat(loader.catalog().practices())
+                .filteredOn(practice -> practice.slug().equals("keeps-views-free-of-networking-and-persistence"))
+                .singleElement()
+                .satisfies(practice -> {
+                    assertThat(practice.definition().evidenceRequirements())
+                            .extracting(
+                                    requirement -> requirement.sourceKind().value(),
+                                    PracticeEvidenceRequirement::stance)
+                            .containsExactlyInAnyOrder(
+                                    tuple("scm.pull-request.diff", EvidenceStance.EXHAUSTIVE),
+                                    tuple("scm.repository.tree", EvidenceStance.CONTEXTUAL));
+                });
     }
 
     @Test

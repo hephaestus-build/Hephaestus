@@ -1061,8 +1061,8 @@ describe("composeNextStep", () => {
 		headline: "Merge requests bundle a fix with a refactor",
 		body: "",
 		reviewedWork: [
-			{ ref: pullRequest(418), date: new Date("2026-09-06"), outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(421), date: new Date("2026-09-03"), outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(418), date: new Date("2026-09-06"), outcome: "NOT_MET" },
+			{ ref: pullRequest(421), date: new Date("2026-09-03"), outcome: "NOT_MET" },
 		],
 		nextStep: "Open the fix first as its own merge request.",
 		condition: [],

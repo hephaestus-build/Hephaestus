@@ -46,7 +46,11 @@ class CatalogInstallationConcurrencyIntegrationTest extends AbstractWorkspaceInt
         PracticeDefinition definition = current.effective();
         PracticeDefinition updated = new PracticeDefinition(
                 definition.name(),
-                definition.bindings(),
+                definition.signals(),
+                definition.evidenceRequirements(),
+                definition.reviewWhen(),
+                definition.subject(),
+                definition.precondition(),
                 "Committed catalog criteria",
                 definition.precomputeScript(),
                 definition.automatedReviewPolicy(),

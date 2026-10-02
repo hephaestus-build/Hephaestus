@@ -142,8 +142,8 @@ export const WhatEachReviewProduced: Story = {
 		const observations = canvas.getAllByRole("list", { name: "Observations" })[0];
 		// A count and its word are two elements, so each pair is asserted on the strip, not per cell.
 		for (const pair of [
-			"1 positive outcome",
-			"2 negative outcomes",
+			"1 met observation",
+			"2 not met observations",
 			"0 not applicable",
 			"0 undetermined",
 		]) {

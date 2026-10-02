@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
  * {@code feedback} schema (entities + repositories), but the write-orchestration + transaction
  * boundary deliberately live in {@code agent} ({@code agent.handler.FeedbackLedgerRecorder} and the
  * reaction-aware delivery filters). The recorder cannot move into {@code practices} because it depends
- * on {@code agent.job.AgentJob} and {@code agent.handler.PracticeDetectionResultParser} — relocating it
+ * on {@code agent.job.AgentJob} and {@code agent.handler.ReviewResultParser} — relocating it
  * would invert the dependency and close a {@code practices -> agent} Modulith cycle.
  *
  * <p><b>Why this matters.</b> The {@code feedback} package is an exposed {@code NamedInterface}, and

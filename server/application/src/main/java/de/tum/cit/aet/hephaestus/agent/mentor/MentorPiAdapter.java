@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.mentor;
 
-import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry;
 import de.tum.cit.aet.hephaestus.agent.proxy.MentorProxyCredentialRegistry.Route;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
@@ -49,8 +48,6 @@ public class MentorPiAdapter {
 
         String baseUrl = llmConfig.baseUrl();
 
-        int timeoutSeconds = clampToRunnableTurnBudget(llmConfig.timeoutSeconds());
-
         // Generated here rather than inside InteractiveSandboxSpec so it can also key the mint: the
         // sandbox adapter revokes this token by the same sessionId when it disposes the session.
         UUID sessionId = UUID.randomUUID();
@@ -72,7 +69,7 @@ public class MentorPiAdapter {
                 llmConfig.reasoningEffort(),
                 proxyToken,
                 llmConfig.allowInternet(),
-                timeoutSeconds,
+                llmConfig.timeoutSeconds(),
                 PROFILE,
                 extraInputs,
                 "");
@@ -90,16 +87,5 @@ public class MentorPiAdapter {
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
                 plan.inputFiles());
-    }
-
-    /**
-     * The binding API's floor sits below the runtime's, and a binding that never went through that API
-     * could exceed its ceiling — so clamp both ends here, where a turn's budget is actually fixed.
-     */
-    private static int clampToRunnableTurnBudget(int configuredTimeoutSeconds) {
-        return Math.clamp(
-                configuredTimeoutSeconds,
-                PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS + 1,
-                AgentBindingLimits.MAX_TIMEOUT_SECONDS);
     }
 }

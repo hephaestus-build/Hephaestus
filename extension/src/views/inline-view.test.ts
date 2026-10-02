@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { QueryClientProvider } from "@tanstack/react-query";
+import { notifyManager, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
-	NEGATIVE_ROW,
+	NOT_MET_ROW,
 	OWN_PAGE,
 	READY_ON_GITHUB,
 	WORK_FEEDBACK,
@@ -45,6 +45,7 @@ function inertObserver() {
 
 let container: HTMLDivElement;
 let root: Root;
+let client: ReturnType<typeof createQueryClient>;
 
 /** What a list row's preview reads, and what only the work's own page may ask for. */
 const ROW_READS = new Set<RpcRequest["type"]>(["get-context", "get-work-feedback"]);
@@ -59,6 +60,7 @@ const PAGE_ONLY = new Set<RpcRequest["type"]>([
 ]);
 
 beforeEach(() => {
+	notifyManager.setNotifyFunction((notify) => act(notify));
 	vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 	vi.stubGlobal("ResizeObserver", vi.fn(inertObserver));
 	vi.stubGlobal("IntersectionObserver", vi.fn(inertObserver));
@@ -75,17 +77,20 @@ beforeEach(() => {
 	container = document.createElement("div");
 	document.body.append(container);
 	root = createRoot(container);
+	client = createQueryClient();
 });
 
 afterEach(async () => {
 	await act(async () => root.unmount());
+	await client.cancelQueries();
+	client.clear();
+	notifyManager.setNotifyFunction((notify) => notify());
 	container.remove();
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
 
 it("says a failed feedback refresh failed, rather than keep old comments under a fresh context", async () => {
-	const client = createQueryClient();
 	await act(async () => {
 		root.render(createElement(QueryClientProvider, { client }, createElement(InlineView)));
 	});
@@ -104,13 +109,11 @@ it("says a failed feedback refresh failed, rather than keep old comments under a
 	expect(container.textContent).toContain("Your feedback could not load");
 	expect(container.textContent).not.toContain("Descriptive merge request");
 	expect(container.querySelector("[role=alert]")).not.toBeNull();
-	client.clear();
 });
 
 it("asks for the reader's observations only once the report is open", async () => {
 	answers.set("get-report-view", ok({ expanded: false }));
 	answers.set("list-observations", ok(OWN_PAGE));
-	const client = createQueryClient();
 	await act(async () => {
 		root.render(createElement(QueryClientProvider, { client }, createElement(InlineView)));
 	});
@@ -122,15 +125,13 @@ it("asks for the reader's observations only once the report is open", async () =
 	await act(async () => {
 		toggle?.click();
 	});
-	await vi.waitFor(() => expect(container.textContent).toContain(NEGATIVE_ROW.summary));
+	await vi.waitFor(() => expect(container.textContent).toContain(NOT_MET_ROW.summary));
 	expect(sent.filter((request) => request.type === "list-observations")).toHaveLength(1);
-	client.clear();
 });
 
 it("reads about a list row only as that row, and keeps no preference for it", async () => {
 	const row = "https://github.com/HephaestusTest/lifecycle-validation/pull/1";
 	vi.stubGlobal("location", { ancestorOrigins: [], search: `?work=${encodeURIComponent(row)}` });
-	const client = createQueryClient();
 	await act(async () => {
 		root.render(createElement(QueryClientProvider, { client }, createElement(InlineView)));
 	});
@@ -147,13 +148,11 @@ it("reads about a list row only as that row, and keeps no preference for it", as
 	await vi.waitFor(() => expect(container.textContent).toContain("3 comments for you"));
 	expect(container.querySelector("[aria-expanded]")).toBeNull();
 	expect(sent.filter((request) => PAGE_ONLY.has(request.type))).toStrictEqual([]);
-	client.clear();
 });
 
 it("says a list row's preview is not current when its refresh fails, and keeps the retry on the line", async () => {
 	const row = "https://github.com/HephaestusTest/lifecycle-validation/pull/1";
 	vi.stubGlobal("location", { ancestorOrigins: [], search: `?work=${encodeURIComponent(row)}` });
-	const client = createQueryClient();
 	await act(async () => {
 		root.render(createElement(QueryClientProvider, { client }, createElement(InlineView)));
 	});
@@ -172,14 +171,12 @@ it("says a list row's preview is not current when its refresh fails, and keeps t
 	expect(
 		[...container.querySelectorAll("button")].map((button) => button.textContent),
 	).toStrictEqual(["Try again"]);
-	client.clear();
 });
 
 it("refreshes new and repaired observations while the report stays open", async () => {
 	vi.useFakeTimers();
 	answers.set("list-observations", ok({ ...OWN_PAGE, rows: [], total: 0 }));
 	answers.set("get-work-feedback", ok({ ...WORK_FEEDBACK, comments: [] }));
-	const client = createQueryClient();
 	await act(async () => {
 		root.render(createElement(QueryClientProvider, { client }, createElement(InlineView)));
 		await vi.advanceTimersByTimeAsync(100);
@@ -188,20 +185,20 @@ it("refreshes new and repaired observations while the report stays open", async 
 		await vi.advanceTimersByTimeAsync(100);
 	});
 	expect(container.textContent).toContain("No observations about your work here.");
-	expect(container.textContent).not.toContain(NEGATIVE_ROW.summary);
+	expect(container.textContent).not.toContain(NOT_MET_ROW.summary);
 
 	answers.set("list-observations", ok(OWN_PAGE));
 	await act(async () => {
 		await vi.advanceTimersByTimeAsync(VISIBLE_REFRESH_MS);
 	});
-	expect(container.textContent).toContain(NEGATIVE_ROW.summary);
+	expect(container.textContent).toContain(NOT_MET_ROW.summary);
 
 	const repairedSummary = "The repaired description explains the purpose of the change.";
 	answers.set(
 		"list-observations",
 		ok({
 			...OWN_PAGE,
-			rows: [{ ...NEGATIVE_ROW, outcome: "POSITIVE", summary: repairedSummary }],
+			rows: [{ ...NOT_MET_ROW, outcome: "MET", summary: repairedSummary }],
 			total: 1,
 		}),
 	);
@@ -209,7 +206,6 @@ it("refreshes new and repaired observations while the report stays open", async 
 		await vi.advanceTimersByTimeAsync(VISIBLE_REFRESH_MS);
 	});
 	expect(container.textContent).toContain(repairedSummary);
-	expect(container.textContent).not.toContain(NEGATIVE_ROW.summary);
+	expect(container.textContent).not.toContain(NOT_MET_ROW.summary);
 	expect(container.querySelector("button[aria-expanded=true]")).not.toBeNull();
-	client.clear();
 });

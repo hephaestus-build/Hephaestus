@@ -27,13 +27,13 @@ record EvidenceOpportunity(
         return new ReviewedWorkKey(artifactKind, artifactId);
     }
 
-    boolean applicable() {
-        return outcomes.applicable() > 0;
+    boolean decided() {
+        return outcomes.decided() > 0;
     }
 
     /** A verdict that raised no problem. Verdictless opportunities are neither clean nor dirty. */
     boolean clean() {
-        return applicable() && outcomes.negatives() == 0;
+        return decided() && outcomes.notMet() == 0;
     }
 
     EvidenceOpportunity withBundle(TrendBundle value) {

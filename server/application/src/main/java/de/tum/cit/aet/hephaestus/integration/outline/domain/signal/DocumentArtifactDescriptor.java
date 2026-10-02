@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateDimension;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Signal;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookMessageHandler;
 import java.util.List;
@@ -39,6 +41,27 @@ public class DocumentArtifactDescriptor implements ArtifactDescriptor {
             declare(DocsSignals.DOCUMENT_ARCHIVED, "Archived", false));
 
     @Override
+    public ReviewCapabilities reviewCapabilities() {
+        return new ReviewCapabilities(
+                List.of(
+                        new ReviewLimitation(
+                                "DESCRIBED_SYSTEM_NOT_OBSERVED",
+                                "Document evidence does not establish whether the system it describes behaves as written."),
+                        new ReviewLimitation(
+                                "READERSHIP_NOT_OBSERVED",
+                                "The mirrored document does not establish whether anyone read it or relied on it.")),
+                List.of(new ReviewStateDimension(
+                        "state",
+                        "State",
+                        List.of(
+                                new ReviewStateDimension.Value("ACTIVE", "Active"),
+                                new ReviewStateDimension.Value("ARCHIVED", "Archived")),
+                        Set.of("ACTIVE", "ARCHIVED"))),
+                Set.of(),
+                Set.of());
+    }
+
+    @Override
     public ArtifactKind kind() {
         return DocsSignals.DOCUMENT;
     }
@@ -66,17 +89,6 @@ public class DocumentArtifactDescriptor implements ArtifactDescriptor {
     @Override
     public Set<FeedbackLane> lanes() {
         return Set.of(FeedbackLane.IN_APP);
-    }
-
-    @Override
-    public List<ReviewLimitation> reviewLimitations() {
-        return List.of(
-                new ReviewLimitation(
-                        "DESCRIBED_SYSTEM_NOT_OBSERVED",
-                        "Document evidence does not establish whether the system it describes behaves as written."),
-                new ReviewLimitation(
-                        "READERSHIP_NOT_OBSERVED",
-                        "The mirrored document does not establish whether anyone read it or relied on it."));
     }
 
     @Override

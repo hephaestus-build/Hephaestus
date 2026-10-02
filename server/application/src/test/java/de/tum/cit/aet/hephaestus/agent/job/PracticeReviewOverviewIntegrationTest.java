@@ -126,18 +126,17 @@ class PracticeReviewOverviewIntegrationTest extends AbstractWorkspaceIntegration
         jobRepository.save(mentorTurn);
         AgentJob elsewhere = persistReviewAt(otherWorkspace, "2026-03-11T00:00:00Z", AgentJobStatus.COMPLETED);
 
-        UUID problem = observe(review, described, "2026-03-10T02:00:00Z", "ABSENT", "GOOD");
-        UUID strength = observe(review, described, "2026-03-11T02:00:00Z", "PRESENT", "GOOD");
-        observe(review, described, "2026-03-11T03:00:00Z", "NOT_APPLICABLE", null);
-        UUID undetermined = observe(review, tested, "2026-03-12T02:00:00Z", "UNDETERMINED", null);
-        UUID beforeRange = observe(review, older, "2026-03-09T20:00:00Z", "ABSENT", "GOOD");
-        observe(review, described, TO, "PRESENT", "GOOD");
+        UUID problem = observe(review, described, "2026-03-10T02:00:00Z", "NOT_MET");
+        UUID strength = observe(review, described, "2026-03-11T02:00:00Z", "MET");
+        observe(review, described, "2026-03-11T03:00:00Z", "NOT_APPLICABLE");
+        UUID undetermined = observe(review, tested, "2026-03-12T02:00:00Z", "UNDETERMINED");
+        UUID beforeRange = observe(review, older, "2026-03-09T20:00:00Z", "NOT_MET");
+        observe(review, described, TO, "MET");
         observe(
                 elsewhere,
                 persistPractice(otherWorkspace, null, "elsewhere", "Elsewhere"),
                 "2026-03-11T02:00:00Z",
-                "ABSENT",
-                "GOOD");
+                "NOT_MET");
 
         invalidate(problem);
         ObservationInvalidation restored = invalidate(strength);
@@ -170,7 +169,7 @@ class PracticeReviewOverviewIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(nonZero(overview.reviews()))
                 .isEqualTo(Map.of("queued", 1L, "running", 1L, "completed", 1L, "failed", 1L));
         assertThat(nonZero(overview.observations()))
-                .isEqualTo(Map.of("strengths", 1L, "problems", 1L, "notApplicable", 1L, "undetermined", 1L));
+                .isEqualTo(Map.of("met", 1L, "notMet", 1L, "notApplicable", 1L, "undetermined", 1L));
         assertThat(overview.observationsInvalidated()).isEqualTo(1L);
         assertThat(nonZero(overview.feedback()))
                 .isEqualTo(Map.of(
@@ -205,7 +204,7 @@ class PracticeReviewOverviewIntegrationTest extends AbstractWorkspaceIntegration
         assertThat(describedCounts.group())
                 .isEqualTo(new ReviewPracticeGroupDTO("collaboration", "Collaboration", null, null));
         assertThat(nonZero(describedCounts.observations()))
-                .isEqualTo(Map.of("strengths", 1L, "problems", 1L, "notApplicable", 1L));
+                .isEqualTo(Map.of("met", 1L, "notMet", 1L, "notApplicable", 1L));
         assertThat(describedCounts.observationsInvalidated()).isEqualTo(1L);
         assertThat(nonZero(describedCounts.feedback()))
                 .isEqualTo(Map.of("awaitingApproval", 1L, "partiallyDelivered", 1L, "delivered", 1L));
@@ -342,7 +341,7 @@ class PracticeReviewOverviewIntegrationTest extends AbstractWorkspaceIntegration
         result.setName(name);
         result.setGroup(group);
         result.setCriteria("Review the change");
-        result.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(result, ScmSignals.PULL_REQUEST_OPENED);
         result.setAutonomy(PracticeAutonomy.AUTOMATIC);
         return practiceRepository.save(result);
     }
@@ -359,9 +358,8 @@ class PracticeReviewOverviewIntegrationTest extends AbstractWorkspaceIntegration
         return jobRepository.save(result);
     }
 
-    /** An assessed observation when {@code assessment} is given, otherwise one with that assessment status. */
-    private UUID observe(
-            AgentJob job, Practice practice, String observedAt, String presence, @Nullable String assessment) {
+    /** A recorded result for this practice. */
+    private UUID observe(AgentJob job, Practice practice, String observedAt, String outcome) {
         UUID id = UUID.randomUUID();
         observationRepository.insertIfAbsent(
                 id,
@@ -374,10 +372,8 @@ class PracticeReviewOverviewIntegrationTest extends AbstractWorkspaceIntegration
                 7L,
                 subject.getId(),
                 "Observed " + id,
-                assessment == null ? presence : "ASSESSED",
-                assessment == null ? null : presence,
-                assessment,
-                assessment == null ? null : "MINOR",
+                outcome,
+                "NOT_MET".equals(outcome) ? "MINOR" : null,
                 "{}",
                 "Reasoning",
                 "overview-" + id,

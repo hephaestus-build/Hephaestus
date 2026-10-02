@@ -6342,22 +6342,15 @@ paths:
         required: false
         schema:
           type: string
-      - description: Filter by presence
+      - description: Filter by review outcome
         in: query
-        name: presence
+        name: outcome
         required: false
         schema:
           type: string
           enum:
-          - PRESENT
-          - ABSENT
-      - in: query
-        name: assessmentStatus
-        required: false
-        schema:
-          type: string
-          enum:
-          - ASSESSED
+          - MET
+          - NOT_MET
           - NOT_APPLICABLE
           - UNDETERMINED
       - description: "Only observations on these kinds of reviewed work, e.g. scm.pull_request\
@@ -7373,9 +7366,9 @@ paths:
           default: 50
           maximum: 100
           minimum: 1
-      - description: "Sorting strategy. ACTIONABILITY orders negative outcomes from\
-          \ CRITICAL to INFO, then positive outcomes, then not-applicable observations;\
-          \ ties are newest first."
+      - description: "Sorting strategy. ACTIONABILITY orders NOT_MET by severity (CRITICAL,\
+          \ MAJOR, MINOR, INFO), then MET, then NOT_APPLICABLE and UNDETERMINED together.\
+          \ Within each rank, observation time and ID are descending."
         in: query
         name: sort
         required: false
@@ -7399,40 +7392,7 @@ paths:
           type: array
           items:
             type: string
-      - in: query
-        name: assessmentStatus
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-            enum:
-            - ASSESSED
-            - NOT_APPLICABLE
-            - UNDETERMINED
-      - in: query
-        name: presence
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-            enum:
-            - PRESENT
-            - ABSENT
-      - in: query
-        name: assessment
-        required: false
-        schema:
-          type: array
-          items:
-            type: string
-            enum:
-            - GOOD
-            - BAD
-      - description: "Outcomes to list (repeatable): POSITIVE where a desirable behavior\
-          \ was present or an undesirable one absent, NEGATIVE the other way round.\
-          \ Only assessed observations have an outcome."
+      - description: Review outcomes to list (repeatable)
         in: query
         name: outcome
         required: false
@@ -7441,8 +7401,10 @@ paths:
           items:
             type: string
             enum:
-            - POSITIVE
-            - NEGATIVE
+            - MET
+            - NOT_MET
+            - NOT_APPLICABLE
+            - UNDETERMINED
       - description: "true for only the observations an admin has marked incorrect\
           \ and not restored, false for only the others; omit for both"
         in: query
@@ -10129,6 +10091,7 @@ components:
       - state
     BindPracticeGroupRequest:
       type: object
+      additionalProperties: false
       description: Request to move a practice to a group or Unassigned
       properties:
         groupSlug:
@@ -10930,6 +10893,7 @@ components:
       - slug
     CreateCuratedPracticeRequest:
       type: object
+      additionalProperties: false
       description: Request to add a practice to the instance catalog
       properties:
         definition:
@@ -11164,20 +11128,13 @@ components:
       - slug
     CreatePracticeRequest:
       type: object
+      additionalProperties: false
       description: Request to create a new practice definition
       properties:
         automatedReviewPolicy:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
           description: Versioned review settings; omit to use the recommended ones
-            for the work type the bindings name
-        bindings:
-          type: array
-          description: "The one occasion this practice is reviewed on, with the evidence\
-            \ that review reads. The kind of work reviewed is read off the signals."
-          items:
-            $ref: "#/components/schemas/PracticeBinding"
-          maxItems: 1
-          minItems: 1
+            for the work type the signals name
         criteria:
           type: string
           description: Practice review criteria
@@ -11185,6 +11142,10 @@ components:
           minLength: 0
         deliveryBehavior:
           $ref: "#/components/schemas/PracticeDeliveryBehavior"
+        evidenceRequirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeEvidenceRequirement"
         groupSlug:
           type:
           - string
@@ -11202,6 +11163,25 @@ components:
           description: TypeScript/Node static analysis run before automated review
           maxLength: 100000
           minLength: 0
+        precondition:
+          $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
+        signals:
+          type: array
+          items:
+            type: string
+          maxItems: 2147483647
+          minItems: 1
         slug:
           type: string
           description: URL-safe identifier unique within the workspace
@@ -11209,6 +11189,13 @@ components:
           maxLength: 64
           minLength: 3
           pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        subject:
+          type: string
+          enum:
+          - AUTHOR
+          - ASSIGNEE
+          - REVIEWER
+          - MERGER
         whatGoodLooksLike:
           type: string
           description: "Developer-facing exemplar; a concrete instance, not the review\
@@ -11221,9 +11208,10 @@ components:
           maxLength: 2000
           minLength: 0
       required:
-      - bindings
       - criteria
+      - evidenceRequirements
       - name
+      - signals
       - slug
     CreateReviewBackfillRunRequest:
       type: object
@@ -11704,20 +11692,44 @@ components:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
         automatedReviewValidation:
           $ref: "#/components/schemas/PracticeAutomatedReviewValidation"
-        bindings:
-          type: array
-          items:
-            $ref: "#/components/schemas/PracticeBinding"
         criteria:
           type: string
         deliveryBehavior:
           $ref: "#/components/schemas/PracticeDeliveryBehavior"
+        evidenceRequirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeEvidenceRequirement"
         groupSlug:
           type: string
         name:
           type: string
         precomputeScript:
           type: string
+        precondition:
+          $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
+        signals:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+          enum:
+          - AUTHOR
+          - ASSIGNEE
+          - REVIEWER
+          - MERGER
         whatGoodLooksLike:
           type: string
         whyItMatters:
@@ -11726,41 +11738,41 @@ components:
       - artifactKind
       - automatedReviewPolicy
       - automatedReviewValidation
-      - bindings
       - criteria
       - deliveryBehavior
+      - evidenceRequirements
       - name
+      - reviewWhen
+      - signals
+      - subject
     CuratedPracticeRequest:
       type: object
+      additionalProperties: false
       description: A complete curated practice definition
       properties:
         automatedReviewPolicy:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
-          description: Evidence requirements; omit to use the recommended requirements
+          description: Versioned review settings; omit to use the recommended settings
             for the selected work type
-        bindingChanges:
+        criteria:
+          type: string
+          maxLength: 50000
+          minLength: 0
+        definitionChanges:
           type: array
           description: Explicit intent to change the gate or the person judged
           items:
             type: string
             enum:
-            - APPLIES_WHEN
+            - PRECONDITION
             - SUBJECT
           uniqueItems: true
-        bindings:
-          type: array
-          description: The one occasion this practice is reviewed on; the kind of
-            work is read off the signals
-          items:
-            $ref: "#/components/schemas/PracticeBinding"
-          maxItems: 1
-          minItems: 1
-        criteria:
-          type: string
-          maxLength: 50000
-          minLength: 0
         deliveryBehavior:
           $ref: "#/components/schemas/PracticeDeliveryBehavior"
+        evidenceRequirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeEvidenceRequirement"
         groupSlug:
           type: string
           maxLength: 64
@@ -11773,6 +11785,32 @@ components:
           type: string
           maxLength: 100000
           minLength: 0
+        precondition:
+          $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
+        signals:
+          type: array
+          items:
+            type: string
+          maxItems: 2147483647
+          minItems: 1
+        subject:
+          type: string
+          enum:
+          - AUTHOR
+          - ASSIGNEE
+          - REVIEWER
+          - MERGER
         whatGoodLooksLike:
           type: string
           maxLength: 2000
@@ -11782,9 +11820,10 @@ components:
           maxLength: 2000
           minLength: 0
       required:
-      - bindings
       - criteria
+      - evidenceRequirements
       - name
+      - signals
     CuratedPracticeSummary:
       type: object
       properties:
@@ -12115,14 +12154,17 @@ components:
           type: string
           format: date-time
           description: Timestamp of most recent observation
-        negativeCount:
+        met:
           type: integer
           format: int64
-          description: Number of negative outcomes
-        positiveCount:
+          description: Number of MET observations
+        notApplicable:
           type: integer
           format: int64
-          description: Number of positive outcomes
+        notMet:
+          type: integer
+          format: int64
+          description: Number of NOT_MET observations
         practiceName:
           type: string
           description: Practice name
@@ -12133,12 +12175,17 @@ components:
           type: integer
           format: int64
           description: Total number of observations
+        undetermined:
+          type: integer
+          format: int64
       required:
-      - negativeCount
-      - positiveCount
+      - met
+      - notApplicable
+      - notMet
       - practiceName
       - practiceSlug
       - totalObservations
+      - undetermined
     EmailTestRequest:
       type: object
       properties:
@@ -12895,10 +12942,8 @@ components:
           description: "What the review made of this piece of work: a behaviour demonstrated,\
             \ a trap avoided, something harmful done, or something needed left out"
           enum:
-          - DEMONSTRATED_STRENGTH
-          - SAFE_AVOIDANCE
-          - COMMISSION_PROBLEM
-          - OMISSION_GAP
+          - MET
+          - NOT_MET
           - NOT_APPLICABLE
           - UNDETERMINED
         reviewedWork:
@@ -13643,26 +13688,14 @@ components:
           type: string
           description: Link to the reviewed artifact on its platform (null when it
             cannot be resolved)
-        assessment:
-          type: string
-          description: "Contextual desirability of the specified behavior: GOOD or\
-            \ BAD; null unless assessmentStatus is ASSESSED"
-          enum:
-          - GOOD
-          - BAD
-        assessmentStatus:
-          type: string
-          enum:
-          - ASSESSED
-          - NOT_APPLICABLE
-          - UNDETERMINED
         claimCurrentness:
           type: string
           description: "Whether an observation's claim still stands: its practice's\
             \ review rules are unchanged and it was not superseded, which an issue's\
             \ observations are when a change to its reviewable content is recorded.\
             \ It says neither whether a later review ran nor whether the work changed\
-            \ since it was reviewed"
+            \ since it was reviewed. Earlier observation standards and missing fingerprints\
+            \ are unverifiable under the current whole-practice standard"
           enum:
           - CURRENT
           - STALE
@@ -13714,30 +13747,24 @@ components:
           - BACKFILL
         outcome:
           type: string
-          description: Derived from presence and contextual behavior assessment; null
-            unless assessed
+          description: Result of the practice review
           enum:
-          - POSITIVE
-          - NEGATIVE
-          readOnly: true
+          - MET
+          - NOT_MET
+          - NOT_APPLICABLE
+          - UNDETERMINED
         practiceName:
           type: string
           description: Practice name
         practiceSlug:
           type: string
           description: Practice slug
-        presence:
-          type: string
-          description: PRESENT or ABSENT only when ASSESSED
-          enum:
-          - PRESENT
-          - ABSENT
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
         severity:
           type: string
-          description: Severity level (null unless outcome is NEGATIVE)
+          description: Severity level (null unless outcome is NOT_MET)
           enum:
           - CRITICAL
           - MAJOR
@@ -13749,11 +13776,11 @@ components:
       required:
       - artifactId
       - artifactKind
-      - assessmentStatus
       - claimCurrentness
       - id
       - observedAt
       - origin
+      - outcome
       - practiceName
       - practiceSlug
       - summary
@@ -13833,26 +13860,14 @@ components:
         artifactKind:
           type: string
           description: Artifact type (e.g. PULL_REQUEST)
-        assessment:
-          type: string
-          description: "Contextual desirability of the specified behavior: GOOD or\
-            \ BAD; null unless assessmentStatus is ASSESSED"
-          enum:
-          - GOOD
-          - BAD
-        assessmentStatus:
-          type: string
-          enum:
-          - ASSESSED
-          - NOT_APPLICABLE
-          - UNDETERMINED
         claimCurrentness:
           type: string
           description: "Whether an observation's claim still stands: its practice's\
             \ review rules are unchanged and it was not superseded, which an issue's\
             \ observations are when a change to its reviewable content is recorded.\
             \ It says neither whether a later review ran nor whether the work changed\
-            \ since it was reviewed"
+            \ since it was reviewed. Earlier observation standards and missing fingerprints\
+            \ are unverifiable under the current whole-practice standard"
           enum:
           - CURRENT
           - STALE
@@ -13875,27 +13890,21 @@ components:
           - BACKFILL
         outcome:
           type: string
-          description: Derived from presence and contextual behavior assessment; null
-            unless assessed
+          description: Result of the practice review
           enum:
-          - POSITIVE
-          - NEGATIVE
-          readOnly: true
+          - MET
+          - NOT_MET
+          - NOT_APPLICABLE
+          - UNDETERMINED
         practiceName:
           type: string
           description: Practice name
         practiceSlug:
           type: string
           description: Practice slug
-        presence:
-          type: string
-          description: PRESENT or ABSENT only when ASSESSED
-          enum:
-          - PRESENT
-          - ABSENT
         severity:
           type: string
-          description: Severity level (null unless outcome is NEGATIVE)
+          description: Severity level (null unless outcome is NOT_MET)
           enum:
           - CRITICAL
           - MAJOR
@@ -13907,11 +13916,11 @@ components:
       required:
       - artifactId
       - artifactKind
-      - assessmentStatus
       - claimCurrentness
       - id
       - observedAt
       - origin
+      - outcome
       - practiceName
       - practiceSlug
       - summary
@@ -13954,30 +13963,22 @@ components:
     OutcomeVector:
       type: object
       properties:
-        commissionProblems:
-          type: integer
-          format: int32
-        demonstratedStrengths:
+        met:
           type: integer
           format: int32
         notApplicable:
           type: integer
           format: int32
-        omissionGaps:
-          type: integer
-          format: int32
-        safeAvoidances:
+        notMet:
           type: integer
           format: int32
         undetermined:
           type: integer
           format: int32
       required:
-      - commissionProblems
-      - demonstratedStrengths
+      - met
       - notApplicable
-      - omissionGaps
-      - safeAvoidances
+      - notMet
       - undetermined
     OutlineCollection:
       type: object
@@ -14543,7 +14544,7 @@ components:
       properties:
         artifactKind:
           type: string
-          description: "Kind of work this practice reviews, read off its bindings"
+          description: "Kind of work this practice reviews, read off its signals"
           example: scm.pull_request
         automatedReviewPolicy:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
@@ -14559,12 +14560,6 @@ components:
           description: "How much autonomy the system has over this practice, whether\
             \ that was set here or inherited from its group or workspace, and which\
             \ level decided it"
-        bindings:
-          type: array
-          description: "The one occasion this practice is reviewed on, with the evidence\
-            \ that review reads"
-          items:
-            $ref: "#/components/schemas/PracticeBinding"
         catalogOrigin:
           $ref: "#/components/schemas/CatalogOrigin"
         createdAt:
@@ -14580,6 +14575,10 @@ components:
           type: integer
           format: int32
           description: Position within its group (lowest first); ties broken by name
+        evidenceRequirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeEvidenceRequirement"
         groupSlug:
           type: string
           description: "Slug of the practice group this practice is bound to, if any"
@@ -14594,9 +14593,34 @@ components:
           type: string
           description: TypeScript/Node precompute script for static analysis before
             AI review
+        precondition:
+          $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
+        signals:
+          type: array
+          description: Signals that start a practice review
+          items:
+            type: string
         slug:
           type: string
           description: URL-safe identifier unique within workspace
+        subject:
+          type: string
+          enum:
+          - AUTHOR
+          - ASSIGNEE
+          - REVIEWER
+          - MERGER
         updatedAt:
           type: string
           format: date-time
@@ -14612,17 +14636,21 @@ components:
       - automatedReviewPolicy
       - automatedReviewValidation
       - autonomy
-      - bindings
       - createdAt
       - criteria
       - deliveryBehavior
       - displayOrder
+      - evidenceRequirements
       - id
       - name
+      - reviewWhen
+      - signals
       - slug
+      - subject
       - updatedAt
     PracticeAutomatedReview:
       type: object
+      additionalProperties: false
       description: Author-declared automated review and evidence sufficiency for one
         practice
       properties:
@@ -14645,6 +14673,7 @@ components:
       - mode
     PracticeAutomatedReviewPolicy:
       type: object
+      additionalProperties: false
       description: Author-defined automated review settings for one practice revision
       properties:
         automatedReview:
@@ -14701,76 +14730,64 @@ components:
       - reviewRuleFingerprint
       - sourceContractVersion
       - status
-    PracticeBinding:
-      type: object
-      description: "An occasion that starts a review, and the evidence that review\
-        \ reads"
-      properties:
-        appliesWhen:
-          $ref: "#/components/schemas/PracticeSubject"
-          description: What must be in the work for this practice to apply; omit to
-            always apply
-        needs:
-          type: array
-          description: "Sources a review occasioned this way reads, each with the\
-            \ stance it takes"
-          items:
-            $ref: "#/components/schemas/PracticeEvidenceRequirement"
-        onDrafts:
-          type: boolean
-          description: Whether an artifact still marked draft occasions this review;
-            omit for false
-        signals:
-          type: array
-          description: "Signals that occasion this review, e.g. scm.pull_request.merged"
-          items:
-            type: string
-          minItems: 1
-        subject:
-          type: string
-          description: Whose conduct this review judges; omit for AUTHOR
-          enum:
-          - AUTHOR
-          - ASSIGNEE
-          - REVIEWER
-          - MERGER
-      required:
-      - needs
-      - signals
     PracticeDefinition:
       type: object
-      description: |-
-        A practice as its author wrote it.
-
-         <p><code>artifactKind</code> is not a field. It is read off {@link de.tum.cit.aet.hephaestus.practices.PracticeDefinition#bindings #bindings()}, whose signal names carry
-         it as a prefix, so there is nothing for a second statement of it to disagree with.
+      additionalProperties: false
+      description: The authored standard and the occasion on which it is reviewed.
       properties:
         automatedReviewPolicy:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
-        bindings:
-          type: array
-          items:
-            $ref: "#/components/schemas/PracticeBinding"
         criteria:
           type: string
         deliveryBehavior:
           $ref: "#/components/schemas/PracticeDeliveryBehavior"
+        evidenceRequirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeEvidenceRequirement"
         groupSlug:
           type: string
         name:
           type: string
         precomputeScript:
           type: string
+        precondition:
+          $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
+        signals:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+          enum:
+          - AUTHOR
+          - ASSIGNEE
+          - REVIEWER
+          - MERGER
         whatGoodLooksLike:
           type: string
         whyItMatters:
           type: string
       required:
       - automatedReviewPolicy
-      - bindings
       - criteria
       - deliveryBehavior
+      - evidenceRequirements
       - name
+      - reviewWhen
+      - signals
+      - subject
     PracticeDefinitionOptions:
       type: object
       description: "What a practice author may choose, per type of reviewed work"
@@ -14788,6 +14805,7 @@ components:
       - workTypes
     PracticeDeliveryBehavior:
       type: object
+      additionalProperties: false
       description: "Delivery choices declared by the practice author, not inferred\
         \ from its slug."
       properties:
@@ -14827,6 +14845,7 @@ components:
       - reviewsAffected
     PracticeEvidenceLimitation:
       type: object
+      additionalProperties: false
       description: Known claim that the selected evidence cannot support even when
         every requirement passes
       properties:
@@ -14871,6 +14890,7 @@ components:
       - reviewedCount
     PracticeEvidenceRequirement:
       type: object
+      additionalProperties: false
       description: A source a practice reads and the stance it takes towards it
       properties:
         sourceKind:
@@ -15113,6 +15133,50 @@ components:
       required:
       - group
       - practices
+    PracticePrecondition:
+      type: object
+      additionalProperties: false
+      description: What must be in a piece of work for this practice to have anything
+        to judge
+      properties:
+        anyOf:
+          type: array
+          description: Alternative conditions; the practice applies when any condition
+            holds
+          items:
+            $ref: "#/components/schemas/PracticePreconditionClause"
+          maxItems: 10
+          minItems: 1
+        skipReason:
+          type: string
+          description: Explanation shown when complete evidence disproves every condition
+          maxLength: 300
+          minLength: 0
+      required:
+      - skipReason
+    PracticePreconditionClause:
+      type: object
+      additionalProperties: false
+      description: One shape the subject a practice judges can take in a piece of
+        work
+      properties:
+        changedPathMatches:
+          type: array
+          description: Globs; holds when the change touches a matching path
+          items:
+            type: string
+        diffContains:
+          type: array
+          description: Literal strings; holds when the diff contains one of them
+          items:
+            type: string
+        evidenceHasItems:
+          type: string
+          description: Named evidence collection; holds when it has at least one entry
+          enum:
+          - scm.review-threads
+          - scm.inline-review-comments
+          - scm.general-review-comments
     PracticeProfileOverview:
       type: object
       description: "What held, what changed and which work was reviewed over a window\
@@ -15157,7 +15221,11 @@ components:
           type: string
           enum:
           - NAME
-          - BINDINGS
+          - SIGNALS
+          - EVIDENCE_REQUIREMENTS
+          - REVIEW_WHEN
+          - SUBJECT
+          - PRECONDITION
           - CRITERIA
           - PRECOMPUTE_SCRIPT
           - AUTOMATED_REVIEW_POLICY
@@ -15184,6 +15252,7 @@ components:
           - EXACT_ADOPTION
           - BUNDLED_DIGEST_MATCH
           - BUNDLED_FINGERPRINT_MATCH
+          - REVISION_FINGERPRINT_MATCH
           - CURRENT_DEFINITION
         current:
           $ref: "#/components/schemas/PracticeDefinition"
@@ -15453,6 +15522,37 @@ components:
       - generatedPaths
       - reviewScope
       - revision
+    PracticeReviewStateDimension:
+      type: object
+      properties:
+        displayName:
+          type: string
+        key:
+          type: string
+        recommendedValues:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        values:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeReviewStateValue"
+      required:
+      - displayName
+      - key
+      - recommendedValues
+      - values
+    PracticeReviewStateValue:
+      type: object
+      properties:
+        displayName:
+          type: string
+        value:
+          type: string
+      required:
+      - displayName
+      - value
     PracticeSignal:
       type: object
       description: A signal and the words a reader sees for it
@@ -15549,20 +15649,6 @@ components:
           type: string
           description: What to do — the text of the newest feedback that said something
             about this observation to this developer (null if nothing was said)
-        kind:
-          type: string
-          description: "What this observation says about the developer: a behaviour\
-            \ demonstrated, a trap avoided, something harmful done, or something needed\
-            \ left out. The lists only separate positive from negative, so this is\
-            \ what tells the two kinds of each apart. Only assessed observations reach\
-            \ a standing, so NOT_APPLICABLE and UNDETERMINED never appear here."
-          enum:
-          - DEMONSTRATED_STRENGTH
-          - SAFE_AVOIDANCE
-          - COMMISSION_PROBLEM
-          - OMISSION_GAP
-          - NOT_APPLICABLE
-          - UNDETERMINED
         locator:
           type: string
           description: "Where in the work, e.g. \"FrameRecorder.swift:212\", when\
@@ -15582,18 +15668,19 @@ components:
           - BACKFILL
         outcome:
           type: string
-          description: Positive or negative consequence of this assessed observation
+          description: MET or NOT_MET result supporting this standing
           enum:
-          - POSITIVE
-          - NEGATIVE
-          readOnly: true
+          - MET
+          - NOT_MET
+          - NOT_APPLICABLE
+          - UNDETERMINED
         reviewedWorkId:
           type: integer
           format: int64
           description: Identifier of the reviewed work
         severity:
           type: string
-          description: Impact level (null unless assessed BAD)
+          description: Impact level (null unless NOT_MET)
           enum:
           - CRITICAL
           - MAJOR
@@ -15606,55 +15693,12 @@ components:
           type: string
           description: The kind of reviewed work this is about
       required:
-      - kind
       - observationId
       - origin
+      - outcome
       - reviewedWorkId
       - title
       - workKind
-    PracticeSubject:
-      type: object
-      description: What must be in a piece of work for this practice to have anything
-        to judge
-      properties:
-        absentSays:
-          type: string
-          description: "Sentence shown when the subject was proven absent, in the\
-            \ author's voice"
-          maxLength: 300
-          minLength: 0
-        anyOf:
-          type: array
-          description: Shapes the subject may take; the subject is present when any
-            one is found
-          items:
-            $ref: "#/components/schemas/PracticeSubjectClause"
-          maxItems: 10
-          minItems: 1
-      required:
-      - absentSays
-    PracticeSubjectClause:
-      type: object
-      description: One shape the subject a practice judges can take in a piece of
-        work
-      properties:
-        changedPathMatches:
-          type: array
-          description: Globs; holds when the change touches a matching path
-          items:
-            type: string
-        diffContains:
-          type: array
-          description: Literal strings; holds when the diff contains one of them
-          items:
-            type: string
-        evidenceHasItems:
-          type: string
-          description: Named evidence collection; holds when it has at least one entry
-          enum:
-          - scm.review-threads
-          - scm.inline-review-comments
-          - scm.general-review-comments
     PracticeTraceEntry:
       type: object
       description: "What became of one practice on this artifact, and whether anyone\
@@ -15819,7 +15863,17 @@ components:
             \ or absent where the work type admits no such request. Not an occasion\
             \ to bind to: such a request reviews every practice on the work type whatever\
             \ state the work is in."
-        recommendedNeeds:
+        preconditionEvidenceCollections:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        preconditionSupportedAspects:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        recommendedEvidenceRequirements:
           type: array
           description: Evidence a new binding on this work type starts with when the
             author says nothing
@@ -15827,6 +15881,10 @@ components:
             $ref: "#/components/schemas/PracticeEvidenceRequirement"
         recommendedPolicy:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
+        reviewWhenDimensions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeReviewStateDimension"
         signals:
           type: array
           description: The occasions a practice on this work type can be bound to.
@@ -15854,8 +15912,11 @@ components:
       required:
       - allowedSources
       - artifactKind
-      - recommendedNeeds
+      - preconditionEvidenceCollections
+      - preconditionSupportedAspects
+      - recommendedEvidenceRequirements
       - recommendedPolicy
+      - reviewWhenDimensions
       - signals
       - subjectRoles
       - supportedAutomatedReviewModes
@@ -16585,26 +16646,14 @@ components:
       type: object
       description: An observation that contributed to a piece of feedback
       properties:
-        assessment:
-          type: string
-          description: "Specified behavior in context: GOOD means desirable, BAD means\
-            \ undesirable (null unless ASSESSED)"
-          enum:
-          - GOOD
-          - BAD
-        assessmentStatus:
-          type: string
-          enum:
-          - ASSESSED
-          - NOT_APPLICABLE
-          - UNDETERMINED
         claimCurrentness:
           type: string
           description: "Whether an observation's claim still stands: its practice's\
             \ review rules are unchanged and it was not superseded, which an issue's\
             \ observations are when a change to its reviewable content is recorded.\
             \ It says neither whether a later review ran nor whether the work changed\
-            \ since it was reviewed"
+            \ since it was reviewed. Earlier observation standards and missing fingerprints\
+            \ are unverifiable under the current whole-practice standard"
           enum:
           - CURRENT
           - STALE
@@ -16624,21 +16673,16 @@ components:
           description: Render order within the feedback (lower renders earlier)
         outcome:
           type: string
-          description: Derived from presence and contextual behavior assessment; null
-            unless assessed
+          description: Result of the practice review
           enum:
-          - POSITIVE
-          - NEGATIVE
-          readOnly: true
+          - MET
+          - NOT_MET
+          - NOT_APPLICABLE
+          - UNDETERMINED
         practiceName:
           type: string
         practiceSlug:
           type: string
-        presence:
-          type: string
-          enum:
-          - PRESENT
-          - ABSENT
         role:
           type: string
           description: Whether the observation leads the feedback or reinforces it
@@ -16647,7 +16691,7 @@ components:
           - SUPPORTING
         severity:
           type: string
-          description: Severity band (null unless outcome is NEGATIVE)
+          description: Severity band (null unless outcome is NOT_MET)
           enum:
           - CRITICAL
           - MAJOR
@@ -16656,11 +16700,11 @@ components:
         summary:
           type: string
       required:
-      - assessmentStatus
       - claimCurrentness
       - observationId
       - observedAt
       - ordinal
+      - outcome
       - practiceName
       - practiceSlug
       - role
@@ -16989,26 +17033,14 @@ components:
         agentJobId:
           type: string
           format: uuid
-        assessment:
-          type: string
-          description: "Specified behavior in context: GOOD means desirable, BAD means\
-            \ undesirable (null unless ASSESSED)"
-          enum:
-          - GOOD
-          - BAD
-        assessmentStatus:
-          type: string
-          enum:
-          - ASSESSED
-          - NOT_APPLICABLE
-          - UNDETERMINED
         claimCurrentness:
           type: string
           description: "Whether an observation's claim still stands: its practice's\
             \ review rules are unchanged and it was not superseded, which an issue's\
             \ observations are when a change to its reviewable content is recorded.\
             \ It says neither whether a later review ran nor whether the work changed\
-            \ since it was reviewed"
+            \ since it was reviewed. Earlier observation standards and missing fingerprints\
+            \ are unverifiable under the current whole-practice standard"
           enum:
           - CURRENT
           - STALE
@@ -17046,21 +17078,16 @@ components:
           - BACKFILL
         outcome:
           type: string
-          description: Derived from presence and contextual behavior assessment; null
-            unless assessed
+          description: Result of the practice review
           enum:
-          - POSITIVE
-          - NEGATIVE
-          readOnly: true
+          - MET
+          - NOT_MET
+          - NOT_APPLICABLE
+          - UNDETERMINED
         practiceName:
           type: string
         practiceSlug:
           type: string
-        presence:
-          type: string
-          enum:
-          - PRESENT
-          - ABSENT
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
@@ -17068,7 +17095,7 @@ components:
           $ref: "#/components/schemas/ReviewedWorkRef"
         severity:
           type: string
-          description: Severity band (null unless outcome is NEGATIVE)
+          description: Severity band (null unless outcome is NOT_MET)
           enum:
           - CRITICAL
           - MAJOR
@@ -17082,12 +17109,12 @@ components:
           type: string
       required:
       - agentJobId
-      - assessmentStatus
       - claimCurrentness
       - feedback
       - id
       - observedAt
       - origin
+      - outcome
       - practiceName
       - practiceSlug
       - reviewedWork
@@ -17096,14 +17123,14 @@ components:
       type: object
       description: Counts of observations by assessment
       properties:
+        met:
+          type: integer
+          format: int64
         notApplicable:
           type: integer
           format: int64
           description: Practices whose subject did not occur in this work
-        problems:
-          type: integer
-          format: int64
-        strengths:
+        notMet:
           type: integer
           format: int64
         undetermined:
@@ -17113,9 +17140,9 @@ components:
             the question either way; reported apart from notApplicable because one
             says there was nothing here to judge and the other says we could not tell
       required:
+      - met
       - notApplicable
-      - problems
-      - strengths
+      - notMet
       - undetermined
     ReviewObservationDetail:
       type: object
@@ -17124,26 +17151,14 @@ components:
         agentJobId:
           type: string
           format: uuid
-        assessment:
-          type: string
-          description: "Specified behavior in context: GOOD means desirable, BAD means\
-            \ undesirable (null unless ASSESSED)"
-          enum:
-          - GOOD
-          - BAD
-        assessmentStatus:
-          type: string
-          enum:
-          - ASSESSED
-          - NOT_APPLICABLE
-          - UNDETERMINED
         claimCurrentness:
           type: string
           description: "Whether an observation's claim still stands: its practice's\
             \ review rules are unchanged and it was not superseded, which an issue's\
             \ observations are when a change to its reviewable content is recorded.\
             \ It says neither whether a later review ran nor whether the work changed\
-            \ since it was reviewed"
+            \ since it was reviewed. Earlier observation standards and missing fingerprints\
+            \ are unverifiable under the current whole-practice standard"
           enum:
           - CURRENT
           - STALE
@@ -17180,12 +17195,12 @@ components:
           format: date-time
         outcome:
           type: string
-          description: Derived from presence and contextual behavior assessment; null
-            unless assessed
+          description: Result of the practice review
           enum:
-          - POSITIVE
-          - NEGATIVE
-          readOnly: true
+          - MET
+          - NOT_MET
+          - NOT_APPLICABLE
+          - UNDETERMINED
         practiceName:
           type: string
         practiceRevisionId:
@@ -17194,11 +17209,6 @@ components:
           description: "Criteria revision selected as of job start, when available"
         practiceSlug:
           type: string
-        presence:
-          type: string
-          enum:
-          - PRESENT
-          - ABSENT
         recurrenceKey:
           type: string
           description: Cross-run locus key; null when continuity is unavailable
@@ -17206,7 +17216,7 @@ components:
           $ref: "#/components/schemas/ReviewedWorkRef"
         severity:
           type: string
-          description: Severity band (null unless outcome is NEGATIVE)
+          description: Severity band (null unless outcome is NOT_MET)
           enum:
           - CRITICAL
           - MAJOR
@@ -17220,13 +17230,13 @@ components:
           type: string
       required:
       - agentJobId
-      - assessmentStatus
       - claimCurrentness
       - disputes
       - feedback
       - id
       - invalidations
       - observedAt
+      - outcome
       - practiceName
       - practiceSlug
       - reviewedWork
@@ -17298,33 +17308,34 @@ components:
     ReviewPracticeOutcomes:
       type: object
       description: "What one run decided about each practice it observed for this\
-        \ developer, one outcome per practice however many observations it recorded\
-        \ about it; an invalidated observation decides nothing"
+        \ developer against the practice's whole positive standard, one count per\
+        \ practice however many observations it recorded; an invalidated observation\
+        \ decides nothing, and a met or not-met outcome recorded under an earlier\
+        \ or missing assessment scheme counts as undetermined"
       properties:
-        held:
+        met:
           type: integer
           format: int32
-          description: Practices with a strength observed and no problem
+          description: Practices with at least one counted met outcome and none not
+            met
         notApplicable:
           type: integer
           format: int32
-          description: Practices whose every observation said the practice did not
-            apply to this work
-        toImprove:
+          description: Practices whose every counted outcome was not applicable
+        notMet:
           type: integer
           format: int32
-          description: Practices with at least one problem observed
-        undecided:
+          description: Practices with at least one counted not-met outcome
+        undetermined:
           type: integer
           format: int32
-          description: "Practices the run looked at and could not settle either way:\
-            \ no strength, no problem, and not only a verdict that the practice did\
-            \ not apply"
+          description: "Practices the run could not settle: no counted met or not-met\
+            \ outcome, and not only not-applicable outcomes"
       required:
-      - held
+      - met
       - notApplicable
-      - toImprove
-      - undecided
+      - notMet
+      - undetermined
     ReviewProposedPlacement:
       type: object
       description: One exact provider message included in a review awaiting approval
@@ -18989,35 +19000,21 @@ components:
           description: Whether this group is shown in practice dashboards
     UpdatePracticeRequest:
       type: object
+      additionalProperties: false
       description: Request to update a practice; omitted fields remain unchanged
       properties:
         automatedReviewPolicy:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
           description: "Replacement review settings; omit to preserve them, or to\
-            \ take the recommended ones when the bindings move the practice to a different\
+            \ take the recommended ones when the signals move the practice to a different\
             \ kind of work"
-        bindingChanges:
-          type: array
-          description: Explicit intent to change the gate or the person judged
-          items:
-            type: string
-            enum:
-            - APPLIES_WHEN
-            - SUBJECT
-          uniqueItems: true
-        bindings:
-          type: array
-          description: Replacement occasion and its evidence; omit to leave it unchanged
-          items:
-            $ref: "#/components/schemas/PracticeBinding"
-          maxItems: 1
-          minItems: 1
         clear:
           type: array
           description: Optional fields to clear before applying supplied values
           items:
             type: string
             enum:
+            - PRECONDITION
             - PRECOMPUTE_SCRIPT
             - WHY_IT_MATTERS
             - WHAT_GOOD_LOOKS_LIKE
@@ -19028,8 +19025,21 @@ components:
           maxLength: 50000
           minLength: 0
           pattern: "[\\s\\S]*\\S[\\s\\S]*"
+        definitionChanges:
+          type: array
+          description: Explicit intent to change the gate or the person judged
+          items:
+            type: string
+            enum:
+            - PRECONDITION
+            - SUBJECT
+          uniqueItems: true
         deliveryBehavior:
           $ref: "#/components/schemas/PracticeDeliveryBehavior"
+        evidenceRequirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeEvidenceRequirement"
         group:
           $ref: "#/components/schemas/BindPracticeGroupRequest"
           description: Catalog placement to apply with the definition update; omit
@@ -19046,6 +19056,32 @@ components:
           description: TypeScript/Node static analysis run before automated review
           maxLength: 100000
           minLength: 0
+        precondition:
+          $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
+        signals:
+          type: array
+          items:
+            type: string
+          maxItems: 2147483647
+          minItems: 1
+        subject:
+          type: string
+          enum:
+          - AUTHOR
+          - ASSIGNEE
+          - REVIEWER
+          - MERGER
         whatGoodLooksLike:
           type: string
           description: Concrete example shown to the developer; not review criteria

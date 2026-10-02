@@ -4,7 +4,7 @@ import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObserva
 import static de.tum.cit.aet.hephaestus.practices.observation.trend.TrendObservations.noVerdict;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Tag;
@@ -24,8 +24,8 @@ class PracticeTrendCalculatorTest {
                 "testing",
                 List.of(
                         noVerdict(7L, "2026-03-01T09:00:00Z"),
-                        judged(40L, "2026-05-01T09:00:00Z", Assessment.BAD),
-                        judged(55L, "2026-06-01T09:00:00Z", Assessment.GOOD)),
+                        judged(40L, "2026-05-01T09:00:00Z", Outcome.NOT_MET),
+                        judged(55L, "2026-06-01T09:00:00Z", Outcome.MET)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 
@@ -43,7 +43,7 @@ class PracticeTrendCalculatorTest {
         // optional arguments.
         PracticeTrend trend = PracticeTrendCalculator.calculatePractice(
                 "testing",
-                List.of(judged(40L, "2026-05-01T09:00:00Z", Assessment.GOOD)),
+                List.of(judged(40L, "2026-05-01T09:00:00Z", Outcome.MET)),
                 Instant.parse("2026-01-01T00:00:00Z"),
                 properties);
 

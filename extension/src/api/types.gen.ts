@@ -1158,20 +1158,15 @@ export type CreatePracticeGroupRequest = {
  */
 export type CreatePracticeRequest = {
   /**
-   * Versioned review settings; omit to use the recommended ones for the work type the bindings name
+   * Versioned review settings; omit to use the recommended ones for the work type the signals name
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
-  /**
-   * The one occasion this practice is reviewed on, with the evidence that review reads. The kind of work reviewed is read off the signals.
-   */
-  bindings: [
-    PracticeBinding
-  ];
   /**
    * Practice review criteria
    */
   criteria: string;
   deliveryBehavior?: PracticeDeliveryBehavior;
+  evidenceRequirements: Array<PracticeEvidenceRequirement>;
   /**
    * Practice group to add the practice to. Omit or set to null for Unassigned.
    */
@@ -1184,10 +1179,19 @@ export type CreatePracticeRequest = {
    * TypeScript/Node static analysis run before automated review
    */
   precomputeScript?: string;
+  precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen?: {
+    [key: string]: Array<string>;
+  };
+  signals: Array<string>;
   /**
    * URL-safe identifier unique within the workspace
    */
   slug: string;
+  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   /**
    * Developer-facing exemplar; a concrete instance, not the review criteria
    */
@@ -1469,12 +1473,21 @@ export type CuratedPracticeDefinition = {
   artifactKind: string;
   automatedReviewPolicy: PracticeAutomatedReviewPolicy;
   automatedReviewValidation: PracticeAutomatedReviewValidation;
-  bindings: Array<PracticeBinding>;
   criteria: string;
   deliveryBehavior: PracticeDeliveryBehavior;
+  evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
+  precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen: {
+    [key: string]: Array<string>;
+  };
+  signals: Array<string>;
+  subject: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   whatGoodLooksLike?: string;
   whyItMatters?: string;
 };
@@ -1484,24 +1497,28 @@ export type CuratedPracticeDefinition = {
  */
 export type CuratedPracticeRequest = {
   /**
-   * Evidence requirements; omit to use the recommended requirements for the selected work type
+   * Versioned review settings; omit to use the recommended settings for the selected work type
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
+  criteria: string;
   /**
    * Explicit intent to change the gate or the person judged
    */
-  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
-  /**
-   * The one occasion this practice is reviewed on; the kind of work is read off the signals
-   */
-  bindings: [
-    PracticeBinding
-  ];
-  criteria: string;
+  definitionChanges?: Array<'PRECONDITION' | 'SUBJECT'>;
   deliveryBehavior?: PracticeDeliveryBehavior;
+  evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
+  precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen?: {
+    [key: string]: Array<string>;
+  };
+  signals: Array<string>;
+  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   whatGoodLooksLike?: string;
   whyItMatters?: string;
 };
@@ -1627,13 +1644,14 @@ export type DeveloperPracticeSummary = {
    */
   lastObservedAt?: string;
   /**
-   * Number of negative outcomes
+   * Number of MET observations
    */
-  negativeCount: number;
+  met: number;
+  notApplicable: number;
   /**
-   * Number of positive outcomes
+   * Number of NOT_MET observations
    */
-  positiveCount: number;
+  notMet: number;
   /**
    * Practice name
    */
@@ -1646,6 +1664,7 @@ export type DeveloperPracticeSummary = {
    * Total number of observations
    */
   totalObservations: number;
+  undetermined: number;
 };
 
 export type EmailTestRequest = {
@@ -2172,7 +2191,7 @@ export type InAppEvidence = {
   /**
    * What the review made of this piece of work: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out
    */
-  outcome: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+  outcome: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * The piece of work, as every surface names it
    */
@@ -2716,12 +2735,7 @@ export type ObservationDetail = {
    */
   artifactUrl?: string;
   /**
-   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed. Earlier observation standards and missing fingerprints are unverifiable under the current whole-practice standard
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2762,9 +2776,9 @@ export type ObservationDetail = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * Derived from presence and contextual behavior assessment; null unless assessed
+   * Result of the practice review
    */
-  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  outcome: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Practice name
    */
@@ -2774,15 +2788,11 @@ export type ObservationDetail = {
    */
   practiceSlug: string;
   /**
-   * PRESENT or ABSENT only when ASSESSED
-   */
-  presence?: 'PRESENT' | 'ABSENT';
-  /**
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
   /**
-   * Severity level (null unless outcome is NEGATIVE)
+   * Severity level (null unless outcome is NOT_MET)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -2850,12 +2860,7 @@ export type ObservationList = {
    */
   artifactKind: string;
   /**
-   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed. Earlier observation standards and missing fingerprints are unverifiable under the current whole-practice standard
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -2871,9 +2876,9 @@ export type ObservationList = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * Derived from presence and contextual behavior assessment; null unless assessed
+   * Result of the practice review
    */
-  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  outcome: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Practice name
    */
@@ -2883,11 +2888,7 @@ export type ObservationList = {
    */
   practiceSlug: string;
   /**
-   * PRESENT or ABSENT only when ASSESSED
-   */
-  presence?: 'PRESENT' | 'ABSENT';
-  /**
-   * Severity level (null unless outcome is NEGATIVE)
+   * Severity level (null unless outcome is NOT_MET)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -2924,11 +2925,9 @@ export type OptionCount = {
 };
 
 export type OutcomeVector = {
-  commissionProblems: number;
-  demonstratedStrengths: number;
+  met: number;
   notApplicable: number;
-  omissionGaps: number;
-  safeAvoidances: number;
+  notMet: number;
   undetermined: number;
 };
 
@@ -3288,7 +3287,7 @@ export type PlacePracticeRequest = {
  */
 export type Practice = {
   /**
-   * Kind of work this practice reviews, read off its bindings
+   * Kind of work this practice reviews, read off its signals
    */
   artifactKind: string;
   automatedReviewPolicy: PracticeAutomatedReviewPolicy;
@@ -3301,10 +3300,6 @@ export type Practice = {
    * How much autonomy the system has over this practice, whether that was set here or inherited from its group or workspace, and which level decided it
    */
   autonomy: AutonomyAssignment;
-  /**
-   * The one occasion this practice is reviewed on, with the evidence that review reads
-   */
-  bindings: Array<PracticeBinding>;
   catalogOrigin?: CatalogOrigin;
   /**
    * Timestamp when the practice was created
@@ -3319,6 +3314,7 @@ export type Practice = {
    * Position within its group (lowest first); ties broken by name
    */
   displayOrder: number;
+  evidenceRequirements: Array<PracticeEvidenceRequirement>;
   /**
    * Slug of the practice group this practice is bound to, if any
    */
@@ -3335,10 +3331,22 @@ export type Practice = {
    * TypeScript/Node precompute script for static analysis before AI review
    */
   precomputeScript?: string;
+  precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen: {
+    [key: string]: Array<string>;
+  };
+  /**
+   * Signals that start a practice review
+   */
+  signals: Array<string>;
   /**
    * URL-safe identifier unique within workspace
    */
   slug: string;
+  subject: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   /**
    * Timestamp when the practice was last updated
    */
@@ -3416,45 +3424,25 @@ export type PracticeAutomatedReviewValidation = {
 };
 
 /**
- * An occasion that starts a review, and the evidence that review reads
- */
-export type PracticeBinding = {
-  /**
-   * What must be in the work for this practice to apply; omit to always apply
-   */
-  appliesWhen?: PracticeSubject;
-  /**
-   * Sources a review occasioned this way reads, each with the stance it takes
-   */
-  needs: Array<PracticeEvidenceRequirement>;
-  /**
-   * Whether an artifact still marked draft occasions this review; omit for false
-   */
-  onDrafts?: boolean;
-  /**
-   * Signals that occasion this review, e.g. scm.pull_request.merged
-   */
-  signals: Array<string>;
-  /**
-   * Whose conduct this review judges; omit for AUTHOR
-   */
-  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
-};
-
-/**
- * A practice as its author wrote it.
- *
- *  <p><code>artifactKind</code> is not a field. It is read off {@link de.tum.cit.aet.hephaestus.practices.PracticeDefinition#bindings #bindings()}, whose signal names carry
- *  it as a prefix, so there is nothing for a second statement of it to disagree with.
+ * The authored standard and the occasion on which it is reviewed.
  */
 export type PracticeDefinition = {
   automatedReviewPolicy: PracticeAutomatedReviewPolicy;
-  bindings: Array<PracticeBinding>;
   criteria: string;
   deliveryBehavior: PracticeDeliveryBehavior;
+  evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
   name: string;
   precomputeScript?: string;
+  precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen: {
+    [key: string]: Array<string>;
+  };
+  signals: Array<string>;
+  subject: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   whatGoodLooksLike?: string;
   whyItMatters?: string;
 };
@@ -3704,6 +3692,38 @@ export type PracticeGroupTrend = {
 };
 
 /**
+ * What must be in a piece of work for this practice to have anything to judge
+ */
+export type PracticePrecondition = {
+  /**
+   * Alternative conditions; the practice applies when any condition holds
+   */
+  anyOf?: Array<PracticePreconditionClause>;
+  /**
+   * Explanation shown when complete evidence disproves every condition
+   */
+  skipReason: string;
+};
+
+/**
+ * One shape the subject a practice judges can take in a piece of work
+ */
+export type PracticePreconditionClause = {
+  /**
+   * Globs; holds when the change touches a matching path
+   */
+  changedPathMatches?: Array<string>;
+  /**
+   * Literal strings; holds when the diff contains one of them
+   */
+  diffContains?: Array<string>;
+  /**
+   * Named evidence collection; holds when it has at least one entry
+   */
+  evidenceHasItems?: 'scm.review-threads' | 'scm.inline-review-comments' | 'scm.general-review-comments';
+};
+
+/**
  * What held, what changed and which work was reviewed over a window of the developer's reviews
  */
 export type PracticeProfileOverview = {
@@ -3731,7 +3751,7 @@ export type PracticeProfileOverview = {
 
 export type PracticeReleaseField = {
   conflict: boolean;
-  field: 'NAME' | 'BINDINGS' | 'CRITERIA' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
+  field: 'NAME' | 'SIGNALS' | 'EVIDENCE_REQUIREMENTS' | 'REVIEW_WHEN' | 'SUBJECT' | 'PRECONDITION' | 'CRITERIA' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
   offeredChanged: boolean;
 };
 
@@ -3740,7 +3760,7 @@ export type PracticeReleaseField = {
  */
 export type PracticeReleaseProposal = {
   base: PracticeDefinition;
-  baseSource: 'EXACT_ADOPTION' | 'BUNDLED_DIGEST_MATCH' | 'BUNDLED_FINGERPRINT_MATCH' | 'CURRENT_DEFINITION';
+  baseSource: 'EXACT_ADOPTION' | 'BUNDLED_DIGEST_MATCH' | 'BUNDLED_FINGERPRINT_MATCH' | 'REVISION_FINGERPRINT_MATCH' | 'CURRENT_DEFINITION';
   current: PracticeDefinition;
   currentRevision?: number;
   etag: string;
@@ -3933,6 +3953,18 @@ export type PracticeReviewSettings = {
   revision: number;
 };
 
+export type PracticeReviewStateDimension = {
+  displayName: string;
+  key: string;
+  recommendedValues: Array<string>;
+  values: Array<PracticeReviewStateValue>;
+};
+
+export type PracticeReviewStateValue = {
+  displayName: string;
+  value: string;
+};
+
 /**
  * A signal and the words a reader sees for it
  */
@@ -4015,10 +4047,6 @@ export type PracticeStandingObservation = {
    */
   deliveredFeedback?: string;
   /**
-   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart. Only assessed observations reach a standing, so NOT_APPLICABLE and UNDETERMINED never appear here.
-   */
-  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
    * Where in the work, e.g. "FrameRecorder.swift:212", when known
    */
   locator?: string;
@@ -4031,15 +4059,15 @@ export type PracticeStandingObservation = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * Positive or negative consequence of this assessed observation
+   * MET or NOT_MET result supporting this standing
    */
-  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  outcome: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   /**
    * Identifier of the reviewed work
    */
   reviewedWorkId: number;
   /**
-   * Impact level (null unless assessed BAD)
+   * Impact level (null unless NOT_MET)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -4050,38 +4078,6 @@ export type PracticeStandingObservation = {
    * The kind of reviewed work this is about
    */
   workKind: string;
-};
-
-/**
- * What must be in a piece of work for this practice to have anything to judge
- */
-export type PracticeSubject = {
-  /**
-   * Sentence shown when the subject was proven absent, in the author's voice
-   */
-  absentSays: string;
-  /**
-   * Shapes the subject may take; the subject is present when any one is found
-   */
-  anyOf?: Array<PracticeSubjectClause>;
-};
-
-/**
- * One shape the subject a practice judges can take in a piece of work
- */
-export type PracticeSubjectClause = {
-  /**
-   * Globs; holds when the change touches a matching path
-   */
-  changedPathMatches?: Array<string>;
-  /**
-   * Literal strings; holds when the diff contains one of them
-   */
-  diffContains?: Array<string>;
-  /**
-   * Named evidence collection; holds when it has at least one entry
-   */
-  evidenceHasItems?: 'scm.review-threads' | 'scm.inline-review-comments' | 'scm.general-review-comments';
 };
 
 /**
@@ -4161,11 +4157,14 @@ export type PracticeWorkTypeDefinitionOptions = {
    * How a person asks for a review of this work type by hand, or absent where the work type admits no such request. Not an occasion to bind to: such a request reviews every practice on the work type whatever state the work is in.
    */
   manualReviewSignal?: PracticeSignal;
+  preconditionEvidenceCollections: Array<string>;
+  preconditionSupportedAspects: Array<string>;
   /**
    * Evidence a new binding on this work type starts with when the author says nothing
    */
-  recommendedNeeds: Array<PracticeEvidenceRequirement>;
+  recommendedEvidenceRequirements: Array<PracticeEvidenceRequirement>;
   recommendedPolicy: PracticeAutomatedReviewPolicy;
+  reviewWhenDimensions: Array<PracticeReviewStateDimension>;
   /**
    * The occasions a practice on this work type can be bound to. A review somebody asks for by hand is not among them — see manualReviewSignal.
    */
@@ -4612,12 +4611,7 @@ export type ReviewBoundFeedback = {
  */
 export type ReviewBoundObservation = {
   /**
-   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed. Earlier observation standards and missing fingerprints are unverifiable under the current whole-practice standard
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4631,18 +4625,17 @@ export type ReviewBoundObservation = {
    */
   ordinal: number;
   /**
-   * Derived from presence and contextual behavior assessment; null unless assessed
+   * Result of the practice review
    */
-  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  outcome: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   practiceName: string;
   practiceSlug: string;
-  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Whether the observation leads the feedback or reinforces it
    */
   role: 'PRIMARY' | 'SUPPORTING';
   /**
-   * Severity band (null unless outcome is NEGATIVE)
+   * Severity band (null unless outcome is NOT_MET)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   summary: string;
@@ -4834,12 +4827,7 @@ export type ReviewFeedbackDetail = {
 export type ReviewObservation = {
   agentJobId: string;
   /**
-   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed. Earlier observation standards and missing fingerprints are unverifiable under the current whole-practice standard
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4865,19 +4853,18 @@ export type ReviewObservation = {
    */
   origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
   /**
-   * Derived from presence and contextual behavior assessment; null unless assessed
+   * Result of the practice review
    */
-  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  outcome: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   practiceName: string;
   practiceSlug: string;
-  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
   reviewedWork: ReviewedWorkRef;
   /**
-   * Severity band (null unless outcome is NEGATIVE)
+   * Severity band (null unless outcome is NOT_MET)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -4891,12 +4878,12 @@ export type ReviewObservation = {
  * Counts of observations by assessment
  */
 export type ReviewObservationCounts = {
+  met: number;
   /**
    * Practices whose subject did not occur in this work
    */
   notApplicable: number;
-  problems: number;
-  strengths: number;
+  notMet: number;
   /**
    * Practices that looked at the evidence and could not settle the question either way; reported apart from notApplicable because one says there was nothing here to judge and the other says we could not tell
    */
@@ -4909,12 +4896,7 @@ export type ReviewObservationCounts = {
 export type ReviewObservationDetail = {
   agentJobId: string;
   /**
-   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
+   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed. Earlier observation standards and missing fingerprints are unverifiable under the current whole-practice standard
    */
   claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
   /**
@@ -4938,23 +4920,22 @@ export type ReviewObservationDetail = {
   invalidations: Array<ObservationInvalidation>;
   observedAt: string;
   /**
-   * Derived from presence and contextual behavior assessment; null unless assessed
+   * Result of the practice review
    */
-  readonly outcome?: 'POSITIVE' | 'NEGATIVE';
+  outcome: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
   practiceName: string;
   /**
    * Criteria revision selected as of job start, when available
    */
   practiceRevisionId?: number;
   practiceSlug: string;
-  presence?: 'PRESENT' | 'ABSENT';
   /**
    * Cross-run locus key; null when continuity is unavailable
    */
   recurrenceKey?: string;
   reviewedWork: ReviewedWorkRef;
   /**
-   * Severity band (null unless outcome is NEGATIVE)
+   * Severity band (null unless outcome is NOT_MET)
    */
   severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
   /**
@@ -5014,25 +4995,25 @@ export type ReviewPracticeGroup = {
 };
 
 /**
- * What one run decided about each practice it observed for this developer, one outcome per practice however many observations it recorded about it; an invalidated observation decides nothing
+ * What one run decided about each practice it observed for this developer against the practice's whole positive standard, one count per practice however many observations it recorded; an invalidated observation decides nothing, and a met or not-met outcome recorded under an earlier or missing assessment scheme counts as undetermined
  */
 export type ReviewPracticeOutcomes = {
   /**
-   * Practices with a strength observed and no problem
+   * Practices with at least one counted met outcome and none not met
    */
-  held: number;
+  met: number;
   /**
-   * Practices whose every observation said the practice did not apply to this work
+   * Practices whose every counted outcome was not applicable
    */
   notApplicable: number;
   /**
-   * Practices with at least one problem observed
+   * Practices with at least one counted not-met outcome
    */
-  toImprove: number;
+  notMet: number;
   /**
-   * Practices the run looked at and could not settle either way: no strength, no problem, and not only a verdict that the practice did not apply
+   * Practices the run could not settle: no counted met or not-met outcome, and not only not-applicable outcomes
    */
-  undecided: number;
+  undetermined: number;
 };
 
 /**
@@ -6136,28 +6117,23 @@ export type UpdatePracticeGroupRequest = {
  */
 export type UpdatePracticeRequest = {
   /**
-   * Replacement review settings; omit to preserve them, or to take the recommended ones when the bindings move the practice to a different kind of work
+   * Replacement review settings; omit to preserve them, or to take the recommended ones when the signals move the practice to a different kind of work
    */
   automatedReviewPolicy?: PracticeAutomatedReviewPolicy;
   /**
-   * Explicit intent to change the gate or the person judged
-   */
-  bindingChanges?: Array<'APPLIES_WHEN' | 'SUBJECT'>;
-  /**
-   * Replacement occasion and its evidence; omit to leave it unchanged
-   */
-  bindings?: [
-    PracticeBinding
-  ];
-  /**
    * Optional fields to clear before applying supplied values
    */
-  clear?: Array<'PRECOMPUTE_SCRIPT' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE'>;
+  clear?: Array<'PRECONDITION' | 'PRECOMPUTE_SCRIPT' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE'>;
   /**
    * Practice review criteria
    */
   criteria?: string;
+  /**
+   * Explicit intent to change the gate or the person judged
+   */
+  definitionChanges?: Array<'PRECONDITION' | 'SUBJECT'>;
   deliveryBehavior?: PracticeDeliveryBehavior;
+  evidenceRequirements?: Array<PracticeEvidenceRequirement>;
   /**
    * Catalog placement to apply with the definition update; omit to leave unchanged
    */
@@ -6170,6 +6146,15 @@ export type UpdatePracticeRequest = {
    * TypeScript/Node static analysis run before automated review
    */
   precomputeScript?: string;
+  precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen?: {
+    [key: string]: Array<string>;
+  };
+  signals?: Array<string>;
+  subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   /**
    * Concrete example shown to the developer; not review criteria
    */
@@ -7097,573 +7082,6 @@ export type WorkspaceTeamSettings = {
    * The workspace ID these settings belong to
    */
   workspaceId: number;
-};
-
-/**
- * Full practice observation detail including delivered feedback and evidence
- */
-export type ObservationDetailWritable = {
-  /**
-   * Artifact entity ID
-   */
-  artifactId: number;
-  /**
-   * Artifact type (e.g. PULL_REQUEST)
-   */
-  artifactKind: string;
-  /**
-   * Link to the reviewed artifact on its platform (null when it cannot be resolved)
-   */
-  artifactUrl?: string;
-  /**
-   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
-   */
-  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
-  /**
-   * What to do — the text of the newest feedback that said something about this observation to this developer (null if nothing was said)
-   */
-  deliveredFeedback?: string;
-  evidence?: ObservationEvidence;
-  /**
-   * Evidence-based rationale for the observation
-   */
-  evidenceRationale?: string;
-  /**
-   * The developer's standing answer to the very feedback whose text deliveredFeedback shows, with that feedback's id as the handle for responding (null when nothing was said, or when the feedback that said it failed to deliver and so cannot be answered)
-   */
-  feedbackResponse?: FeedbackResponse;
-  /**
-   * Observation ID
-   */
-  id: string;
-  /**
-   * When a workspace admin marked this observation as incorrect; null while it stands. An invalidated observation counts toward nothing current.
-   */
-  invalidatedAt?: string;
-  /**
-   * The admin's reason for the invalidation; null while the observation stands
-   */
-  invalidationReason?: string;
-  /**
-   * The next step the review wrote about this observation, whether or not the feedback carrying it was delivered (null when it wrote none)
-   */
-  nextStep?: string;
-  /**
-   * When the observation was made
-   */
-  observedAt: string;
-  /**
-   * What occasioned the measurement; never mix origins in one trend line
-   */
-  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
-  /**
-   * Practice name
-   */
-  practiceName: string;
-  /**
-   * Practice slug
-   */
-  practiceSlug: string;
-  /**
-   * PRESENT or ABSENT only when ASSESSED
-   */
-  presence?: 'PRESENT' | 'ABSENT';
-  /**
-   * Cross-run locus key; null when continuity is unavailable
-   */
-  recurrenceKey?: string;
-  /**
-   * Severity level (null unless outcome is NEGATIVE)
-   */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
-  /**
-   * Observation summary
-   */
-  summary: string;
-};
-
-/**
- * Practice observation summary for list views
- */
-export type ObservationListWritable = {
-  /**
-   * Artifact entity ID
-   */
-  artifactId: number;
-  /**
-   * Artifact type (e.g. PULL_REQUEST)
-   */
-  artifactKind: string;
-  /**
-   * Contextual desirability of the specified behavior: GOOD or BAD; null unless assessmentStatus is ASSESSED
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
-   */
-  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
-  /**
-   * Observation ID
-   */
-  id: string;
-  /**
-   * When the observation was made
-   */
-  observedAt: string;
-  /**
-   * What occasioned the measurement; never mix origins in one trend line
-   */
-  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
-  /**
-   * Practice name
-   */
-  practiceName: string;
-  /**
-   * Practice slug
-   */
-  practiceSlug: string;
-  /**
-   * PRESENT or ABSENT only when ASSESSED
-   */
-  presence?: 'PRESENT' | 'ABSENT';
-  /**
-   * Severity level (null unless outcome is NEGATIVE)
-   */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
-  /**
-   * Observation summary
-   */
-  summary: string;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- *  is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- *  response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
-export type PageResponseDtoObservationListWritable = {
-  content?: Array<ObservationListWritable>;
-  empty?: boolean;
-  first?: boolean;
-  last?: boolean;
-  number?: number;
-  numberOfElements?: number;
-  pageable?: Pageable;
-  size?: number;
-  sort?: Sort;
-  totalElements?: number;
-  totalPages?: number;
-};
-
-export type PagedModelReviewObservationWritable = {
-  content?: Array<ReviewObservationWritable>;
-  page?: PageMetadata;
-};
-
-/**
- * A complete review run in a developer's practice-group history
- */
-export type PracticeGroupReviewRunWritable = {
-  /**
-   * Every visible observation of the run, complete enough to open in place
-   */
-  observations: Array<ObservationDetailWritable>;
-  reviewId: string;
-  reviewedAt: string;
-  reviewedWork: ReviewedWorkRef;
-};
-
-/**
- * A page of visible review runs
- */
-export type PracticeGroupReviewRunsPageWritable = {
-  content: Array<PracticeGroupReviewRunWritable>;
-  hasNext?: boolean;
-  page?: number;
-  size?: number;
-};
-
-/**
- * A developer's derived qualitative standing for one Group including 1<=n<many practices
- */
-export type PracticeGroupStandingWritable = {
-  /**
-   * Evidence-weighted, opportunity-indexed direction across the group's practices
-   */
-  direction?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
-  /**
-   * Oldest contributing observation, for provenance only (null without a verdict)
-   */
-  feedbackSince?: string;
-  /**
-   * Calendar span covered by the feedback, for provenance only; never a trend-analysis unit
-   */
-  feedbackSpanDays?: number;
-  /**
-   * Group name
-   */
-  groupName: string;
-  /**
-   * Group slug
-   */
-  groupSlug: string;
-  /**
-   * Developer guidance aggregated from the group's feedback (null unless the standing is a verdict). The deterministic summary combines standing, next focus, and developer-facing catalog guidance.
-   */
-  guidance?: string;
-  /**
-   * How the guidance text was produced (null when there is no guidance)
-   */
-  guidanceSource?: 'RULE_BASED';
-  /**
-   * Supporting observations the standing derives from (problems first); empty without a verdict
-   */
-  observations: Array<PracticeStandingObservationWritable>;
-  /**
-   * Distinct pieces of reviewed work the observations come from, per kind (provenance, not a score); empty without a verdict
-   */
-  sources: Array<FeedbackSourceCount>;
-  /**
-   * Derived qualitative standing across the group's practices
-   */
-  standing: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
-  /**
-   * Evidence support and provenance for the direction
-   */
-  trendSupport?: TrendSupport;
-};
-
-/**
- * A developer's readable feedback for one practice
- */
-export type PracticeStandingWritable = {
-  /**
-   * Opportunity-indexed direction of this practice's recent evidence
-   */
-  direction?: 'IMPROVING' | 'DECLINING' | 'UNCERTAIN' | 'INSUFFICIENT_EVIDENCE';
-  /**
-   * Group name this practice belongs to, if any
-   */
-  groupName?: string;
-  /**
-   * Group slug this practice belongs to, if any
-   */
-  groupSlug?: string;
-  /**
-   * Practice name
-   */
-  name: string;
-  /**
-   * Practice slug
-   */
-  slug: string;
-  /**
-   * Where the developer stands on this practice, or why no standing could be formed
-   */
-  standing: 'DEVELOPING' | 'STRENGTH' | 'MIXED' | 'NOT_OBSERVED' | 'NO_OPPORTUNITY';
-  /**
-   * What the developer already does well here
-   */
-  strengths: Array<PracticeStandingObservationWritable>;
-  /**
-   * Specific feedback to act on (highest-impact first)
-   */
-  toWorkOn: Array<PracticeStandingObservationWritable>;
-  /**
-   * Evidence support and provenance for the direction
-   */
-  trendSupport?: TrendSupport;
-  /**
-   * A concrete picture of doing this well
-   */
-  whatGoodLooksLike?: string;
-  /**
-   * Why this practice matters, in plain language
-   */
-  whyItMatters?: string;
-};
-
-/**
- * A single piece of practice feedback to read and act on
- */
-export type PracticeStandingObservationWritable = {
-  /**
-   * What to do — the text of the newest feedback that said something about this observation to this developer (null if nothing was said)
-   */
-  deliveredFeedback?: string;
-  /**
-   * What this observation says about the developer: a behaviour demonstrated, a trap avoided, something harmful done, or something needed left out. The lists only separate positive from negative, so this is what tells the two kinds of each apart. Only assessed observations reach a standing, so NOT_APPLICABLE and UNDETERMINED never appear here.
-   */
-  kind: 'DEMONSTRATED_STRENGTH' | 'SAFE_AVOIDANCE' | 'COMMISSION_PROBLEM' | 'OMISSION_GAP' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Where in the work, e.g. "FrameRecorder.swift:212", when known
-   */
-  locator?: string;
-  /**
-   * Observation id — handle to open the full detail
-   */
-  observationId: string;
-  /**
-   * Why this observation was recorded. BACKFILL means it came from a review of past work rather than from something that just happened, and nothing was posted anywhere at the time.
-   */
-  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
-  /**
-   * Identifier of the reviewed work
-   */
-  reviewedWorkId: number;
-  /**
-   * Impact level (null unless assessed BAD)
-   */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
-  /**
-   * The headline of the feedback
-   */
-  title: string;
-  /**
-   * The kind of reviewed work this is about
-   */
-  workKind: string;
-};
-
-/**
- * One review run on the developer's own work and what it observed about them
- */
-export type ProfileReviewRunDetailWritable = {
-  /**
-   * Every visible observation the run made about this developer
-   */
-  observations: Array<ObservationDetailWritable>;
-  run: ProfileReviewRun;
-};
-
-/**
- * An observation that contributed to a piece of feedback
- */
-export type ReviewBoundObservationWritable = {
-  /**
-   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
-   */
-  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
-  /**
-   * Practice group; null when the practice is Unassigned
-   */
-  group?: ReviewPracticeGroup;
-  observationId: string;
-  observedAt: string;
-  /**
-   * Render order within the feedback (lower renders earlier)
-   */
-  ordinal: number;
-  practiceName: string;
-  practiceSlug: string;
-  presence?: 'PRESENT' | 'ABSENT';
-  /**
-   * Whether the observation leads the feedback or reinforces it
-   */
-  role: 'PRIMARY' | 'SUPPORTING';
-  /**
-   * Severity band (null unless outcome is NEGATIVE)
-   */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
-  summary: string;
-};
-
-/**
- * Full feedback detail including the stored composed body
- */
-export type ReviewFeedbackDetailWritable = {
-  agentJobId: string;
-  /**
-   * Immutable human decision for this proposal, when one has been made
-   */
-  approval?: FeedbackApproval;
-  /**
-   * Stored composed body; null when none was produced, and always null on the IN_APP and IN_CHAT channels — neither the developer's practice pages nor the mentor's prepared context is readable by an operator
-   */
-  body?: string;
-  channel: 'IN_CONTEXT' | 'IN_CHAT' | 'IN_APP';
-  createdAt: string;
-  /**
-   * When the feedback was placed; null if it was not delivered
-   */
-  deliveredAt?: string;
-  /**
-   * Ordered delivery-policy evaluations for this feedback's review
-   */
-  deliveryPolicy: Array<DeliveryPolicyTrace>;
-  deliveryState: 'AWAITING_APPROVAL' | 'PREPARED' | 'PARTIALLY_DELIVERED' | 'PARTIALLY_FAILED' | 'DELIVERED' | 'SUPERSEDED' | 'SUPPRESSED' | 'FAILED' | 'DISCARDED' | 'UNCONFIRMED';
-  /**
-   * The developer's standing dispute of this feedback; null while they do not dispute it
-   */
-  dispute?: FeedbackDispute;
-  id: string;
-  /**
-   * Source observations in render order
-   */
-  observations: Array<ReviewBoundObservationWritable>;
-  /**
-   * Recorded placements; empty when none
-   */
-  placements: Array<ReviewPlacement>;
-  /**
-   * Exact ordered summary and inline messages covered by the approval decision
-   */
-  proposedPlacements: Array<ReviewProposedPlacement>;
-  /**
-   * Who the feedback is addressed to; null when the identity is no longer resolvable
-   */
-  recipient?: ReviewSubject;
-  /**
-   * The feedback this one replaced; null on a first delivery
-   */
-  replacesId?: string;
-  /**
-   * Reviewed source revision for an immutable approval package
-   */
-  reviewedRevision?: string;
-  /**
-   * Reviewed work the feedback targets; null when it is unanchored
-   */
-  reviewedWork?: ReviewedWorkRef;
-  /**
-   * Whose work the feedback addresses; may equal the recipient
-   */
-  subject?: ReviewSubject;
-  /**
-   * Why delivery stopped; set on withheld or terminally partial feedback
-   */
-  suppressionReason?: 'VOLUME_CAPPED' | 'COMPOSER_DEDUPED' | 'COMPOSER_WITHHELD' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISPUTED' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'ARTIFACT_GONE' | 'ARTIFACT_CLOSED' | 'ISSUE_SNAPSHOT_CHANGED' | 'ARTIFACT_MERGED' | 'ARTIFACT_DRAFT' | 'RECIPIENT_OPTED_OUT' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_COVERAGE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'OBSERVATION_INVALIDATED';
-  /**
-   * Cross-run continuity key tying successive deliveries together
-   */
-  threadKey?: string;
-  /**
-   * Every withdrawal of this card from the developer's practice page, newest first; empty when none
-   */
-  withdrawals: Array<FeedbackWithdrawal>;
-};
-
-/**
- * A practice review observation with its linked feedback outcomes
- */
-export type ReviewObservationWritable = {
-  agentJobId: string;
-  /**
-   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
-   */
-  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
-  /**
-   * When the developer last disputed feedback written from this observation; null while nothing about it is disputed
-   */
-  disputedAt?: string;
-  /**
-   * Counts of linked feedback by delivery state
-   */
-  feedback: ReviewFeedbackCounts;
-  /**
-   * Practice group; null when the practice is Unassigned
-   */
-  group?: ReviewPracticeGroup;
-  id: string;
-  /**
-   * When a workspace admin invalidated this observation; null while it stands
-   */
-  invalidatedAt?: string;
-  observedAt: string;
-  /**
-   * What occasioned the measurement. BACKFILL came from a confirmed campaign over work that already existed, so it is not a point on the live trend line.
-   */
-  origin: 'LIVE' | 'MANUAL' | 'BACKFILL';
-  practiceName: string;
-  practiceSlug: string;
-  presence?: 'PRESENT' | 'ABSENT';
-  /**
-   * Cross-run locus key; null when continuity is unavailable
-   */
-  recurrenceKey?: string;
-  reviewedWork: ReviewedWorkRef;
-  /**
-   * Severity band (null unless outcome is NEGATIVE)
-   */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
-  /**
-   * Whose work the observation is about; null when the identity is no longer resolvable
-   */
-  subject?: ReviewSubject;
-  summary: string;
-};
-
-/**
- * An observation with evidence and linked feedback
- */
-export type ReviewObservationDetailWritable = {
-  agentJobId: string;
-  /**
-   * Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)
-   */
-  assessment?: 'GOOD' | 'BAD';
-  assessmentStatus: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
-  /**
-   * Whether an observation's claim still stands: its practice's review rules are unchanged and it was not superseded, which an issue's observations are when a change to its reviewable content is recorded. It says neither whether a later review ran nor whether the work changed since it was reviewed
-   */
-  claimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
-  /**
-   * The developer's standing disputes of feedback written from this observation, newest first; empty when nothing about it is disputed
-   */
-  disputes: Array<FeedbackDispute>;
-  evidence?: ObservationEvidence;
-  evidenceRationale?: string;
-  /**
-   * Linked feedback, newest first
-   */
-  feedback: Array<ReviewBoundFeedback>;
-  /**
-   * Practice group; null when the practice is Unassigned
-   */
-  group?: ReviewPracticeGroup;
-  id: string;
-  /**
-   * Every correction by a workspace admin, newest first; the first is in force while it has no restoration
-   */
-  invalidations: Array<ObservationInvalidation>;
-  observedAt: string;
-  practiceName: string;
-  /**
-   * Criteria revision selected as of job start, when available
-   */
-  practiceRevisionId?: number;
-  practiceSlug: string;
-  presence?: 'PRESENT' | 'ABSENT';
-  /**
-   * Cross-run locus key; null when continuity is unavailable
-   */
-  recurrenceKey?: string;
-  reviewedWork: ReviewedWorkRef;
-  /**
-   * Severity band (null unless outcome is NEGATIVE)
-   */
-  severity?: 'CRITICAL' | 'MAJOR' | 'MINOR' | 'INFO';
-  /**
-   * Whose work the observation is about; null when the identity is no longer resolvable
-   */
-  subject?: ReviewSubject;
-  summary: string;
 };
 
 export type GetJwksData = {
@@ -12878,10 +12296,9 @@ export type ListObservationsData = {
      */
     groupSlug?: string;
     /**
-     * Filter by presence
+     * Filter by review outcome
      */
-    presence?: 'PRESENT' | 'ABSENT';
-    assessmentStatus?: 'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED';
+    outcome?: 'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED';
     /**
      * Only observations on these kinds of reviewed work, e.g. scm.pull_request (repeatable)
      */
@@ -13570,18 +12987,15 @@ export type ListPracticeReviewObservationsData = {
     page?: number;
     size?: number;
     /**
-     * Sorting strategy. ACTIONABILITY orders negative outcomes from CRITICAL to INFO, then positive outcomes, then not-applicable observations; ties are newest first.
+     * Sorting strategy. ACTIONABILITY orders NOT_MET by severity (CRITICAL, MAJOR, MINOR, INFO), then MET, then NOT_APPLICABLE and UNDETERMINED together. Within each rank, observation time and ID are descending.
      */
     sort?: 'NEWEST' | 'ACTIONABILITY';
     practiceSlug?: Array<string>;
     groupSlug?: Array<string>;
-    assessmentStatus?: Array<'ASSESSED' | 'NOT_APPLICABLE' | 'UNDETERMINED'>;
-    presence?: Array<'PRESENT' | 'ABSENT'>;
-    assessment?: Array<'GOOD' | 'BAD'>;
     /**
-     * Outcomes to list (repeatable): POSITIVE where a desirable behavior was present or an undesirable one absent, NEGATIVE the other way round. Only assessed observations have an outcome.
+     * Review outcomes to list (repeatable)
      */
-    outcome?: Array<'POSITIVE' | 'NEGATIVE'>;
+    outcome?: Array<'MET' | 'NOT_MET' | 'NOT_APPLICABLE' | 'UNDETERMINED'>;
     /**
      * true for only the observations an admin has marked incorrect and not restored, false for only the others; omit for both
      */

@@ -23,7 +23,7 @@ public final class DeveloperTextSanitizer {
             + "\\bthreshold\\s+for\\s+a\\s+\\w+\\s+(?:observation|finding)\\b|"
             + "\\braw\\s+bucket\\b|"
             + "->\\s*(?:MAJOR|MINOR|INFO|CRITICAL|OBSERVED|NOT[_ ]OBSERVED|NOT[_ ]APPLICABLE|PRESENT|ABSENT|GOOD|BAD|POSITIVE|NEGATIVE)\\b|"
-            + "\\b(?:presence|assessment|outcome)\\s+is\\s+(?:PRESENT|ABSENT|NOT[_ ]APPLICABLE|GOOD|BAD|POSITIVE|NEGATIVE)\\b|"
+            + "\\b(?:presence|assessment|outcome)\\s+is\\s+(?:PRESENT|ABSENT|NOT[_ ]APPLICABLE|GOOD|BAD|POSITIVE|NEGATIVE|MET|NOT[_ ]MET|UNDETERMINED)\\b|"
             + "\\((?:PRESENT|ABSENT|NOT[_ ]APPLICABLE)\\s*,\\s*(?:GOOD|BAD)\\)|"
             + "\\b(?:DEFECT-DETECTOR|OBSERVED\\s+DISCIPLINE|GROUNDING\\s+GATE|EPIC\\s+EXCEPTION|EPIC/CORE-REQUIREMENT)\\b|"
             + "\\benriched\\s*[=:]|"

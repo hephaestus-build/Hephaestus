@@ -6,11 +6,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
@@ -22,10 +20,10 @@ import org.junit.jupiter.api.Test;
 class RecurringLapsesTest extends BaseUnitTest {
 
     private static Observation negative(String slug, long artifactId) {
-        return observed(slug, artifactId, Presence.ABSENT);
+        return observed(slug, artifactId, Outcome.NOT_MET);
     }
 
-    private static Observation observed(String slug, long artifactId, Presence presence) {
+    private static Observation observed(String slug, long artifactId, Outcome outcome) {
         Practice practice = new Practice();
         practice.setSlug(slug);
         return Observation.builder()
@@ -33,9 +31,7 @@ class RecurringLapsesTest extends BaseUnitTest {
                 .workspaceId(1L)
                 .aboutUserId(7L)
                 .artifactId(artifactId)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(presence)
-                .assessment(Assessment.GOOD)
+                .outcome(outcome)
                 .build();
     }
 
@@ -69,7 +65,7 @@ class RecurringLapsesTest extends BaseUnitTest {
     void shouldNotCountALapseTheNextReviewFoundFixed() {
         ObservationRepository repository = mock(ObservationRepository.class);
         Clock clock = Clock.fixed(Instant.parse("2026-09-19T12:00:00Z"), ZoneOffset.UTC);
-        Observation fixed = observed("describe-what-and-why", 40, Presence.PRESENT);
+        Observation fixed = observed("describe-what-and-why", 40, Outcome.MET);
         // Newest first: work 40 was negative as a draft and fixed by the review that followed.
         when(repository.findRecentForSubjectAndPractice(eq(1L), eq(7L), eq("describe-what-and-why"), any(), any()))
                 .thenReturn(List.of(

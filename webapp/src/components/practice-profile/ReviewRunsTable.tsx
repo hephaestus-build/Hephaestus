@@ -61,7 +61,8 @@ const NAMED_PRACTICES = 2;
 
 /**
  * What the row leads with: the practices this review recorded a problem about, by name. A review
- * that stopped or is still going says that instead of "Nothing to improve", a claim it never made.
+ * that stopped, is still going or left a practice undetermined says that instead of "Nothing to
+ * improve", a claim it never made.
  */
 function slippedLead(run: ProfileReviewRun): string {
 	const names = run.slippedPractices.map((practice) => practice.practiceName);
@@ -76,22 +77,25 @@ function slippedLead(run: ProfileReviewRun): string {
 	if (run.status === "IN_PROGRESS") {
 		return "Still running";
 	}
+	if (run.practices.undetermined > 0) {
+		return "Some practices remain undetermined";
+	}
 	return "Nothing to improve";
 }
 
 /**
- * "5 practices held, 9 did not apply; 16 practices reached", every number a count of practices. A
+ * "5 practices met, 9 did not apply; 16 practices reached", every number a count of practices. A
  * nought is dropped: this is a sentence about somebody's own work, and what slipped is already
  * named above it. The reach is its own clause, never a total of the outcomes: it counts every
  * practice the review measured, the outcomes only those it decided something about for the reader.
  */
 function reachedPhrase(run: ProfileReviewRun): string {
-	const { held, notApplicable, undecided } = run.practices;
+	const { met, notApplicable, undetermined } = run.practices;
 	const reached = run.practicesEvaluated;
 	const outcomes = [
-		{ n: held, verb: "held" },
+		{ n: met, verb: "met" },
 		{ n: notApplicable, verb: "did not apply" },
-		{ n: undecided, verb: "undecided" },
+		{ n: undetermined, verb: "undetermined" },
 	].filter((outcome) => outcome.n > 0);
 	if (outcomes.length === 0 && reached === undefined) {
 		return run.status === "IN_PROGRESS" ? "Results appear as it finishes" : "";

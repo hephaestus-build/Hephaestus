@@ -33,7 +33,9 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
             Set<SourceKind> allowed,
             java.util.function.Consumer<ProjectedRecord> consumer) {
         rows("""
-            SELECT (to_jsonb(i)||jsonb_build_object('synced_at',i.last_sync_at))::text FROM issue i
+            SELECT (to_jsonb(i)||jsonb_build_object('synced_at',i.last_sync_at,'labels',COALESCE(
+              (SELECT jsonb_agg(l.name ORDER BY l.name COLLATE "C") FROM issue_label il JOIN label l ON l.id=il.label_id
+               WHERE il.issue_id=i.id),'[]'::jsonb)))::text FROM issue i
             WHERE i.repository_id=? AND i.deleted_at IS NULL AND EXISTS
               (SELECT 1 FROM repository_to_monitor m JOIN repository r ON r.name_with_owner=m.name_with_owner
                WHERE m.workspace_id=? AND r.id=i.repository_id) ORDER BY i.number

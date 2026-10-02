@@ -36,7 +36,7 @@ import org.jspecify.annotations.Nullable;
  *
  * <p><strong>A schedule says when, not whose.</strong> Do not add a repository or author list here:
  * {@code WorkspaceReviewScope.repositories} already defines the compute scope, and
- * {@code PracticeReviewDetectionGate} applies it to this path too. A second copy would disagree the first
+ * {@code ReviewGate} applies it to this path too. A second copy would disagree the first
  * time somebody changed one of them; recipient selection belongs to delivery policy instead.
  *
  * <p>Each tick opens a {@link ReviewBackfillRun} rather than driving artifacts itself, because the

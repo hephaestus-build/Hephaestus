@@ -55,9 +55,9 @@ class PracticesIntegrationBoundaryTest extends HephaestusArchitectureTest {
             "de.tum.cit.aet.hephaestus.practices.observation.ObservationService -> de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository",
             "de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackService -> de.tum.cit.aet.hephaestus.integration.scm.domain.user.User",
             "de.tum.cit.aet.hephaestus.practices.feedback.inapp.InAppFeedbackService -> de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository",
-            "de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate -> de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue",
-            "de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate -> de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest",
-            "de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository",
+            "de.tum.cit.aet.hephaestus.practices.review.ReviewGate -> de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue",
+            "de.tum.cit.aet.hephaestus.practices.review.ReviewGate -> de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest",
+            "de.tum.cit.aet.hephaestus.practices.review.ReviewGate -> de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository",
             "de.tum.cit.aet.hephaestus.practices.reviewoutput.ReviewSubjectResolver -> de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository",
             "de.tum.cit.aet.hephaestus.practices.reviewoutput.dto.ReviewSubjectDTO -> de.tum.cit.aet.hephaestus.integration.scm.domain.user.User");
 

@@ -12,11 +12,9 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -411,9 +409,7 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                 .id(UUID.randomUUID())
                 .practice(practice)
                 .summary("Explains the motivation")
-                .presence(Presence.PRESENT)
-                .assessment(Assessment.GOOD)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
+                .outcome(Outcome.MET)
                 .evidence(evidence)
                 .evidenceRationale("The issue states why.")
                 .build();

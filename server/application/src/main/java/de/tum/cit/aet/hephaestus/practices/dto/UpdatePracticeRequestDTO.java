@@ -1,19 +1,27 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
-import de.tum.cit.aet.hephaestus.practices.BindingChange;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.ClosedPracticeInput;
+import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "Request to update a practice; omitted fields remain unchanged")
+@Schema(
+        description = "Request to update a practice; omitted fields remain unchanged",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record UpdatePracticeRequestDTO(
         @Size(min = 3, max = 128, message = "Name must be between 3 and 128 characters")
         @Pattern(regexp = ".*\\S.*", message = "Name must not be blank")
@@ -21,14 +29,16 @@ public record UpdatePracticeRequestDTO(
         @Nullable
         String name,
 
-        @Size(
-                min = 1,
-                max = 1,
-                message = "A practice is reviewed on one occasion. To read different evidence at a different moment, "
-                        + "split this into two practices.")
-        @Schema(description = "Replacement occasion and its evidence; omit to leave it unchanged")
-        @Nullable
-        List<@Valid PracticeBinding> bindings,
+        @Size(min = 1, message = "Choose at least one review moment") @Nullable
+        List<SignalName> signals,
+
+        @Nullable List<@Valid PracticeEvidenceRequirement> evidenceRequirements,
+
+        @Schema(description = ReviewWhen.DESCRIPTION) @Nullable
+        Map<String, Set<String>> reviewWhen,
+
+        @Nullable ActorRole subject,
+        @Valid @Nullable PracticePrecondition precondition,
 
         @Size(max = 50000, message = "Criteria must be at most 50000 characters")
         @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*", message = "Criteria must not be blank")
@@ -46,7 +56,7 @@ public record UpdatePracticeRequestDTO(
         @Valid
         @Schema(
                 description = "Replacement review settings; omit to preserve them, or to take the recommended ones "
-                        + "when the bindings move the practice to a different kind of work")
+                        + "when the signals move the practice to a different kind of work")
         @Nullable
         PracticeAutomatedReviewPolicy automatedReviewPolicy,
 
@@ -71,12 +81,17 @@ public record UpdatePracticeRequestDTO(
         Set<ClearablePracticeField> clear,
 
         @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
-        Set<BindingChange> bindingChanges,
+        Set<DefinitionChange> definitionChanges,
 
-        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior)
+        implements ClosedPracticeInput {
     public UpdatePracticeRequestDTO(
             @Nullable String name,
-            @Nullable List<PracticeBinding> bindings,
+            @Nullable List<SignalName> signals,
+            @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
+            @Nullable Map<String, Set<String>> reviewWhen,
+            @Nullable ActorRole subject,
+            @Nullable PracticePrecondition precondition,
             @Nullable String criteria,
             @Nullable String precomputeScript,
             @Nullable PracticeAutomatedReviewPolicy automatedReviewPolicy,
@@ -84,10 +99,14 @@ public record UpdatePracticeRequestDTO(
             @Nullable String whatGoodLooksLike,
             @Nullable BindPracticeGroupRequestDTO group,
             @Nullable Set<ClearablePracticeField> clear,
-            @Nullable Set<BindingChange> bindingChanges) {
+            @Nullable Set<DefinitionChange> definitionChanges) {
         this(
                 name,
-                bindings,
+                signals,
+                evidenceRequirements,
+                reviewWhen,
+                subject,
+                precondition,
                 criteria,
                 precomputeScript,
                 automatedReviewPolicy,
@@ -95,7 +114,7 @@ public record UpdatePracticeRequestDTO(
                 whatGoodLooksLike,
                 group,
                 clear,
-                bindingChanges,
+                definitionChanges,
                 null);
     }
 }

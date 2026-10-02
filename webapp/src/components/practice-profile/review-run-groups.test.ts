@@ -21,7 +21,7 @@ const run = (
 	reviewedAt,
 	reviewedWork,
 	status: "COMPLETED",
-	practices: { toImprove: 0, held: 0, notApplicable: 0, undecided: 0 },
+	practices: { notMet: 0, met: 0, notApplicable: 0, undetermined: 0 },
 	feedbackDelivered: 0,
 	slippedPractices: [],
 	mayRequest: false,

@@ -29,9 +29,7 @@ const strength = {
 	practiceSlug: "explains-decisions",
 	practiceName: "Explain significant decisions",
 	summary: "The reasoning is recorded next to the changed behavior",
-	assessmentStatus: "ASSESSED",
-	presence: "PRESENT",
-	assessment: "GOOD",
+	outcome: "MET",
 	observedAt: daysBefore(2),
 	origin: "LIVE",
 	claimCurrentness: "CURRENT",
@@ -75,9 +73,7 @@ const problemSeen = {
 	practiceSlug: "does-not-swallow-errors",
 	practiceName: "Do not swallow recoverable errors",
 	summary: "The exception is caught and discarded",
-	assessmentStatus: "ASSESSED",
-	presence: "PRESENT",
-	assessment: "BAD",
+	outcome: "NOT_MET",
 	severity: "MAJOR",
 	observedAt: daysBefore(2),
 	origin: "LIVE",
@@ -85,11 +81,7 @@ const problemSeen = {
 	...reviewedWork,
 } satisfies ObservationDetail;
 
-/**
- * One row per outcome the registry can name, with nothing to open under any of them. The
- * assessment is the behaviour's desirability, so the two absent rows read against the grain: an
- * undesirable behaviour absent is the risk avoided, a desirable one absent is the gap.
- */
+/** One row per outcome, with no expanded evidence. */
 const outcomes: ObservationDetail[] = [
 	problemSeen,
 	{
@@ -97,23 +89,7 @@ const outcomes: ObservationDetail[] = [
 		practiceSlug: "avoids-unsafe-defaults",
 		practiceName: "Avoid unsafe defaults",
 		summary: "The boundary does not fall back to an unsafe value",
-		assessmentStatus: "ASSESSED",
-		presence: "ABSENT",
-		assessment: "BAD",
-		observedAt: daysBefore(2),
-		origin: "LIVE",
-		claimCurrentness: "CURRENT",
-		...reviewedWork,
-	},
-	{
-		id: "00000000-0000-0000-0000-000000000351",
-		practiceSlug: "covers-new-behavior",
-		practiceName: "Cover new behavior with a test",
-		summary: "The new branch has no test exercising it",
-		assessmentStatus: "ASSESSED",
-		presence: "ABSENT",
-		assessment: "GOOD",
-		severity: "CRITICAL",
+		outcome: "MET",
 		observedAt: daysBefore(2),
 		origin: "LIVE",
 		claimCurrentness: "CURRENT",
@@ -124,7 +100,7 @@ const outcomes: ObservationDetail[] = [
 		practiceSlug: "network-timeouts",
 		practiceName: "Document network timeout behavior",
 		summary: "This change performs no network request",
-		assessmentStatus: "NOT_APPLICABLE",
+		outcome: "NOT_APPLICABLE",
 		observedAt: daysBefore(2),
 		origin: "LIVE",
 		claimCurrentness: "CURRENT",
@@ -135,7 +111,7 @@ const outcomes: ObservationDetail[] = [
 		practiceSlug: "keeps-docs-current",
 		practiceName: "Keep documentation current",
 		summary: "The evidence does not settle whether the page is current",
-		assessmentStatus: "UNDETERMINED",
+		outcome: "UNDETERMINED",
 		observedAt: daysBefore(2),
 		origin: "LIVE",
 		claimCurrentness: "CURRENT",
@@ -171,7 +147,7 @@ export const Default: Story = {
 		const row = canvas.getByRole("button", { name: new RegExp(strength.summary, "u") });
 		await expect(row).toHaveAttribute("aria-expanded", "true");
 		await expect(canvas.getByText(strength.practiceName)).toBeVisible();
-		await expect(canvas.getByText("Strength shown")).toBeVisible();
+		await expect(canvas.getByText("Met")).toBeVisible();
 		// The day belongs to the run's card, which names it once above these rows.
 		await expect(canvas.queryByText(formatDay(strength.observedAt))).toBeNull();
 		// The four labels, in the order the reader needs them.
@@ -279,7 +255,7 @@ export const UntitledObservation: Story = {
  * Nothing to open: the outcome line alone, and the row is no control — the chip is the one button,
  * the way a keyboard reaches its sentence. Nothing ranks a problem seen.
  */
-export const OutcomeMatrix: Story = {
+export const EveryOutcome: Story = {
 	render: (args) => (
 		<>
 			{outcomes.map((observation) => (
@@ -290,9 +266,8 @@ export const OutcomeMatrix: Story = {
 	play: async ({ canvas }) => {
 		const buttons = canvas.getAllByRole("button");
 		await expect(buttons.map((button) => button.textContent)).toStrictEqual([
-			"Needs improvement",
-			"Risk avoided",
-			"Expected practice missing",
+			"Not met",
+			"Met",
 			"Not applicable",
 			"Undetermined",
 		]);
@@ -416,8 +391,10 @@ export const DisputeWaitsForItsSentence: Story = {
 /** The chip explains its outcome on hover with the registry's sentence. */
 export const OutcomeExplained: Story = {
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.hover(canvas.getByText("Strength shown"));
-		await expectSettledVisible(await screen.findByText(/worth keeping/u));
+		await userEvent.hover(canvas.getByText("Met"));
+		await expectSettledVisible(
+			await screen.findByText(/practice standard is met in the reviewed evidence/u),
+		);
 	},
 };
 
@@ -427,7 +404,7 @@ export const OutcomeExplained: Story = {
  */
 export const MobileReflow: Story = {
 	args: {
-		observation: { ...strength, assessment: "BAD", severity: "MAJOR", origin: "BACKFILL" },
+		observation: { ...strength, outcome: "NOT_MET", severity: "MAJOR", origin: "BACKFILL" },
 	},
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {

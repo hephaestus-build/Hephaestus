@@ -4,9 +4,10 @@ import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactCatalog;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
@@ -45,10 +46,30 @@ public class PracticeEvidenceDefaults {
                 .toList();
     }
 
+    public Map<String, Set<String>> reviewWhenFor(ArtifactKind artifact) {
+        return ReviewWhen.recommended(artifacts
+                .descriptorFor(artifact)
+                .orElseThrow(
+                        () -> new IllegalArgumentException("No registered domain declares artifact kind: " + artifact))
+                .reviewCapabilities()
+                .reviewWhenDimensions());
+    }
+
+    public Map<String, Set<String>> normalizeReviewWhen(ArtifactKind artifact, Map<String, Set<String>> policy) {
+        return ReviewWhen.normalize(
+                policy,
+                artifacts
+                        .descriptorFor(artifact)
+                        .orElseThrow(() -> new IllegalArgumentException(
+                                "No registered domain declares artifact kind: " + artifact))
+                        .reviewCapabilities()
+                        .reviewWhenDimensions());
+    }
+
     public PracticeAutomatedReviewPolicy policyFor(ArtifactKind artifact) {
         List<ReviewLimitation> limitations = artifacts
                 .descriptorFor(artifact)
-                .map(ArtifactDescriptor::reviewLimitations)
+                .map(descriptor -> descriptor.reviewCapabilities().reviewLimitations())
                 .orElseThrow(
                         () -> new IllegalArgumentException("No registered domain declares artifact kind: " + artifact));
         if (limitations.isEmpty()) {

@@ -21,7 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
@@ -47,7 +47,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
     private ReviewableArtifactLoader artifactLoader;
 
     @Mock
-    private PracticeReviewDetectionGate detectionGate;
+    private ReviewGate reviewGate;
 
     @Mock
     private TransactionTemplate transactionTemplate;
@@ -61,7 +61,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         controller = new DevTriggerController(
-                agentJobService, artifactLoader, detectionGate, transactionTemplate, signalRecorder);
+                agentJobService, artifactLoader, reviewGate, transactionTemplate, signalRecorder);
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(mock(TransactionStatus.class));
@@ -74,14 +74,14 @@ class DevTriggerControllerTest extends BaseUnitTest {
                 PR_ID, null, WORKSPACE_ID, ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.value());
 
         assertThat(response).startsWith("Error:").contains("cannot be triggered manually");
-        verifyNoInteractions(artifactLoader, detectionGate, agentJobService, signalRecorder);
+        verifyNoInteractions(artifactLoader, reviewGate, agentJobService, signalRecorder);
     }
 
     @Test
     void shouldRecordAPullRequestGateRefusalAgainstItsSignal() {
         PullRequest pr = pullRequest();
         when(artifactLoader.findPullRequestForGate(WORKSPACE_ID, PR_ID)).thenReturn(Optional.of(pr));
-        when(detectionGate.evaluate(any(), any(), any())).thenReturn(new GateDecision.Skip("no assignee"));
+        when(reviewGate.evaluate(any(), any(), any())).thenReturn(new GateDecision.Skip("no assignee"));
 
         String response = controller.triggerReview(PR_ID, null, WORKSPACE_ID, "scm.pull_request.merged");
 
@@ -93,7 +93,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
     void shouldRecordTheGatesOwnReasonWhenItNamesOne() {
         PullRequest pr = pullRequest();
         when(artifactLoader.findPullRequestForGate(WORKSPACE_ID, PR_ID)).thenReturn(Optional.of(pr));
-        when(detectionGate.evaluate(any(), any(), any()))
+        when(reviewGate.evaluate(any(), any(), any()))
                 .thenReturn(new GateDecision.Skip(
                         "nobody it could be attributed to is linked", SignalStateReason.SUBJECT_UNLINKED));
 
@@ -109,8 +109,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
         Issue issue = issue();
         when(artifactLoader.findIssueForGate(WORKSPACE_ID, ISSUE_ID)).thenReturn(Optional.of(issue));
         when(agentJobService.buildIssueRequest(any(), any())).thenReturn(issueRequest());
-        when(detectionGate.evaluateIssue(any(), anyLong(), any(), any()))
-                .thenReturn(new GateDecision.Skip("no assignee"));
+        when(reviewGate.evaluateIssue(any(), anyLong(), any(), any())).thenReturn(new GateDecision.Skip("no assignee"));
 
         String response = controller.triggerReview(null, ISSUE_ID, WORKSPACE_ID, "scm.issue.closed");
 
@@ -127,7 +126,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
     void shouldSettleNothingWhenTheGatePasses() {
         PullRequest pr = pullRequest();
         when(artifactLoader.findPullRequestForGate(WORKSPACE_ID, PR_ID)).thenReturn(Optional.of(pr));
-        when(detectionGate.evaluate(any(), any(), any())).thenReturn(automaticDetection(new Workspace(), List.of()));
+        when(reviewGate.evaluate(any(), any(), any())).thenReturn(automaticDetection(new Workspace(), List.of()));
         when(agentJobService.buildReviewRequest(any(), any())).thenReturn(null);
 
         controller.triggerReview(PR_ID, null, WORKSPACE_ID, "scm.pull_request.merged");
@@ -142,7 +141,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
         PullRequest pr = pullRequest();
         org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefOid", null);
         when(artifactLoader.findPullRequestForGate(WORKSPACE_ID, PR_ID)).thenReturn(Optional.of(pr));
-        when(detectionGate.evaluate(any(), any(), any())).thenReturn(new GateDecision.Skip("no assignee"));
+        when(reviewGate.evaluate(any(), any(), any())).thenReturn(new GateDecision.Skip("no assignee"));
 
         String response = controller.triggerReview(PR_ID, null, WORKSPACE_ID, "scm.pull_request.synchronized");
 
@@ -187,7 +186,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
         String response = controller.triggerReview(null, ISSUE_ID, WORKSPACE_ID, "scm.issue.closed");
 
         assertThat(response).contains("Issue missing repository");
-        verify(detectionGate, never()).evaluateIssue(any(), anyLong(), any(), any());
+        verify(reviewGate, never()).evaluateIssue(any(), anyLong(), any(), any());
         verifyNoInteractions(signalRecorder);
     }
 

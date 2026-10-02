@@ -385,8 +385,10 @@ class AgentJobServiceTest extends BaseUnitTest {
             verify(agentJobRepository, never()).saveAndFlush(any());
         }
 
-        @Test
-        void shouldCreateAQueuedJobWithItsPurposeIdempotencyKeyAndFrozenSnapshot() {
+        @ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(de.tum.cit.aet.hephaestus.practices.review.TriggerMode.class)
+        void shouldCreateAQueuedJobWithItsPurposeIdempotencyKeyAndFrozenSnapshot(
+                de.tum.cit.aet.hephaestus.practices.review.TriggerMode triggerMode) {
             MDC.put(StructuredLogKeys.TRACE_ID, "0123456789abcdef0123456789abcdef");
             when(workspaceRepository.findById(1L)).thenReturn(Optional.of(workspace));
 
@@ -403,8 +405,18 @@ class AgentJobServiceTest extends BaseUnitTest {
                 return j;
             });
 
-            Optional<AgentJob> result =
-                    service.submit(1L, AgentJobType.PULL_REQUEST_REVIEW, mock(JobSubmissionRequest.class), null);
+            Optional<AgentJob> result = service.submit(
+                    1L,
+                    AgentJobType.PULL_REQUEST_REVIEW,
+                    mock(JobSubmissionRequest.class),
+                    null,
+                    new de.tum.cit.aet.hephaestus.practices.review.GateDecision.Detect(
+                            workspace,
+                            List.of(),
+                            workspace.getReviewSettings().getRolloutRevision(),
+                            triggerMode,
+                            java.util.Set.of(),
+                            java.util.Map.of("state", "OPEN", "draftStatus", "NOT_DRAFT")));
 
             assertThat(result).isPresent();
             AgentJob job = result.get();
@@ -414,6 +426,9 @@ class AgentJobServiceTest extends BaseUnitTest {
             assertThat(job.getIdempotencyKey()).isEqualTo("pr_review:owner/repo:42:authoring:abc123:detection");
             assertThat(job.getConfigSnapshot()).isNotNull();
             assertThat(job.getStatus()).isEqualTo(AgentJobStatus.QUEUED);
+            assertThat(job.getPracticeTriggerMode()).isEqualTo(triggerMode);
+            assertThat(java.util.Objects.requireNonNull(job.getMetadata()).path("review_state"))
+                    .isEqualTo(objectMapper.readTree("{\"state\":\"OPEN\",\"draftStatus\":\"NOT_DRAFT\"}"));
             assertThat(job.getTraceId()).isEqualTo("0123456789abcdef0123456789abcdef");
         }
 

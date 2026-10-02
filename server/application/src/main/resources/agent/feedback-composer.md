@@ -159,7 +159,7 @@ Before you write a pattern claim, satisfy yourself of all of these:
 
 1. There are entries for it on **at least as many distinct pieces of work** as `minDistinctArtifacts` in
    `<compositionRequest>` says.
-2. They are problems (`outcome: "NEGATIVE"`), not strengths and not `NOT_APPLICABLE`.
+2. They are problems (`outcome: "NOT_MET"`), not strengths and not `NOT_APPLICABLE`.
 3. You can name what the occurrences have **in common as a way of working** — an ordering or a
    default the person falls back on. If the only thing they share is the practice's name, you have a
    list, not a pattern, and a list is not worth a message.
@@ -296,7 +296,7 @@ with the reason — and call it again if more become ready. Do not print a messa
 persisted and the turn will end having produced nothing.
 
 Each unit carries `channel`, `practiceSlug`, `basedOn`, `action`, the words, and — for `IN_CONTEXT` — a
-`placement`. It takes no presence, no assessment, no severity and no confidence, and that is deliberate:
+`placement`. It takes no outcome, no severity and no confidence, and that is deliberate:
 this is an intervention, not a measurement, and a message that could carry a verdict would eventually be
 read back as one.
 

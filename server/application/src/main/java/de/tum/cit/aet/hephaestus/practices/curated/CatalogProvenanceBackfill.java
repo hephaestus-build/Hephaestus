@@ -13,7 +13,6 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
-import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
 import de.tum.cit.aet.hephaestus.practices.PracticeUsageSnapshot;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -27,6 +26,7 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -34,14 +34,13 @@ import org.springframework.transaction.support.TransactionOperations;
 @Slf4j
 @RequiredArgsConstructor
 @ConditionalOnServerRole
-@WorkspaceAgnostic("Repairs migrated fingerprints and links eligible catalog installations")
+@WorkspaceAgnostic("Links eligible catalog installations")
 public class CatalogProvenanceBackfill {
 
     private final PracticeCatalogInstallationRepository installationRepository;
     private final PracticeRepository practiceRepository;
     private final PracticeGroupRepository practiceGroupRepository;
     private final PracticeRevisionRepository revisionRepository;
-    private final PracticeRevisionService revisionService;
     private final CuratedCatalogService curatedCatalogService;
     private final BundledPracticeCatalogLoader bundledCatalogLoader;
     private final CuratedPracticeOverrideRepository practiceOverrideRepository;
@@ -72,8 +71,6 @@ public class CatalogProvenanceBackfill {
     }
 
     private Stamped repairProvenance() {
-        alignVersionedEvidence();
-        fingerprintMigratedRevisions();
         Map<String, PracticeDefinition> bundled = bundledCatalogLoader.catalog().practices().stream()
                 .collect(Collectors.toMap(
                         BundledPracticeCatalog.BundledEntry::slug, BundledPracticeCatalog.BundledEntry::definition));
@@ -132,13 +129,41 @@ public class CatalogProvenanceBackfill {
 
     private void setRecoveredBase(Practice practice, Map<String, PracticeDefinition> bundled) {
         String slug = Objects.requireNonNull(practice.getSourceCuratedSlug());
+        String sourceFingerprint = practice.getSourceCuratedFingerprint();
         PracticeDefinition candidate = bundled.get(slug);
-        if (candidate != null && candidate.provenanceFingerprint(slug).equals(practice.getSourceCuratedFingerprint())) {
+        if (candidate != null && candidate.provenanceFingerprint(slug).equals(sourceFingerprint)) {
             practice.setAdoptedBase(candidate);
             practice.setAdoptedBaseSource(AdoptedBaseSource.BUNDLED_FINGERPRINT_MATCH);
+            return;
+        }
+        PracticeDefinition recorded =
+                sourceFingerprint == null ? null : recordedSourceBase(practice, sourceFingerprint);
+        if (recorded != null) {
+            practice.setAdoptedBase(recorded);
+            practice.setAdoptedBaseSource(AdoptedBaseSource.REVISION_FINGERPRINT_MATCH);
         } else {
             practice.setAdoptedBase(PracticeDefinition.from(practice));
             practice.setAdoptedBaseSource(AdoptedBaseSource.CURRENT_DEFINITION);
+        }
+    }
+
+    /** Only this practice's own immutable revision under the stored source fingerprint; never a synthetic bundle. */
+    private @Nullable PracticeDefinition recordedSourceBase(Practice practice, String sourceFingerprint) {
+        PracticeRevision revision = revisionRepository
+                .findFirstByPracticeIdAndReviewRuleFingerprintOrderByRevisionNumberAsc(
+                        Objects.requireNonNull(practice.getId()), sourceFingerprint)
+                .orElse(null);
+        if (revision == null) {
+            return null;
+        }
+        try {
+            return PracticeDefinition.recordedBy(revision);
+        } catch (IllegalArgumentException rejected) {
+            log.warn(
+                    "A recorded revision cannot serve as an adopted base: practiceId={}, revisionId={}",
+                    practice.getId(),
+                    revision.getId());
+            return null;
         }
     }
 
@@ -183,52 +208,6 @@ public class CatalogProvenanceBackfill {
         return unrepaired;
     }
 
-    private void alignVersionedEvidence() {
-        EffectiveCatalog catalog = curatedCatalogService.catalog();
-        for (Long practiceId : practiceRepository.findSourceAlignedV1PracticeIds()) {
-            try {
-                transactionOperations.executeWithoutResult(ignored -> {
-                    Practice managed = practiceRepository.findById(practiceId).orElseThrow();
-                    String sourceSlug = Objects.requireNonNull(managed.getSourceCuratedSlug());
-                    catalog.practice(sourceSlug).ifPresent(entry -> {
-                        PracticeDefinition effective = entry.effective();
-                        PracticeDefinition aligned = new PracticeDefinition(
-                                managed.getName(),
-                                managed.getBindings(),
-                                managed.getCriteria(),
-                                managed.getPrecomputeScript(),
-                                effective.automatedReviewPolicy(),
-                                managed.getWhyItMatters(),
-                                managed.getWhatGoodLooksLike(),
-                                managed.getGroup() == null
-                                        ? null
-                                        : managed.getGroup().getSlug(),
-                                managed.getDeliveryBehavior());
-                        if (!aligned.provenanceFingerprint(entry.slug())
-                                .equals(effective.provenanceFingerprint(entry.slug()))) {
-                            return;
-                        }
-                        managed.setAutomatedReviewPolicy(effective.automatedReviewPolicy());
-                        managed.setSourceCuratedFingerprint(effective.provenanceFingerprint(entry.slug()));
-                        revisionService.append(managed);
-                    });
-                });
-            } catch (RuntimeException exception) {
-                log.error("Could not align catalog evidence: practiceId={}", practiceId, exception);
-            }
-        }
-    }
-
-    private void fingerprintMigratedRevisions() {
-        for (Long workspaceId : revisionRepository.findWorkspaceIdsWithDefinitionRevisionsMissingFingerprint()) {
-            try {
-                transactionOperations.executeWithoutResult(ignored -> fingerprintMigratedRevisions(workspaceId));
-            } catch (RuntimeException exception) {
-                log.error("Could not fingerprint migrated practice revisions: workspaceId={}", workspaceId, exception);
-            }
-        }
-    }
-
     public record Stamped(int practices, int groups) {
         Stamped plus(Stamped other) {
             return other == null ? this : new Stamped(practices + other.practices(), groups + other.groups());
@@ -246,13 +225,6 @@ public class CatalogProvenanceBackfill {
         installation.markProvenanceLinked(clock.instant());
         installationRepository.save(installation);
         return new Stamped(practices, groups);
-    }
-
-    private void fingerprintMigratedRevisions(Long workspaceId) {
-        for (PracticeRevision revision : revisionRepository.findDefinitionRevisionsMissingFingerprint(workspaceId)) {
-            revisionRepository.setReviewRuleFingerprint(
-                    Objects.requireNonNull(revision.getId()), revision.computeReviewRuleFingerprint());
-        }
     }
 
     private int stampPractices(Long workspaceId, EffectiveCatalog catalog, Map<String, PracticeDefinition> bundled) {

@@ -388,7 +388,6 @@ export async function observationPage(
 			summary: row.summary,
 			outcome: row.outcome,
 			severity: row.severity,
-			assessmentStatus: row.assessmentStatus,
 			claimCurrentness: row.claimCurrentness,
 			observedAt: row.observedAt,
 		})),

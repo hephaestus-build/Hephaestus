@@ -5,7 +5,7 @@ import static de.tum.cit.aet.hephaestus.agent.handler.spi.JobMetadataReader.requ
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.conversation.ChatSignals;
-import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent;
+import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
@@ -32,7 +32,7 @@ import tools.jackson.databind.node.ObjectNode;
  * turns ({@code context/conversation_thread.json}) plus the workspace-wide project inventory, since a
  * conversation isn't anchored to one repo.
  *
- * <p>Admission persists verified observations. Delivery publishes {@link PracticeDetectionDeliveredEvent}
+ * <p>Admission persists verified observations. Delivery publishes {@link PracticeFeedbackPreparationRequestedEvent}
  * to drive the conversational-delivery loop: OBSERVED problems become PREPARED IN_CHAT units for the
  * judged author and surface in their next mentor DM turn. Nothing is posted back to Slack from here.
  */
@@ -42,16 +42,16 @@ public class ConversationReviewHandler implements JobTypeHandler {
 
     private final JsonMapper objectMapper;
     private final PracticeReviewPreparation preparation;
-    private final PracticeDetectionResultParser resultParser;
-    private final PracticeDetectionDeliveryService deliveryService;
+    private final ReviewResultParser resultParser;
+    private final ReviewOutputService deliveryService;
     private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate transactionTemplate;
 
     ConversationReviewHandler(
             JsonMapper objectMapper,
             PracticeReviewPreparation preparation,
-            PracticeDetectionResultParser resultParser,
-            PracticeDetectionDeliveryService deliveryService,
+            ReviewResultParser resultParser,
+            ReviewOutputService deliveryService,
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate) {
         this.objectMapper = objectMapper;
@@ -75,8 +75,7 @@ public class ConversationReviewHandler implements JobTypeHandler {
         }
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put(
-                PracticeDetectionDeliveryService.ORIGIN_METADATA_KEY,
-                r.observationOrigin().name());
+                ReviewOutputService.ORIGIN_METADATA_KEY, r.observationOrigin().name());
         metadata.put("artifact_kind", ArtifactKinds.CONVERSATION_THREAD.value());
         metadata.put("slack_thread_id", r.slackThreadId());
         metadata.put("slack_channel_id", r.slackChannelId());
@@ -88,7 +87,7 @@ public class ConversationReviewHandler implements JobTypeHandler {
         metadata.put("about_user_id", r.aboutUserId());
         // A settled thread is the one occasion a conversation practice is reviewed on. The scheduler
         // decides it, so no ingested event carries it — but the job still records what occasioned it,
-        // because that is what selects the practices and the evidence their bindings read.
+        // because that is what selects the practices for this review.
         metadata.put(PracticeCatalogInjector.SIGNAL_METADATA_KEY, ChatSignals.CONVERSATION_THREAD_SETTLED.value());
 
         // Trailing segment is the disposable freshness (lastTs): AgentJobService.extractCooldownKeyPrefix
@@ -168,8 +167,7 @@ public class ConversationReviewHandler implements JobTypeHandler {
                             + ", discarded="
                             + parsed.discarded().size());
         }
-        var admissible = deliveryService.prepare(
-                job, PracticeDetectionResultParser.validateCoherence(parsed.validObservations()));
+        var admissible = deliveryService.prepare(job, ReviewResultParser.validateCoherence(parsed.validObservations()));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 
@@ -182,7 +180,7 @@ public class ConversationReviewHandler implements JobTypeHandler {
         // in the executor). Best-effort — a publish hiccup never fails the job; observations are already persisted.
         try {
             transactionTemplate.executeWithoutResult(
-                    status -> eventPublisher.publishEvent(new PracticeDetectionDeliveredEvent(
+                    status -> eventPublisher.publishEvent(new PracticeFeedbackPreparationRequestedEvent(
                             job.getId(), job.getWorkspace().getId())));
         } catch (RuntimeException e) {
             log.warn(

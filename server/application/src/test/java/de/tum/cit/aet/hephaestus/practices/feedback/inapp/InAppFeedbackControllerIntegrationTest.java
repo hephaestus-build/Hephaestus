@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.InAppFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.feedback.dto.FeedbackResponseRequestDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationInvalidation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -105,7 +105,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                 .jsonPath("$[0].evidence[0].reviewedWork.container")
                 .isEqualTo("acme/api")
                 .jsonPath("$[0].evidence[0].outcome")
-                .isEqualTo("OMISSION_GAP")
+                .isEqualTo("NOT_MET")
                 .jsonPath("$[0].evidence[0].observedAt")
                 .exists();
     }
@@ -375,7 +375,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
                         job,
                         101L,
                         developer,
-                        ObservationKind.OMISSION_GAP,
+                        Outcome.NOT_MET,
                         Severity.MAJOR,
                         Instant.now(),
                         "{\"citations\":[{\"sourceKind\":\"scm.pull-request.withdrawn\",\"quote\":\"example\"}]}"));
@@ -436,8 +436,7 @@ class InAppFeedbackControllerIntegrationTest extends AbstractPracticeReviewInteg
     }
 
     private UUID persistObservation(Practice about, AgentJob agentJob, User subject, long artifactId) {
-        return observe(
-                about, agentJob, artifactId, subject, ObservationKind.OMISSION_GAP, Severity.MAJOR, Instant.now());
+        return observe(about, agentJob, artifactId, subject, Outcome.NOT_MET, Severity.MAJOR, Instant.now());
     }
 
     private Feedback persistInAppCard(

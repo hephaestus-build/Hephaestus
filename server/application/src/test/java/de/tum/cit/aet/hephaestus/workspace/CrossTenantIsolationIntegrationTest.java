@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
@@ -150,7 +151,11 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         practice.setSlug(practiceSlug);
         practice.setName("Practice of " + ws.getWorkspaceSlug());
         practice.setCriteria("Criteria for " + ws.getWorkspaceSlug());
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        practice.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
+        practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
+        practice.setReviewWhen(Map.of());
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practice = practiceRepository.save(practice);
 
@@ -172,9 +177,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 1L,
                 overlapUser.getId(),
                 "Finding in " + ws.getWorkspaceSlug(),
-                "ASSESSED",
-                "PRESENT",
-                "GOOD",
+                "MET",
                 null,
                 null,
                 "reasoning",
@@ -427,7 +430,11 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         practice.setSlug("in-app-" + ws.getWorkspaceSlug());
         practice.setName("In-app practice of " + ws.getWorkspaceSlug());
         practice.setCriteria("Criteria for " + ws.getWorkspaceSlug());
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        practice.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
+        practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
+        practice.setReviewWhen(Map.of());
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
@@ -453,9 +460,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
                 2L,
                 overlapUser.getId(),
                 "In-app evidence in " + ws.getWorkspaceSlug(),
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 DIFF_EVIDENCE_JSON,
                 "reasoning",

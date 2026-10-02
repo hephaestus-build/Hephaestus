@@ -2,13 +2,10 @@ package de.tum.cit.aet.hephaestus.practices.observation.trend;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import java.time.Instant;
 import java.util.UUID;
-import org.jspecify.annotations.Nullable;
 
 /**
  * The observations the trend and standing tests read: one piece of work a practice reviewed, and what it made
@@ -21,48 +18,27 @@ public final class TrendObservations {
 
     /** The practice was demonstrated on this piece of work. */
     public static Observation clean(long artifactId, String observedAt) {
-        return judged(artifactId, observedAt, Assessment.GOOD);
+        return judged(artifactId, observedAt, Outcome.MET);
     }
 
     /** {@link #clean} on a kind other than a pull request. */
     public static Observation clean(long artifactId, String observedAt, ArtifactKind kind) {
-        return observation(
-                artifactId,
-                UUID.randomUUID(),
-                observedAt,
-                kind,
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD);
+        return observation(artifactId, UUID.randomUUID(), observedAt, kind, Outcome.MET);
     }
 
     /** {@link #clean} on a named run. */
     public static Observation clean(long artifactId, UUID jobId, String observedAt) {
-        return observation(
-                artifactId,
-                jobId,
-                observedAt,
-                ArtifactKinds.PULL_REQUEST,
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.GOOD);
+        return observation(artifactId, jobId, observedAt, ArtifactKinds.PULL_REQUEST, Outcome.MET);
     }
 
     /** The practice was there to judge and was judged: {@code BAD} is a problem in what was done. */
-    public static Observation judged(long artifactId, String observedAt, Assessment assessment) {
-        return judged(artifactId, UUID.randomUUID(), observedAt, assessment);
+    public static Observation judged(long artifactId, String observedAt, Outcome outcome) {
+        return judged(artifactId, UUID.randomUUID(), observedAt, outcome);
     }
 
     /** {@link #judged} on a named run. */
-    public static Observation judged(long artifactId, UUID jobId, String observedAt, Assessment assessment) {
-        return observation(
-                artifactId,
-                jobId,
-                observedAt,
-                ArtifactKinds.PULL_REQUEST,
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                assessment);
+    public static Observation judged(long artifactId, UUID jobId, String observedAt, Outcome outcome) {
+        return observation(artifactId, jobId, observedAt, ArtifactKinds.PULL_REQUEST, outcome);
     }
 
     /** The practice was missing from this piece of work. */
@@ -72,14 +48,7 @@ public final class TrendObservations {
 
     /** {@link #problem} on a named run. */
     public static Observation problem(long artifactId, UUID jobId, String observedAt) {
-        return observation(
-                artifactId,
-                jobId,
-                observedAt,
-                ArtifactKinds.PULL_REQUEST,
-                AssessmentStatus.ASSESSED,
-                Presence.ABSENT,
-                Assessment.GOOD);
+        return observation(artifactId, jobId, observedAt, ArtifactKinds.PULL_REQUEST, Outcome.NOT_MET);
     }
 
     /** The practice looked at this piece of work and found nothing to judge. */
@@ -89,26 +58,17 @@ public final class TrendObservations {
 
     /** {@link #noVerdict} on a named run. */
     public static Observation noVerdict(long artifactId, UUID jobId, String observedAt) {
-        return observation(
-                artifactId, jobId, observedAt, ArtifactKinds.PULL_REQUEST, AssessmentStatus.NOT_APPLICABLE, null, null);
+        return observation(artifactId, jobId, observedAt, ArtifactKinds.PULL_REQUEST, Outcome.NOT_APPLICABLE);
     }
 
     private static Observation observation(
-            long artifactId,
-            UUID jobId,
-            String observedAt,
-            ArtifactKind kind,
-            AssessmentStatus status,
-            @Nullable Presence presence,
-            @Nullable Assessment assessment) {
+            long artifactId, UUID jobId, String observedAt, ArtifactKind kind, Outcome outcome) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(jobId)
                 .artifactKind(kind)
                 .artifactId(artifactId)
-                .assessmentStatus(status)
-                .presence(presence)
-                .assessment(assessment)
+                .outcome(outcome)
                 .observedAt(Instant.parse(observedAt))
                 .build();
     }

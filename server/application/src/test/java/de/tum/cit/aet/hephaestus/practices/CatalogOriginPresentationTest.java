@@ -75,7 +75,10 @@ class CatalogOriginPresentationTest extends BaseUnitTest {
         when(practice.getSlug()).thenReturn(slug);
         when(practice.getName()).thenReturn(slug);
         when(practice.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
-        when(practice.getBindings()).thenReturn(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        when(practice.getSignals()).thenReturn(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
+        when(practice.getEvidenceRequirements())
+                .thenReturn(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
+        when(practice.getSubject()).thenReturn(de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR);
         when(practice.getCriteria()).thenReturn("Review the change");
         when(practice.getAutomatedReviewPolicy()).thenReturn(PracticeTestEvidence.pullRequest());
     }

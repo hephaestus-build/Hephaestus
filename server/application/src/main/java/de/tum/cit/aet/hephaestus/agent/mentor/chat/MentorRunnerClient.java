@@ -41,8 +41,8 @@ public final class MentorRunnerClient implements AutoCloseable {
      * replies {@code {accepted:true}} synchronously after binding the thread and arming its
      * watchdog (see {@code pi-mentor-runner.ts#handlePrompt} → {@code sendResult(id, {accepted:true})}),
      * then fires {@code runtime.session.prompt(...)} fire-and-forget. Turn streaming and
-     * cancellation are observed via subscribed events; the runner's 120s + 30s watchdog owns
-     * the actual turn deadline. This timeout exists only to surface a runner hang during
+     * cancellation are observed via subscribed events; the runner's binding-derived work
+     * budget and watchdog grace own the actual turn deadline. This timeout surfaces a runner hang during
      * {@code bindThread}/{@code switchSession} (typical: tens of milliseconds; pathological:
      * multiple seconds on a large session JSONL). The generous 165s upper bound leaves slack
      * for a cold-start cohort awaiting {@code ensureRuntime} behind a single mutex; in

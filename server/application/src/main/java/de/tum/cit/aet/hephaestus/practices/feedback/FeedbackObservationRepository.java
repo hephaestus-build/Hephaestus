@@ -3,10 +3,8 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.CurrentResponseProjection;
 import java.time.Instant;
@@ -256,11 +254,7 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
           AND fo.role = de.tum.cit.aet.hephaestus.practices.feedback.EvidenceRole.PRIMARY
           AND o.practice.id = :practiceId AND o.artifactKind = :artifactKind AND o.artifactId = :artifactId
           AND o.origin <> de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin.BACKFILL
-          AND o.assessmentStatus = de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.ASSESSED
-          AND ((o.presence = de.tum.cit.aet.hephaestus.practices.model.Presence.PRESENT
-                AND o.assessment = de.tum.cit.aet.hephaestus.practices.model.Assessment.BAD)
-            OR (o.presence = de.tum.cit.aet.hephaestus.practices.model.Presence.ABSENT
-                AND o.assessment = de.tum.cit.aet.hephaestus.practices.model.Assessment.GOOD))
+          AND o.outcome = de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET
         """)
     List<UUID> findPreparedConversationFeedbackIdsForNegativeClaim(
             @Param("workspaceId") Long workspaceId,
@@ -300,7 +294,7 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
         SELECT fo.observation.id AS observationId, fo.role AS role, fo.ordinal AS ordinal,
                p.slug AS practiceSlug, p.name AS practiceName, o.summary AS summary,
                pa.slug AS groupSlug, pa.name AS groupName, pa.icon AS groupIcon, pa.color AS groupColor,
-               o.assessmentStatus AS assessmentStatus, o.presence AS presence, o.assessment AS assessment, o.severity AS severity,
+               o.outcome AS outcome, o.severity AS severity,
                evaluatedRevision.id AS practiceRevisionId,
                evaluatedRevision.reviewRuleFingerprint AS practiceRevisionFingerprint,
                currentRevision.reviewRuleFingerprint AS currentPracticeRevisionFingerprint,
@@ -360,13 +354,7 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
 
         String getSummary();
 
-        AssessmentStatus getAssessmentStatus();
-
-        @Nullable
-        Presence getPresence();
-
-        @Nullable
-        Assessment getAssessment();
+        Outcome getOutcome();
 
         @Nullable
         Severity getSeverity();

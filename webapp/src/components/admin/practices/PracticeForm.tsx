@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import deepEqual from "fast-deep-equal";
 
 import { cn } from "cn";
 import type {
@@ -10,12 +9,12 @@ import type {
 	PracticeGroup,
 	UpdatePracticeRequest,
 } from "@/api/types.gen";
-import { normalizeBinding, soleBinding } from "@/components/admin/practice-editor/bindings";
 import {
 	PracticeDefinitionForm,
 	type PracticeDefinitionValue,
 } from "@/components/admin/practice-editor/PracticeDefinitionForm";
 import { PracticeAutomatedReviewValidationSummary } from "@/components/admin/practice-editor/PracticeEvidenceSummary";
+import { normalizeReviewSettings } from "@/components/admin/practice-editor/review-settings";
 import { practiceLevel } from "@/components/admin/practice-reviews/review-levels";
 import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -63,7 +62,7 @@ function asDefinitionValue(practice: Practice): PracticeDefinitionValue {
 	return {
 		slug: practice.slug,
 		name: practice.name,
-		bindings: [soleBinding(practice.bindings)],
+		...normalizeReviewSettings(practice),
 		criteria: practice.criteria,
 		...(hasText(practice.groupSlug) ? { groupSlug: practice.groupSlug } : {}),
 		...(hasText(practice.whyItMatters) ? { whyItMatters: practice.whyItMatters } : {}),
@@ -81,16 +80,15 @@ export function PracticeForm(props: PracticeFormProps) {
 	// Passes the host's return through untouched: a `void` from `onSubmit` must stay `void`, because
 	// the unsaved-changes guard reads only a promise as a save it can wait for.
 	const submit = (value: PracticeDefinitionValue): void | Promise<void> => {
-		const { groupSlug, bindingChanges, ...definition } = value;
+		const { groupSlug, definitionChanges, ...definition } = value;
 		if (props.mode === "create") {
 			return props.onSubmit(definition, groupSlug ?? null);
 		}
 
-		const bindingsChanged = !deepEqual(
-			definition.bindings[0],
-			normalizeBinding(soleBinding(props.initialData.bindings)),
-		);
 		const clear: NonNullable<UpdatePracticeRequest["clear"]> = [];
+		if (!definition.precondition) {
+			clear.push("PRECONDITION");
+		}
 		if (!hasText(definition.precomputeScript)) {
 			clear.push("PRECOMPUTE_SCRIPT");
 		}
@@ -105,8 +103,13 @@ export function PracticeForm(props: PracticeFormProps) {
 			{
 				name: definition.name,
 				criteria: definition.criteria,
-				bindings: bindingsChanged ? definition.bindings : undefined,
-				bindingChanges: bindingsChanged ? bindingChanges : undefined,
+				signals: definition.signals,
+				evidenceRequirements: definition.evidenceRequirements,
+				reviewWhen: definition.reviewWhen,
+				subject: definition.subject,
+				precondition: definition.precondition,
+				definitionChanges:
+					definitionChanges && definitionChanges.length > 0 ? definitionChanges : undefined,
 				whyItMatters: definition.whyItMatters,
 				whatGoodLooksLike: definition.whatGoodLooksLike,
 				precomputeScript: definition.precomputeScript,

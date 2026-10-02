@@ -173,8 +173,8 @@ export const MarkedIncorrect: Story = {
 				index === 0
 					? {
 							...observation,
-							presence: "PRESENT",
-							assessment: "GOOD",
+							outcome: "MET",
+							severity: undefined,
 							summary: "The changes each have a clear purpose",
 							invalidatedAt: daysBefore(1),
 							invalidationReason:

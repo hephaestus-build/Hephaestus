@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.inapp.dto;
 
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup.Target;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkLabels;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
@@ -35,7 +35,7 @@ public record InAppEvidenceDTO(
         @Schema(
                 description = "What the review made of this piece of work: a behaviour demonstrated, a trap"
                         + " avoided, something harmful done, or something needed left out")
-        ObservationKind outcome,
+        Outcome outcome,
 
         @Schema(description = "What the review recorded on this piece of work") @Nullable
         String summary) {
@@ -47,7 +47,7 @@ public record InAppEvidenceDTO(
         return new InAppEvidenceDTO(
                 ReviewedWorkLabels.ref(observation.getArtifactKind(), observation.getArtifactId(), target),
                 observation.getObservedAt(),
-                ObservationKind.of(observation),
+                observation.getOutcome(),
                 observation.getSummary());
     }
 }

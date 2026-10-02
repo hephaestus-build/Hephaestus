@@ -92,7 +92,6 @@ export type ObservationRow = Pick<
 	| "summary"
 	| "outcome"
 	| "severity"
-	| "assessmentStatus"
 	| "claimCurrentness"
 	| "observedAt"
 >;

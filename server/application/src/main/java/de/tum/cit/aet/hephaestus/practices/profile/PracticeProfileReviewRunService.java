@@ -3,11 +3,13 @@ package de.tum.cit.aet.hephaestus.practices.profile;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.ReviewRuleFingerprint;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.DeliveredFeedbackCount;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationInvalidationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.DeveloperReviewRunRow;
@@ -190,7 +192,7 @@ public class PracticeProfileReviewRunService {
                             .collect(Collectors.groupingBy(
                                     Observation::getPractice,
                                     Collectors.mapping(
-                                            ObservationKind::of,
+                                            PracticeProfileReviewRunService::countedOutcome,
                                             Collectors.collectingAndThen(Collectors.toList(), PracticeOutcome::of))));
                     ReviewRunFacts run = facts.get(jobId);
                     return new ProfileReviewRunDTO(
@@ -212,6 +214,20 @@ public class PracticeProfileReviewRunService {
                 .toList();
     }
 
+    /**
+     * The outcome a run's summary counts. A met or not-met verdict recorded under an earlier fingerprint
+     * scheme, or without one, judged a behavior rather than the whole practice standard, so it counts as
+     * undecided; the observation itself keeps its recorded outcome.
+     */
+    private static Outcome countedOutcome(Observation observation) {
+        PracticeRevision evaluated = observation.getPracticeRevision();
+        boolean currentStandard =
+                evaluated != null && ReviewRuleFingerprint.isCurrentScheme(evaluated.getReviewRuleFingerprint());
+        return observation.getOutcome().isDecided() && !currentStandard
+                ? Outcome.UNDETERMINED
+                : observation.getOutcome();
+    }
+
     /** What a run decided about one practice for this developer, from every standing observation of it. */
     private enum PracticeOutcome {
         TO_IMPROVE,
@@ -220,14 +236,14 @@ public class PracticeProfileReviewRunService {
         UNDECIDED;
 
         /** Any problem outweighs any strength. */
-        static PracticeOutcome of(List<ObservationKind> kinds) {
-            if (kinds.stream().anyMatch(ObservationKind::isNegative)) {
+        static PracticeOutcome of(List<Outcome> kinds) {
+            if (kinds.stream().anyMatch(Outcome::isNotMet)) {
                 return TO_IMPROVE;
             }
-            if (kinds.stream().anyMatch(ObservationKind::isPositive)) {
+            if (kinds.stream().anyMatch(Outcome::isMet)) {
                 return HELD;
             }
-            return kinds.stream().allMatch(ObservationKind.NOT_APPLICABLE::equals) ? NOT_APPLICABLE : UNDECIDED;
+            return kinds.stream().allMatch(Outcome.NOT_APPLICABLE::equals) ? NOT_APPLICABLE : UNDECIDED;
         }
     }
 

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.feedback.inapp;
 
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.DEMONSTRATED_STRENGTH;
-import static de.tum.cit.aet.hephaestus.practices.model.ObservationKind.OMISSION_GAP;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.MET;
+import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -61,8 +61,8 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
 
         // The slip the feedback was written from, reviewed shortly before the feedback was prepared.
         AgentJob run = persistPullRequestReview(workspace, 10, PREPARED_AT.minus(Duration.ofHours(1)));
-        UUID problem = observe(
-                practice, run, 10L, developer, OMISSION_GAP, Severity.MAJOR, PREPARED_AT.minus(Duration.ofHours(1)));
+        UUID problem =
+                observe(practice, run, 10L, developer, NOT_MET, Severity.MAJOR, PREPARED_AT.minus(Duration.ofHours(1)));
         feedback = persistInAppFeedback(
                 run,
                 developer,
@@ -109,7 +109,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
                 .jsonPath("$[0].evidence[0].reviewedWork.url")
                 .isEqualTo("https://github.com/acme/api/pull/10")
                 .jsonPath("$[0].evidence[0].outcome")
-                .isEqualTo("OMISSION_GAP")
+                .isEqualTo("NOT_MET")
                 .jsonPath("$[0].evidence[0].observedAt")
                 .isEqualTo(PREPARED_AT.minus(Duration.ofHours(1)).toString())
                 .jsonPath("$[0].cleanWork[0].reviewedWork.label")
@@ -127,7 +127,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
         cleanReview(practice, developer, 11, daysAfterPreparation(1));
         cleanReview(practice, developer, 12, daysAfterPreparation(2));
         AgentJob slip = persistPullRequestReview(workspace, 13, daysAfterPreparation(3));
-        observe(practice, slip, 13L, developer, OMISSION_GAP, Severity.MAJOR, daysAfterPreparation(3));
+        observe(practice, slip, 13L, developer, NOT_MET, Severity.MAJOR, daysAfterPreparation(3));
         cleanReview(practice, developer, 14, daysAfterPreparation(4));
 
         card().jsonPath("$[0].cleanWork[*].reviewedWork.label")
@@ -145,7 +145,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
         cleanReview(practice, developer, 12, daysAfterPreparation(2));
         cleanReview(practice, developer, 13, daysAfterPreparation(3));
         AgentJob later = persistPullRequestReview(workspace, 14, daysAfterPreparation(4));
-        observe(practice, later, 14L, developer, OMISSION_GAP, Severity.MAJOR, daysAfterPreparation(4));
+        observe(practice, later, 14L, developer, NOT_MET, Severity.MAJOR, daysAfterPreparation(4));
 
         card().jsonPath("$[0].closedBy")
                 .isEqualTo("WORK")
@@ -165,7 +165,7 @@ class InAppFeedbackWorkResolutionIntegrationTest extends AbstractPracticeReviewI
     void shouldNotCountWorkWhenAnotherDeveloperDidIt() {
         for (int number = 11; number <= 13; number++) {
             AgentJob run = persistPullRequestReview(workspace, number, daysAfterPreparation(number - 10));
-            observe(practice, run, number, teammate, DEMONSTRATED_STRENGTH, null, daysAfterPreparation(number - 10));
+            observe(practice, run, number, teammate, MET, null, daysAfterPreparation(number - 10));
         }
 
         card().jsonPath("$[0].cleanWork.length()")

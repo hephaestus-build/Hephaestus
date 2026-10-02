@@ -1,7 +1,7 @@
 /**
  * Code-health module — AI-driven practice reviews and developer observations.
  *
- * <p>Owns the review gate ({@code review.PracticeReviewDetectionGate}) and persists results as
+ * <p>Owns the review gate ({@code review.ReviewGate}) and persists results as
  * {@link de.tum.cit.aet.hephaestus.practices.model.Observation}. This module has no outbound
  * dependency on {@link de.tum.cit.aet.hephaestus.agent}: it is the {@code agent} orchestrator that
  * subscribes to {@code ScmDomainEvent}s, consults the gate here, dispatches the agent job, and

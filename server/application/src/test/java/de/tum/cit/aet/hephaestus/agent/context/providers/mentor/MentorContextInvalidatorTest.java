@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,16 +15,20 @@ import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -30,6 +36,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Unit tests for {@link MentorContextInvalidator}: event-to-cache-eviction wiring. The full
@@ -95,14 +103,38 @@ class MentorContextInvalidatorTest extends BaseUnitTest {
         verify(userCache, never()).evict(ArgumentMatchers.any());
     }
 
-    @Test
-    void issueUpdateEvictsAuthor() {
-        when(workspaceRepository.findWorkspaceIdByRepositoryId(eq(42L))).thenReturn(Optional.of(7L));
+    @ParameterizedTest
+    @ValueSource(strings = {"updated", "closed"})
+    void shouldEvictOnlyTheIssueAuthorsRecordedContext(String action) {
+        when(workspaceRepository.findWorkspaceIdsByRepositoryId(42L, Pageable.unpaged()))
+                .thenReturn(List.of(7L, 8L));
+        var caches = new ConcurrentMapCacheManager(
+                "mentor_user_context", "mentor_workspace_context", "mentor_authored_work_context");
+        var subject = new MentorContextInvalidator(caches, workspaceRepository, mock(PullRequestRepository.class));
+        caches.getCacheNames().forEach(name -> {
+            var cache = Objects.requireNonNull(caches.getCache(name));
+            cache.put("7:9", "old state");
+            cache.put("8:9", "old state in another monitor");
+            cache.put("7:10", "another developer");
+            cache.put("9:9", "unrelated workspace");
+        });
 
-        invalidator.onIssueUpdated(buildIssueUpdated(42L, 9L));
+        switch (action) {
+            case "updated" -> subject.onIssueUpdated(buildIssueUpdated(42L, 9L, Issue.State.OPEN));
+            case "closed" -> {
+                var data = buildIssueUpdated(42L, 9L, Issue.State.CLOSED);
+                subject.onIssueClosed(new ScmDomainEvent.IssueClosed(data.issue(), "completed", data.context()));
+            }
+            default -> throw new AssertionError(action);
+        }
 
-        verify(userCache).evict(eq("7:9"));
-        verify(workspaceCache).evict(eq("7:9"));
+        caches.getCacheNames().forEach(name -> {
+            var cache = Objects.requireNonNull(caches.getCache(name));
+            assertThat(cache.get("7:9")).isNull();
+            assertThat(cache.get("8:9")).isNull();
+            assertThat(cache.get("7:10", String.class)).isEqualTo("another developer");
+            assertThat(cache.get("9:9", String.class)).isEqualTo("unrelated workspace");
+        });
     }
 
     private static ScmDomainEvent.PullRequestUpdated buildPrUpdated(
@@ -129,13 +161,13 @@ class MentorContextInvalidatorTest extends BaseUnitTest {
         return new ScmDomainEvent.PullRequestUpdated(pr, Set.of(), buildContext(repoId));
     }
 
-    private static ScmDomainEvent.IssueUpdated buildIssueUpdated(long repoId, Long authorId) {
+    private static ScmDomainEvent.IssueUpdated buildIssueUpdated(long repoId, Long authorId, Issue.State state) {
         ScmEventPayload.IssueData issue = new ScmEventPayload.IssueData(
                 1L,
                 17,
                 "title",
                 "body",
-                Issue.State.OPEN,
+                state,
                 null,
                 "https://example.com/issue/17",
                 false,

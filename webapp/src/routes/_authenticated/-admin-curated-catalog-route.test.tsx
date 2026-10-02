@@ -8,7 +8,7 @@ import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockConversationWorkType,
 	mockPracticeDefinitionOptions,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { server } from "@/mocks/server";
@@ -34,7 +34,7 @@ const groupDefinition = {
 const practiceDefinition = {
 	name: "Say what changed and why",
 	artifactKind: "scm.pull_request",
-	bindings: [mockPullRequestBinding],
+	...mockPullRequestReviewFields,
 	criteria: "Our own criteria",
 	whyItMatters: "Reviewers need context",
 	automatedReviewPolicy: mockPullRequestPolicy,
@@ -46,21 +46,21 @@ const release: PracticeReleaseProposal = {
 	slug: "describe-what-and-why",
 	base: {
 		name: practiceDefinition.name,
-		bindings: practiceDefinition.bindings,
+		...mockPullRequestReviewFields,
 		criteria: "Earlier criteria",
 		automatedReviewPolicy: mockPullRequestPolicy,
 		deliveryBehavior: { summaryOnly: false },
 	},
 	current: {
 		name: practiceDefinition.name,
-		bindings: practiceDefinition.bindings,
+		...mockPullRequestReviewFields,
 		criteria: practiceDefinition.criteria,
 		automatedReviewPolicy: mockPullRequestPolicy,
 		deliveryBehavior: { summaryOnly: false },
 	},
 	offered: {
 		name: practiceDefinition.name,
-		bindings: practiceDefinition.bindings,
+		...mockPullRequestReviewFields,
 		criteria: "The definition Hephaestus ships now",
 		automatedReviewPolicy: mockPullRequestPolicy,
 		deliveryBehavior: { summaryOnly: false },
@@ -725,7 +725,7 @@ describe("instance catalog routes", () => {
 				/* keep the pull request the route loaded */
 			},
 			mockPullRequestPolicy,
-			mockPullRequestBinding.signals,
+			mockPullRequestReviewFields.signals,
 		],
 		[
 			"changed",
@@ -768,11 +768,7 @@ describe("instance catalog routes", () => {
 
 			await waitFor(() => expect(requestBody).toBeDefined());
 			expect(requestBody?.automatedReviewPolicy).toStrictEqual(expectedPolicy);
-			// The kind of work is read off the signals, so switching it has to rewrite the occasions
-			// rather than send a kind alongside bindings that still name the old one.
-			expect(requestBody?.bindings.map((binding) => binding.signals)).toStrictEqual([
-				[...expectedSignals],
-			]);
+			expect(requestBody?.signals).toStrictEqual([...expectedSignals]);
 		},
 	);
 });

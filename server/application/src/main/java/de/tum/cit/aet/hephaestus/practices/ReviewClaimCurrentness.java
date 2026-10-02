@@ -11,7 +11,8 @@ import org.jspecify.annotations.Nullable;
                 "Whether an observation's claim still stands: its practice's review rules are unchanged and it was"
                         + " not superseded, which an issue's observations are when a change to its reviewable content is"
                         + " recorded. It says neither whether a later review ran nor whether the work changed since it was"
-                        + " reviewed")
+                        + " reviewed. Earlier observation standards and missing fingerprints are unverifiable under the"
+                        + " current whole-practice standard")
 public enum ReviewClaimCurrentness {
     CURRENT,
     STALE,
@@ -30,20 +31,16 @@ public enum ReviewClaimCurrentness {
     }
 
     public static ReviewClaimCurrentness of(@Nullable PracticeRevision evaluated, Practice practice) {
-        PracticeRevision current = practice.getCurrentRevision();
-        if (evaluated != null
-                && current != null
-                && !evaluated.equals(current)
-                && evaluated.getAutomatedReviewPolicy() == null
-                && current.getAutomatedReviewPolicy() != null) {
-            return STALE;
-        }
-        return of(fingerprint(evaluated), fingerprint(current));
+        return of(fingerprint(evaluated), fingerprint(practice.getCurrentRevision()));
     }
 
     public static ReviewClaimCurrentness of(
             @Nullable String evaluatedFingerprint, @Nullable String currentFingerprint) {
-        if (evaluatedFingerprint == null || currentFingerprint == null) {
+        // Earlier schemes measured behavior-level claims, not the current whole-practice standard.
+        if (evaluatedFingerprint == null
+                || currentFingerprint == null
+                || !ReviewRuleFingerprint.isCurrentScheme(evaluatedFingerprint)
+                || !ReviewRuleFingerprint.isCurrentScheme(currentFingerprint)) {
             return UNVERIFIABLE;
         }
         return evaluatedFingerprint.equals(currentFingerprint) ? CURRENT : STALE;

@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.List;
 
 public final class PracticeTestEvidence {
@@ -32,14 +33,22 @@ public final class PracticeTestEvidence {
                 null);
     }
 
-    /** One binding on the kind's recommended signal, reading what a practice of that kind reads. */
-    public static List<PracticeBinding> bindings(ArtifactKind artifactKind) {
-        return List.of(PracticeBinding.on(defaultSignal(artifactKind), needsFor(artifactKind)));
+    public static List<SignalName> signals(ArtifactKind artifactKind) {
+        return List.of(defaultSignal(artifactKind));
     }
 
-    public static List<PracticeBinding> bindings(SignalName... signals) {
-        ArtifactKind kind = signals[0].artifactKind();
-        return List.of(new PracticeBinding(List.of(signals), needsFor(kind), false));
+    public static List<SignalName> signals(SignalName... signals) {
+        return List.of(signals);
+    }
+
+    public static void configure(Practice practice, ArtifactKind artifactKind) {
+        configure(practice, defaultSignal(artifactKind));
+    }
+
+    public static void configure(Practice practice, SignalName... signals) {
+        practice.setSignals(List.of(signals));
+        practice.setEvidenceRequirements(needsFor(signals[0].artifactKind()));
+        practice.setReviewWhen(PracticeSignalOptionsFixture.real().defaultReviewWhenFor(signals[0].artifactKind()));
     }
 
     public static SignalName defaultSignal(ArtifactKind artifactKind) {

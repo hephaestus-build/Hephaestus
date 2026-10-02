@@ -13,7 +13,7 @@ const pullRequest = (n: number): ReviewedWorkRef => ({
 const problem = (n: number, day: string) => ({
 	ref: pullRequest(n),
 	date: new Date(day),
-	outcome: "COMMISSION_PROBLEM" as const,
+	outcome: "NOT_MET" as const,
 });
 const clean = (n: number, day: string) => ({ ref: pullRequest(n), date: new Date(day) });
 
@@ -35,7 +35,7 @@ describe("stripPieces", () => {
 	it("lets the evidence give way to newer clean work", () => {
 		const pieces = stripPieces(sevenProblems, [clean(21, "2026-09-07"), clean(22, "2026-09-09")]);
 		expect(labels(pieces)).toStrictEqual(["#15", "#16", "#17", "#21", "#22"]);
-		expect(pieces.at(-1)?.outcome).toBe("DEMONSTRATED_STRENGTH");
+		expect(pieces.at(-1)?.outcome).toBe("MET");
 	});
 
 	it("places clean work among the evidence by its date, not after it", () => {

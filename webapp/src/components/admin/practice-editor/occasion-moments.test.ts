@@ -46,7 +46,7 @@ describe("momentBands", () => {
 		]);
 	});
 
-	it("warns that an issue's middle moment repeats, because binding it is a decision about volume", () => {
+	it("warns that an issue's middle moment repeats, because reviewFields it is a decision about volume", () => {
 		const bands = momentBands(mockIssueWorkType.signals);
 
 		expect(

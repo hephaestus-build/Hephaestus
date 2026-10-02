@@ -68,6 +68,13 @@ import org.jspecify.annotations.Nullable;
 @ToString(callSuper = true)
 public class PullRequest extends Issue {
 
+    @Override
+    public Map<String, String> reviewState() {
+        var facts = new HashMap<>(super.reviewState());
+        facts.put("draftStatus", isDraft() ? "DRAFT" : "NOT_DRAFT");
+        return Map.copyOf(facts);
+    }
+
     private @Nullable Instant mergedAt;
 
     private boolean isDraft;

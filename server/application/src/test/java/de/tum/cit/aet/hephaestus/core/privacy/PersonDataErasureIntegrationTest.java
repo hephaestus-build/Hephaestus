@@ -627,7 +627,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         chatMessageRepository.save(message);
 
         Practice practice = new Practice();
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.CONVERSATION_THREAD);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         practice.setWorkspace(workspace);
         practice.setSlug("conv-practice-" + workspace.getId() + "-" + owner.getId());
@@ -664,9 +664,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                     threadId,
                     owner.getId(),
                     "Observation title",
-                    "ASSESSED",
-                    "ABSENT",
-                    "GOOD",
+                    "NOT_MET",
                     "MAJOR",
                     null,
                     null,

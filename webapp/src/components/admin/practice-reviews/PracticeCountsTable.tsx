@@ -10,7 +10,7 @@ import { InlineLink } from "@/components/common/InlineLink";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
-import { OUTCOME_COUNT_NOUNS } from "@/components/practice-vocabulary/outcome-defs";
+import { outcomeCountNoun } from "@/components/practice-vocabulary/outcome-defs";
 import {
 	Empty,
 	EmptyDescription,
@@ -102,7 +102,7 @@ export function PracticeCountsTable({ workspaceSlug, state, practices }: Practic
 							Observations
 						</TableHead>
 						<TableHead numeric className={cn(SECONDARY, "text-right")}>
-							{capitalise(OUTCOME_COUNT_NOUNS.NEGATIVE.other)}
+							{capitalise(outcomeCountNoun("NOT_MET", 0))}
 						</TableHead>
 						<TableHead
 							numeric
@@ -203,7 +203,7 @@ function PracticeCountsRow({ counts }: { counts: PracticeReviewCounts }) {
 				{observations}
 			</TableCell>
 			<TableCell numeric className={cn(SECONDARY, "text-right")}>
-				<OutOf part={counts.observations.problems} whole={observations} />
+				<OutOf part={counts.observations.notMet} whole={observations} />
 			</TableCell>
 			<TableCell numeric className={cn(SECONDARY, "text-right")}>
 				<OutOf part={counts.observationsInvalidated} whole={observations} />

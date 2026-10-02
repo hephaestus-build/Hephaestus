@@ -1,11 +1,8 @@
 package de.tum.cit.aet.hephaestus.practices.reviewoutput.dto;
 
 import de.tum.cit.aet.hephaestus.practices.ReviewClaimCurrentness;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.ObservationEvidenceDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkRefDTO;
@@ -36,16 +33,11 @@ public record ReviewObservationDetailDTO(
         ReviewSubjectDTO subject,
 
         @NonNull String summary,
-        @NonNull AssessmentStatus assessmentStatus,
-        @Nullable Presence presence,
 
-        @Schema(
-                description =
-                        "Specified behavior in context: GOOD means desirable, BAD means undesirable (null unless ASSESSED)")
-        @Nullable
-        Assessment assessment,
+        @NonNull @Schema(description = "Result of the practice review")
+        Outcome outcome,
 
-        @Schema(description = "Severity band (null unless outcome is NEGATIVE)") @Nullable
+        @Schema(description = "Severity band (null unless outcome is NOT_MET)") @Nullable
         Severity severity,
 
         @Nullable ObservationEvidenceDTO evidence,
@@ -72,13 +64,6 @@ public record ReviewObservationDetailDTO(
 
         @NonNull @Schema(description = "Linked feedback, newest first")
         List<ReviewBoundFeedbackDTO> feedback) {
-    @com.fasterxml.jackson.annotation.JsonProperty("outcome")
-    @Schema(
-            description = "Derived from presence and contextual behavior assessment; null unless assessed",
-            accessMode = Schema.AccessMode.READ_ONLY)
-    public @Nullable Outcome getOutcome() {
-        return Outcome.of(presence, assessment);
-    }
 
     public static ReviewObservationDetailDTO from(
             Observation observation,
@@ -100,9 +85,7 @@ public record ReviewObservationDetailDTO(
                 reviewedWork,
                 subject,
                 observation.getSummary(),
-                observation.getAssessmentStatus(),
-                observation.getPresence(),
-                observation.getAssessment(),
+                observation.getOutcome(),
                 observation.getSeverity(),
                 includeEvidence ? ObservationEvidenceDTO.from(observation.getEvidence()) : null,
                 observation.getEvidenceRationale(),

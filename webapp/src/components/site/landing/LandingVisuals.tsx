@@ -183,7 +183,7 @@ export function LandingFeedbackCard({
 	rotate = 0,
 }: LandingFeedbackCardProps) {
 	const { Icon: GroupIcon, pill } = getGroupVisual(group.icon, group.color);
-	const assessment = OUTCOME_DEFS[stance === "strength" ? "POSITIVE" : "NEGATIVE"];
+	const assessment = OUTCOME_DEFS[stance === "strength" ? "MET" : "NOT_MET"];
 	const StanceIcon = assessment.icon;
 	return (
 		<div

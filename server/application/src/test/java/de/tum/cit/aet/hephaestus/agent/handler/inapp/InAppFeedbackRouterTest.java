@@ -4,12 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
@@ -62,7 +60,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     @Test
     void refusesAPracticeWithNoProblemsBehindIt() {
-        Observation strength = observation(1L, ObservationOrigin.LIVE, Assessment.GOOD);
+        Observation strength = observation(1L, ObservationOrigin.LIVE, Outcome.MET);
 
         assertThat(route(List.of(strength), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.NO_EVIDENCE);
@@ -92,8 +90,8 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     /** One live measurement is enough to make the cluster a live one; the refusal is for a wholly backfilled set. */
     @Test
     void admitsAPatternThatMixesBackfilledAndLiveMeasurements() {
-        Observation backfilled = observation(1L, ObservationOrigin.BACKFILL, Assessment.BAD);
-        Observation live = observation(2L, ObservationOrigin.LIVE, Assessment.BAD);
+        Observation backfilled = observation(1L, ObservationOrigin.BACKFILL, Outcome.NOT_MET);
+        Observation live = observation(2L, ObservationOrigin.LIVE, Outcome.NOT_MET);
 
         assertThat(route(List.of(backfilled, live), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.ADMIT);
@@ -110,8 +108,8 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     @Test
     void countsTwoProblemsOnOneArtifactAsOneOccurrence() {
         UUID run = UUID.randomUUID();
-        Observation first = observation(42L, run, NOW, ObservationOrigin.LIVE, Assessment.BAD);
-        Observation second = observation(42L, run, NOW, ObservationOrigin.LIVE, Assessment.BAD);
+        Observation first = observation(42L, run, NOW, ObservationOrigin.LIVE, Outcome.NOT_MET);
+        Observation second = observation(42L, run, NOW, ObservationOrigin.LIVE, Outcome.NOT_MET);
 
         assertThat(route(List.of(first, second), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
@@ -141,10 +139,10 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     @Test
     void shouldNotCorroborateWhenTheReReviewCameBackClean() {
         Observation slipped = observation(
-                7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Assessment.BAD);
-        Observation recovered = observation(
-                7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.LIVE, Assessment.GOOD);
-        Observation other = observation(8L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Assessment.BAD);
+                7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Outcome.NOT_MET);
+        Observation recovered =
+                observation(7L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.LIVE, Outcome.MET);
+        Observation other = observation(8L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Outcome.NOT_MET);
 
         assertThat(route(List.of(other, recovered, slipped), PracticeAutonomy.AUTOMATIC, ActorRole.AUTHOR, null))
                 .isEqualTo(InAppRoutingDecision.UNCORROBORATED);
@@ -154,12 +152,12 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     @Test
     void shouldCiteOneRowPerPieceOfWorkWhenWorkWasReviewedTwice() {
         Observation first = observation(
-                1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(3)), ObservationOrigin.LIVE, Assessment.BAD);
+                1L, UUID.randomUUID(), NOW.minus(Duration.ofDays(3)), ObservationOrigin.LIVE, Outcome.NOT_MET);
         Observation second = observation(
-                2L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Assessment.BAD);
+                2L, UUID.randomUUID(), NOW.minus(Duration.ofDays(2)), ObservationOrigin.LIVE, Outcome.NOT_MET);
         Observation slipped = observation(
-                3L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.LIVE, Assessment.BAD);
-        Observation recovered = observation(3L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Assessment.GOOD);
+                3L, UUID.randomUUID(), NOW.minus(Duration.ofDays(1)), ObservationOrigin.LIVE, Outcome.NOT_MET);
+        Observation recovered = observation(3L, UUID.randomUUID(), NOW, ObservationOrigin.LIVE, Outcome.MET);
 
         assertThat(InAppFeedbackRouter.problemsIn(List.of(recovered, slipped, second, first)))
                 .containsExactly(second, first);
@@ -194,15 +192,14 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
      */
     @Test
     void narrowsAWindowOfMeasurementsToJustTheProblems() {
-        Observation problem = observation(1L, ObservationOrigin.LIVE, Assessment.BAD);
-        Observation strength = observation(2L, ObservationOrigin.LIVE, Assessment.GOOD);
+        Observation problem = observation(1L, ObservationOrigin.LIVE, Outcome.NOT_MET);
+        Observation strength = observation(2L, ObservationOrigin.LIVE, Outcome.MET);
         Observation abstention = Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(UUID.randomUUID())
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(3L)
-                .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
-                .presence(null)
+                .outcome(Outcome.NOT_APPLICABLE)
                 .origin(ObservationOrigin.LIVE)
                 .observedAt(NOW)
                 .build();
@@ -230,7 +227,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
     /** {@code count} problems, each on a different piece of work. */
     private static List<Observation> problems(int count, ObservationOrigin origin) {
         return java.util.stream.IntStream.rangeClosed(1, count)
-                .mapToObj(i -> observation(i, origin, Assessment.BAD))
+                .mapToObj(i -> observation(i, origin, Outcome.NOT_MET))
                 .toList();
     }
 
@@ -241,29 +238,25 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
                 .agentJobId(run)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.PRESENT)
-                .assessment(Assessment.BAD)
+                .outcome(Outcome.NOT_MET)
                 .severity(severity)
                 .origin(ObservationOrigin.LIVE)
                 .observedAt(NOW)
                 .build();
     }
 
-    private static Observation observation(long artifactId, ObservationOrigin origin, Assessment assessment) {
-        return observation(artifactId, UUID.randomUUID(), NOW, origin, assessment);
+    private static Observation observation(long artifactId, ObservationOrigin origin, Outcome outcome) {
+        return observation(artifactId, UUID.randomUUID(), NOW, origin, outcome);
     }
 
     private static Observation observation(
-            long artifactId, UUID run, Instant observedAt, ObservationOrigin origin, Assessment assessment) {
+            long artifactId, UUID run, Instant observedAt, ObservationOrigin origin, Outcome outcome) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(run)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.PRESENT)
-                .assessment(assessment)
+                .outcome(outcome)
                 .origin(origin)
                 .observedAt(observedAt)
                 .build();

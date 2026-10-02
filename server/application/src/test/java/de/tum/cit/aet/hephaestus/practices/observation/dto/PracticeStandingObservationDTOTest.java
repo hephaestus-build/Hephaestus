@@ -4,10 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.UUID;
@@ -25,9 +23,7 @@ class PracticeStandingObservationDTOTest extends BaseUnitTest {
                 .id(UUID.randomUUID())
                 .summary("Distance-warning logic ships with no test")
                 .severity(Severity.MAJOR)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.ABSENT)
-                .assessment(Assessment.GOOD)
+                .outcome(Outcome.NOT_MET)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(575L)
                 .evidence(evidenceJson == null ? null : MAPPER.readTree(evidenceJson))

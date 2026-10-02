@@ -29,7 +29,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
     private WorkspaceContextBuilder workspaceContextBuilder;
 
     @Mock
-    private PracticeDetectionDeliveryService deliveryService;
+    private ReviewOutputService deliveryService;
 
     @Mock
     private FeedbackDeliveryService feedbackService;
@@ -50,11 +50,15 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 practiceCatalogInjector,
                 new TaskEnvelopeWriter(objectMapper),
                 gitRepositoryManager,
-                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer());
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer(),
+                org.mockito.Mockito.mock(
+                        de.tum.cit.aet.hephaestus.practices.PracticeRevisionService.class,
+                        invocation -> ((de.tum.cit.aet.hephaestus.practices.model.Practice) invocation.getArgument(0))
+                                .getCurrentRevision()));
     }
 
     private JobTypeHandler prReviewHandler() {
-        var parser = new PracticeDetectionResultParser(objectMapper);
+        var parser = new ReviewResultParser(objectMapper);
         var practiceCatalogInjector = practiceCatalogInjector();
         return new PullRequestReviewHandler(
                 objectMapper,
@@ -75,7 +79,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
     }
 
     private JobTypeHandler issueReviewHandler() {
-        var parser = new PracticeDetectionResultParser(objectMapper);
+        var parser = new ReviewResultParser(objectMapper);
         var practiceCatalogInjector = practiceCatalogInjector();
         return new IssueReviewHandler(
                 objectMapper,
@@ -101,7 +105,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
     }
 
     private JobTypeHandler conversationReviewHandler() {
-        var parser = new PracticeDetectionResultParser(objectMapper);
+        var parser = new ReviewResultParser(objectMapper);
         var practiceCatalogInjector = practiceCatalogInjector();
         return new ConversationReviewHandler(
                 objectMapper,
@@ -113,7 +117,7 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
     }
 
     private JobTypeHandler documentReviewHandler() {
-        var parser = new PracticeDetectionResultParser(objectMapper);
+        var parser = new ReviewResultParser(objectMapper);
         var practiceCatalogInjector = practiceCatalogInjector();
         return new DocumentReviewHandler(objectMapper, preparation(practiceCatalogInjector), parser, deliveryService);
     }

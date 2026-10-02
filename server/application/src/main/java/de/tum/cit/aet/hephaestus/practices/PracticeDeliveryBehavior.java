@@ -4,10 +4,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.jspecify.annotations.Nullable;
 
 /** Delivery choices declared by the practice author, not inferred from its slug. */
+@Schema(additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record PracticeDeliveryBehavior(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean summaryOnly,
         @Nullable String overlapGroup,
-        @Nullable String redundantToSlug) {
+        @Nullable String redundantToSlug)
+        implements ClosedPracticeInput {
     public static final PracticeDeliveryBehavior DEFAULT = new PracticeDeliveryBehavior(false, null, null);
 
     public PracticeDeliveryBehavior {

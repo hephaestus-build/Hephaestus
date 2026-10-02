@@ -4,25 +4,14 @@ import { useId, useRef, useState } from "react";
 
 import type {
 	PracticeAutomatedReviewPolicy,
-	PracticeBinding,
+	PracticePrecondition,
+	PracticeEvidenceRequirement,
 	PracticeDeliveryBehavior,
 	UpdatePracticeRequest,
 	PracticeDefinitionOptions,
 	PracticeEvidenceOutcome,
 	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
-import { parseGate } from "@/components/admin/practice-editor/binding-scope";
-import {
-	artifactKindOfBindings,
-	type BindingsProblem,
-	bindingsProblem,
-	EMPTY_BINDING,
-	normalizeBinding,
-	orderedWorkTypes,
-	recommendedBinding,
-	soleBinding,
-	workTypeOptionsFor,
-} from "@/components/admin/practice-editor/bindings";
 import {
 	generateSlug,
 	isValidSlug,
@@ -30,19 +19,36 @@ import {
 } from "@/components/admin/practice-editor/constants";
 import { canAttemptAutomatedReview } from "@/components/admin/practice-editor/evidence-presentation";
 import {
-	PracticeBindingsEditor,
-	type PracticeOccasionMode,
-	withoutEvidence,
-	withRecommendedEvidence,
-} from "@/components/admin/practice-editor/PracticeBindingsEditor";
+	gatePresentation,
+	parseGate,
+} from "@/components/admin/practice-editor/practice-precondition";
 import {
 	PracticeMentoringSupportEditor,
 	practicePolicyError,
 	practicePolicyErrorTarget,
 } from "@/components/admin/practice-editor/PracticeMentoringSupportEditor";
+import {
+	PracticeReviewSettingsEditor,
+	type PracticeOccasionMode,
+	withoutEvidence,
+	withRecommendedEvidence,
+} from "@/components/admin/practice-editor/PracticeReviewSettingsEditor";
+import {
+	artifactKindOfSignals,
+	type ReviewSettingsProblem,
+	reviewSettingsProblem,
+	EMPTY_REVIEW_SETTINGS,
+	normalizeReviewSettings,
+	orderedWorkTypes,
+	recommendedReviewSettings,
+	workTypeOptionsFor,
+} from "@/components/admin/practice-editor/review-settings";
 import { CodeEditor } from "@/components/common/CodeEditor";
 import { type FormError, FormErrorSummary } from "@/components/common/FormErrorSummary";
-import { ACTOR_ROLE_LABELS } from "@/components/practice-vocabulary/actor-role-labels";
+import {
+	ACTOR_ROLE_LABELS,
+	type ActorRole,
+} from "@/components/practice-vocabulary/actor-role-labels";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -74,7 +80,7 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { artifactKindLabel, artifactKindNoun, isKnownArtifactKind } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
-type BindingChange = NonNullable<UpdatePracticeRequest["bindingChanges"]>[number];
+type DefinitionChange = NonNullable<UpdatePracticeRequest["definitionChanges"]>[number];
 
 const NO_GROUP = "__none__";
 
@@ -88,11 +94,15 @@ export interface PracticeDefinitionValue {
 	name: string;
 	groupSlug?: string;
 	/**
-	 * The one occasion this practice is reviewed on, in the list shape the wire carries. The kind of
+	 * The settings that determine when this practice is reviewed. The kind of
 	 * work is read off its signals; it is not carried separately.
 	 */
-	bindings: [PracticeBinding];
-	bindingChanges?: BindingChange[];
+	signals: string[];
+	evidenceRequirements: PracticeEvidenceRequirement[];
+	reviewWhen: Record<string, string[]>;
+	subject: ActorRole;
+	precondition?: PracticePrecondition;
+	definitionChanges?: DefinitionChange[];
 	criteria: string;
 	whyItMatters?: string;
 	whatGoodLooksLike?: string;
@@ -139,13 +149,17 @@ interface FormState {
 	slug: string;
 	groupSlug: string;
 	/**
-	 * Held rather than read off the bindings: the occasion's signals are what the author is editing,
+	 * Held rather than read off the signals: the occasion's signals are what the author is editing,
 	 * and unticking the last of them would otherwise take the kind of work — and with it the editor
 	 * that is the only way to tick one again — off the screen.
 	 */
 	artifactKind: string;
-	bindings: [PracticeBinding];
-	bindingChanges: BindingChange[];
+	signals: string[];
+	evidenceRequirements: PracticeEvidenceRequirement[];
+	reviewWhen: Record<string, string[]>;
+	subject: ActorRole;
+	precondition?: PracticePrecondition;
+	definitionChanges: DefinitionChange[];
 	gateText: string;
 	criteria: string;
 	whyItMatters: string;
@@ -157,7 +171,11 @@ interface FormState {
 
 /** Everything a work type owns, stashed so switching away and back does not discard the work. */
 interface WorkTypeDraft {
-	bindings: [PracticeBinding];
+	signals: string[];
+	evidenceRequirements: PracticeEvidenceRequirement[];
+	reviewWhen: Record<string, string[]>;
+	subject: ActorRole;
+	precondition?: PracticePrecondition;
 	gateText: string;
 	precomputeScript: string;
 	automatedReviewPolicy: PracticeAutomatedReviewPolicy;
@@ -177,8 +195,8 @@ function blankState(fallback: PracticeWorkTypeDefinitionOptions | undefined): Fo
 		slug: "",
 		groupSlug: NO_GROUP,
 		artifactKind: fallback?.artifactKind ?? "",
-		bindings: [fallback ? recommendedBinding(fallback) : EMPTY_BINDING],
-		bindingChanges: [],
+		...(fallback ? recommendedReviewSettings(fallback) : EMPTY_REVIEW_SETTINGS),
+		definitionChanges: [],
 		gateText: "",
 		criteria: "",
 		whyItMatters: "",
@@ -197,12 +215,10 @@ function stateOf(
 		name: initialData.name,
 		slug: initialData.slug,
 		groupSlug: initialData.groupSlug ?? NO_GROUP,
-		artifactKind: artifactKindOfBindings(initialData.bindings) ?? fallback?.artifactKind ?? "",
-		bindings: [normalizeBinding(soleBinding(initialData.bindings))],
-		bindingChanges: [],
-		gateText: initialData.bindings[0].appliesWhen
-			? JSON.stringify(initialData.bindings[0].appliesWhen, null, 2)
-			: "",
+		artifactKind: artifactKindOfSignals(initialData.signals) ?? fallback?.artifactKind ?? "",
+		...normalizeReviewSettings(initialData),
+		definitionChanges: [],
+		gateText: initialData.precondition ? JSON.stringify(initialData.precondition, null, 2) : "",
 		criteria: initialData.criteria,
 		whyItMatters: initialData.whyItMatters ?? "",
 		whatGoodLooksLike: initialData.whatGoodLooksLike ?? "",
@@ -214,7 +230,7 @@ function stateOf(
 
 function draftOf(form: FormState): WorkTypeDraft {
 	return {
-		bindings: form.bindings,
+		...normalizeReviewSettings(form),
 		gateText: form.gateText,
 		precomputeScript: form.precomputeScript,
 		automatedReviewPolicy: form.automatedReviewPolicy,
@@ -240,7 +256,7 @@ interface FormErrors {
 	slug?: string;
 	criteria?: string;
 	policy?: string;
-	bindings?: BindingsProblem;
+	reviewSettings?: ReviewSettingsProblem;
 	gate?: string;
 	subject?: string;
 	delivery?: string;
@@ -265,11 +281,10 @@ function formErrors(
 	const criteriaTooShort = form.criteria.trim().length < 3;
 	const slugInvalid = mode === "create" && !isValidSlug(form.slug);
 	const policy = practicePolicyError(form.automatedReviewPolicy);
-	const bindings = bindingsProblem(form.bindings[0], form.automatedReviewPolicy, selectedWorkType);
-	const gateError = parseGate(form.gateText).error;
+	const reviewSettings = reviewSettingsProblem(form, form.automatedReviewPolicy, selectedWorkType);
+	const gateError = parseGate(form.gateText, selectedWorkType).error;
 	const subjectError =
-		selectedWorkType &&
-		!selectedWorkType.subjectRoles.includes(form.bindings[0].subject ?? "AUTHOR")
+		selectedWorkType && !selectedWorkType.subjectRoles.includes(form.subject)
 			? "Choose a person this kind of work can identify."
 			: undefined;
 	const preferredSlug = form.deliveryBehavior.redundantToSlug?.trim();
@@ -290,7 +305,7 @@ function formErrors(
 			fieldId: practicePolicyErrorTarget(form.automatedReviewPolicy),
 			message: policy,
 		},
-		bindings && { fieldId: bindings.focusId, message: bindings.message },
+		reviewSettings && { fieldId: reviewSettings.focusId, message: reviewSettings.message },
 		hasText(subjectError) && { fieldId: "practice-subject", message: subjectError },
 		hasText(gateError) && { fieldId: "practice-gate", message: gateError },
 		slugInvalid && {
@@ -310,7 +325,7 @@ function formErrors(
 		slug: slugInvalid ? "Use 3–64 lowercase letters, numbers, and single hyphens." : undefined,
 		criteria: criteriaTooShort ? "Criteria must be at least 3 characters" : undefined,
 		policy,
-		bindings,
+		reviewSettings,
 		gate: gateError,
 		subject: subjectError,
 		delivery: deliveryError,
@@ -399,7 +414,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	const selectedWorkType = workTypeOptionsFor(definitionOptions, artifactKind);
 	// Recorded history belongs to the work type the practice was reviewed under: switching work type
 	// changes which sources are allowed, so the same rows would resolve to "Another source".
-	const workTypeUnchanged = artifactKindOfBindings(initialData?.bindings ?? []) === artifactKind;
+	const workTypeUnchanged = artifactKindOfSignals(initialData?.signals ?? []) === artifactKind;
 	// `useRef` takes no lazy initialiser, so the map is built on the first render and every later one
 	// is spared building a map to discard.
 	// https://react.dev/reference/react/useRef#avoiding-recreating-the-ref-contents
@@ -414,7 +429,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		supportedAutomatedReviewModes,
 	);
 	const occasionMode = occasionModeOf(form.automatedReviewPolicy, canRunMentoring);
-	const subjectRole = form.bindings[0].subject ?? "AUTHOR";
+	const gateHelp = gatePresentation(selectedWorkType);
+	const subjectRole = form.subject;
 	const subjectRoles =
 		selectedWorkType?.subjectRoles.includes(subjectRole) === true
 			? selectedWorkType.subjectRoles
@@ -428,7 +444,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 	}));
 	const unsavedChanges = useUnsavedChanges({
 		isDirty: !deepEqual(
-			{ ...form, bindingChanges: [] },
+			{ ...form, definitionChanges: [] },
 			initialState(definitionOptions, initialData),
 		),
 		disabled: formDisabled,
@@ -440,7 +456,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			return {
 				...previous,
 				name,
-				...(slugWasEdited ? {} : { slug: generateSlug(name) }),
+				...(mode === "create" && !slugWasEdited ? { slug: generateSlug(name) } : {}),
 			};
 		});
 	};
@@ -458,10 +474,10 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			const automatedReviewPolicy =
 				draft?.automatedReviewPolicy ??
 				recommendedPolicyWithCurrentSupport(next.recommendedPolicy, previous.automatedReviewPolicy);
-			const binding = draft?.bindings[0] ?? {
-				...recommendedBinding(next),
-				subject: previous.bindings[0].subject,
-				appliesWhen: previous.bindings[0].appliesWhen,
+			const reviewFields = draft ?? {
+				...recommendedReviewSettings(next),
+				subject: previous.subject,
+				precondition: previous.precondition,
 			};
 			return {
 				...previous,
@@ -469,12 +485,11 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 				automatedReviewPolicy,
 				gateText:
 					draft?.gateText ??
-					(binding.appliesWhen ? JSON.stringify(binding.appliesWhen, null, 2) : ""),
-				bindings: [
-					automatedReviewPolicy.automatedReview.mode === "NONE"
-						? withoutEvidence(binding)
-						: binding,
-				],
+					(reviewFields.precondition ? JSON.stringify(reviewFields.precondition, null, 2) : ""),
+				...(automatedReviewPolicy.automatedReview.mode === "NONE"
+					? withoutEvidence(reviewFields)
+					: reviewFields),
+				precondition: reviewFields.precondition,
 				precomputeScript: draft?.precomputeScript ?? "",
 			};
 		});
@@ -486,16 +501,16 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		setForm((previous) => {
 			const nowGuidanceOnly = automatedReviewPolicy.automatedReview.mode === "NONE";
 			const wasGuidanceOnly = previous.automatedReviewPolicy.automatedReview.mode === "NONE";
-			let binding = previous.bindings[0];
+			let reviewFields = normalizeReviewSettings(previous);
 			if (nowGuidanceOnly) {
-				binding = withoutEvidence(binding);
+				reviewFields = withoutEvidence(reviewFields);
 			} else if (wasGuidanceOnly && selectedWorkType) {
-				binding = withRecommendedEvidence(binding, selectedWorkType);
+				reviewFields = withRecommendedEvidence(reviewFields, selectedWorkType);
 			}
 			return {
 				...previous,
 				automatedReviewPolicy,
-				bindings: [binding],
+				...normalizeReviewSettings(reviewFields),
 				precomputeScript: nowGuidanceOnly ? "" : previous.precomputeScript,
 			};
 		});
@@ -522,8 +537,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		const submission = props.onSubmit({
 			slug: form.slug,
 			name: form.name.trim(),
-			bindings: [normalizeBinding(form.bindings[0])],
-			bindingChanges: form.bindingChanges.length > 0 ? form.bindingChanges : undefined,
+			...normalizeReviewSettings(form),
+			definitionChanges: form.definitionChanges.length > 0 ? form.definitionChanges : undefined,
 			criteria: form.criteria.trim(),
 			...(form.groupSlug === NO_GROUP ? {} : { groupSlug: form.groupSlug }),
 			...(form.whyItMatters.trim() ? { whyItMatters: form.whyItMatters.trim() } : {}),
@@ -758,16 +773,16 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 							</FieldSet>
 
 							{selectedWorkType ? (
-								<PracticeBindingsEditor
+								<PracticeReviewSettingsEditor
 									options={selectedWorkType}
-									binding={form.bindings[0]}
+									reviewFields={form}
 									mode={occasionMode}
 									outcome={workTypeUnchanged ? evidenceOutcome : undefined}
 									disabled={formDisabled}
-									error={shownErrors.bindings?.message}
-									errorFocusId={shownErrors.bindings?.focusId}
-									onChange={(binding) =>
-										setForm((previous) => ({ ...previous, bindings: [binding] }))
+									error={shownErrors.reviewSettings?.message}
+									errorFocusId={shownErrors.reviewSettings?.focusId}
+									onChange={(reviewFields) =>
+										setForm((previous) => ({ ...previous, ...reviewFields }))
 									}
 								/>
 							) : (
@@ -792,17 +807,12 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 												onValueChange={(value) =>
 													setForm((previous) => ({
 														...previous,
-														bindingChanges: [
-															...new Set([...previous.bindingChanges, "SUBJECT" as const]),
+														definitionChanges: [
+															...new Set([...previous.definitionChanges, "SUBJECT" as const]),
 														],
-														bindings: [
-															{
-																...previous.bindings[0],
-																subject:
-																	selectedWorkType.subjectRoles.find((role) => role === value) ??
-																	previous.bindings[0].subject,
-															},
-														],
+														subject:
+															selectedWorkType.subjectRoles.find((role) => role === value) ??
+															previous.subject,
 													}))
 												}
 											>
@@ -831,10 +841,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									</FieldGroup>
 									<Field>
 										<FieldLabel htmlFor="practice-gate">Only review when</FieldLabel>
-										<FieldDescription>
-											Leave empty to review all work. To change or clear a gate, edit this JSON
-											field.
-										</FieldDescription>
+										<FieldDescription>{gateHelp.description}</FieldDescription>
 										<Textarea
 											id="practice-gate"
 											aria-invalid={hasText(errors.gate)}
@@ -846,18 +853,16 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 												setForm((previous) => ({
 													...previous,
 													gateText,
-													bindingChanges: [
-														...new Set([...previous.bindingChanges, "APPLIES_WHEN" as const]),
+													definitionChanges: [
+														...new Set([...previous.definitionChanges, "PRECONDITION" as const]),
 													],
-													bindings: hasText(parsed.error)
-														? previous.bindings
-														: [{ ...previous.bindings[0], appliesWhen: parsed.value }],
+													precondition: hasText(parsed.error)
+														? previous.precondition
+														: parsed.value,
 												}));
 											}}
 											rows={7}
-											placeholder={
-												'{"absentSays":"the change adds no Swift code","anyOf":[{"changedPathMatches":["**/*.swift"]}]}'
-											}
+											placeholder={gateHelp.example}
 										/>
 										{hasText(errors.gate) && (
 											<FieldError id="practice-gate-error">{errors.gate}</FieldError>
@@ -941,7 +946,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 											}
 										/>
 										<FieldDescription>
-											On an issue, only the first negative practice in this group is shown.
+											On an issue, only the first practice that is not met in this group is shown.
 										</FieldDescription>
 									</Field>
 									<Field>
@@ -969,7 +974,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 											}
 										/>
 										<FieldDescription>
-											When both practices are negative, show feedback from the preferred practice
+											When both practices are not met, show feedback from the preferred practice
 											instead of this one.
 										</FieldDescription>
 										<FieldError id={`${deliveryId}-redundant-error`}>

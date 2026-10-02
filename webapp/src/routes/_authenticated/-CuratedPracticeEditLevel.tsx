@@ -21,7 +21,6 @@ import {
 	CuratedPracticeForm,
 	type CuratedPracticeFormValue,
 } from "@/components/admin/curated-catalog/CuratedPracticeForm";
-import { soleBinding } from "@/components/admin/practice-editor/bindings";
 import { PracticeReleaseReview } from "@/components/admin/practices/PracticeReleaseReview";
 import { PracticeDefinitionSkeleton } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -283,7 +282,6 @@ function LoadedCuratedPracticeEditor({
 			initialData={{
 				slug: basePractice.slug,
 				...basePractice.definition,
-				bindings: [soleBinding(basePractice.definition.bindings)],
 				precomputeScript: basePractice.definition.precomputeScript ?? undefined,
 				whyItMatters: basePractice.definition.whyItMatters ?? undefined,
 				whatGoodLooksLike: basePractice.definition.whatGoodLooksLike ?? undefined,

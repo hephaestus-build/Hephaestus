@@ -4,7 +4,6 @@ import type {
 	ReviewRunCounts,
 } from "@/api/types.gen";
 import { type StatusDef, statusValues } from "@/components/common/status-def";
-import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
 import {
 	DELIVERY_FAMILY_DEFS,
 	DELIVERY_FAMILY_STATES,
@@ -34,7 +33,7 @@ export type ReviewListTarget =
 export interface OutcomeSlot {
 	key: string;
 	def: StatusDef;
-	/** The count's noun for this count: "positive outcome", "negative outcomes", "delivered". */
+	/** The count's noun for this count: "met observation", "not met observations", "delivered". */
 	label: string;
 	count: number;
 	target?: ReviewListTarget;
@@ -107,35 +106,35 @@ export function observationSlots(
 	const search = scope && observationsSearch(scope);
 	return [
 		{
-			key: "strengths",
-			def: OUTCOME_DEFS.POSITIVE,
-			label: outcomeCountNoun("POSITIVE", counts.strengths),
-			count: counts.strengths,
-			target: search && { list: "observations", search: { ...search, outcome: ["POSITIVE"] } },
+			key: "met",
+			def: OUTCOME_DEFS.MET,
+			label: outcomeCountNoun("MET", counts.met),
+			count: counts.met,
+			target: search && { list: "observations", search: { ...search, outcome: ["MET"] } },
 		},
 		{
-			key: "problems",
-			def: OUTCOME_DEFS.NEGATIVE,
-			label: outcomeCountNoun("NEGATIVE", counts.problems),
-			count: counts.problems,
-			target: search && { list: "observations", search: { ...search, outcome: ["NEGATIVE"] } },
+			key: "notMet",
+			def: OUTCOME_DEFS.NOT_MET,
+			label: outcomeCountNoun("NOT_MET", counts.notMet),
+			count: counts.notMet,
+			target: search && { list: "observations", search: { ...search, outcome: ["NOT_MET"] } },
 		},
 		...(["NOT_APPLICABLE", "UNDETERMINED"] as const).map((status) => ({
 			key: status,
-			def: ASSESSMENT_STATUS_DEFS[status],
-			label: lower(ASSESSMENT_STATUS_DEFS[status]),
+			def: OUTCOME_DEFS[status],
+			label: lower(OUTCOME_DEFS[status]),
 			count: status === "NOT_APPLICABLE" ? counts.notApplicable : counts.undetermined,
 			target: search && {
 				list: "observations" as const,
-				search: { ...search, assessmentStatus: [status] },
+				search: { ...search, outcome: [status] },
 			},
 		})),
 	];
 }
 
 /**
- * Observations an admin marked incorrect. They overlap the partition — an incorrect positive outcome
- * is still a positive outcome — so this count is listed beside the mix, never added into it.
+ * Observations an admin marked incorrect. They overlap the partition — an incorrect met observation
+ * is still a met observation — so this count is listed beside the mix, never added into it.
  */
 export function markedIncorrectSlot(count: number, scope?: OutcomeScope): OutcomeSlot {
 	return {

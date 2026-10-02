@@ -5,7 +5,7 @@ import type { CuratedPracticeDefinition } from "@/api/types.gen";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { realPracticeDefinition } from "@/mocks/fixtures/practice-catalog";
@@ -17,7 +17,7 @@ import { PracticeDefinitionPreview } from "./PracticeDefinitionPreview";
 const definition: CuratedPracticeDefinition = {
 	name: "Describe what changed and why",
 	artifactKind: "scm.pull_request",
-	bindings: [mockPullRequestBinding],
+	...mockPullRequestReviewFields,
 	criteria: "Confirm the pull request explains both the change and its motivation.",
 	deliveryBehavior: { summaryOnly: false },
 	automatedReviewPolicy: mockPullRequestPolicy,
@@ -66,16 +66,13 @@ export const ScopedReviewer: Story = {
 	args: {
 		definition: {
 			...definition,
-			bindings: [
-				{
-					...mockPullRequestBinding,
-					subject: "REVIEWER",
-					appliesWhen: {
-						absentSays: "the change has no Swift code",
-						anyOf: [{ changedPathMatches: ["**/*.swift"] }],
-					},
-				},
-			],
+
+			...mockPullRequestReviewFields,
+			subject: "REVIEWER",
+			precondition: {
+				skipReason: "the change has no Swift code",
+				anyOf: [{ changedPathMatches: ["**/*.swift"] }],
+			},
 		},
 	},
 	play: async ({ canvas }) => {

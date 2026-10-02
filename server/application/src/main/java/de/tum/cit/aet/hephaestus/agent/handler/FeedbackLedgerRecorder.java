@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalFeedbackPreparer;
-import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent;
+import de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
@@ -27,7 +27,6 @@ import de.tum.cit.aet.hephaestus.practices.feedback.PlacementAnchorSide;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.feedback.ProposedPlacement;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -258,8 +257,8 @@ public class FeedbackLedgerRecorder {
         // The composer's drops this run, addressed by occurrence key (one observation each).
         Map<String, FeedbackSuppressionReason> withheldByKey = delivery.withheld().stream()
                 .collect(Collectors.toMap(
-                        PracticeDetectionResultParser.WithheldObservation::occurrenceKey,
-                        PracticeDetectionResultParser.WithheldObservation::reason));
+                        ReviewResultParser.WithheldObservation::occurrenceKey,
+                        ReviewResultParser.WithheldObservation::reason));
         List<Observation> composerWithheld = observations.stream()
                 .filter(f -> withheldByKey.containsKey(f.getOccurrenceKey()))
                 .filter(f -> !alreadySuppressed.contains(f.getId()))
@@ -283,7 +282,7 @@ public class FeedbackLedgerRecorder {
                 .filter(f -> summaryContributors == null
                         ? summaryDelivered || deliveredInlineKeys.contains("observation:" + f.getOccurrenceKey())
                         : landed.contains(f.getOccurrenceKey()))
-                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
+                .filter(f -> (f.getOutcome().isDecided()))
                 .filter(f -> !excludedIds.contains(f.getId()))
                 // Stable order matching the composer's prioritisation, and the same ObservationOrder it uses:
                 // severity, then how much of the work the observation's citations span, then id — so the persisted
@@ -293,7 +292,7 @@ public class FeedbackLedgerRecorder {
                 .toList();
         int ordinal = created ? 0 : feedbackObservationRepository.countForFeedback(workspaceId, feedback.getId());
         for (Observation f : assessed) {
-            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NOT_MET ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             ordinal += feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal);
         }
 
@@ -381,20 +380,16 @@ public class FeedbackLedgerRecorder {
     }
 
     /**
-     * Fire {@link PracticeDetectionDeliveredEvent} so both longitudinal lanes can route this cycle's
+     * Fire {@link PracticeFeedbackPreparationRequestedEvent} so both longitudinal lanes can route this cycle's
      * observations — IN_CHAT units for the mentor, IN_APP units for the developer's practice pages.
      * Best-effort - a publish failure must never poison the ledger write or the delivery already received.
      *
-     * <p><b>Never gated on silent mode.</b> Silence stops what leaves the instance; neither lane this wakes
-     * leaves it. An IN_APP unit is read on the developer's own pages and egresses nowhere, and IN_CHAT's
-     * egress is refused at the turn itself, by {@code ConversationalDeliveryReconciler}. Withholding the
-     * signal here silenced both of them as a side effect of silencing the merge-request note, and left the
-     * hourly {@code FeedbackLanePreparationSweeper} as the only path — which then logs "the listeners are
-     * dropping events" on every pass, because under silence they always were.
+     * <p>Silent mode limits provider egress, not preparation in either internal lane. IN_CHAT egress is
+     * checked at the mentor turn by {@code ConversationalDeliveryReconciler}.
      */
     private void publishFeedbackLaneTrigger(AgentJob job) {
         try {
-            eventPublisher.publishEvent(new PracticeDetectionDeliveredEvent(
+            eventPublisher.publishEvent(new PracticeFeedbackPreparationRequestedEvent(
                     job.getId(), job.getWorkspace().getId()));
         } catch (RuntimeException e) {
             log.warn("Feedback-lane trigger publish failed (delivery unaffected): jobId={}", job.getId(), e);
@@ -419,8 +414,8 @@ public class FeedbackLedgerRecorder {
                 new HashSet<>(feedbackObservationRepository.findObservationIdsSuppressedForJob(job.getId()));
         Map<String, FeedbackSuppressionReason> withheldByKey = delivery.withheld().stream()
                 .collect(Collectors.toMap(
-                        PracticeDetectionResultParser.WithheldObservation::occurrenceKey,
-                        PracticeDetectionResultParser.WithheldObservation::reason));
+                        ReviewResultParser.WithheldObservation::occurrenceKey,
+                        ReviewResultParser.WithheldObservation::reason));
         List<Observation> withheld =
                 observationRepository
                         .findByAgentJobId(job.getId(), job.getWorkspace().getId())
@@ -575,10 +570,10 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         for (Observation f : behindNotes(observations, delivery, keys).stream()
-                .filter(f -> f.getAssessmentStatus() == AssessmentStatus.ASSESSED)
+                .filter(f -> f.getOutcome().isDecided())
                 .sorted(ObservationOrder.worstFirst())
                 .toList()) {
-            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NOT_MET ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
     }
@@ -615,11 +610,11 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         List<Observation> assessed = evidence.stream()
-                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
+                .filter(f -> (f.getOutcome().isDecided()))
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {
-            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NOT_MET ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
         log.info(
@@ -835,11 +830,11 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         List<Observation> assessed = writtenFrom(observations, delivery).stream()
-                .filter(f -> (f.getAssessmentStatus() == AssessmentStatus.ASSESSED))
+                .filter(f -> (f.getOutcome().isDecided()))
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {
-            EvidenceRole role = f.getOutcome() == Outcome.NEGATIVE ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
+            EvidenceRole role = f.getOutcome() == Outcome.NOT_MET ? EvidenceRole.PRIMARY : EvidenceRole.SUPPORTING;
             feedbackObservationRepository.insertIfAbsent(feedback.getId(), f.getId(), role.name(), ordinal++);
         }
         log.info(

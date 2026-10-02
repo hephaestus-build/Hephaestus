@@ -82,7 +82,7 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         practice.setSlug("test-practice");
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.save(practice);
 
         agentJob = new AgentJob();
@@ -327,9 +327,7 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                 42L,
                 recipient.getId(),
                 "Observation title",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 null,
                 null,
