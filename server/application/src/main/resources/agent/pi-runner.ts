@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { isDeepStrictEqual } from "node:util";
 
 import {
 	type AgentSession,
@@ -36,13 +37,13 @@ import {
 	boundedAtSentenceEnd,
 	cellsRuledOut,
 	deriveOutcome,
-	dedupeKeyForObservation,
 	describeVocabulary,
 	isRecord,
 	type NormalizedCitation,
 	type NormalizedObservation,
 	type Outcome,
 	normalizeObservation,
+	normalizePracticeSlug,
 	resolveQuote,
 	validateEvidenceSources,
 	validateInapplicabilityScope,
@@ -436,10 +437,7 @@ let currentTurn: TurnTrace | null = null;
 
 /** How much of a refusal reason the trace keeps: the kind of failure, not the whole excerpt. */
 const TRACE_REASON_CHARS = 140;
-const reviewState: { observations: NormalizedObservation[]; observationKeys: string[] } = {
-	observations: [],
-	observationKeys: [],
-};
+const reviewState: { observations: NormalizedObservation[] } = { observations: [] };
 const searchSchema = {
 	type: "object",
 	additionalProperties: false,
@@ -581,6 +579,11 @@ const observationSchema = {
 		"evidenceRationale",
 	],
 	properties: {
+		revises: {
+			type: "string",
+			description:
+				"To correct a draft already recorded in this review, copy its returned draft reference here and resend the complete observation. Omit for a new draft. A refused correction leaves the previous draft unchanged.",
+		},
 		practiceSlug: { type: "string", minLength: 1 },
 		summary: {
 			type: "string",
@@ -897,9 +900,13 @@ function readCheckoutFile(path: string, repository: string): string | typeof BIN
 	}
 }
 
-/** What one submitted observation came to: stored, a duplicate of one already stored, or refused. */
+/** A draft disposition; its practice slug is its stable reference within this review. */
 type Recorded =
-	| { kind: "stored"; slug: string; negative: boolean; filled: string[] }
+	| (({ kind: "stored" } | { kind: "revised" }) & {
+			slug: string;
+			negative: boolean;
+			filled: string[];
+	  })
 	| { kind: "duplicate"; slug: string }
 	| { kind: "refused"; slug: string; reason: string };
 
@@ -962,7 +969,7 @@ function countRefusal(slug: string): void {
 }
 
 function slugOf(raw: unknown): string {
-	return isRecord(raw) && typeof raw.practiceSlug === "string" ? raw.practiceSlug : "unknown";
+	return (isRecord(raw) ? normalizePracticeSlug(raw.practiceSlug) : "") || "unknown";
 }
 
 function record(raw: unknown): Recorded {
@@ -976,52 +983,68 @@ function record(raw: unknown): Recorded {
 			reason: `${MAX_REFUSALS_PER_PRACTICE} submissions for '${slug}' were refused; no more are accepted for it. Move on.`,
 		};
 	}
+	const revises = isRecord(raw) ? raw.revises : undefined;
+	if (isRecord(raw) && Object.hasOwn(raw, "revises") && revises !== slug) {
+		countRefusal(slug);
+		return {
+			kind: "refused",
+			slug,
+			reason: "revises must name this practice's returned draft reference.",
+		};
+	}
+	const candidate = isRecord(raw) ? { ...raw } : raw;
+	if (isRecord(candidate)) {
+		delete candidate.revises;
+	}
 	let validated: Validated;
 	try {
-		validated = normalizeAndValidateObservation(raw);
+		validated = normalizeAndValidateObservation(candidate);
 	} catch (error) {
 		countRefusal(slug);
 		return { kind: "refused", slug, reason: errorText(error) };
 	}
 	const { observation, notes } = validated;
-	const key = dedupeKeyForObservation(observation);
-	if (reviewState.observationKeys.includes(key)) {
+	const index = reviewState.observations.findIndex((draft) => draft.practiceSlug === slug);
+	if (index === -1 && revises !== undefined) {
+		countRefusal(slug);
+		return { kind: "refused", slug, reason: `No draft '${slug}' exists in this review to revise.` };
+	}
+	const previous = reviewState.observations[index];
+	if (previous !== undefined && isDeepStrictEqual(previous, observation)) {
 		return { kind: "duplicate", slug };
 	}
-	reviewState.observationKeys.push(key);
-	reviewState.observations.push(observation);
-	// What the check recorded for a citation by coordinates alone, and where it moved a citation
-	// whose text was elsewhere, is echoed back so the session sees what its evidence became.
+	if (previous !== undefined && revises === undefined) {
+		countRefusal(slug);
+		return {
+			kind: "refused",
+			slug,
+			reason: `Draft '${slug}' already exists. To correct it, resend the complete observation with revises: '${slug}'.`,
+		};
+	}
+	if (previous === undefined) {
+		reviewState.observations.push(observation);
+	} else {
+		reviewState.observations[index] = observation;
+	}
 	return {
-		kind: "stored",
+		kind: previous === undefined ? "stored" : "revised",
 		slug,
 		negative: deriveOutcome(observation.presence, observation.assessment) === "NEGATIVE",
 		filled: notes,
 	};
 }
 
-/** Appends the observations a turn recorded to the notes file: the review's memory across compaction. */
-function noteRecorded(observations: readonly NormalizedObservation[]): void {
-	const lines = observations.map((observation) => {
-		const cited = [...new Set(observation.evidence.citations.map((citation) => citation.path))];
-		const verdict =
-			observation.assessmentStatus === "ASSESSED"
-				? `${observation.presence}/${observation.assessment}`
-				: observation.assessmentStatus;
-		return `- ${observation.practiceSlug}: ${verdict} — ${observation.summary} (cites ${cited.join(", ")})`;
-	});
+/** Rebuild the notes from current drafts instead of retaining replaced results. */
+function persistRecordedNotes(): void {
 	try {
 		mkdirSync(nodePath.dirname(NOTES_PATH), { recursive: true });
-		const existing = existsSync(NOTES_PATH)
-			? readFileSync(NOTES_PATH, "utf8")
-			: "# Recorded observations\n\nOne line per observation this review has recorded, appended by the runner.\n";
-		writeFileSync(NOTES_PATH, lines.length === 0 ? existing : `${existing}${lines.join("\n")}\n`);
+		writeFileSync(NOTES_PATH, `# Current observation drafts\n\n${recordedSoFar()}\n`);
 	} catch (error) {
 		console.error(`[pi-runner] notes could not be written: ${errorText(error)}`);
 	}
 }
 
-/** One line per recorded observation, for the top of every later turn. */
+/** One line per current draft, for later turns and the review's notes. */
 function recordedSoFar(): string {
 	if (reviewState.observations.length === 0) {
 		return "Nothing recorded yet.";
@@ -1032,13 +1055,15 @@ function recordedSoFar(): string {
 				observation.assessmentStatus === "ASSESSED"
 					? `${observation.presence}/${observation.assessment}`
 					: observation.assessmentStatus;
-			return `- ${observation.practiceSlug}: ${verdict} — ${observation.summary}`;
+			const cited = [...new Set(observation.evidence.citations.map((citation) => citation.path))];
+			return `- ${observation.practiceSlug}: ${verdict} — ${observation.summary} (cites ${cited.join(", ")})`;
 		})
 		.join("\n");
 }
 
 interface ReportObservationDetails {
 	inserted: number;
+	revised: number;
 	duplicates: number;
 	refused: number;
 	totalObservations: number;
@@ -1129,8 +1154,8 @@ function buildReportObservationTool() {
 		label: "Report Observations",
 		description:
 			"Record one or more evidenced practice observations in local review state, for server admission " +
-			"after the measuring turns. Send every observation you have ready in one call; each is stored or " +
-			"refused on its own, with the reason.",
+			"after the measuring turns. Record one draft per practice. Its draft reference is the practice slug. " +
+			"Correct it explicitly with revises and a complete observation. Send at most one item per practice in a call; repeated practices refuse the whole call.",
 		parameters: {
 			type: "object",
 			required: ["observations"],
@@ -1145,6 +1170,7 @@ function buildReportObservationTool() {
 					content: [{ type: "text", text }],
 					details: {
 						inserted: 0,
+						revised: 0,
 						duplicates: 0,
 						refused: 0,
 						totalObservations: reviewState.observations.length,
@@ -1162,8 +1188,24 @@ function buildReportObservationTool() {
 				logRefusal("(unparsed list)", submitted.error);
 				return refusal(toolCallId, `observations refused — ${submitted.error}`);
 			}
+			const slugs = submitted.items.map((item) =>
+				isRecord(item) ? normalizePracticeSlug(item.practiceSlug) : "",
+			);
+			const repeated = slugs.filter((slug, index) => slug !== "" && slugs.indexOf(slug) !== index);
+			if (repeated.length > 0) {
+				for (const slug of new Set(repeated)) {
+					countRefusal(slug);
+					logRefusal(slug, "more than one item for this practice in the call");
+				}
+				return refusal(
+					toolCallId,
+					`Call refused without changing any drafts: more than one item for ${[...new Set(repeated)].join(", ")}. Send one complete observation per practice.`,
+				);
+			}
 			const outcomes = submitted.items.map(record);
-			const stored = outcomes.filter((outcome) => outcome.kind === "stored");
+			const stored = outcomes.filter(
+				(outcome) => outcome.kind === "stored" || outcome.kind === "revised",
+			);
 			for (const outcome of outcomes) {
 				if (outcome.kind === "refused") {
 					logRefusal(outcome.slug, outcome.reason);
@@ -1176,14 +1218,14 @@ function buildReportObservationTool() {
 				persistReviewState();
 				maybeWriteResultFile();
 				persistPracticeCoverage();
-				noteRecorded(reviewState.observations.slice(-stored.length));
+				persistRecordedNotes();
 			}
 			const observed = new Set(reviewState.observations.map((item) => item.practiceSlug));
 			const remainingPractices = currentTurnSlugs.filter((slug) => !observed.has(slug));
 			const lines = outcomes.map((outcome, index) => {
 				const head = `#${index + 1} ${outcome.slug}:`;
-				if (outcome.kind === "stored") {
-					return `${head} stored${outcome.negative ? " (negative)" : ""}.${outcome.filled.map((line) => `\n   ${line}`).join("")}`;
+				if (outcome.kind === "stored" || outcome.kind === "revised") {
+					return `${head} ${outcome.kind}${outcome.negative ? " (negative)" : ""}. Draft reference: '${outcome.slug}'.${outcome.filled.map((line) => `\n   ${line}`).join("")}`;
 				}
 				if (outcome.kind === "duplicate") {
 					return `${head} duplicate of one already stored; skipped.`;
@@ -1197,7 +1239,8 @@ function buildReportObservationTool() {
 			);
 			const text = lines.join("\n");
 			const details: ReportObservationDetails = {
-				inserted: stored.length,
+				inserted: outcomes.filter((outcome) => outcome.kind === "stored").length,
+				revised: outcomes.filter((outcome) => outcome.kind === "revised").length,
 				duplicates: outcomes.filter((outcome) => outcome.kind === "duplicate").length,
 				refused: outcomes.filter((outcome) => outcome.kind === "refused").length,
 				totalObservations: reviewState.observations.length,
@@ -2862,7 +2905,7 @@ async function main() {
 
 	const allSlugs = loadPracticeSlugs();
 	practiceCoverageLedger = new PracticeCoverageLedger(PRACTICE_COVERAGE_PATH, allSlugs);
-	noteRecorded([]);
+	persistRecordedNotes();
 	const turns = planTurns(practiceIndex, PRACTICES_PER_TURN);
 	const brief = buildBrief(CWD, {
 		contextRoot: taskEnvelope.paths.contextRoot,

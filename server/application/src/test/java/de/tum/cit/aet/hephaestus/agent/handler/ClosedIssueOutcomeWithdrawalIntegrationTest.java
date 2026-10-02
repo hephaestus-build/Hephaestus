@@ -214,10 +214,11 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         ValidatedObservation cleanClose = claim(Presence.ABSENT, null);
 
         // Named, because an unverifiable quote is withheld through the same refusal.
-        assertThatThrownBy(() -> deliveryService.prepare(job, List.of(lapse, cleanClose)))
-                .isInstanceOf(ObservationsRefusedException.class)
-                .hasMessageContaining("withheld=[" + WITHDRAWN + ": withdrawn from automated review, " + WITHDRAWN
-                        + ": withdrawn from automated review]");
+        for (ValidatedObservation observation : List.of(lapse, cleanClose)) {
+            assertThatThrownBy(() -> deliveryService.prepare(job, List.of(observation)))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .hasMessageContaining("withheld=[" + WITHDRAWN + ": withdrawn from automated review]");
+        }
 
         for (String table : List.of("observation", "feedback", "feedback_dispatch")) {
             assertThat(jdbcTemplate.queryForObject(
