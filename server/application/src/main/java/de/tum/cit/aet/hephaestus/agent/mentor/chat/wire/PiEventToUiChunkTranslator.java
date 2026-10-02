@@ -392,6 +392,11 @@ public class PiEventToUiChunkTranslator {
             piStopReason = state.observedStopReason();
         }
         out.addAll(closeOpenStreamingBlocks(state));
+        // The runner forwards agent_end only after Pi settles its retries.
+        if (mapStopReason(piStopReason) == UIMessageChunk.FinishReason.ERROR) {
+            out.add(new UIMessageChunk.Error("Heph couldn't finish this reply. Please try again."));
+            return out;
+        }
         UIMessageChunk.MessageMetadata metadata = UIMessageChunk.MessageMetadata.of(
                 state.observedModel(),
                 UIMessageChunk.MessageMetadata.Usage.fromJsonNode(state.observedUsage()),

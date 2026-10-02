@@ -16,6 +16,8 @@ import static org.mockito.Mockito.when;
 
 import com.slack.api.model.block.LayoutBlock;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChannel;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackSendException;
@@ -24,6 +26,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -37,6 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Pins the invariants that make the Slack stream feel live AND stay robust: the reply streams in more than
@@ -216,6 +220,27 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
         assertThat(blocks.getValue())
                 .as("failed mentor turns should not ask for quality feedback")
                 .isEmpty();
+    }
+
+    @Test
+    void shouldShowTheSettledModelFailureInsteadOfAnEmptyReply() {
+        SlackMessageService slack = slackThatStreamsOk();
+        var channel = new SlackStreamingMentorChannel(slack, WS, CH, THREAD);
+        var mapper = new ObjectMapper();
+        var event = mapper.createObjectNode().put("type", "agent_end");
+        var message = event.putArray("messages").addObject();
+        message.put("role", "assistant").put("stopReason", "error").put("errorMessage", "502 private upstream details");
+        message.putArray("content");
+        var translator = new PiEventToUiChunkTranslator();
+        var state = new TranslatorState(UUID.randomUUID());
+
+        translator.translate(event, state).forEach(channel::send);
+        channel.close();
+
+        assertThat(String.join("", delivered))
+                .contains("Heph couldn't finish this reply. Please try again.")
+                .doesNotContain("produced no response", "502", "private upstream");
+        verify(slack).stopStream(eq(WS), eq(CH), anyString(), eq(List.of()));
     }
 
     @Test
