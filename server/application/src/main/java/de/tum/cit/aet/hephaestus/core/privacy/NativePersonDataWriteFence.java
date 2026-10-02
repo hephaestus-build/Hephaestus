@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -87,15 +88,36 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
         }
     }
 
+    private record NativeKey(String providerType, String providerOrigin, String subject) {}
+
     private void lock(List<PersonIdentity> identities, boolean shared) {
         // Team variants share only a lock, not a suppression decision. This also covers Outline's
         // canonical provider-wide subject control. Hash collisions can only add serialization.
         // Sort the actual lock keys, not their inputs, to keep one lock order even on collisions.
-        var keys = jdbc.query("""
-                SELECT DISTINCT hashtextextended(jsonb_build_array(i."providerId",i.subject)::text,0) AS lock_key
+        // Equivalent provider rows share the same native lock, including rows registered after
+        // preview. Otherwise a new alias could commit while erasure checks the old provider row.
+        var nativeKeys = jdbc.query(
+                """
+                SELECT p.type,p.server_url,i.subject
                 FROM jsonb_to_recordset(CAST(? AS jsonb)) AS i("providerId" bigint,subject text)
+                JOIN identity_provider p ON p.id=i."providerId"
+                """,
+                (rs, row) -> new NativeKey(
+                        java.util.Objects.requireNonNull(rs.getString(1)),
+                        ScmOrigin.of(rs.getString(2))
+                                .orElseThrow(() ->
+                                        new IllegalStateException("Native admission requires a valid provider origin")),
+                        java.util.Objects.requireNonNull(rs.getString(3))),
+                mapper.writeValueAsString(identities));
+        if (nativeKeys.size() != identities.size())
+            throw new IllegalStateException("Native admission requires existing exact provider keys");
+        var keys = jdbc.query("""
+                SELECT DISTINCT hashtextextended(
+                    jsonb_build_array(i."providerType",i."providerOrigin",i.subject)::text,0) AS lock_key
+                FROM jsonb_to_recordset(CAST(? AS jsonb))
+                    AS i("providerType" text,"providerOrigin" text,subject text)
                 ORDER BY lock_key
-                """, (rs, row) -> rs.getLong(1), mapper.writeValueAsString(identities));
+                """, (rs, row) -> rs.getLong(1), mapper.writeValueAsString(nativeKeys));
         String function = shared ? "pg_advisory_xact_lock_shared" : "pg_advisory_xact_lock";
         for (long key : keys) {
             jdbc.query("SELECT " + function + "(?)", rs -> {}, key);

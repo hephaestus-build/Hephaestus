@@ -84,7 +84,10 @@ existing configuration-audit retention policy.
 Exact identity resolution also includes registered provider rows whose type and normalized network
 origin are identical. Host case and a default port do not create a different provider instance. The
 native subject and Slack workspace key must still match exactly. A conflicting account link on any
-such row stops the request; display attribution is never used to resolve it.
+such row stops the request; display attribution is never used to resolve it. Permanent suppression
+and native write locks use that same type, origin and native subject, including provider rows
+registered after erasure. Adding an equivalent provider row cannot reset a processing control.
+Slack workspace keys still distinguish suppression decisions; sharing a lock does not merge teams.
 
 Each active database store has an export and erasure contributor in its owning module. The shared
 mechanics in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/spi/JdbcPersonDataStore.java`

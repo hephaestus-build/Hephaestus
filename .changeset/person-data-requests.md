@@ -66,3 +66,8 @@ Erasure also includes observations and feedback derived from copied evidence abo
 when the review's primary developer is someone else. Confirmed folder removal does not discard that
 exact provenance before the counted erasure step. Unrelated reviews and the other developer's profile
 and replies stay.
+
+A provider instance added after erasure cannot reset a processing control by changing host case or
+adding a default port. Native identity write locks use the same exact provider origin, so an admitted
+write on an equivalent provider record must finish before erasure checks its scope. Different
+providers, non-default ports, native users and Slack workspaces remain separate identities.

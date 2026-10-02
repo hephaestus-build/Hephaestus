@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.integration.core.connection.*;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.*;
 import de.tum.cit.aet.hephaestus.testconfig.*;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
@@ -32,6 +33,9 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private UserRepository users;
+
+    @Autowired
+    private WorkspaceRepository workspaces;
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -70,6 +74,95 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
             assertThat(fence.holdForUserWrites(List.of(other.getId(), target.getId(), other.getId(), -1L)))
                     .containsExactly(other.getId());
             assertThat(fence.holdForUserWrites(List.of())).isEmpty();
+        });
+    }
+
+    @Test
+    void shouldSuppressAProviderAliasRegisteredAfterErasureWithoutMatchingAnotherInstanceOrPerson() {
+        databaseTestUtils.cleanDatabase();
+        var original = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://late-alias.example.test"));
+        jdbc.update(
+                "INSERT INTO person_suppression(id,provider_id,subject,team_key) VALUES (?,?,?,?)",
+                UUID.randomUUID(),
+                original.getId(),
+                "42",
+                "");
+        var alias = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "HTTPS://LATE-ALIAS.EXAMPLE.TEST:443/"));
+        var otherInstance = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://late-alias.example.test:8443"));
+        var otherType = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITHUB, "https://late-alias.example.test"));
+        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "same-display", alias));
+        var other = users.saveAndFlush(TestUserFactory.createUser(84L, "same-display", alias));
+        assertThat(suppression.isSuppressed(Objects.requireNonNull(alias.getId()), "42", null))
+                .isTrue();
+        assertThat(suppression.isUserSuppressed(Objects.requireNonNull(target.getId())))
+                .isTrue();
+        assertThat(suppression.isUserSuppressed(Objects.requireNonNull(other.getId())))
+                .isFalse();
+        assertThat(suppression.isSuppressed(Objects.requireNonNull(otherInstance.getId()), "42", null))
+                .isFalse();
+        assertThat(suppression.isSuppressed(Objects.requireNonNull(otherType.getId()), "42", null))
+                .isFalse();
+        var seed = new SchemaRowSeeder(jdbc);
+        long workspaceId = Objects.requireNonNull(workspaces
+                .saveAndFlush(WorkspaceTestFixtures.activeWorkspace("late-alias-source"))
+                .getId());
+        seed.insert(
+                "repository",
+                Map.of(
+                        "id",
+                        812202L,
+                        "provider_id",
+                        alias.getId(),
+                        "native_id",
+                        812202L,
+                        "name",
+                        "source",
+                        "name_with_owner",
+                        "team/source"));
+        seed.insert(
+                "repository_to_monitor",
+                Map.of("id", 812203L, "native_id", 812202L, "workspace_id", workspaceId, "generated_paths", "[]"));
+        seed.insert(
+                "connection",
+                Map.of(
+                        "id",
+                        812204L,
+                        "workspace_id",
+                        workspaceId,
+                        "kind",
+                        "GITLAB",
+                        "config",
+                        "{\"serverUrl\":\"" + alias.getServerUrl() + "\"}"));
+        seed.insert(
+                "issue",
+                Map.of(
+                        "id",
+                        812205L,
+                        "provider_id",
+                        alias.getId(),
+                        "native_id",
+                        812205L,
+                        "repository_id",
+                        812202L,
+                        "author_id",
+                        target.getId(),
+                        "issue_type",
+                        "ISSUE",
+                        "number",
+                        12L,
+                        "state",
+                        "OPEN"));
+        assertThat(suppression.isArtifactSuppressed(workspaceId, "scm.issue", 812205L))
+                .isTrue();
+        assertThat(suppression.isArtifactSuppressed(-1L, "scm.issue", 812205L)).isFalse();
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            assertThat(fence.holdForUserWrites(List.of(target.getId(), other.getId())))
+                    .containsExactly(other.getId());
+            assertThat(fence.holdForUserWrite(target.getId())).isFalse();
         });
     }
 
@@ -116,7 +209,9 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseAWaitingWriterAfterTheErasureControlCommitsWithoutMatchingAnotherSlackTeam() throws Exception {
         databaseTestUtils.cleanDatabase();
         var provider = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"));
+        var alias = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.SLACK, "HTTPS://SLACK.COM:443/"));
         var identity = new PersonIdentity(Objects.requireNonNull(provider.getId()), "UFENCE", "T1");
+        var aliasIdentity = new PersonIdentity(Objects.requireNonNull(alias.getId()), "UFENCE", "T1");
         var identities = List.of(identity);
         var request = requests.saveAndFlush(new PersonDataRequest());
         var locked = new CountDownLatch(1);
@@ -132,7 +227,7 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
             assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
             var writer = executor.submit(() -> new TransactionTemplate(transactions).execute(status -> {
                 writerPid.set(Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
-                return fence.holdForWrite(identities);
+                return fence.holdForWrite(List.of(aliasIdentity));
             }));
             try {
                 await().atMost(Duration.ofSeconds(10)).until(() -> waitingForLock(writerPid.get()));
@@ -144,7 +239,7 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
             assertThat(writer.get(10, TimeUnit.SECONDS)).isFalse();
             new TransactionTemplate(transactions)
                     .executeWithoutResult(status -> assertThat(fence.holdForWrite(
-                                    List.of(new PersonIdentity(identity.providerId(), identity.subject(), "T2"))))
+                                    List.of(new PersonIdentity(aliasIdentity.providerId(), identity.subject(), "T2"))))
                             .isTrue());
 
         } finally {

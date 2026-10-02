@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -13,12 +14,8 @@ import org.springframework.stereotype.Service;
 public class PersonSuppressionService implements PersonProcessingSuppression {
     private final JdbcTemplate jdbc;
     private final java.util.List<PersonSourceIdentityContributor> sourceOwners;
-    private final tools.jackson.databind.ObjectMapper mapper;
 
-    public PersonSuppressionService(
-            JdbcTemplate jdbc,
-            java.util.List<PersonSourceIdentityContributor> sourceOwners,
-            tools.jackson.databind.ObjectMapper mapper) {
+    public PersonSuppressionService(JdbcTemplate jdbc, java.util.List<PersonSourceIdentityContributor> sourceOwners) {
         var kinds = sourceOwners.stream()
                 .flatMap(owner -> owner.artifactKinds().stream())
                 .toList();
@@ -31,7 +28,6 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
         }
         this.jdbc = jdbc;
         this.sourceOwners = java.util.List.copyOf(sourceOwners);
-        this.mapper = mapper;
     }
 
     public void suppress(PersonScope scope, UUID requestId) {
@@ -67,20 +63,42 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
 
     @Override
     public boolean isSuppressed(long providerId, String subject, @Nullable String teamId) {
-        return Boolean.TRUE.equals(jdbc.queryForObject(
-                "SELECT EXISTS(SELECT 1 FROM person_suppression s JOIN identity_provider p ON p.id=s.provider_id WHERE s.provider_id=? AND s.subject=? AND (s.team_key=? OR (p.type='OUTLINE' AND s.team_key='')))",
-                Boolean.class,
-                providerId,
-                subject,
-                Objects.requireNonNullElse(teamId, "")));
+        // A new provider row must not reset a permanent native control. Compare exact network
+        // origins with the same parser as identity resolution, never with URL text or display data.
+        return jdbc
+                .query(
+                        """
+                SELECT p.server_url,requested.server_url
+                FROM identity_provider requested
+                JOIN identity_provider p ON p.type=requested.type
+                JOIN person_suppression s ON s.provider_id=p.id
+                WHERE requested.id=? AND s.subject=?
+                  AND (s.team_key=? OR (p.type='OUTLINE' AND s.team_key=''))
+                """,
+                        (rs, row) -> {
+                            var requestedOrigin = ScmOrigin.of(rs.getString(2));
+                            return ScmOrigin.of(rs.getString(1))
+                                    .filter(origin -> requestedOrigin
+                                            .filter(origin::equals)
+                                            .isPresent())
+                                    .isPresent();
+                        },
+                        providerId,
+                        subject,
+                        Objects.requireNonNullElse(teamId, ""))
+                .stream()
+                .anyMatch(Boolean::booleanValue);
     }
 
     @Override
     public boolean isUserSuppressed(long userId) {
-        return Boolean.TRUE.equals(jdbc.queryForObject(
-                "SELECT EXISTS(SELECT 1 FROM person_suppression s JOIN \"user\" u ON u.provider_id=s.provider_id AND u.native_id::text=s.subject WHERE u.id=? AND s.team_key='')",
-                Boolean.class,
-                userId));
+        return jdbc
+                .query(
+                        "SELECT provider_id,native_id::text FROM \"user\" WHERE id=?",
+                        (rs, row) -> new PersonIdentity(rs.getLong(1), Objects.requireNonNull(rs.getString(2)), null),
+                        userId)
+                .stream()
+                .anyMatch(identity -> isSuppressed(identity.providerId(), identity.subject(), null));
     }
 
     @Override
@@ -92,12 +110,7 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
         if (owners.isEmpty()) return false;
         var identities = owners.getFirst().identitiesForSource(workspaceId, artifactKind, artifactId);
         if (identities.isEmpty()) return false;
-        return Boolean.TRUE.equals(jdbc.queryForObject("""
-                SELECT EXISTS(SELECT 1 FROM jsonb_to_recordset(CAST(? AS jsonb))
-                    AS i("providerId" bigint,subject text,"teamId" text)
-                    JOIN person_suppression s ON s.provider_id=i."providerId" AND s.subject=i.subject
-                    JOIN identity_provider p ON p.id=s.provider_id
-                    WHERE s.team_key=COALESCE(i."teamId",'') OR (p.type='OUTLINE' AND s.team_key=''))
-                """, Boolean.class, mapper.writeValueAsString(identities)));
+        return identities.stream()
+                .anyMatch(identity -> isSuppressed(identity.providerId(), identity.subject(), identity.teamId()));
     }
 }

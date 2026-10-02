@@ -10,12 +10,11 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import tools.jackson.databind.ObjectMapper;
 
 class PersonSourceOwnerInventoryTest extends BaseUnitTest {
     @Test
     void shouldRejectMissingSourceAttributionOwnersBeforeProcessingCanStart() {
-        assertThatThrownBy(() -> new PersonSuppressionService(mock(JdbcTemplate.class), List.of(), new ObjectMapper()))
+        assertThatThrownBy(() -> new PersonSuppressionService(mock(JdbcTemplate.class), List.of()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("exactly one");
     }
@@ -25,8 +24,7 @@ class PersonSourceOwnerInventoryTest extends BaseUnitTest {
         var owner = mock(PersonSourceIdentityContributor.class);
         when(owner.artifactKinds())
                 .thenReturn(Set.of("scm.issue", "scm.pull_request", "chat.conversation_thread", "docs.document"));
-        assertThatThrownBy(() -> new PersonSuppressionService(
-                        mock(JdbcTemplate.class), List.of(owner, owner), new ObjectMapper()))
+        assertThatThrownBy(() -> new PersonSuppressionService(mock(JdbcTemplate.class), List.of(owner, owner)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("exactly one");
     }
