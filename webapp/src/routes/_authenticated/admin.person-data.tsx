@@ -12,10 +12,10 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { adminExportPersonData } from "@/api/sdk.gen";
 import {
-	PersonDataPage,
-	type PersonDataPageState,
+	InstancePersonDataPage,
+	type InstancePersonDataPageState,
 	type PersonSelectionInput,
-} from "@/components/admin/privacy/PersonDataPage";
+} from "@/components/admin/privacy/InstancePersonDataPage";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
@@ -124,7 +124,7 @@ function PersonDataRoute() {
 	const currentRequest = request.data;
 	const error: unknown =
 		providers.error ?? request.error ?? preview.error ?? erase.error ?? download.error;
-	let state: PersonDataPageState;
+	let state: InstancePersonDataPageState;
 	if (inputError !== undefined || (error !== null && error !== undefined)) {
 		state = {
 			status: "error",
@@ -160,7 +160,7 @@ function PersonDataRoute() {
 				title="Person data"
 				description="Answer access and erasure requests across every workspace."
 			/>
-			<PersonDataPage
+			<InstancePersonDataPage
 				key={`${requestId ?? "new"}:${request.data?.state ?? "empty"}`}
 				providers={providers.data ?? []}
 				selection={selection}

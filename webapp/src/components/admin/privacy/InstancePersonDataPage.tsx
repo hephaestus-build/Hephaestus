@@ -3,8 +3,16 @@ import type { PersonDataRequest, PersonDataProvider } from "@/api/types.gen";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
 	Table,
@@ -25,7 +33,7 @@ export interface PersonSelectionInput {
 	accountId: string;
 	identities: PersonIdentityInput[];
 }
-export type PersonDataPageState =
+export type InstancePersonDataPageState =
 	| { status: "empty" }
 	| { status: "loading" }
 	| { status: "error"; message: string; onRetry: () => void }
@@ -42,7 +50,7 @@ interface Props {
 	selection: PersonSelectionInput;
 	onChange: (selection: PersonSelectionInput) => void;
 	onPreview: () => void;
-	state: PersonDataPageState;
+	state: InstancePersonDataPageState;
 }
 
 const REQUEST_STATE_LABELS = {
@@ -53,8 +61,13 @@ const REQUEST_STATE_LABELS = {
 	EXPIRED: "Preview expired",
 } satisfies Record<PersonDataRequest["state"], string>;
 
-/** Controlled identity input. This page has no network or account-name matching. */
-export function PersonDataPage({ providers, selection, onChange, onPreview, state }: Props) {
+export function InstancePersonDataPage({
+	providers,
+	selection,
+	onChange,
+	onPreview,
+	state,
+}: Props) {
 	const [confirmation, setConfirmation] = useState("");
 	const [externalCopiesRemoved, setExternalCopiesRemoved] = useState(false);
 	const pending =
@@ -104,21 +117,28 @@ export function PersonDataPage({ providers, selection, onChange, onPreview, stat
 								<legend className="text-sm font-medium">Provider identity {index + 1}</legend>
 								<div className="space-y-2">
 									<Label htmlFor={`person-provider-${index}`}>Provider instance</Label>
-									<select
-										id={`person-provider-${index}`}
-										className="h-9 w-full rounded-md border bg-background px-3 text-sm"
-										value={identity.providerId}
-										onChange={(event) =>
-											updateIdentity(index, { providerId: event.target.value, teamId: "" })
+									<Select
+										items={providers.map((provider) => ({
+											value: String(provider.id),
+											label: `${provider.type} — ${provider.serverUrl}`,
+										}))}
+										value={identity.providerId || null}
+										disabled={pending}
+										onValueChange={(value) =>
+											updateIdentity(index, { providerId: value ?? "", teamId: "" })
 										}
 									>
-										<option value="">Select an exact provider instance</option>
-										{providers.map((provider) => (
-											<option key={provider.id} value={provider.id}>
-												{provider.type} — {provider.serverUrl}
-											</option>
-										))}
-									</select>
+										<SelectTrigger id={`person-provider-${index}`} className="w-full">
+											<SelectValue placeholder="Select an exact provider instance" />
+										</SelectTrigger>
+										<SelectContent aria-label={`Provider instance for identity ${index + 1}`}>
+											{providers.map((provider) => (
+												<SelectItem key={provider.id} value={String(provider.id)}>
+													{provider.type} — {provider.serverUrl}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 								</div>
 								<div className="space-y-2">
 									<Label htmlFor={`person-subject-${index}`}>Native user ID</Label>
@@ -298,11 +318,10 @@ export function PersonDataPage({ providers, selection, onChange, onPreview, stat
 									</p>
 								)}
 								<div className="flex items-center gap-2">
-									<input
+									<Checkbox
 										id="external-copies-removed"
-										type="checkbox"
 										checked={externalCopiesRemoved}
-										onChange={(event) => setExternalCopiesRemoved(event.target.checked)}
+										onCheckedChange={setExternalCopiesRemoved}
 									/>
 									<Label htmlFor="external-copies-removed">
 										I have checked and removed external feedback copies.

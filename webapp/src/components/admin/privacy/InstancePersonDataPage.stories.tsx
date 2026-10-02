@@ -3,7 +3,7 @@ import { expect, fn } from "storybook/test";
 import type { PersonDataRequest } from "@/api/types.gen";
 import { Stateful } from "@/stories/stateful";
 import { daysAfter } from "@/stories/story-clock";
-import { PersonDataPage } from "./PersonDataPage";
+import { InstancePersonDataPage } from "./InstancePersonDataPage";
 
 const request = {
 	id: "11111111-1111-1111-1111-111111111111",
@@ -23,11 +23,11 @@ const request = {
 } satisfies PersonDataRequest;
 const ready = { status: "ready", request, onExport: fn(), onErase: fn(), onRefresh: fn() } as const;
 const meta = {
-	component: PersonDataPage,
+	component: InstancePersonDataPage,
 	render: (args) => (
 		<Stateful initial={args.selection}>
 			{(selection, setSelection) => (
-				<PersonDataPage
+				<InstancePersonDataPage
 					{...args}
 					selection={selection}
 					onChange={(next) => {
@@ -50,7 +50,7 @@ const meta = {
 		onPreview: fn(),
 		state: { status: "empty" },
 	},
-} satisfies Meta<typeof PersonDataPage>;
+} satisfies Meta<typeof InstancePersonDataPage>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const Empty: Story = {
@@ -98,8 +98,23 @@ export const ProviderCopies: Story = {
 			},
 		},
 	},
-	play: async ({ canvas }) => {
+	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByRole("alert")).toHaveTextContent("Remove provider copies first");
+		const erase = canvas.getByRole("button", { name: "Erase this person's data" });
+		await userEvent.type(canvas.getByLabelText("Type ERASE to confirm permanent erasure"), "ERASE");
+		await expect(erase).toBeDisabled();
+		await userEvent.click(
+			canvas.getByRole("checkbox", {
+				name: "I have checked and removed external feedback copies.",
+			}),
+		);
+		await expect(erase).toBeEnabled();
+		await userEvent.click(
+			canvas.getByRole("checkbox", {
+				name: "I have checked and removed external feedback copies.",
+			}),
+		);
+		await expect(erase).toBeDisabled();
 	},
 };
 export const Running: Story = {
