@@ -154,6 +154,26 @@ database. Every seeded row carries a recognizable id, so the seed replaces itsel
 The seed addresses no writes to a provider.
 The runs are complete, and the seed writes only in-app feedback.
 
+### Seeding Practices across the workspace
+
+Practices across the workspace counts developers, and shows nothing until at least five besides the
+reader have a standing. `vp run dev:practices-across-the-workspace:seed` adds 24 synthetic members
+to a workspace, logins `synthetic-developer-01` to `synthetic-developer-24`, each with completed
+practice reviews of pull requests and issues already synced into it, dated relative to the moment it
+runs and reaching back about 75 days. Each practice group gets its own split, so the page shows a
+full split, a collapsed one and a withheld one.
+
+| Flag                        | Environment                    | Default                              |
+| --------------------------- | ------------------------------ | ------------------------------------ |
+| `--workspace`               | `SEED_WORKSPACE_SLUG`          | `hephaestustest`                     |
+| `--pull-request-repository` | `SEED_PULL_REQUEST_REPOSITORY` | `HephaestusTest/practice-validation` |
+| `--issue-repository`        | `SEED_ISSUE_REPOSITORY`        | `HephaestusTest/MaxTestRepo`         |
+
+It connects and refuses non-loopback hosts as the profile seed does, writes no feedback, and
+`vp run dev:practices-across-the-workspace:remove` removes its rows, its memberships and its users.
+The organisation sync, which runs when the server starts and every night, removes members the
+GitHub organisation does not list, so run the seed once the server is up.
+
 ### Port overrides
 
 Every host-side port is configurable so multiple Hephaestus instances (or other services) can coexist on the same machine. Container-internal ports never change – only the `localhost` binding moves.
