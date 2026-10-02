@@ -169,6 +169,13 @@ It connects and refuses non-loopback hosts as the profile seed does, writes no f
 The organisation sync, which runs when the server starts and every night, removes members the
 GitHub organisation does not list, so run the seed once the server is up.
 
+An observation counts only when its practice revision carries the current review rule fingerprint,
+and only the server computes one. Before it writes, the seed signs in through dev sign-in as an
+existing dev administrator, or as `seed-admin` when there is none, and asks the server for the
+revision a review would pin. A practice whose current revision predates the fingerprint scheme
+gets a new revision with the same definition, as it would on its next review. Removing the seed
+removes such a revision again once no observation pins it.
+
 ### Port overrides
 
 Every host-side port is configurable so multiple Hephaestus instances (or other services) can coexist on the same machine. Container-internal ports never change – only the `localhost` binding moves.
