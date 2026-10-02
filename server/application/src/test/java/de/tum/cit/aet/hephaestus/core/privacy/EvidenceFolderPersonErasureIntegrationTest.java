@@ -262,6 +262,55 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @Autowired
+    private WorkspaceLifecycleService workspaceLifecycle;
+
+    @Test
+    void shouldRemovePurgedWorkspaceCopiesAfterCommitWithoutLosingAnOfflineOwnersReceipt() throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var identity = new PersonCopyIdentity("GITLAB", "https://workspace-folder.example", "42", null);
+        var recorder = new ExactPersonDataCopyRecorder(jdbc);
+        Path mounted = root.resolve("workspace-worker-volume");
+        var owner = catalog(mounted, recorder);
+        var erased = job("folder-workspace-purge");
+        var other = job("folder-workspace-keep");
+        copy(mounted, owner, recorder, erased, identity).close();
+        copy(mounted, owner, recorder, other, identity).close();
+        jdbc.update("UPDATE agent_job SET status='COMPLETED' WHERE id=?", erased.getId());
+        Path erasedFolder = mounted.resolve("jobs")
+                .resolve(erased.getWorkspace().getId().toString())
+                .resolve(erased.getId().toString());
+        Path otherFolder = mounted.resolve("jobs")
+                .resolve(other.getWorkspace().getId().toString())
+                .resolve(other.getId().toString());
+
+        workspaceLifecycle.purgeWorkspace(erased.getWorkspace().getWorkspaceSlug());
+
+        assertThat(jobs.findById(erased.getId())).isEmpty();
+        assertThat(erasedFolder).exists();
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, erased.getId()))
+                .isEqualTo("PURGE_REQUESTED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload::text FROM person_evidence_copy WHERE job_id=?", String.class, erased.getId()))
+                .contains("42");
+        var restarted = catalog(mounted, new ExactPersonDataCopyRecorder(jdbc));
+        restarted.removeLocalRequests();
+        restarted.removeLocalRequests();
+        assertThat(erasedFolder).doesNotExist();
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, erased.getId()))
+                .isEqualTo("ERASED");
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload::text FROM person_evidence_copy WHERE job_id=?", String.class, erased.getId()))
+                .isEqualTo("{}");
+        assertThat(otherFolder).exists();
+        assertThat(jobs.findById(other.getId())).isPresent();
+        assertThat(jdbc.queryForObject(
+                        "SELECT state FROM person_evidence_copy WHERE job_id=?", String.class, other.getId()))
+                .isEqualTo("READY");
+    }
+
     @Test
     void anOfflineMountedOwnerCannotBeAcknowledgedByAnEmptyServerFolderAndCanResumeAfterRestart() {
         databaseTestUtils.cleanDatabase();

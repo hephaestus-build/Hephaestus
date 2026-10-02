@@ -53,3 +53,7 @@ Each completed store step records its count, completion time and exact acting ac
 administrator can resume a failed request without changing the earlier steps' attribution. Erasing
 an administrator clears their step attribution, not the counts or times. Each new step verifies that
 the acting administrator still has active instance-admin access.
+
+Workspace purge also queues removal of mounted review copies. Offline worker volumes retain a
+durable removal request until they return. Their identity metadata is cleared only after confirmed
+folder deletion; deleting a database job alone does not count as removing its files.

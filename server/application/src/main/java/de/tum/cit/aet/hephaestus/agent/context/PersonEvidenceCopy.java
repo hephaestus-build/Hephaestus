@@ -43,6 +43,7 @@ public class PersonEvidenceCopy {
         CAPTURING,
         READY,
         ERASE_REQUESTED,
+        PURGE_REQUESTED,
         ERASED
     }
 

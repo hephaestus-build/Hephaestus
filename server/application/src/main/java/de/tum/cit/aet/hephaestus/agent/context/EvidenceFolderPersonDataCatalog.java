@@ -27,7 +27,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 @PersonDataStores({"person_evidence_copy"})
 @WorkspaceAgnostic("Exact-person receipts span workspaces; every job mutation also pins its workspace key")
-public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure {
+public class EvidenceFolderPersonDataCatalog
+        implements PersonEvidenceErasure, de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor {
     private final FabricLayout layout;
     private final JdbcTemplate jdbc;
     private final NamedParameterJdbcTemplate namedJdbc;
@@ -273,6 +274,22 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure {
                         "job_id", rs.getString(1), "copy_id", rs.getString(2), "workspace_id", rs.getString(3)))));
     }
 
+    /** Queue removal in the workspace transaction; workers can acknowledge only after it commits. */
+    @Override
+    public void deleteWorkspaceData(Long workspaceId) {
+        jdbc.update("""
+            UPDATE person_evidence_copy
+            SET state=CASE WHEN state='ERASED' THEN state ELSE 'PURGE_REQUESTED' END,
+                payload=CASE WHEN state='ERASED' THEN '{}'::jsonb ELSE payload END
+            WHERE workspace_id=?
+            """, workspaceId);
+    }
+
+    @Override
+    public int getOrder() {
+        return -60;
+    }
+
     @Override
     public Set<UUID> jobsContaining(PersonScope person) {
         return selectCopies(person, false).rows().stream()
@@ -320,7 +337,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure {
         for (var key : selection.rows())
             jdbc.update(
                     """
-            UPDATE person_evidence_copy SET state='ERASE_REQUESTED'
+            UPDATE person_evidence_copy SET state=CASE WHEN state='PURGE_REQUESTED' THEN state ELSE 'ERASE_REQUESTED' END
             WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND state<>'ERASED'
             """,
                     key.columns().get("copy_id"),
@@ -366,7 +383,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure {
         jdbc.query(
                 """
             SELECT c.job_id,c.workspace_id,c.id FROM person_evidence_copy c
-            WHERE c.store_id=CAST(? AS uuid) AND c.state='ERASE_REQUESTED' ORDER BY c.job_id,c.id
+            WHERE c.store_id=CAST(? AS uuid) AND c.state IN ('ERASE_REQUESTED','PURGE_REQUESTED') ORDER BY c.job_id,c.id
             """,
                 (org.springframework.jdbc.core.RowCallbackHandler) rs -> {
                     UUID jobId = Objects.requireNonNull(rs.getObject(1, UUID.class));
@@ -385,8 +402,10 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure {
                         if (Files.exists(folder, LinkOption.NOFOLLOW_LINKS))
                             throw new IllegalStateException("Evidence folder remains");
                         jdbc.update("""
-                    UPDATE person_evidence_copy SET state='ERASED'
-                    WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state='ERASE_REQUESTED'
+                    UPDATE person_evidence_copy SET state='ERASED',
+                        payload=CASE WHEN state='PURGE_REQUESTED'
+                            THEN '{}'::jsonb ELSE payload END
+                    WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND store_id=CAST(? AS uuid) AND state IN ('ERASE_REQUESTED','PURGE_REQUESTED')
                     """, copyId, jobId, workspaceId, owner);
                     } catch (IOException exception) {
                         throw new UncheckedIOException(exception);
