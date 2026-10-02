@@ -32,6 +32,8 @@ interface UseMentorChatReturn extends Omit<
 	"sendMessage" | "addToolResult"
 > {
 	sendMessage: (text: string) => void;
+	/** Starts a separate floating conversation, leaving the previous stored thread available. */
+	startNewChat: () => Promise<void>;
 	/** Answers the latest prompt again, replacing the reply that failed. */
 	retry: () => void;
 	isLoading: boolean;
@@ -67,7 +69,7 @@ export function useMentorChat({
 	const slug = workspaceSlug ?? "";
 	const hasWorkspace = Boolean(workspaceSlug);
 
-	const [stableThreadId] = useState(() => threadId ?? uuidv4());
+	const [stableThreadId, setStableThreadId] = useState(() => threadId ?? uuidv4());
 
 	const { data: threadDetail, isLoading: isThreadLoading } = useQuery({
 		...mentorThreadOptions(slug, threadId ?? ""),
@@ -100,8 +102,8 @@ export function useMentorChat({
 		isUpvoted,
 	}));
 
-	// Unmemoised on purpose: `useChat` builds its `Chat` from these options into a ref and rebuilds it
-	// only when `id` changes, so the transport is read once and a later instance is never looked at.
+	// `useChat` reads the current transport through its refreshed ref and recreates the conversation
+	// when its id changes.
 	const transport = new DefaultChatTransport<ChatMessage>({
 		api: `${environment.serverUrl}/workspaces/${slug}/mentor/chat`,
 		prepareSendMessagesRequest: ({ id, messages, trigger, messageId, requestMetadata }) => {
@@ -188,6 +190,13 @@ export function useMentorChat({
 	// after a retry refused before a new reply started, the target travels as request metadata.
 	const retryTarget = useRef<string | undefined>(undefined);
 
+	const startNewChat = async () => {
+		await stop();
+		retryTarget.current = undefined;
+		setWarmingUp(false);
+		setStableThreadId(uuidv4());
+	};
+
 	const sendMessage = (text: string) => {
 		if (!text.trim() || !hasWorkspace) {
 			return;
@@ -267,6 +276,7 @@ export function useMentorChat({
 		id,
 		clearError,
 		sendMessage,
+		startNewChat,
 		retry,
 		currentThreadId: threadId ?? id,
 		voteMessage,

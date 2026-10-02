@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -79,6 +81,25 @@ class MentorContextKeysRunnerMirrorTest {
         assertThat(Files.readString(PROTOCOL, StandardCharsets.UTF_8))
                 .contains(
                         "/^inputs\\/context\\/observations_history\\/[\\da-f]{8}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{4}-[\\da-f]{12}\\.json$/u");
+    }
+
+    @Test
+    @DisplayName("a review-attempts key names one pull request or issue by artifactId, mirrored by the runner")
+    void reviewAttemptsKeyIsCanonical() throws IOException {
+        assertThat(ReviewAttemptsContentSource.workOf("inputs/context/review_attempts/issue/21.json"))
+                .contains(new AgentJobRepository.ScmWork(AgentJobType.ISSUE_REVIEW, 21L));
+        assertThat(ReviewAttemptsContentSource.workOf("inputs/context/review_attempts/pull_request/42.json"))
+                .contains(new AgentJobRepository.ScmWork(AgentJobType.PULL_REQUEST_REVIEW, 42L));
+        assertThat(ReviewAttemptsContentSource.workOf("inputs/context/review_attempts/21.json"))
+                .isEmpty();
+        assertThat(ReviewAttemptsContentSource.workOf("inputs/context/review_attempts/conversation/21.json"))
+                .isEmpty();
+        assertThat(ReviewAttemptsContentSource.workOf("inputs/context/review_attempts/issue/../user.json"))
+                .isEmpty();
+        assertThat(ReviewAttemptsContentSource.workOf("inputs/context/review_attempts/issue/1234567890123456789.json"))
+                .isEmpty();
+        assertThat(Files.readString(PROTOCOL, StandardCharsets.UTF_8))
+                .contains("/^inputs\\/context\\/review_attempts\\/(?:pull_request|issue)\\/\\d{1,18}\\.json$/u");
     }
 
     @Test

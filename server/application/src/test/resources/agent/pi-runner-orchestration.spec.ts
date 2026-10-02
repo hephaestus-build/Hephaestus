@@ -66,6 +66,18 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 	};
 }
 
+function feedbackUnit(practiceSlug: string, observationId: string) {
+	return {
+		channel: "IN_CONTEXT",
+		practiceSlug,
+		basedOn: [observationId],
+		action: "NEW",
+		title: "On this change",
+		nextStep: "Keep the check in place.",
+		placement: { kind: "ARTIFACT" },
+	};
+}
+
 /** An observation that decides nothing; it must show it read the change, as admission demands. */
 const undecided = (consulted: string[]) => ({
 	practiceSlug: "test-practice",
@@ -118,19 +130,40 @@ if (scenario !== undefined && scenario !== "") {
 	let now = 1_000_000;
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
+	const admitted = (): unknown[] => {
+		switch (scenario) {
+			case "compose-abstention": {
+				// Admission answers with every recorded outcome, abstentions included, as it was measured.
+				return readObservations(nodePath.join(cwd, "admission.json")).map((posted, index) => ({
+					...posted,
+					id: `observation-${index + 1}`,
+					citations: [],
+					anchorable: false,
+				}));
+			}
+			case "compose-quiet": {
+				return [{ ...admittedObservation, outcome: "MET", severity: null }];
+			}
+			case "compose-unknown-outcome": {
+				return [{ ...admittedObservation, outcome: "PASSED" }];
+			}
+			case "compose-null-outcome": {
+				return [{ ...admittedObservation, outcome: null }];
+			}
+			default: {
+				return [admittedObservation];
+			}
+		}
+	};
 	mock.method(globalThis, "fetch", async (_input: unknown, init?: RequestInit) => {
-		if (scenario === "draft-revision") {
+		if (scenario === "draft-revision" || scenario === "compose-abstention") {
 			assert.ok(typeof init?.body === "string");
 			writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
 		}
 		return Response.json({
 			schemaVersion: 1,
 			admissionDigest: "admitted-digest",
-			observations: [
-				scenario === "compose-quiet"
-					? { ...admittedObservation, outcome: "MET", severity: null }
-					: admittedObservation,
-			],
+			observations: admitted(),
 		});
 	});
 	const manager = { getSessionFile: () => undefined, getSessionId: () => "test-session" };
@@ -329,6 +362,18 @@ if (scenario !== undefined && scenario !== "") {
 											error instanceof Error ? error.message : String(error),
 										);
 									record(`feedback-quiet:${quiet}`);
+									return;
+								}
+								if (scenario === "compose-abstention") {
+									// An abstention is no primary evidence; the MET strength beside it still is.
+									const reply = await tool("report_feedback").execute("f-a", {
+										units: [
+											feedbackUnit("second-practice", "observation-2"),
+											feedbackUnit("third-practice", "observation-3"),
+											feedbackUnit("test-practice", "observation-1"),
+										],
+									});
+									record(`feedback-abstention:${JSON.stringify(reply)}`);
 									return;
 								}
 								if (scenario === "compose-silent") {
@@ -728,6 +773,34 @@ if (scenario !== undefined && scenario !== "") {
 								);
 								return;
 							}
+							if (scenario === "compose-abstention") {
+								await report.execute("o-mixed", {
+									observations: [
+										{
+											...observation("test-practice", "Authentication call"),
+											outcome: "MET",
+											severity: null,
+										},
+										{
+											...undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
+											practiceSlug: "second-practice",
+										},
+										{
+											...observation("third-practice", "Whether the call is reachable"),
+											outcome: "UNDETERMINED",
+											severity: null,
+											evidence: {
+												citations: [changeCitation],
+												undecidability: {
+													openQuestion: "Is insecure() reachable from the login flow?",
+													wouldSettleIt: "The callers of Auth outside this change.",
+												},
+											},
+										},
+									],
+								});
+								return;
+							}
 							if (scenario !== "batch") {
 								await report.execute("o-1", {
 									observations: [observation("test-practice", "Unsafe authentication call")],
@@ -832,6 +905,9 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-silent",
 		"compose-loop",
 		"compose-quiet",
+		"compose-abstention",
+		"compose-unknown-outcome",
+		"compose-null-outcome",
 	]) {
 		void test(
 			{
@@ -862,6 +938,12 @@ if (scenario !== undefined && scenario !== "") {
 				"compose-loop":
 					"ends a composition that keeps calling a recording tool without recording anything",
 				"compose-quiet": "skips a WITHHOLD on a practice with nothing to withhold and asks no more",
+				"compose-abstention":
+					"composes from admitted NOT_APPLICABLE and UNDETERMINED observations without basing feedback on them",
+				"compose-unknown-outcome":
+					"refuses an admitted outcome outside the vocabulary before composing",
+				"compose-null-outcome":
+					"refuses an admitted observation without an outcome before composing",
 			}[stage] ?? stage,
 			() => {
 				const cwd = mkdtempSync(nodePath.join(tmpdir(), "pi-orchestration-"));
@@ -977,10 +1059,16 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(
 						nodePath.join(cwd, "catalog/practices/index.json"),
 						JSON.stringify(
-							stage === "finish" || stage === "batch" || stage === "draft-revision"
+							stage === "finish" ||
+								stage === "batch" ||
+								stage === "draft-revision" ||
+								stage === "compose-abstention"
 								? [
 										{ slug: "test-practice", group: "code" },
 										{ slug: "second-practice", group: "code" },
+										...(stage === "compose-abstention"
+											? [{ slug: "third-practice", group: "code" }]
+											: []),
 									]
 								: [{ slug: "test-practice", group: "code" }],
 						),
@@ -1394,6 +1482,59 @@ if (scenario !== undefined && scenario !== "") {
 								/NOT_MET for the primary practice 'test-practice'/u,
 							);
 							assert.doesNotMatch(child.stderr, /asking once more/u);
+							break;
+						}
+						case "compose-abstention": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1", "prompt:2"],
+							);
+							const reply = events.find((event) => event.startsWith("feedback-abstention:")) ?? "";
+							for (const [index, practice] of ["second-practice", "third-practice"].entries()) {
+								assert.match(
+									reply,
+									new RegExp(
+										`#${index + 1}: At least one basedOn observation must have a MET or NOT_MET outcome for the primary practice '${practice}'`,
+										"u",
+									),
+									child.stderr,
+								);
+							}
+							assert.match(reply, /#3: stored a IN_CONTEXT unit for test-practice \(NEW\)/u);
+							for (const file of ["out/result.json", "out/feedback.json"]) {
+								const payload: unknown = JSON.parse(readFileSync(nodePath.join(cwd, file), "utf8"));
+								assert.ok(isRecord(payload));
+								assert.equal(payload.admissionDigest, "admitted-digest");
+								assert.deepEqual(
+									readObservations(nodePath.join(cwd, file)).map((item) => item.outcome),
+									["MET", "NOT_APPLICABLE", "UNDETERMINED"],
+								);
+							}
+							const feedback: unknown = JSON.parse(
+								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
+							);
+							assert.ok(isRecord(feedback) && Array.isArray(feedback.units));
+							assert.deepEqual(
+								feedback.units.map((unit: unknown) => (isRecord(unit) ? unit.practiceSlug : unit)),
+								["test-practice"],
+							);
+							reached({
+								"test-practice": "EVALUATED",
+								"second-practice": "EVALUATED",
+								"third-practice": "EVALUATED",
+							});
+							break;
+						}
+						case "compose-unknown-outcome":
+						case "compose-null-outcome": {
+							assert.equal(child.status, 2, child.stderr);
+							assert.match(child.stderr, /observation admission returned an invalid contract/u);
+							assert.deepEqual(
+								events.filter((event) => event.startsWith("prompt:")),
+								["prompt:1"],
+							);
+							assert.ok(!existsSync(nodePath.join(cwd, "out/feedback.json")));
 							break;
 						}
 						case "compose-loop": {

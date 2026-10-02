@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.ResolvedLlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
@@ -19,7 +20,9 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ReviewAttemptsContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
@@ -268,6 +271,9 @@ class MentorChatServiceTest extends BaseUnitTest {
     ObservationHistoryContentSource observationHistory;
 
     @Mock
+    ReviewAttemptsContentSource reviewAttempts;
+
+    @Mock
     ConversationalDeliveryReconciler conversationalDeliveryReconciler;
 
     private MentorTurnLock turnLock;
@@ -394,6 +400,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                 (workspaceId, developerId) -> aiDecision,
                 mergeReadiness,
                 observationHistory,
+                reviewAttempts,
                 conversationalDeliveryReconciler);
     }
 
@@ -1236,6 +1243,11 @@ class MentorChatServiceTest extends BaseUnitTest {
         ObjectNode observation = mapper.createObjectNode();
         observation.putObject("observation").put("id", observationId.toString());
         when(observationHistory.inspect(WORKSPACE_ID, USER_ID, observationId)).thenReturn(observation);
+        ObjectNode attempts = mapper.createObjectNode();
+        attempts.putObject("work").put("number", 21);
+        when(reviewAttempts.inspect(
+                        WORKSPACE_ID, USER_ID, new AgentJobRepository.ScmWork(AgentJobType.ISSUE_REVIEW, 21L)))
+                .thenReturn(attempts);
 
         sandbox.onSend = frame -> {
             String method = frame.path("method").asString("");
@@ -1256,6 +1268,8 @@ class MentorChatServiceTest extends BaseUnitTest {
                             "inputs/context/observations_history/"
                                     + observationId.toString().toUpperCase(java.util.Locale.ROOT)
                                     + ".json"));
+                    sandbox.push(fetchContextCallback("fc-attempts", "inputs/context/review_attempts/issue/21.json"));
+                    sandbox.push(fetchContextCallback("fc-attempts-guess", "inputs/context/review_attempts/21.json"));
                     sandbox.push(event("agent_end", n -> n.putArray("messages")));
                     sandbox.push(jsonRpcResult(id, mapper.createObjectNode()));
                 }
@@ -1300,6 +1314,18 @@ class MentorChatServiceTest extends BaseUnitTest {
                         .asString())
                 .isEqualTo(observationId.toString());
         assertThat(sandbox.sentFrameWithId("fc-uppercase")
+                        .path("error")
+                        .path("message")
+                        .asString())
+                .contains("fetch_context path not allowed");
+        assertThat(sandbox.sentFrameWithId("fc-attempts")
+                        .path("result")
+                        .path("content")
+                        .path("work")
+                        .path("number")
+                        .asInt())
+                .isEqualTo(21);
+        assertThat(sandbox.sentFrameWithId("fc-attempts-guess")
                         .path("error")
                         .path("message")
                         .asString())

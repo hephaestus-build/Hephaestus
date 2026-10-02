@@ -54,7 +54,7 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 		<Copilot
 			hasMessages={mentorChat.messages.length > 0}
 			onNewChat={() => {
-				mentorChat.setMessages([]);
+				void mentorChat.startNewChat();
 			}}
 			onOpenFullChat={() => {
 				const threadId = mentorChat.currentThreadId ?? mentorChat.id;
