@@ -392,6 +392,8 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         @Test
         void objectProviderUsageIsLimited() {
             Set<String> knownCycleBreakers = Set.of(
+                    "EvidenceFolderPersonDataCatalog", // The executor is worker-only; resolving lifecycle/handlers
+                    // eagerly would recurse through evidence preparation into this mounted-store hook.
                     "FairRetryPostProcessor", // A static BeanPostProcessor must not initialize JDBC/serializer beans
                     // early.
                     "WorkspaceActivationService",

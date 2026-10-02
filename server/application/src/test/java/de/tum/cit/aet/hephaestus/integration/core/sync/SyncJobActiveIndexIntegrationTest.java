@@ -161,11 +161,11 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         assertThatThrownBy(() -> connectionService.disconnect(
                         connection,
-                        new ConnectionService.TransitionRequest(
+                        ConnectionService.TransitionRequest.byAccount(
                                 IntegrationState.UNINSTALLED,
                                 "DISCONNECT",
                                 "ADMIN",
-                                "test-admin",
+                                null,
                                 "disconnect-race-test",
                                 "disconnect"),
                         Mockito.mock(ConnectionStrategy.class)))

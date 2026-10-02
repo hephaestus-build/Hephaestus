@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.productfeedback;
+package de.tum.cit.aet.hephaestus.productfeedback.adapter;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;

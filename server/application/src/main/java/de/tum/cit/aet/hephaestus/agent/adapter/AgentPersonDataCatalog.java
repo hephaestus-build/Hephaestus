@@ -1,5 +1,6 @@
-package de.tum.cit.aet.hephaestus.agent;
+package de.tum.cit.aet.hephaestus.agent.adapter;
 
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.List;
@@ -22,7 +23,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
     private final List<PersonEvidenceErasure> evidenceCopies;
-    private final de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService lifecycle;
+    private final AgentJobLifecycleService lifecycle;
 
     @Override
     public List<PersonDataContributor> contributors() {
@@ -32,7 +33,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "agent_job",
                         "agent_job",
-                        "t.id IN (SELECT j.id FROM agent_job j WHERE j.metadata->>'slack_thread_id' IN (SELECT id::text FROM slack_thread WHERE id = ANY(:conversations)) OR j.metadata->>'docs_document_id' IN (SELECT id::text FROM outline_document WHERE id = ANY(:documents)) OR j.metadata->>'author_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'actor_user_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'about_user_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'pull_request_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text) OR j.metadata->>'issue_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text) OR j.id IN (SELECT agent_job_id FROM observation WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents)))) OR j.id IN (SELECT agent_job_id FROM feedback WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents))) OR recipient_user_id = ANY(:users)))",
+                        "t.id IN (SELECT j.id FROM agent_job j WHERE j.metadata->>'slack_thread_id' IN (SELECT unnest(CAST(:conversations AS bigint[]))::text) OR j.metadata->>'docs_document_id' IN (SELECT unnest(CAST(:documents AS bigint[]))::text) OR j.metadata->>'author_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'actor_user_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'about_user_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'pull_request_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text) OR j.metadata->>'issue_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text) OR j.id IN (SELECT agent_job_id FROM observation WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents)))) OR j.id IN (SELECT agent_job_id FROM feedback WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents))) OR recipient_user_id = ANY(:users)))",
                         "id,workspace_id,purpose,job_type,status,evidence_snapshot,created_at,completed_at,delivery_status,delivery_comment_id",
                         "id",
                         "metadata='{}'::jsonb,output=NULL,evidence_snapshot=NULL,container_logs=NULL,config_snapshot='{}'::jsonb,job_token=gen_random_uuid()::text,job_token_hash=NULL,error_message=NULL,delivery_comment_id=NULL,review_readiness=NULL",
@@ -42,11 +43,10 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         java.util.Set<PersonDataSelection.RowKey> rows = new java.util.LinkedHashSet<>(
                                 super.select(person).rows());
                         evidenceCopies.forEach(copy -> copy.jobsContaining(person).stream()
-                                .filter(id -> Boolean.TRUE.equals(jdbc.getJdbcTemplate()
-                                        .queryForObject(
-                                                "SELECT EXISTS(SELECT 1 FROM agent_job WHERE id=?)",
-                                                Boolean.class,
-                                                id)))
+                                .filter(id -> Boolean.TRUE.equals(jdbc.queryForObject(
+                                        "SELECT EXISTS(SELECT 1 FROM agent_job WHERE id=:id)",
+                                        java.util.Map.of("id", id),
+                                        Boolean.class)))
                                 .forEach(id -> rows.add(
                                         new PersonDataSelection.RowKey(java.util.Map.of("id", id.toString())))));
                         return new PersonDataSelection(rows.stream()
@@ -93,7 +93,7 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         mapper,
                         "llm_usage_event",
                         "llm_usage_event",
-                        "t.source_id IN (SELECT id FROM (SELECT j.id FROM agent_job j WHERE j.metadata->>'slack_thread_id' IN (SELECT id::text FROM slack_thread WHERE id = ANY(:conversations)) OR j.metadata->>'docs_document_id' IN (SELECT id::text FROM outline_document WHERE id = ANY(:documents)) OR j.metadata->>'author_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'actor_user_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'about_user_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'pull_request_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text) OR j.metadata->>'issue_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text) OR j.id IN (SELECT agent_job_id FROM observation WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents)))) OR j.id IN (SELECT agent_job_id FROM feedback WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents))) OR recipient_user_id = ANY(:users))) jobs) OR t.source_id IN (SELECT id FROM chat_message WHERE thread_id IN (SELECT id FROM chat_thread WHERE user_id = ANY(:users)))",
+                        "t.source_id IN (SELECT id FROM (SELECT j.id FROM agent_job j WHERE j.metadata->>'slack_thread_id' IN (SELECT unnest(CAST(:conversations AS bigint[]))::text) OR j.metadata->>'docs_document_id' IN (SELECT unnest(CAST(:documents AS bigint[]))::text) OR j.metadata->>'author_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'actor_user_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'about_user_id' IN (SELECT id::text FROM \"user\" WHERE id = ANY(:users)) OR j.metadata->>'pull_request_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text) OR j.metadata->>'issue_id' IN (SELECT unnest(CAST(:artifacts AS bigint[]))::text) OR j.id IN (SELECT agent_job_id FROM observation WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents)))) OR j.id IN (SELECT agent_job_id FROM feedback WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents))) OR recipient_user_id = ANY(:users))) jobs) OR t.source_id IN (SELECT id FROM chat_message WHERE thread_id IN (SELECT id FROM chat_thread WHERE user_id = ANY(:users)))",
                         "id,workspace_id,job_type,source_type,source_id,source_attempt,model,input_tokens,output_tokens,cache_read_tokens,cache_write_tokens,reasoning_tokens,total_calls,cost_usd,pricing_state,funding_source,applied_price_id,applied_workspace_model_id,applied_per_1m_input_usd,applied_per_1m_output_usd,applied_per_1m_cache_read_usd,applied_per_1m_cache_write_usd,occurred_at,usage_provenance",
                         "id",
                         "source_id=gen_random_uuid()",

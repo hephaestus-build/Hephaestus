@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
@@ -46,7 +47,7 @@ public class RepositoryTreeContentSource implements EvidenceSource {
 
     private final GitRepositoryManager gitRepositoryManager;
     private final ReviewRepositoryPreparer repositoryPreparer;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
+    private final PersonDataCopyRecorder personCopies;
 
     @Override
     public boolean supports(ContextRequest request) {

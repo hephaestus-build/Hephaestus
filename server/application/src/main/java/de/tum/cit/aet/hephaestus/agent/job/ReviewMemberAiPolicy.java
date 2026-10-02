@@ -38,6 +38,10 @@ public class ReviewMemberAiPolicy {
 
     @Transactional(readOnly = true)
     public boolean isProcessingSuppressed(long workspaceId, AgentJobType type, @Nullable JsonNode metadata) {
+        return processingSuppressed(workspaceId, type, metadata);
+    }
+
+    private boolean processingSuppressed(long workspaceId, AgentJobType type, @Nullable JsonNode metadata) {
         Long developerId = subject(workspaceId, type, metadata);
         if (developerId != null && suppression.isUserSuppressed(developerId)) return true;
         String key;
@@ -69,7 +73,7 @@ public class ReviewMemberAiPolicy {
 
     @Transactional(readOnly = true)
     public boolean permitsReview(long workspaceId, AgentJobType type, @Nullable JsonNode metadata) {
-        if (isProcessingSuppressed(workspaceId, type, metadata)) return false;
+        if (processingSuppressed(workspaceId, type, metadata)) return false;
         return preferences
                 .forDeveloper(workspaceId, subject(workspaceId, type, metadata))
                 .permitsAi();
@@ -85,7 +89,7 @@ public class ReviewMemberAiPolicy {
 
     @Transactional(readOnly = true)
     public boolean allowsResult(AgentJob job) {
-        if (isProcessingSuppressed(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) return false;
+        if (processingSuppressed(job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) return false;
         return evaluatePerson(job, subject(job.getWorkspace().getId(), job.getJobType(), job.getMetadata()));
     }
 

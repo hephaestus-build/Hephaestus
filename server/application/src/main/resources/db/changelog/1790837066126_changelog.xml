@@ -243,4 +243,17 @@ CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS tr
             <column name="state"/>
         </createIndex>
     </changeSet>
+    <changeSet id="1790837066126-22" author="hephaestus">
+    <preConditions onFail="HALT"><tableExists tableName="auth_event"/></preConditions>
+    <comment>Admit person request audit events in the production partitioned audit table. Keep all existing event types and recorded facts.</comment>
+    <sql>ALTER TABLE auth_event DROP CONSTRAINT ck_auth_event_event_type;
+ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type IN ('USER_VIEW', 'LOGIN', 'LOGIN_FAILED', 'LOGOUT', 'TOKEN_REFRESH', 'JWT_REVOKED', 'IDENTITY_LINKED', 'IDENTITY_UNLINKED', 'IMPERSONATION_BEGIN', 'IMPERSONATION_END', 'ACCOUNT_DELETED', 'EXPORT_REQUESTED', 'PERSON_DATA_PREVIEWED', 'PERSON_DATA_EXPORTED', 'PERSON_DATA_ERASURE_REQUESTED', 'APP_ROLE_CHANGED', 'RESEARCH_CONSENT_REVOKED', 'WORKSPACE_ELEVATION', 'LLM_CONNECTION_CREATED', 'LLM_CONNECTION_UPDATED', 'LLM_CONNECTION_DELETED', 'LLM_MODEL_CREATED', 'LLM_MODEL_UPDATED', 'LLM_MODEL_DELETED', 'LLM_MODEL_PRICE_CHANGED', 'LLM_MODEL_SHARING_CHANGED', 'LLM_SETTINGS_CHANGED', 'LOGIN_PROVIDER_CREATED', 'LOGIN_PROVIDER_UPDATED', 'LOGIN_PROVIDER_DELETED', 'SILENT_MODE_CHANGED'));</sql>
+    <rollback><sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Person request audit types cannot be removed while their events are retained. Restore a verified pre-upgrade backup instead.'; END $$;</sql></rollback>
+  </changeSet>
+    <changeSet id="1790837066126-23" author="hephaestus">
+    <preConditions onFail="HALT"><sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname='fk_oauth_state_nonce_actor_account' AND conrelid='oauth_state_nonce'::regclass</sqlCheck></preConditions>
+    <comment>Name the account foreign key as SQL-owned: OAuth stores only an opaque account id across the module boundary, not an Account entity association.</comment>
+    <sql>ALTER TABLE oauth_state_nonce RENAME CONSTRAINT fk_oauth_state_nonce_actor_account TO sfk_oauth_state_nonce_actor_account;</sql>
+    <rollback><sql>ALTER TABLE oauth_state_nonce RENAME CONSTRAINT sfk_oauth_state_nonce_actor_account TO fk_oauth_state_nonce_actor_account;</sql></rollback>
+  </changeSet>
 </databaseChangeLog>

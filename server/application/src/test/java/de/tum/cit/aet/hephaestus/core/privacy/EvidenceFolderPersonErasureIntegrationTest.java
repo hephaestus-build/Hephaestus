@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.context.*;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.*;
@@ -264,6 +265,42 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private WorkspaceLifecycleService workspaceLifecycle;
+
+    @Test
+    void shouldSelectAndSuppressCopiedNativeKeysAcrossEquivalentOriginSpellings() {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "HTTPS://ORIGIN-COPY.EXAMPLE:443/"));
+        var identity = new PersonCopyIdentity("GITLAB", "https://origin-copy.example", "42", null);
+        var recorder = new ExactPersonDataCopyRecorder(jdbc);
+        var owner = catalog(root, recorder);
+        var first = job("folder-origin-copy");
+        copy(root, owner, recorder, first, identity).close();
+        var store = owner.contributors().getFirst();
+        var scope = new PersonScope(
+                null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)), List.of());
+        var selected = store.select(scope);
+        assertThat(selected.rows()).hasSize(1);
+        store.prepareErasure(selected);
+        assertThat(store.erase(selected)).isEqualTo(1);
+        jdbc.update(
+                "INSERT INTO person_suppression(id,provider_id,subject,team_key) VALUES (?,?,?,'')",
+                UUID.randomUUID(),
+                provider.getId(),
+                "42");
+        var blocked = job("folder-origin-blocked");
+        assertThatThrownBy(() -> copy(root, owner, recorder, blocked, identity))
+                .isInstanceOf(IllegalStateException.class)
+                .hasRootCauseMessage("Copied evidence contains an erased native identity");
+        assertThat(root.resolve("jobs")
+                        .resolve(blocked.getWorkspace().getId().toString())
+                        .resolve(blocked.getId().toString()))
+                .doesNotExist();
+        assertThat(store.select(scope).rows()).isEmpty();
+        assertThat(jdbc.queryForObject(
+                        "SELECT payload::text FROM person_evidence_copy WHERE job_id=?", String.class, blocked.getId()))
+                .isEqualTo("{}");
+    }
 
     @Test
     void shouldRemovePurgedWorkspaceCopiesAfterCommitWithoutLosingAnOfflineOwnersReceipt() throws Exception {

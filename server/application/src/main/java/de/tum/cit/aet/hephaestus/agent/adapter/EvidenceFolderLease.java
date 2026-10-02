@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.context;
+package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;

@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.outline.documentation;
 
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -46,7 +48,7 @@ public class OutlineDocumentProjector implements DocumentProjection {
     private final OutlineIdentityResolver identityResolver;
     private final OutlineDocumentSelector documentSelector;
     private final OutlineOriginPolicy originPolicy;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
+    private final PersonDataCopyRecorder personCopies;
 
     public OutlineDocumentProjector(
             OutlineDocumentRepository documentRepository,
@@ -55,7 +57,7 @@ public class OutlineDocumentProjector implements DocumentProjection {
             OutlineIdentityResolver identityResolver,
             OutlineDocumentSelector documentSelector,
             OutlineOriginPolicy originPolicy,
-            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies) {
+            PersonDataCopyRecorder personCopies) {
         this.documentRepository = documentRepository;
         this.collectionRepository = collectionRepository;
         this.connectionService = connectionService;
@@ -166,9 +168,8 @@ public class OutlineDocumentProjector implements DocumentProjection {
                         if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
                         subjects.stream()
                                 .filter(subject -> !subject.isBlank())
-                                .forEach(subject -> personCopies.recordIdentity(
-                                        new de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity(
-                                                "OUTLINE", config.serverUrl(), subject, connection.getInstanceKey())));
+                                .forEach(subject -> personCopies.recordIdentity(new PersonCopyIdentity(
+                                        "OUTLINE", config.serverUrl(), subject, connection.getInstanceKey())));
                     }
                 });
         boolean deleted = doc.isDeleted();

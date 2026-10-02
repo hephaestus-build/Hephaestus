@@ -4,9 +4,13 @@ import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.web.CurrentAccount;
 import de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,9 +42,9 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class PersonDataAdminController {
     private final PersonDataService service;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver resolver;
+    private final PersonIdentityResolver resolver;
     private final ObjectMapper mapper;
-    private final de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger audit;
+    private final AuthEventLogger audit;
 
     public record PersonDataProviderDTO(
             @NonNull long id, @NonNull String type, @NonNull String serverUrl) {}
@@ -99,7 +103,7 @@ public class PersonDataAdminController {
                 CurrentAccount.requireId(),
                 body.accountId(),
                 body.identities().stream().map(IdentityDTO::identity).toList());
-        record(de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent.EventType.PERSON_DATA_PREVIEWED);
+        record(AuthEvent.EventType.PERSON_DATA_PREVIEWED);
         return response(snapshot);
     }
 
@@ -122,7 +126,7 @@ public class PersonDataAdminController {
                             schema = @io.swagger.v3.oas.annotations.media.Schema(type = "string", format = "binary")))
     public ResponseEntity<byte[]> export(@PathVariable UUID id) {
         String bundle = mapper.writeValueAsString(service.export(id));
-        record(de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent.EventType.PERSON_DATA_EXPORTED);
+        record(AuthEvent.EventType.PERSON_DATA_EXPORTED);
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=person-data.json")
@@ -136,12 +140,12 @@ public class PersonDataAdminController {
     public ResponseEntity<PersonDataRequestDTO> erase(
             @PathVariable UUID id, @Valid @RequestBody ErasureRequestDTO body) {
         service.requestErasure(id, CurrentAccount.requireId(), body.externalCopiesRemoved());
-        record(de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent.EventType.PERSON_DATA_ERASURE_REQUESTED);
+        record(AuthEvent.EventType.PERSON_DATA_ERASURE_REQUESTED);
         return response(service.get(id));
     }
 
-    private void record(de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent.EventType type) {
-        if (!audit.event(type, de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent.Result.SUCCESS)
+    private void record(AuthEvent.EventType type) {
+        if (!audit.event(type, AuthEvent.Result.SUCCESS)
                 .actingAccount(CurrentAccount.requireId())
                 .record())
             throw new org.springframework.web.server.ResponseStatusException(
@@ -154,8 +158,7 @@ public class PersonDataAdminController {
         Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, r.getCompletedJson());
         PersonDataScopeDTO resolvedScope = null;
         if (r.getScopeJson() != null) {
-            var scope =
-                    mapper.readValue(r.getScopeJson(), de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope.class);
+            var scope = mapper.readValue(r.getScopeJson(), PersonScope.class);
             resolvedScope = new PersonDataScopeDTO(
                     scope.accountId(),
                     scope.identities().stream()

@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -38,6 +39,10 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
     @Override
     @Transactional(readOnly = true)
     public List<Provider> providers() {
+        return providerRows();
+    }
+
+    private List<Provider> providerRows() {
         return jdbc.query(
                 "SELECT id,type,server_url FROM identity_provider ORDER BY type,server_url,id",
                 (rs, row) -> new Provider(
@@ -59,6 +64,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
             throw invalid("The account id does not exist");
         }
         Set<PersonIdentity> identities = new LinkedHashSet<>(supplied);
+        includeEquivalentProviders(identities);
         Set<Long> owners = new LinkedHashSet<>();
         if (accountId != null) {
             owners.add(accountId);
@@ -79,6 +85,7 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                             rs.getString("team_id")),
                     resolvedAccount));
         }
+        includeEquivalentProviders(identities);
         // A mirror is keyed by instance and native user, not by the OAuth workspace.
         // Normalize after account closure so account-only requests install the same control.
         for (PersonIdentity identity : List.copyOf(identities)) {
@@ -142,13 +149,40 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                 artifacts.stream().sorted().toList());
     }
 
+    /** Provider rows may retain different spellings of the same exact network origin. */
+    private void includeEquivalentProviders(Set<PersonIdentity> identities) {
+        var instances = providerRows();
+        for (var identity : List.copyOf(identities)) {
+            validateProvider(identity);
+            var selected = instances.stream()
+                    .filter(provider -> provider.id() == identity.providerId())
+                    .findFirst()
+                    .orElseThrow(() -> invalid("The provider instance id does not exist"));
+            var origin = ScmOrigin.of(selected.serverUrl())
+                    .orElseThrow(
+                            () -> conflict("The provider instance has no valid origin; repair its exact instance key"));
+            for (var candidate : instances) {
+                if (candidate.type().equals(selected.type())
+                        && ScmOrigin.of(candidate.serverUrl())
+                                .filter(origin::equals)
+                                .isPresent()) {
+                    identities.add(new PersonIdentity(candidate.id(), identity.subject(), identity.teamId()));
+                }
+            }
+        }
+    }
+
     private record CachedSlackIdentity(
             @Nullable String subject, @Nullable String teamId) {}
 
     private void requireVerifiedSlackCaches(Set<PersonIdentity> identities, List<Long> users) {
-        List<Long> slackProviders = jdbc.query(
-                "SELECT id FROM identity_provider WHERE type='SLACK' AND server_url='https://slack.com'",
-                (rs, row) -> rs.getLong(1));
+        List<Long> slackProviders = providerRows().stream()
+                .filter(provider -> provider.type().equals("SLACK")
+                        && ScmOrigin.of(provider.serverUrl())
+                                .filter("https://slack.com"::equals)
+                                .isPresent())
+                .map(Provider::id)
+                .toList();
         for (long userId : new LinkedHashSet<>(users)) {
             List<CachedSlackIdentity> caches = jdbc.query(
                     """
@@ -157,13 +191,13 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                         JOIN chat_thread t ON t.id=m.chat_thread_id WHERE t.user_id=?
                     """, (rs, row) -> new CachedSlackIdentity(rs.getString(1), rs.getString(2)), userId, userId);
             for (var cache : caches) {
-                if (slackProviders.size() != 1
-                        || cache.subject() == null
+                if (cache.subject() == null
                         || cache.subject().isBlank()
                         || cache.teamId() == null
                         || cache.teamId().isBlank()
-                        || !identities.contains(
-                                new PersonIdentity(slackProviders.getFirst(), cache.subject(), cache.teamId())))
+                        || slackProviders.stream()
+                                .noneMatch(provider -> identities.contains(
+                                        new PersonIdentity(provider, cache.subject(), cache.teamId()))))
                     throw conflict("Collected Slack work has cached SCM attribution without an exact Slack identity; "
                             + "add its provider instance, native Slack user id and native workspace id");
             }

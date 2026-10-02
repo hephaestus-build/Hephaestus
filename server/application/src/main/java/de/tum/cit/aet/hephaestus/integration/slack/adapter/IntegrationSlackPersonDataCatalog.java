@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.integration.slack;
+package de.tum.cit.aet.hephaestus.integration.slack.adapter;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;

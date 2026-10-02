@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountErasureContributor;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -15,8 +16,7 @@ class PrivacyAccountErasureAdapter implements AccountErasureContributor {
     @Override
     public void eraseAccount(long id) {
         var steps = new PersonDataStoreAdministrationContributor(namedJdbc, mapper);
-        var actor = new de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope(
-                id, java.util.List.of(), java.util.List.of());
+        var actor = new PersonScope(id, java.util.List.of(), java.util.List.of());
         steps.erase(steps.select(actor));
         jdbc.update(
                 "UPDATE person_data_request SET administrator_account_id=NULL,version=version+1 WHERE administrator_account_id=?",

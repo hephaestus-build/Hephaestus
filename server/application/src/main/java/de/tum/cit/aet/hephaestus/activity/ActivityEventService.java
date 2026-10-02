@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import de.tum.cit.aet.hephaestus.activity.metrics.ActivityMetrics;
 import de.tum.cit.aet.hephaestus.activity.spi.ActivityRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -27,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActivityEventService implements ActivityRecorder {
 
     private final ActivityEventRepository eventRepository;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence;
+    private final PersonDataWriteFence writeFence;
     private final WorkspaceRepository workspaceRepository;
     private final Counter eventsRecordedCounter;
     private final Counter eventsDuplicateCounter;
@@ -40,7 +41,7 @@ public class ActivityEventService implements ActivityRecorder {
             ActivityEventRepository eventRepository,
             WorkspaceRepository workspaceRepository,
             MeterRegistry meterRegistry,
-            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence) {
+            PersonDataWriteFence writeFence) {
         this.eventRepository = eventRepository;
         this.writeFence = writeFence;
         this.workspaceRepository = workspaceRepository;

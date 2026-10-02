@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.context;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,14 +14,14 @@ import tools.jackson.databind.node.ObjectNode;
 public class ScmJobFolderProjector implements WorkspaceScmProjection {
     private final JdbcTemplate jdbc;
     private final JsonMapper mapper;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression;
+    private final PersonDataCopyRecorder personCopies;
+    private final PersonProcessingSuppression suppression;
 
     public ScmJobFolderProjector(
             JdbcTemplate jdbc,
             JsonMapper mapper,
-            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies,
-            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression) {
+            PersonDataCopyRecorder personCopies,
+            PersonProcessingSuppression suppression) {
         this.jdbc = jdbc;
         this.mapper = mapper;
         this.personCopies = personCopies;

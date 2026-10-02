@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceContract;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
@@ -59,7 +60,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
     private final ReviewRepositoryPreparer repositoryPreparer;
     private final ReviewHistoryContentSource history;
     private final ReviewMemberAiPolicy memberAiPolicy;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
+    private final PersonDataCopyRecorder personCopies;
 
     public WorkspaceFolderRenderer(
             WorkspaceScmProjection scmProjection,
@@ -74,7 +75,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
             ReviewMemberAiPolicy memberAiPolicy,
             WorkspaceMembershipRepository memberships,
             PracticeRepository practices,
-            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies) {
+            PersonDataCopyRecorder personCopies) {
         this.scmProjection = scmProjection;
         this.memberships = memberships;
         this.practices = practices;

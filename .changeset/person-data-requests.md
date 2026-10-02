@@ -57,3 +57,7 @@ the acting administrator still has active instance-admin access.
 Workspace purge also queues removal of mounted review copies. Offline worker volumes retain a
 durable removal request until they return. Their identity metadata is cleared only after confirmed
 folder deletion; deleting a database job alone does not count as removing its files.
+
+Person requests include existing provider records that differ only in the spelling of the same
+network origin, such as host case or a default HTTPS port. Native identities still match exactly.
+A link to another account on any equivalent provider record stops the request.

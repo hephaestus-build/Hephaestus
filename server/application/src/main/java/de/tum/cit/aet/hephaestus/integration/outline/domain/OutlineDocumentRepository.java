@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.domain;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -228,4 +229,36 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
         @Nullable
         String getCollectionName();
     }
+
+    interface PersonSourceIdentityRow {
+        long getProviderId();
+
+        String getSubject();
+    }
+
+    @WorkspaceAgnostic("Instance-admin person selection pins an exact provider and native identity across workspaces")
+    @Query(value = """
+        SELECT DISTINCT d.id
+                FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
+                JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+                CROSS JOIN LATERAL (
+                    SELECT d.created_by_subject AS subject UNION SELECT d.updated_by_subject
+                    UNION SELECT jsonb_array_elements_text(COALESCE(d.collaborator_subjects,'[]'::jsonb))
+                ) authors
+                 WHERE p.id=:providerId AND authors.subject=:subject
+        """, nativeQuery = true)
+    List<Long> findPersonSourceIds(@Param("providerId") long providerId, @Param("subject") String subject);
+
+    @Query(value = """
+        SELECT DISTINCT p.id AS providerId,authors.subject AS subject
+                FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
+                JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+                CROSS JOIN LATERAL (
+                    SELECT d.created_by_subject AS subject UNION SELECT d.updated_by_subject
+                    UNION SELECT jsonb_array_elements_text(COALESCE(d.collaborator_subjects,'[]'::jsonb))
+                ) authors
+                 WHERE d.workspace_id=:workspaceId AND d.id=:artifactId AND authors.subject IS NOT NULL AND authors.subject<>''
+        """, nativeQuery = true)
+    List<PersonSourceIdentityRow> findPersonSourceIdentities(
+            @Param("workspaceId") long workspaceId, @Param("artifactId") long artifactId);
 }

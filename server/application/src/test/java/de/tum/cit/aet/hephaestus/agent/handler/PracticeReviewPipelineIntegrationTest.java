@@ -314,7 +314,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         agentJob.setWorkerId("test-worker");
         agentJob.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         agentJob.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        agentJob.setStatus(AgentJobStatus.COMPLETED);
+        agentJob.setStatus(AgentJobStatus.RUNNING);
         agentJob.setConfigSnapshot(AdmittedReviewJobFixtures.snapshot(
                 workspace,
                 llmConnectionRepository,
@@ -339,6 +339,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 evidenceFiles,
                 agentJob,
                 de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        agentJob.setStatus(AgentJobStatus.COMPLETED);
+        agentJob = agentJobRepository.saveAndFlush(agentJob);
         preparedJobIds.add(agentJob.getId());
 
         handler = handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW);
@@ -523,6 +525,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 })
                 .when(documentProjection)
                 .documentsForWorkspace(workspace.getId());
+        evidenceFiles.beginPersonCapture(next);
         var raw = folderBuilder.prepare(
                 new ContextRequest.PracticeReviewRequest(next),
                 de.tum.cit.aet.hephaestus.agent.context.EvidencePlan.compile(List.of(practice)));
@@ -735,7 +738,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setWorkerId("test-worker");
         next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        next.setStatus(AgentJobStatus.COMPLETED);
+        next.setStatus(AgentJobStatus.RUNNING);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
         JsonNode metadata = agentJob.getMetadata();
         org.junit.jupiter.api.Assertions.assertNotNull(metadata);
@@ -746,6 +749,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 evidenceFiles,
                 next,
                 de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        next.setStatus(AgentJobStatus.COMPLETED);
+        next = agentJobRepository.saveAndFlush(next);
         preparedJobIds.add(next.getId());
         return admitAndSetOutput(next, rawOutput);
     }
@@ -876,7 +881,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
         next.setWorkerId("test-worker");
         next.setPurpose(AgentPurpose.PRACTICE_REVIEW);
         next.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
-        next.setStatus(AgentJobStatus.COMPLETED);
+        next.setStatus(AgentJobStatus.RUNNING);
         next.setConfigSnapshot(agentJob.getConfigSnapshot());
         ObjectNode metadata = (ObjectNode)
                 java.util.Objects.requireNonNull(agentJob.getMetadata()).deepCopy();
@@ -895,6 +900,8 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                 evidenceFiles,
                 next,
                 de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(capturedFiles)));
+        next.setStatus(AgentJobStatus.COMPLETED);
+        next = agentJobRepository.saveAndFlush(next);
         preparedJobIds.add(next.getId());
         return admitAndSetOutput(next, rawOutput);
     }

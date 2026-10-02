@@ -25,6 +25,10 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean holdForWrite(List<PersonIdentity> identities) {
+        return holdIdentities(identities);
+    }
+
+    private boolean holdIdentities(List<PersonIdentity> identities) {
         requireFreshControlReads();
         lock(identities, true);
         for (var identity : identities) {
@@ -42,7 +46,7 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
                 "SELECT provider_id,native_id::text FROM \"user\" WHERE id=?",
                 (rs, row) -> new PersonIdentity(rs.getLong(1), java.util.Objects.requireNonNull(rs.getString(2)), null),
                 userId);
-        return !identities.isEmpty() && holdForWrite(identities);
+        return !identities.isEmpty() && holdIdentities(identities);
     }
 
     @Override

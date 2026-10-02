@@ -20,6 +20,14 @@ class ExactPersonDataCopyRecorderTest {
     private final PersonCopyIdentity second = new PersonCopyIdentity("SLACK", "https://slack.com", "U42", "T1");
 
     @Test
+    void shouldUseTheSameExactOriginForEquivalentUrlSpellings() {
+        assertThat(new PersonCopyIdentity("GITLAB", "HTTPS://GIT.EXAMPLE:443/", "42", null))
+                .isEqualTo(first);
+        assertThatThrownBy(() -> new PersonCopyIdentity("GITLAB", "not-an-origin", "42", null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void capturesOnlyExactKeysAndKeepsTheCopiedValue() {
         recorder.recordIdentity(second);
         var captured = recorder.capture(() -> {

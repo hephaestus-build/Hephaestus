@@ -36,12 +36,22 @@ public class OAuthStateNonceStore {
      * Record a freshly minted nonce. Persists immediately so a subsequent consume sees
      * the row even if the issuing transaction is separate.
      */
+    @Transactional
     public void issue(@Nullable String nonce, long workspaceId, IntegrationKind kind, Instant issuedAt) {
-        issue(nonce, workspaceId, kind, issuedAt, null);
+        issueRows(nonce, workspaceId, kind, issuedAt, null);
     }
 
     @Transactional
     public void issue(
+            @Nullable String nonce,
+            long workspaceId,
+            IntegrationKind kind,
+            Instant issuedAt,
+            @Nullable Long actorAccountId) {
+        issueRows(nonce, workspaceId, kind, issuedAt, actorAccountId);
+    }
+
+    private void issueRows(
             @Nullable String nonce,
             long workspaceId,
             IntegrationKind kind,

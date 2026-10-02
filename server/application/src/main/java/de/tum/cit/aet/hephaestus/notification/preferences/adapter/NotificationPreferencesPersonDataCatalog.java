@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.notification.preferences;
+package de.tum.cit.aet.hephaestus.notification.preferences.adapter;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;

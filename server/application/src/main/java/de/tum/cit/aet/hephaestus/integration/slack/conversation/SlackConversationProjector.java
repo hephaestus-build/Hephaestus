@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationThreadProjection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -37,13 +39,13 @@ public class SlackConversationProjector implements ConversationThreadProjection 
 
     private final SlackMessageRepository messageRepository;
     private final ObjectMapper objectMapper;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
+    private final PersonDataCopyRecorder personCopies;
 
     public SlackConversationProjector(
             SlackThreadRepository threadRepository,
             SlackMessageRepository messageRepository,
             ObjectMapper objectMapper,
-            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies) {
+            PersonDataCopyRecorder personCopies) {
         this.threadRepository = threadRepository;
         this.messageRepository = messageRepository;
         this.objectMapper = objectMapper;
@@ -203,8 +205,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      */
     private void recordNative(@Nullable String subject, String teamId) {
         if (subject != null && !subject.isBlank())
-            personCopies.recordIdentity(new de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity(
-                    "SLACK", "https://slack.com", subject, teamId));
+            personCopies.recordIdentity(new PersonCopyIdentity("SLACK", "https://slack.com", subject, teamId));
     }
 
     private boolean appendThreadMessages(long workspaceId, ThreadKey key, ArrayNode messages) {

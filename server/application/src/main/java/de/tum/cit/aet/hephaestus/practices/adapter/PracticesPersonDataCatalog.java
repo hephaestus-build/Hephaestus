@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.practices;
+package de.tum.cit.aet.hephaestus.practices.adapter;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;

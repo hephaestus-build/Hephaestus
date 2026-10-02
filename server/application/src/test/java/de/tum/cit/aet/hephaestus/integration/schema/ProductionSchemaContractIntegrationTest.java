@@ -79,6 +79,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Import({
     TestCacheConfiguration.class,
     SlackConversationProjector.class,
+    de.tum.cit.aet.hephaestus.core.privacy.ExactPersonDataCopyRecorder.class,
     ConfigAuditRetentionJob.class,
     ShedLockConfig.class,
     ProductionSchemaContractIntegrationTest.JsonConfiguration.class,
@@ -370,7 +371,7 @@ class ProductionSchemaContractIntegrationTest {
 
     /**
      * Foreign-key triggers are off for this one rolled-back insert, so only the row's own checks decide it: a
-     * restoration carries its time, actor and reason together, or none of them.
+     * restoration keeps its time even when person erasure clears its actor or free-text reason.
      */
     @ParameterizedTest(name = "{argumentSetName}")
     @MethodSource("restorationStates")
@@ -417,8 +418,9 @@ class ProductionSchemaContractIntegrationTest {
                 org.junit.jupiter.params.provider.Arguments.argumentSet(
                         "missing time", null, 1L, "Right after all", false),
                 org.junit.jupiter.params.provider.Arguments.argumentSet(
-                        "missing actor", now, null, "Right after all", false),
-                org.junit.jupiter.params.provider.Arguments.argumentSet("missing reason", now, 1L, null, false),
+                        "erased actor", now, null, "Right after all", true),
+                org.junit.jupiter.params.provider.Arguments.argumentSet("erased reason", now, 1L, null, true),
+                org.junit.jupiter.params.provider.Arguments.argumentSet("erased attribution", now, null, null, true),
                 org.junit.jupiter.params.provider.Arguments.argumentSet("blank reason", now, 1L, "   ", false));
     }
 
@@ -513,30 +515,39 @@ class ProductionSchemaContractIntegrationTest {
                 .isTrue();
     }
 
-    static Stream<org.junit.jupiter.params.provider.Arguments> invalidWithdrawalRestores() {
+    static Stream<org.junit.jupiter.params.provider.Arguments> withdrawalRestorationStates() {
         return Stream.of(
-                // A CHECK passes on UNKNOWN: a missing reason must fail on its own, not through btrim(NULL).
-                org.junit.jupiter.params.provider.Arguments.of("restored_at = now(), restored_by_account_id = %d"),
                 org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '"),
+                        "restored_at = now(), restored_by_account_id = %d", true),
                 org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_at = now(), restoration_reason = 'Right after all'"),
+                        "restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '", false),
                 org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_by_account_id = %d, restoration_reason = 'Right after all'"));
+                        "restored_at = now(), restoration_reason = 'Right after all'", true),
+                org.junit.jupiter.params.provider.Arguments.of("restored_at = now()", true),
+                org.junit.jupiter.params.provider.Arguments.of(
+                        "restored_by_account_id = %d, restoration_reason = 'Right after all'", false));
     }
 
     @ParameterizedTest
-    @MethodSource("invalidWithdrawalRestores")
-    void feedbackWithdrawalRejectsAnIncompleteRestore(String assignment) {
+    @MethodSource("withdrawalRestorationStates")
+    void feedbackWithdrawalKeepsRestorationFactsAfterAttributionErasure(String assignment, boolean accepted) {
         long account = Objects.requireNonNull(
                 accountRepository.save(new Account("Withdrawal actor")).getId());
         DispatchOwner owner = insertDispatchOwner("withdrawal-restore-" + UUID.randomUUID());
         UUID withdrawal =
                 insertWithdrawal(owner, insertFeedback(owner, "withdrawal-restore-" + UUID.randomUUID()), account);
 
-        assertThatThrownBy(() -> jdbcTemplate.update(
-                        "UPDATE feedback_withdrawal SET " + assignment.formatted(account) + " WHERE id = ?",
-                        withdrawal))
+        String update = "UPDATE feedback_withdrawal SET " + assignment.formatted(account) + " WHERE id = ?";
+        if (accepted) {
+            assertThat(jdbcTemplate.update(update, withdrawal)).isOne();
+            assertThat(jdbcTemplate.queryForObject(
+                            "SELECT restored_at IS NOT NULL FROM feedback_withdrawal WHERE id = ?",
+                            Boolean.class,
+                            withdrawal))
+                    .isTrue();
+            return;
+        }
+        assertThatThrownBy(() -> jdbcTemplate.update(update, withdrawal))
                 .isInstanceOf(DataIntegrityViolationException.class)
                 .hasMessageContaining("ck_feedback_withdrawal_restoration");
     }

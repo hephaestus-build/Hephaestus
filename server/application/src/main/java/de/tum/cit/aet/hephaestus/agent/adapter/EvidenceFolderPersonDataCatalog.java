@@ -1,10 +1,13 @@
-package de.tum.cit.aet.hephaestus.agent.context;
+package de.tum.cit.aet.hephaestus.agent.adapter;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobExecutor;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobStateConflictException;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.integration.core.fabric.FabricLayout;
+import de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -27,8 +30,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 @PersonDataStores({"person_evidence_copy"})
 @WorkspaceAgnostic("Exact-person receipts span workspaces; every job mutation also pins its workspace key")
-public class EvidenceFolderPersonDataCatalog
-        implements PersonEvidenceErasure, de.tum.cit.aet.hephaestus.workspace.spi.WorkspacePurgeContributor {
+public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, WorkspacePurgeContributor {
     private final FabricLayout layout;
     private final JdbcTemplate jdbc;
     private final NamedParameterJdbcTemplate namedJdbc;
@@ -36,7 +38,7 @@ public class EvidenceFolderPersonDataCatalog
     private final PersonDataCopyRecorder recorder;
     private final PersonDataCopyFence fence;
     private final ObjectProvider<AgentJobExecutor> executor;
-    private final ObjectProvider<de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService> lifecycles;
+    private final ObjectProvider<AgentJobLifecycleService> lifecycles;
     private final ThreadLocal<ActiveCapture> active = new ThreadLocal<>();
     private @Nullable UUID localStoreId;
 
@@ -48,7 +50,7 @@ public class EvidenceFolderPersonDataCatalog
             PersonDataCopyRecorder recorder,
             PersonDataCopyFence fence,
             ObjectProvider<AgentJobExecutor> executor,
-            ObjectProvider<de.tum.cit.aet.hephaestus.agent.job.AgentJobLifecycleService> lifecycles) {
+            ObjectProvider<AgentJobLifecycleService> lifecycles) {
         this.layout = layout;
         this.jdbc = jdbc;
         this.namedJdbc = namedJdbc;
@@ -107,8 +109,22 @@ public class EvidenceFolderPersonDataCatalog
             capture.receipt()
                     .set("repositories", mapper.valueToTree(capture.provenance().repositoryIds()));
             if (isSuppressed(
-                    capture.provenance().identities(), capture.admission().jdbc()))
+                    capture.provenance().identities(), capture.admission().jdbc())) {
+                // This capture still owns the folder lease; no runtime has received these inputs.
+                try {
+                    deleteFolder(capture.workspaceId(), capture.jobId());
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
+                }
+                int discarded = capture.admission()
+                        .jdbc()
+                        .update("""
+                    UPDATE person_evidence_copy SET state='ERASED',payload='{}'::jsonb
+                    WHERE id=? AND job_id=? AND workspace_id=? AND state='CAPTURING'
+                    """, capture.copyId(), capture.jobId(), capture.workspaceId());
+                if (discarded != 1) throw new IllegalStateException("Evidence capture ownership changed");
                 throw new IllegalStateException("Copied evidence contains an erased native identity");
+            }
             updateReceipt(capture);
             return capture.lease();
         } catch (RuntimeException exception) {
@@ -179,13 +195,29 @@ public class EvidenceFolderPersonDataCatalog
 
     private boolean isSuppressed(
             List<PersonCopyIdentity> identities, org.springframework.jdbc.core.JdbcOperations controls) {
-        return Boolean.TRUE.equals(controls.queryForObject("""
-            SELECT EXISTS(SELECT 1 FROM jsonb_to_recordset(CAST(? AS jsonb))
-              AS i("providerType" text,"providerOrigin" text,subject text,"teamId" text)
-              JOIN identity_provider p ON p.type=i."providerType" AND p.server_url=i."providerOrigin"
-              JOIN person_suppression s ON s.provider_id=p.id AND s.subject=i.subject
-              WHERE s.team_key=COALESCE(i."teamId",'') OR (p.type='OUTLINE' AND s.team_key=''))
-            """, Boolean.class, mapper.writeValueAsString(identities)));
+        if (identities.isEmpty()) return false;
+        var blocked = controls.query(
+                """
+            SELECT DISTINCT p.type,p.server_url,s.subject,NULLIF(s.team_key,'')
+            FROM person_suppression s JOIN identity_provider p ON p.id=s.provider_id
+            WHERE s.subject=ANY(?)
+            """,
+                (rs, row) -> new PersonCopyIdentity(
+                        Objects.requireNonNull(rs.getString(1)), Objects.requireNonNull(rs.getString(2)),
+                        Objects.requireNonNull(rs.getString(3)), rs.getString(4)),
+                new org.springframework.jdbc.support.SqlArrayValue(
+                        "text",
+                        identities.stream()
+                                .map(PersonCopyIdentity::subject)
+                                .distinct()
+                                .toArray()));
+        return blocked.stream()
+                .anyMatch(control -> identities.stream()
+                        .anyMatch(identity -> control.providerType().equals(identity.providerType())
+                                && control.providerOrigin().equals(identity.providerOrigin())
+                                && control.subject().equals(identity.subject())
+                                && (Objects.equals(control.teamId(), identity.teamId())
+                                        || (control.providerType().equals("OUTLINE") && control.teamId() == null))));
     }
 
     @Override
@@ -228,21 +260,25 @@ public class EvidenceFolderPersonDataCatalog
 
             @Override
             public long erase(PersonDataSelection selection) {
-                if (!allRemoved(selection)) throw new IllegalStateException("Evidence removal is not acknowledged");
-                long count = 0;
-                for (var key : selection.rows())
-                    count += jdbc.update(
-                            """
+                return eraseAcknowledgedCopies(selection);
+            }
+        });
+    }
+
+    private long eraseAcknowledgedCopies(PersonDataSelection selection) {
+        if (!allRemoved(selection)) throw new IllegalStateException("Evidence removal is not acknowledged");
+        long count = 0;
+        for (var key : selection.rows())
+            count += jdbc.update(
+                    """
                     UPDATE person_evidence_copy SET payload='{}'::jsonb
                     WHERE id=CAST(? AS uuid) AND job_id=? AND workspace_id=? AND state='ERASED'
                       AND payload<>'{}'::jsonb
                     """,
-                            key.columns().get("copy_id"),
-                            UUID.fromString(key.columns().get("job_id")),
-                            Long.parseLong(key.columns().get("workspace_id")));
-                return count;
-            }
-        });
+                    key.columns().get("copy_id"),
+                    UUID.fromString(key.columns().get("job_id")),
+                    Long.parseLong(key.columns().get("workspace_id")));
+        return count;
     }
 
     private PersonDataSelection selectCopies(PersonScope person) {
@@ -252,6 +288,17 @@ public class EvidenceFolderPersonDataCatalog
     private PersonDataSelection selectCopies(PersonScope person, boolean includeUnknown) {
         var parameters = new HashMap<>(JdbcPersonDataStore.parameters(person, mapper));
         parameters.put("includeUnknown", includeUnknown);
+        var identities = jdbc.query(
+                """
+            SELECT p.type,p.server_url,i.subject,i."teamId"
+            FROM jsonb_to_recordset(CAST(? AS jsonb)) AS i("providerId" bigint,subject text,"teamId" text)
+            JOIN identity_provider p ON p.id=i."providerId"
+            """,
+                (rs, row) -> new PersonCopyIdentity(
+                        Objects.requireNonNull(rs.getString(1)), Objects.requireNonNull(rs.getString(2)),
+                        Objects.requireNonNull(rs.getString(3)), rs.getString(4)),
+                mapper.writeValueAsString(person.identities()));
+        parameters.put("copyIdentities", mapper.writeValueAsString(identities));
         return new PersonDataSelection(namedJdbc.query(
                 """
             SELECT c.job_id,c.id,c.workspace_id FROM person_evidence_copy c
@@ -259,10 +306,10 @@ public class EvidenceFolderPersonDataCatalog
               (EXISTS(
                 SELECT 1 FROM jsonb_to_recordset(COALESCE(c.payload->'identities','[]'::jsonb))
                   AS k("providerType" text,"providerOrigin" text,subject text,"teamId" text)
-                JOIN jsonb_to_recordset(CAST(:identities AS jsonb)) AS i("providerId" bigint,subject text,"teamId" text)
-                  ON i.subject=k.subject
-                JOIN identity_provider p ON p.id=i."providerId" AND p.type=k."providerType" AND p.server_url=k."providerOrigin"
-                WHERE COALESCE(k."teamId",'')=COALESCE(i."teamId",'') OR (p.type='OUTLINE' AND i."teamId" IS NULL))
+                JOIN jsonb_to_recordset(CAST(:copyIdentities AS jsonb))
+                  AS i("providerType" text,"providerOrigin" text,subject text,"teamId" text)
+                  ON i.subject=k.subject AND i."providerType"=k."providerType" AND i."providerOrigin"=k."providerOrigin"
+                WHERE COALESCE(k."teamId",'')=COALESCE(i."teamId",'') OR (i."providerType"='OUTLINE' AND i."teamId" IS NULL))
                 OR (:includeUnknown AND EXISTS(SELECT 1 FROM jsonb_array_elements_text(COALESCE(c.payload->'repositories','[]'::jsonb)) repository_id
                   JOIN git_commit gc ON gc.repository_id=repository_id.value::bigint
                   WHERE gc.author_id=ANY(:users) OR gc.committer_id=ANY(:users)
@@ -325,7 +372,7 @@ public class EvidenceFolderPersonDataCatalog
             if (Boolean.TRUE.equals(running)) {
                 try {
                     lifecycles.getObject().cancel(workspaceId, jobId);
-                } catch (de.tum.cit.aet.hephaestus.agent.job.AgentJobStateConflictException raced) {
+                } catch (AgentJobStateConflictException raced) {
                     if (Boolean.TRUE.equals(jdbc.queryForObject(
                             "SELECT EXISTS(SELECT 1 FROM agent_job WHERE id=? AND workspace_id=? AND status IN ('QUEUED','RUNNING'))",
                             Boolean.class,
@@ -395,12 +442,7 @@ public class EvidenceFolderPersonDataCatalog
                     if (acquired.isEmpty()) return;
                     var lease = acquired.get();
                     try (lease) {
-                        var folder = layout.jobsRoot()
-                                .resolve(Long.toString(workspaceId))
-                                .resolve(jobId.toString());
-                        FileUtils.deleteDirectory(folder.toFile());
-                        if (Files.exists(folder, LinkOption.NOFOLLOW_LINKS))
-                            throw new IllegalStateException("Evidence folder remains");
+                        deleteFolder(workspaceId, jobId);
                         jdbc.update("""
                     UPDATE person_evidence_copy SET state='ERASED',
                         payload=CASE WHEN state='PURGE_REQUESTED'
@@ -412,6 +454,12 @@ public class EvidenceFolderPersonDataCatalog
                     }
                 },
                 owner);
+    }
+
+    private void deleteFolder(long workspaceId, UUID jobId) throws IOException {
+        var folder = layout.jobsRoot().resolve(Long.toString(workspaceId)).resolve(jobId.toString());
+        FileUtils.deleteDirectory(folder.toFile());
+        if (Files.exists(folder, LinkOption.NOFOLLOW_LINKS)) throw new IllegalStateException("Evidence folder remains");
     }
 
     private synchronized UUID storeId() {

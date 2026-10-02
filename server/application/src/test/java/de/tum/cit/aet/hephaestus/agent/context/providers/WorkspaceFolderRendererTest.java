@@ -37,10 +37,10 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.json.JsonMapper;
 
 class WorkspaceFolderRendererTest extends BaseUnitTest {
-    private static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolderPersonDataCatalog personCopies() {
+    private static de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog personCopies() {
         AutoCloseable released = () -> {};
         return org.mockito.Mockito.mock(
-                de.tum.cit.aet.hephaestus.agent.context.EvidenceFolderPersonDataCatalog.class,
+                de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog.class,
                 invocation -> invocation.getMethod().getName().equals("finishCapture")
                         ? released
                         : org.mockito.Answers.RETURNS_DEFAULTS.answer(invocation));

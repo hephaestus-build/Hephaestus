@@ -113,6 +113,8 @@ class SlackIntegrationArchitectureTest extends HephaestusArchitectureTest {
      * a workspace. Their callers carry {@code @WorkspaceAgnostic}; everything else must take a workspace id.
      */
     private static final Set<String> UNSCOPED_ALLOWLIST = Set.of(
+            // Instance-admin person scope spans workspaces but pins an exact provider/native key.
+            "SlackThreadRepository.findPersonSourceIds",
             "SlackMessageRepository.findDistinctWorkspaceIds",
             "SlackMonitoredChannelRepository.findDistinctWorkspaceIdsByConsentState",
             // The agent-owned ConversationCandidateSource SPI's settled-thread scan is an inherently cross-workspace

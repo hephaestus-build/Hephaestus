@@ -93,6 +93,47 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldResolveEquivalentProviderOriginsUsingOnlyExactNativeKeys() {
+        String host = UUID.randomUUID() + ".example.com";
+        var canonical = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://" + host));
+        var alias = providers.saveAndFlush(new IdentityProvider(
+                IdentityProviderType.GITLAB, "HTTPS://" + host.toUpperCase(java.util.Locale.ROOT) + ":443/"));
+        var target = user(canonical, 42);
+        var aliasTarget = user(alias, 42);
+        var unrelated = user(alias, 84);
+        var account = accounts.saveAndFlush(new Account("not-a-resolution-key"));
+        link(account, canonical, "42", null, target.getId());
+
+        var expected = List.of(identity(canonical, "42", null), identity(alias, "42", null));
+        var providerScope = resolver.resolve(null, List.of(identity(alias, "42", null)));
+        assertThat(providerScope.accountId()).isEqualTo(account.getId());
+        assertThat(providerScope.identities()).containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(providerScope.userIds())
+                .containsExactlyInAnyOrder(target.getId(), aliasTarget.getId())
+                .doesNotContain(unrelated.getId());
+        assertThat(resolver.resolve(account.getId(), List.of()).identities())
+                .containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    @Test
+    void shouldRejectAnotherAccountsExactNativeLinkOnAnEquivalentProviderOrigin() {
+        String host = UUID.randomUUID() + ".example.com";
+        var canonical = providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "https://" + host));
+        var alias =
+                providers.saveAndFlush(new IdentityProvider(IdentityProviderType.GITLAB, "HTTPS://" + host + ":443/"));
+        var first = accounts.saveAndFlush(new Account("first"));
+        var second = accounts.saveAndFlush(new Account("second"));
+        link(first, canonical, "42", null, null);
+        link(second, alias, "42", null, null);
+        assertThatThrownBy(() -> resolver.resolve(null, List.of(identity(canonical, "42", null))))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("409");
+        assertThatThrownBy(() -> resolver.resolve(first.getId(), List.of()))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("409");
+    }
+
+    @Test
     void shouldHaveExactlyOneSourceAttributionOwnerForEachShippedArtifactKind() {
         var kinds = sourceOwners.stream()
                 .flatMap(owner -> owner.artifactKinds().stream())

@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.integration.outline;
+package de.tum.cit.aet.hephaestus.integration.outline.adapter;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;

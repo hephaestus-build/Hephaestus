@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.mentor;
+package de.tum.cit.aet.hephaestus.mentor.adapter;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import java.util.*;
