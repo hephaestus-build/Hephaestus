@@ -73,9 +73,7 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
         }
 
         if (key.signalName().equals(ScmSignals.ISSUE_UPDATED)
-                && (issue.getState() == Issue.State.CLOSED
-                        || !key.revision()
-                                .equals(ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue))))) {
+                && !key.revision().equals(ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue)))) {
             signalRecorder.markRefused(key, SignalStateReason.COALESCED);
             return;
         }

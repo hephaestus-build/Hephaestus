@@ -49,6 +49,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
@@ -912,9 +913,13 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
             verify(milestoneRepository, never()).findByNumberAndRepositoryId(anyInt(), anyLong());
         }
 
-        @Test
-        void processFromSyncNoEventForExisting() {
+        @ParameterizedTest
+        @EnumSource(
+                value = Issue.State.class,
+                names = {"OPEN", "CLOSED"})
+        void shouldNotPublishAnUpdateForAnUnchangedExistingIssue(Issue.State state) {
             Issue issue = createIssueEntity();
+            issue.setState(state);
             // Issue already exists
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, ISSUE_IID))
                     .thenReturn(Optional.of(issue))
@@ -925,7 +930,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     "5",
                     "Title",
                     null,
-                    "opened",
+                    state.name(),
                     false,
                     "https://example.com",
                     null,
@@ -945,7 +950,54 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     null);
             processor.processFromSync(syncData, testRepo, 1L);
 
-            verify(eventPublisher, never()).publishEvent(any());
+            verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.IssueUpdated.class));
+        }
+
+        @ParameterizedTest
+        @EnumSource(
+                value = Issue.State.class,
+                names = {"OPEN", "CLOSED"})
+        void shouldPublishSyncDiscoveredBodyChangesForExistingIssues(Issue.State state) {
+            Issue previous = createIssueEntity();
+            previous.setState(state);
+            previous.setBody("Unconfirmed outcome");
+            Issue current = createIssueEntity();
+            current.setState(state);
+            current.setBody("Outcome confirmed");
+            when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, ISSUE_IID))
+                    .thenReturn(Optional.of(previous))
+                    .thenReturn(Optional.of(current));
+            var syncData = new GitLabIssueProcessor.SyncIssueData(
+                    "gid://gitlab/Issue/422296",
+                    "5",
+                    current.getTitle(),
+                    current.getBody(),
+                    state.name(),
+                    false,
+                    "https://example.com",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+
+            processor.processFromSync(syncData, testRepo, 1L);
+
+            var event = ArgumentCaptor.forClass(ScmDomainEvent.IssueUpdated.class);
+            verify(eventPublisher).publishEvent(event.capture());
+            assertThat(event.getValue().changedFields()).containsExactly("body");
+            assertThat(event.getValue().context().isSync()).isTrue();
+            assertThat(event.getValue().issue().state()).isEqualTo(state);
         }
 
         @Test

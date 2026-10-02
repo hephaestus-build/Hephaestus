@@ -122,11 +122,6 @@ public class IssueUpdateCoalescer {
             pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.ARTIFACT_NOT_VISIBLE));
             return;
         }
-        if (issue.getState() == Issue.State.CLOSED) {
-            // Closing has its own review occasion.
-            pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.COALESCED));
-            return;
-        }
         if (coolingDown(signals, owner, reviewProperties, ScmSignals.ISSUE, issueId, ScmSignals.ISSUE_UPDATED, now)) {
             return;
         }

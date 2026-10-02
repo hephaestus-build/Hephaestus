@@ -378,7 +378,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             eventPublisher.publishEvent(
                     new ScmDomainEvent.IssueCreated(ScmEventPayload.IssueData.from(issue), EventContext.from(ctx)));
             log.debug("Created issue from sync: issueId={}, iid={}", nativeId, data.iid());
-        } else if (previous != null && issueState == Issue.State.OPEN) {
+        } else if (previous != null) {
             ScmEventPayload.IssueData current = ScmEventPayload.IssueData.from(issue);
             Set<String> changedFields = changedReviewFields(previous, current);
             if (!changedFields.isEmpty()) {

@@ -146,16 +146,27 @@ class IssueUpdateCoalescerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldLeaveTheRetrospectiveToTheCloseOccasion() {
+    void shouldSubmitTheCurrentClosedSnapshotAndRetireTheEarlierOpenEdit() {
         Issue issue = issue();
+        ArtifactSignal old = signal(
+                ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue))
+                        .value(),
+                60);
         issue.setState(Issue.State.CLOSED);
+        issue.setBody("Outcome confirmed");
+        ArtifactSignal current = signal(
+                ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue))
+                        .value(),
+                30);
         stubOwningWorkspace();
-        ArtifactSignal old = signal("old", 60);
-        when(signals.lockDeferred(7L, 42L, ScmSignals.ISSUE_UPDATED.value())).thenReturn(List.of(old));
+        when(signals.lockDeferred(7L, 42L, ScmSignals.ISSUE_UPDATED.value())).thenReturn(List.of(old, current));
         when(issues.findByIdWithRepositoryAndAssignees(42L)).thenReturn(Optional.of(issue));
+
         coalescer.drain(7L, 42L, NOW);
+
         verify(recorder).markRefused(old.key(), SignalStateReason.COALESCED);
-        verifyNoInteractions(submitter);
+        verify(submitter).resubmit(current);
+        verifyNoMoreInteractions(submitter, recorder);
     }
 
     @Test
