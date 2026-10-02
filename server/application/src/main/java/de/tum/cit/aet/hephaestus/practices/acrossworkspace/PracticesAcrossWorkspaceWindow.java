@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.PracticeStandingService;
  * The span the page reads evidence over. Each window is checked against {@link CohortPrivacyPolicy} on its own.
  *
  * <p>{@link #TERM} is the standing's own look-back for now. Which dates a term spans, and who sets them for a
- * workspace, is an open decision recorded in ADR 0050; until it is taken a term reads the same evidence as
+ * workspace, is an open decision recorded in ADR 0051; until it is taken a term reads the same evidence as
  * {@link #DAYS_90}.
  */
 public enum PracticesAcrossWorkspaceWindow {
