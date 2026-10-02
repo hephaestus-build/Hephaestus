@@ -168,6 +168,13 @@ public class ObservationAdmissionService {
             // The publish transaction rolled back before this separate refusal write.
             recordRefusal(identity, refusal.reasonCode(), refusal.reason(), refusal.verificationFailures());
             throw refusal;
+        } catch (JobDeliveryException inadmissible) {
+            recordRefusal(
+                    identity,
+                    INADMISSIBLE_REASON_CODE,
+                    String.valueOf(inadmissible.getMessage()),
+                    JsonNodeFactory.instance.arrayNode());
+            throw inadmissible;
         }
     }
 

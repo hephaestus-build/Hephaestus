@@ -982,6 +982,82 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(Set.of(AgentJobStatus.RUNNING)));
         }
 
+        @ParameterizedTest
+        @MethodSource("failedOutputs")
+        void shouldUseFreshAdmissionForFailedOutput(
+                boolean admitted,
+                String rawOutput,
+                AgentJobStatus expected,
+                @org.jspecify.annotations.Nullable DeliveryStatus expectedDelivery) {
+            job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
+            stubClaimableJob();
+            JobTypeHandler handler =
+                    setupFullExecution(new SandboxResult(2, Map.of(), "runner failed", false, Duration.ofSeconds(5)));
+            when(practiceAgent.parseResult(any())).thenReturn(new AgentResult(false, Map.of("rawOutput", rawOutput)));
+            AgentJob fresh = freshJob();
+            fresh.setMetadata(objectMapper
+                    .createObjectNode()
+                    .put(ObservationAdmissionService.DIGEST_METADATA_KEY, admitted ? "accepted" : ""));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.findById(jobId)).thenReturn(Optional.of(fresh));
+            when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
+                    .thenReturn(1);
+            when(jobRepository.findLlmUsageById(jobId))
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(2, 100, 50, 0, 0, 0)));
+
+            executor.processJob(jobId);
+
+            verify(jobRepository)
+                    .transitionStatus(
+                            eq(jobId),
+                            eq(expected),
+                            any(),
+                            expected == AgentJobStatus.FAILED ? eq("Container exited with code 2") : isNull(),
+                            eq(Set.of(AgentJobStatus.RUNNING)));
+            assertThat(fresh.getExitCode()).isEqualTo(2);
+            assertThat(requireNonNull(fresh.getOutput()).path("rawOutput").asString())
+                    .isEqualTo(rawOutput);
+            assertThat(fresh.getDeliveryStatus()).isEqualTo(expectedDelivery);
+            verify(handler, times(expected == AgentJobStatus.COMPLETED ? 1 : 0)).deliver(fresh);
+            verify(jobRepository, times(expected == AgentJobStatus.COMPLETED ? 1 : 0))
+                    .updateDeliveryStatus(eq(jobId), eq(DeliveryStatus.DELIVERED), isNull());
+            ArgumentCaptor<LlmUsageRecorder.LlmUsageSample> sample =
+                    ArgumentCaptor.forClass(LlmUsageRecorder.LlmUsageSample.class);
+            verify(usageRecorder).record(eq(99L), sample.capture());
+            assertThat(sample.getValue().totalCalls()).isEqualTo(2);
+            assertThat(sample.getValue().inputTokens()).isEqualTo(100);
+            assertThat(sample.getValue().outputTokens()).isEqualTo(50);
+        }
+
+        private static Stream<Arguments> failedOutputs() {
+            return Stream.of(
+                    Arguments.of(false, "local draft", AgentJobStatus.FAILED, null),
+                    Arguments.of(true, "accepted output", AgentJobStatus.COMPLETED, DeliveryStatus.PENDING),
+                    Arguments.of(true, "", AgentJobStatus.FAILED, null));
+        }
+
+        @Test
+        void shouldNotDeliverOrBillFailedOutputWhenTheTerminalFenceIsLost() {
+            stubClaimableJob();
+            JobTypeHandler handler =
+                    setupFullExecution(new SandboxResult(2, Map.of(), "runner failed", false, Duration.ofSeconds(5)));
+            when(practiceAgent.parseResult(any()))
+                    .thenReturn(new AgentResult(false, Map.of("rawOutput", "accepted output")));
+            AgentJob fresh = freshJob();
+            fresh.setMetadata(
+                    objectMapper.createObjectNode().put(ObservationAdmissionService.DIGEST_METADATA_KEY, "accepted"));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(fresh));
+
+            executor.processJob(jobId);
+
+            assertThat(fresh.getOutput()).isNull();
+            assertThat(fresh.getDeliveryStatus()).isNull();
+            verify(handler, never()).deliver(any());
+            verify(jobRepository, never()).saveAndFlush(any());
+            verify(usageRecorder, never()).record(any(), any());
+            verify(usageRecorder, never()).recordUnverifiable(any(), any());
+        }
+
         @Test
         void emitsEnvelopeMismatchOnExit42() {
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -2614,6 +2690,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
     }
 
     private JobTypeHandler setupFullExecution(SandboxResult sandboxResult) {
+        lenient()
+                .when(jobRepository.findByIdWithWorkspaceForUpdate(jobId))
+                .thenAnswer(invocation -> Optional.of(freshJob()));
         // Every execution stamps its provenance digests before the sandbox starts, and fails loud if the write
         // matches no row — so the standard path must report the row it updated.
         lenient()

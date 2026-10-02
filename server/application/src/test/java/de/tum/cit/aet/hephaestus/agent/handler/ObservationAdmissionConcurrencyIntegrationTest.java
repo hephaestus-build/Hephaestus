@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.AdmissionIdentity;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.StaleAttemptException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedObservations;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
@@ -47,6 +49,52 @@ class ObservationAdmissionConcurrencyIntegrationTest extends BaseIntegrationTest
 
     @Autowired
     private JsonMapper mapper;
+
+    @Test
+    void shouldKeepPublicationRefusalAfterItsWritesRollBack() {
+        var workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace(
+                "publish-refusal-" + UUID.randomUUID().toString().substring(0, 8)));
+        var job = new AgentJob();
+        job.setWorkspace(workspace);
+        job.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        job.setConfigSnapshot(mapper.createObjectNode());
+        job.setStatus(AgentJobStatus.RUNNING);
+        job.setWorkerId("publishing-worker");
+        job.setMetadata(mapper.createObjectNode().put("preserved", "value"));
+        var saved = jobs.saveAndFlush(job);
+        var identity = new AdmissionIdentity(saved.getId(), workspace.getId(), 0, "publishing-worker");
+        PreparedObservations publication = admitted -> {
+            admitted.setMetadata(mapper.createObjectNode().put("rolled_back", true));
+            jobs.saveAndFlush(admitted);
+            throw new JobDeliveryException("Reviewed work changed after submission");
+        };
+        org.mockito.Mockito.doReturn(publication)
+                .when(reviewHandler)
+                .prepareObservations(
+                        org.mockito.ArgumentMatchers.argThat(
+                                candidate -> candidate.getId().equals(saved.getId())),
+                        org.mockito.ArgumentMatchers.any());
+
+        assertThatThrownBy(() -> admission.admit(identity, mapper.createArrayNode()))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessage("Reviewed work changed after submission");
+
+        var reloaded = jobs.findById(saved.getId()).orElseThrow();
+        var metadata = java.util.Objects.requireNonNull(reloaded.getMetadata());
+        assertThat(metadata.path("preserved").asString()).isEqualTo("value");
+        assertThat(metadata.has("rolled_back")).isFalse();
+        assertThat(metadata.path(ObservationAdmissionService.REFUSAL_METADATA_KEY)
+                        .path("reasonCode")
+                        .asString())
+                .isEqualTo(ObservationAdmissionService.INADMISSIBLE_REASON_CODE);
+        assertThat(metadata.path(ObservationAdmissionService.REFUSAL_METADATA_KEY)
+                        .path("reason")
+                        .asString())
+                .isEqualTo("Reviewed work changed after submission");
+        assertThat(ObservationAdmissionService.isAdmitted(reloaded)).isFalse();
+        assertThat(reloaded.getStatus()).isEqualTo(AgentJobStatus.RUNNING);
+    }
 
     @Test
     void shouldRejectStaleRefusalWhenOwnershipChangesWhileWaitingForTheJobLock() throws Exception {
