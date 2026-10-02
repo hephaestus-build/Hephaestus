@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.ClientDisconnectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import java.io.IOException;
+import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -37,6 +38,8 @@ final class MentorSseChannel implements MentorChannel {
     private static final long HEARTBEAT_TICK_MS = 5_000;
     private static final long HEARTBEAT_INITIAL_DELAY_MS = 1_000;
 
+    private final long workspaceId;
+    private final UUID threadId;
     private final SseEmitter emitter;
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService scheduler;
@@ -64,7 +67,14 @@ final class MentorSseChannel implements MentorChannel {
 
     private volatile @Nullable ScheduledFuture<?> heartbeat;
 
-    MentorSseChannel(SseEmitter emitter, ObjectMapper objectMapper, ScheduledExecutorService scheduler) {
+    MentorSseChannel(
+            long workspaceId,
+            UUID threadId,
+            SseEmitter emitter,
+            ObjectMapper objectMapper,
+            ScheduledExecutorService scheduler) {
+        this.workspaceId = workspaceId;
+        this.threadId = threadId;
         this.emitter = emitter;
         this.objectMapper = objectMapper;
         this.scheduler = scheduler;
@@ -76,21 +86,19 @@ final class MentorSseChannel implements MentorChannel {
      * binding completes.
      */
     void bindLifecycle() {
-        emitter.onCompletion(this::flagDisconnected);
+        emitter.onCompletion(() -> flagDisconnected("completion"));
         emitter.onTimeout(() -> {
             // INFO because emitter timeout (controller default 10 min) means the request
             // outlived the SSE window — operationally interesting; the runner may still be
             // alive on the server while the browser long-disconnected without a close.
-            log.info("Mentor SSE emitter timed out; flagging disconnected");
-            flagDisconnected();
+            flagDisconnected("timeout");
             try {
                 emitter.complete();
             } catch (RuntimeException ignored) {
             }
         });
         emitter.onError(throwable -> {
-            log.debug("SseEmitter error on mentor turn: {}", throwable.toString());
-            flagDisconnected();
+            flagDisconnected("emitter_error");
         });
     }
 
@@ -141,12 +149,7 @@ final class MentorSseChannel implements MentorChannel {
                             emitter.send(SseEmitter.event().comment("ping"));
                             lastSendNanos.set(System.nanoTime());
                         } catch (IOException | IllegalStateException ex) {
-                            // Real disconnect: flip and stop. Spring's emitter callbacks fire and
-                            // unwind the orchestrator naturally. DEBUG-log so a flaky proxy that
-                            // closes the socket between chunks is observable (the lifecycle
-                            // callbacks also fire, but this path can win the race).
-                            log.debug("Heartbeat send failed; flagging disconnected: {}", ex.toString());
-                            flagDisconnected();
+                            flagDisconnected("heartbeat_write_failed");
                         }
                     } finally {
                         writeLock.unlock();
@@ -186,10 +189,10 @@ final class MentorSseChannel implements MentorChannel {
                     finishDelivered.set(true);
                 }
             } catch (IOException e) {
-                flagDisconnected();
+                flagDisconnected("chunk_write_failed");
                 throw new ClientDisconnectedException("SSE send failed: " + e.getMessage(), e);
             } catch (IllegalStateException ex) {
-                flagDisconnected();
+                flagDisconnected("emitter_closed");
                 throw new ClientDisconnectedException("SSE emitter closed: " + ex.getMessage(), ex);
             }
         } finally {
@@ -261,8 +264,14 @@ final class MentorSseChannel implements MentorChannel {
         }
     }
 
-    private void flagDisconnected() {
+    private void flagDisconnected(String cause) {
         if (clientGone.compareAndSet(false, true)) {
+            log.info(
+                    "Mentor SSE lifecycle: workspaceId={}, threadId={}, cause={}, terminalClosed={}",
+                    workspaceId,
+                    threadId,
+                    cause,
+                    closed.get());
             Runnable hook = disconnectHook.getAndSet(null);
             if (hook != null) {
                 try {

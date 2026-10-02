@@ -836,6 +836,15 @@ function forwardEvent(state: ThreadState, event: AgentSessionEvent) {
 			log(`assistant end: ${event.message.stopReason}`);
 		}
 	}
+	if (
+		event.type === "message_end" &&
+		event.message.role === "assistant" &&
+		(event.message.stopReason === "aborted" || event.message.stopReason === "error")
+	) {
+		log(
+			`assistant ended: thread=${state.threadId} stopReason=${event.message.stopReason} abortRequested=${state.abortRequested}`,
+		);
+	}
 	// agent_end is attempt-level; expose only the final attempt after agent_settled.
 	if (event.type === "agent_end") {
 		state.lastAgentEnd = event;
@@ -1086,6 +1095,7 @@ async function handleAbort(id: JsonRpcId | undefined, params: MentorParams) {
 		sendError(id, ERR.INVALID_STATE, "no turn in flight for this thread");
 		return;
 	}
+	log(`abort received: thread=${threadId}`);
 	state.abortRequested = true;
 	// A stopped turn shows nothing more, so no server answer may complete one of its tool calls.
 	rejectPendingCallbacks(state, "turn stopped before the server answered");
@@ -1093,6 +1103,7 @@ async function handleAbort(id: JsonRpcId | undefined, params: MentorParams) {
 		const rt = await bindThread(state);
 		rt.session.abortCompaction();
 		await rt.session.abort();
+		log(`abort settled: thread=${threadId}`);
 		sendResult(id, { aborted: true });
 	} catch (error) {
 		sendError(id, ERR.PI_ERROR, `abort failed: ${errorText(error)}`);

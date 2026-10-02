@@ -211,7 +211,7 @@ function spawnRunner(t: TestContext, env: Record<string, string> = {}): RunnerHa
 				}
 				assert.match(
 					message,
-					/^(?:runtime initialised|shutdown requested — exiting|bound thread [\da-f-]+ → .+\.jsonl|restored session for thread [\da-f-]+|prompt resolved: thread=[\da-f-]+)$/u,
+					/^(?:runtime initialised|shutdown requested — exiting|bound thread [\da-f-]+ → .+\.jsonl|restored session for thread [\da-f-]+|prompt resolved: thread=[\da-f-]+|abort (?:received|settled): thread=[\da-f-]+|assistant ended: thread=[\da-f-]+ stopReason=(?:aborted|error) abortRequested=(?:true|false))$/u,
 				);
 			}
 		} catch (error) {
