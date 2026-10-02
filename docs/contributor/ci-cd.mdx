@@ -709,7 +709,10 @@ digest an earlier run published and re-tags it to this run's head SHA. It is ali
 nearest commit the default branch contains, found by walking up the chain of bases — a layer of a
 stacked pull request is based on another branch's head, which published nothing — and a run that
 reaches no such commit builds every image itself. `detect-changes` resolves that commit once, with
-`scripts/resolve-alias-base.ts`, and hands it to the image jobs as `alias_base`.
+`scripts/resolve-alias-base.ts`, and hands it to the image jobs as `alias_base`. For a pull request,
+the walk starts at the checked-out merge commit's first parent, which identifies the base the run
+actually tests. The PR event can carry an older base after the target branch advances; using it
+would combine newly built server code with an older agent image.
 
 ## Parallelism and concurrency
 

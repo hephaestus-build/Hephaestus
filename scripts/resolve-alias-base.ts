@@ -13,6 +13,20 @@ import { requiredEnv } from "./lib/env.ts";
 import { compareStatus } from "./lib/github.ts";
 import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { output } from "./lib/process.ts";
+import { isCommit } from "./reconcile-deployment.ts";
+
+/**
+ * A PR event can name an older base than the merge tree GitHub checks out. Only that tree's first
+ * parent names the inputs the run actually tests; the event's stale base can mix runtime contracts.
+ */
+export function pullRequestBase(revision: string): string {
+	const parents = revision.trim().split(/\s+/u);
+	const base = parents[1];
+	if (parents.length !== 3 || base === undefined || !parents.every(isCommit)) {
+		throw new Error("Image reuse requires the checked-out pull request's two-parent merge commit");
+	}
+	return base;
+}
 
 export interface BaseChain {
 	/** Where `head` stands relative to `base`, as GitHub's compare API reports it. */
@@ -42,28 +56,28 @@ export async function resolveAliasBase(
 
 if (import.meta.main) {
 	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
-	const commit = await resolveAliasBase(
-		requiredEnv(process.env, "BASE_SHA"),
-		requiredEnv(process.env, "DEFAULT_BRANCH"),
-		{
-			compare: async (base, head) => compareStatus(repository, base, head),
-			// A commit the default branch does not contain answers with the open pull requests whose
-			// branches carry it; only the one it is the head of names the next base up.
-			baseOf: async (head): Promise<string | undefined> => {
-				const pulls = asArray(
-					parseJson(await output("gh", ["api", `repos/${repository}/commits/${head}/pulls`])),
-					"pull requests",
-				);
-				for (const [index, value] of pulls.entries()) {
-					const pull = asRecord(value, `pull requests[${index}]`);
-					const sha = asString(asRecord(pull.head, "pull request head").sha, "head.sha");
-					if (sha === head) {
-						return asString(asRecord(pull.base, "pull request base").sha, "base.sha");
-					}
+	const startingBase =
+		process.env.GITHUB_EVENT_NAME === "pull_request"
+			? pullRequestBase(await output("git", ["rev-list", "--parents", "-n", "1", "HEAD"]))
+			: requiredEnv(process.env, "BASE_SHA");
+	const commit = await resolveAliasBase(startingBase, requiredEnv(process.env, "DEFAULT_BRANCH"), {
+		compare: async (base, head) => compareStatus(repository, base, head),
+		// A commit the default branch does not contain answers with the open pull requests whose
+		// branches carry it; only the one it is the head of names the next base up.
+		baseOf: async (head): Promise<string | undefined> => {
+			const pulls = asArray(
+				parseJson(await output("gh", ["api", `repos/${repository}/commits/${head}/pulls`])),
+				"pull requests",
+			);
+			for (const [index, value] of pulls.entries()) {
+				const pull = asRecord(value, `pull requests[${index}]`);
+				const sha = asString(asRecord(pull.head, "pull request head").sha, "head.sha");
+				if (sha === head) {
+					return asString(asRecord(pull.base, "pull request base").sha, "base.sha");
 				}
-				return undefined;
-			},
+			}
+			return undefined;
 		},
-	);
+	});
 	await appendFile(requiredEnv(process.env, "GITHUB_OUTPUT"), `commit=${commit ?? ""}\n`);
 }
