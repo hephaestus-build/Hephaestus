@@ -29,10 +29,12 @@ final class MentorMessagePersonDataStore extends JdbcPersonDataStore {
 
     @Override
     public List<JsonNode> export(PersonDataSelection selection) {
-        return super.export(selection).stream().map(this::conversationRow).toList();
+        return super.export(selection).stream()
+                .map(row -> conversationRow(mapper, row))
+                .toList();
     }
 
-    private JsonNode conversationRow(JsonNode stored) {
+    static JsonNode conversationRow(ObjectMapper mapper, JsonNode stored) {
         var exported = mapper.createObjectNode();
         for (var property : stored.properties()) {
             if (!property.getKey().equals("parts") && !property.getKey().equals("metadata")) {
@@ -48,6 +50,7 @@ final class MentorMessagePersonDataStore extends JdbcPersonDataStore {
                         .put("text", part.path("text").asString());
             }
         }
+        if (!stored.has("metadata")) return exported;
         var billing = exported.putObject("metadata");
         for (String key : BILLING_FACTS) {
             JsonNode value = stored.path("metadata").path(key);

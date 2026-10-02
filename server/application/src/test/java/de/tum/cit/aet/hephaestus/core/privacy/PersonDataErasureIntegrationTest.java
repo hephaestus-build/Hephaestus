@@ -172,6 +172,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         preference(other);
         List<DerivedConversation> targetDerived = new ArrayList<>();
         List<DerivedConversation> otherDerived = new ArrayList<>();
+        List<ConversationFeedbackCopy> copiedFeedback = new ArrayList<>();
         List<Long> sharedThreads = new ArrayList<>();
         for (int index = 1; index <= 2; index++) {
             String team = "T" + index;
@@ -213,6 +214,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
             message(workspace, team, "300.1", "300.1", "UOTHER", other, "Unrelated conversation");
             targetDerived.add(seedDerivedConversation(workspace, shared.getId(), target));
             otherDerived.add(seedDerivedConversation(workspace, unrelated.getId(), other));
+            copiedFeedback.add(seedFeedbackCopy(targetDerived.getLast(), otherDerived.getLast()));
         }
         for (var derived : targetDerived) {
             invalidations.saveAndFlush(new ObservationInvalidation(
@@ -233,7 +235,10 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         for (var contributor : registry.stores())
             otherRows.put(
                     contributor.store(),
-                    contributor.export(Objects.requireNonNull(otherSelection.get(contributor.store()))));
+                    withoutErasedCopies(
+                            contributor.store(),
+                            contributor.export(Objects.requireNonNull(otherSelection.get(contributor.store()))),
+                            copiedFeedback));
         long administratorId = Objects.requireNonNull(administrator.getId());
         var preview = personData.preview(administratorId, targetAccount.getId(), List.of());
         UUID requestId = preview.request().getId();
@@ -259,6 +264,11 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(counts.get("observation_invalidation")).isEqualTo(2L);
         assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(2L);
         assertThat(counts.get("chat_thread")).isEqualTo(2L);
+        assertThat(counts.get("chat_message_feedback_copy")).isEqualTo(2L);
+        assertThat(counts.get("chat_thread_feedback_runtime_copy")).isEqualTo(2L);
+        assertThat(export.path("stores").path("chat_message_feedback_copy").toString())
+                .contains("Target guidance copied into another conversation")
+                .doesNotContain("Other reply to erased feedback", "user_id", "inputTokens");
         assertThat(counts.get("slack_message")).isEqualTo(2L);
         counts.forEach((store, count) -> assertThat(
                         (long) export.path("stores").path(store).size())
@@ -361,15 +371,58 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                             threadId))
                     .isEqualTo(1);
         }
+        for (var copy : copiedFeedback) {
+            assertThat(jdbc.queryForObject(
+                            "SELECT parts::text FROM chat_message WHERE id=?", String.class, copy.messageId()))
+                    .contains("This feedback was erased.")
+                    .doesNotContain("Target guidance");
+            assertThat(jdbc.queryForObject(
+                            "SELECT parts::text FROM chat_message WHERE id=?", String.class, copy.replyId()))
+                    .contains("Other reply to erased feedback");
+            assertThat(jdbc.queryForObject(
+                            "SELECT session_jsonl IS NULL FROM chat_thread WHERE id=?", Boolean.class, copy.threadId()))
+                    .isTrue();
+            assertThat(jdbc.queryForObject(
+                            "SELECT parent_message_id FROM chat_message WHERE id=?", UUID.class, copy.replyId()))
+                    .isEqualTo(copy.messageId());
+        }
         for (var contributor : registry.stores()) {
             // A shared thread's aggregate changes; the other person's participant projection does not.
-            assertThat(contributor.export(Objects.requireNonNull(otherSelection.get(contributor.store()))))
+            assertThat(withoutErasedCopies(
+                            contributor.store(),
+                            contributor.export(Objects.requireNonNull(otherSelection.get(contributor.store()))),
+                            copiedFeedback))
                     .as("Another person's %s rows", contributor.store())
                     .isEqualTo(otherRows.get(contributor.store()));
         }
         personData.requestErasure(requestId, administratorId, true);
         personData.run(requestId);
         assertThat(personData.get(requestId).request().getCompletedJson()).isEqualTo(receipt.getCompletedJson());
+    }
+
+    @Test
+    void shouldStopWhenAnExactFeedbackCopyReferencesAnotherWorkspace() {
+        IdentityProvider scm = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://copy-conflict.example.org"));
+        User target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", scm));
+        User other = users.saveAndFlush(TestUserFactory.createUser(84L, "other", scm));
+        Workspace first = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("copy-first"));
+        Workspace second = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("copy-second"));
+        var targetData = seedDerivedConversation(
+                first, slackThread(first, "100.1", target).getId(), target);
+        var otherData = seedDerivedConversation(
+                second, slackThread(second, "200.1", other).getId(), other);
+        var copied = seedFeedbackCopy(targetData, otherData);
+        assertThatThrownBy(() -> registry.select(new PersonScope(
+                        null,
+                        List.of(new PersonIdentity(Objects.requireNonNull(scm.getId()), "42", null)),
+                        List.of(target.getId()))))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("different workspace")
+                .hasMessageContaining("exact delivery reference");
+        assertThat(jdbc.queryForObject(
+                        "SELECT parts::text FROM chat_message WHERE id=?", String.class, copied.messageId()))
+                .contains("Target guidance copied");
     }
 
     @Test
@@ -495,6 +548,46 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         message.setAuthorMemberId(member.getId());
         message.setText(text);
         slackMessages.saveAndFlush(message);
+    }
+
+    private record ConversationFeedbackCopy(UUID messageId, UUID replyId, UUID threadId) {}
+
+    private List<tools.jackson.databind.JsonNode> withoutErasedCopies(
+            String store, List<tools.jackson.databind.JsonNode> rows, List<ConversationFeedbackCopy> copies) {
+        if (!store.equals("chat_message")) return rows;
+        var copiedIds =
+                copies.stream().map(copy -> copy.messageId().toString()).collect(java.util.stream.Collectors.toSet());
+        return rows.stream()
+                .filter(row -> !copiedIds.contains(row.path("id").asString()))
+                .toList();
+    }
+
+    private ConversationFeedbackCopy seedFeedbackCopy(DerivedConversation target, DerivedConversation other) {
+        var thread =
+                chatMessageRepository.findById(other.messageId()).orElseThrow().getThread();
+        ChatMessage copied = new ChatMessage();
+        copied.setId(UUID.randomUUID());
+        copied.setThread(thread);
+        copied.setRole(ChatMessage.Role.ASSISTANT);
+        copied.setStatus(ChatMessage.Status.completed);
+        copied.setParts(mapper.valueToTree(
+                List.of(Map.of("type", "text", "text", "Target guidance copied into another conversation"))));
+        chatMessageRepository.saveAndFlush(copied);
+        ChatMessage reply = new ChatMessage();
+        reply.setId(UUID.randomUUID());
+        reply.setThread(thread);
+        reply.setParentMessage(copied);
+        reply.setRole(ChatMessage.Role.USER);
+        reply.setStatus(ChatMessage.Status.completed);
+        reply.setParts(mapper.valueToTree(List.of(Map.of("type", "text", "text", "Other reply to erased feedback"))));
+        chatMessageRepository.saveAndFlush(reply);
+        feedbackPlacementRepository.saveAndFlush(FeedbackPlacement.builder()
+                .feedback(feedbackRepository.findById(target.deliveredId()).orElseThrow())
+                .placementType(PlacementType.CONVERSATION_TURN)
+                .chatMessageId(copied.getId())
+                .createdAt(Instant.now())
+                .build());
+        return new ConversationFeedbackCopy(copied.getId(), reply.getId(), thread.getId());
     }
 
     private record DerivedConversation(List<UUID> observationIds, UUID preparedId, UUID deliveredId, UUID messageId) {}

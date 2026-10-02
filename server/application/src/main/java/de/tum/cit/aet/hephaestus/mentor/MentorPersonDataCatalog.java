@@ -11,14 +11,23 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @ConditionalOnServerRole
 @RequiredArgsConstructor
-@PersonDataStores({"chat_message_vote", "chat_message", "chat_thread"})
+@PersonDataStores({
+    "chat_message_vote",
+    "chat_message",
+    "chat_thread",
+    "chat_message_feedback_copy",
+    "chat_thread_feedback_runtime_copy"
+})
 public class MentorPersonDataCatalog implements PersonDataCatalog {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
+    private final List<PersonConversationCopySource> copySources;
 
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
+                new MentorFeedbackCopyPersonDataStore(jdbc, mapper, copySources, false),
+                new MentorFeedbackCopyPersonDataStore(jdbc, mapper, copySources, true),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

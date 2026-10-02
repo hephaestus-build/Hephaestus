@@ -19,6 +19,9 @@ are about a different participant. Shared Slack conversations retain the other p
 
 Person exports include authored milestones and commit file-change copies. Applying another
 developer's commit removes only the person's committer attribution, not that developer's work.
+Feedback copied into another person's Heph conversation is exported through its exact delivery
+reference. Erasure replaces that copy and resets the thread's hidden memory while keeping the other
+person's replies and conversation times.
 Heph exports visible conversation text and usage facts, not hidden reasoning, tool payloads or
 internal runtime journals that can contain credentials or another person's copied profile.
 Shared Outline document bodies and co-authored commit content are included through exact native

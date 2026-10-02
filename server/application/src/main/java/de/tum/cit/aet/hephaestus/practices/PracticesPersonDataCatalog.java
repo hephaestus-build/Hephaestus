@@ -28,9 +28,34 @@ import tools.jackson.databind.ObjectMapper;
     "observation_invalidation_actor",
     "observation_restoration_actor"
 })
-public class PracticesPersonDataCatalog implements PersonDataCatalog {
+public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConversationCopySource {
     private final NamedParameterJdbcTemplate jdbc;
     private final ObjectMapper mapper;
+
+    @Override
+    public List<ConversationCopy> conversationCopies(PersonScope person) {
+        var placement = contributors().stream()
+                .filter(store -> store.store().equals("feedback_placement"))
+                .findFirst()
+                .orElseThrow();
+        var selected = placement.select(person);
+        if (selected.rows().isEmpty()) return List.of();
+        return jdbc.query(
+                """
+                SELECT DISTINCT f.workspace_id, p.chat_message_id
+                FROM feedback_placement p JOIN feedback f ON f.id=p.feedback_id
+                WHERE p.chat_message_id IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM jsonb_populate_recordset(NULL::feedback_placement,CAST(:keys AS jsonb)) selected
+                    WHERE selected.id=p.id)
+                ORDER BY f.workspace_id,p.chat_message_id
+                """,
+                java.util.Map.of(
+                        "keys",
+                        mapper.writeValueAsString(selected.rows().stream()
+                                .map(PersonDataSelection.RowKey::columns)
+                                .toList())),
+                (rs, row) -> new ConversationCopy(rs.getLong(1), java.util.UUID.fromString(rs.getString(2))));
+    }
 
     @Override
     public List<PersonDataContributor> contributors() {
