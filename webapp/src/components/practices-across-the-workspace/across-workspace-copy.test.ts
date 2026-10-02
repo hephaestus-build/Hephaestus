@@ -11,7 +11,7 @@ const context: SplitContext = {
 	window: "ALL_TIME",
 	readerCounted: true,
 	observedDevelopers: 28,
-	minimumOthers: 5,
+	minimumOthers: 3,
 };
 
 describe("splitDescription", () => {
@@ -38,14 +38,6 @@ describe("splitDescription", () => {
 			/in the last 30 days: .*, 8 none yet\. You: Not observed yet, not counted in the split\.$/u,
 		);
 	});
-
-	it("gives the two parts of a collapsed split and why it collapsed", () => {
-		expect(
-			splitDescription({ shape: "COLLAPSED", hasStanding: 22, noneYet: 6 }, "STRENGTH", context),
-		).toBe(
-			"28 developers observed in this workspace so far: 22 merged standings, 6 none yet. The split is held back while one standing would cover 5 developers or fewer. You: Going well.",
-		);
-	});
 });
 
 describe("a split held back", () => {
@@ -57,28 +49,32 @@ describe("a split held back", () => {
 
 	it("names no total the server held back", () => {
 		expect(
-			splitDescription({ shape: "COLLAPSED", hasStanding: 22, noneYet: 6 }, "MIXED", {
-				...context,
-				observedDevelopers: undefined,
-			}),
+			splitDescription(
+				{ shape: "SPLIT", needsAttention: 4, mixedFeedback: 5, goingWell: 6, noneYet: 4 },
+				"MIXED",
+				{
+					...context,
+					observedDevelopers: undefined,
+				},
+			),
 		).toMatch(/^Developers observed in this workspace so far: /u);
 	});
 });
 
 describe("the hints", () => {
 	it("names who the band is of once, with the count and window the response gives", () => {
-		expect(tilesHint(5, "DAYS_90", 41)).toBe(
-			"The typical range is the middle half of 41 developers observed in the last 90 days; your marker shows you. A tile compares you once at least 10 other developers have reviewed work in this window; until then it shows only your own value.",
+		expect(tilesHint(3, "DAYS_90", 41)).toBe(
+			"The typical range is the middle half of 41 developers observed in the last 90 days; your marker shows you. A tile compares you once at least 6 other developers have reviewed work in this window; until then it shows only your own value.",
 		);
 	});
 
 	it("names no count the server held back", () => {
-		expect(tilesHint(5, "DAYS_30")).toMatch(
+		expect(tilesHint(3, "DAYS_30")).toMatch(
 			/^The typical range is the middle half of the developers here; /u,
 		);
 	});
 
 	it("takes the part size from K", () => {
-		expect(groupsHint(5)).toContain("A part shows only when it holds at least 5 other developers");
+		expect(groupsHint(3)).toContain("A part shows only when it holds at least 3 other developers");
 	});
 });

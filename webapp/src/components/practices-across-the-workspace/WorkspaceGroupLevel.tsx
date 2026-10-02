@@ -13,7 +13,7 @@ import { useRevealedRows } from "@/hooks/use-revealed-rows";
 
 import type { SplitContext } from "./across-workspace-copy";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
-import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
+import { SplitLegend, WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
 /** How many practices the level lists before it offers more. */
 export const PRACTICES_PAGE_SIZE = 20;
@@ -138,27 +138,31 @@ function GroupPractices({
 	}));
 	const { shown, ...more } = useRevealedRows(rows, PRACTICES_PAGE_SIZE);
 	return (
-		<WorkspaceComparisonTable
-			aria-label={group === undefined ? "Practices" : `Practices of ${group.groupName}`}
-			subjectHead="Practice"
-			state={
-				state.status === "ready"
-					? { status: "ready", rows: shown, context: state.context, more }
-					: { status: "loading" }
-			}
-			noun="practices"
-			empty={{
-				title: "No practices here yet",
-				description: "Once your workspace reviews a practice in this group, it appears here.",
-			}}
-			rowLink={(row) => ({
-				text: "View practice",
-				onOpen: () => {
-					if (group !== undefined) {
-						onViewPractice(group.groupSlug, row.key);
-					}
-				},
-			})}
-		/>
+		<>
+			{/* What the bars show, the page's own legend, above the table it explains. */}
+			<SplitLegend />
+			<WorkspaceComparisonTable
+				aria-label={group === undefined ? "Practices" : `Practices of ${group.groupName}`}
+				subjectHead="Practice"
+				state={
+					state.status === "ready"
+						? { status: "ready", rows: shown, context: state.context, more }
+						: { status: "loading" }
+				}
+				noun="practices"
+				empty={{
+					title: "No practices here yet",
+					description: "Once your workspace reviews a practice in this group, it appears here.",
+				}}
+				rowLink={(row) => ({
+					text: "View practice",
+					onOpen: () => {
+						if (group !== undefined) {
+							onViewPractice(group.groupSlug, row.key);
+						}
+					},
+				})}
+			/>
+		</>
 	);
 }
