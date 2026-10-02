@@ -2,7 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
+import {
+	mockPracticeDefinitionOptions,
+	mockPullRequestReviewFields,
+	mockPullRequestPolicy,
+} from "@/mocks/fixtures/practice";
 import { deferred } from "@/test/async";
 import { renderWithRouter } from "@/test/router-harness";
 
@@ -55,6 +59,39 @@ describe("the gate field", () => {
 		expect(onSubmit).not.toHaveBeenCalled();
 		expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", "{");
 		expect(screen.getAllByText("Enter valid JSON for the gate.").length).toBeGreaterThan(0);
+	});
+});
+
+describe("the identifier of an existing practice", () => {
+	it("does not change when the practice is renamed", async () => {
+		const onSubmit = vi.fn();
+		await renderWithRouter(
+			<PracticeDefinitionForm
+				mode="edit"
+				groups={[]}
+				definitionOptions={mockPracticeDefinitionOptions}
+				initialData={{
+					...mockPullRequestReviewFields,
+					slug: "reviewable-diffs",
+					name: "Small changes",
+					criteria: "Changes must remain reviewable.",
+					automatedReviewPolicy: mockPullRequestPolicy,
+				}}
+				isPending={false}
+				cancelAction={<Link to="/">Cancel</Link>}
+				onSubmit={onSubmit}
+			/>,
+			"/admin/practices/new",
+		);
+		await openTechnicalSettings();
+		fireEvent.change(nameField(), { target: { value: "Small, reviewable changes" } });
+		expect(slugField().value).toBe("reviewable-diffs");
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		await waitFor(() =>
+			expect(onSubmit).toHaveBeenCalledWith(
+				expect.objectContaining({ slug: "reviewable-diffs", name: "Small, reviewable changes" }),
+			),
+		);
 	});
 });
 

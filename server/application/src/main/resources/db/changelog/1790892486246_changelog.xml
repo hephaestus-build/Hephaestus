@@ -185,32 +185,7 @@ CREATE OR REPLACE FUNCTION public.enforce_practice_revision_immutability() RETUR
     LANGUAGE plpgsql
     AS $$
             BEGIN
-                IF NEW.practice_id = OLD.practice_id
-                   AND NEW.revision_number = OLD.revision_number
-                   AND NEW.created_at = OLD.created_at
-                   AND NEW.slug IS NOT DISTINCT FROM OLD.slug
-                   AND NEW.name IS NOT DISTINCT FROM OLD.name
-                   AND NEW.applies_to IS NOT DISTINCT FROM OLD.applies_to
-                   AND NEW.signals IS NOT DISTINCT FROM OLD.signals
-                   AND NEW.evidence_requirements IS NOT DISTINCT FROM OLD.evidence_requirements
-                   AND NEW.on_drafts IS NOT DISTINCT FROM OLD.on_drafts
-                   AND NEW.subject IS NOT DISTINCT FROM OLD.subject
-                   AND NEW.precondition IS NOT DISTINCT FROM OLD.precondition
-                   AND NEW.criteria = OLD.criteria
-                   AND NEW.precompute_script IS NOT DISTINCT FROM OLD.precompute_script
-                   AND NEW.automated_review_policy IS NOT DISTINCT FROM OLD.automated_review_policy
-                   AND NEW.delivery_behavior IS NOT DISTINCT FROM OLD.delivery_behavior
-                   AND NEW.why_it_matters IS NOT DISTINCT FROM OLD.why_it_matters
-                   AND NEW.what_good_looks_like IS NOT DISTINCT FROM OLD.what_good_looks_like
-                   AND NEW.group_slug IS NOT DISTINCT FROM OLD.group_slug
-                   AND NEW.group_name IS NOT DISTINCT FROM OLD.group_name
-                   AND NEW.group_description IS NOT DISTINCT FROM OLD.group_description
-                   AND NEW.group_icon IS NOT DISTINCT FROM OLD.group_icon
-                   AND NEW.group_color IS NOT DISTINCT FROM OLD.group_color
-                   AND (
-                       NEW.review_rule_fingerprint IS NOT DISTINCT FROM OLD.review_rule_fingerprint
-                       OR OLD.review_rule_fingerprint IS NULL
-                   )
+                IF NEW IS NOT DISTINCT FROM OLD
                 THEN
                     RETURN NEW;
                 END IF;

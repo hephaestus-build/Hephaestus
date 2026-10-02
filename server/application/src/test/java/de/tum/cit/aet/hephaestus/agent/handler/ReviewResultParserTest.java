@@ -272,6 +272,20 @@ class ReviewResultParserTest extends BaseUnitTest {
                     .isEmpty();
         }
 
+        @ParameterizedTest
+        @ValueSource(strings = {"absenceBoundary", "presence", "assessment", "unknown"})
+        void shouldRejectUnknownEvidenceFields(String field) {
+            ObjectNode observation = validFindingNode();
+            ((ObjectNode) observation.path("evidence")).putNull(field);
+
+            var result = parser.parseObservations(objectMapper.createArrayNode().add(observation));
+
+            assertThat(result.validObservations()).isEmpty();
+            assertThat(result.discarded())
+                    .singleElement()
+                    .satisfies(entry -> assertThat(entry.reason()).contains("unknown evidence fields", field));
+        }
+
         @Test
         void shouldRejectRemovedAxesInsteadOfInferringAnOutcome() {
             for (String field : new String[] {"assessmentStatus", "presence", "assessment"}) {
@@ -389,11 +403,11 @@ class ReviewResultParserTest extends BaseUnitTest {
         }
 
         @Test
-        void optionalFieldsPresent() {
+        void preservesSubmittedEvidenceAndRationale() {
             ObjectNode observation = validFindingNode();
             observation.put("evidenceRationale", "Some evidenceRationale");
             ObjectNode evidence = objectMapper.createObjectNode();
-            evidence.put("key", "value");
+            evidence.putArray("citations").addObject().put("quote", "Quoted source text");
             observation.set("evidence", evidence);
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));
@@ -401,7 +415,8 @@ class ReviewResultParserTest extends BaseUnitTest {
             ValidatedObservation f = result.validObservations().get(0);
             assertThat(f.evidenceRationale()).isEqualTo("Some evidenceRationale");
             assertThat(f.evidence()).isNotNull();
-            assertThat(f.evidence().get("key").asString()).isEqualTo("value");
+            assertThat(f.evidence().path("citations").get(0).path("quote").asString())
+                    .isEqualTo("Quoted source text");
         }
 
         @Test
@@ -425,7 +440,7 @@ class ReviewResultParserTest extends BaseUnitTest {
         void oversizedEvidenceIsRejected() {
             ObjectNode observation = validFindingNode();
             ObjectNode evidence = objectMapper.createObjectNode();
-            evidence.put("data", "x".repeat(70_000));
+            evidence.putArray("citations").addObject().put("quote", "x".repeat(70_000));
             observation.set("evidence", evidence);
 
             ParseResult result = parser.parse(wrapRawOutput(wrapObservations(observation)));

@@ -5,9 +5,15 @@
       "summary": "Well-structured PR description with context",
       "severity": null,
       "evidence": {
-        "locations": [],
-        "snippets": [
-          "## Summary\nThis PR implements..."
+        "citations": [
+          {
+            "sourceKind": "scm.pull-request.core",
+            "artifactPath": "context/description.md",
+            "path": "context/description.md",
+            "startLine": 2,
+            "endLine": 2,
+            "quote": "This PR fixes the connection timeout by retrying once. Tested with the integration suite."
+          }
         ]
       },
       "evidenceRationale": "The PR description clearly explains the motivation, changes made, and testing approach.",
@@ -18,15 +24,16 @@
       "summary": "Missing error handling in Main.java",
       "severity": "MAJOR",
       "evidence": {
-        "locations": [
+        "citations": [
           {
+            "sourceKind": "scm.pull-request.diff",
+            "artifactPath": "context/change.json",
             "path": "src/Main.java",
             "startLine": 42,
-            "endLine": 50
+            "endLine": 42,
+            "quote": "try { connect(); } catch (Exception e) {}",
+            "side": "NEW"
           }
-        ],
-        "snippets": [
-          "try { connect(); } catch (Exception e) {}"
         ]
       },
       "evidenceRationale": "Empty catch block swallows exceptions silently, making debugging difficult.",
@@ -36,24 +43,57 @@
       "practiceSlug": "commit-message-quality",
       "summary": "Commit messages follow conventional format",
       "severity": null,
-      "evidence": {},
-      "evidenceRationale": "All commits follow the conventional commit format (feat:, fix:, etc.).",
+      "evidence": {
+        "citations": [
+          {
+            "sourceKind": "scm.pull-request.core",
+            "artifactPath": "context/commits.json",
+            "path": "context/commits.json",
+            "startLine": 5,
+            "endLine": 5,
+            "quote": "\"message\": \"fix(network): retry timed-out connections\""
+          }
+        ]
+      },
+      "evidenceRationale": "The captured commit message uses the required conventional commit format.",
       "outcome": "MET"
     },
     {
       "practiceSlug": "pr-scope",
       "summary": "PR scope is appropriately sized",
       "severity": null,
-      "evidence": {},
+      "evidence": {
+        "citations": [
+          {
+            "sourceKind": "scm.pull-request.core",
+            "artifactPath": "context/commits.json",
+            "path": "context/commits.json",
+            "startLine": 8,
+            "endLine": 8,
+            "quote": "\"filename\": \"docs/network.md\""
+          }
+        ]
+      },
       "evidenceRationale": "Single-file documentation change is well-scoped and focused.",
       "outcome": "MET"
     },
     {
-      "practiceSlug": "review-thoroughness",
-      "summary": "Insufficient test coverage for new feature",
+      "practiceSlug": "test-coverage",
+      "summary": "New utility behavior is not exercised by its tests",
       "severity": "MINOR",
-      "evidence": {},
-      "evidenceRationale": "New utility class has no unit tests, but the change is small and well-understood.",
+      "evidence": {
+        "citations": [
+          {
+            "sourceKind": "scm.repository.tree",
+            "artifactPath": "repos/reviewed/.git/HEAD",
+            "path": "src/test/java/UtilityTest.java",
+            "startLine": 12,
+            "endLine": 12,
+            "quote": "// TODO: add cases for the new utility"
+          }
+        ]
+      },
+      "evidenceRationale": "The captured test file leaves the new utility cases as a TODO.",
       "outcome": "NOT_MET"
     }
   ]

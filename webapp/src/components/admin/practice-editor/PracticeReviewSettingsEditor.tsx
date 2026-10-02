@@ -16,19 +16,9 @@ import { artifactKindIcon, artifactKindLabel } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
 /** Also the `aria-describedby` target: focus lands on the control, not on the rendered message. */
-const BINDINGS_ERROR_ID = "practice-reviewSettings-error";
+const REVIEW_SETTINGS_ERROR_ID = "practice-review-settings-error";
 
-/**
- * What the review on this occasion amounts to — the one thing that changes what this editor offers.
- *
- * One value rather than the `canAttemptReview` + `guidanceOnly` pair it replaces: that pair could
- * spell four states for three real ones, and `guidanceOnly` silently won every disagreement, so
- * `guidanceOnly && canAttemptReview` and `guidanceOnly && !canAttemptReview` rendered identically.
- *
- * `human-review` is named for what the author sees — evidence recorded, nothing checked — and so
- * also covers a policy the instance cannot run at all (`automatedReviewUnavailableLabel` calls that
- * one "AI support unavailable"). Those two differ in why, never in what this editor draws.
- */
+/** Human review also covers policies unavailable on this instance: both record evidence without AI review. */
 export type PracticeOccasionMode = "reviewed" | "human-review" | "guidance-only";
 
 export interface PracticeReviewSettingsEditorProps {
@@ -107,7 +97,7 @@ export function PracticeReviewSettingsEditor({
 				onIncludeDraftsChange={(includeDrafts) =>
 					onChange(normalizeReviewSettings({ ...reviewFields, onDrafts: includeDrafts }))
 				}
-				errorId={signalsInvalid && hasText(error) ? BINDINGS_ERROR_ID : undefined}
+				errorId={signalsInvalid && hasText(error) ? REVIEW_SETTINGS_ERROR_ID : undefined}
 				disabled={disabled}
 			/>
 
@@ -122,7 +112,7 @@ export function PracticeReviewSettingsEditor({
 					idPrefix={OCCASION_ID_PREFIX}
 					disabled={disabled}
 					invalid={evidenceInvalid}
-					errorId={evidenceInvalid && hasText(error) ? BINDINGS_ERROR_ID : undefined}
+					errorId={evidenceInvalid && hasText(error) ? REVIEW_SETTINGS_ERROR_ID : undefined}
 					onChange={(evidenceRequirements) => onChange({ ...reviewFields, evidenceRequirements })}
 				/>
 			)}
@@ -140,7 +130,7 @@ export function PracticeReviewSettingsEditor({
 				</p>
 			)}
 
-			{hasText(error) && <FieldError id={BINDINGS_ERROR_ID}>{error}</FieldError>}
+			{hasText(error) && <FieldError id={REVIEW_SETTINGS_ERROR_ID}>{error}</FieldError>}
 		</div>
 	);
 }

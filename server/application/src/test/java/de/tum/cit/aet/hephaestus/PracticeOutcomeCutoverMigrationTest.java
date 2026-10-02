@@ -54,6 +54,17 @@ class PracticeOutcomeCutoverMigrationTest {
                 .isEqualTo("0");
         assertThat(scalar("SELECT review_rule_fingerprint FROM practice_revision WHERE id=991301"))
                 .isEqualTo("v4:" + "a".repeat(64));
+        execute("UPDATE practice_revision SET review_rule_fingerprint=NULL WHERE id=991302");
+        for (String mutation : java.util.List.of("review_rule_fingerprint='v5:' || repeat('b',64)", "id=991303")) {
+            assertThatThrownBy(() -> execute("UPDATE practice_revision SET " + mutation + " WHERE id=991302"))
+                    .isInstanceOfSatisfying(
+                            SQLException.class,
+                            exception -> assertThat(exception.getSQLState()).isEqualTo("55000"));
+        }
+        assertThat(
+                        scalar(
+                                "SELECT (review_rule_fingerprint IS NULL)::text || ':' || criteria || ':' || subject || ':' || on_drafts::text FROM practice_revision WHERE id=991302"))
+                .isEqualTo("true:The change explains its purpose.:AUTHOR:true");
         assertThat(scalar("SELECT signals::text FROM practice WHERE id=991201"))
                 .isEqualTo("[\"scm.pull_request.created\"]");
         assertThat(scalar("SELECT subject || ':' || on_drafts::text FROM practice WHERE id=991201"))
@@ -104,6 +115,9 @@ class PracticeOutcomeCutoverMigrationTest {
                 "INSERT INTO practice_revision(id,practice_id,revision_number,slug,name,applies_to,bindings,criteria,created_at,automated_review_policy,delivery_behavior,review_rule_fingerprint) "
                         + "VALUES(991301,991201,1,'cutover','Cutover','scm.pull_request','" + BINDINGS
                         + "','The change explains its purpose.',now(),'{}','{\"summaryOnly\":false}','v4:' || repeat('a',64))",
+                "INSERT INTO practice_revision(id,practice_id,revision_number,slug,name,applies_to,bindings,criteria,created_at,automated_review_policy,delivery_behavior) "
+                        + "VALUES(991302,991201,2,'cutover','Cutover','scm.pull_request','" + BINDINGS
+                        + "','The change explains its purpose.',now(),'{}','{\"summaryOnly\":false}')",
                 "UPDATE practice SET current_revision_id=991301, adopted_base=jsonb_build_object('bindings','"
                         + BINDINGS
                         + "'::jsonb,'criteria','The change explains its purpose.'), adopted_base_source='BUNDLED' WHERE id=991201",

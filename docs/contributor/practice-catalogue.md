@@ -34,7 +34,7 @@ flowchart LR
 
 All three scopes use the same definition fields. What differs is who owns the value:
 
-- **Definition, binding, and review frame** — maintained in the repository, inherited or customized
+- **Definition and review policy** — maintained in the repository, inherited or customized
   on the instance, then owned outright by a workspace once adopted.
 - **Inclusion** — an instance decision only. Excluding an entry removes it from what workspaces may
   adopt and changes nothing that is already adopted.
@@ -64,16 +64,16 @@ The practice editor follows the decisions an author can make confidently:
 2. **Review guidance** — describe what to look for, why it matters, and one concrete example.
 3. **How Hephaestus can help** — choose AI-supported mentoring, human review, or guidance only.
 
-The generated identifier, the occasion a review runs on, and the optional static-analysis script are
-under **Technical settings**. A new practice starts with a binding that fits the selected kind of work.
-Authors only change that default when the practice genuinely needs a different occasion. This keeps
-runtime plumbing out of the common path without hiding it from expert authors. A practice has exactly one
-occasion: reading different evidence at a different moment is a second practice, which is what the shipped
-catalogue does, and asking for a review by hand is not an occasion to choose at all.
-The definition-options API supplies the signals a practice on that kind of work may bind to, the evidence
-a new binding starts with, and the sources it may read, so the editor and runtime cannot silently
-disagree about what is bindable. The practice never states its artifact kind: it is read off the
-signals' shared prefix, which is what stops a declared kind and its triggers from drifting apart.
+The generated identifier, review signals, and optional static-analysis script are under
+**Technical settings**. A new practice starts with the signals and evidence requirements recommended
+for its kind of work. Authors change them only when the practice needs a different review boundary.
+One definition may name several signals with the same evidence and subject. Different expectations
+or evidence at another moment belong in a separate practice. Manual review is not an author-selected
+signal.
+
+The definition-options API supplies eligible signals, default evidence requirements, and permitted
+sources. The runtime derives the artifact kind from the signals' shared prefix instead of storing a
+second declaration that could contradict them.
 
 Write **What to look for** as a review boundary, not as a personality or a score. Define one
 observable way of working, the signals that demonstrate it, and the cases where a reviewer should stay
@@ -93,7 +93,7 @@ settings:
   a static-analysis script and its autonomy is forced to `OFF`.
 - **Guidance only** keeps the criteria and guidance without configuring Hephaestus to review it.
 
-The binding starts with the recommended evidence for its kind of work. Most authors should keep it.
+The practice starts with the recommended evidence for its kind of work. Most authors should keep it.
 **Customize evidence** reveals each source's display name, privacy class, the capture quality its
 contract demands, and whether it can be captured whole — so an author knows whether an `EXHAUSTIVE`
 stance is available — along with the practice's known limitations. How strictly a source must be
@@ -220,7 +220,7 @@ current definition. An older instance customization uses the current bundle only
 catalog digest matches; otherwise it uses its current definition. Each saved base records which route
 was used (`EXACT_ADOPTION`, `BUNDLED_DIGEST_MATCH`, `BUNDLED_FINGERPRINT_MATCH`, or
 `CURRENT_DEFINITION`). Neither historical match proves identical content: the review-rule fingerprint
-excludes guidance, and older catalog digests predate the binding subject field added in
+excludes guidance, and older catalog digests predate the subject field added in
 [#2160](https://github.com/hephaestus-build/Hephaestus/issues/2160). Release proposals carry the
 base source so an administrator can judge an approximate comparison rather than mistake it for
 the original adopted content.
@@ -253,7 +253,7 @@ Use the [authoring checklist](/admin/writing-practices#challenge-the-draft-befor
 the occasion, named behavior, evidence, consequences and expected feedback. For bundled entries,
 also cite research, a standard or an explicitly identified practitioner norm.
 
-Evidence is declared per binding against the versioned
+Evidence requirements are declared on each practice against the versioned
 [artifact-source contract](./artifact-source-contract) and the canonical
 [practice review glossary](./practice-review-glossary.mdx). Each entry names a source and a stance —
 `REQUIRED`, `EXHAUSTIVE`, or `CONTEXTUAL` — and the practice's policy adds conservative skipping and
@@ -285,8 +285,8 @@ standard as an experiment or a convention as a proven outcome.
 
 1. State the user problem and supported reviewed work.
 2. Cite and classify the evidence.
-3. Draft applicability, signals, exclusions, the binding's evidence, and severity.
-4. Confirm every source applies to the binding's artifact kind and that its governance decision permits
+3. Draft applicability, signals, exclusions, evidence requirements, and severity.
+4. Confirm every source applies to the practice's artifact kind and that its governance decision permits
    the product purpose, audience, processor egress, and retention. A new source follows the
    [artifact-source governance gate](../admin/dsms/artifact-source-governance).
 5. Update `server/application/src/main/resources/practices/default-catalog.json`; its adjacent JSON Schema provides
@@ -348,10 +348,10 @@ inspected every candidate.
 
 ### Review the effective definition
 
-For every changed practice, compare its criteria with the work-type preamble, binding, precompute
+For every changed practice, compare its criteria with the work-type preamble, review configuration, precompute
 script, shared review instructions and developer guidance. Check these seams explicitly:
 
-- A preamble cannot declare a source unavailable when the binding captures it, or infer absence from
+- A preamble cannot declare a source unavailable when the review captures it, or infer absence from
   an unavailable quotation. The actual capture manifest establishes availability; practice criteria
   establish permitted use.
 - A precompute candidate is a lead, not a judgment. A count or path match alone cannot establish a

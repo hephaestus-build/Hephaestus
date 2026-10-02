@@ -36,6 +36,9 @@ public class ReviewResultParser {
     private static final Set<String> OBSERVATION_FIELDS =
             Set.of("practiceSlug", "summary", "outcome", "severity", "evidence", "evidenceRationale");
 
+    private static final Set<String> EVIDENCE_FIELDS =
+            Set.of("citations", "search", "inapplicability", "undecidability");
+
     static final int MAX_DELIVERY_DIFF_NOTES = 30;
 
     private final JsonMapper objectMapper;
@@ -146,6 +149,13 @@ public class ReviewResultParser {
         JsonNode evidence = entry.get("evidence");
         if (evidence == null || !evidence.isObject()) {
             throw new EntryValidationException("missing or non-object field: evidence");
+        }
+        List<String> unknownEvidenceFields = evidence.properties().stream()
+                .map(java.util.Map.Entry::getKey)
+                .filter(field -> !EVIDENCE_FIELDS.contains(field))
+                .toList();
+        if (!unknownEvidenceFields.isEmpty()) {
+            throw new EntryValidationException("unknown evidence fields: " + unknownEvidenceFields);
         }
         try {
             if (objectMapper.writeValueAsBytes(evidence).length > MAX_EVIDENCE_BYTES) {

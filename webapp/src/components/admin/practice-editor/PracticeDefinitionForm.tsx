@@ -452,7 +452,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 			return {
 				...previous,
 				name,
-				...(slugWasEdited ? {} : { slug: generateSlug(name) }),
+				...(mode === "create" && !slugWasEdited ? { slug: generateSlug(name) } : {}),
 			};
 		});
 	};
