@@ -286,17 +286,17 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturnOnlyOwnExactWorkWhenFilteringByKindAndId(String kind, String sort) {
             Instant now = Instant.now();
             UUID latest =
-                    insertObservation(practiceA, developer, "Exact work", "ABSENT", "MAJOR", 0.9f, kind, 741L, now);
+                    insertObservation(practiceA, developer, "Exact work", "NOT_MET", "MAJOR", 0.9f, kind, 741L, now);
             UUID older = insertObservation(
-                    practiceB, developer, "Same work older", "ABSENT", "MAJOR", 0.9f, kind, 741L, now.minusSeconds(5));
-            insertObservation(practiceA, developer, "Different ID", "ABSENT", "MAJOR", 0.9f, kind, 742L, now);
+                    practiceB, developer, "Same work older", "NOT_MET", "MAJOR", 0.9f, kind, 741L, now.minusSeconds(5));
+            insertObservation(practiceA, developer, "Different ID", "NOT_MET", "MAJOR", 0.9f, kind, 742L, now);
             String otherKind = kind.equals("scm.issue") ? "scm.pull_request" : "scm.issue";
-            insertObservation(practiceA, developer, "Different kind", "ABSENT", "MAJOR", 0.9f, otherKind, 741L, now);
+            insertObservation(practiceA, developer, "Different kind", "NOT_MET", "MAJOR", 0.9f, otherKind, 741L, now);
             insertObservation(
                     practiceA,
                     persistUser("another-work-author"),
                     "Other developer",
-                    "ABSENT",
+                    "NOT_MET",
                     "MAJOR",
                     0.9f,
                     kind,
@@ -915,7 +915,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                         .jsonPath("$.totalElements")
                         .isEqualTo(1)
                         .jsonPath("$.content[0].summary")
-                        .isEqualTo("My WS finding");
+                        .isEqualTo("My WS observation");
             }
         }
     }

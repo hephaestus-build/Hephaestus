@@ -147,4 +147,4 @@ observation incorrect or withdraw the feedback.
 
 ## Update — 2026-10-02
 
-[ADR 0048](0050-one-practice-standard-one-outcome.md) supersedes the observation-axis decision with a single conformance outcome. The original rationale remains as design history.
+[ADR 0050](0050-one-practice-standard-one-outcome.md) supersedes the observation-axis decision with a single conformance outcome. The original rationale remains as design history.

@@ -141,26 +141,26 @@ export const READY_ON_GITHUB: ReadyContext = {
 	pageUrl: "https://github.com/HephaestusTest/lifecycle-validation/pull/1",
 };
 
-export const NEGATIVE_ROW: ObservationRow = {
+export const NOT_MET_ROW: ObservationRow = {
 	id: "1a2b3c4d-0000-4000-8000-000000000001",
 	practiceName: "Descriptive merge request",
 	practiceSlug: "descriptive-merge-request",
 	summary:
 		"The description lists the changed files but never says what problem the login screen solves or which issue it closes.",
-	outcome: "NEGATIVE",
+	outcome: "NOT_MET",
 	severity: "MAJOR",
-	assessmentStatus: "ASSESSED",
+
 	claimCurrentness: "CURRENT",
 	observedAt: minutesBefore(42),
 };
 
-export const POSITIVE_ROW: ObservationRow = {
+export const MET_ROW: ObservationRow = {
 	id: "1a2b3c4d-0000-4000-8000-000000000002",
 	practiceName: "Small, focused changes",
 	practiceSlug: "small-focused-changes",
 	summary: "The change touches one feature and stays under two hundred lines.",
-	outcome: "POSITIVE",
-	assessmentStatus: "ASSESSED",
+	outcome: "MET",
+
 	claimCurrentness: "CURRENT",
 	observedAt: minutesBefore(42),
 };
@@ -171,13 +171,22 @@ export const UNDETERMINED_ROW: ObservationRow = {
 	practiceSlug: "tests-cover-the-change",
 	summary:
 		"The diff adds a form but it is unclear whether the existing end-to-end suite reaches it.",
-	assessmentStatus: "UNDETERMINED",
+	outcome: "UNDETERMINED",
 	claimCurrentness: "CURRENT",
 	observedAt: minutesBefore(42),
 };
 
+export const NOT_APPLICABLE_ROW: ObservationRow = {
+	...MET_ROW,
+	id: "1a2b3c4d-0000-4000-8000-000000000005",
+	practiceName: "Explain breaking changes",
+	practiceSlug: "explain-breaking-changes",
+	outcome: "NOT_APPLICABLE",
+	summary: "The change does not alter a public interface.",
+};
+
 export const HISTORICAL_ROW: ObservationRow = {
-	...NEGATIVE_ROW,
+	...NOT_MET_ROW,
 	id: "1a2b3c4d-0000-4000-8000-000000000004",
 	practiceName: "Commit messages explain why",
 	severity: "MINOR",
@@ -186,15 +195,15 @@ export const HISTORICAL_ROW: ObservationRow = {
 };
 
 export const OWN_PAGE: ObservationPage = {
-	rows: [NEGATIVE_ROW, HISTORICAL_ROW, POSITIVE_ROW, UNDETERMINED_ROW],
-	total: 4,
+	rows: [NOT_MET_ROW, HISTORICAL_ROW, MET_ROW, UNDETERMINED_ROW, NOT_APPLICABLE_ROW],
+	total: 5,
 	fetchedAt: minutesBefore(1),
 };
 
 /** A long first page of a longer list: 25 shown of 40 recorded. */
 export const LONG_PAGE: ObservationPage = {
 	rows: Array.from({ length: 25 }, (_, index) => ({
-		...(index < 3 ? NEGATIVE_ROW : POSITIVE_ROW),
+		...(index < 3 ? NOT_MET_ROW : MET_ROW),
 		id: `1a2b3c4d-0000-4000-8000-${String(100 + index).padStart(12, "0")}`,
 		practiceName: `${index < 3 ? "Needs work" : "Followed"}: practice ${index + 1} with a name long enough to wrap on a narrow window`,
 	})),

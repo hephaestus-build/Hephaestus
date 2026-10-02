@@ -157,8 +157,11 @@ export const Opened: Story = {
 		// Posted while the rest of its feedback failed: no practice is claimed for it.
 		await expect(within(comments).getByText("Feedback")).toBeVisible();
 		const observations = canvas.getByRole("region", { name: "Your observations" });
-		await expect(within(observations).getAllByRole("listitem")).toHaveLength(4);
-		await expect(within(observations).getByText("Negative outcome · Major")).toBeVisible();
+		await expect(within(observations).getAllByRole("listitem")).toHaveLength(5);
+		await expect(within(observations).getByText("Not met · Major")).toBeVisible();
+		await expect(within(observations).getByText("Met", { exact: true })).toBeVisible();
+		await expect(within(observations).getByText("Not applicable", { exact: true })).toBeVisible();
+		await expect(within(observations).getByText("Undetermined", { exact: true })).toBeVisible();
 		await expect(within(observations).getByText(/no longer current/u)).toBeVisible();
 		// When, precisely, and at which commit; the rest is in Hephaestus.
 		await expect(canvas.getByText(/^Reviewed .+ at 4f2a9c1\.$/u)).toBeVisible();

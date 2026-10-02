@@ -10,7 +10,7 @@ observation assessment axes are removed. Do not run old workers or API clients a
    Describe the positive standard in `criteria`; remove matrix-based instructions.
 4. Update integrations to submit `outcome`: `MET`, `NOT_MET`, `NOT_APPLICABLE`, or `UNDETERMINED`.
    Supply severity exactly for `NOT_MET`. Retain the appropriate evidence warrants.
-5. Deploy matching server, review runtime, and webapp versions. Allow the forward migration to finish
+5. Deploy matching server, review runtime, webapp, and browser extension versions. Allow the forward migration to finish
    before restarting reviews. Update the criteria of persisted custom practices in the new editor to
    describe the positive standard, without matrix instructions. Then verify practice editing, one
    review, its recorded result, and delivery.

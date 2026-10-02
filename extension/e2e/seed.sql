@@ -176,23 +176,23 @@ DECLARE
   page_url text;
   comment_base bigint;
   fixture_time timestamptz := '2026-09-27 08:00:00+00';
-  policy jsonb := '{"sourceContractVersion":"1.2.0","automatedReview":{"mode":"NONE","evidenceSufficiency":"NONE"},"whenEvidenceIsInsufficient":"SKIP_AUTOMATED_REVIEW","knownLimitations":[],"insufficiencyReason":null}'::jsonb;
+  policy jsonb := '{"sourceContractVersion":"1.3.0","automatedReview":{"mode":"NONE","evidenceSufficiency":"NONE"},"whenEvidenceIsInsufficient":"SKIP_AUTOMATED_REVIEW","knownLimitations":[],"insufficiencyReason":null}'::jsonb;
 BEGIN
   FOR definition IN SELECT * FROM (VALUES
     (923101, 'e2e-explain-validation', 'Explain validation'),
     (923102, 'e2e-keep-changes-focused', 'Keep changes focused'),
     (923103, 'e2e-unposted-proposal', 'E2E_UNPOSTED_PROPOSAL_PRACTICE')
   ) AS definitions(id, slug, name) LOOP
-    INSERT INTO practice(id, workspace_id, slug, name, bindings, criteria, created_at, updated_at,
+    INSERT INTO practice(id, workspace_id, slug, name, signals, evidence_requirements, on_drafts, subject, criteria, created_at, updated_at,
       applies_to, automated_review_policy, delivery_behavior, autonomy)
     VALUES (definition.id, 20, definition.slug, definition.name,
-      '[{"signals":["scm.pull_request.extension_fixture"],"needs":[],"subject":"AUTHOR","onDrafts":false}]'::jsonb,
+      '["scm.pull_request.extension_fixture"]'::jsonb, '[]'::jsonb, false, 'AUTHOR',
       'Synthetic extension fixture only. This practice never schedules a review.', fixture_time, fixture_time,
       'scm.pull_request', policy, '{"summaryOnly":false}'::jsonb, 'OFF')
     ON CONFLICT (id) DO NOTHING;
     INSERT INTO practice_revision(id, practice_id, revision_number, criteria, created_at, slug, name,
-      applies_to, bindings, automated_review_policy, delivery_behavior)
-    SELECT id, id, 1, criteria, fixture_time, slug, name, applies_to, bindings,
+      applies_to, signals, evidence_requirements, on_drafts, subject, automated_review_policy, delivery_behavior)
+    SELECT id, id, 1, criteria, fixture_time, slug, name, applies_to, signals, evidence_requirements, on_drafts, subject,
       automated_review_policy, delivery_behavior FROM practice WHERE id = definition.id
     ON CONFLICT (id) DO NOTHING;
     UPDATE practice SET current_revision_id = definition.id
@@ -272,11 +272,11 @@ BEGIN
           lpad(item.ordinal::text, 12, '0'))::uuid;
         INSERT INTO observation(id, occurrence_key, agent_job_id, workspace_id, practice_id,
           practice_revision_id, artifact_kind, artifact_id, about_user_id, summary,
-          assessment_status, presence, assessment, severity, origin, observed_at, evidence_rationale)
+          outcome, severity, origin, observed_at, evidence_rationale)
         VALUES(observation_id, 'extension-native-feedback-' || target.number || '-' || item.ordinal,
           run_id, 20, 923100 + item.ordinal, 923100 + item.ordinal, 'scm.pull_request', target.artifact_id,
           target.recipient_id, 'Synthetic browser-test observation; no model reviewed this work.',
-          'ASSESSED', 'PRESENT', 'GOOD', NULL, 'MANUAL', fixture_time,
+          'MET', NULL, 'MANUAL', fixture_time,
           'Synthetic evidence for deterministic browser validation only.')
         ON CONFLICT(id) DO NOTHING;
         INSERT INTO feedback_observation(feedback_id, observation_id, role, ordinal)

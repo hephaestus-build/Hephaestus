@@ -694,16 +694,17 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
     }
 
     private void assertOwnTraceCounts(User developer, boolean ownEndpoint) {
+        // Historical reviews can have multiple observations per practice; access filters still apply to every row.
         Practice shared = persistPractice(workspace, null, "shared", "Shared practice", null);
         AgentJob job = persistPullRequestReview(workspace, (int) ARTIFACT_ID, ARTIFACT_ID, READY_AT);
         recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, job.getId());
-        UUID own = observe(shared, job, ARTIFACT_ID, developer, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
+        UUID own = observe(shared, job, ARTIFACT_ID, developer, Outcome.MET, null, READY_AT);
         observe(
                 shared,
                 job,
                 ARTIFACT_ID,
                 developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
+                Outcome.MET,
                 null,
                 READY_AT.plusSeconds(60),
                 "{\"citations\":[{\"sourceKind\":\"workspace.project-inventory\","
@@ -726,22 +727,15 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                 job,
                 ARTIFACT_ID,
                 developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
+                Outcome.MET,
                 null,
                 READY_AT.plusSeconds(30),
                 "{\"citations\":[{\"sourceKind\":\"slack.conversation.thread\","
                         + "\"artifactPath\":\"context/conversation_thread.json\","
                         + "\"sourceReference\":{\"records\":[{\"type\":\"chat\","
                         + "\"channel\":\"trace-channel\",\"message\":\"1.000001\"}]}}]}");
-        observe(
-                shared,
-                job,
-                ARTIFACT_ID + 1,
-                developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
-                null,
-                READY_AT.plusSeconds(120));
-        UUID theirs = observe(shared, job, ARTIFACT_ID, author, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
+        observe(shared, job, ARTIFACT_ID + 1, developer, Outcome.MET, null, READY_AT.plusSeconds(120));
+        UUID theirs = observe(shared, job, ARTIFACT_ID, author, Outcome.MET, null, READY_AT);
         feedback(job, 1, own, developer, FeedbackDeliveryState.DELIVERED, null);
         feedback(
                 job,

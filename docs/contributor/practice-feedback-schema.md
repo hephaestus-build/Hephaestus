@@ -18,7 +18,7 @@ Use the executable sources for exact details:
 - [`openapi.yaml`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml) for HTTP projections;
 - [ADR 0021](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0021-observations-feedback-synthesis-seam.md)
   and
-  [ADR 0048](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0050-one-practice-standard-one-outcome.md)
+  [ADR 0050](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0050-one-practice-standard-one-outcome.md)
   for design history;
 - [practice feedback language](./practice-feedback-language.md) for user-facing terms.
 

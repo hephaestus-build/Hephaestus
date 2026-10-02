@@ -663,8 +663,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
      * <p>Native (not JPQL) because the latest-run-per-target selection needs {@code ORDER BY ... LIMIT 1} in a
      * correlated subquery, which JPQL cannot express. Aliases are quoted so the JDBC column labels match the
      * {@link DeveloperPracticeSummaryProjection} getters exactly (Postgres folds unquoted identifiers to
-     * lower-case). Enum columns compare against their {@code STRING} storage form. {@code metCount} is
-     * the positive outcomes; {@code notMetCount} is the negative outcomes.
+     * lower-case). Enum columns compare against their {@code STRING} storage form.
      */
     @Query(
             value = """
