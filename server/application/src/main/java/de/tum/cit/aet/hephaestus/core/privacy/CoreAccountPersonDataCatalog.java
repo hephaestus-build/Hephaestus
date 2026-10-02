@@ -34,7 +34,8 @@ class CoreAccountPersonDataCatalog implements PersonDataCatalog {
                     @Override
                     public long erase(PersonDataSelection selection) {
                         for (var row : selection.rows())
-                            purger.purge(Long.valueOf(row.columns().get("id")));
+                            purger.purgeInCurrentTransaction(
+                                    Long.valueOf(row.columns().get("id")));
                         return selection.rows().size();
                     }
                 });

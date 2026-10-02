@@ -326,7 +326,7 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(receipt.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
         assertThat(receipt.getScopeJson()).isNull();
         assertThat(receipt.getSelectionsJson()).isNull();
-        Map<String, Long> completed = mapper.readValue(receipt.getCompletedJson(), new TypeReference<>() {});
+        Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, receipt.getCompletedJson());
         assertThat(completed.keySet()).containsExactlyInAnyOrderElementsOf(counts.keySet());
         assertThat(accounts.findById(Objects.requireNonNull(targetAccount.getId()))
                         .orElseThrow()

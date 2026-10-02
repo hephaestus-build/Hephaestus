@@ -27,6 +27,7 @@ import tools.jackson.databind.ObjectMapper;
     "event_publication",
     "person_data_request",
     "person_data_request_administration",
+    "person_data_store_administration",
     "person_suppression"
 })
 public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
@@ -36,6 +37,7 @@ public class CorePrivacyPersonDataCatalog implements PersonDataCatalog {
     @Override
     public List<PersonDataContributor> contributors() {
         return List.of(
+                new PersonDataStoreAdministrationContributor(jdbc, mapper),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

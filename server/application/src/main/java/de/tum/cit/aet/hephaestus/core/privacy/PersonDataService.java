@@ -79,15 +79,28 @@ public class PersonDataService {
 
     @Transactional
     public void requestErasure(UUID id, long administratorId, boolean externalCopiesRemoved) {
-        PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
-        if (r.getState() == PersonDataRequest.State.COMPLETE || r.getState() == PersonDataRequest.State.ERASING) return;
-        if (r.getState() != PersonDataRequest.State.FAILED) requirePreview(r);
-        PersonScope person = scope(r);
+        // All writers take global admission, native keys and accounts before a request row.
+        // The unlocked snapshot contains only the immutable admission scope; revalidate after locking.
+        var admission = jdbc.query(
+                "SELECT state,scope_json FROM person_data_request WHERE id=?",
+                (rs, row) -> new ErasureAdmission(Objects.requireNonNull(rs.getString(1)), rs.getString(2)),
+                id);
+        if (admission.isEmpty()) throw notFound();
+        var initial = admission.getFirst();
+        if (initial.state().equals("COMPLETE") || initial.state().equals("ERASING")) return;
+        if (!initial.state().equals("PREVIEW") && !initial.state().equals("FAILED"))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This preview is no longer available");
+        PersonScope person = mapper.readValue(Objects.requireNonNull(initial.scopeJson()), PersonScope.class);
         if (Objects.equals(person.accountId(), administratorId))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Another administrator must authorize this erasure");
         copyFence.holdForErasure();
         writeFence.holdForErasure(person.identities());
         requireActiveAdministratorAndLockAccount(administratorId, person.accountId());
+        PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
+        if (r.getState() == PersonDataRequest.State.COMPLETE || r.getState() == PersonDataRequest.State.ERASING) return;
+        if (r.getState() != PersonDataRequest.State.FAILED) requirePreview(r);
+        if (!scope(r).equals(person))
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "The request scope changed");
         if (r.getState() == PersonDataRequest.State.FAILED) {
             requireExternalRemoval(selections(r), externalCopiesRemoved);
             r.setAdministratorAccountId(administratorId);
@@ -121,6 +134,9 @@ public class PersonDataService {
         r.setFailureCode(null);
     }
 
+    private record ErasureAdmission(
+            String state, @org.jspecify.annotations.Nullable String scopeJson) {}
+
     private void requireActiveAdministratorAndLockAccount(
             long administratorId, @org.jspecify.annotations.Nullable Long personAccountId) {
         // Lock both accounts in one order. Concurrent requests must not erase each other's
@@ -140,10 +156,8 @@ public class PersonDataService {
         var admission = copyFence.erase();
         try (admission) {
             Map<String, PersonDataSelection> frozen = tx.execute(status -> {
-                PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
-                return r.getState() == PersonDataRequest.State.ERASING
-                        ? selections(r)
-                        : Map.<String, PersonDataSelection>of();
+                PersonDataRequest r = lockAdmittedErasure(id);
+                return r == null ? Map.<String, PersonDataSelection>of() : selections(r);
             });
             if (frozen == null || frozen.isEmpty()) return;
             Set<String> inventory = registry.stores().stream()
@@ -154,8 +168,8 @@ public class PersonDataService {
             for (var store : registry.stores()) store.prepareErasure(Objects.requireNonNull(frozen.get(store.store())));
             for (var store : registry.stores()) {
                 Boolean proceed = tx.execute(status -> {
-                    PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
-                    if (r.getState() != PersonDataRequest.State.ERASING) return false;
+                    PersonDataRequest r = lockAdmittedErasure(id);
+                    if (r == null) return false;
                     var completed = completed(r);
                     if (!completed.keySet().stream()
                             .allMatch(key -> registry.stores().stream()
@@ -164,7 +178,9 @@ public class PersonDataService {
                     if (!completed.containsKey(store.store())) {
                         long count =
                                 store.erase(Objects.requireNonNull(selections(r).get(store.store())));
-                        completed.put(store.store(), count);
+                        completed.put(
+                                store.store(),
+                                new PersonDataStoreReceipt(count, Instant.now(), r.getAdministratorAccountId()));
                         r.setCompletedJson(mapper.writeValueAsString(completed));
                         requests.saveAndFlush(r);
                     }
@@ -225,8 +241,29 @@ public class PersonDataService {
                 new TypeReference<Map<String, PersonDataSelection>>() {});
     }
 
-    private Map<String, Long> completed(PersonDataRequest r) {
-        return mapper.readValue(r.getCompletedJson(), new TypeReference<Map<String, Long>>() {});
+    private @org.jspecify.annotations.Nullable PersonDataRequest lockAdmittedErasure(UUID id) {
+        var actors = jdbc.query(
+                "SELECT administrator_account_id,scope_json FROM person_data_request WHERE id=? AND state='ERASING'",
+                (rs, row) -> new StepAdmission(rs.getObject(1, Long.class), rs.getString(2)),
+                id);
+        if (actors.isEmpty()) return null;
+        var actor = actors.getFirst();
+        var person = mapper.readValue(Objects.requireNonNull(actor.scopeJson()), PersonScope.class);
+        requireActiveAdministratorAndLockAccount(
+                Objects.requireNonNull(actor.administratorAccountId()), person.accountId());
+        PersonDataRequest request = requests.lock(id).orElseThrow(() -> notFound());
+        if (request.getState() != PersonDataRequest.State.ERASING) return null;
+        if (!Objects.equals(request.getAdministratorAccountId(), actor.administratorAccountId())
+                || !scope(request).equals(person)) throw new IllegalStateException("Erasure admission changed");
+        return request;
+    }
+
+    private record StepAdmission(
+            @org.jspecify.annotations.Nullable Long administratorAccountId,
+            @org.jspecify.annotations.Nullable String scopeJson) {}
+
+    private Map<String, PersonDataStoreReceipt> completed(PersonDataRequest r) {
+        return PersonDataStoreReceipt.read(mapper, r.getCompletedJson());
     }
 
     private List<PersonDataContributor.ExternalDelivery> deliveries(Map<String, PersonDataSelection> selected) {

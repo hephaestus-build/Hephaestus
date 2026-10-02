@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.*;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
@@ -75,6 +76,7 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
         administrator.setAppRole(Account.AppRole.APP_ADMIN);
         long adminId =
                 Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var preparationCalls = new AtomicInteger();
         var firstCalls = new AtomicInteger();
         var secondCalls = new AtomicInteger();
         var failOnce = new AtomicBoolean(true);
@@ -89,6 +91,11 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
                         "user_id",
                         "",
                         0) {
+                    @Override
+                    public void prepareErasure(PersonDataSelection selection) {
+                        preparationCalls.incrementAndGet();
+                    }
+
                     @Override
                     public long erase(PersonDataSelection selection) {
                         firstCalls.incrementAndGet();
@@ -139,6 +146,7 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
         assertThat(failed.getFailureCode()).isEqualTo("STORE_ERASURE_FAILED");
         assertThat(mapper.readTree(failed.getCompletedJson())
                         .path("preferences_step")
+                        .path("count")
                         .asLong())
                 .isEqualTo(1L);
         assertThat(mapper.readTree(failed.getCompletedJson()).has("profile_step"))
@@ -150,17 +158,37 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
         assertThat(preferenceCount(other.getId())).isEqualTo(1L);
         assertThat(profileName(other.getId())).isEqualTo("Other profile");
 
-        tx.executeWithoutResult(status -> service.requestErasure(requestId, adminId, true));
+        jdbc.update("UPDATE account SET app_role='USER' WHERE id=?", adminId);
+        jdbc.update("UPDATE person_data_request SET state='ERASING' WHERE id=?", requestId);
+        service.run(requestId);
+        assertThat(preparationCalls.get()).isEqualTo(1);
+        assertThat(requests.findById(requestId).orElseThrow().getState()).isEqualTo(PersonDataRequest.State.FAILED);
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> service.requestErasure(requestId, adminId, true)))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(secondCalls.get()).isEqualTo(1);
+        var resumingAdministrator = new Account("Resuming administrator");
+        resumingAdministrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long resumingId = Objects.requireNonNull(
+                accounts.saveAndFlush(resumingAdministrator).getId());
+        tx.executeWithoutResult(status -> service.requestErasure(requestId, resumingId, true));
         service.run(requestId);
         var completed = requests.findById(requestId).orElseThrow();
         assertThat(completed.getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
-        assertThat(completed.getAdministratorAccountId()).isEqualTo(adminId);
+        assertThat(completed.getAdministratorAccountId()).isEqualTo(resumingId);
+        var receipts = PersonDataStoreReceipt.read(mapper, completed.getCompletedJson());
+        assertThat(Objects.requireNonNull(receipts.get("preferences_step")).administratorAccountId())
+                .isEqualTo(adminId);
+        assertThat(Objects.requireNonNull(receipts.get("profile_step")).administratorAccountId())
+                .isEqualTo(resumingId);
+        assertThat(receipts.values())
+                .allSatisfy(receipt -> assertThat(receipt.completedAt()).isNotNull());
         assertThat(completed.getScopeJson()).isNull();
         assertThat(completed.getSelectionsJson()).isNull();
         assertThat(completed.getFailureCode()).isNull();
         assertThat(completed.getCompletedAt()).isNotNull();
         assertThat(mapper.readTree(completed.getCompletedJson())
                         .path("profile_step")
+                        .path("count")
                         .asLong())
                 .isEqualTo(1L);
         assertThat(profileName(target.getId())).isNull();

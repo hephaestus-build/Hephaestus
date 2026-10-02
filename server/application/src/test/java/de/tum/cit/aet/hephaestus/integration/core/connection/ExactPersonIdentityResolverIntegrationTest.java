@@ -80,8 +80,8 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         var receipt = personData.get(snapshot.request().getId()).request();
         assertThat(receipt.getState())
                 .isEqualTo(de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State.COMPLETE);
-        java.util.Map<String, Long> completed = new tools.jackson.databind.ObjectMapper()
-                .readValue(receipt.getCompletedJson(), new tools.jackson.core.type.TypeReference<>() {});
+        java.util.Map<String, Long> completed = de.tum.cit.aet.hephaestus.core.privacy.PersonDataStoreReceipt.counts(
+                new tools.jackson.databind.ObjectMapper(), receipt.getCompletedJson());
         assertThat(completed.keySet()).containsExactlyInAnyOrderElementsOf(exportedStores);
         assertThat(receipt.getScopeJson()).isNull();
         assertThat(receipt.getSelectionsJson()).isNull();

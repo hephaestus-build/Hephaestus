@@ -58,6 +58,15 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
     private ObjectProvider<AgentJobLifecycleService> lifecycles;
 
     @Autowired
+    private PersonDataService personData;
+
+    @Autowired
+    private PersonDataRequestRepository requests;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository accounts;
+
+    @Autowired
     private org.springframework.transaction.PlatformTransactionManager transactions;
 
     private EvidenceFolderPersonDataCatalog catalog(Path store, PersonDataCopyRecorder recorder) {
@@ -94,6 +103,61 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
                         Map.of("context/people/person.json", "COPIED-PROFILE-CANARY".getBytes(StandardCharsets.UTF_8)),
                         null),
                 null);
+    }
+
+    @Test
+    void erasureWaitsForCaptureWithoutHoldingTheRequestRowAndRejectsTheChangedPreview() throws Exception {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://capture-race.example"));
+        var administrator = new de.tum.cit.aet.hephaestus.core.auth.domain.Account("Administrator");
+        administrator.setAppRole(de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var preview = personData.preview(
+                administratorId,
+                null,
+                List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)));
+        UUID requestId = preview.request().getId();
+        var recorder = new ExactPersonDataCopyRecorder(jdbc);
+        var catalog = catalog(root, recorder);
+        var job = job("folder-capture-race");
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        files.beginPersonCapture(job);
+        recorder.recordIdentity(new PersonCopyIdentity("GITLAB", "https://capture-race.example", "42", null));
+        var executor = Executors.newSingleThreadExecutor();
+        try {
+            var erasure = executor.submit(
+                    () -> assertThatThrownBy(() -> personData.requestErasure(requestId, administratorId, true))
+                            .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                            .hasMessageContaining("preview scope changed"));
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (!Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND classid=2165 AND objid=1 AND NOT granted)",
+                    Boolean.class))) {
+                if (System.nanoTime() > deadline)
+                    throw new AssertionError("Erasure did not wait for the capture fence");
+                Thread.sleep(20);
+            }
+            var tx = new org.springframework.transaction.support.TransactionTemplate(transactions);
+            tx.executeWithoutResult(status -> {
+                jdbc.execute("SET LOCAL lock_timeout='2s'");
+                assertThat(requests.lock(requestId).orElseThrow().getState())
+                        .isEqualTo(PersonDataRequest.State.PREVIEW);
+            });
+            assertThat(erasure.isDone()).isFalse();
+            files.abortPersonCapture(job);
+            erasure.get(10, TimeUnit.SECONDS);
+            assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
+            assertThat(jdbc.queryForObject(
+                            "SELECT count(*) FROM person_suppression WHERE provider_id=?",
+                            Long.class,
+                            provider.getId()))
+                    .isZero();
+        } finally {
+            files.abortPersonCapture(job);
+            executor.shutdownNow();
+        }
     }
 
     @Test

@@ -151,7 +151,7 @@ public class PersonDataAdminController {
     private ResponseEntity<PersonDataRequestDTO> response(PersonDataService.Snapshot snapshot) {
         var r = snapshot.request();
         Map<String, Long> counts = mapper.readValue(r.getCountsJson(), new TypeReference<Map<String, Long>>() {});
-        Map<String, Long> completed = mapper.readValue(r.getCompletedJson(), new TypeReference<Map<String, Long>>() {});
+        Map<String, Long> completed = PersonDataStoreReceipt.counts(mapper, r.getCompletedJson());
         PersonDataScopeDTO resolvedScope = null;
         if (r.getScopeJson() != null) {
             var scope =

@@ -48,3 +48,8 @@ failed rendering folders. An active runtime must release its folder before delet
 If a worker volume is offline, erasure stops with a resumable failure; an empty server folder does
 not count as deletion. Capture admission is serialized with erasure across runtime roles, without
 changing the existing job-folder retention period.
+
+Each completed store step records its count, completion time and exact acting account. A different
+administrator can resume a failed request without changing the earlier steps' attribution. Erasing
+an administrator clears their step attribution, not the counts or times. Each new step verifies that
+the acting administrator still has active instance-admin access.
