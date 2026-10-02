@@ -55,7 +55,7 @@ export const Default: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Each bar counts developers by their standing in the group, and You marks yours. A part shows only when it holds at least 3 other developers; otherwise it is merged or held back, so no one can be singled out.",
+				"Each bar counts developers by their standing in the group, and You marks yours. A bar shows only when each of its parts holds at least 3 other developers; otherwise the whole bar is held back, so no one can be singled out.",
 			),
 		).toBeVisible();
 		const table = groupsTable(canvas);

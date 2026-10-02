@@ -75,6 +75,8 @@ describe("the hints", () => {
 	});
 
 	it("takes the part size from K", () => {
-		expect(groupsHint(3)).toContain("A part shows only when it holds at least 3 other developers");
+		expect(groupsHint(3)).toContain(
+			"A bar shows only when each of its parts holds at least 3 other developers",
+		);
 	});
 });

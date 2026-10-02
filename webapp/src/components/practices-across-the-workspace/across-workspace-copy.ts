@@ -61,7 +61,7 @@ export function tilesHint(
  * shows from K + 1 developers, the reader counted, so it stands for K others whoever reads it.
  */
 export function groupsHint(minimumOthers: number): string {
-	return `Each bar counts developers by their standing in the group, and You marks yours. A part shows only when it holds at least ${minimumOthers} other developers; otherwise it is merged or held back, so no one can be singled out.`;
+	return `Each bar counts developers by their standing in the group, and You marks yours. A bar shows only when each of its parts holds at least ${minimumOthers} other developers; otherwise the whole bar is held back, so no one can be singled out.`;
 }
 
 export const standingLabel = (standing: PracticeGroupStandingValue): string =>
