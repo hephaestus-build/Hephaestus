@@ -71,7 +71,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog {
                         "feedback_placement",
                         "feedback_placement",
                         "t.feedback_id IN (SELECT id FROM feedback WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents))) OR recipient_user_id = ANY(:users) OR id IN (SELECT feedback_id FROM feedback_observation WHERE observation_id IN (SELECT id FROM observation WHERE (about_user_id = ANY(:users) OR (artifact_kind IN ('scm.issue','scm.pull_request') AND artifact_id = ANY(:artifacts)) OR (artifact_kind='chat.conversation_thread' AND artifact_id = ANY(:conversations)) OR (artifact_kind='docs.document' AND artifact_id = ANY(:documents))))))",
-                        "id,feedback_id,placement_type,anchor_kind,anchor_path,anchor_start_line,anchor_end_line,anchor_side,posted_comment_ref,created_at,chat_message_id",
+                        "id,feedback_id,placement_type,anchor_kind,anchor_path,anchor_start_line,anchor_end_line,anchor_side,posted_comment_ref,posted_comment_url,created_at,chat_message_id",
                         "id",
                         "",
                         -200),

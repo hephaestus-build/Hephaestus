@@ -245,7 +245,16 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(export.path("stores").path("client_sign_in_handoff").toString())
                 .doesNotContain(targetSession.toString(), "code_hash", "code_challenge");
 
-        assertThat(counts.get("feedback")).isEqualTo(4L);
+        assertThat(counts.get("feedback")).isEqualTo(6L);
+        assertThat(preview.externalDeliveries()).hasSize(2);
+        assertThat(preview.externalDeliveries())
+                .allSatisfy(delivery -> assertThat(delivery.locator()).startsWith("https://team-"));
+        assertThat(export.path("stores").path("feedback_placement").toString())
+                .contains("posted_comment_url", "https://team-");
+        assertThatThrownBy(() -> personData.requestErasure(requestId, administratorId, false))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("un-deliver runbook");
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
         assertThat(counts.get("observation")).isEqualTo(4L);
         assertThat(counts.get("observation_invalidation")).isEqualTo(2L);
         assertThat(counts.get("config_audit_event_membership_subject")).isEqualTo(2L);
@@ -572,6 +581,31 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .feedback(delivered)
                 .placementType(PlacementType.CONVERSATION_TURN)
                 .chatMessageId(message.getId())
+                .createdAt(Instant.now())
+                .build());
+        Feedback posted = feedbackRepository.save(Feedback.builder()
+                .agentJobId(job.getId())
+                .workspaceId(workspace.getId())
+                .artifactKind(ArtifactKinds.CONVERSATION_THREAD)
+                .artifactId(threadId)
+                .recipientUserId(owner.getId())
+                .aboutUserId(owner.getId())
+                .channel(FeedbackChannel.IN_CONTEXT)
+                .position(2)
+                .deliveryState(FeedbackDeliveryState.DELIVERED)
+                .body("Provider-posted guidance for developer " + owner.getId())
+                .source(FeedbackSource.AGENT)
+                .createdAt(Instant.now())
+                .deliveredAt(Instant.now())
+                .build());
+        feedbackObservationRepository.insertIfAbsent(
+                posted.getId(), observationIds.getFirst(), EvidenceRole.PRIMARY.name(), 0);
+        feedbackPlacementRepository.save(FeedbackPlacement.builder()
+                .feedback(posted)
+                .placementType(PlacementType.SUMMARY)
+                .postedCommentRef("1700000000." + owner.getId())
+                .postedCommentUrl(
+                        "https://team-" + workspace.getId() + ".slack.com/archives/C1/p1700000000" + owner.getId())
                 .createdAt(Instant.now())
                 .build());
         return new DerivedConversation(observationIds, prepared.getId(), delivered.getId(), message.getId());

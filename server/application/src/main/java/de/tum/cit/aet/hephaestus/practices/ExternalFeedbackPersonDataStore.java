@@ -27,7 +27,7 @@ final class ExternalFeedbackPersonDataStore extends JdbcPersonDataStore {
     public List<ExternalDelivery> externalDeliveries(PersonDataSelection selection) {
         boolean placement = store().equals("feedback_placement");
         String projection = placement
-                ? "jsonb_build_object('workspaceId',f.workspace_id,'locator',t.posted_comment_ref)::text"
+                ? "jsonb_build_object('workspaceId',f.workspace_id,'locator',COALESCE(NULLIF(t.posted_comment_url,''),t.posted_comment_ref))::text"
                 : "jsonb_build_object('workspaceId',t.workspace_id,'locator',t.delivered_external_ref,'placements',t.delivered_placements)::text";
         String from = placement ? "feedback_placement t JOIN feedback f ON f.id=t.feedback_id" : "feedback_dispatch t";
         List<ExternalDelivery> deliveries = new ArrayList<>();
