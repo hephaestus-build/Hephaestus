@@ -397,7 +397,7 @@ class DeliveryComposerTest extends BaseUnitTest {
     @Test
     void shouldKeepAbbreviatedExamplesWholeWhenRemovingInternalReasoning() {
         String prose = "The README names the feature. "
-                + "I checked the mapping (e.g. #21 covers steps that are deferred). "
+                + "The outcome is NOT_MET (e.g. #21 covers steps that are deferred). "
                 + "The practice requires explicit criteria.";
 
         assertThat(DeliveryComposer.sanitizeStudentText(prose)).isEqualTo("The README names the feature.");

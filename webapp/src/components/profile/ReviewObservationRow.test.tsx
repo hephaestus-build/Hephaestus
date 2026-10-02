@@ -64,16 +64,36 @@ describe("ReviewObservationRow", () => {
 		screen.getByText(/This looked like a credential/u);
 	});
 
-	it("shows the review's own next step over the one that was delivered", () => {
+	it("shows the authored next step without substituting the provider comment", () => {
 		renderOpen({
 			observation: {
 				...observation,
 				nextStep: "Split the commit so the rename can be reverted on its own.",
+				deliveredFeedback:
+					"<!-- hephaestus:summary -->\nProvider comment.\n<sub>AI-generated</sub>",
 			},
 		});
 
 		screen.getByText("Split the commit so the rename can be reverted on its own.");
-		expect(screen.queryByText(/Land the rename on its own first/u)).toBeNull();
+		expect(screen.queryByText(/hephaestus:summary/u)).toBeNull();
+		expect(screen.queryByText(/Provider comment/u)).toBeNull();
+	});
+
+	it("keeps an unavailable next step absent while preserving the observation response", () => {
+		renderOpen({
+			observation: {
+				...observation,
+				nextStep: undefined,
+				deliveredFeedback:
+					"<!-- hephaestus:summary -->\nProvider comment.\n<sub>AI-generated</sub>",
+			},
+		});
+
+		expect(screen.queryByText("Next step")).toBeNull();
+		expect(screen.queryByText(/hephaestus:summary/u)).toBeNull();
+		expect(screen.queryByText(/Provider comment/u)).toBeNull();
+		screen.getByRole("button", { name: "Addressed" });
+		screen.getByText("Helpful");
 	});
 
 	it("refuses a dispute made of blanks through the field rather than in silence", () => {

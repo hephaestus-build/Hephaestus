@@ -36,6 +36,8 @@ const strength = {
 	...reviewedWork,
 	evidenceRationale:
 		"The comment above the changed branch states why the timeout was raised, so a later reader does not have to reconstruct it from the diff.",
+	nextStep:
+		"Keep doing this where a value is chosen rather than derived — the reasoning is what a reviewer cannot recover on their own.",
 	deliveredFeedback:
 		"Keep doing this where a value is chosen rather than derived — the reasoning is what a reviewer cannot recover on their own.",
 	evidence: {
