@@ -29,11 +29,12 @@ public class PracticesAcrossWorkspaceController {
     @GetMapping
     @Operation(
             operationId = "getPracticesAcrossWorkspace",
-            summary = "The reader's practice group standings beside how the workspace's developers split",
+            summary = "The reader's practice group and practice standings beside how the workspace's developers split",
             description = "Counts developers, never names them: a count is shown only when it holds at least "
-                    + CohortPrivacyPolicy.MINIMUM_OTHERS + " developers other than the reader, a group's split"
-                    + " collapses to has a standing against none yet before it is withheld, and each window is"
-                    + " checked on its own.")
+                    + CohortPrivacyPolicy.MINIMUM_OTHERS
+                    + " developers other than the reader, a group's or a practice's"
+                    + " split collapses to has a standing against none yet before it is withheld, and each window"
+                    + " is checked on its own.")
     @ApiResponse(responseCode = "200", description = "Practices across the workspace returned")
     public ResponseEntity<PracticesAcrossWorkspaceDTO> getPracticesAcrossWorkspace(
             WorkspaceContext context, @RequestParam(defaultValue = "TERM") PracticesAcrossWorkspaceWindow window) {

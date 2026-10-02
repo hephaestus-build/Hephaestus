@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO;
-import de.tum.cit.aet.hephaestus.practices.dto.PracticeGroupStandingDTO.Standing;
+import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import java.util.Collection;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -13,7 +13,10 @@ import org.jspecify.annotations.Nullable;
  * least {@link #MINIMUM_OTHERS} developers other than the reader. The reader is left out of that test because the
  * reader knows their own standing: a part of five that includes the reader hides only four others.
  *
- * <p>A practice group's split is checked on "has a standing" against "none yet" first, and both parts must hold
+ * <p>A practice group and a practice are split by the same rule, over the same observed developers: each
+ * developer falls in one {@link Bucket}, read off their group standing or their practice standing.
+ *
+ * <p>A split is checked on "has a standing" against "none yet" first, and both parts must hold
  * enough others before any split shows. The page states how many developers were observed, so a three way split
  * also states "none yet" as the rest: 23 at a standing among 24 observed names the one without. When that holds,
  * the split shows Needs attention, Mixed feedback and Going well, or collapses to the two parts when one of the
@@ -28,7 +31,33 @@ public final class CohortPrivacyPolicy {
 
     private CohortPrivacyPolicy() {}
 
-    /** How one practice group's split is shown. */
+    /** Where one developer falls in a split: one of the three standings, or none yet. */
+    public enum Bucket {
+        NEEDS_ATTENTION,
+        MIXED_FEEDBACK,
+        GOING_WELL,
+        NONE_YET;
+
+        public static Bucket of(PracticeGroupStandingDTO.Standing standing) {
+            return switch (standing) {
+                case DEVELOPING -> NEEDS_ATTENTION;
+                case MIXED -> MIXED_FEEDBACK;
+                case STRENGTH -> GOING_WELL;
+                case NOT_OBSERVED, NO_OPPORTUNITY -> NONE_YET;
+            };
+        }
+
+        public static Bucket of(PracticeStandingDTO.Standing standing) {
+            return switch (standing) {
+                case DEVELOPING -> NEEDS_ATTENTION;
+                case MIXED -> MIXED_FEEDBACK;
+                case STRENGTH -> GOING_WELL;
+                case NOT_OBSERVED, NO_OPPORTUNITY -> NONE_YET;
+            };
+        }
+    }
+
+    /** How one split is shown. */
     public enum Shape {
         /** Needs attention, Mixed feedback and Going well, each counted. */
         SPLIT,
@@ -39,7 +68,7 @@ public final class CohortPrivacyPolicy {
     }
 
     /**
-     * One group's split as it may be shown. Counts include the reader when the reader is counted, so the bar and
+     * One split as it may be shown. Counts include the reader when the reader is counted, so the bar and
      * the reader's place on it agree; every count is null outside the shape that shows it.
      */
     public record Split(
@@ -54,15 +83,15 @@ public final class CohortPrivacyPolicy {
     }
 
     /**
-     * The split of one practice group.
+     * The split of one practice group or one practice.
      *
-     * @param others the group standing of every observed developer other than the reader, silences included
-     * @param reader the reader's group standing when the reader is one of the observed developers, else null
+     * @param others the bucket of every observed developer other than the reader, none yet included
+     * @param reader the reader's bucket when the reader is one of the observed developers, else null
      */
-    public static Split split(Collection<Standing> others, @Nullable Standing reader) {
-        int needs = count(others, Standing.DEVELOPING);
-        int mixed = count(others, Standing.MIXED);
-        int well = count(others, Standing.STRENGTH);
+    public static Split split(Collection<Bucket> others, @Nullable Bucket reader) {
+        int needs = count(others, Bucket.NEEDS_ATTENTION);
+        int mixed = count(others, Bucket.MIXED_FEEDBACK);
+        int well = count(others, Bucket.GOING_WELL);
         int has = needs + mixed + well;
         int none = others.size() - has;
         if (!shows(has) || !shows(none)) {
@@ -71,13 +100,13 @@ public final class CohortPrivacyPolicy {
         if (shows(needs) && shows(mixed) && shows(well)) {
             return new Split(
                     Shape.SPLIT,
-                    needs + (reader == Standing.DEVELOPING ? 1 : 0),
-                    mixed + (reader == Standing.MIXED ? 1 : 0),
-                    well + (reader == Standing.STRENGTH ? 1 : 0),
+                    needs + (reader == Bucket.NEEDS_ATTENTION ? 1 : 0),
+                    mixed + (reader == Bucket.MIXED_FEEDBACK ? 1 : 0),
+                    well + (reader == Bucket.GOING_WELL ? 1 : 0),
                     null,
                     null);
         }
-        boolean readerHas = reader != null && PracticeGroupStandingDTO.isVerdict(reader);
+        boolean readerHas = reader != null && reader != Bucket.NONE_YET;
         return new Split(
                 Shape.COLLAPSED,
                 null,
@@ -111,7 +140,7 @@ public final class CohortPrivacyPolicy {
         return others >= MINIMUM_OTHERS;
     }
 
-    private static int count(Collection<Standing> standings, Standing standing) {
-        return (int) standings.stream().filter(each -> each == standing).count();
+    private static int count(Collection<Bucket> buckets, Bucket bucket) {
+        return (int) buckets.stream().filter(each -> each == bucket).count();
     }
 }

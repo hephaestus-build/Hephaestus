@@ -1503,7 +1503,15 @@ export const getOwnArtifactTraceResponseTransformer = async (data: any): Promise
   return data;
 };
 
+const workspaceGroupSplitSchemaResponseTransformer = (data: any) => {
+  if (data.yourTrendSupport) {
+    data.yourTrendSupport = trendSupportSchemaResponseTransformer(data.yourTrendSupport);
+  }
+  return data;
+};
+
 const practicesAcrossWorkspaceSchemaResponseTransformer = (data: any) => {
+  data.groups = data.groups.map((item: any) => workspaceGroupSplitSchemaResponseTransformer(item));
   data.since = new Date(data.since);
   data.until = new Date(data.until);
   return data;
