@@ -13,6 +13,8 @@ import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.block.composition.ConfirmationDialogObject;
 import com.slack.api.model.view.View;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorReadinessQuery;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorTurnRunner;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
@@ -45,6 +47,7 @@ public class SlackAppHomeService {
     private final SlackParticipantConsentRepository participantConsentRepository;
     private final SlackMonitoredChannelRepository monitoredChannelRepository;
     private final MentorReadinessQuery mentorReadinessQuery;
+    private final MentorTurnRunner mentorTurnRunner;
     private final SlackMessageService messageService;
     private final SlackOnboardingService onboardingService;
     private final SlackHephaestusUiLinks uiLinks;
@@ -55,6 +58,7 @@ public class SlackAppHomeService {
             SlackParticipantConsentRepository participantConsentRepository,
             SlackMonitoredChannelRepository monitoredChannelRepository,
             MentorReadinessQuery mentorReadinessQuery,
+            MentorTurnRunner mentorTurnRunner,
             SlackMessageService messageService,
             SlackOnboardingService onboardingService,
             SlackHephaestusUiLinks uiLinks) {
@@ -63,6 +67,7 @@ public class SlackAppHomeService {
         this.participantConsentRepository = participantConsentRepository;
         this.monitoredChannelRepository = monitoredChannelRepository;
         this.mentorReadinessQuery = mentorReadinessQuery;
+        this.mentorTurnRunner = mentorTurnRunner;
         this.messageService = messageService;
         this.onboardingService = onboardingService;
         this.uiLinks = uiLinks;
@@ -87,14 +92,17 @@ public class SlackAppHomeService {
         boolean mentorReady = mentorReadinessQuery.isReady(workspaceId);
         Optional<User> developer = identityResolver.resolveDeveloper(workspaceId, teamId, slackUserId);
         Optional<String> login = developer.map(User::getLogin);
+        Optional<MentorRefusal> refusal = mentorReady
+                ? developer.flatMap(user -> mentorTurnRunner.refusal(workspaceId, user.getId()))
+                : Optional.empty();
         boolean channelMessagesAllowed =
                 !participantConsentRepository.existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(
                         workspaceId, slackUserId);
         long activeChannels =
                 monitoredChannelRepository.countByWorkspaceIdAndConsentState(workspaceId, ConsentState.ACTIVE);
 
-        blocks.addAll(
-                overviewBlocks(new HomeOverviewState(mentorReady, login, channelMessagesAllowed, activeChannels)));
+        blocks.addAll(overviewBlocks(
+                new HomeOverviewState(mentorReady, login, refusal, channelMessagesAllowed, activeChannels)));
         blocks.addAll(openHephaestusBlocks(uiLinks.userSettingsUrl()));
         blocks.add(divider());
         blocks.addAll(channelMessageBlocks(channelMessagesAllowed));
@@ -113,18 +121,26 @@ public class SlackAppHomeService {
             mentorState = "Unavailable";
         } else if (state.login().isEmpty()) {
             mentorState = "Check account access";
+        } else if (state.refusal().isPresent()) {
+            mentorState = switch (state.refusal().get()) {
+                case NO_AI -> "Off for you";
+                case CHOICE_REQUIRED -> "Choose your AI";
+                case UNAVAILABLE -> "Unavailable for your AI choice";
+            };
         } else {
-            mentorState = "Ready to answer";
+            mentorState = "Enabled for you";
         }
         String accountState =
                 state.login().map(value -> "Linked as `" + value + "`").orElse("No active linked workspace member");
         String activeChannelText =
                 state.activeChannels() == 1 ? "1 active channel" : state.activeChannels() + " active channels";
         return List.of(
-                section(s -> s.text(markdownText(leadText(state.mentorReady(), state.login())))),
+                section(s -> s.text(markdownText(leadText(state)))),
                 section(s -> s.fields(List.of(
                         markdownText("*Mentor*\n"
-                                + stateIcon(state.mentorReady() && state.login().isPresent())
+                                + stateIcon(state.mentorReady()
+                                        && state.login().isPresent()
+                                        && state.refusal().isEmpty())
                                 + " "
                                 + mentorState),
                         markdownText("*Account*\n" + stateIcon(state.login().isPresent()) + " " + accountState),
@@ -141,7 +157,11 @@ public class SlackAppHomeService {
     }
 
     record HomeOverviewState(
-            boolean mentorReady, Optional<String> login, boolean channelMessagesAllowed, long activeChannels) {}
+            boolean mentorReady,
+            Optional<String> login,
+            Optional<MentorRefusal> refusal,
+            boolean channelMessagesAllowed,
+            long activeChannels) {}
 
     private static List<LayoutBlock> openHephaestusBlocks(String url) {
         if (url == null || url.isBlank()) {
@@ -157,15 +177,18 @@ public class SlackAppHomeService {
                         .style("primary"))))));
     }
 
-    private static String leadText(boolean mentorReady, Optional<String> login) {
-        if (!mentorReady) {
+    private static String leadText(HomeOverviewState state) {
+        if (!state.mentorReady()) {
             return ("*Mentor unavailable.* The mentor is disabled or not configured for this workspace. "
                     + "You can still manage privacy here.");
         }
-        if (login.isEmpty()) {
+        if (state.login().isEmpty()) {
             return ("*Check your account access to use the mentor.* You need an active Hephaestus account "
                     + "linked to Slack and a project identity in this workspace. You can still manage "
                     + "channel-message privacy here.");
+        }
+        if (state.refusal().isPresent()) {
+            return state.refusal().get().userMessage();
         }
         return ("*AI mentor for software project practices.* Ask in the Messages tab about PRs, reviews, issues, "
                 + "tests, or team ways of working. Replies stay in DM.");
