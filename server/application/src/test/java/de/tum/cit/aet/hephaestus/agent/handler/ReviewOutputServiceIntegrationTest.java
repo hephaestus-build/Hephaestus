@@ -538,6 +538,14 @@ class ReviewOutputServiceIntegrationTest extends BaseIntegrationTest {
             var observations = List.of(observation("pr-description-quality", Outcome.MET));
 
             var first = publishVerified(agentJob, observations);
+            var admittedEvidence =
+                    java.util.Objects.requireNonNull(first.recorded().getFirst().evidence());
+            var storedEvidence = observationRepository
+                    .findByAgentJobId(agentJob.getId(), workspace.getId())
+                    .getFirst()
+                    .getEvidence();
+            assertThat(storedEvidence)
+                    .isEqualTo(OBJECT_MAPPER.readTree(OBJECT_MAPPER.writeValueAsString(admittedEvidence)));
             var second = publishVerified(agentJob, observations);
 
             assertThat(first.inserted()).isEqualTo(1);

@@ -393,7 +393,8 @@ public class ReviewOutputService {
                         || !stored.getSummary().equals(observation.summary())
                         || stored.getOutcome() != observation.outcome()
                         || stored.getSeverity() != observation.severity()
-                        || !Objects.equals(stored.getEvidence(), observation.evidence())
+                        || !Objects.equals(
+                                stored.getEvidence(), evidenceJson == null ? null : objectMapper.readTree(evidenceJson))
                         || !Objects.equals(stored.getEvidenceRationale(), observation.evidenceRationale())
                         || !Objects.equals(stored.getRecurrenceKey(), recurrenceKey)
                         || stored.getOrigin() != origin) {
