@@ -67,7 +67,11 @@ const split = (
 	goingWell,
 });
 
-/** Eight practice groups over 24 of 31 developers, the numbers of design C. */
+/**
+ * Eight practice groups over 24 of 31 developers, the numbers of design C. Every split leaves at
+ * least five developers besides the reader without a standing, as the privacy rule requires, since
+ * the observed total would otherwise give that rest away.
+ */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	window: "TERM",
 	since: daysBefore(90),
@@ -81,13 +85,13 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	practicesGoingWell: { yours: 6, middleLow: 5, middleHigh: 9 },
 	practicesNeedingAttention: { yours: 4, middleLow: 2, middleHigh: 5 },
 	groups: [
-		split(ACTING, "MIXED", [5, 9, 9]),
-		split(COMMUNICATION, "DEVELOPING", [7, 10, 7]),
+		split(ACTING, "MIXED", [5, 7, 7]),
+		split(COMMUNICATION, "DEVELOPING", [6, 7, 6]),
 		{ ...FAILURE, yourStanding: "MIXED", shape: "COLLAPSED", hasStanding: 19, noneYet: 5 },
-		split(PACKAGING, "DEVELOPING", [7, 6, 11]),
-		split(REVIEWING, "STRENGTH", [6, 8, 10]),
-		split(TESTING, "NOT_OBSERVED", [5, 6, 12]),
-		split(ISSUES, "NO_OPPORTUNITY", [5, 11, 6]),
+		split(PACKAGING, "DEVELOPING", [6, 5, 8]),
+		split(REVIEWING, "STRENGTH", [5, 6, 8]),
+		split(TESTING, "NOT_OBSERVED", [5, 6, 7]),
+		split(ISSUES, "NO_OPPORTUNITY", [5, 6, 7]),
 		{ ...MAINTAINABLE, yourStanding: "STRENGTH", shape: "WITHHELD" },
 	],
 };

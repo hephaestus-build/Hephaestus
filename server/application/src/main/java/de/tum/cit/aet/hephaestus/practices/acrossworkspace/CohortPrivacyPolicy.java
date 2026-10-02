@@ -13,10 +13,13 @@ import org.jspecify.annotations.Nullable;
  * least {@link #MINIMUM_OTHERS} developers other than the reader. The reader is left out of that test because the
  * reader knows their own standing: a part of five that includes the reader hides only four others.
  *
- * <p>A practice group's three way split degrades in one step before it disappears: when any of Needs attention,
- * Mixed feedback and Going well holds too few others, the split collapses to "has a standing" against "none yet";
- * when even one of those two holds too few, the group shows no split at all. Collapse before omit, and omit rather
- * than show a zero. The reader's own standing is shown as a word in every case, since it is theirs.
+ * <p>A practice group's split is checked on "has a standing" against "none yet" first, and both parts must hold
+ * enough others before any split shows. The page states how many developers were observed, so a three way split
+ * also states "none yet" as the rest: 23 at a standing among 24 observed names the one without. When that holds,
+ * the split shows Needs attention, Mixed feedback and Going well, or collapses to the two parts when one of the
+ * three holds too few. When it fails, the group shows no split and the page's total is the only count left.
+ * Collapse before omit, and omit rather than show a zero. The reader's own standing is shown as a word in every
+ * case, since it is theirs.
  */
 public final class CohortPrivacyPolicy {
 
@@ -31,7 +34,7 @@ public final class CohortPrivacyPolicy {
         SPLIT,
         /** Only "has a standing" against "none yet": one of the three would cover too few others. */
         COLLAPSED,
-        /** Nothing: even the collapsed split would cover too few others. */
+        /** No split, only the observed total: "has a standing" or "none yet" would cover too few others. */
         WITHHELD,
     }
 
@@ -60,7 +63,11 @@ public final class CohortPrivacyPolicy {
         int needs = count(others, Standing.DEVELOPING);
         int mixed = count(others, Standing.MIXED);
         int well = count(others, Standing.STRENGTH);
-        int none = others.size() - needs - mixed - well;
+        int has = needs + mixed + well;
+        int none = others.size() - has;
+        if (!shows(has) || !shows(none)) {
+            return Split.WITHHELD;
+        }
         if (shows(needs) && shows(mixed) && shows(well)) {
             return new Split(
                     Shape.SPLIT,
@@ -70,18 +77,14 @@ public final class CohortPrivacyPolicy {
                     null,
                     null);
         }
-        int has = needs + mixed + well;
-        if (shows(has) && shows(none)) {
-            boolean readerHas = reader != null && PracticeGroupStandingDTO.isVerdict(reader);
-            return new Split(
-                    Shape.COLLAPSED,
-                    null,
-                    null,
-                    null,
-                    has + (readerHas ? 1 : 0),
-                    none + (reader != null && !readerHas ? 1 : 0));
-        }
-        return Split.WITHHELD;
+        boolean readerHas = reader != null && PracticeGroupStandingDTO.isVerdict(reader);
+        return new Split(
+                Shape.COLLAPSED,
+                null,
+                null,
+                null,
+                has + (readerHas ? 1 : 0),
+                none + (reader != null && !readerHas ? 1 : 0));
     }
 
     /** The middle half of a figure across the workspace, as the two values that bound it. */

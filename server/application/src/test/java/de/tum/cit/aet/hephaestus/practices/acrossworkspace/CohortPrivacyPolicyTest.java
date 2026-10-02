@@ -36,7 +36,7 @@ class CohortPrivacyPolicyTest {
     @Test
     @DisplayName("every bucket with five others shows the split, the reader counted in their own bucket")
     void shouldShowTheSplitWithTheReaderInTheirBucketWhenEveryBucketHoldsFiveOthers() {
-        Split split = CohortPrivacyPolicy.split(developers(5, 6, 7, 3), MIXED);
+        Split split = CohortPrivacyPolicy.split(developers(5, 6, 7, 5), MIXED);
 
         assertThat(split.shape()).isEqualTo(Shape.SPLIT);
         assertThat(split.needsAttention()).isEqualTo(5);
@@ -85,9 +85,30 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
+    @DisplayName("one other without a standing withholds a full split: the observed total would name them")
+    void shouldWithholdAFullSplitWhenNoneYetHoldsFewerThanFiveOthers() {
+        Split split = CohortPrivacyPolicy.split(developers(7, 8, 7, 1), MIXED);
+
+        assertThat(split).isEqualTo(Split.WITHHELD);
+    }
+
+    @Test
+    @DisplayName("every other at a standing is a none yet of zero and withholds the split")
+    void shouldWithholdTheSplitWhenEveryOtherHasAStanding() {
+        assertThat(CohortPrivacyPolicy.split(developers(6, 6, 6, 0), STRENGTH)).isEqualTo(Split.WITHHELD);
+    }
+
+    @Test
+    @DisplayName("fewer than five others with a standing withholds the split however many have none")
+    void shouldWithholdTheSplitWhenHasAStandingHoldsFewerThanFiveOthers() {
+        assertThat(CohortPrivacyPolicy.split(developers(1, 1, 2, 20), DEVELOPING))
+                .isEqualTo(Split.WITHHELD);
+    }
+
+    @Test
     @DisplayName("a reader outside the observed developers adds to no count")
     void shouldAddNothingForAReaderWhoIsNotCounted() {
-        Split split = CohortPrivacyPolicy.split(developers(5, 5, 5, 0), null);
+        Split split = CohortPrivacyPolicy.split(developers(5, 5, 5, 5), null);
 
         assertThat(split.shape()).isEqualTo(Shape.SPLIT);
         assertThat(split.needsAttention()).isEqualTo(5);
