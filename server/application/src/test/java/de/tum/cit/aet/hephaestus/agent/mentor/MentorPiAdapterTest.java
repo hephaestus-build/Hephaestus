@@ -102,9 +102,11 @@ class MentorPiAdapterTest extends BaseUnitTest {
     @Test
     @DisplayName("a binding stored above the ceiling still produces a turn bounded by the ceiling")
     void turnBudgetIsClampedDownToTheConfigurableCeiling() {
-        PiPlanSpec spec = capturePlanSpec(llmConfig(null, false, AgentBindingLimits.MAX_TIMEOUT_SECONDS * 2));
+        MentorLlmConfig config = llmConfig(null, false, AgentBindingLimits.MAX_TIMEOUT_SECONDS * 2);
+        PiPlanSpec spec = capturePlanSpec(config);
 
         assertThat(spec.timeoutSeconds()).isEqualTo(AgentBindingLimits.MAX_TIMEOUT_SECONDS);
+        assertThat(config.timeoutSeconds()).isEqualTo(spec.timeoutSeconds());
     }
 
     /**
@@ -114,9 +116,27 @@ class MentorPiAdapterTest extends BaseUnitTest {
     @Test
     @DisplayName("a binding at the configurable floor still yields a buildable sandbox")
     void turnBudgetIsClampedUpToTheSmallestBuildableBudget() {
-        PiPlanSpec spec = capturePlanSpec(llmConfig(null, false, AgentBindingLimits.MIN_TIMEOUT_SECONDS));
+        MentorLlmConfig config = llmConfig(null, false, AgentBindingLimits.MIN_TIMEOUT_SECONDS);
+        PiPlanSpec spec = capturePlanSpec(config);
 
         assertThat(spec.timeoutSeconds()).isEqualTo(PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS + 1);
+        assertThat(config.timeoutSeconds()).isEqualTo(spec.timeoutSeconds());
+    }
+
+    @Test
+    void shouldReserveCleanupFromTheFrozenTimeoutInTheActualRunnerEnvironment() {
+        org.mockito.Mockito.reset(runtimeFactory);
+        var actualAdapter = new MentorPiAdapter(
+                new PiRuntimeFactory(new tools.jackson.databind.ObjectMapper()),
+                new AgentImageProperties("test-image:latest", ImagePullPolicy.IF_NOT_PRESENT),
+                proxyRegistry);
+        MentorLlmConfig config = llmConfig(null, false, 300);
+
+        InteractiveSandboxSpec sandbox = actualAdapter.buildSandboxSpec(REQUEST, config);
+
+        assertThat(config.timeoutSeconds()).isEqualTo(300);
+        assertThat(sandbox.environment()).containsEntry("AGENT_BUDGET_MS", "240000");
+        assertThat(sandbox.environment()).doesNotContainKey("MENTOR_TURN_BUDGET_MS");
     }
 
     @Test
