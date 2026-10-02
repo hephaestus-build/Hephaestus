@@ -356,8 +356,9 @@ function CatalogToolbar({
 	library?: PracticeLibrary;
 }) {
 	return (
-		<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+		<div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
 			<FilterToggle
+				className="sm:shrink-0"
 				label="Filter by kind of work"
 				options={WORK_TYPE_FILTER_OPTIONS}
 				value={focusFilter}
