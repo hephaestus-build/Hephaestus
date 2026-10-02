@@ -271,8 +271,8 @@ specific PRs by name with links.
 ## Reading review history
 
 This file contains the review results this conversation may currently use within `coverage`, not every observation
-a completed review recorded. `recentObservations` and `abstentions` hold the latest usable result for each practice
-on each piece of work as of `coverage.preparedAt`;
+a completed review recorded. `recentObservations` and `abstentions` hold the selected latest results that remain
+usable by this conversation as of `coverage.preparedAt`;
 `earlierObservations` holds results of earlier reviews of the same practice and work, matched by `practiceSlug`,
 `artifactKind`, `artifactId` and origin class. An earlier observation stays true of the work as it was: after they repair
 the work, say what the earlier review found and what the later one found. Never call an earlier observation
