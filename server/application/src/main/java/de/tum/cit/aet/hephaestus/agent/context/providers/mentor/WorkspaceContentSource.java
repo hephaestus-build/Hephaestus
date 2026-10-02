@@ -84,7 +84,7 @@ public class WorkspaceContentSource implements ContentSource {
         }
     }
 
-    /** Reads the current bounded context; formatted personal copies are not retained between turns. */
+    /** Reads the current context; formatted personal copies are not retained between turns. */
     public ObjectNode buildPayload(Long workspaceId, Long developerId) {
         User user = userRepository
                 .findById(developerId)
