@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class DeveloperTextSanitizerTest extends BaseUnitTest {
 
@@ -15,6 +17,17 @@ class DeveloperTextSanitizerTest extends BaseUnitTest {
                             "The outcome is " + outcome + ". Add a test for the retry path."))
                     .isEqualTo("Add a test for the retry path.");
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "Track the review asks you defer in a linked issue.",
+                "Keep each deferred-review-request gap on its own open line.",
+                "When deferring a check, name the follow-up issue."
+            })
+    void shouldKeepActionableAdviceAboutDeferredWork(String advice) {
+        assertThat(DeveloperTextSanitizer.sanitize(advice)).isEqualTo(advice);
     }
 
     @Test

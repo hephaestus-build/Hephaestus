@@ -124,7 +124,10 @@ export function Copilot({
 						</div>
 					</TooltipProvider>
 				</DrawerHeader>
-				<DrawerBody className="flex flex-col p-0">{children}</DrawerBody>
+				{/* Not a tab stop of its own: the conversation inside is the scroll region, and it is one. */}
+				<DrawerBody className="flex flex-col p-0" tabIndex={-1}>
+					{children}
+				</DrawerBody>
 			</DrawerContent>
 		</Drawer>
 	);

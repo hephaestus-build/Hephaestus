@@ -53,6 +53,22 @@ class ReviewRunNarrativeLookupAdapterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRetainTheAuthoredNextStepAboutDeferredWork() {
+        UUID observationId = UUID.randomUUID();
+        String nextStep = "Split each requirement into the steps that produce it — e.g. drafting each section, "
+                + "gathering the real check names for the simulated-status distinction — so each step can be "
+                + "checked off and the deferred-review-request gap shows up as its own open line rather than "
+                + "one line in the Progress note.";
+        ReviewRunNarrative narrative = lookUp(output(observationId.toString(), """
+                {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"pr-description-quality",
+                 "basedOn":["%s"],"title":"The Done-when list tracks the page, not the work",
+                 "nextStep":"%s","placement":{"kind":"ARTIFACT"}}
+                """.formatted(observationId, nextStep)));
+
+        assertThat(narrative.nextStepByObservationId()).containsExactly(Map.entry(observationId, nextStep));
+    }
+
+    @Test
     @DisplayName("an observation the output names by something other than an id gets no next step")
     void shouldAddressNoObservationWhenTheOutputNamesOneByANonId() {
         ReviewRunNarrative narrative = lookUp(output("obs-0", """
@@ -79,7 +95,7 @@ class ReviewRunNarrativeLookupAdapterTest extends BaseUnitTest {
     /** One composed output grounded in {@code observationId}, carrying the given units verbatim. */
     private static JsonNode output(String observationId, String units) {
         return OBJECT_MAPPER.readTree("""
-                {"feedback":{"observations":[{"id":"%s","practiceSlug":"pr-description-quality","anchorable":false,
+                {"feedback":{"observations":[{"id":"%s","practiceSlug":"pr-description-quality","outcome":"NOT_MET","anchorable":false,
                    "citations":[]}],
                   "units":[%s]}}
                 """.formatted(observationId, units));

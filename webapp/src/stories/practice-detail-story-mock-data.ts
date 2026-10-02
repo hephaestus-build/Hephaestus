@@ -122,6 +122,8 @@ export const detailObservation: ObservationDetail = {
 		"The diff renames the loader's package and changes its caching in the same commit, so a reviewer cannot tell which hunk carries the behaviour change.",
 	deliveredFeedback:
 		"Land the rename on its own first; the caching change then reads as the small diff it is.",
+	nextStep:
+		"Land the rename on its own first; the caching change then reads as the small diff it is.",
 	evidence: {
 		detector: "practice-observer",
 		citations: [

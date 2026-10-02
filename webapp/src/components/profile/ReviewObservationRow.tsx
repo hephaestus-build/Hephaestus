@@ -105,10 +105,7 @@ export function ReviewObservationRow({
 	const invalidated = observation.invalidatedAt !== undefined;
 	const evidenceLocations = toEvidenceLocations(observation.evidence);
 	const checks = toEvidenceCheck(observation.evidence);
-	// The sentence the review wrote about this work stands over the one that was delivered: the
-	// delivery may have been withheld, replaced or rewritten, and only one next step can be acted on.
-	// Either is written as a clause, and the row shows it as a sentence.
-	const nextStep = capitalise(observation.nextStep ?? observation.deliveredFeedback ?? "");
+	const nextStep = capitalise(observation.nextStep ?? "");
 	const detector = observation.evidence?.detector;
 	// A response needs feedback to respond to and a route that records it.
 	const respondTo = hasText(observation.feedbackResponse?.feedbackId) ? onRespond : undefined;
