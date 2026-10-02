@@ -92,6 +92,58 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
                             "change_type",
                             "MODIFIED"));
         }
+        rows.insert(
+                "git_commit",
+                Map.of(
+                        "id",
+                        995608L,
+                        "repository_id",
+                        995601L,
+                        "sha",
+                        "c".repeat(40),
+                        "author_id",
+                        other.getId(),
+                        "message",
+                        "Co-authored work",
+                        "message_body",
+                        "Target co-author copy"));
+        rows.insert(
+                "commit_contributor",
+                Map.of(
+                        "id",
+                        995609L,
+                        "commit_id",
+                        995608L,
+                        "user_id",
+                        target.getId(),
+                        "role",
+                        "CO_AUTHOR",
+                        "name",
+                        "Target co-author",
+                        "email",
+                        "target@example.test",
+                        "ordinal",
+                        1));
+        rows.insert(
+                "commit_contributor",
+                Map.of(
+                        "id",
+                        995610L,
+                        "commit_id",
+                        995608L,
+                        "user_id",
+                        other.getId(),
+                        "role",
+                        "AUTHOR",
+                        "name",
+                        "Other author",
+                        "email",
+                        "other@example.test",
+                        "ordinal",
+                        0));
+        rows.insert(
+                "commit_file_change",
+                Map.of("id", 995611L, "commit_id", 995608L, "filename", "co-authored-path", "change_type", "MODIFIED"));
         long adminId = Objects.requireNonNull(administrator.getId());
         var preview = service.preview(
                 adminId, null, List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)));
@@ -99,7 +151,11 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
         assertThat(export.path("milestone").size()).isEqualTo(1);
         assertThat(export.path("milestone").get(0).path("description").asString())
                 .isEqualTo("Target milestone content");
-        assertThat(export.path("commit_file_change").size()).isEqualTo(1);
+        assertThat(export.path("commit_file_change").size()).isEqualTo(2);
+        assertThat(export.path("git_commit_authored_content").size()).isEqualTo(2);
+        assertThat(export.path("git_commit_authored_content").toString())
+                .contains("Target co-author copy")
+                .doesNotContain("other@example.test", "Other author", "author_id");
         assertThat(export.path("commit_file_change").get(0).path("filename").asString())
                 .isEqualTo("target-path");
         assertThat(export.toString()).doesNotContain("Other milestone content", "other-path", "Other commit");
@@ -121,5 +177,16 @@ class PersonScmCopiesIntegrationTest extends BaseIntegrationTest {
                         "SELECT committer_id IS NULL AND message='Other commit' FROM git_commit WHERE id=995605",
                         Boolean.class))
                 .isTrue();
+        assertThat(jdbc.queryForObject(
+                        "SELECT author_id=? AND message='' AND message_body IS NULL FROM git_commit WHERE id=995608",
+                        Boolean.class,
+                        other.getId()))
+                .isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM commit_contributor WHERE id=995609", Long.class))
+                .isZero();
+        assertThat(jdbc.queryForObject("SELECT name FROM commit_contributor WHERE id=995610", String.class))
+                .isEqualTo("Other author");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM commit_file_change WHERE id=995611", Long.class))
+                .isZero();
     }
 }

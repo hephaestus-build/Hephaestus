@@ -42,6 +42,7 @@ import tools.jackson.databind.ObjectMapper;
     "sync_job",
     "artifact_signal",
     "git_commit_committer",
+    "git_commit_authored_content",
     "issue_merger",
     "discussion_answer_actor",
     "artifact_signal_requester"
@@ -343,6 +344,16 @@ public class IntegrationCoreConnectionPersonDataCatalog implements PersonDataCat
                         "id",
                         "actor_user_id=NULL",
                         400),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "git_commit_authored_content",
+                        "git_commit",
+                        "t.author_id = ANY(:users) OR t.id IN (SELECT commit_id FROM commit_contributor WHERE user_id = ANY(:users) AND role IN ('AUTHOR','CO_AUTHOR'))",
+                        "id,sha,repository_id,message,message_body,authored_at,committed_at",
+                        "id",
+                        "message='',message_body=NULL",
+                        180),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

@@ -16,6 +16,7 @@ import tools.jackson.databind.ObjectMapper;
     "outline_document_event",
     "outline_collection",
     "outline_document_editor",
+    "outline_document_content",
     "outline_document_collaborator"
 })
 public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
@@ -65,6 +66,16 @@ public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
                         "id",
                         "updated_by_subject=NULL,updated_by_name=NULL",
                         280),
+                new JdbcPersonDataStore(
+                        jdbc,
+                        mapper,
+                        "outline_document_content",
+                        "outline_document",
+                        "t.id = ANY(:documents)",
+                        "id,workspace_id,connection_id,document_id,title,slug,body_markdown,content_hash,outline_updated_at,outline_created_at",
+                        "id",
+                        "title=NULL,slug=NULL,body_markdown=NULL,content_hash=NULL",
+                        270),
                 new OutlineCollaboratorPersonDataContributor(jdbc, mapper));
     }
 }
