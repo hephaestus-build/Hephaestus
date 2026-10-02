@@ -36,6 +36,8 @@ const READS_OF_OBSERVATION_VALIDITY: ReadonlySet<string> = new Set([
 	"getPracticeGroupTrend",
 	"listPracticeGroupReviewRuns",
 	"getPracticeProfileOverview",
+	"getPracticeProfileReviewRun",
+	"listPracticeProfileReviewRuns",
 	"getInAppFeedback",
 	"getFeedbackResolutionCounts",
 ]);
