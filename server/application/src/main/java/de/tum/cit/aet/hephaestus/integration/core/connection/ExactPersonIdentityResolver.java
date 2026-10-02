@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentityResolver;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonScope;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -27,8 +28,11 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
 
     private final JdbcTemplate jdbc;
 
-    public ExactPersonIdentityResolver(JdbcTemplate jdbc) {
+    private final List<PersonSourceIdentityContributor> sourceOwners;
+
+    public ExactPersonIdentityResolver(JdbcTemplate jdbc, List<PersonSourceIdentityContributor> sourceOwners) {
         this.jdbc = jdbc;
+        this.sourceOwners = List.copyOf(sourceOwners);
     }
 
     @Override
@@ -118,68 +122,24 @@ public class ExactPersonIdentityResolver implements PersonIdentityResolver {
                         .thenComparing(PersonIdentity::subject)
                         .thenComparing(i -> Objects.requireNonNullElse(i.teamId(), "")))
                 .toList();
+        PersonScope primary = new PersonScope(
+                resolvedAccount, ordered, users.stream().distinct().sorted().toList());
         Set<Long> conversations = new LinkedHashSet<>();
         Set<Long> documents = new LinkedHashSet<>();
-        for (PersonIdentity identity : ordered) {
-            String type = validateProvider(identity);
-            if (type.equals("SLACK")) {
-                conversations.addAll(jdbc.query(
-                        """
-                        SELECT DISTINCT st.id FROM slack_message m
-                        JOIN slack_thread st ON st.workspace_id=m.workspace_id
-                            AND st.slack_channel_id=m.slack_channel_id
-                            AND st.slack_thread_ts=COALESCE(m.slack_thread_ts,m.slack_ts)
-                        JOIN identity_provider p ON p.id=? AND p.type='SLACK'
-                            AND p.server_url='https://slack.com'
-                        WHERE m.author_slack_user_id=? AND m.slack_team_id=?
-                        """, (rs, row) -> rs.getLong(1), identity.providerId(), identity.subject(), identity.teamId()));
-            } else if (type.equals("OUTLINE")) {
-                documents.addAll(jdbc.query(
-                        """
-                        SELECT DISTINCT d.id FROM outline_document d
-                        JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
-                        JOIN identity_provider p ON p.id=? AND p.type='OUTLINE'
-                            AND p.server_url=c.config->>'serverUrl'
-                        WHERE d.created_by_subject=? OR d.updated_by_subject=?
-                            OR COALESCE(d.collaborator_subjects,'[]'::jsonb) @> jsonb_build_array(CAST(? AS text))
-                        """,
-                        (rs, row) -> rs.getLong(1),
-                        identity.providerId(),
-                        identity.subject(),
-                        identity.subject(),
-                        identity.subject()));
-            }
+        Set<Long> artifacts = new LinkedHashSet<>();
+        for (var owner : sourceOwners) {
+            var ids = owner.sourceIds(primary);
+            if (owner.artifactKinds().contains("chat.conversation_thread")) conversations.addAll(ids);
+            if (owner.artifactKinds().contains("docs.document")) documents.addAll(ids);
+            if (owner.artifactKinds().contains("scm.issue")) artifacts.addAll(ids);
         }
         return new PersonScope(
                 resolvedAccount,
                 ordered,
-                users.stream().distinct().sorted().toList(),
+                primary.userIds(),
                 conversations.stream().sorted().toList(),
                 documents.stream().sorted().toList(),
-                scmArtifacts(users));
-    }
-
-    private List<Long> scmArtifacts(List<Long> users) {
-        return jdbc.query(
-                """
-                WITH person_users AS (SELECT id FROM "user" WHERE id=ANY(?)),
-                person_commits AS (
-                    SELECT id FROM git_commit WHERE author_id IN (SELECT id FROM person_users)
-                        OR committer_id IN (SELECT id FROM person_users)
-                    UNION SELECT commit_id FROM commit_contributor WHERE user_id IN (SELECT id FROM person_users)
-                ), artifacts AS (
-                    SELECT id FROM issue WHERE author_id IN (SELECT id FROM person_users)
-                        OR merged_by_id IN (SELECT id FROM person_users)
-                    UNION SELECT issue_id FROM issue_assignee WHERE user_id IN (SELECT id FROM person_users)
-                    UNION SELECT pull_request_id FROM pull_request_requested_reviewers WHERE user_id IN (SELECT id FROM person_users)
-                    UNION SELECT issue_id FROM issue_comment WHERE author_id IN (SELECT id FROM person_users)
-                    UNION SELECT pull_request_id FROM pull_request_review WHERE author_id IN (SELECT id FROM person_users)
-                    UNION SELECT pull_request_id FROM pull_request_review_comment WHERE author_id IN (SELECT id FROM person_users)
-                    UNION SELECT pull_request_id FROM commit_pull_request WHERE commit_id IN (SELECT id FROM person_commits)
-                ) SELECT id FROM artifacts WHERE id IS NOT NULL ORDER BY id
-                """,
-                (rs, row) -> rs.getLong(1),
-                new org.springframework.jdbc.support.SqlArrayValue("bigint", users.toArray()));
+                artifacts.stream().sorted().toList());
     }
 
     private record CachedSlackIdentity(

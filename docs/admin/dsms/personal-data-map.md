@@ -16,6 +16,11 @@ The implementation inventory below owns each store's exact selection, export and
 The frozen scope includes reviewed work on which the person authored, merged, commented, reviewed,
 was assigned, was requested to review, or contributed a linked commit. Derived observations, feedback
 and evidence copies use that same source scope, including when their primary author is another person.
+Provider-owned source attribution is shared by scope selection and processing suppression:
+`server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/scm/ScmPersonSourceIdentityContributor.java`,
+`server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/slack/SlackPersonSourceIdentityContributor.java`
+and `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/outline/OutlinePersonSourceIdentityContributor.java`.
+Each guard checks the requesting workspace in SQL; mirror sync cannot bypass a native-identity control.
 OAuth state nonces record only a new exact initiating account; exports omit the nonce capability, and erasure deletes its row. Older rows have no inferred account attribution.
 The self-service account export and cooldown remain separate, narrower operations.
 

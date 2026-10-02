@@ -4,16 +4,35 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
 import java.util.Objects;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
 @WorkspaceAgnostic("An instance-wide exact provider identity processing fence")
 public class PersonSuppressionService implements PersonProcessingSuppression {
     private final JdbcTemplate jdbc;
+    private final java.util.List<PersonSourceIdentityContributor> sourceOwners;
+    private final tools.jackson.databind.ObjectMapper mapper;
+
+    public PersonSuppressionService(
+            JdbcTemplate jdbc,
+            java.util.List<PersonSourceIdentityContributor> sourceOwners,
+            tools.jackson.databind.ObjectMapper mapper) {
+        var kinds = sourceOwners.stream()
+                .flatMap(owner -> owner.artifactKinds().stream())
+                .toList();
+        if (kinds.size() != new java.util.HashSet<>(kinds).size()
+                || !new java.util.HashSet<>(kinds)
+                        .equals(java.util.Set.of(
+                                "scm.issue", "scm.pull_request", "chat.conversation_thread", "docs.document"))) {
+            throw new IllegalStateException(
+                    "Each shipped artifact kind requires exactly one person source attribution owner");
+        }
+        this.jdbc = jdbc;
+        this.sourceOwners = java.util.List.copyOf(sourceOwners);
+        this.mapper = mapper;
+    }
 
     public void suppress(PersonScope scope, UUID requestId) {
         for (PersonIdentity i : scope.identities()) {
@@ -66,51 +85,19 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
 
     @Override
     public boolean isArtifactSuppressed(long workspaceId, String artifactKind, long artifactId) {
-        return switch (artifactKind) {
-            case "scm.pull_request", "scm.issue" ->
-                Boolean.TRUE.equals(jdbc.queryForObject("""
-                    SELECT EXISTS (
-                      SELECT 1 FROM issue i
-                      JOIN repository_to_monitor rm ON rm.repository_id=i.repository_id AND rm.workspace_id=?
-                      JOIN "user" u ON u.id IN (
-                        SELECT author_id FROM issue WHERE id=i.id
-                        UNION SELECT merged_by_id FROM issue WHERE id=i.id
-                        UNION SELECT author_id FROM issue_comment WHERE issue_id=i.id
-                        UNION SELECT author_id FROM pull_request_review WHERE pull_request_id=i.id
-                        UNION SELECT author_id FROM pull_request_review_comment WHERE pull_request_id=i.id
-                      )
-                      JOIN person_suppression s ON s.provider_id=u.provider_id AND s.subject=u.native_id::text
-                          AND s.team_key=''
-                      WHERE i.id=?
-                    )
-                    """, Boolean.class, workspaceId, artifactId));
-            case "chat.conversation_thread" ->
-                Boolean.TRUE.equals(jdbc.queryForObject("""
-                    SELECT EXISTS (
-                      SELECT 1 FROM slack_thread t
-                      JOIN slack_message m ON m.workspace_id=t.workspace_id
-                        AND m.slack_channel_id=t.slack_channel_id
-                        AND COALESCE(m.slack_thread_ts,m.slack_ts)=t.slack_thread_ts
-                      JOIN person_suppression s ON s.subject=m.author_slack_user_id AND s.team_key=m.slack_team_id
-                      JOIN identity_provider p ON p.id=s.provider_id AND p.type='SLACK'
-                        AND p.server_url='https://slack.com'
-                      WHERE t.workspace_id=? AND t.id=?
-                    )
-                    """, Boolean.class, workspaceId, artifactId));
-            case "docs.document" ->
-                Boolean.TRUE.equals(jdbc.queryForObject("""
-                    SELECT EXISTS (
-                      SELECT 1 FROM outline_document d
-                      JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
-                      JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
-                      JOIN person_suppression s ON s.provider_id=p.id AND (
-                        s.subject=d.created_by_subject OR s.subject=d.updated_by_subject
-                        OR jsonb_exists(COALESCE(d.collaborator_subjects,'[]'::jsonb),s.subject)
-                      )
-                      WHERE d.workspace_id=? AND d.id=?
-                    )
-                    """, Boolean.class, workspaceId, artifactId));
-            default -> false;
-        };
+        var owners = sourceOwners.stream()
+                .filter(owner -> owner.artifactKinds().contains(artifactKind))
+                .toList();
+        if (owners.size() > 1) throw new IllegalStateException("Duplicate person source attribution owner");
+        if (owners.isEmpty()) return false;
+        var identities = owners.getFirst().identitiesForSource(workspaceId, artifactKind, artifactId);
+        if (identities.isEmpty()) return false;
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM jsonb_to_recordset(CAST(? AS jsonb))
+                    AS i("providerId" bigint,subject text,"teamId" text)
+                    JOIN person_suppression s ON s.provider_id=i."providerId" AND s.subject=i.subject
+                    JOIN identity_provider p ON p.id=s.provider_id
+                    WHERE s.team_key=COALESCE(i."teamId",'') OR (p.type='OUTLINE' AND s.team_key=''))
+                """, Boolean.class, mapper.writeValueAsString(identities)));
     }
 }

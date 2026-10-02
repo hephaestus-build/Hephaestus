@@ -24,6 +24,15 @@ import org.springframework.web.server.ResponseStatusException;
 class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
+    private de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression;
+
+    @Autowired
+    private de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository workspaces;
+
+    @Autowired
+    private List<de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceIdentityContributor> sourceOwners;
+
+    @Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Autowired
@@ -84,11 +93,25 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldHaveExactlyOneSourceAttributionOwnerForEachShippedArtifactKind() {
+        var kinds = sourceOwners.stream()
+                .flatMap(owner -> owner.artifactKinds().stream())
+                .toList();
+        assertThat(kinds)
+                .doesNotHaveDuplicates()
+                .containsExactlyInAnyOrder(
+                        "scm.issue", "scm.pull_request", "chat.conversation_thread", "docs.document");
+    }
+
+    @Test
     void shouldResolveAssignedRequestedAndCommitRelatedSourcesByStableUserKeys() {
         var provider = provider(IdentityProviderType.GITLAB);
         var target = user(provider, 42);
         var other = user(provider, 84);
         var seed = new de.tum.cit.aet.hephaestus.testconfig.SchemaRowSeeder(jdbc);
+        var workspace = workspaces.saveAndFlush(
+                de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures.activeWorkspace("source-privacy"));
+        long workspaceId = Objects.requireNonNull(workspace.getId());
         long repositoryId = 995201L;
         seed.insert(
                 "repository",
@@ -103,6 +126,28 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
                         "source-repository",
                         "name_with_owner",
                         "other/source-repository"));
+        seed.insert(
+                "repository_to_monitor",
+                java.util.Map.of(
+                        "id",
+                        995201L,
+                        "native_id",
+                        repositoryId,
+                        "workspace_id",
+                        workspaceId,
+                        "generated_paths",
+                        "[]"));
+        seed.insert(
+                "connection",
+                java.util.Map.of(
+                        "id",
+                        995207L,
+                        "workspace_id",
+                        workspaceId,
+                        "kind",
+                        "GITLAB",
+                        "config",
+                        "{\"serverUrl\":\"" + provider.getServerUrl() + "\"}"));
         for (long sourceId : List.of(995202L, 995203L, 995204L, 995205L)) {
             var source = new java.util.HashMap<String, Object>(java.util.Map.of(
                     "id",
@@ -163,11 +208,30 @@ class ExactPersonIdentityResolverIntegrationTest extends BaseIntegrationTest {
         assertThat(resolver.resolve(null, List.of(identity(provider, "84", null)))
                         .scmArtifactIds())
                 .contains(995205L);
+        Account administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var request = personData.preview(administratorId, null, List.of(identity(provider, "42", null)));
+        personData.requestErasure(request.request().getId(), administratorId, true);
+        for (long sourceId : scope.scmArtifactIds()) {
+            assertThat(suppression.isArtifactSuppressed(workspaceId, "scm.pull_request", sourceId))
+                    .isTrue();
+            assertThat(suppression.isArtifactSuppressed(-1, "scm.pull_request", sourceId))
+                    .isFalse();
+        }
+        assertThat(suppression.isArtifactSuppressed(workspaceId, "scm.pull_request", 995205L))
+                .isFalse();
+        personData.run(request.request().getId());
+        assertThat(personData.get(request.request().getId()).request().getState())
+                .isEqualTo(de.tum.cit.aet.hephaestus.core.privacy.PersonDataRequest.State.COMPLETE);
+        assertThat(users.findById(other.getId()).orElseThrow().getLogin()).doesNotStartWith("erased-");
         jdbc.update("DELETE FROM commit_pull_request WHERE commit_id=?", 995206L);
         jdbc.update("DELETE FROM git_commit WHERE id=?", 995206L);
         jdbc.update("DELETE FROM issue_assignee WHERE issue_id=?", 995202L);
         jdbc.update("DELETE FROM pull_request_requested_reviewers WHERE pull_request_id=?", 995203L);
         jdbc.update("DELETE FROM issue WHERE repository_id=?", repositoryId);
+        jdbc.update("DELETE FROM repository_to_monitor WHERE native_id=?", repositoryId);
         jdbc.update("DELETE FROM repository WHERE id=?", repositoryId);
     }
 
