@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1790954438557-1" author="hephaestus">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conname = 'ck_curated_group_override_based_on' AND conrelid = 'public.curated_group_override'::regclass</sqlCheck>
+        </preConditions>
+        <comment>Accept the group digest the catalogue writes and keep every stored earlier group digest valid. No row changes: the new predicate admits every value the earlier one did.</comment>
+        <sql><![CDATA[
+ALTER TABLE curated_group_override
+    DROP CONSTRAINT ck_curated_group_override_based_on,
+    ADD CONSTRAINT ck_curated_group_override_based_on CHECK (
+        based_on_digest IS NULL OR based_on_digest ~ '^(area|group):v1:[0-9a-f]{64}$');
+        ]]></sql>
+        <rollback>
+            <stop>Restore a verified database backup made before this upgrade. Group digests saved since then do not satisfy the earlier constraint.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
