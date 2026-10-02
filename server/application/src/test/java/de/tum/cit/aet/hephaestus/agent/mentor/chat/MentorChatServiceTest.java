@@ -702,11 +702,12 @@ class MentorChatServiceTest extends BaseUnitTest {
     void shouldInterruptTheTurnWhenItsInStreamErrorCannotBeWritten() {
         User developer = userRepository.getCurrentUserElseThrow();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
-        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
-            if (chunk instanceof UIMessageChunk.Error) {
-                throw new IllegalStateException("Failed to serialise UIMessageChunk");
-            }
-        });
+        HookedChannel channel =
+                new HookedChannel(new MentorSseChannel(WORKSPACE_ID, THREAD_ID, emitter, mapper, scheduler), chunk -> {
+                    if (chunk instanceof UIMessageChunk.Error) {
+                        throw new IllegalStateException("Failed to serialise UIMessageChunk");
+                    }
+                });
         scheduleResponses(sandbox, prompt -> {
             sandbox.push(assistantStart());
             sandbox.push(textDelta("Hel"));
@@ -832,12 +833,13 @@ class MentorChatServiceTest extends BaseUnitTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
         CountDownLatch sending = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
-            if (chunk instanceof UIMessageChunk.TextDelta) {
-                sending.countDown();
-                awaitQuietly(release);
-            }
-        });
+        HookedChannel channel =
+                new HookedChannel(new MentorSseChannel(WORKSPACE_ID, THREAD_ID, emitter, mapper, scheduler), chunk -> {
+                    if (chunk instanceof UIMessageChunk.TextDelta) {
+                        sending.countDown();
+                        awaitQuietly(release);
+                    }
+                });
         AtomicReference<Thread> dispatcher = streamOnItsOwnThread("Hi");
         Thread.ofVirtual().start(() -> {
             awaitQuietly(sending);
@@ -964,11 +966,12 @@ class MentorChatServiceTest extends BaseUnitTest {
         User developer = userRepository.getCurrentUserElseThrow();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(developer));
         AtomicBoolean failed = new AtomicBoolean();
-        HookedChannel channel = new HookedChannel(new MentorSseChannel(emitter, mapper, scheduler), chunk -> {
-            if (chunk instanceof UIMessageChunk.TextDelta && failed.compareAndSet(false, true)) {
-                throw new IllegalStateException("Failed to serialise UIMessageChunk");
-            }
-        });
+        HookedChannel channel =
+                new HookedChannel(new MentorSseChannel(WORKSPACE_ID, THREAD_ID, emitter, mapper, scheduler), chunk -> {
+                    if (chunk instanceof UIMessageChunk.TextDelta && failed.compareAndSet(false, true)) {
+                        throw new IllegalStateException("Failed to serialise UIMessageChunk");
+                    }
+                });
         scheduleHappyPathResponses(sandbox).run();
 
         service.run(

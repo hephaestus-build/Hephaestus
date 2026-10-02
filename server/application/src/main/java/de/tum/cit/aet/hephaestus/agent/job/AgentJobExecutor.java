@@ -648,7 +648,7 @@ public class AgentJobExecutor {
             }
 
             JobTypeHandler handler = handlerRegistry.getHandler(job.getJobType());
-            AgentJobStatus terminalStatus = completeJob(jobId, agentResult, result, handler, job);
+            AgentJobStatus terminalStatus = completeJob(jobId, agentResult, result, handler);
             metricOutcome = terminalStatus != null ? terminalStatus.name() : "unknown";
 
             log.info("Agent job completed: jobId={}, duration={}", jobId, Duration.between(startTime, Instant.now()));
@@ -1346,12 +1346,10 @@ public class AgentJobExecutor {
     }
 
     private @Nullable AgentJobStatus completeJob(
-            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult, JobTypeHandler handler, AgentJob job) {
-        AgentJobStatus terminalStatus = determineTerminalStatus(sandboxResult, agentResult);
-        // persistTerminalState returns false when we lost the fence (cancelled / orphan-requeued); we
-        // must not deliver then, or a stuck-then-recovered worker would double-post the sibling's findings.
-        boolean persisted = persistTerminalState(jobId, agentResult, sandboxResult, terminalStatus);
-        if (persisted) {
+            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult, JobTypeHandler handler) {
+        // A lost ownership fence must not deliver another attempt's result.
+        AgentJobStatus terminalStatus = persistTerminalState(jobId, agentResult, sandboxResult);
+        if (terminalStatus != null) {
             deliverResults(jobId, terminalStatus, handler);
             return terminalStatus;
         } else {
@@ -1361,11 +1359,10 @@ public class AgentJobExecutor {
     }
 
     /**
-     * A non-zero exit that still produced valid output counts as COMPLETED so the findings are
-     * delivered — the runner's validation is stricter than the Java-side parser, so an agent can write
-     * result.json and still exit 1 for an unrelated reason.
+     * A failed runner can leave a local draft. Only observations already admitted by this server
+     * allow its remaining output to continue through delivery.
      */
-    private AgentJobStatus determineTerminalStatus(SandboxResult sandboxResult, AgentResult agentResult) {
+    private AgentJobStatus determineTerminalStatus(SandboxResult sandboxResult, AgentResult agentResult, AgentJob job) {
         if (sandboxResult.timedOut()) {
             return AgentJobStatus.TIMED_OUT;
         }
@@ -1385,13 +1382,13 @@ public class AgentJobExecutor {
         }
         if (agentResult != null && agentResult.output() != null) {
             Object rawOutput = agentResult.output().get("rawOutput");
-            if (rawOutput instanceof String raw && !raw.isBlank()) {
+            if (rawOutput instanceof String raw && !raw.isBlank() && observationsAdmitted(job)) {
                 log.info(
-                        "Agent exited with code {} but produced output — treating as COMPLETED for delivery",
+                        "Agent exited with code {} after observation admission — continuing delivery",
                         sandboxResult.exitCode());
                 return AgentJobStatus.COMPLETED;
             }
-            if (rawOutput != null) {
+            if (rawOutput != null && !(rawOutput instanceof String)) {
                 log.warn(
                         "Agent exited with code {} and rawOutput is present but not a String (type={})",
                         sandboxResult.exitCode(),
@@ -1409,37 +1406,37 @@ public class AgentJobExecutor {
      * so re-running would charge for it twice. {@link AgentJobZombieSweeper} terminalises the row
      * instead and books the proxy-recorded spend.
      *
-     * @return {@code true} if this worker won the terminal write; {@code false} if the job was
-     *     cancelled or orphan-requeued to a sibling, in which case the caller must NOT deliver.
+     * @return the committed terminal status, or {@code null} when ownership was lost and the caller
+     *     must not deliver.
      */
-    private boolean persistTerminalState(
-            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult, AgentJobStatus terminalStatus) {
-        String errorMessage =
-                switch (terminalStatus) {
-                    case TIMED_OUT -> "Container timed out";
-                    case FAILED -> "Container exited with code " + sandboxResult.exitCode();
-                    default -> null;
-                };
+    private @Nullable AgentJobStatus persistTerminalState(
+            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult) {
         try {
             return terminalPersistRetries.execute(named(
                     "Terminal persistence for jobId=" + jobId,
-                    () -> persistTerminalStateOnce(jobId, agentResult, sandboxResult, terminalStatus, errorMessage)));
+                    () -> persistTerminalStateOnce(jobId, agentResult, sandboxResult)));
         } catch (RetryException e) {
             throw new TerminalPersistenceException(e);
         }
     }
 
-    private boolean persistTerminalStateOnce(
-            UUID jobId,
-            AgentResult agentResult,
-            SandboxResult sandboxResult,
-            AgentJobStatus terminalStatus,
-            @Nullable String errorMessage) {
-        Boolean persisted = transactionTemplate.execute(status -> {
+    private @Nullable AgentJobStatus persistTerminalStateOnce(
+            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult) {
+        return transactionTemplate.execute(status -> {
+            AgentJob locked =
+                    jobRepository.findByIdWithWorkspaceForUpdate(jobId).orElse(null);
+            if (locked == null) return null;
+            AgentJobStatus terminalStatus = determineTerminalStatus(sandboxResult, agentResult, locked);
+            String errorMessage =
+                    switch (terminalStatus) {
+                        case TIMED_OUT -> "Container timed out";
+                        case FAILED -> "Container exited with code " + sandboxResult.exitCode();
+                        default -> null;
+                    };
             int updated = transitionTerminal(jobId, terminalStatus, Instant.now(), errorMessage);
             if (updated == 0) {
                 log.info("Job no longer owned/RUNNING, skipping output persist: jobId={}", jobId);
-                return false;
+                return null;
             }
 
             AgentJob freshJob = jobRepository.findById(jobId).orElseThrow();
@@ -1483,9 +1480,8 @@ public class AgentJobExecutor {
             jobRepository.saveAndFlush(freshJob);
 
             usage.appendTo(usageRecorder, freshJob.getWorkspace().getId(), freshJob, snapshot.upstreamModelId(), price);
-            return true;
+            return terminalStatus;
         });
-        return Boolean.TRUE.equals(persisted);
     }
 
     private static final class TerminalPersistenceException extends RuntimeException {

@@ -108,10 +108,12 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
     @Override
     public void start(MentorTurnRequest request, SseEmitter emitter) {
-        MentorSseChannel channel = new MentorSseChannel(emitter, objectMapper, runnerTimeoutScheduler.scheduler());
+        MentorSseChannel channel = new MentorSseChannel(
+                request.workspaceId(), request.threadId(), emitter, objectMapper, runnerTimeoutScheduler.scheduler());
         channel.bindLifecycle();
         AtomicReference<@Nullable MentorRunnerClient> clientHolder = new AtomicReference<>();
-        channel.onDisconnect(() -> abortRunner(clientHolder.get(), request.threadId()));
+        channel.onDisconnect(() ->
+                abortRunner(clientHolder.get(), request.workspaceId(), request.threadId(), "transport_disconnect"));
 
         // Record-started fires here so started/completed balance on the executor-rejected branch.
         metrics.recordStarted();
@@ -582,7 +584,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         try {
             client.start();
             if (channel.isClientGone()) {
-                abortRunner(client, request.threadId());
+                abortRunner(client, request.workspaceId(), request.threadId(), "disconnected_before_handshake");
                 throw new ClientDisconnectedException("Client disconnected after runner start");
             }
 
@@ -641,8 +643,10 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
      * generation happens. {@code session.abort()} is documented idempotent — calling it after
      * the turn has naturally completed is harmless.
      */
-    private static void abortRunner(@Nullable MentorRunnerClient client, UUID threadId) {
+    private static void abortRunner(
+            @Nullable MentorRunnerClient client, long workspaceId, UUID threadId, String origin) {
         if (client == null) return;
+        log.info("Mentor abort requested: workspaceId={}, threadId={}, origin={}", workspaceId, threadId, origin);
         try {
             client.abort(threadId)
                     .orTimeout(2, TimeUnit.SECONDS)

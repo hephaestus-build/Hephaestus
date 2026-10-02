@@ -40,7 +40,7 @@ class MentorSseChannelTest extends BaseUnitTest {
     void setUp() {
         emitter = new RecordingEmitter();
         scheduler = Executors.newSingleThreadScheduledExecutor();
-        channel = new MentorSseChannel(emitter, MAPPER, scheduler);
+        channel = new MentorSseChannel(1L, UUID.randomUUID(), emitter, MAPPER, scheduler);
     }
 
     @AfterEach

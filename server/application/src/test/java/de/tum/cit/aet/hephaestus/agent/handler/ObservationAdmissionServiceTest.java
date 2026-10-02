@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -246,6 +247,29 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
                         .path("reason")
                         .asString())
                 .isEqualTo("Observation cited unavailable evidence");
+    }
+
+    @ParameterizedTest
+    @EnumSource(AgentJobType.class)
+    void shouldRecordAnInadmissibleSubmissionWhenPublicationRejectsIt(AgentJobType type) {
+        job.setJobType(type);
+        doThrow(new JobDeliveryException("Reviewed work changed after submission"))
+                .when(prepared)
+                .record(job);
+
+        assertThatThrownBy(() -> service.admit(identity, mapper.createArrayNode()))
+                .isInstanceOf(JobDeliveryException.class)
+                .hasMessage("Reviewed work changed after submission");
+
+        assertThat(refusalReason(job)).isEqualTo(ObservationAdmissionService.INADMISSIBLE_REASON_CODE);
+        assertThat(Objects.requireNonNull(job.getMetadata())
+                        .path(ObservationAdmissionService.REFUSAL_METADATA_KEY)
+                        .path("reason")
+                        .asString())
+                .isEqualTo("Reviewed work changed after submission");
+        assertThat(ObservationAdmissionService.isAdmitted(job)).isFalse();
+        verify(evidenceFiles, never()).discardAdmittedAttempt(any());
+        verify(transactionManager).rollback(any());
     }
 
     @Test
