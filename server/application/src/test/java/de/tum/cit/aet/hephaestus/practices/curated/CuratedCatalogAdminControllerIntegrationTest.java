@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.core.event.WorkspacesInitializedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
+import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
@@ -920,6 +921,55 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     }
 
     @Test
+    void shouldStoreTheOfferedGroupDigestWhenABundledGroupIsUpdatedOrKept() {
+        GroupDefinition shipped =
+                Objects.requireNonNull(catalogService.group(GROUP).shipped());
+        String offered = CuratedDefinitionDigest.of(GROUP, shipped);
+
+        webTestClient
+                .put()
+                .uri(CATALOG + "/groups/" + GROUP)
+                .headers(headers -> {
+                    headers.setBearerAuth(ADMIN_TOKEN);
+                    headers.set(HttpHeaders.IF_MATCH, etagOf(getGroup()));
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new CuratedGroupRequestDTO(
+                        "Our ready work", shipped.description(), shipped.icon(), shipped.color()))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status.state")
+                .isEqualTo("EDITED_HERE");
+        assertThat(storedGroupDigest()).isEqualTo(offered);
+        assertThat(auditValues("CURATED_PRACTICE_GROUP", GROUP).getFirst()).contains(offered, "EDITED_HERE");
+
+        jdbcTemplate.update(
+                "UPDATE curated_group_override SET based_on_digest = ? WHERE slug = ?",
+                "area:v1:" + "a".repeat(64),
+                GROUP);
+        CuratedGroupDTO stale = getGroup();
+        assertThat(stale.status().state()).isEqualTo(CatalogEntryState.UPDATE_WAITING);
+
+        webTestClient
+                .put()
+                .uri(CATALOG + "/groups/" + GROUP + "/override/acknowledgement")
+                .headers(headers -> {
+                    headers.setBearerAuth(ADMIN_TOKEN);
+                    headers.set(HttpHeaders.IF_MATCH, etagOf(stale));
+                })
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status.state")
+                .isEqualTo("EDITED_HERE");
+        assertThat(storedGroupDigest()).isEqualTo(offered);
+        assertThat(auditValues("CURATED_PRACTICE_GROUP", GROUP).getFirst()).contains(offered, "EDITED_HERE");
+    }
+
+    @Test
     void customEntriesAppendWithoutTakingOwnershipOfTheShippedOrder() {
         CuratedCatalogDTO beforeGroup = getCatalog();
         webTestClient
@@ -1235,6 +1285,11 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 Long.class);
         assertNotNull(rows);
         return rows;
+    }
+
+    private @Nullable String storedGroupDigest() {
+        return jdbcTemplate.queryForObject(
+                "SELECT based_on_digest FROM curated_group_override WHERE slug = ?", String.class, GROUP);
     }
 
     private List<@Nullable String> auditValues(String entityType, String entityId) {
