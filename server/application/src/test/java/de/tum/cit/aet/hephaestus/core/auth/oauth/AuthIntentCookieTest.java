@@ -37,7 +37,7 @@ class AuthIntentCookieTest extends BaseUnitTest {
     }
 
     private static AuthIntentCookie.Intent intentAt(long issuedAtMillis) {
-        return new AuthIntentCookie.Intent("ws", "/x", AuthIntentCookie.Intent.Mode.LOGIN, null, issuedAtMillis);
+        return new AuthIntentCookie.Intent("ws", "/x", AuthIntentCookie.Intent.Mode.LOGIN, null, issuedAtMillis, null);
     }
 
     @Test

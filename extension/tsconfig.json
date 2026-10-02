@@ -1,0 +1,38 @@
+{
+	// Self-contained on purpose: WXT's generated `.wxt/tsconfig.json` exists only after `wxt prepare`,
+	// and auto-imports are off (`wxt.config.ts`), so type checking never depends on generated files.
+	"include": ["src/**/*.ts", "src/**/*.tsx", ".storybook/**/*.ts", ".storybook/**/*.tsx", "*.ts"],
+	// The Playwright tree runs on Node and carries its own `tsconfig.json`.
+	"exclude": ["e2e"],
+	"compilerOptions": {
+		"target": "ES2022",
+		"jsx": "react-jsx",
+		"module": "ESNext",
+		"lib": ["ES2024", "DOM", "DOM.Iterable"],
+		"types": ["vite/client", "node"],
+		"moduleResolution": "bundler",
+		"allowImportingTsExtensions": true,
+		"resolveJsonModule": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUncheckedSideEffectImports": true,
+		"noUncheckedIndexedAccess": true,
+		"noImplicitOverride": true,
+		"noImplicitReturns": true,
+		"allowUnreachableCode": false,
+		"allowUnusedLabels": false,
+		// Match the framework aliases in `vite.shared.ts`; generated API types stay in this tree.
+		"paths": {
+			"~/*": ["./src/*"],
+			"@/api/*": ["./src/api/*"],
+			"@/components/*": ["../webapp/src/components/*"],
+			"@/lib/*": ["../webapp/src/lib/*"],
+			"@/brand/*": ["../webapp/brand/*"]
+		}
+	}
+}

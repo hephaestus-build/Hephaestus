@@ -1,0 +1,100 @@
+---
+id: browser-extension-privacy
+title: Chrome extension privacy
+description: What the Hephaestus Chrome extension reads, sends and stores, and how to control it.
+---
+
+The Hephaestus Chrome extension has one purpose: show the practice review of the GitHub or GitLab
+work you are viewing, in that work's page. You choose the Hephaestus instance that receives your
+requests and each provider site where the extension may run.
+
+The default instance is [hephaestus.build](https://hephaestus.build). Its
+[Privacy notice](https://hephaestus.build/privacy) identifies the operator, legal bases, recipients,
+retention and privacy contacts. If you connect to a different instance, its operator receives the
+requests instead. Read that instance's Privacy notice before connecting; this page describes the
+extension's behaviour across instances.
+
+## What it reads and sends
+
+- **Sign-in information.** Sign-in goes through your chosen instance and its identity provider.
+  The extension receives an account identity and credentials for its own session. It does not read
+  your GitHub or GitLab password, cookies or personal access tokens.
+- **The address of the work you open.** Only after you allow a site, the extension recognises
+  supported issue and pull/merge-request addresses there. As soon as you open one, it sends the
+  work's canonical address to your chosen instance to look up its practice review, and again while
+  the page stays open and the review may change. The address includes the provider, repository and
+  work number; query strings, fragments and subpage paths are removed. It does not upload the page's
+  text, source code, form inputs or screenshots, or collect a browsing history. The instance only
+  resolves work in workspaces you may access.
+- **A list row you choose to preview.** On a repository's or project's list of pull requests, merge
+  requests or issues, the extension reads only the addresses of the rows' title links, to put a
+  Hephaestus button beside each; it sends nothing. Only when you press the Hephaestus button on a row
+  does it send that row's work address, in the same canonical form, to look up that one work. Other
+  pages — repository pages, searches, other sites — are never looked up.
+- **Review records.** Your instance returns account and workspace information and the review records
+  to display: the comments it recorded posting on that work for you — where each is, which practices
+  it is about, when it was delivered and the comment's address, never the comment's text — and, when
+  you open the report on the work's page, your own observations on that work: each practice, its
+  outcome and a one-sentence summary. The extension shows only your own records, workspace
+  administrators included, and never the text of any feedback; other developers' records are in the
+  Hephaestus web app, for those allowed to see them. Everything the report shows stays inside the
+  extension's own frame; none of it is inserted into the provider page's document.
+- **Review requests.** Asking for a review is the only change the extension makes, and it happens
+  only in the extension's own confirmation window, after it re-checks the work and your access with
+  the instance and you confirm there. Cancelling a review, retrying its results and approving or
+  rejecting feedback happen in the Hephaestus web app.
+
+The practice review's box, and on a list each row's Hephaestus button, are visible to the page that
+hosts them, and the page can observe the box's size, which is the same in every state until you open
+it. The page cannot read the review records inside it or open it. The extension does not hide that it
+is installed.
+
+## Storage and retention
+
+The chosen instance is stored locally in your Chrome profile. Chrome also
+remembers the site permissions you grant. These preferences are not synced by the extension.
+Credentials stay in Chrome's session memory, restricted from page content scripts, and are removed
+when Chrome closes or you sign out. Displayed account and review data are held in memory rather than
+saved as a persistent extension cache.
+
+The instance keeps its own session and security records, including authentication events; ending a
+browser session is not erasure of those records. The instance's Privacy notice covers their retention
+and the records already held about your work. Uninstalling the extension removes its local storage
+but does not erase server records or work in GitHub or GitLab.
+
+## AI processing and other recipients
+
+The extension does not call an AI provider. Looking up a practice review does not start an AI
+review. If you request a review and confirm it, the Hephaestus server may process evidence from its connected
+sources using the workspace's configured AI provider, subject to your AI choice and the workspace's
+controls. Feedback may subsequently be delivered through the configured channels. A self-hosted
+instance can use an external AI provider; self-hosting does not imply that all processing stays on
+that server. See [Your AI choice](./privacy#your-ai-choice) and your instance's Privacy notice.
+
+The extension contains no advertising, analytics or third-party error-reporting service. It uses
+system fonts and bundled scripts and images. Opening a help or privacy link
+visits the named website under that site's own privacy terms.
+
+## Limited Use
+
+The Hephaestus extension's use of information adheres to the
+[Chrome Web Store User Data Policy, including the Limited Use requirements](https://developer.chrome.com/docs/webstore/program-policies/limited-use).
+Extension data is used only to provide and secure the in-page practice review described here.
+It is not sold, used for advertising, used to determine creditworthiness or lending eligibility,
+or repurposed for unrelated profiling or research. The platform's optional academic-research
+participation does not authorise collecting or reusing your extension browsing activity for research.
+
+## Your controls and privacy requests
+
+You can remove access to each provider site in extension settings. Signing out clears the extension's
+credentials and open review views, and asks the instance to revoke that session. If the instance
+cannot be reached, local sign-out still completes; revoke the session from **User settings** in the
+app when it is reachable. Changing instance disconnects the old account and removes access to that
+instance before you connect elsewhere. You can also revoke the extension session or sign out
+everywhere from the app's **User settings**.
+
+For access, correction, deletion or an objection to server processing, use the privacy contact in
+the selected instance's Privacy notice. On the default instance, these contacts and the rights
+process are in [hephaestus.build/privacy](https://hephaestus.build/privacy). Do not put tokens,
+private work or personal data in a public support issue. General extension problems can be reported
+through [Hephaestus support](https://github.com/hephaestus-build/Hephaestus/issues).

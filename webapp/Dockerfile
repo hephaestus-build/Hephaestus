@@ -4,9 +4,10 @@ WORKDIR /repo
 # renovate: datasource=node-version depName=node
 ARG NODE_VERSION=24.20.0
 RUN pnpm runtime set node ${NODE_VERSION} -g
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .oxfmtrc.json .oxlintrc.json oxlint.react.jsonc /repo/
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .oxfmtrc.json .oxlintrc.json oxlint.react.jsonc oxlint.app.jsonc /repo/
 COPY webapp/package.json /repo/webapp/
 COPY docs/package.json /repo/docs/
+COPY patches/ /repo/patches/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \
     pnpm fetch --filter webapp
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store,sharing=locked \

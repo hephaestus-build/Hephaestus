@@ -9,7 +9,7 @@ import {
 import type { KnownArtifactKind } from "@/lib/artifact-kinds";
 import { workspaceAdminHead } from "@/lib/page-title";
 
-import { reviewArtifactTypeFromSlug, reviewArtifactTypeSlug } from "./ReviewArtifact";
+import { reviewArtifactTypeFromSlug, reviewArtifactTypeSlug } from "@/lib/artifact-kind-slugs";
 
 /**
  * The records Practice reviews opens over its tabs, as `?detail=kind:id`, by what each is called in

@@ -118,6 +118,40 @@ public class PracticeReviewDetectionGate {
                 pullRequest, pullRequest.isDraft(), signal, TriggerMode.MANUAL, true, pullRequest.reviewSubject());
     }
 
+    /**
+     * A pull request judged by the settings of the workspace that asked, not by whichever workspace first
+     * monitors a repository of that name: a repository can be monitored by several workspaces, and the same
+     * name can exist on another provider server.
+     */
+    public GateDecision evaluatePullRequest(
+            @NonNull PullRequest pullRequest,
+            @NonNull Workspace workspace,
+            @NonNull SignalName signal,
+            @NonNull TriggerMode triggerMode) {
+        return evaluateReviewableInWorkspace(
+                pullRequest,
+                workspace,
+                pullRequest.isDraft(),
+                signal,
+                triggerMode,
+                false,
+                pullRequest.reviewSubject(),
+                false);
+    }
+
+    public GateDecision evaluatePullRequestAdministrative(
+            PullRequest pullRequest, Workspace workspace, SignalName signal) {
+        return evaluateReviewableInWorkspace(
+                pullRequest,
+                workspace,
+                pullRequest.isDraft(),
+                signal,
+                TriggerMode.MANUAL,
+                true,
+                pullRequest.reviewSubject(),
+                false);
+    }
+
     public GateDecision evaluateIssue(
             @NonNull Issue issue,
             @NonNull Workspace workspace,

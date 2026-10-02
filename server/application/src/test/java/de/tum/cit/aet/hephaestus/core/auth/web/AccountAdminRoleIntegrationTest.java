@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
@@ -45,9 +44,6 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private HephaestusJwtIssuer jwtIssuer;
-
-    @Autowired
-    private JwtPrincipalFactory principalFactory;
 
     @Autowired
     private IssuedJwtRepository issuedJwtRepository;
@@ -205,7 +201,10 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
 
     private String tokenFor(Account account) {
         return jwtIssuer
-                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null)
+                .issue(
+                        java.util.Objects.requireNonNull(account.getId()),
+                        TokenConstraints.session(null, Instant.now()),
+                        null)
                 .value();
     }
 

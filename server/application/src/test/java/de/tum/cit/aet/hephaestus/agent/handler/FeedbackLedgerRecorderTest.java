@@ -100,15 +100,23 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 new FeedbackAnchor.DiffAnchor("src/Review.java", 12, 9),
                 InlineFeedbackChannel.Disposition.POSTED,
                 "inline-ref",
-                "thread-ref");
+                "thread-ref",
+                "https://github.com/owner/repo/pull/42#discussion_r123");
 
-        recorder().recordApprovedPlacements(feedback, "summary-ref", List.of(signal));
+        recorder()
+                .recordApprovedPlacements(
+                        feedback,
+                        "summary-ref",
+                        "https://github.com/owner/repo/pull/42#issuecomment-987654",
+                        List.of(signal));
 
         verify(feedbackPlacementRepository)
                 .insertProviderPlacementIfAbsent(
                         argThat(placement -> placement.feedbackId().equals(feedback.getId())
                                 && placement.placementType().equals("SUMMARY")
-                                && "summary-ref".equals(placement.postedCommentRef())));
+                                && "summary-ref".equals(placement.postedCommentRef())
+                                && "https://github.com/owner/repo/pull/42#issuecomment-987654"
+                                        .equals(placement.postedCommentUrl())));
         verify(feedbackPlacementRepository)
                 .insertProviderPlacementIfAbsent(
                         argThat(placement -> placement.feedbackId().equals(feedback.getId())
@@ -118,7 +126,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                                 && Integer.valueOf(9).equals(placement.anchorStartLine())
                                 && Integer.valueOf(12).equals(placement.anchorEndLine())
                                 && "NEW".equals(placement.anchorSide())
-                                && "inline-ref".equals(placement.postedCommentRef())));
+                                && "inline-ref".equals(placement.postedCommentRef())
+                                && "https://github.com/owner/repo/pull/42#discussion_r123"
+                                        .equals(placement.postedCommentUrl())));
     }
 
     @Test
@@ -139,7 +149,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                                 observations.get(4).getOccurrenceKey(), FeedbackSuppressionReason.VOLUME_CAPPED)),
                 null);
 
-        recorder().record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", false);
+        recorder().record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", null);
 
         // Every observation bound exactly once across ALL units (3 to DELIVERED + 1 each to the 2 SUPPRESSED units).
         var boundFindingIds = ArgumentCaptor.forClass(UUID.class);
@@ -172,7 +182,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "summary-ref",
-                        false);
+                        null);
 
         verify(feedbackObservationRepository, org.mockito.Mockito.times(5))
                 .insertIfAbsent(any(), any(), any(), anyInt());
@@ -205,7 +215,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(signal),
                         "summary-ref",
-                        true);
+                        null);
 
         var placements = ArgumentCaptor.forClass(ProviderPlacement.class);
         verify(feedbackPlacementRepository, org.mockito.Mockito.atLeastOnce())
@@ -238,7 +248,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(signal),
                         null,
-                        false);
+                        null);
 
         verify(feedbackPlacementRepository, org.mockito.Mockito.never()).insertProviderPlacementIfAbsent(any());
     }
@@ -264,7 +274,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         observations.get(5).getOccurrenceKey(), FeedbackSuppressionReason.VOLUME_CAPPED)),
                 null);
 
-        recorder.record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", false);
+        recorder.record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", null);
 
         var bound = ArgumentCaptor.forClass(UUID.class);
         verify(feedbackObservationRepository, org.mockito.Mockito.atLeastOnce())
@@ -292,7 +302,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 ArtifactKinds.PULL_REQUEST,
                 List.of(),
                 "summary-ref",
-                false);
+                null);
 
         var bound = ArgumentCaptor.forClass(UUID.class);
         verify(feedbackObservationRepository).insertIfAbsent(any(), bound.capture(), any(), anyInt());
@@ -318,7 +328,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "summary-ref",
-                        false);
+                        null);
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
@@ -394,7 +404,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 ArtifactKinds.PULL_REQUEST,
                 List.of(),
                 "summary-ref",
-                false);
+                null);
 
         // The prior is superseded by id, inside its workspace.
         verify(feedbackRepository).supersedeDelivered(1L, priorId);
@@ -425,7 +435,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "summary-ref",
-                        false);
+                        null);
 
         // Two bindings (problem PRIMARY + strength SUPPORTING); the NA is never bound.
         var boundId = ArgumentCaptor.forClass(UUID.class);
@@ -455,7 +465,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 ArtifactKinds.PULL_REQUEST,
                 List.of(),
                 null,
-                false);
+                null);
 
         verify(feedbackRepository, org.mockito.Mockito.never()).save(any());
         verify(feedbackRepository, org.mockito.Mockito.never()).supersedeDelivered(any(), any());
@@ -483,7 +493,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(signal),
                         null,
-                        true);
+                        null);
 
         var savedFeedback = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository).save(savedFeedback.capture());
@@ -659,7 +669,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         deduped.getOccurrenceKey(), FeedbackSuppressionReason.COMPOSER_DEDUPED)),
                 null);
 
-        recorder().record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", false);
+        recorder().record(job(), delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-ref", null);
 
         var saved = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository, org.mockito.Mockito.atLeast(2)).save(saved.capture());
@@ -779,17 +789,20 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                 new FeedbackAnchor.DiffAnchor("src/Foo.java", 10, null),
                 InlineFeedbackChannel.Disposition.POSTED,
                 "note-1",
-                "discussion-1");
+                "discussion-1",
+                "https://gitlab.example.com/a/b/-/merge_requests/1#note_123");
         FeedbackLedgerRecorder recorder = recorder();
         AgentJob job = job();
 
-        recorder.record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(signal), null, true);
+        recorder.record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(signal), null, null);
         recorder.recordSuppressedRemainder(
                 job, delivery, FeedbackSuppressionReason.INSTANCE_SILENCED, List.of("observation:key-2"));
 
         ArgumentCaptor<ProviderPlacement> placement = ArgumentCaptor.forClass(ProviderPlacement.class);
         verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(placement.capture());
         assertThat(placement.getValue().anchorPath()).isEqualTo("src/Foo.java");
+        assertThat(placement.getValue().postedCommentUrl())
+                .isEqualTo("https://gitlab.example.com/a/b/-/merge_requests/1#note_123");
 
         ArgumentCaptor<Feedback> feedback = ArgumentCaptor.forClass(Feedback.class);
         verify(feedbackRepository, org.mockito.Mockito.times(2)).save(feedback.capture());
@@ -816,7 +829,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "summary-ref",
-                        false);
+                        null);
 
         verify(eventPublisher, org.mockito.Mockito.never()).publishEvent(any());
     }
@@ -837,7 +850,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         null,
-                        false);
+                        null);
 
         verify(feedbackPlacementRepository, org.mockito.Mockito.never()).insertProviderPlacementIfAbsent(any());
     }
@@ -857,7 +870,7 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
                         ArtifactKinds.PULL_REQUEST,
                         List.of(),
                         "dispatch-ref",
-                        false);
+                        null);
 
         var placement = ArgumentCaptor.forClass(ProviderPlacement.class);
         verify(feedbackPlacementRepository).insertProviderPlacementIfAbsent(placement.capture());

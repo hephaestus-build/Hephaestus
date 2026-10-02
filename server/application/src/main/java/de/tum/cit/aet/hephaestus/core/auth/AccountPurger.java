@@ -39,11 +39,17 @@ public class AccountPurger {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void purge(Long accountId) {
+        // The account row first, as every issuance and revocation takes it: a refresh holding its share
+        // lock finishes before any child row goes, and none starts while the purge runs.
+        accountRepository.lockStatusForUpdate(accountId);
         // Children carry ON DELETE CASCADE on account_id, but we keep the account tombstone, so the
         // cascade is not triggered — delete the personal/auth child rows explicitly.
         jdbcTemplate.update("DELETE FROM account_feature WHERE account_id = ?", accountId);
         anonymizeAuditRows(accountId); // reads identity_link, so before it is deleted
         jdbcTemplate.update("DELETE FROM identity_link WHERE account_id = ?", accountId);
+        jdbcTemplate.update("DELETE FROM client_sign_in_handoff WHERE account_id = ?", accountId);
+        // Sessions before tokens, the order every session operation locks them in.
+        jdbcTemplate.update("DELETE FROM client_session WHERE account_id = ?", accountId);
         jdbcTemplate.update("DELETE FROM issued_jwt WHERE account_id = ?", accountId);
         jdbcTemplate.update("DELETE FROM account_export WHERE account_id = ?", accountId);
         jdbcTemplate.update("UPDATE consent_decision SET account_id = NULL WHERE account_id = ?", accountId);

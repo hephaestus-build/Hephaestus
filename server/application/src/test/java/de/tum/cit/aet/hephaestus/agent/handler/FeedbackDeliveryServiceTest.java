@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.mock;
@@ -149,7 +148,7 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
         service.projectAutomaticPackage(job, dispatch);
 
         verify(ledgerRecorder)
-                .record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(signal), "dispatch-summary", true);
+                .record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(signal), "dispatch-summary", null);
         verify(jobRepository)
                 .reconcileDispatchDeliveryStatus(
                         job.getId(), WORKSPACE_ID, DeliveryStatus.DELIVERED, "dispatch-summary");
@@ -167,7 +166,7 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
         verify(ledgerRecorder).recordSuppressedUnit(job, delivery, FeedbackSuppressionReason.WORKSPACE_DELIVERY_PAUSED);
         verify(ledgerRecorder, never())
-                .recordWithoutConversation(any(), any(), any(), any(), nullable(String.class), anyBoolean());
+                .recordWithoutConversation(any(), any(), any(), any(), nullable(String.class), nullable(String.class));
         verify(jobRepository)
                 .reconcileDispatchDeliveryStatus(job.getId(), WORKSPACE_ID, DeliveryStatus.DELIVERED, null);
     }
@@ -191,7 +190,7 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
         verify(ledgerRecorder)
                 .recordWithoutConversation(
-                        job, delivery, ArtifactKinds.PULL_REQUEST, List.of(delivered), "summary-1", true);
+                        job, delivery, ArtifactKinds.PULL_REQUEST, List.of(delivered), "summary-1", null);
         verify(ledgerRecorder)
                 .recordSuppressedRemainder(
                         job, delivery, FeedbackSuppressionReason.WORKSPACE_DELIVERY_PAUSED, List.of("inline-2"));
@@ -223,7 +222,7 @@ class FeedbackDeliveryServiceTest extends BaseUnitTest {
 
         assertThat(service.recoverAutomaticPackageIfPresent(job)).isTrue();
 
-        verify(ledgerRecorder).record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-1", false);
+        verify(ledgerRecorder).record(job, delivery, ArtifactKinds.PULL_REQUEST, List.of(), "summary-1", null);
         assertThat(job.getDeliveryCommentId()).isEqualTo("summary-1");
     }
 

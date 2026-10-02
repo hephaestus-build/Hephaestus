@@ -51,6 +51,7 @@ const group = (dependsOn: readonly string[]) => ({
 });
 
 const webappSources = "'webapp/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
+const extensionSources = "'extension/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 const agentSources =
 	"'server/application/src/{main,test}/resources/agent/**/*.ts' 'server/application/src/main/resources/practices/precompute/**/*.ts' 'docker/agents/{precompute,pi}/**/*.ts' 'scripts/**/*.ts'";
 const loadSources = "'load-tests/**/*.js'";
@@ -83,6 +84,7 @@ const docsLintInputs = [
 	"webapp/tools/oxlint/**",
 	".oxlintrc.json",
 	"oxlint.react.jsonc",
+	"oxlint.app.jsonc",
 	"tsconfig.json",
 	"pnpm-lock.yaml",
 ];
@@ -102,6 +104,12 @@ const policyGates = [
 ];
 const serverGates = ["gate:java-nullness", "gate:server"];
 const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
+const extensionGates = [
+	"gate:extension",
+	"gate:extension-format",
+	"gate:components",
+	"gate:stories",
+];
 const agentGates = ["gate:agents", "gate:agent-tests"];
 const docsGates = ["gate:docs", "gate:diagrams", "gate:docs-tokens"];
 const loadGates = ["gate:load-format"];
@@ -109,6 +117,7 @@ const checkTasks = [
 	...policyGates,
 	...serverGates,
 	...webappGates,
+	...extensionGates,
 	...agentGates,
 	...docsGates,
 	...loadGates,
@@ -133,9 +142,11 @@ export default defineConfig({
 				"vp run quality",
 				"vp run verification:webapp-tests",
 				"vp run verification:storybook-tests",
+				"vp run verification:extension-tests",
 				"vp run verification:server-tests",
 				"vp run verification:webapp-build",
 				"vp run verification:storybook-build",
+				"vp run verification:extension-build",
 				"vp run verification:docs-build",
 			]),
 			"check:affected": run("node scripts/check-affected.ts"),
@@ -144,6 +155,7 @@ export default defineConfig({
 			format: group([
 				"format:java",
 				"format:webapp",
+				"format:extension",
 				"format:agents",
 				"format:load",
 				"format:docs",
@@ -152,6 +164,7 @@ export default defineConfig({
 			"format:check": group([
 				"format:java:check",
 				"gate:webapp-format",
+				"gate:extension-format",
 				"gate:agents-format",
 				"gate:load-format",
 				"gate:docs-format",
@@ -161,6 +174,8 @@ export default defineConfig({
 			"format:java:check": run(`${gradlew} :spotlessCheck :application:spotlessCheck --quiet`),
 			"format:webapp": run(`vp fmt --write ${webappSources}`),
 			"format:webapp:check": group(["gate:webapp-format"]),
+			"format:extension": run(`vp fmt --write ${extensionSources}`),
+			"format:extension:check": group(["gate:extension-format"]),
 			"format:agents": run(`vp fmt --write ${agentSources}`),
 			"format:agents:check": group(["gate:agents-format"]),
 			"format:load": run(`vp fmt --write ${loadSources}`),
@@ -171,23 +186,39 @@ export default defineConfig({
 			"format:config:check": group(["gate:config-format"]),
 
 			// Lint and typecheck
-			lint: group(["lint:java", "lint:webapp", "gate:agents-lint", "gate:docs-lint"]),
-			typecheck: group(["typecheck:webapp", "gate:scripts-typecheck", "gate:agents-typecheck"]),
+			lint: group([
+				"lint:java",
+				"lint:webapp",
+				"lint:extension",
+				"gate:agents-lint",
+				"gate:docs-lint",
+			]),
+			typecheck: group([
+				"typecheck:webapp",
+				"typecheck:extension",
+				"gate:scripts-typecheck",
+				"gate:agents-typecheck",
+			]),
 			"lint:java": run(`${gradlew} :application:pmdMain --quiet`),
 			"lint:java:report": run(
 				`${gradlew} :application:pmdMain && echo 'Report: server/application/build/reports/pmd/main.html'`,
 			),
 			"lint:webapp": run("vp -C webapp lint ."),
 			"lint:webapp:fix": run("vp -C webapp lint --fix ."),
+			"lint:extension": run("vp -C extension lint ."),
+			"lint:extension:fix": run("vp -C extension lint --fix ."),
 			"lint:agents": group(["gate:agents-lint"]),
 			"lint:agents:fix": run(`vp exec oxlint --fix ${oxlintTargets}`),
-			// The SPA has no separate `tsc` leg: the root config turns `typeAware` and `typeCheck` on, so
-			// the lint half of `gate:webapp` is also its type check.
+			// The SPA and the extension have no separate `tsc` leg: the root config turns `typeAware` and
+			// `typeCheck` on, so the lint half of each tree's gate is also its type check.
 			"typecheck:webapp": group(["gate:webapp"]),
+			"typecheck:extension": group(["gate:extension"]),
 			"typecheck:scripts": group(["gate:scripts-typecheck"]),
 			"typecheck:agents": group(["gate:agents-typecheck"]),
 			"check:webapp": run("vp -C webapp check"),
 			"fix:webapp": run("vp -C webapp check --fix"),
+			"check:extension": group(extensionGates),
+			"fix:extension": run("vp -C extension check --fix"),
 			"check:agents": group(["gate:agents"]),
 			"fix:agents": run(["vp run format:agents", "vp run format:config", "vp run lint:agents:fix"]),
 
@@ -238,7 +269,10 @@ export default defineConfig({
 			// stays one verdict.
 			"gate:webapp": cached("vp -C webapp check --no-fmt"),
 			"gate:webapp-format": cached(`vp fmt --check ${webappSources}`),
-			"gate:components": cached("node scripts/check-presentational-components.ts"),
+			"gate:components": run([
+				"node scripts/check-presentational-components.ts",
+				"node --test scripts/check-presentational-components.test.ts",
+			]),
 			"gate:stories": cached("node scripts/check-story-prose.ts"),
 			"gate:docs-tokens": cached(
 				"node scripts/check-docs-tokens.ts && node --test scripts/check-docs-tokens.test.ts",
@@ -248,6 +282,25 @@ export default defineConfig({
 			"test:webapp:stories": run("vp run --filter webapp test:storybook"),
 			"build:webapp": run("vp -C webapp build"),
 			"dev:webapp": run("vp -C webapp dev"),
+
+			// Chrome extension
+			"gate:extension": cached("vp -C extension check --no-fmt"),
+			"gate:extension-format": cached(`vp fmt --check ${extensionSources}`),
+			"verification:extension-tests": run([
+				"vp run test:extension",
+				"vp run test:extension:stories",
+			]),
+			"test:extension": run("vp run --filter extension test"),
+			"test:extension:stories": run("vp run --filter extension test:storybook"),
+			// The `e2e` build, never the production zip, against a server on the `e2e` profile, which
+			// `dev:server:e2e` starts.
+			"test:extension:e2e": run([
+				"vp run --filter extension build:e2e",
+				"vp run --filter extension test:e2e",
+			]),
+			// The zip the Chrome Web Store takes, from the production build.
+			"build:extension": run("vp run --filter extension zip"),
+			"dev:extension": run("vp run --filter extension dev"),
 
 			// Agent runtime, precompute, repository scripts and tooling config
 			"gate:agents-format": cached(`vp fmt --check ${agentSources}`),
@@ -315,6 +368,8 @@ export default defineConfig({
 			// The build regenerates the route tree, so it never runs beside a gate that reads it. A
 			// second name after `vp run` is an argument, not a second task, so the two are separate.
 			"ci:webapp": run(["vp run ci:webapp:static", "vp run verification:webapp-build"]),
+			"ci:extension:static": group([...extensionGates, "verification:extension-tests"]),
+			"ci:extension": run(["vp run ci:extension:static", "vp run verification:extension-build"]),
 			"ci:windows": group(checkTasks.filter((gate) => !linuxOnly.has(gate))),
 
 			// Scoped selections for check:affected
@@ -322,12 +377,19 @@ export default defineConfig({
 			"affected:docs": group([...docsGates, "gate:instructions"]),
 			"affected:server": group(serverGates),
 			"affected:webapp": group(webappGates),
+			"affected:extension": group(extensionGates),
 
 			// The credential-free builds and suites that verification adds to quality
 			"verification:storybook-tests": group(["test:webapp:stories"]),
 			"verification:webapp-build": run("node scripts/verify-webapp-build.ts"),
 			"verification:storybook-build": run("vp run --filter webapp build-storybook"),
 			"verification:docs-build": group(["docs:build"]),
+			// The browser suites run development and e2e builds; this judges the production zip itself.
+			"verification:extension-build": run([
+				"vp run build:extension",
+				"vp run check:extension-package",
+			]),
+			"check:extension-package": run("node scripts/check-extension-package.ts"),
 			"verification:server-tests": run([
 				"vp run test:server:selection",
 				"vp run test:server:verification",
@@ -337,7 +399,7 @@ export default defineConfig({
 			"generate:api": run(["vp run generate:api:specs", "vp run generate:api:client"]),
 			"generate:api:specs": run("node scripts/generate-openapi-spec.ts"),
 			"generate:api:client": run(
-				"node scripts/rm.ts webapp/src/api && vp run --filter webapp generate:api",
+				"node scripts/rm.ts webapp/src/api extension/src/api && vp run --filter webapp generate:api && vp run --filter extension generate:api",
 			),
 			"db:draft-changelog": run("node scripts/db-utils.ts draft-changelog"),
 			"db:check-drift": run("node scripts/db-utils.ts check-drift"),

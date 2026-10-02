@@ -43,10 +43,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Image contents, excluding tests and in-tree documentation.
+          # Image contents and the Chrome extension, excluding tests and in-tree documentation.
           SHIPPED_PATHS=(
-            "server" "webapp" "docker"
-            ":!**/*.md" ":!server/application/src/test" ":!webapp/e2e"
+            "server" "webapp" "docker" "extension"
+            ":!**/*.md" ":!server/application/src/test" ":!webapp/e2e" ":!extension/e2e"
             ":!**/*.test.ts" ":!**/*.test.tsx" ":!**/*.stories.tsx"
           )
 

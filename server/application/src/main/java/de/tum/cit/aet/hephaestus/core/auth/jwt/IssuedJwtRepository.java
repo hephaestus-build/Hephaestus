@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth.jwt;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -110,8 +111,93 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
             @Param("now") Instant now,
             @Param("reason") IssuedJwt.RevokedReason reason);
 
-    /** Periodic cleanup — physically removes expired rows so the table doesn't grow unbounded. */
+    /**
+     * Account-wide revocation that keeps one installed-client session's whole token family (sign out
+     * everywhere else from that client). Browser tokens have no session and are always revoked.
+     */
     @Modifying
-    @Query("DELETE FROM IssuedJwt j WHERE j.expiresAt < :cutoff")
+    @Query("""
+        UPDATE IssuedJwt j
+           SET j.revokedAt = :now,
+               j.revokedReason = :reason
+         WHERE j.accountId = :accountId
+           AND j.revokedAt IS NULL
+           AND (j.sessionId IS NULL OR j.sessionId <> :keepSessionId)
+        """)
+    int revokeAllForAccountExceptSession(
+            @Param("accountId") Long accountId,
+            @Param("keepSessionId") UUID keepSessionId,
+            @Param("now") Instant now,
+            @Param("reason") IssuedJwt.RevokedReason reason);
+
+    /**
+     * The installed-client session a token belongs to, for revoking it from the session list. Resolves
+     * rotated-away and expired tokens too, as long as their session exists. Empty for a browser token.
+     */
+    @Query("SELECT j.sessionId FROM IssuedJwt j WHERE j.jti = :jti AND j.accountId = :accountId")
+    Optional<UUID> findSessionIdOwnedBy(@Param("jti") UUID jti, @Param("accountId") Long accountId);
+
+    /** The installed-client session a refresh secret, current or rotated away, was issued to. */
+    @Query("SELECT j.sessionId FROM IssuedJwt j WHERE j.refreshTokenHash = :refreshTokenHash")
+    Optional<UUID> findSessionIdByRefreshTokenHash(@Param("refreshTokenHash") String refreshTokenHash);
+
+    /**
+     * Rotates a session's current token away: 1 when {@code refreshTokenHash} belongs to the session's
+     * one unrevoked token, 0 when it was rotated away already (a reuse). Callers hold the session lock.
+     */
+    @Modifying
+    @Query("""
+        UPDATE IssuedJwt j
+           SET j.revokedAt = :now,
+               j.revokedReason = de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt.RevokedReason.ROTATE
+         WHERE j.refreshTokenHash = :refreshTokenHash
+           AND j.sessionId = :sessionId
+           AND j.revokedAt IS NULL
+        """)
+    int rotate(
+            @Param("refreshTokenHash") String refreshTokenHash,
+            @Param("sessionId") UUID sessionId,
+            @Param("now") Instant now);
+
+    /** Revokes every still-active token of one installed-client session. Callers hold the session lock. */
+    @Modifying
+    @Query("""
+        UPDATE IssuedJwt j
+           SET j.revokedAt = :now,
+               j.revokedReason = :reason
+         WHERE j.sessionId = :sessionId
+           AND j.revokedAt IS NULL
+        """)
+    int revokeSession(
+            @Param("sessionId") UUID sessionId,
+            @Param("now") Instant now,
+            @Param("reason") IssuedJwt.RevokedReason reason);
+
+    /** The one unrevoked token of each given session: the token a session list shows it by. */
+    @Query("""
+        SELECT j
+          FROM IssuedJwt j
+         WHERE j.sessionId IN :sessionIds
+           AND j.revokedAt IS NULL
+        """)
+    List<IssuedJwt> findCurrentBySessionIds(@Param("sessionIds") Collection<UUID> sessionIds);
+
+    /**
+     * Periodic cleanup — physically removes expired rows so the table doesn't grow unbounded. A row of an
+     * installed-client session stays while its session exists: it is how an old refresh secret or JTI
+     * still resolves its family. The session cleanup removes those rows with their session.
+     */
+    @Modifying
+    @Query("""
+        DELETE FROM IssuedJwt j
+         WHERE j.expiresAt < :cutoff
+           AND (j.sessionId IS NULL
+                OR NOT EXISTS (SELECT 1 FROM ClientSession s WHERE s.id = j.sessionId))
+        """)
     int deleteExpiredBefore(@Param("cutoff") Instant cutoff);
+
+    /** Removes the token rows of sessions the session cleanup has locked and is about to delete. */
+    @Modifying
+    @Query("DELETE FROM IssuedJwt j WHERE j.sessionId IN :sessionIds")
+    int deleteBySessionIds(@Param("sessionIds") Collection<UUID> sessionIds);
 }

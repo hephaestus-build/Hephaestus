@@ -43,6 +43,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
@@ -286,6 +289,88 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
     @Nested
     class ListFindings {
+
+        @ParameterizedTest
+        @CsvSource({"scm.pull_request, DATE", "scm.pull_request, SEVERITY", "scm.issue, DATE", "scm.issue, SEVERITY"})
+        @WithUser
+        void shouldReturnOnlyOwnExactWorkWhenFilteringByKindAndId(String kind, String sort) {
+            Instant now = Instant.now();
+            UUID latest =
+                    insertObservation(practiceA, developer, "Exact work", "ABSENT", "MAJOR", 0.9f, kind, 741L, now);
+            UUID older = insertObservation(
+                    practiceB, developer, "Same work older", "ABSENT", "MAJOR", 0.9f, kind, 741L, now.minusSeconds(5));
+            insertObservation(practiceA, developer, "Different ID", "ABSENT", "MAJOR", 0.9f, kind, 742L, now);
+            String otherKind = kind.equals("scm.issue") ? "scm.pull_request" : "scm.issue";
+            insertObservation(practiceA, developer, "Different kind", "ABSENT", "MAJOR", 0.9f, otherKind, 741L, now);
+            insertObservation(
+                    practiceA,
+                    persistUser("another-work-author"),
+                    "Other developer",
+                    "ABSENT",
+                    "MAJOR",
+                    0.9f,
+                    kind,
+                    741L,
+                    now);
+            for (int page = 0; page < 2; page++) {
+                webTestClient
+                        .get()
+                        .uri(
+                                BASE_URI + "?artifactKind={kind}&artifactId=741&sort={sort}&size=1&page={page}",
+                                workspace.getWorkspaceSlug(),
+                                kind,
+                                sort,
+                                page)
+                        .headers(TestAuthUtils.withCurrentUser())
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody()
+                        .jsonPath("$.totalElements")
+                        .isEqualTo(2)
+                        .jsonPath("$.content.length()")
+                        .isEqualTo(1)
+                        .jsonPath("$.content[0].id")
+                        .isEqualTo((page == 0 ? latest : older).toString());
+            }
+            webTestClient
+                    .get()
+                    .uri(
+                            BASE_URI + "?artifactKind={kind}&artifactId=741&artifactKinds={otherKind}",
+                            workspace.getWorkspaceSlug(),
+                            kind,
+                            otherKind)
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.totalElements")
+                    .isEqualTo(0);
+        }
+
+        @ParameterizedTest
+        @ValueSource(
+                strings = {
+                    "artifactKind=scm.issue",
+                    "artifactId=741",
+                    "artifactKind=scm.issue&artifactId=0",
+                    "artifactKind=scm.issue&artifactId=-1",
+                    "artifactKind=INVALID&artifactId=741",
+                    "artifactKind=&artifactId=741",
+                    "artifactKind=scm.issue&artifactId=741&size=101"
+                })
+        @WithUser
+        void shouldRejectInvalidExactWorkFilterWhenPairOrBoundsAreInvalid(String query) {
+            webTestClient
+                    .get()
+                    .uri(BASE_URI + "?" + query, workspace.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .exchange()
+                    .expectStatus()
+                    .isBadRequest()
+                    .expectBody(Void.class);
+        }
 
         @Test
         @WithUser
@@ -798,7 +883,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     otherPractice.getId(),
                     null, // practiceRevisionId
                     "scm.pull_request",
-                    2L,
+                    1L,
                     developer.getId(),
                     "Other WS finding",
                     "ASSESSED",
@@ -826,6 +911,23 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("My WS finding")
                     .jsonPath("$.totalElements")
                     .isEqualTo(1);
+            for (String sort : java.util.List.of("DATE", "SEVERITY")) {
+                webTestClient
+                        .get()
+                        .uri(
+                                BASE_URI + "?artifactKind=scm.pull_request&artifactId=1&sort={sort}",
+                                workspace.getWorkspaceSlug(),
+                                sort)
+                        .headers(TestAuthUtils.withCurrentUser())
+                        .exchange()
+                        .expectStatus()
+                        .isOk()
+                        .expectBody()
+                        .jsonPath("$.totalElements")
+                        .isEqualTo(1)
+                        .jsonPath("$.content[0].summary")
+                        .isEqualTo("My WS finding");
+            }
         }
     }
 

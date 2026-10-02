@@ -27,6 +27,7 @@ mutation AddPullRequestReviewWithThreads(
             comments(first: 100) {
                 nodes {
                     id
+                    url
                     path
                     line
                     body

@@ -306,6 +306,7 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
                 "package-worker",
                 FeedbackDispatchState.UNCERTAIN.name(),
                 "summary-42",
+                "https://github.com/owner/repo/pull/42#issuecomment-1",
                 "inline delivery incomplete",
                 null,
                 "[]",
@@ -316,6 +317,8 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
                 .hasValueSatisfying(dispatch -> {
                     assertThat(dispatch.getState()).isEqualTo(FeedbackDispatchState.UNCERTAIN);
                     assertThat(dispatch.getDeliveredExternalRef()).isEqualTo("summary-42");
+                    assertThat(dispatch.getDeliveredExternalUrl())
+                            .isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-1");
                 });
     }
 

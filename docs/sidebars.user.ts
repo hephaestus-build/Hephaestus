@@ -18,6 +18,8 @@ const sidebars: SidebarsConfig = {
 				"practice-profile",
 				"ai-mentor",
 				"workspace",
+				"browser-extension",
+				"browser-extension-privacy",
 				"product-feedback",
 			],
 		},

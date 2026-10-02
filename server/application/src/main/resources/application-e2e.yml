@@ -6,6 +6,8 @@ hephaestus:
     dev-login-enabled: true
     cookie-secure: false
     cookie-name: HEPHAESTUS_AT
+    # The development extension key's id; the extension E2E suite signs in through /auth/dev-login/client.
+    browser-extension-ids: ijkajblcbajjpjbknfgdiiiljipafiko
   workspace:
     init-default: false
     creation-policy: SELF_SERVICE

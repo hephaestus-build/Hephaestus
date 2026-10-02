@@ -1,0 +1,65 @@
+{
+	"$schema": "../node_modules/oxlint/configuration_schema.json",
+
+	// The application layer owns the shared React Compiler, Vitest and Storybook policy.
+	"extends": ["../oxlint.app.jsonc"],
+
+	// Named here because `load-config.ts` drops a base's `jsPlugins` on the object path (`AGENTS.md`
+	// § Lint and format).
+	"jsPlugins": ["../webapp/tools/oxlint/index.ts"],
+
+	// `webextensions` declares `chrome`; the extension itself reaches the API through `wxt/browser`.
+	"env": { "browser": true, "webextensions": true, "es2022": true },
+	"settings": { "react": { "version": "19.2" } },
+
+	"ignorePatterns": [
+		// Generated.
+		"src/api",
+		// Build output.
+		".output",
+		".wxt",
+		"playwright-report",
+		"storybook-static"
+	],
+
+	"rules": {
+		// Both want `toSorted`/`toReversed`; copy before sorting an array a caller can observe.
+		"unicorn/no-array-sort": "off",
+		"unicorn/no-array-reverse": "off",
+		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, as in the webapp.
+		"complexity": ["error", { "max": 40 }],
+		// `webapp/AGENTS.md` § File naming: a file that exports a component is PascalCase.
+		"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
+		// A semantic tag can carry extra form/list semantics; axe proves the rendered role.
+		"jsx-a11y/prefer-tag-over-role": "off"
+	},
+
+	"overrides": [
+		{
+			// The configs reach the webapp's lint loader and the root manifest, across the tree boundary
+			// no alias spans.
+			"files": ["vite.config.ts", "wxt.config.ts"],
+			"rules": { "import/no-relative-parent-imports": "off" }
+		},
+		{
+			// Views, content script and worker only; the configs and the Playwright tree run on Node.
+			"files": ["src/**"],
+			"rules": {
+				// Every request goes through the worker's generated client (`src/background/api.ts`).
+				"no-restricted-globals": [
+					"error",
+					{ "name": "fetch", "message": "Requests go through the worker's generated client." },
+					{
+						"name": "XMLHttpRequest",
+						"message": "Requests go through the worker's generated client."
+					}
+				]
+			}
+		},
+		{
+			// Playwright names its fixture callback `use`, which the React plugin reads as the hook.
+			"files": ["e2e/**"],
+			"rules": { "react-hooks/rules-of-hooks": "off" }
+		}
+	]
+}

@@ -59,6 +59,8 @@ relationships stay with people.
 - **Answers follow-up questions.** Developers can ask why a suggestion matters or supply the context
   it did not have. In chat Hephaestus goes by Heph, in the web app and, when Slack is connected, in a
   direct message.
+- **Explains itself where the work is.** A Chrome extension shows, on the pull request, merge request
+  or issue you are viewing, what Hephaestus recorded about it and why.
 - **Uses only the project context you connect.** GitHub and GitLab repositories, plus optional
   selected Slack channels and Outline collections.
 - **Puts admins in control.** They configure repositories, practices, members, integrations, the AI

@@ -228,7 +228,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
             if (prior != null && prior.humanReplied()) {
                 posted++; // the finding IS represented on the MR, just not by us this run
                 signals.add(new DeliveredSignal(
-                        key, diff, Disposition.PRESERVED_EXISTING, prior.noteId(), prior.discussionId()));
+                        key, diff, Disposition.PRESERVED_EXISTING, prior.noteId(), prior.discussionId(), prior.url()));
                 continue;
             }
 
@@ -245,7 +245,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
                     failed++;
                 }
                 signals.add(new DeliveredSignal(
-                        key, diff, outcome.disposition(), outcome.noteId(), outcome.discussionId()));
+                        key, diff, outcome.disposition(), outcome.noteId(), outcome.discussionId(), outcome.url()));
             } catch (OutboundEgressSuppressedException e) {
                 return InlineResult.suppressed(
                         posted, failed, signals, deliveryKeys(feedbackItems.subList(index, feedbackItems.size())));
@@ -310,8 +310,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
                             scopeId,
                             diff.filePath(),
                             diff.newLineNumber());
-                    String noteId = postFallbackComment(scopeId, mrInfo.globalId(), diff, body);
-                    return noteId != null ? new Outcome(Disposition.FELL_BACK, noteId, null) : Outcome.failed();
+                    return postFallbackComment(scopeId, mrInfo.globalId(), diff, body);
                 }
                 log.warn(
                         "GitLab createDiffNote failed: workspaceId={}, file={}, line={}, errors={}",
@@ -322,7 +321,11 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
                 return Outcome.failed();
             }
 
-            return new Outcome(Disposition.POSTED, noteIdOf(response), discussionIdOf(response));
+            return new Outcome(
+                    Disposition.POSTED,
+                    noteIdOf(response),
+                    discussionIdOf(response),
+                    response.field("createDiffNote.note.url").getValue());
         } catch (OutboundEgressSuppressedException e) {
             throw e;
         } catch (Exception e) {
@@ -365,7 +368,9 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
                         sanitizeForLog(errors.toString()));
                 return Outcome.failed();
             }
-            return new Outcome(Disposition.POSTED, prior.noteId(), prior.discussionId());
+            String url = response.field("updateNote.note.url").getValue();
+            return new Outcome(
+                    Disposition.POSTED, prior.noteId(), prior.discussionId(), url == null ? prior.url() : url);
         } catch (OutboundEgressSuppressedException e) {
             throw e;
         } catch (Exception e) {
@@ -465,6 +470,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         }
         String discussionId = (String) discussion.get("id");
         String botNoteId = null;
+        String botUrl = null;
         String botKey = null;
         boolean humanReplied = false;
         for (Map<String, Object> note : notes) {
@@ -478,6 +484,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
             }
             if (body.contains(marker)) {
                 botNoteId = noteId;
+                botUrl = (String) note.get("url");
                 botKey = parseDeliveryKey(body);
             } else {
                 humanReplied = true; // a person (or other tool) participated in this thread
@@ -486,7 +493,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
         if (botKey == null || botNoteId == null) {
             return; // not one of ours, or a legacy bot note posted before keys existed — leave the clear path to it
         }
-        byKey.put(botKey, new PriorThread(botKey, botNoteId, discussionId, humanReplied));
+        byKey.put(botKey, new PriorThread(botKey, botNoteId, discussionId, humanReplied, botUrl));
     }
 
     private int destroyVanishedThreads(long scopeId, Map<String, PriorThread> priorByKey, Set<String> seenKeys) {
@@ -534,15 +541,20 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
 
     /** A prior diff-note thread we posted, matched by its embedded correlation key. */
     private record PriorThread(
-            String key, String noteId, @Nullable String discussionId, boolean humanReplied) {}
+            String key,
+            String noteId,
+            @Nullable String discussionId,
+            boolean humanReplied,
+            @Nullable String url) {}
 
     /** Result of a single create/edit attempt: what happened plus the durable note/discussion handles. */
     private record Outcome(
             Disposition disposition,
             @Nullable String noteId,
-            @Nullable String discussionId) {
+            @Nullable String discussionId,
+            @Nullable String url) {
         static Outcome failed() {
-            return new Outcome(Disposition.FAILED, null, null);
+            return new Outcome(Disposition.FAILED, null, null, null);
         }
     }
 
@@ -696,10 +708,9 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
     /**
      * Posts an out-of-hunk finding as a plain MR comment, prefixed with its {@code file:line} so the location is
      * still legible. {@code markedBody} already carries the marker + correlation tag (so a fallback comment is
-     * reconciled like any other note); returns the new note id or {@code null} on failure.
+     * reconciled like any other note); returns its provider handle and permalink on success.
      */
-    @Nullable
-    private String postFallbackComment(
+    private Outcome postFallbackComment(
             long scopeId, String mrGlobalId, FeedbackAnchor.DiffAnchor diff, String markedBody) {
         try {
             String fallbackBody = String.format("**`%s:%d`**%n%n%s", diff.filePath(), diff.newLineNumber(), markedBody);
@@ -714,7 +725,7 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
 
             if (response == null) {
                 log.warn("Null response posting fallback MR comment: workspaceId={}", scopeId);
-                return null;
+                return Outcome.failed();
             }
 
             List<String> errors =
@@ -724,15 +735,22 @@ public class GitlabInlineFeedbackChannel implements InlineFeedbackChannel {
                         "Fallback MR comment failed: workspaceId={}, errors={}",
                         scopeId,
                         sanitizeForLog(errors.toString()));
-                return null;
+                return Outcome.failed();
             }
-            return Objects.requireNonNull(response).field("createNote.note.id").getValue();
+            String noteId = response.field("createNote.note.id").getValue();
+            return noteId == null
+                    ? Outcome.failed()
+                    : new Outcome(
+                            Disposition.FELL_BACK,
+                            noteId,
+                            null,
+                            response.field("createNote.note.url").getValue());
         } catch (OutboundEgressSuppressedException e) {
             throw e;
         } catch (Exception e) {
             log.warn(
                     "Fallback MR comment failed: workspaceId={}, file={}", scopeId, sanitizeForLog(diff.filePath()), e);
-            return null;
+            return Outcome.failed();
         }
     }
 

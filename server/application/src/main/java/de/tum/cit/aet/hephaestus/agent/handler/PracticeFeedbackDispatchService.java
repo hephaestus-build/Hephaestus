@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliverySuppressedExceptio
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyStage;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
@@ -137,14 +138,19 @@ class PracticeFeedbackDispatchService {
 
     private Result dispatch(FeedbackDispatch dispatch, AgentJob job) {
         if (dispatch.getState() == FeedbackDispatchState.SENT) {
-            return Result.sent(dispatch.getDeliveredExternalRef(), deliveredSignals(dispatch));
+            return Result.sent(
+                    dispatch.getDeliveredExternalRef(), dispatch.getDeliveredExternalUrl(), deliveredSignals(dispatch));
         }
         if (dispatch.getState() == FeedbackDispatchState.SUPPRESSED) {
             return Result.suppressed(
-                    storedReason(dispatch), dispatch.getDeliveredExternalRef(), deliveredSignals(dispatch));
+                    storedReason(dispatch),
+                    dispatch.getDeliveredExternalRef(),
+                    dispatch.getDeliveredExternalUrl(),
+                    deliveredSignals(dispatch));
         }
         if (dispatch.getState() == FeedbackDispatchState.FAILED) {
-            return Result.failed(dispatch.getDeliveredExternalRef(), deliveredSignals(dispatch));
+            return Result.failed(
+                    dispatch.getDeliveredExternalRef(), dispatch.getDeliveredExternalUrl(), deliveredSignals(dispatch));
         }
 
         String owner = UUID.randomUUID().toString();
@@ -174,6 +180,7 @@ class PracticeFeedbackDispatchService {
 
     private Result dispatchAutomaticPackage(FeedbackDispatch dispatch, AgentJob job, String owner) {
         @Nullable String summaryRef = dispatch.getDeliveredExternalRef();
+        @Nullable String summaryUrl = dispatch.getDeliveredExternalUrl();
         List<DeliveredSignal> inlineSignals = deliveredSignals(dispatch);
         boolean writeBegan = false;
         try {
@@ -186,6 +193,7 @@ class PracticeFeedbackDispatchService {
                 }
                 if (existing.kind() == ExistingDeliveryLookup.Kind.FOUND) {
                     summaryRef = existing.commentId();
+                    summaryUrl = existing.commentUrl();
                 } else if (dispatch.getWriteStarted()) {
                     return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
                 } else {
@@ -198,7 +206,9 @@ class PracticeFeedbackDispatchService {
                             status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
                     if (began == null || began != 1) return Result.inProgress();
                     writeBegan = true;
-                    summaryRef = commentPoster.post(write);
+                    SummaryHandle handle = commentPoster.post(write);
+                    summaryRef = handle.externalId();
+                    summaryUrl = handle.url();
                 }
             }
 
@@ -206,7 +216,8 @@ class PracticeFeedbackDispatchService {
             if (!isIssue(job)) {
                 PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                 if (!decision.allowed())
-                    return stateMachine.refuse(dispatch, owner, decision.refusal(), summaryRef, inlineSignals);
+                    return stateMachine.refuse(
+                            dispatch, owner, decision.refusal(), summaryRef, summaryUrl, inlineSignals);
                 if (!inlineNotes.isEmpty() && !stateMachine.beginInlineWrite(dispatch, owner)) {
                     return Result.inProgress();
                 }
@@ -214,19 +225,30 @@ class PracticeFeedbackDispatchService {
                 inlineSignals = stateMachine.mergeSignals(inlineSignals, inline.signals());
                 if (inline.failed() > 0 || inline.suppressed()) {
                     return stateMachine.retryPackage(
-                            dispatch, owner, "Automatic review package remains incomplete", summaryRef, inlineSignals);
+                            dispatch,
+                            owner,
+                            "Automatic review package remains incomplete",
+                            summaryRef,
+                            summaryUrl,
+                            inlineSignals);
                 }
             }
 
-            return stateMachine.sent(dispatch, owner, summaryRef, inlineSignals);
+            return stateMachine.sent(dispatch, owner, summaryRef, summaryUrl, inlineSignals);
         } catch (JobDeliverySuppressedException exception) {
             return stateMachine.refuse(
-                    dispatch, owner, FeedbackSuppressionReason.INSTANCE_SILENCED, summaryRef, inlineSignals);
+                    dispatch,
+                    owner,
+                    FeedbackSuppressionReason.INSTANCE_SILENCED,
+                    summaryRef,
+                    summaryUrl,
+                    inlineSignals);
         } catch (PullRequestCommentPoster.SummaryNotSentException exception) {
             return retryUnsent(dispatch, owner, exception.getMessage());
         } catch (RuntimeException exception) {
             if (summaryRef != null) {
-                return stateMachine.retryPackage(dispatch, owner, exception.getMessage(), summaryRef, inlineSignals);
+                return stateMachine.retryPackage(
+                        dispatch, owner, exception.getMessage(), summaryRef, summaryUrl, inlineSignals);
             }
             return writeBegan
                     ? stateMachine.retryAfterWrite(dispatch, owner, exception.getMessage())
@@ -245,6 +267,7 @@ class PracticeFeedbackDispatchService {
                     dispatch, owner, "Approved feedback is missing or no longer matches its immutable body");
         }
         @Nullable String summaryRef = dispatch.getDeliveredExternalRef();
+        @Nullable String summaryUrl = dispatch.getDeliveredExternalUrl();
         List<DeliveredSignal> inlineSignals = deliveredSignals(dispatch);
         boolean writeBegan = false;
         try {
@@ -256,6 +279,7 @@ class PracticeFeedbackDispatchService {
                 }
                 if (existing.kind() == ExistingDeliveryLookup.Kind.FOUND) {
                     summaryRef = java.util.Objects.requireNonNull(existing.commentId());
+                    summaryUrl = existing.commentUrl();
                 } else if (dispatch.getWriteStarted()) {
                     return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
                 } else {
@@ -268,7 +292,9 @@ class PracticeFeedbackDispatchService {
                             status -> repository.beginWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
                     if (began == null || began != 1) return Result.inProgress();
                     writeBegan = true;
-                    summaryRef = commentPoster.post(write);
+                    SummaryHandle handle = commentPoster.post(write);
+                    summaryRef = handle.externalId();
+                    summaryUrl = handle.url();
                 }
             }
 
@@ -277,7 +303,8 @@ class PracticeFeedbackDispatchService {
             if (!inlineNotes.isEmpty()) {
                 PracticeFeedbackDeliveryPolicy.Decision<?> decision = evaluateAtEgress(dispatch, job);
                 if (!decision.allowed()) {
-                    return stateMachine.refuse(dispatch, owner, decision.refusal(), deliveredSummaryRef, inlineSignals);
+                    return stateMachine.refuse(
+                            dispatch, owner, decision.refusal(), deliveredSummaryRef, summaryUrl, inlineSignals);
                 }
                 if (!reviewedRevisionMatches(feedback, decision)) {
                     return stateMachine.refuse(
@@ -285,6 +312,7 @@ class PracticeFeedbackDispatchService {
                             owner,
                             FeedbackSuppressionReason.APPROVAL_STALE,
                             deliveredSummaryRef,
+                            summaryUrl,
                             inlineSignals);
                 }
                 if (!stateMachine.beginInlineWrite(dispatch, owner)) return Result.inProgress();
@@ -297,18 +325,25 @@ class PracticeFeedbackDispatchService {
                             owner,
                             "Approved review package remains incomplete",
                             deliveredSummaryRef,
+                            summaryUrl,
                             inlineSignals);
                 }
             }
-            return stateMachine.sent(dispatch, owner, deliveredSummaryRef, inlineSignals);
+            return stateMachine.sent(dispatch, owner, deliveredSummaryRef, summaryUrl, inlineSignals);
         } catch (JobDeliverySuppressedException exception) {
             return stateMachine.refuse(
-                    dispatch, owner, FeedbackSuppressionReason.INSTANCE_SILENCED, summaryRef, inlineSignals);
+                    dispatch,
+                    owner,
+                    FeedbackSuppressionReason.INSTANCE_SILENCED,
+                    summaryRef,
+                    summaryUrl,
+                    inlineSignals);
         } catch (PullRequestCommentPoster.SummaryNotSentException exception) {
             return retryUnsent(dispatch, owner, exception.getMessage());
         } catch (RuntimeException exception) {
             if (summaryRef != null) {
-                return stateMachine.retryPackage(dispatch, owner, exception.getMessage(), summaryRef, inlineSignals);
+                return stateMachine.retryPackage(
+                        dispatch, owner, exception.getMessage(), summaryRef, summaryUrl, inlineSignals);
             }
             if (writeBegan) {
                 return stateMachine.retryAfterWrite(dispatch, owner, exception.getMessage());
@@ -326,7 +361,7 @@ class PracticeFeedbackDispatchService {
         Integer released = transactionTemplate.execute(
                 status -> repository.releaseUnsentWrite(dispatch.getId(), dispatch.getWorkspaceId(), owner));
         if (released == null || released != 1) return stateMachine.retryAfterWrite(dispatch, owner, error);
-        return stateMachine.retry(dispatch, owner, error, null, false, deliveredSignals(dispatch));
+        return stateMachine.retry(dispatch, owner, error, null, null, false, deliveredSignals(dispatch));
     }
 
     /**
@@ -352,6 +387,7 @@ class PracticeFeedbackDispatchService {
     private Result refuseInvalidated(FeedbackDispatch dispatch, AgentJob job, String owner) {
         boolean approved = dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE;
         @Nullable String summaryRef = dispatch.getDeliveredExternalRef();
+        @Nullable String summaryUrl = dispatch.getDeliveredExternalUrl();
         List<DeliveredSignal> signals = deliveredSignals(dispatch);
         boolean unconfirmed = false;
         if (summaryRef == null
@@ -364,6 +400,7 @@ class PracticeFeedbackDispatchService {
                 existing = ExistingDeliveryLookup.unknown();
             }
             summaryRef = existing.commentId();
+            summaryUrl = existing.commentUrl();
             unconfirmed = existing.kind() != ExistingDeliveryLookup.Kind.FOUND;
         }
         if (dispatch.inlineWriteMayHaveStarted() && !isIssue(job)) {
@@ -374,16 +411,27 @@ class PracticeFeedbackDispatchService {
         }
         if (!unconfirmed) {
             return stateMachine.refuse(
-                    dispatch, owner, FeedbackSuppressionReason.OBSERVATION_INVALIDATED, summaryRef, signals);
+                    dispatch,
+                    owner,
+                    FeedbackSuppressionReason.OBSERVATION_INVALIDATED,
+                    summaryRef,
+                    summaryUrl,
+                    signals);
         }
         String error = "An earlier provider write is not confirmed yet";
         Instant writeStartedAt = dispatch.getWriteStartedAt();
         Instant since = writeStartedAt != null ? writeStartedAt : dispatch.getCreatedAt();
         if (Instant.now().isAfter(since.plus(UNCONFIRMED_WINDOW))) {
             return stateMachine.recheckAt(
-                    dispatch, owner, error, summaryRef, signals, Instant.now().plus(UNCONFIRMED_RECHECK));
+                    dispatch,
+                    owner,
+                    error,
+                    summaryRef,
+                    summaryUrl,
+                    signals,
+                    Instant.now().plus(UNCONFIRMED_RECHECK));
         }
-        return stateMachine.retry(dispatch, owner, error, summaryRef, true, signals);
+        return stateMachine.retry(dispatch, owner, error, summaryRef, summaryUrl, true, signals);
     }
 
     /**
@@ -394,6 +442,7 @@ class PracticeFeedbackDispatchService {
         boolean summaryStage = dispatch.getDestination() == FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE
                 || !dispatch.getBody().isBlank();
         @Nullable String summaryRef = dispatch.getDeliveredExternalRef();
+        @Nullable String summaryUrl = dispatch.getDeliveredExternalUrl();
         List<DeliveredSignal> signals = deliveredSignals(dispatch);
         if (summaryStage && summaryRef == null && dispatch.getWriteStarted()) {
             ExistingDeliveryLookup existing;
@@ -406,13 +455,15 @@ class PracticeFeedbackDispatchService {
                 return stateMachine.retry(dispatch, owner, "A prior provider write has not been reconciled");
             }
             summaryRef = existing.commentId();
+            summaryUrl = existing.commentUrl();
         }
         boolean summaryAccounted = !summaryStage || summaryRef != null;
         boolean inlineAccounted = isIssue(job) || DiffNotePoster.acknowledgesAll(inlineNotes(dispatch), signals);
         if (summaryAccounted && inlineAccounted && (summaryRef != null || !signals.isEmpty())) {
-            return stateMachine.sent(dispatch, owner, summaryRef, signals);
+            return stateMachine.sent(dispatch, owner, summaryRef, summaryUrl, signals);
         }
-        return stateMachine.retryPackage(dispatch, owner, "Dispatch retry limit exhausted", summaryRef, signals);
+        return stateMachine.retryPackage(
+                dispatch, owner, "Dispatch retry limit exhausted", summaryRef, summaryUrl, signals);
     }
 
     private static boolean reviewedRevisionMatches(
@@ -529,6 +580,7 @@ class PracticeFeedbackDispatchService {
     record Result(
             Status status,
             @Nullable String externalRef,
+            @Nullable String externalUrl,
             @Nullable FeedbackSuppressionReason suppressionReason,
             List<DeliveredSignal> deliveredSignals) {
         FeedbackSuppressionReason refusal() {
@@ -544,7 +596,11 @@ class PracticeFeedbackDispatchService {
         }
 
         static Result sent(@Nullable String ref, List<DeliveredSignal> signals) {
-            return new Result(Status.SENT, ref, null, List.copyOf(signals));
+            return sent(ref, null, signals);
+        }
+
+        static Result sent(@Nullable String ref, @Nullable String url, List<DeliveredSignal> signals) {
+            return new Result(Status.SENT, ref, url, null, List.copyOf(signals));
         }
 
         static Result suppressed(@Nullable FeedbackSuppressionReason reason) {
@@ -557,11 +613,23 @@ class PracticeFeedbackDispatchService {
 
         static Result suppressed(
                 @Nullable FeedbackSuppressionReason reason, @Nullable String ref, List<DeliveredSignal> signals) {
-            return new Result(Status.SUPPRESSED, ref, reason, List.copyOf(signals));
+            return suppressed(reason, ref, null, signals);
+        }
+
+        static Result suppressed(
+                @Nullable FeedbackSuppressionReason reason,
+                @Nullable String ref,
+                @Nullable String url,
+                List<DeliveredSignal> signals) {
+            return new Result(Status.SUPPRESSED, ref, url, reason, List.copyOf(signals));
         }
 
         static Result uncertain(@Nullable String ref) {
-            return new Result(Status.UNCERTAIN, ref, null, List.of());
+            return uncertain(ref, null);
+        }
+
+        static Result uncertain(@Nullable String ref, @Nullable String url) {
+            return new Result(Status.UNCERTAIN, ref, url, null, List.of());
         }
 
         static Result uncertain() {
@@ -569,7 +637,7 @@ class PracticeFeedbackDispatchService {
         }
 
         static Result inProgress() {
-            return new Result(Status.IN_PROGRESS, null, null, List.of());
+            return new Result(Status.IN_PROGRESS, null, null, null, List.of());
         }
 
         static Result failed() {
@@ -581,7 +649,11 @@ class PracticeFeedbackDispatchService {
         }
 
         static Result failed(@Nullable String ref, List<DeliveredSignal> signals) {
-            return new Result(Status.FAILED, ref, null, List.copyOf(signals));
+            return failed(ref, null, signals);
+        }
+
+        static Result failed(@Nullable String ref, @Nullable String url, List<DeliveredSignal> signals) {
+            return new Result(Status.FAILED, ref, url, null, List.copyOf(signals));
         }
 
         enum Status {

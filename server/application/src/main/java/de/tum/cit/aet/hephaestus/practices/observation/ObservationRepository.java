@@ -484,6 +484,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
+        AND (:artifactKind IS NULL OR f.artifactKind = :artifactKind)
+        AND (:artifactId IS NULL OR f.artifactId = :artifactId)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
@@ -498,6 +500,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
+        AND (:artifactKind IS NULL OR f.artifactKind = :artifactKind)
+        AND (:artifactId IS NULL OR f.artifactId = :artifactId)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
@@ -511,6 +515,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("presence") @Nullable Presence presence,
             @Param("hasArtifactKinds") boolean hasArtifactKinds,
             @Param("artifactKinds") Collection<ArtifactKind> artifactKinds,
+            @Param("artifactKind") @Nullable ArtifactKind artifactKind,
+            @Param("artifactId") @Nullable Long artifactId,
             @Param("hasSeverities") boolean hasSeverities,
             @Param("severities") Collection<Severity> severities,
             @Param("displayableOnly") boolean displayableOnly,
@@ -539,6 +545,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
+        AND (:artifactKind IS NULL OR f.artifactKind = :artifactKind)
+        AND (:artifactId IS NULL OR f.artifactId = :artifactId)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
@@ -560,6 +568,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
+        AND (:artifactKind IS NULL OR f.artifactKind = :artifactKind)
+        AND (:artifactId IS NULL OR f.artifactId = :artifactId)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
@@ -573,6 +583,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("presence") @Nullable Presence presence,
             @Param("hasArtifactKinds") boolean hasArtifactKinds,
             @Param("artifactKinds") Collection<ArtifactKind> artifactKinds,
+            @Param("artifactKind") @Nullable ArtifactKind artifactKind,
+            @Param("artifactId") @Nullable Long artifactId,
             @Param("hasSeverities") boolean hasSeverities,
             @Param("severities") Collection<Severity> severities,
             @Param("displayableOnly") boolean displayableOnly,

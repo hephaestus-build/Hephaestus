@@ -514,7 +514,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         provider.failAfterAccept = true;
         PracticeFeedbackDispatchService.Result first = dispatchService.dispatchApproved(job, approved);
         provider.failAfterAccept = false;
-        ledgerRecorder.recordApprovedPlacements(approved, first.externalRef(), first.deliveredSignals());
+        ledgerRecorder.recordApprovedPlacements(
+                approved, first.externalRef(), first.externalUrl(), first.deliveredSignals());
         provider.lookupFails = true;
         invalidate();
 
@@ -533,7 +534,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         dispatchService.projectRecovered(
                 dispatch(key),
                 () -> ledgerRecorder.recordApprovedPlacements(
-                        approved, reconciled.externalRef(), reconciled.deliveredSignals()));
+                        approved, reconciled.externalRef(), reconciled.externalUrl(), reconciled.deliveredSignals()));
         settleCorrections();
 
         assertThat(provider.comments.get("summary-1")).containsOnlyOnce("> **Correction:**");
@@ -617,7 +618,7 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
                 ArtifactKinds.PULL_REQUEST,
                 dispatchService.deliveredSignals(dispatch(key)),
                 null,
-                true);
+                null);
         invalidate();
         settleCorrections();
 
@@ -635,8 +636,10 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
         PracticeFeedbackDispatchService.Result sent = dispatchService.dispatchApproved(job, approved);
         dispatchService.projectRecovered(
                 dispatch("approved:" + approved.getId()),
-                () -> ledgerRecorder.recordApprovedPlacements(approved, sent.externalRef(), sent.deliveredSignals()));
-        ledgerRecorder.recordApprovedPlacements(approved, sent.externalRef(), sent.deliveredSignals());
+                () -> ledgerRecorder.recordApprovedPlacements(
+                        approved, sent.externalRef(), sent.externalUrl(), sent.deliveredSignals()));
+        ledgerRecorder.recordApprovedPlacements(
+                approved, sent.externalRef(), sent.externalUrl(), sent.deliveredSignals());
         invalidate();
         settleCorrections();
 
@@ -983,7 +986,8 @@ class ObservationInvalidationEgressIntegrationTest extends AbstractPracticeRevie
                 inline ? 3 : null,
                 null,
                 inline ? "NEW" : null,
-                ref);
+                ref,
+                null);
     }
 
     private static void awaitLatch(CountDownLatch latch) {

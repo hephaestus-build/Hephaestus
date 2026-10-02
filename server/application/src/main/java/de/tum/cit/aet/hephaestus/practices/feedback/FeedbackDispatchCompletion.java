@@ -10,6 +10,7 @@ public record FeedbackDispatchCompletion(
         String owner,
         String state,
         @Nullable String externalRef,
+        @Nullable String externalUrl,
         @Nullable String error,
         @Nullable String suppressionReason,
         String deliveredPlacements,

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.config.CorsProperties;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,38 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
         assertThat(SecurityConfig.EMAIL_UNSUBSCRIBE_MATCHER.matches(post)).isFalse();
     }
 
+    private static org.springframework.beans.factory.ObjectProvider<InstalledClientRegistry> noClients() {
+        return new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                .getBeanProvider(InstalledClientRegistry.class);
+    }
+
+    @Test
+    void shouldMatchOnlyTheThreeInstalledClientPostsWhenDecidingPublicAccessAndCsrf() {
+        for (String path : List.of("/auth/client/token", "/auth/client/refresh", "/auth/client/logout")) {
+            MockHttpServletRequest post = new MockHttpServletRequest("POST", path);
+            post.setServletPath(path);
+            assertThat(SecurityConfig.CLIENT_SESSION_MATCHER.matches(post))
+                    .as(path)
+                    .isTrue();
+            MockHttpServletRequest get = new MockHttpServletRequest("GET", path);
+            get.setServletPath(path);
+            assertThat(SecurityConfig.CLIENT_SESSION_MATCHER.matches(get))
+                    .as("GET " + path)
+                    .isFalse();
+        }
+        for (String path : List.of("/auth/client/configuration", "/auth/client/other", "/auth/client/token/x")) {
+            MockHttpServletRequest post = new MockHttpServletRequest("POST", path);
+            post.setServletPath(path);
+            assertThat(SecurityConfig.CLIENT_SESSION_MATCHER.matches(post))
+                    .as(path)
+                    .isFalse();
+        }
+        MockHttpServletRequest configuration = new MockHttpServletRequest("GET", "/auth/client/configuration");
+        configuration.setServletPath("/auth/client/configuration");
+        assertThat(SecurityConfig.CLIENT_CONFIGURATION_MATCHER.matches(configuration))
+                .isTrue();
+    }
+
     @Test
     void devTriggerMatcherMatchesDevPathsOnly() {
         MockHttpServletRequest dev = new MockHttpServletRequest("POST", "/api/dev/trigger-review");
@@ -48,7 +81,13 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
         MockEnvironment prod = new MockEnvironment();
         prod.setActiveProfiles("prod");
         assertThatThrownBy(() -> new SecurityConfig(
-                        new CorsProperties(List.of("https://example.com")), prod, false, false, false, "HEPHAESTUS_AT"))
+                        new CorsProperties(List.of("https://example.com")),
+                        noClients(),
+                        prod,
+                        false,
+                        false,
+                        false,
+                        "HEPHAESTUS_AT"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("cookie-secure");
     }
@@ -58,7 +97,13 @@ class SecurityConfigSharedMatcherTest extends BaseUnitTest {
         MockEnvironment dev = new MockEnvironment();
         dev.setActiveProfiles("dev", "e2e");
         assertThat(new SecurityConfig(
-                        new CorsProperties(List.of("https://example.com")), dev, false, false, false, "HEPHAESTUS_AT"))
+                        new CorsProperties(List.of("https://example.com")),
+                        noClients(),
+                        dev,
+                        false,
+                        false,
+                        false,
+                        "HEPHAESTUS_AT"))
                 .isNotNull();
     }
 

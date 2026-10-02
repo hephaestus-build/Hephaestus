@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.web.QueryFilterSupport;
 import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.List;
 import java.util.Objects;
@@ -14,7 +15,9 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Query parameters for the developer observation feed. Bound with {@code @ParameterObject}, so the wire
@@ -46,6 +49,17 @@ public record ObservationFeedFilterParams(
         @RequestParam(required = false)
         @Nullable
         List<String> artifactKinds,
+
+        @Parameter(description = "Exact reviewed-work kind; requires artifactId, e.g. scm.pull_request or scm.issue")
+        @RequestParam(required = false)
+        @Nullable
+        String artifactKind,
+
+        @Parameter(description = "Exact reviewed-work ID; requires artifactKind")
+        @RequestParam(required = false)
+        @Positive
+        @Nullable
+        Long artifactId,
 
         @Parameter(description = "Only observations with these severities (repeatable); omit for all")
         @RequestParam(required = false)
@@ -97,12 +111,18 @@ public record ObservationFeedFilterParams(
 
     /** The domain-facing shape; {@code direction} collapses into the severity sort's only use of it. */
     public ObservationFeedQuery toQuery() {
+        if ((artifactKind == null) != (artifactId == null)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "artifactKind and artifactId must be provided together");
+        }
         return new ObservationFeedQuery(
                 practiceSlug,
                 groupSlug,
                 assessmentStatus,
                 presence,
                 QueryFilterSupport.artifactKinds(artifactKinds),
+                QueryFilterSupport.artifactKind(artifactKind),
+                artifactId,
                 severities,
                 Objects.requireNonNull(displayableOnly),
                 Objects.requireNonNull(sort),

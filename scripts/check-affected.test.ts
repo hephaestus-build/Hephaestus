@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -19,6 +19,92 @@ await test("accepts only the documented arguments", () => {
 await test("selects ordinary workspace changes", () => {
 	assert.deepEqual(scopesFor(["webapp/src/a.tsx"]), ["webapp"]);
 	assert.deepEqual(scopesFor(["server/application/src/main/java/A.java"]), ["server"]);
+});
+
+await test("selects the Chrome extension, and the webapp inputs it imports", () => {
+	assert.deepEqual(scopesFor(["extension/src/entrypoints/background.ts"]), ["extension"]);
+	assert.deepEqual(scopesFor(["extension/wxt.config.ts", "extension/e2e/seed.sql"]), ["extension"]);
+	assert.deepEqual(scopesFor(["webapp/src/components/practice-vocabulary/outcome-defs.ts"]), [
+		"extension",
+		"webapp",
+	]);
+	for (const file of [
+		"webapp/brand/hephaestus-mark.svg",
+		"webapp/src/components/icons/brand.tsx",
+		"webapp/src/lib/artifact-kind-slugs.ts",
+		"webapp/src/lib/artifact-kinds.ts",
+		"webapp/src/components/common/status-def.ts",
+		"webapp/src/components/common/FacetMultiSelect.tsx",
+		"webapp/src/lib/sign-in-providers.ts",
+		"webapp/src/styles.css",
+	]) {
+		assert.deepEqual(scopesFor([file]), ["extension", "webapp"], file);
+	}
+	for (const file of [
+		"webapp/src/components/ui/button.tsx",
+		"webapp/src/components/practice-trace/PracticeTraceTable.tsx",
+		"webapp/src/lib/utils.ts",
+	]) {
+		assert.deepEqual(scopesFor([file]), ["webapp"], file);
+	}
+	assert.deepEqual(scopesFor(["webapp/src/styles/theme-tokens.css"]), [
+		"docs",
+		"extension",
+		"webapp",
+	]);
+	// The lint plugin both trees load, and the spec the extension's client comes from, run everything.
+	assert.deepEqual(scopesFor(["webapp/tools/oxlint/rules/a.ts"]), ["full"]);
+	assert.deepEqual(scopesFor(["server/openapi.yaml"]), ["full"]);
+});
+
+/** A path-filter glob as a pattern; the filter uses only `**` and literal dots. */
+const asPattern = (glob: string) =>
+	new RegExp(`^${glob.replaceAll(".", String.raw`\.`).replaceAll("**", ".*")}$`, "u");
+
+await test("the CI extension filters select every webapp input the extension imports", async () => {
+	const workflow = await readFile(".github/workflows/cicd.yml", "utf8");
+	const inputs = [
+		"webapp/src/components/practice-vocabulary/trace-outcome-defs.ts",
+		"webapp/brand/hephaestus-mark.svg",
+		"webapp/src/components/icons/brand.tsx",
+		"webapp/src/lib/artifact-kind-slugs.ts",
+		"webapp/src/lib/artifact-kinds.ts",
+		"webapp/src/components/common/status-def.ts",
+		"webapp/src/components/common/FacetMultiSelect.tsx",
+		"webapp/src/lib/sign-in-providers.ts",
+		"webapp/src/styles/theme-tokens.css",
+		"webapp/src/styles.css",
+		"webapp/tools/oxlint/rules/a.ts",
+	];
+	for (const name of ["extension", "extension-e2e"]) {
+		const filter = new RegExp(`^ {12}${name}:\\n(?<entries>(?: {14}- '[^']+'\\n)+)`, "mu").exec(
+			workflow,
+		)?.groups?.entries;
+		assert.ok(filter !== undefined, `cicd.yml has an ${name} filter`);
+		const globs = [...filter.matchAll(/- '(?<glob>[^']+)'/gu)].map(
+			({ groups }) => groups?.glob ?? "",
+		);
+		const webappGlobs = globs.filter(
+			(glob) => glob.startsWith("webapp/") && !glob.startsWith("webapp/e2e/"),
+		);
+		for (const file of inputs) {
+			// Browser behavior is unaffected by the lint plugin; the extension's quality leg owns it.
+			if (name === "extension-e2e" && file.startsWith("webapp/tools/oxlint/")) {
+				continue;
+			}
+			assert.ok(
+				webappGlobs.some((glob) => asPattern(glob).test(file)),
+				`the ${name} filter must select ${file}`,
+			);
+		}
+		for (const glob of webappGlobs.filter((entry) => !entry.startsWith("webapp/tools/oxlint/"))) {
+			const sample = glob.replace("**", "a.ts");
+			assert.ok(
+				scopesFor([sample]).includes("extension"),
+				`check-affected must map ${glob} to the extension scope`,
+			);
+		}
+	}
 });
 
 await test("combines independent workspaces", () => {
@@ -44,9 +130,10 @@ await test("selects documentation changes", () => {
 });
 
 await test("maps scopes to the documented commands", () => {
-	assert.deepEqual(commandsFor(["agents", "docs", "server", "webapp"]), [
+	assert.deepEqual(commandsFor(["agents", "docs", "extension", "server", "webapp"]), [
 		["vp", "run", "affected:agents"],
 		["vp", "run", "affected:docs"],
+		["vp", "run", "affected:extension"],
 		["vp", "run", "affected:server"],
 		["vp", "run", "affected:webapp"],
 	]);
@@ -62,6 +149,7 @@ await test("fails closed for shared, generated, contract, tooling, and unknown i
 		"scripts/check-affected.ts",
 		"server/openapi.yaml",
 		"webapp/src/api/core/a.ts",
+		"extension/src/api/sdk.gen.ts",
 		"webapp/src/routeTree.gen.ts",
 		"webapp/tools/oxlint/index.ts",
 		"docs/contributor/erd/schema.mmd",
@@ -76,6 +164,7 @@ await test("fails closed for shared, generated, contract, tooling, and unknown i
 
 await test("a full-gate input overrides scoped inputs", () => {
 	assert.deepEqual(scopesFor(["webapp/src/a.tsx", "package.json"]), ["full"]);
+	assert.deepEqual(scopesFor(["extension/src/a.tsx", "server/openapi.yaml"]), ["full"]);
 	assert.deepEqual(commandsFor(["full"]), [["vp", "run", "quality"]]);
 });
 
