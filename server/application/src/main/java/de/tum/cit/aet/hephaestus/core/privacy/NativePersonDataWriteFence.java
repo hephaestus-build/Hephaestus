@@ -1,0 +1,67 @@
+package de.tum.cit.aet.hephaestus.core.privacy;
+
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * PostgreSQL transaction locks close the admission/erasure race across replicas.
+ * https://www.postgresql.org/docs/current/explicit-locking.html#ADVISORY-LOCKS
+ */
+@Component
+@RequiredArgsConstructor
+@WorkspaceAgnostic("Instance-wide exact native identity admission; content writers retain their workspace predicates")
+public class NativePersonDataWriteFence implements PersonDataWriteFence {
+    private final JdbcTemplate jdbc;
+    private final ObjectMapper mapper;
+    private final PersonProcessingSuppression suppression;
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean holdForWrite(List<PersonIdentity> identities) {
+        lock(identities, true);
+        for (var identity : identities) {
+            if (suppression.isSuppressed(identity.providerId(), identity.subject(), identity.teamId())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean holdForUserWrite(long userId) {
+        var identities = jdbc.query(
+                "SELECT provider_id,native_id::text FROM \"user\" WHERE id=?",
+                (rs, row) -> new PersonIdentity(rs.getLong(1), java.util.Objects.requireNonNull(rs.getString(2)), null),
+                userId);
+        return !identities.isEmpty() && holdForWrite(identities);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void holdForErasure(List<PersonIdentity> identities) {
+        lock(identities, false);
+    }
+
+    private void lock(List<PersonIdentity> identities, boolean shared) {
+        // Team variants share only a lock, not a suppression decision. This also covers Outline's
+        // canonical provider-wide subject control. Hash collisions can only add serialization.
+        // Sort the actual lock keys, not their inputs, to keep one lock order even on collisions.
+        var keys = jdbc.query("""
+                SELECT DISTINCT hashtextextended(jsonb_build_array(i."providerId",i.subject)::text,0) AS lock_key
+                FROM jsonb_to_recordset(CAST(? AS jsonb)) AS i("providerId" bigint,subject text)
+                ORDER BY lock_key
+                """, (rs, row) -> rs.getLong(1), mapper.writeValueAsString(identities));
+        String function = shared ? "pg_advisory_xact_lock_shared" : "pg_advisory_xact_lock";
+        for (long key : keys) {
+            jdbc.query("SELECT " + function + "(?)", rs -> {}, key);
+        }
+    }
+}

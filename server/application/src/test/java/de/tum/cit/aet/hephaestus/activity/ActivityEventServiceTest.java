@@ -25,10 +25,16 @@ class ActivityEventServiceTest extends BaseUnitTest {
     private MeterRegistry meterRegistry;
     private ActivityEventService service;
 
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence =
+            org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence.class);
+
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        service = new ActivityEventService(eventRepository, workspaceRepository, meterRegistry);
+        org.mockito.Mockito.lenient()
+                .when(writeFence.holdForUserWrite(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(true);
+        service = new ActivityEventService(eventRepository, workspaceRepository, meterRegistry, writeFence);
     }
 
     @Test

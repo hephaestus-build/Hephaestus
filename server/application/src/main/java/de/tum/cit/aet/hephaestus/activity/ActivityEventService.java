@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ActivityEventService implements ActivityRecorder {
 
     private final ActivityEventRepository eventRepository;
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence;
     private final WorkspaceRepository workspaceRepository;
     private final Counter eventsRecordedCounter;
     private final Counter eventsDuplicateCounter;
@@ -38,8 +39,10 @@ public class ActivityEventService implements ActivityRecorder {
     public ActivityEventService(
             ActivityEventRepository eventRepository,
             WorkspaceRepository workspaceRepository,
-            MeterRegistry meterRegistry) {
+            MeterRegistry meterRegistry,
+            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence) {
         this.eventRepository = eventRepository;
+        this.writeFence = writeFence;
         this.workspaceRepository = workspaceRepository;
         this.eventsRecordedCounter = Counter.builder(ActivityMetrics.ACTIVITY_EVENTS_RECORDED)
                 .description("Number of activity events recorded")
@@ -88,6 +91,7 @@ public class ActivityEventService implements ActivityRecorder {
             @Nullable Repository repository,
             ActivityTargetType targetType,
             Long targetId) {
+        if (actor != null && !writeFence.holdForUserWrite(actor.getId())) return false;
         if (!workspaceRepository.existsById(workspaceId)) {
             eventsFailedCounter.increment();
             log.warn(

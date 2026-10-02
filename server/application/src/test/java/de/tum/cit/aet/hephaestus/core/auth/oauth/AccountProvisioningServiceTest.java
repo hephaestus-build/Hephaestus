@@ -54,15 +54,17 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     private AdminBootstrapPolicy adminBootstrapPolicy;
     private LoginProviderRepository loginProviderRepository;
     private GitProviderRegistry gitProviderRegistry;
-    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression suppression =
-            mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression.class);
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence =
+            mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence.class);
     private AccountProvisioningService service;
     private final org.springframework.context.ApplicationEventPublisher events =
             mock(org.springframework.context.ApplicationEventPublisher.class);
 
     @BeforeEach
     void setUp() {
+        lenient().when(writeFence.holdForWrite(any())).thenReturn(true);
         accountRepository = mock(AccountRepository.class);
+        lenient().when(accountRepository.lockStatusForShare(anyLong())).thenReturn(Optional.of("ACTIVE"));
         identityLinkRepository = mock(IdentityLinkRepository.class);
         gitProviderRegistry = mock(GitProviderRegistry.class);
         verifiedEmailResolver = mock(VerifiedEmailResolver.class);
@@ -92,7 +94,24 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
                 adminBootstrapPolicy,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 events,
-                suppression);
+                writeFence);
+    }
+
+    @Test
+    void linkingNewNativeIdentityToDeletingAccountIsRejectedBeforeWriting() {
+        when(accountRepository.lockStatusForShare(42L)).thenReturn(Optional.of("DELETING"));
+
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github", "new-native-subject", principal(), AuthIntentCookie.Intent.link(42L, null)))
+                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class)
+                .isInstanceOfSatisfying(
+                        org.springframework.security.oauth2.core.OAuth2AuthenticationException.class,
+                        exception -> assertThat(exception.getError().getErrorCode())
+                                .isEqualTo("identity_processing_suppressed"));
+
+        verify(identityLinkRepository, never()).save(any());
+        verify(accountRepository, never()).findById(anyLong());
+        verify(accountJitCreator, never()).create(any(), any());
     }
 
     @Test
@@ -315,6 +334,20 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void returningLoginDoesNotUpdateADeletingAccount() {
+        existingLink(null);
+        when(accountRepository.lockStatusForShare(9L)).thenReturn(Optional.of("DELETING"));
+
+        assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github", "777", principal(), AuthIntentCookie.Intent.login(null, null)))
+                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
+
+        verify(identityLinkRepository, never()).touchLastLogin(anyLong(), any());
+        verify(identityLinkRepository, never()).linkExternalActorIfAbsent(anyLong(), anyLong());
+        verify(accountRepository, never()).save(any());
+    }
+
+    @Test
     void returningLogin_leavesAWiredLinkAlone() {
         existingLink(555L);
 
@@ -421,7 +454,9 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
 
     @Test
     void erasedProviderIdentity_cannotCreateAnotherAccountOrAttachANewLink() {
-        when(suppression.isSuppressed(PROVIDER_ID, "42", null)).thenReturn(true);
+        when(writeFence.holdForWrite(java.util.List.of(
+                        new de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity(PROVIDER_ID, "42", null))))
+                .thenReturn(false);
         assertThatThrownBy(() -> service.resolveOrProvision("github", "42", mock(OAuth2User.class), null))
                 .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
         verify(accountJitCreator, never()).create(any(), any());

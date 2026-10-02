@@ -28,6 +28,7 @@ public class PersonDataService {
     private final PersonDataRegistry registry;
     private final PersonDataRequestRepository requests;
     private final PersonSuppressionService suppression;
+    private final PersonDataWriteFence writeFence;
     private final IssuedJwtRepository issuedTokens;
     private final PlatformTransactionManager transactions;
     private final ObjectMapper mapper;
@@ -83,6 +84,7 @@ public class PersonDataService {
         PersonScope person = scope(r);
         if (Objects.equals(person.accountId(), administratorId))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Another administrator must authorize this erasure");
+        writeFence.holdForErasure(person.identities());
         requireActiveAdministratorAndLockAccount(administratorId, person.accountId());
         if (r.getState() == PersonDataRequest.State.FAILED) {
             requireExternalRemoval(selections(r), externalCopiesRemoved);

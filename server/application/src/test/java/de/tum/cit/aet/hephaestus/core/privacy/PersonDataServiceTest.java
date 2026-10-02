@@ -32,6 +32,9 @@ class PersonDataServiceTest extends BaseUnitTest {
     private PersonSuppressionService suppression;
 
     @Mock
+    private de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence;
+
+    @Mock
     private PlatformTransactionManager transactions;
 
     @Mock
