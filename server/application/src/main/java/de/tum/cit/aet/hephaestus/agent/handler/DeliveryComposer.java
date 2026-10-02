@@ -81,7 +81,7 @@ class DeliveryComposer {
     }
 
     /**
-     * @param recurringSlugs practices this developer has already been told about on several earlier
+     * @param recurringSlugs practices last observed negative for this developer on several other recent
      *     pieces of work ({@link RecurringLapses}); a non-blocking lapse in one of them is named in one
      *     line instead of explained again, and does not spend the improvement cap
      */
@@ -368,7 +368,7 @@ class DeliveryComposer {
     private static final int STRENGTH_BUDGET = 280;
 
     private static final int LEAD_BUDGET = 240;
-    /** A recurring lapse gets its one sentence; the explanation already lives on the practice page. */
+    /** A recurring lapse gets its one sentence instead of the full explanation. */
     private static final int RECURRING_BUDGET = 200;
 
     /**
@@ -469,7 +469,7 @@ class DeliveryComposer {
         return sb.toString();
     }
 
-    /** One line per recurring lapse: the observation's own sentence, then where the pattern is explained. */
+    /** Recurrence establishes earlier observations, not visible private feedback. */
     static void appendRecurring(StringBuilder sb, List<ValidatedObservation> recurring) {
         sb.append("**Still open from your earlier changes**\n\n");
         for (ValidatedObservation f : recurring) {
@@ -477,8 +477,7 @@ class DeliveryComposer {
                     clampToSentenceBudget(sanitizeStudentText(f.summary()).strip(), RECURRING_BUDGET);
             sb.append("- ").append(sentence).append("\n");
         }
-        sb.append(
-                "\nThese came up on several of your recent changes, so they are only named here; your practice page has the pattern and what good looks like.\n\n");
+        sb.append("\nThese came up on several of your recent changes, so they are only named here.\n\n");
     }
 
     private static void appendExpanded(
