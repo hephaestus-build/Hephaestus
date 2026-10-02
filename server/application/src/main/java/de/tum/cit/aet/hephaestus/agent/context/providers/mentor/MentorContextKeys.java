@@ -19,6 +19,7 @@ public final class MentorContextKeys {
             DeliveredFeedbackContentSource.OUTPUT_KEY,
             RecentAuthoredWorkContentSource.OUTPUT_KEY,
             MergeReadinessContentSource.OUTPUT_KEY,
+            ReviewAttemptsContentSource.OUTPUT_KEY,
             SlackConversationContentSource.OUTPUT_KEY,
             PreparedConversationFeedbackContentSource.OUTPUT_KEY,
             CurrentThreadHistoryContentSource.OUTPUT_KEY,

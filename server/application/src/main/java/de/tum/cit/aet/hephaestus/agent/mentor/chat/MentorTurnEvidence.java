@@ -3,19 +3,41 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.RecentAuthoredWorkContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ReviewAttemptsContentSource;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /** A bounded projection of the authorized turn map, not another read of the developer's work. */
 final class MentorTurnEvidence {
 
+    /**
+     * The {@code currentEvidence} length {@code handlePrompt} in {@code pi-mentor-runner.ts} accepts; a longer receipt
+     * is refused before the turn starts. Both sides count UTF-16 units.
+     */
+    static final int MAX_RECEIPT_CHARS = 40_000;
+
     private static final int MAX_SOURCE_CHARS = 12_000;
     private static final List<String> WORK_FIELDS =
-            List.of("artifactId", "resource", "number", "url", "state", "isDraft");
+            List.of("artifactId", "resource", "reviewsResource", "number", "url", "state", "isDraft");
+    private static final List<String> ATTEMPT_FIELDS = List.of(
+            "reviewId",
+            "artifactKind",
+            "artifactId",
+            "number",
+            "url",
+            "state",
+            "reviewsResource",
+            "status",
+            "triggerMode",
+            "createdAt",
+            "completedAt");
     private static final List<String> READINESS_FIELDS = List.of(
             "artifactId",
             "resource",
@@ -56,31 +78,83 @@ final class MentorTurnEvidence {
     static String forRunner(ObjectMapper mapper, Map<String, byte[]> inputs) {
         ObjectNode receipt = mapper.createObjectNode();
         receipt.put("providerFreshness", "UNKNOWN");
-        ObjectNode readiness = source(
-                mapper,
-                inputs,
-                MergeReadinessContentSource.OUTPUT_KEY,
-                List.of("pullRequests", "notLoaded"),
-                READINESS_FIELDS);
+        List<String> readinessLists = List.of("pullRequests", "notLoaded");
+        ObjectNode readiness =
+                source(mapper, inputs, MergeReadinessContentSource.OUTPUT_KEY, readinessLists, READINESS_FIELDS);
         receipt.set("mergeReadiness", readiness);
 
+        List<String> observationLists = List.of("recentObservations", "abstentions", "earlierObservations");
         ObjectNode observations = source(
-                mapper,
-                inputs,
-                ObservationHistoryContentSource.OUTPUT_KEY,
-                List.of("recentObservations", "abstentions", "earlierObservations"),
-                OBSERVATION_FIELDS);
+                mapper, inputs, ObservationHistoryContentSource.OUTPUT_KEY, observationLists, OBSERVATION_FIELDS);
         receipt.set("observations", observations);
 
-        ObjectNode authored = source(
-                mapper,
-                inputs,
-                RecentAuthoredWorkContentSource.OUTPUT_KEY,
-                List.of("pullRequests", "issues"),
-                WORK_FIELDS);
+        List<String> workLists = List.of("pullRequests", "issues");
+        ObjectNode authored =
+                source(mapper, inputs, RecentAuthoredWorkContentSource.OUTPUT_KEY, workLists, WORK_FIELDS);
         authored.put("use", "ARTIFACT_INDEX_NOT_CURRENT_READINESS");
         receipt.set("authoredWorkIndex", authored);
-        return mapper.writeValueAsString(receipt);
+
+        List<String> attemptLists = List.of("attempts");
+        ObjectNode attempts =
+                source(mapper, inputs, ReviewAttemptsContentSource.OUTPUT_KEY, attemptLists, ATTEMPT_FIELDS);
+        receipt.set("reviewAttempts", attempts);
+
+        return fitted(
+                mapper,
+                receipt,
+                List.of(
+                        new Section(readiness, readinessLists),
+                        new Section(observations, observationLists),
+                        new Section(authored, workLists),
+                        new Section(attempts, attemptLists)));
+    }
+
+    /** One projected source and the names of its row lists. */
+    private record Section(ObjectNode node, List<String> lists) {}
+
+    /**
+     * Fits the whole receipt within {@link #MAX_RECEIPT_CHARS}: each section is bounded on its own, but together they
+     * can exceed what the runner accepts. Leaves out whole rows, the last row of the largest section first, and counts
+     * each in that section's {@code omittedFromReceipt}. A receipt whose metadata alone does not fit is unavailable,
+     * never a shorter one that reads as complete.
+     */
+    private static String fitted(ObjectMapper mapper, ObjectNode receipt, List<Section> sections) {
+        String serialized = mapper.writeValueAsString(receipt);
+        while (serialized.length() > MAX_RECEIPT_CHARS) {
+            Section largest = null;
+            int largestLength = -1;
+            for (Section section : sections) {
+                int length = mapper.writeValueAsString(section.node()).length();
+                if (lastNonEmptyList(section) != null && length > largestLength) {
+                    largest = section;
+                    largestLength = length;
+                }
+            }
+            if (largest == null) {
+                return mapper.writeValueAsString(mapper.createObjectNode()
+                        .put("providerFreshness", "UNKNOWN")
+                        .put("status", "UNAVAILABLE")
+                        .put(
+                                "reason",
+                                "This turn's stored evidence does not fit in one message; fetch its resources."));
+            }
+            String list = Objects.requireNonNull(lastNonEmptyList(largest));
+            ArrayNode rows = (ArrayNode) largest.node().get(list);
+            rows.remove(rows.size() - 1);
+            ObjectNode omitted = largest.node().withObject("omittedFromReceipt");
+            omitted.put(list, omitted.path(list).asInt() + 1);
+            serialized = mapper.writeValueAsString(receipt);
+        }
+        return serialized;
+    }
+
+    private static @Nullable String lastNonEmptyList(Section section) {
+        for (String list : section.lists().reversed()) {
+            if (section.node().get(list) instanceof ArrayNode rows && !rows.isEmpty()) {
+                return list;
+            }
+        }
+        return null;
     }
 
     private static ObjectNode source(

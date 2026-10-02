@@ -8,7 +8,9 @@ import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MentorContextKeys;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.MergeReadinessContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ObservationHistoryContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.ReviewAttemptsContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.conversation.ConversationalDeliveryReconciler;
+import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorPiAdapter;
@@ -104,6 +106,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final MemberAiPreferences memberAiPreferences;
     private final MergeReadinessContentSource mergeReadiness;
     private final ObservationHistoryContentSource observationHistory;
+    private final ReviewAttemptsContentSource reviewAttempts;
     private final ConversationalDeliveryReconciler conversationalDeliveryReconciler;
 
     /** The holder lets a disconnect abort a runner attached after lifecycle callbacks were registered. */
@@ -920,6 +923,10 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
         Optional<UUID> observation = ObservationHistoryContentSource.observationIdOf(path);
         if (observation.isPresent()) {
             return observationHistory.inspect(workspaceId, developerId, observation.get());
+        }
+        Optional<AgentJobRepository.ScmWork> reviewedWork = ReviewAttemptsContentSource.workOf(path);
+        if (reviewedWork.isPresent()) {
+            return reviewAttempts.inspect(workspaceId, developerId, reviewedWork.get());
         }
         if (!MentorContextKeys.ALLOWED_OUTPUT_KEYS.contains(path)) {
             throw new IllegalArgumentException("fetch_context path not allowed: " + path);

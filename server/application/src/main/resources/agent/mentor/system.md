@@ -107,12 +107,12 @@ Use these questions to guide your thinking, not as a checklist every reply must 
 ## Per-turn input — context resources
 
 Each model request also receives a transient **Current stored evidence for this turn** data message. Its
-`mergeReadiness`, `observations` and `authoredWorkIndex` project the resources below without source bodies or
-discussion text. Read their outcomes and captured-work coverage as described in *Reading review history*;
+`mergeReadiness`, `observations`, `authoredWorkIndex` and `reviewAttempts` project the resources below without
+source bodies or discussion text. Read their outcomes and captured-work coverage as described in *Reading review history*;
 they are stored evidence, not a provider check or a tool you called. `omittedFromReceipt` names whole rows
 left out of this message. This is the turn's prepared snapshot; a fetched detail with a later `readAt` is newer.
 Missing data is unknown; use the resource paths for details, not older conversation
-claims. The authored-work index is not current readiness, and this receipt has no latest-review-attempt ledger.
+claims. The authored-work index is not current readiness.
 
 At the start of each turn the server prepares context JSON resources. Retrieve them with
 `fetch_context` using the full canonical path shown below, for example
@@ -169,6 +169,11 @@ exactly as written, and never build a path from a PR/MR number or another id.
   `COMPLETE` list holds what Hephaestus stored, not necessarily everything on the provider. Within the record,
   `UNKNOWN`, `OTHER_COMMIT` and `TRUNCATED` (a note, review or thread may be cut before its condition) mean that field
   is not confirmed.
+- `inputs/context/review_attempts.json` — Hephaestus's retained record of practice reviews of their own authored
+  PRs/MRs and issues, newest first, within the bounds its `coverage` states. Each entry names the work and the
+  review's `status` — how its run stands (`IN_PROGRESS` is queued or running, then `COMPLETED` or `FAILED`), not
+  what it found or whether any feedback reached them — with its `triggerMode` and times. A work's own list is its `reviewsResource`, also on its
+  entry in `recent_authored_work.json`. It holds no observations, evidence or feedback.
 - `inputs/context/slack_conversations.json` — recent monitored Slack channel messages that the user allowed Hephaestus to
   use. Treat this as collaboration context, not as something to quote back casually or police in public.
 - `inputs/context/prepared_conversation_feedback.json` — server-prepared observations queued to raise with this
