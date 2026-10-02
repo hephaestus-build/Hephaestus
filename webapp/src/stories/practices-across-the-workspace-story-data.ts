@@ -58,12 +58,21 @@ const MAINTAINABLE: Group = {
 	groupColor: "emerald",
 };
 
-/** A three way split: Needs attention, Mixed feedback, Going well. */
+/** The observed developers every story split is a part of. */
+export const STORY_OBSERVED = 28;
+
+/** A full split: Needs attention, Mixed feedback, Going well, and the rest of the 28 none yet. */
 export const threeWay = ([needsAttention, mixedFeedback, goingWell]: [
 	number,
 	number,
 	number,
-]): WorkspaceSplit => ({ shape: "SPLIT", needsAttention, mixedFeedback, goingWell });
+]): WorkspaceSplit => ({
+	shape: "SPLIT",
+	needsAttention,
+	mixedFeedback,
+	goingWell,
+	noneYet: STORY_OBSERVED - needsAttention - mixedFeedback - goingWell,
+});
 
 export const collapsed = (hasStanding: number, noneYet: number): WorkspaceSplit => ({
 	shape: "COLLAPSED",
@@ -87,28 +96,31 @@ const group = (
 	practices: WorkspacePracticeSplit[] = [],
 ): WorkspaceGroupSplit => ({ ...of, yourStanding, split, practices });
 
-/** Packaging's five practices: two split, one collapsed, one held back with its total, one more. */
+/**
+ * Packaging's five practices: two split, one collapsed, one held back with its total, one more.
+ * Every part shown holds at least six of the 28 observed developers, the reader counted.
+ */
 export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 	practice(
 		"keep-the-diff-reviewable",
 		"Keep the diff reviewable in one sitting",
 		"DEVELOPING",
-		threeWay([7, 6, 6]),
+		threeWay([7, 6, 8]),
 	),
 	practice(
 		"explain-the-change",
 		"Explain what the change does and why",
 		"MIXED",
-		threeWay([5, 7, 7]),
+		threeWay([6, 7, 8]),
 	),
-	practice("scope-to-one-concern", "Scope the change to one concern", "STRENGTH", collapsed(16, 8)),
+	practice("scope-to-one-concern", "Scope the change to one concern", "STRENGTH", collapsed(20, 8)),
 	practice(
 		"mark-ready-and-link",
 		"Mark the change ready and link its issue",
 		"NOT_OBSERVED",
 		WITHHELD,
 	),
-	practice("keep-history-clean", "Keep the history readable", "STRENGTH", threeWay([5, 5, 9])),
+	practice("keep-history-clean", "Keep the history readable", "STRENGTH", threeWay([6, 6, 9])),
 ];
 
 const TREND = {
@@ -127,22 +139,21 @@ const TREND = {
 
 /** The group the slide in stories open: its practices and the reader's trend in it. */
 export const PACKAGING_GROUP: WorkspaceGroupSplit = {
-	...group(PACKAGING, "DEVELOPING", threeWay([6, 5, 8]), PACKAGING_PRACTICES),
+	...group(PACKAGING, "DEVELOPING", threeWay([7, 6, 8]), PACKAGING_PRACTICES),
 	...TREND,
 };
 
 /**
- * Eight practice groups over 24 of 31 developers. Every split leaves at least five developers
- * besides the reader without a standing, as the privacy rule requires, since the observed total
- * would otherwise give that rest away.
+ * Eight practice groups over 28 of 33 developers. Every part shown, none yet included, holds at
+ * least six developers, as the privacy rule requires, so it stands for five besides any reader.
  */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
-	window: "TERM",
-	since: daysBefore(90),
+	window: "DAYS_30",
+	since: daysBefore(30),
 	until: new Date(STORY_NOW),
 	minimumOthers: 5,
-	eligibleDevelopers: 31,
-	observedDevelopers: 24,
+	eligibleDevelopers: 33,
+	observedDevelopers: 28,
 	readerCounted: true,
 	yourPractices: 18,
 	reviewedWork: { yours: 17, middleLow: 11, middleHigh: 21 },
@@ -150,13 +161,13 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	practicesNeedingAttention: { yours: 4, middleLow: 2, middleHigh: 5 },
 	openFeedback: { yours: 3, middleLow: 1, middleHigh: 4 },
 	groups: [
-		group(ACTING, "MIXED", threeWay([5, 7, 7])),
-		group(COMMUNICATION, "DEVELOPING", threeWay([6, 7, 6])),
-		group(FAILURE, "MIXED", collapsed(19, 5)),
+		group(ACTING, "MIXED", threeWay([6, 7, 7])),
+		group(COMMUNICATION, "DEVELOPING", threeWay([7, 7, 6])),
+		group(FAILURE, "MIXED", collapsed(22, 6)),
 		PACKAGING_GROUP,
-		group(REVIEWING, "STRENGTH", threeWay([5, 6, 8])),
-		group(TESTING, "NOT_OBSERVED", threeWay([5, 6, 7])),
-		group(ISSUES, "NO_OPPORTUNITY", threeWay([5, 6, 7])),
+		group(REVIEWING, "STRENGTH", threeWay([6, 6, 8])),
+		group(TESTING, "NOT_OBSERVED", threeWay([6, 6, 7])),
+		group(ISSUES, "NO_OPPORTUNITY", threeWay([6, 6, 7])),
 		group(MAINTAINABLE, "STRENGTH", WITHHELD),
 	],
 };
@@ -164,7 +175,8 @@ export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 /** Four other developers observed: too few for any figure about the workspace, even a total. */
 export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
-	observedDevelopers: 5,
+	eligibleDevelopers: 33,
+	observedDevelopers: undefined,
 	reviewedWork: { yours: 17 },
 	practicesGoingWell: { yours: 6 },
 	practicesNeedingAttention: { yours: 4 },
@@ -179,7 +191,7 @@ export const GATED_WORKSPACE: PracticesAcrossWorkspace = {
 /** Enough developers for the tiles, but every group's three way split holds too few somewhere. */
 export const COLLAPSED_WORKSPACE: PracticesAcrossWorkspace = {
 	...ACROSS_WORKSPACE,
-	groups: ACROSS_WORKSPACE.groups.map((each) => ({ ...each, split: collapsed(17, 7) })),
+	groups: ACROSS_WORKSPACE.groups.map((each) => ({ ...each, split: collapsed(21, 7) })),
 };
 
 /** Every group held back with only the observed total: has a standing or none yet holds too few. */
@@ -197,7 +209,7 @@ export const MANY_GROUPS_WORKSPACE: PracticesAcrossWorkspace = {
 		...group(
 			{ ...ACTING, groupSlug: `group-${index + 1}`, groupName: `Practice group ${index + 1}` },
 			"MIXED",
-			threeWay([5, 7, 7]),
+			threeWay([6, 7, 7]),
 		),
 	})),
 };

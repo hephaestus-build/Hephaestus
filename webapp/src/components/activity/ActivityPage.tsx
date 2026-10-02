@@ -16,7 +16,7 @@ import {
 import { getProviderTerms, type ProviderType } from "@/lib/provider/provider-terms";
 
 import type { ActivityOverviewState } from "./activity-buckets";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "./activity-range";
+import { ACTIVITY_RANGE_DEFS, type ActivityRange, ACTIVITY_RANGE_OPTIONS } from "./activity-range";
 import { ActivityTiles } from "./ActivityTiles";
 import { ActivityWorkLog, type ActivityWorkLogState } from "./ActivityWorkLog";
 import { CopyMarkdownButton } from "./CopyMarkdownButton";
@@ -110,6 +110,7 @@ export function ActivityPage({
 				title={ACTIVITY_RANGE_DEFS[range].label}
 				actions={
 					<RangeControls
+						options={ACTIVITY_RANGE_OPTIONS}
 						range={range}
 						onRangeChange={onRangeChange}
 						updating={

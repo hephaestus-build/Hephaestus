@@ -4,8 +4,9 @@ import { cn } from "cn";
 import type { ActivityOverview } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { STAT_TILE_GRID, StatTile } from "@/components/common/StatTile";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ProviderType } from "@/lib/provider/provider-terms";
 import { capitalise } from "@/lib/text";
@@ -57,10 +58,7 @@ export function ActivityTiles({ state, providerType }: ActivityTilesProps) {
 		<div className="@container">
 			<ul
 				aria-busy={isBusy(state) || undefined}
-				className={cn(
-					"grid grid-cols-1 gap-3 @sm:grid-cols-2 @2xl:grid-cols-4",
-					state.status === "ready" && state.stale && STALE,
-				)}
+				className={cn(STAT_TILE_GRID, state.status === "ready" && state.stale && STALE)}
 			>
 				{ACTIVITY_CATEGORIES.map((category) => (
 					<li key={category} className="flex">
@@ -112,49 +110,35 @@ function ActivityTile({
 		previous &&
 		deltaPhrase(headline, kindsTotal(previous.summary, def.headline.kinds), previous.name);
 	const card = (
-		<Card variant={opens ? "interactive" : "muted"} size="sm" className="w-full">
-			<CardHeader>
-				<CardTitle className="flex items-center gap-2 text-sm font-medium">
-					<Icon
-						size={16}
-						className={cn(
-							"shrink-0",
-							opens ? ACTIVITY_TONES[def.tone].text : "text-muted-foreground",
-						)}
-					/>
-					{def.label(providerType)}
-				</CardTitle>
-			</CardHeader>
-			<CardContent className="flex flex-1 flex-col gap-3">
-				<div className="space-y-1">
-					<p className="flex items-baseline gap-1.5">
-						<span
-							className={cn(
-								"text-2xl leading-none font-semibold",
-								opens ? "text-foreground" : "text-muted-foreground",
-							)}
-						>
-							{headline}
-						</span>
-						{def.headline.qualifier !== undefined && (
-							<span className="text-sm text-muted-foreground">{def.headline.qualifier}</span>
-						)}
-					</p>
-					{delta !== undefined && <p className="text-xs text-muted-foreground">{delta}</p>}
-				</div>
-				{opens && (
-					<TileChart
-						category={category}
-						overview={overview}
-						span={span}
-						providerType={providerType}
-					/>
-				)}
-				{chips.length > 0 && (
-					<ActionChips actions={chips} providerType={providerType} display="labelled" />
-				)}
-			</CardContent>
-		</Card>
+		<StatTile
+			variant={opens ? "interactive" : "muted"}
+			icon={
+				<Icon
+					size={16}
+					className={cn(
+						"shrink-0",
+						opens ? ACTIVITY_TONES[def.tone].text : "text-muted-foreground",
+					)}
+				/>
+			}
+			title={def.label(providerType)}
+			value={headline}
+			qualifier={def.headline.qualifier}
+			muted={!opens}
+			detail={delta !== undefined && <p className="text-xs text-muted-foreground">{delta}</p>}
+		>
+			{opens && (
+				<TileChart
+					category={category}
+					overview={overview}
+					span={span}
+					providerType={providerType}
+				/>
+			)}
+			{chips.length > 0 && (
+				<ActionChips actions={chips} providerType={providerType} display="labelled" />
+			)}
+		</StatTile>
 	);
 	if (!opens) {
 		return card;

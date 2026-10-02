@@ -12,7 +12,7 @@ const meta = {
 	component: WorkspaceTiles,
 	tags: ["autodocs"],
 	parameters: { layout: "padded" },
-	args: { overview: ACROSS_WORKSPACE, showWorkspace: true },
+	args: { overview: ACROSS_WORKSPACE },
 } satisfies Meta<typeof WorkspaceTiles>;
 
 export default meta;
@@ -21,7 +21,7 @@ type Story = StoryObj<typeof meta>;
 /** Three to a row: the fourth tile, open feedback, starts the second. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText(/^Most developers here:/u)).toHaveLength(4);
+		await expect(canvas.getAllByText(/^Middle half here:/u)).toHaveLength(4);
 		await expect(canvas.getByText("11 to 21")).toBeVisible();
 		await expect(canvas.getAllByText("of your 18 practices")).toHaveLength(2);
 		await expect(canvas.getByText("pieces open now")).toBeVisible();
@@ -30,9 +30,14 @@ export const Default: Story = {
 				name: "You: 3. The middle half of developers here: 1 to 4.",
 			}),
 		).toBeVisible();
+		// Where a figure comes from sits behind an info icon, so every tile keeps one height.
 		await expect(
-			canvas.getAllByText("Middle half of 24 developers observed this term"),
-		).toHaveLength(4);
+			canvas.getByRole("button", {
+				name: "About Open feedback: Feedback your Practice profile shows open right now, whatever the range.",
+			}),
+		).toBeVisible();
+		// Every tile explains itself the same way, so all four keep one height.
+		await expect(canvas.getAllByRole("button", { name: /^About /u })).toHaveLength(4);
 	},
 };
 
@@ -43,15 +48,19 @@ export const NeedsMoreData: Story = {
 		await expect(
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(4);
-		await expect(canvas.queryByRole("img")).toBeNull();
+		// Each tile keeps its axis, with only the reader's own pin on it.
+		await expect(canvas.getAllByRole("img", { name: /^You: \d+\.$/u })).toHaveLength(4);
 	},
 };
 
-export const WorkspaceHidden: Story = {
-	args: { showWorkspace: false },
+/** Nobody here has feedback open: one sentence in place of a band and pin at nought. */
+export const NoOpenFeedbackHere: Story = {
+	args: {
+		overview: { ...ACROSS_WORKSPACE, openFeedback: { yours: 0, middleLow: 0, middleHigh: 0 } },
+	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText(/Most developers here/u)).toBeNull();
-		await expect(canvas.getByText("17")).toBeVisible();
+		await expect(canvas.getByText("Most developers here have no open feedback.")).toBeVisible();
+		await expect(canvas.getAllByText(/^Middle half here:/u)).toHaveLength(3);
 	},
 };
 

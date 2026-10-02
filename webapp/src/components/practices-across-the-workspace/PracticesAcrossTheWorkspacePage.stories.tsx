@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent, waitFor, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 
 import {
 	ACROSS_WORKSPACE,
@@ -22,14 +22,11 @@ import { PracticesAcrossTheWorkspacePage } from "./PracticesAcrossTheWorkspacePa
 const meta = {
 	component: PracticesAcrossTheWorkspacePage,
 	tags: ["autodocs"],
-	parameters: { layout: "padded" },
+	parameters: { layout: "fullscreen" },
 	args: {
-		workspaceSlug: "aet",
 		state: { status: "ready", overview: ACROSS_WORKSPACE },
-		window: "TERM",
+		window: "DAYS_30",
 		onWindowChange: fn(),
-		showWorkspace: true,
-		onShowWorkspaceChange: fn(),
 		onOpenGroup: fn(),
 	},
 } satisfies Meta<typeof PracticesAcrossTheWorkspacePage>;
@@ -45,23 +42,32 @@ export const Default: Story = {
 	play: async ({ canvas, args }) => {
 		await expect(
 			canvas.getByText(
-				"Course figures show the middle half of developers, from the 25th to the 75th percentile.",
+				"See where your practices stand among the developers in this workspace, so you can choose what to work on next. Standings move with your next pieces of reviewed work; open a group to see your next step.",
 			),
 		).toBeVisible();
 		await expect(
 			canvas.getByRole("heading", { level: 2, name: "All practice groups" }),
 		).toBeVisible();
+		// The two rules, each where it applies, with the numbers the response carries.
+		await expect(
+			canvas.getByText(
+				"The grey band shows the middle half of 28 developers observed in the last 30 days, and your marker shows you. A tile compares you once at least 10 other developers have reviewed work in this window; until then it shows only your own value.",
+			),
+		).toBeVisible();
+		await expect(
+			canvas.getByText(
+				"Each bar counts developers by their standing in the group, and You marks yours. A part shows only when it holds at least 5 other developers; otherwise it is merged or held back, so no one can be singled out.",
+			),
+		).toBeVisible();
 		const table = groupsTable(canvas);
 		await expect(
 			table.getByRole("img", {
-				name: "24 developers observed in this workspace this term: 6 Needs attention, 5 Mixed feedback, 8 Going well, 5 none yet. You: Needs attention.",
+				name: "28 developers observed in this workspace in the last 30 days: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You: Needs attention.",
 			}),
 		).toBeVisible();
-		await expect(
-			table.getByRole("link", { name: "Open group Packaging work for review" }),
-		).toHaveAttribute("href", expect.stringContaining("practice-group%3Areview-ready-work"));
+		// The row's one action, drawn as the reviews table draws "Open review", opens the group's level.
 		await userEvent.click(
-			table.getByRole("button", { name: "See practices of the group Packaging work for review" }),
+			table.getByRole("button", { name: "Open group Packaging work for review" }),
 		);
 		await expect(args.onOpenGroup).toHaveBeenCalledWith("review-ready-work");
 	},
@@ -78,61 +84,62 @@ export const GroupOpen: Story = {
 	},
 };
 
-/** The workspace turned off: the reader's own figures and standings, and no figure about anyone else. */
-export const WorkspaceHidden: Story = {
-	args: { showWorkspace: false },
-	play: async ({ canvas }) => {
-		await expect(canvas.queryAllByRole("img", { name: /developers observed/u })).toHaveLength(0);
-		await expect(canvas.queryByText(/Most developers here/u)).toBeNull();
-		await expect(canvas.getByText(/pieces of your work reviewed, this term\.$/u)).toHaveTextContent(
-			/^17 pieces of your work reviewed, this term\.$/u,
-		);
-	},
-};
-
 /** Each split collapses to has a standing against none yet. */
 export const Collapsed: Story = {
 	args: { state: { status: "ready", overview: COLLAPSED_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("img", { name: /17 have a standing/u })).toHaveLength(8);
+		await expect(canvas.getAllByRole("img", { name: /21 have a standing/u })).toHaveLength(8);
 	},
 };
 
-/** Has a standing or none yet holds too few in every group, so each says only the observed total. */
+/** Has a standing or none yet holds too few in every group: an empty track, the total said once. */
 export const CollapsedTotalOnly: Story = {
 	args: { state: { status: "ready", overview: TOTAL_ONLY_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(
-			canvas.getAllByText("Split held back: 24 developers observed this term."),
-		).toHaveLength(8);
+		await expect(canvas.getAllByText("Held back: too few developers to compare yet.")).toHaveLength(
+			8,
+		);
 	},
 };
 
-/** Too few developers observed: every middle half, every split and every total is withheld. */
+/**
+ * Too few developers observed: every middle half, every split and the observed total are held back
+ * by the server, and the page says only how many pieces of the reader's own work were reviewed.
+ */
 export const Withheld: Story = {
 	args: { state: { status: "ready", overview: GATED_WORKSPACE } },
 	play: async ({ canvas }) => {
+		await expect(canvas.queryByText(/developers\s+observed,/u)).toBeNull();
 		await expect(
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(4);
-		await expect(canvas.getAllByText("Too few developers observed to compare yet.")).toHaveLength(
+		await expect(canvas.getAllByText("Held back: too few developers to compare yet.")).toHaveLength(
 			8,
 		);
 		await expect(canvas.queryAllByRole("img", { name: /developers observed/u })).toHaveLength(0);
 	},
 };
 
-/** More groups than a page: the table lists the first twenty and loads the rest as it is read. */
+/** More groups than a page: the table lists the first twenty and shows the rest when asked. */
 export const ManyGroups: Story = {
 	args: { state: { status: "ready", overview: MANY_GROUPS_WORKSPACE } },
 	play: async ({ canvas }) => {
 		const table = groupsTable(canvas);
-		await expect(table.getAllByRole("link", { name: /^Open group /u })).toHaveLength(20);
-		// Reading to the end of the first page brings its end row into view, which shows the rest.
-		table.getByText("Practice group 20").scrollIntoView();
-		await waitFor(async () => {
-			await expect(table.getAllByRole("link", { name: /^Open group /u })).toHaveLength(26);
-		});
+		await expect(table.getAllByRole("button", { name: /^Open group /u })).toHaveLength(20);
+		await userEvent.click(table.getByRole("button", { name: "Show more practice groups" }));
+		await expect(table.getAllByRole("button", { name: /^Open group /u })).toHaveLength(26);
+		await expect(table.queryByRole("button", { name: "Show more practice groups" })).toBeNull();
+	},
+};
+
+/** Another window's figures on their way: the last ones stay, and both sections say they are busy. */
+export const SwitchingWindow: Story = {
+	args: { state: { status: "ready", overview: ACROSS_WORKSPACE, stale: true }, window: "DAYS_90" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("table", { name: "All practice groups" })).toBeVisible();
+		await expect(
+			canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section"),
+		).toHaveAttribute("aria-busy", "true");
 	},
 };
 

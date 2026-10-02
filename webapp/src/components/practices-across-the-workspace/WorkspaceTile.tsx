@@ -1,25 +1,25 @@
+import { InfoIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { cn } from "cn";
 import type { WorkspaceTile as WorkspaceTileFigure } from "@/api/types.gen";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FOCUS_RING, HIT_AREA_24 } from "@/components/common/focus";
+import { StatTile } from "@/components/common/StatTile";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-
-import { type AcrossWorkspaceWindow, developerCount, windowPhrase } from "./across-workspace-copy";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface WorkspaceTileProps {
 	title: string;
 	icon: ReactNode;
 	/** The reader's own value and the middle half of the observed developers, when it may show. */
 	figure: WorkspaceTileFigure;
-	/** What the value counts: "this term", "of your 18 practices". */
+	/** What the value counts: "so far", "of your 18 practices". */
 	qualifier: string;
-	/** One line under the value on where it comes from. */
+	/** Where the value comes from, behind an info icon beside the title so every tile keeps one height. */
 	note?: string;
-	/** The reference group the middle half is a part of: "24 developers observed this term". */
-	observedDevelopers: number;
-	window: AcrossWorkspaceWindow;
-	/** Off, the tile shows the reader's own value and nothing about the workspace. */
-	showWorkspace: boolean;
+	/** Said in place of the band and pin when the whole middle half is at nought. */
+	noneSentence?: string;
 }
 
 /**
@@ -34,50 +34,58 @@ export function WorkspaceTile({
 	figure,
 	qualifier,
 	note,
-	observedDevelopers,
-	window,
-	showWorkspace,
+	noneSentence,
 }: WorkspaceTileProps) {
 	const { yours, middleLow, middleHigh } = figure;
-	const middle =
+	const middle: MiddleHalf | undefined =
 		middleLow !== undefined && middleHigh !== undefined
 			? { low: middleLow, high: middleHigh }
 			: undefined;
 	return (
-		<Card size="sm" className="w-full">
-			<CardHeader>
-				<CardTitle className="flex items-center gap-2 text-sm font-medium">
-					{icon}
+		<StatTile
+			icon={icon}
+			title={
+				<>
 					{title}
-				</CardTitle>
-			</CardHeader>
-			<CardContent className="flex flex-1 flex-col gap-1.5">
-				<p className="flex items-baseline gap-1.5">
-					<span className="text-2xl leading-none font-semibold tabular-nums">{yours}</span>
-					<span className="text-sm text-muted-foreground">{qualifier}</span>
-				</p>
-				{note !== undefined && <p className="text-xs text-muted-foreground">{note}</p>}
-				{showWorkspace &&
-					(middle === undefined ? (
-						<p className="mt-auto pt-1 text-sm text-muted-foreground">
-							Needs more data before the workspace shows here.
+					{note !== undefined && (
+						<Tooltip>
+							<TooltipTrigger
+								render={<button type="button" aria-label={`About ${title}: ${note}`} />}
+								className={cn(HIT_AREA_24, FOCUS_RING, "inline-flex cursor-help items-center")}
+							>
+								<InfoIcon className="size-3.5 text-muted-foreground" aria-hidden />
+							</TooltipTrigger>
+							<TooltipContent className="max-w-xs">{note}</TooltipContent>
+						</Tooltip>
+					)}
+				</>
+			}
+			value={yours}
+			qualifier={qualifier}
+		>
+			<div className="mt-auto flex flex-col gap-1.5">
+				{middle !== undefined && middle.high === 0 && noneSentence !== undefined ? (
+					<p className="text-sm text-muted-foreground">{noneSentence}</p>
+				) : (
+					<>
+						<p className="text-sm text-muted-foreground">
+							{middle === undefined ? (
+								"Needs more data before the workspace shows here."
+							) : (
+								<>
+									Middle half here:{" "}
+									<span className="font-semibold text-foreground tabular-nums">
+										{middle.low === middle.high ? middle.low : `${middle.low} to ${middle.high}`}
+									</span>
+								</>
+							)}
 						</p>
-					) : (
-						<div className="mt-auto flex flex-col gap-1.5 pt-1">
-							<p className="text-sm text-muted-foreground">
-								Most developers here:{" "}
-								<span className="font-semibold text-foreground tabular-nums">
-									{middle.low === middle.high ? middle.low : `${middle.low} to ${middle.high}`}
-								</span>
-							</p>
-							<RangeBar yours={yours} low={middle.low} high={middle.high} />
-							<p className="text-xs text-muted-foreground">
-								Middle half of {developerCount(observedDevelopers)} observed {windowPhrase(window)}
-							</p>
-						</div>
-					))}
-			</CardContent>
-		</Card>
+						{/* The axis is always there, so the reader's value reads against it; the band once it may show. */}
+						<RangeBar yours={yours} middle={middle} />
+					</>
+				)}
+			</div>
+		</StatTile>
 	);
 }
 
@@ -86,27 +94,45 @@ function scaleOf(yours: number, high: number): number {
 	return Math.max(1, Math.ceil(Math.max(yours, high) * 1.25));
 }
 
-/** The middle half as a band on a track from nought, the reader's value as a pin on it. */
-function RangeBar({ yours, low, high }: { yours: number; low: number; high: number }) {
-	const scale = scaleOf(yours, high);
+interface MiddleHalf {
+	low: number;
+	high: number;
+}
+
+/**
+ * A track from nought with the reader's value pinned on it, and the middle half as a band on it
+ * once the workspace may show.
+ */
+function RangeBar({ yours, middle }: { yours: number; middle?: MiddleHalf }) {
+	const scale = scaleOf(yours, middle?.high ?? 0);
 	const at = (value: number) => `${(value / scale) * 100}%`;
+	const range =
+		middle === undefined
+			? ""
+			: ` The middle half of developers here: ${middle.low === middle.high ? middle.low : `${middle.low} to ${middle.high}`}.`;
 	return (
-		<div
-			role="img"
-			aria-label={`You: ${yours}. The middle half of developers here: ${low === high ? low : `${low} to ${high}`}.`}
-			className="relative h-4 w-full"
-		>
+		<div role="img" aria-label={`You: ${yours}.${range}`} className="relative mb-5 h-4 w-full">
 			<span aria-hidden className="absolute inset-x-0 top-1.5 h-1 rounded-full bg-muted" />
-			<span
-				aria-hidden
-				className="absolute top-1 left-(--low) h-2 w-(--width) min-w-1 rounded-full bg-muted-foreground/50"
-				style={{ "--low": at(low), "--width": at(high - low) }}
-			/>
+			{middle !== undefined && (
+				<span
+					aria-hidden
+					className="absolute top-1 left-(--low) h-2 w-(--width) min-w-1 rounded-full bg-muted-foreground/50"
+					style={{ "--low": at(middle.low), "--width": at(middle.high - middle.low) }}
+				/>
+			)}
 			<span
 				aria-hidden
 				className="absolute top-0 left-(--at) h-4 w-1 -translate-x-1/2 rounded-full bg-mentor ring-2 ring-card"
 				style={{ "--at": at(yours) }}
 			/>
+			{/* The scale's two ends, so the band and the pin read against numbers. */}
+			<span
+				aria-hidden
+				className="absolute inset-x-0 top-full flex justify-between pt-0.5 text-xs text-muted-foreground tabular-nums"
+			>
+				<span>0</span>
+				<span>{scale}</span>
+			</span>
 		</div>
 	);
 }

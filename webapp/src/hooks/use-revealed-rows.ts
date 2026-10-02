@@ -1,21 +1,23 @@
 import { useState } from "react";
 
-import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
+/** The end of a list that arrived whole: whether rows are left, and how to show the next page. */
+export interface RevealedMore {
+	hasMore: boolean;
+	onShowMore: () => void;
+}
 
 /**
- * A list that arrived whole, shown a page at a time as its reader reaches the end, in the shape an
- * infinite query hands a list (`infiniteListState`), so one table draws both. Nothing is fetched, so
- * a page never fails and never waits.
+ * A list that arrived whole, shown a page at a time: nothing is fetched, so a page never waits and
+ * never fails, and the reader asks for the next one.
  */
 export function useRevealedRows<TRow>(
 	rows: readonly TRow[],
 	pageSize: number,
-): { shown: readonly TRow[] } & MorePages {
+): { shown: readonly TRow[] } & RevealedMore {
 	const [count, setCount] = useState(pageSize);
 	return {
 		shown: rows.slice(0, count),
 		hasMore: count < rows.length,
-		isLoadingMore: false,
-		onLoadMore: () => setCount((shown) => shown + pageSize),
+		onShowMore: () => setCount((shown) => shown + pageSize),
 	};
 }

@@ -3,13 +3,14 @@ import { expect, fn } from "storybook/test";
 
 import { withStandardPage } from "@/stories/decorators";
 
+import { ACTIVITY_RANGE_OPTIONS } from "./activity-range";
 import { RangeControls } from "./RangeControls";
 
 const meta = {
 	component: RangeControls,
 	decorators: [withStandardPage],
 	tags: ["autodocs"],
-	args: { range: "30d", onRangeChange: fn(), updating: false },
+	args: { options: ACTIVITY_RANGE_OPTIONS, range: "30d", onRangeChange: fn(), updating: false },
 } satisfies Meta<typeof RangeControls>;
 
 export default meta;
