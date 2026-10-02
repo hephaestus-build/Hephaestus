@@ -12,7 +12,8 @@ WORKDIR /opt/precompute
 COPY precompute/package.json precompute/pnpm-lock.yaml precompute/pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
-FROM node:${NODE_VERSION}-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e AS os-packages
+# Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
+FROM node:${NODE_VERSION}-trixie-slim@sha256:50c3b2f6988dfc307b86e5301d69611af31f4789bdf232863b07d3b02fe55ae0 AS os-packages
 RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
     apt-get install -y --no-install-recommends bash git ripgrep fd-find findutils tree jq ca-certificates grep coreutils util-linux tar && \
     rm -rf /var/lib/apt/lists/*
@@ -24,7 +25,7 @@ RUN groupmod --new-name agent node && \
     usermod --login agent --home /home/agent --move-home --shell /bin/bash node
 
 # renovate: datasource=npm depName=@earendil-works/pi-coding-agent
-ARG PI_VERSION=0.84.4
+ARG PI_VERSION=1.0.0
 COPY --from=dependencies /opt/pi-sdk /opt/pi-sdk
 RUN test -d /opt/pi-sdk/node_modules/@earendil-works/pi-coding-agent \
       || (echo "Pi SDK not found at /opt/pi-sdk/node_modules" >&2; exit 1) && \
@@ -139,7 +140,7 @@ RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions 
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules
 
-LABEL hephaestus.agent.runtime-contract=3
+LABEL hephaestus.agent.runtime-contract=4
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

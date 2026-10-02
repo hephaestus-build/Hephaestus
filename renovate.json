@@ -229,15 +229,6 @@
 			"versioningTemplate": "npm"
 		},
 		{
-			"description": "Track the Pi SDK pin in the live agent tests",
-			"customType": "regex",
-			"managerFilePatterns": ["/^server/application/src/test/java/.*\\.java$/"],
-			"matchStrings": ["private static final String PI_SDK_VERSION = \"(?<currentValue>[^\"]+)\";"],
-			"depNameTemplate": "@earendil-works/pi-coding-agent",
-			"datasourceTemplate": "npm",
-			"versioningTemplate": "npm"
-		},
-		{
 			"description": "Track release image tags and digests",
 			"customType": "regex",
 			"managerFilePatterns": ["/^security/release-images\\.json$/"],

@@ -352,10 +352,12 @@ hints, metrics and directions, not observations.
   Unsupported languages and unavailable files produce `unknown` placement. Directions must identify
   relevant limits, such as constructs that span several lines.
 
-The runner renders a bounded `work/precompute-out/summary.md` for the review brief. It includes
-practice directions, candidate locations and record rows. When rows do not fit, it retains pointers
-to the full per-practice JSON. A summary is an entry point to the evidence, not proof that the model
-inspected every candidate.
+The runner renders one bounded section per practice, `work/precompute-out/<slug>.md`, and the review
+shows it under that practice's criteria in the turn that evaluates it. A section holds the practice's
+directions, candidate locations and record rows; when they do not fit its 3,000 characters, it keeps a
+sample of each and a pointer to the full per-practice JSON. Sections are bounded one by one, so a script
+with many rows never crowds another practice's leads out. A section is an entry point to the evidence,
+not proof that the model inspected every candidate.
 
 ### Review the effective definition
 

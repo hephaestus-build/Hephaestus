@@ -45,6 +45,11 @@ export function newUsageLedger(): UsageLedger {
 	};
 }
 
+/** Output tokens one assistant message spent; zero for a failed call that reported none. */
+export function outputTokensOf(msg: ReportedMessage): number {
+	return msg.role === "assistant" ? (msg.usage?.output ?? 0) : 0;
+}
+
 export function addAssistantUsage(
 	ledger: UsageLedger,
 	msg: ReportedMessage | null | undefined,

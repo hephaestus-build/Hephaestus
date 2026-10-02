@@ -83,6 +83,31 @@ export function annotateDiff(patch: Buffer): Buffer {
 	return Buffer.from(out.join("\n"), "latin1");
 }
 
+/**
+ * Where each file's section of the annotated diff starts and ends, 1-based and inclusive, keyed by its
+ * `diff --git` header without the prefix (`a/<old> b/<new>`): what lets a large diff be read one file
+ * at a time.
+ */
+export function diffSections(annotated: string): Map<string, [number, number]> {
+	const lines = annotated.split("\n");
+	const sections = new Map<string, [number, number]>();
+	let header: string | null = null;
+	let start = 0;
+	for (const [index, line] of lines.entries()) {
+		if (line.startsWith("diff --git ")) {
+			if (header !== null) {
+				sections.set(header, [start, index]);
+			}
+			header = line.slice("diff --git ".length);
+			start = index + 1;
+		}
+	}
+	if (header !== null) {
+		sections.set(header, [start, lines.at(-1) === "" ? lines.length - 1 : lines.length]);
+	}
+	return sections;
+}
+
 /** `git diff --name-status -z` as records. Renames and copies carry the old path first. */
 export function parseNameStatus(
 	output: Buffer,
@@ -297,7 +322,8 @@ export function writeChangeView(
 	mkdirSync(out, { recursive: true });
 	const range = [change.base, change.head];
 	const patch = git(repository, ["diff", "--no-color", "--no-ext-diff", RENAMES, ...range]);
-	writeFileSync(path.resolve(out, "diff.patch"), annotateDiff(patch));
+	const annotated = annotateDiff(patch);
+	writeFileSync(path.resolve(out, "diff.patch"), annotated);
 	writeFileSync(
 		path.resolve(out, "diff_stat.txt"),
 		git(repository, ["diff", "--no-color", "--no-ext-diff", "--stat=200", RENAMES, ...range]),
@@ -305,7 +331,15 @@ export function writeChangeView(
 	const files = parseNameStatus(
 		git(repository, ["diff", "--no-color", "--name-status", "-z", RENAMES, ...range]),
 	);
-	writeFileSync(path.resolve(out, "files.json"), `${JSON.stringify({ files }, null, 2)}\n`);
+	const sections = diffSections(annotated.toString("utf8"));
+	const indexed = files.map((file) => {
+		const lines = sections.get(`a/${file.oldPath ?? file.path} b/${file.path}`);
+		return lines === undefined ? file : { ...file, diffPatchLines: lines };
+	});
+	writeFileSync(
+		path.resolve(out, "files.json"),
+		`${JSON.stringify({ files: indexed }, null, 2)}\n`,
+	);
 	if (description !== null) {
 		const view = authoredDescription(description, descriptionTemplates(repository, change.head));
 		writeFileSync(

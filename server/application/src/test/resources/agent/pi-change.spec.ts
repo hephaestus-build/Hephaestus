@@ -169,6 +169,40 @@ void test("name-status records carry the old path of a rename", () => {
 	]);
 });
 
+interface IndexedFile {
+	status: string;
+	path: string;
+	oldPath?: string;
+	diffPatchLines: [number, number];
+}
+
+/** files.json as written, checked field by field. */
+function filesIndex(text: string): IndexedFile[] {
+	const parsed: unknown = JSON.parse(text);
+	assert.ok(typeof parsed === "object" && parsed !== null);
+	const files: unknown = Reflect.get(parsed, "files");
+	assert.ok(Array.isArray(files));
+	return files.map((file: unknown): IndexedFile => {
+		assert.ok(typeof file === "object" && file !== null);
+		const status: unknown = Reflect.get(file, "status");
+		const filePath: unknown = Reflect.get(file, "path");
+		const oldPath: unknown = Reflect.get(file, "oldPath");
+		const lines: unknown = Reflect.get(file, "diffPatchLines");
+		assert.ok(typeof status === "string" && typeof filePath === "string");
+		assert.ok(oldPath === undefined || typeof oldPath === "string");
+		assert.ok(Array.isArray(lines) && lines.length === 2);
+		const start: unknown = Reflect.get(lines, 0);
+		const end: unknown = Reflect.get(lines, 1);
+		assert.ok(typeof start === "number" && typeof end === "number");
+		return {
+			status,
+			path: filePath,
+			...(oldPath === undefined ? {} : { oldPath }),
+			diffPatchLines: [start, end],
+		};
+	});
+}
+
 void test("derives the change view from a real checkout with git", () => {
 	const { root, repo, base, head } = repositoryWithChange();
 	try {
@@ -192,16 +226,27 @@ void test("derives the change view from a real checkout with git", () => {
 			/3 files changed/u,
 		);
 
-		const files: unknown = JSON.parse(
-			readFileSync(path.join(root, "work/change/files.json"), "utf8"),
-		);
-		assert.deepEqual(files, {
-			files: [
+		const files = filesIndex(readFileSync(path.join(root, "work/change/files.json"), "utf8"));
+		assert.deepEqual(
+			files.map(({ diffPatchLines: _lines, ...file }) => file),
+			[
 				{ status: "A", path: "Wördle.md" },
 				{ status: "A", path: "lib.test.ts" },
 				{ status: "R", path: "lib.ts", oldPath: "app.ts" },
 			],
-		});
+		);
+		// Each file names its own section of diff.patch, so a large diff can be read one file at a time.
+		const diffLines = diff.split("\n");
+		for (const file of files) {
+			const [start, end] = file.diffPatchLines;
+			assert.equal(
+				diffLines[start - 1],
+				`diff --git a/${file.oldPath ?? file.path} b/${file.path}`,
+			);
+			// The next line opens the next file's section, or the diff has ended.
+			const after = diffLines[end] ?? "";
+			assert.ok(end >= start && (after === "" || after.startsWith("diff --git ")));
+		}
 		// The template is read from the checkout at the reviewed head, and the authored view written.
 		assert.match(
 			readFileSync(path.join(root, "work/change/description.authored.md"), "utf8"),

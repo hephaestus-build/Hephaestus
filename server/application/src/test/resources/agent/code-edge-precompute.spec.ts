@@ -203,3 +203,27 @@ void test("the input practice lists edge constructs in code only, and none the l
 		rmSync(root, { recursive: true, force: true });
 	}
 });
+
+void test("the error practice lists the fallbacks and bare returns its criteria ask to classify", async () => {
+	const { root, script } = await stage("handles-errors-instead-of-swallowing-them");
+	try {
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([
+				added("App/Parsing.swift", ["return Double(normalizedValue) ?? 0"]),
+				added("App/Loader.swift", ["guard let data = cache[key] else { return }"]),
+				added("App/Plain.swift", ["let total = values.reduce(0, +)"]),
+			]),
+			metadata,
+		);
+		assert.deepEqual(
+			result.hints.map((h) => [h.file, h.line, h.pattern]),
+			[
+				["App/Parsing.swift", 1, "swift:?? fallback on a failable conversion"],
+				["App/Loader.swift", 1, "swift:guard … else { return }"],
+			],
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});

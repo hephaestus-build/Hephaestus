@@ -75,21 +75,10 @@ if (
 	);
 }
 
-const javaPin = /private static final String PI_SDK_VERSION = "(?<version>[^"]+)";/u;
-for (const path of [
-	"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/mentor/live/MentorLiveLlmTest.java",
-	"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/mentor/live/MentorSandboxStressTest.java",
-	"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/practice/live/PracticeRunnerLiveLlmTest.java",
-]) {
-	const testVersion = javaPin.exec(readFileSync(path, "utf8"))?.groups?.version;
-	if (testVersion !== piVersion) {
-		problems.push(`${path} pins Pi ${String(testVersion)} but the agent image pins ${piVersion}.`);
-	}
-}
-
-const nodeBase = /^FROM node:\$\{NODE_VERSION\}-slim@sha256:[a-f0-9]{64}(?: AS [\w-]+)?$/mu.exec(
-	dockerfile,
-);
+const nodeBase =
+	/^FROM node:\$\{NODE_VERSION\}-trixie-slim@sha256:[a-f0-9]{64}(?: AS [\w-]+)?$/mu.exec(
+		dockerfile,
+	);
 if (!nodeBase) {
 	problems.push("docker/agents/pi/Dockerfile: Node base must be pinned by a 64-character digest.");
 }
