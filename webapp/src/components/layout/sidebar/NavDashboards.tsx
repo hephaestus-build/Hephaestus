@@ -1,5 +1,5 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { Activity, Building2, Compass, Users } from "lucide-react";
+import { Activity, Building2, ChartNoAxesGantt, Compass, Users } from "lucide-react";
 
 import {
 	SidebarGroup,
@@ -21,6 +21,9 @@ export function NavDashboards({
 	const onPracticeProfile = Boolean(
 		matchRoute({ to: "/w/$workspaceSlug/practice-profile", fuzzy: true }),
 	);
+	const onAcrossTheWorkspace = Boolean(
+		matchRoute({ to: "/w/$workspaceSlug/practices-across-the-workspace", fuzzy: true }),
+	);
 	const onWorkspaceActivity = Boolean(
 		matchRoute({ to: "/w/$workspaceSlug/workspace-activity", fuzzy: true }),
 	);
@@ -39,6 +42,23 @@ export function NavDashboards({
 						>
 							<Compass />
 							<span>Practice profile</span>
+						</SidebarMenuButton>
+					</SidebarMenuItem>
+				)}
+				{practicesEnabled && (
+					<SidebarMenuItem>
+						<SidebarMenuButton
+							tooltip="Across the workspace"
+							isActive={onAcrossTheWorkspace}
+							render={
+								<Link
+									to="/w/$workspaceSlug/practices-across-the-workspace"
+									params={{ workspaceSlug }}
+								/>
+							}
+						>
+							<ChartNoAxesGantt />
+							<span>Across the workspace</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>
 				)}

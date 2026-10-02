@@ -22,9 +22,16 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		// The Practice profile is the workspace home, so it leads; Activity follows it.
+		// The Practice profile is the workspace home, so it leads, with the workspace's view of the
+		// same practice groups under it; Activity follows them.
 		const links = canvas.getAllByRole("link").map((link) => link.textContent);
-		await expect(links).toEqual(["Practice profile", "Activity", "Workspace activity", "Teams"]);
+		await expect(links).toEqual([
+			"Practice profile",
+			"Across the workspace",
+			"Activity",
+			"Workspace activity",
+			"Teams",
+		]);
 	},
 };
 
