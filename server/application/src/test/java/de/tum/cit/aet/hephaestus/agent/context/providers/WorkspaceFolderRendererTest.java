@@ -37,6 +37,15 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.json.JsonMapper;
 
 class WorkspaceFolderRendererTest extends BaseUnitTest {
+    private static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolderPersonDataCatalog personCopies() {
+        AutoCloseable released = () -> {};
+        return org.mockito.Mockito.mock(
+                de.tum.cit.aet.hephaestus.agent.context.EvidenceFolderPersonDataCatalog.class,
+                invocation -> invocation.getMethod().getName().equals("finishCapture")
+                        ? released
+                        : org.mockito.Answers.RETURNS_DEFAULTS.answer(invocation));
+    }
+
     @TempDir
     Path root;
 
@@ -64,12 +73,16 @@ class WorkspaceFolderRendererTest extends BaseUnitTest {
                 policies,
                 git,
                 new JobEvidenceFiles(
-                        new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC()),
+                        new FabricLayout(root.toString()),
+                        mock(AgentJobRepository.class),
+                        Clock.systemUTC(),
+                        personCopies()),
                 repositories,
                 history,
                 memberPolicy,
                 memberships,
-                practices);
+                practices,
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder.class));
     }
 
     private AgentJob job() {

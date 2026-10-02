@@ -59,6 +59,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
     private final ReviewRepositoryPreparer repositoryPreparer;
     private final ReviewHistoryContentSource history;
     private final ReviewMemberAiPolicy memberAiPolicy;
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
 
     public WorkspaceFolderRenderer(
             WorkspaceScmProjection scmProjection,
@@ -72,10 +73,12 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
             ReviewHistoryContentSource history,
             ReviewMemberAiPolicy memberAiPolicy,
             WorkspaceMembershipRepository memberships,
-            PracticeRepository practices) {
+            PracticeRepository practices,
+            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies) {
         this.scmProjection = scmProjection;
         this.memberships = memberships;
         this.practices = practices;
+        this.personCopies = personCopies;
         this.mapper = mapper;
         this.documents = documents;
         this.conversations = conversations;
@@ -242,6 +245,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                                         repo,
                                         SourceAbsenceReason.PROVIDER_FAILURE));
                             } else {
+                                personCopies.recordRepository(id);
                                 files.addDirectory(snapshot.stagingDir());
                                 Path target = root.resolve("repos/" + repo);
                                 copy(snapshot.stagingDir(), target);
@@ -301,6 +305,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                 for (var membership : memberships.findByWorkspace_Id(workspace)) {
                     if (membership.isHidden()) continue;
                     var person = membership.getUser();
+                    personCopies.recordUser(person.getId());
                     if (!memberAiPolicy.allowsPerson(job, person.getId())) {
                         refusals.add(new WorkspaceRefusal(
                                 WorkspaceRefusal.Target.RECORD,

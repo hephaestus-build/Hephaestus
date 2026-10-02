@@ -29,6 +29,7 @@ public class PersonDataService {
     private final PersonDataRequestRepository requests;
     private final PersonSuppressionService suppression;
     private final PersonDataWriteFence writeFence;
+    private final PersonDataCopyFence copyFence;
     private final IssuedJwtRepository issuedTokens;
     private final PlatformTransactionManager transactions;
     private final ObjectMapper mapper;
@@ -84,6 +85,7 @@ public class PersonDataService {
         PersonScope person = scope(r);
         if (Objects.equals(person.accountId(), administratorId))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Another administrator must authorize this erasure");
+        copyFence.holdForErasure();
         writeFence.holdForErasure(person.identities());
         requireActiveAdministratorAndLockAccount(administratorId, person.accountId());
         if (r.getState() == PersonDataRequest.State.FAILED) {
@@ -135,7 +137,8 @@ public class PersonDataService {
 
     public void run(UUID id) {
         TransactionTemplate tx = new TransactionTemplate(transactions);
-        try {
+        var admission = copyFence.erase();
+        try (admission) {
             Map<String, PersonDataSelection> frozen = tx.execute(status -> {
                 PersonDataRequest r = requests.lock(id).orElseThrow(() -> notFound());
                 return r.getState() == PersonDataRequest.State.ERASING

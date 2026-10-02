@@ -33,7 +33,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
 
     @Query("""
         SELECT m.id AS id, m.slackChannelId AS slackChannelId, m.slackTs AS slackTs,
-          m.slackThreadTs AS slackThreadTs, m.authorMemberId AS authorMemberId,
+          m.slackThreadTs AS slackThreadTs, m.authorMemberId AS authorMemberId, m.slackTeamId AS slackTeamId, m.authorSlackUserId AS authorSlackUserId,
           m.text AS text, m.ingestedAt AS ingestedAt
         FROM SlackMessage m JOIN SlackMonitoredChannel c
           ON c.workspaceId=m.workspaceId AND c.slackChannelId=m.slackChannelId
@@ -45,6 +45,11 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
 
     /** Scalar projection keeps the full-folder stream out of Hibernate's managed-entity cache. */
     interface WorkspaceMessage {
+        String getSlackTeamId();
+
+        @Nullable
+        String getAuthorSlackUserId();
+
         Long getId();
 
         String getSlackChannelId();
@@ -234,7 +239,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
      */
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow(
-            m.slackTs, m.authorSlackUserId, m.authorMemberId, u.login, u.name, m.text, m.editedAt
+            m.slackTs, m.slackTeamId, m.authorSlackUserId, m.authorMemberId, u.login, u.name, m.text, m.editedAt
         )
         FROM SlackMessage m
         JOIN SlackMonitoredChannel c ON c.workspaceId = m.workspaceId AND c.slackChannelId = m.slackChannelId

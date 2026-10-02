@@ -463,3 +463,19 @@ Workspace connection alerts cover recorded Slack credential revocation and verif
 suspension, with paired recovery. Intentional disconnection, routine token refresh, and first-time
 connection are not incidents. GitLab and Outline do not yet expose equivalent durable incident
 signals; monitor their existing health/configuration surfaces rather than assuming email coverage.
+
+### An evidence store is offline
+
+Person erasure records a deletion request for each mounted store that captured the person's data.
+The owning worker cancels the affected attempt and removes the whole job folder, including failed
+rendering folders and retries. It confirms deletion only after the runtime releases its folder.
+A server that has no such folder cannot confirm deletion for another worker's volume.
+
+If the mounted owner does not confirm deletion, the request fails and can be resumed. Restore the
+same worker volume, let its deletion poll run, then resume the request in instance administration.
+The store identity stays on the volume across a worker restart. Do not replace the volume with an
+empty one and report the old copy as erased. Keep a disconnected old volume under access controls
+until its copy has been removed and its deletion has been confirmed.
+
+This does not change the normal job-folder contract: admission removes the admitted folder,
+ended attempts have a one-hour grace period, and restart cleanup removes old attempts.

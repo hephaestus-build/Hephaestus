@@ -1021,6 +1021,15 @@ erDiagram
         BIGINT version "NOT NULL"
     }
 
+    PersonEvidenceCopy {
+        UUID id PK
+        UUID job_id "NOT NULL"
+        VARCHAR(24) state "NOT NULL"
+        JSONB payload "NOT NULL"
+        UUID store_id "NOT NULL"
+        BIGINT workspace_id "NOT NULL"
+    }
+
     PersonSuppression {
         UUID id PK
         UUID active_request_id FK

@@ -42,3 +42,9 @@ Person exports list repositories whose history may contain the person's commits.
 not rewritten: repository mirrors and short-lived job folders cache the organization's upstream
 repository. The repository owner must remove Git authorship at the source. Hephaestus removes its
 own person records and derived data and removes affected attempt folders during erasure.
+
+Erasure waits for the mounted evidence store to confirm deletion of all affected attempts, including
+failed rendering folders. An active runtime must release its folder before deletion is acknowledged.
+If a worker volume is offline, erasure stops with a resumable failure; an empty server folder does
+not count as deletion. Capture admission is serialized with erasure across runtime roles, without
+changing the existing job-folder retention period.

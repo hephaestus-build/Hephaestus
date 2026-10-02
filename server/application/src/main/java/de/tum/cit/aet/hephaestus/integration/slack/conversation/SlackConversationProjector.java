@@ -37,14 +37,17 @@ public class SlackConversationProjector implements ConversationThreadProjection 
 
     private final SlackMessageRepository messageRepository;
     private final ObjectMapper objectMapper;
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
 
     public SlackConversationProjector(
             SlackThreadRepository threadRepository,
             SlackMessageRepository messageRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies) {
         this.threadRepository = threadRepository;
         this.messageRepository = messageRepository;
         this.objectMapper = objectMapper;
+        this.personCopies = personCopies;
     }
 
     @Override
@@ -57,6 +60,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     public void forEachWorkspaceMessage(long workspaceId, java.util.function.Consumer<ObjectNode> consumer) {
         try (var messages = messageRepository.streamWorkspaceMessages(workspaceId)) {
             messages.forEach(message -> {
+                recordNative(message.getAuthorSlackUserId(), message.getSlackTeamId());
                 ObjectNode record = objectMapper.createObjectNode();
                 record.put("id", message.getId());
                 record.put("channel", message.getSlackChannelId());
@@ -197,11 +201,18 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      * channel paused or revoked between enqueue and execution: a non-ACTIVE channel yields zero messages,
      * atomically with the read.
      */
+    private void recordNative(@Nullable String subject, String teamId) {
+        if (subject != null && !subject.isBlank())
+            personCopies.recordIdentity(new de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity(
+                    "SLACK", "https://slack.com", subject, teamId));
+    }
+
     private boolean appendThreadMessages(long workspaceId, ThreadKey key, ArrayNode messages) {
         List<SlackThreadMessageRow> rows = messageRepository.findThreadMessages(
                 workspaceId, key.channelId(), key.threadTs(), org.springframework.data.domain.Pageable.unpaged());
         for (int index = 0; index < rows.size(); index++) {
             SlackThreadMessageRow row = rows.get(index);
+            recordNative(row.authorSlackUserId(), row.slackTeamId());
             ObjectNode node = messages.addObject();
             node.put("ts", row.slackTs());
             node.put("author", row.authorSlackUserId());

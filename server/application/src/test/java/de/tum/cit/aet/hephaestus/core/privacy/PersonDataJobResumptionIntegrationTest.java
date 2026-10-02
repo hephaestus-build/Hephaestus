@@ -117,7 +117,16 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
                 };
         var registry = new PersonDataRegistry(List.of(new TransactionProofCatalog(List.of(preferences, profile))));
         var service = new PersonDataService(
-                resolver, registry, requests, suppression, fence, tokens, transactions, mapper, jdbc);
+                resolver,
+                registry,
+                requests,
+                suppression,
+                fence,
+                new PostgresPersonDataCopyFence(Objects.requireNonNull(jdbc.getDataSource()), jdbc),
+                tokens,
+                transactions,
+                mapper,
+                jdbc);
         var tx = new TransactionTemplate(transactions);
         var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null));
         var preview = Objects.requireNonNull(tx.execute(status -> service.preview(adminId, null, identities)));

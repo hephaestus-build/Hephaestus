@@ -46,6 +46,7 @@ public class RepositoryTreeContentSource implements EvidenceSource {
 
     private final GitRepositoryManager gitRepositoryManager;
     private final ReviewRepositoryPreparer repositoryPreparer;
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
 
     @Override
     public boolean supports(ContextRequest request) {
@@ -75,6 +76,10 @@ public class RepositoryTreeContentSource implements EvidenceSource {
             return absent(absence);
         }
         GitRepositoryManager.GitTreeSnapshot snapshot = snapshot(request);
+        if (request instanceof ContextRequest.PracticeReviewRequest review) {
+            var metadata = java.util.Objects.requireNonNull(review.job().getMetadata());
+            personCopies.recordRepository(metadata.path("repository_id").asLong());
+        }
         Map<String, java.nio.file.Path> onDisk = Map.of(
                 SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD",
                         snapshot.stagingDir().resolve(".git/HEAD"),

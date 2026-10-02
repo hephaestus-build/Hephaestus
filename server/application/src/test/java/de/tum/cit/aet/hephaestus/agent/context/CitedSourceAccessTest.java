@@ -30,6 +30,15 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.json.JsonMapper;
 
 class CitedSourceAccessTest extends BaseUnitTest {
+    private static de.tum.cit.aet.hephaestus.agent.context.EvidenceFolderPersonDataCatalog personCopies() {
+        AutoCloseable released = () -> {};
+        return org.mockito.Mockito.mock(
+                de.tum.cit.aet.hephaestus.agent.context.EvidenceFolderPersonDataCatalog.class,
+                invocation -> invocation.getMethod().getName().equals("finishCapture")
+                        ? released
+                        : org.mockito.Answers.RETURNS_DEFAULTS.answer(invocation));
+    }
+
     @TempDir
     Path root;
 
@@ -60,7 +69,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void bindsTheFrozenMessageIdentityNotAnAgentSuppliedReferenceAndRechecksConsent() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var job = job();
         String path = "context/chat/C1/2026-10.jsonl";
         byte[] bytes = "{\"channel\":\"C1\",\"ts\":\"1.000001\",\"text\":\"quote\",\"synced_at\":null}\n"
@@ -93,7 +102,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void normalizedThreadCannotBypassAWithdrawnMessage() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var job = job();
         String path = "context/conversation_thread.json";
         byte[] bytes =
@@ -115,7 +124,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void normalizedDocumentCannotBypassErasure() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var job = job();
         job.setMetadata(mapper.createObjectNode().put("docs_document_id", 7L));
         var document = DocumentProjection.ProjectedDocument.withoutAuthors("c", "d", "Title", "quote", false);
@@ -137,7 +146,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void normalizedScmCannotBypassRepositoryRemoval() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var job = job();
         job.setMetadata(mapper.createObjectNode().put("repository_id", 2L));
         var citation = mapper.createObjectNode()
@@ -158,7 +167,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void composedViewsCannotBypassCanonicalRecordAuthorization() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         for (String path : java.util.List.of("inputs/history/observations.json", "context/project_inventory.json")) {
             var citation = mapper.createObjectNode().put("artifactPath", path);
             assertThatThrownBy(() -> access(files).bind(job(), citation, "a".repeat(64)))
@@ -176,7 +185,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void refusesHistoryWhenItsDeveloperChangesTheProcessorChoiceAfterRendering() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var job = job();
         var citation = mapper.createObjectNode()
                 .put("artifactPath", "context/people/42/observations.jsonl")
@@ -191,7 +200,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void malformedNumericSourceIdentityIsATypedAdmissionRefusal() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         for (String path : java.util.List.of("context/people/not-a-person/person.json", "repos/not-a-repo/.git/HEAD")) {
             assertThatThrownBy(() -> access(files)
                             .bind(job(), mapper.createObjectNode().put("artifactPath", path), "a".repeat(64)))
@@ -203,7 +212,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void refusesMissingCanonicalReferencesAndForeignRepositories() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var access = access(files);
         for (String path : java.util.List.of(
                 "context/conversation_thread.json",
@@ -235,7 +244,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @org.junit.jupiter.params.provider.ValueSource(strings = {"observations.jsonl", "feedback.jsonl", "person.json"})
     void canonicalPersonReferencesReuseVisibilityAndRecordWithdrawal(String filename) {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var job = job();
         String path = "context/people/42/" + filename;
         UUID recordId = UUID.randomUUID();
@@ -275,7 +284,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
     @Test
     void canonicalDocumentRechecksItsSourceIdentityAndLocation() {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         var job = job();
         String path = "context/docs/engineering/design.md";
         byte[] bytes = "---\nsynced_at: null\nsource_id: \"source-7\"\n---\nquote\n".getBytes(StandardCharsets.UTF_8);
@@ -317,7 +326,7 @@ class CitedSourceAccessTest extends BaseUnitTest {
             })
     void malformedPersistedReferencesFailClosed(String reference) {
         var files = new JobEvidenceFiles(
-                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC());
+                new FabricLayout(root.toString()), mock(AgentJobRepository.class), Clock.systemUTC(), personCopies());
         when(preferences.forDeveloper(1L, 42L)).thenReturn(new MemberAiPreferences.Decision(false, null));
         when(memberships.findByWorkspace_IdAndUser_Id(1L, 42L))
                 .thenReturn(java.util.Optional.of(new de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership()));

@@ -210,4 +210,37 @@ CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS tr
             <sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Legacy hidden conversation memory cannot be restored. Restore a verified pre-upgrade backup instead.'; END $$;</sql>
         </rollback>
     </changeSet>
+    <changeSet id="1790837066126-19" author="hephaestus">
+        <createTable tableName="person_evidence_copy">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="person_evidence_copyPK"/>
+            </column>
+            <column name="job_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(24)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payload" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="store_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="workspace_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1790837066126-20" author="hephaestus">
+        <createIndex indexName="idx_person_evidence_copy_job" tableName="person_evidence_copy">
+            <column name="job_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1790837066126-21" author="hephaestus">
+        <createIndex indexName="idx_person_evidence_copy_store" tableName="person_evidence_copy">
+            <column name="store_id"/>
+            <column name="state"/>
+        </createIndex>
+    </changeSet>
 </databaseChangeLog>

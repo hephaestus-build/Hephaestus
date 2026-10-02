@@ -41,7 +41,12 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                     public PersonDataSelection select(PersonScope person) {
                         java.util.Set<PersonDataSelection.RowKey> rows = new java.util.LinkedHashSet<>(
                                 super.select(person).rows());
-                        evidenceCopies.forEach(copy -> copy.jobsContaining(person)
+                        evidenceCopies.forEach(copy -> copy.jobsContaining(person).stream()
+                                .filter(id -> Boolean.TRUE.equals(jdbc.getJdbcTemplate()
+                                        .queryForObject(
+                                                "SELECT EXISTS(SELECT 1 FROM agent_job WHERE id=?)",
+                                                Boolean.class,
+                                                id)))
                                 .forEach(id -> rows.add(
                                         new PersonDataSelection.RowKey(java.util.Map.of("id", id.toString())))));
                         return new PersonDataSelection(rows.stream()

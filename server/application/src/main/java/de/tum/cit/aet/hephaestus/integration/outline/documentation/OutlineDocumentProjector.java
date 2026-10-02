@@ -46,6 +46,7 @@ public class OutlineDocumentProjector implements DocumentProjection {
     private final OutlineIdentityResolver identityResolver;
     private final OutlineDocumentSelector documentSelector;
     private final OutlineOriginPolicy originPolicy;
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies;
 
     public OutlineDocumentProjector(
             OutlineDocumentRepository documentRepository,
@@ -53,13 +54,15 @@ public class OutlineDocumentProjector implements DocumentProjection {
             ConnectionService connectionService,
             OutlineIdentityResolver identityResolver,
             OutlineDocumentSelector documentSelector,
-            OutlineOriginPolicy originPolicy) {
+            OutlineOriginPolicy originPolicy,
+            de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder personCopies) {
         this.documentRepository = documentRepository;
         this.collectionRepository = collectionRepository;
         this.connectionService = connectionService;
         this.identityResolver = identityResolver;
         this.documentSelector = documentSelector;
         this.originPolicy = originPolicy;
+        this.personCopies = personCopies;
     }
 
     @Override
@@ -151,8 +154,23 @@ public class OutlineDocumentProjector implements DocumentProjection {
     }
 
     /** Maps a mirrored row to the agent view; a tombstoned/evicted document serves a null body. */
-    private static ProjectedDocument project(
-            OutlineDocument doc, AuthorContext authors, Map<String, String> collectionNames) {
+    private ProjectedDocument project(OutlineDocument doc, AuthorContext authors, Map<String, String> collectionNames) {
+        connectionService
+                .findInWorkspace(doc.getWorkspaceId(), doc.getConnectionId())
+                .ifPresent(connection -> {
+                    if (connection.getConfig() instanceof ConnectionConfig.OutlineConfig config
+                            && config.serverUrl() != null) {
+                        var subjects = new LinkedHashSet<String>();
+                        if (doc.getCreatedBySubject() != null) subjects.add(doc.getCreatedBySubject());
+                        if (doc.getUpdatedBySubject() != null) subjects.add(doc.getUpdatedBySubject());
+                        if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
+                        subjects.stream()
+                                .filter(subject -> !subject.isBlank())
+                                .forEach(subject -> personCopies.recordIdentity(
+                                        new de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity(
+                                                "OUTLINE", config.serverUrl(), subject, connection.getInstanceKey())));
+                    }
+                });
         boolean deleted = doc.isDeleted();
         String body = deleted ? null : doc.getBodyMarkdown();
         return new ProjectedDocument(
