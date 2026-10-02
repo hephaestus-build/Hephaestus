@@ -20047,8 +20047,9 @@ components:
           description: "GitLab workspace provider config, null if not available"
     WorkspaceReviewScope:
       type: object
-      description: Selecting specific repositories or people with an empty selection
-        admits nobody. A selected repository without branches admits all its branches.
+      description: An empty repository selection admits no repository work; an empty
+        person selection admits nobody. A selected repository without branches admits
+        all its branches.
       properties:
         personMode:
           type: string

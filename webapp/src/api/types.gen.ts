@@ -7003,7 +7003,7 @@ export type WorkspaceProviders = {
 };
 
 /**
- * Selecting specific repositories or people with an empty selection admits nobody. A selected repository without branches admits all its branches.
+ * An empty repository selection admits no repository work; an empty person selection admits nobody. A selected repository without branches admits all its branches.
  */
 export type WorkspaceReviewScope = {
   personMode: 'ALL_ELIGIBLE' | 'SELECTED';

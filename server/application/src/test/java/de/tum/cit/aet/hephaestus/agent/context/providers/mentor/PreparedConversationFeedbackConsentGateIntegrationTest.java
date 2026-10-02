@@ -40,6 +40,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
+import de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
 import java.time.Instant;
 import java.util.HashMap;
@@ -292,16 +293,36 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
     }
 
     @Test
-    void aPreparedFactIsWithheldAfterRepositorylessWorkLeavesCoverage() {
+    void shouldApplyPeopleCoverageWithoutRevivingSuppressedConversationFeedback() {
         long threadId = seedThread("C-active", "100.0", ConsentState.ACTIVE);
         AgentJob job = conversationJob(threadId);
-        saveConversationObservation(job, "occ-outside-coverage", threadId);
+        Observation observation = saveConversationObservation(job, "occ-outside-coverage", threadId);
         prepareFor(job);
-        assertThat(contribute().get("preparedConversationFeedback")).hasSize(1);
+        JsonNode covered = contribute().get("preparedConversationFeedback");
+        assertThat(covered).hasSize(1);
+        assertThat(covered.get(0).get("observationId").asString())
+                .isEqualTo(observation.getId().toString());
         workspace.getReviewSettings().setRepositoryCoverageMode(ReviewRepositoryMode.SELECTED);
         workspaceRepository.saveAndFlush(workspace);
 
+        assertThat(contribute().get("preparedConversationFeedback")).hasSize(1);
+        workspace.getReviewSettings().setPersonCoverageMode(ReviewPersonMode.SELECTED);
+        workspaceRepository.saveAndFlush(workspace);
+
         assertThat(contribute().get("preparedConversationFeedback")).isEmpty();
+
+        workspace.getReviewSettings().setPersonCoverageMode(ReviewPersonMode.ALL_ELIGIBLE);
+        workspaceRepository.saveAndFlush(workspace);
+
+        assertThat(contribute().get("preparedConversationFeedback")).isEmpty();
+        AgentJob resumedJob = conversationJob(threadId);
+        Observation resumed = saveConversationObservation(resumedJob, "occ-restored-coverage", threadId);
+        prepareFor(resumedJob);
+
+        JsonNode restored = contribute().get("preparedConversationFeedback");
+        assertThat(restored).hasSize(1);
+        assertThat(restored.get(0).get("observationId").asString())
+                .isEqualTo(resumed.getId().toString());
     }
 
     @Test
