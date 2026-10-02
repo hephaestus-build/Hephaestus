@@ -81,7 +81,7 @@ sequenceDiagram
 - **Work, not time, bounds a turn.** Each turn gets its own budget of model calls and output tokens:
   `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS` per practice it
   carries, never less than three practices' worth, whatever earlier turns spent
-  ([practice-review operations](../admin/practice-review-operations.mdx)). The turn text does not
+  ([practice-review operations](/admin/practice-review-operations)). The turn text does not
   state the budget: told its call budget up front, an open model read less and missed more negatives.
   A turn is asked once to record when two calls are left, or when its tokens left only pay for
   the observations it still owes at the tokens per observation the session has shown. It ends at the
