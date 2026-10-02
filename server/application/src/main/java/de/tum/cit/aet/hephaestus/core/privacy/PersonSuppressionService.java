@@ -13,9 +13,13 @@ import org.springframework.stereotype.Service;
 @WorkspaceAgnostic("An instance-wide exact provider identity processing fence")
 public class PersonSuppressionService implements PersonProcessingSuppression {
     private final JdbcTemplate jdbc;
+    private final PersonDataCopyFence copies;
     private final java.util.List<PersonSourceIdentityContributor> sourceOwners;
 
-    public PersonSuppressionService(JdbcTemplate jdbc, java.util.List<PersonSourceIdentityContributor> sourceOwners) {
+    public PersonSuppressionService(
+            JdbcTemplate jdbc,
+            java.util.List<PersonSourceIdentityContributor> sourceOwners,
+            PersonDataCopyFence copies) {
         var kinds = sourceOwners.stream()
                 .flatMap(owner -> owner.artifactKinds().stream())
                 .toList();
@@ -27,8 +31,55 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
                     "Each shipped artifact kind requires exactly one person source attribution owner");
         }
         this.jdbc = jdbc;
+        this.copies = copies;
         this.sourceOwners = java.util.List.copyOf(sourceOwners);
     }
+
+    @org.springframework.context.event.EventListener
+    @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void onProviderInstanceRegistered(PersonProviderInstanceRegistered event) {
+        copies.holdForCapture();
+        inheritProviderControls(jdbc, event.providerId());
+    }
+
+    static void inheritProviderControls(org.springframework.jdbc.core.JdbcOperations jdbc, long providerId) {
+        var instance = jdbc.query(
+                "SELECT type,server_url FROM identity_provider WHERE id=?",
+                (rs, row) -> new ProviderInstance(
+                        Objects.requireNonNull(rs.getString(1)),
+                        ScmOrigin.of(rs.getString(2))
+                                .orElseThrow(() ->
+                                        new IllegalStateException("Provider controls require an exact valid origin"))),
+                providerId);
+        if (instance.size() != 1) throw new IllegalStateException("The exact provider namespace does not exist");
+        var target = instance.getFirst();
+        var equivalent = jdbc
+                .query(
+                        """
+                SELECT DISTINCT p.id,p.server_url FROM identity_provider p
+                JOIN person_suppression s ON s.provider_id=p.id
+                WHERE p.type=? AND p.id<>?
+                """,
+                        (rs, row) -> new ProviderAlias(rs.getLong(1), ScmOrigin.of(rs.getString(2))),
+                        target.type(),
+                        providerId)
+                .stream()
+                .filter(alias -> alias.origin().filter(target.origin()::equals).isPresent())
+                .toList();
+        for (var alias : equivalent) {
+            jdbc.update("""
+                    INSERT INTO person_suppression(id,provider_id,subject,team_key,active_request_id)
+                    SELECT gen_random_uuid(),?,subject,team_key,active_request_id
+                    FROM person_suppression WHERE provider_id=?
+                    ON CONFLICT(provider_id,subject,team_key) DO NOTHING
+                    """, providerId, alias.id());
+        }
+    }
+
+    private record ProviderInstance(String type, String origin) {}
+
+    private record ProviderAlias(long id, java.util.Optional<String> origin) {}
 
     public void suppress(PersonScope scope, UUID requestId) {
         for (PersonIdentity i : scope.identities()) {

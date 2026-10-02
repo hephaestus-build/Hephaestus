@@ -256,4 +256,15 @@ ALTER TABLE auth_event ADD CONSTRAINT ck_auth_event_event_type CHECK (event_type
     <sql>ALTER TABLE oauth_state_nonce RENAME CONSTRAINT fk_oauth_state_nonce_actor_account TO sfk_oauth_state_nonce_actor_account;</sql>
     <rollback><sql>ALTER TABLE oauth_state_nonce RENAME CONSTRAINT sfk_oauth_state_nonce_actor_account TO fk_oauth_state_nonce_actor_account;</sql></rollback>
   </changeSet>
+    <changeSet id="1790837066126-24" author="hephaestus">
+        <preConditions onFail="HALT">
+            <tableExists tableName="connection"/>
+            <tableExists tableName="identity_provider"/>
+            <tableExists tableName="person_suppression"/>
+            <tableExists tableName="outline_document"/>
+        </preConditions>
+        <comment>Register known source instances for people without accounts; retain exact source URL spelling and carry existing native controls across equivalent origins. No display attribution is matched or inferred.</comment>
+        <customChange class="de.tum.cit.aet.hephaestus.core.privacy.PersonSourceProviderBackfillChange"/>
+        <rollback><stop>Restore the verified pre-upgrade backup to reverse source namespace registration; do not remove provider references or native processing controls.</stop></rollback>
+    </changeSet>
 </databaseChangeLog>

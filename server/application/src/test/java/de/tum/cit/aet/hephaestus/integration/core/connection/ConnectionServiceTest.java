@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -98,7 +99,8 @@ class ConnectionServiceTest extends BaseUnitTest {
                         credentialConverter,
                         transactionManager,
                         new SyncTaskExecutor(),
-                        Clock.systemUTC()));
+                        Clock.systemUTC()),
+                mock(SourceProviderNamespaces.class));
         // Default: the connection is free. Only the disconnect fence ever asks.
         Mockito.lenient()
                 .when(syncJobService.requestCancelForTeardown(anyLong()))

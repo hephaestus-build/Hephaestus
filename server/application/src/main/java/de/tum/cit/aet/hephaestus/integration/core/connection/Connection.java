@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionChangedEvent.Problem;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.CredentialBundle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -258,6 +260,16 @@ public class Connection {
     }
 
     public void setConfig(ConnectionConfig config) {
+        if (instanceKey != null && kind != null && this.config != null) {
+            var previous = PersonSourceNamespace.from(kind.name(), SourceProviderNamespaces.configuredUrl(this.config));
+            var next = PersonSourceNamespace.from(kind.name(), SourceProviderNamespaces.configuredUrl(config));
+            if (previous.isPresent()
+                    && next.isPresent()
+                    && !ScmOrigin.of(previous.orElseThrow().serverUrl())
+                            .equals(ScmOrigin.of(next.orElseThrow().serverUrl())))
+                throw new IllegalStateException(
+                        "A bound connection cannot change provider instance; create a new connection");
+        }
         this.config = config;
     }
 

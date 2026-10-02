@@ -289,6 +289,33 @@ reconciliation procedure above before processing resumes. Do not claim selective
 The [personal-data map](./dsms/personal-data-map) owns store-specific export, removal and residual
 retention. The [record of processing](./dsms/record-of-processing) owns the legal and retention record.
 
+### Exact source bindings for person requests
+
+A connected GitHub, GitLab, Slack or Outline source is available in the person-request provider list,
+even when the person has no account. Use its exact native user ID and, for Slack, native workspace ID.
+A connected source cannot be changed to a different provider instance; create a new connection.
+Equivalent host case and default-port spellings remain the same instance and keep processing controls.
+
+The upgrade registers existing source instances. If it reports an Outline connection with mirrored
+documents but no provider instance, restore a verified state with that exact binding before upgrading.
+Visible document content stays. Names, logins, email addresses and document text are not binding proof.
+
+### An evidence store is offline
+
+Person erasure records a deletion request for each mounted store that captured the person's data.
+The owning worker cancels the affected attempt and removes the whole job folder, including failed
+rendering folders and retries. It confirms deletion only after the runtime releases its folder.
+A server that has no such folder cannot confirm deletion for another worker's volume.
+
+If the mounted owner does not confirm deletion, the request fails and can be resumed. Restore the
+same worker volume, let its deletion poll run, then resume the request in instance administration.
+The store identity stays on the volume across a worker restart. Do not replace the volume with an
+empty one and report the old copy as erased. Keep a disconnected old volume under access controls
+until its copy has been removed and its deletion has been confirmed.
+
+This does not change the normal job-folder contract: admission removes the admitted folder,
+ended attempts have a one-hour grace period, and restart cleanup removes old attempts.
+
 ### Git history and repository owners
 
 The JSON export's `git_repository_history` section lists repositories whose history may contain the
@@ -469,19 +496,3 @@ Workspace connection alerts cover recorded Slack credential revocation and verif
 suspension, with paired recovery. Intentional disconnection, routine token refresh, and first-time
 connection are not incidents. GitLab and Outline do not yet expose equivalent durable incident
 signals; monitor their existing health/configuration surfaces rather than assuming email coverage.
-
-### An evidence store is offline
-
-Person erasure records a deletion request for each mounted store that captured the person's data.
-The owning worker cancels the affected attempt and removes the whole job folder, including failed
-rendering folders and retries. It confirms deletion only after the runtime releases its folder.
-A server that has no such folder cannot confirm deletion for another worker's volume.
-
-If the mounted owner does not confirm deletion, the request fails and can be resumed. Restore the
-same worker volume, let its deletion poll run, then resume the request in instance administration.
-The store identity stays on the volume across a worker restart. Do not replace the volume with an
-empty one and report the old copy as erased. Keep a disconnected old volume under access controls
-until its copy has been removed and its deletion has been confirmed.
-
-This does not change the normal job-folder contract: admission removes the admitted folder,
-ended attempts have a one-hour grace period, and restart cleanup removes old attempts.

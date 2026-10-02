@@ -38,6 +38,14 @@ public class PostgresPersonDataCopyFence implements PersonDataCopyFence {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public void holdForCapture() {
+        if (!"read committed".equals(jdbc.queryForObject("SHOW transaction_isolation", String.class)))
+            throw new IllegalStateException("Copy admission requires a READ_COMMITTED transaction");
+        jdbc.query("SELECT pg_advisory_xact_lock_shared(2165,1)", rs -> {});
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public void holdForErasure() {
         jdbc.query("SELECT pg_advisory_xact_lock(2165,1)", rs -> {});
     }

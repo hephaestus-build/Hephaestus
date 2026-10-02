@@ -52,6 +52,7 @@ public class ConnectionService {
 
     private final TransactionTemplate providerTeardownTemplate;
     private final CredentialReader credentialReader;
+    private final SourceProviderNamespaces sourceNamespaces;
 
     public ConnectionService(
             ConnectionRepository connectionRepository,
@@ -60,8 +61,10 @@ public class ConnectionService {
             ApplicationEventPublisher eventPublisher,
             SyncJobService syncJobService,
             PlatformTransactionManager transactionManager,
-            CredentialReader credentialReader) {
+            CredentialReader credentialReader,
+            SourceProviderNamespaces sourceNamespaces) {
         this.connectionRepository = connectionRepository;
+        this.sourceNamespaces = sourceNamespaces;
         this.credentialReader = credentialReader;
         this.auditRepository = auditRepository;
         this.credentialConverter = credentialConverter;
@@ -279,7 +282,11 @@ public class ConnectionService {
                         + " → "
                         + next.getClass().getSimpleName());
             }
+            boolean namespaceChanged = !Objects.equals(
+                    SourceProviderNamespaces.configuredUrl(c.getConfig()),
+                    SourceProviderNamespaces.configuredUrl(next));
             c.setConfig(next);
+            if (namespaceChanged) sourceNamespaces.ensure(kind, next);
             return connectionRepository.save(c);
         });
     }
@@ -528,6 +535,8 @@ public class ConnectionService {
             throw new IllegalStateException(
                     "Illegal transition for connection " + connection.getId() + ": " + current + " → " + req.next());
         }
+        if (req.next() == IntegrationState.ACTIVE)
+            sourceNamespaces.ensure(connection.getKind(), connection.getConfig());
         if (beforeLocalTransition != null) {
             beforeLocalTransition.accept(connection);
         }

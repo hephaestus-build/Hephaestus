@@ -89,6 +89,17 @@ and native write locks use that same type, origin and native subject, including 
 registered after erasure. Adding an equivalent provider row cannot reset a processing control.
 Slack workspace keys still distinguish suppression decisions; sharing a lock does not merge teams.
 
+Source connections register their provider instance even when nobody signs in through that provider.
+`server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/SourceProviderNamespaces.java`
+runs before activation and before an exact source URL spelling changes. Registration and native-control
+inheritance commit together, under capture admission. The synchronous listener in
+`server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/PersonSuppressionService.java`
+copies only exact type/origin/subject/Slack-workspace controls; it does not infer account ownership.
+Existing sources are registered by
+`server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/PersonSourceProviderBackfillChange.java`.
+A bound connection cannot be changed to a different network origin. A legacy Outline mirror without
+an exact provider instance stops the upgrade instead of guessing a binding or deleting visible work.
+
 Each active database store has an export and erasure contributor in its owning module. The shared
 mechanics in `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/spi/JdbcPersonDataStore.java`
 apply only the frozen row keys. The catalog owns the exact identity predicate, export field allowlist

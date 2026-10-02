@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.*;
+import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import java.util.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -42,6 +43,7 @@ public class ScmPersonSourceIdentityContributor implements PersonSourceIdentityC
 
     @Override
     public List<PersonIdentity> identitiesForSource(long workspaceId, String artifactKind, long artifactId) {
+        boolean connected = connectedToWorkspace(workspaceId, artifactId);
         return jdbc.query(
                 "SELECT DISTINCT u.provider_id,u.native_id::text FROM (" + ROLES + """
                 ) roles JOIN issue i ON i.id=roles.artifact_id
@@ -49,20 +51,51 @@ public class ScmPersonSourceIdentityContributor implements PersonSourceIdentityC
                 JOIN identity_provider p ON p.id=r.provider_id
                 JOIN "user" u ON u.id=roles.user_id
                 WHERE i.id=? AND (
-                    EXISTS (SELECT 1 FROM repository_to_monitor rm JOIN connection c ON c.workspace_id=rm.workspace_id
-                        WHERE rm.workspace_id=? AND rm.native_id=r.native_id AND c.kind=p.type
-                            AND p.server_url=COALESCE(c.config->>'serverUrl',
-                                CASE c.kind WHEN 'GITHUB' THEN 'https://github.com' WHEN 'GITLAB' THEN 'https://gitlab.com' END))
+                    ?
                     OR EXISTS (SELECT 1 FROM artifact_signal a WHERE a.workspace_id=?
                         AND a.artifact_kind=? AND a.artifact_id=i.id)) AND ((?='scm.pull_request' AND i.issue_type='PULL_REQUEST')
                     OR (?='scm.issue' AND i.issue_type='ISSUE'))
                 """,
                 (rs, row) -> new PersonIdentity(rs.getLong(1), Objects.requireNonNull(rs.getString(2)), null),
                 artifactId,
-                workspaceId,
+                connected,
                 workspaceId,
                 artifactKind,
                 artifactKind,
                 artifactKind);
     }
+
+    private boolean connectedToWorkspace(long workspaceId, long artifactId) {
+        var sources = jdbc.query(
+                """
+                SELECT r.native_id,p.type,p.server_url FROM issue i
+                JOIN repository r ON r.id=i.repository_id JOIN identity_provider p ON p.id=r.provider_id
+                WHERE i.id=?
+                """,
+                (rs, row) -> new RepositorySource(
+                        rs.getLong(1), Objects.requireNonNull(rs.getString(2)), ScmOrigin.of(rs.getString(3))),
+                artifactId);
+        if (sources.isEmpty()) return false;
+        var source = sources.getFirst();
+        if (source.origin().isEmpty()) return false;
+        return jdbc
+                .query(
+                        """
+                SELECT c.kind,c.config->>'serverUrl' FROM repository_to_monitor rm
+                JOIN connection c ON c.workspace_id=rm.workspace_id
+                WHERE rm.workspace_id=? AND rm.native_id=? AND c.kind=?
+                """,
+                        (rs, row) -> PersonSourceNamespace.from(
+                                        Objects.requireNonNull(rs.getString(1)), rs.getString(2))
+                                .map(namespace ->
+                                        ScmOrigin.of(namespace.serverUrl()).equals(source.origin()))
+                                .orElse(false),
+                        workspaceId,
+                        source.nativeRepositoryId(),
+                        source.type())
+                .stream()
+                .anyMatch(Boolean::booleanValue);
+    }
+
+    private record RepositorySource(long nativeRepositoryId, String type, Optional<String> origin) {}
 }

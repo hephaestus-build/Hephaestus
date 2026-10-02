@@ -19,3 +19,10 @@ Heph's hidden conversation memory resets once on upgrade. Old runtime journals h
 exact-person provenance, so the migration clears them without matching text, names, logins or emails.
 Every visible message, conversation title and time stays. Recovery of the cleared hidden journals
 requires a verified pre-upgrade backup. Users may need to repeat earlier context to Heph.
+
+Existing source connections are registered for exact person requests, including Slack and Outline
+sources with no account login. This creates only provider reference data and carries native processing
+controls across equivalent origins. It does not change visible content or infer identity ownership.
+If an Outline connection has mirrored documents but no exact provider instance, the upgrade stops and
+names that connection ID. Restore a verified state with its exact source binding before upgrading;
+do not recover a binding from names, logins, email addresses or document content.

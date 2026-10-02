@@ -6,6 +6,9 @@ public interface PersonDataCopyFence {
 
     Lease erase();
 
+    /** Short READ_COMMITTED writes retain capture admission until their transaction commits. */
+    void holdForCapture();
+
     void holdForErasure();
 
     interface Lease extends AutoCloseable {

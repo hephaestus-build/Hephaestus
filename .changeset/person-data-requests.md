@@ -71,3 +71,8 @@ A provider instance added after erasure cannot reset a processing control by cha
 adding a default port. Native identity write locks use the same exact provider origin, so an admitted
 write on an equivalent provider record must finish before erasure checks its scope. Different
 providers, non-default ports, native users and Slack workspaces remain separate identities.
+
+Slack and Outline connections register their provider instance without requiring an account login.
+Connecting another workspace to the same exact instance carries existing processing controls forward,
+including ranked document search. Changing a connected source to a different instance requires a new
+connection; a URL spelling change does not change the instance.
