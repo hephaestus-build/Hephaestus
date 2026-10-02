@@ -23,7 +23,7 @@ that audience.
 
 - No developer is named, ranked or placed in an order of people.
 - Nothing another reader sees can be traced back to one developer.
-- The comparison is the reader's choice and never their first impression.
+- The comparison is the reader's choice: one switch turns it off, and it is remembered.
 - The rule that decides what may be shown has one home.
 
 ## Considered options
@@ -49,10 +49,13 @@ attention, Mixed feedback and Going well, counted in developers.
   total. When it holds, a three way split with a part under five collapses to those two. Collapse
   before omit, omit rather than show a small number. Each window (term, 30 days, 90 days) is checked
   on its own.
-- The tiles show the reader's own figure and the middle half of the observed developers, never a
-  minimum, maximum, average or count at one value. There is no tile for feedback.
-- Design C: each group first asks where the reader thinks they stand. The estimate stays in the
-  reader's browser, is never sent to the server and enters no workspace figure.
+- A group's practices are split by the same rule over the same observed developers, each practice on
+  its own, so a practice collapses or is withheld more often than its group.
+- The tiles show the reader's own figure and the middle half of the observed developers, the 25th
+  to the 75th percentile, never a minimum, maximum, average or count at one value. The open feedback
+  tile counts per developer what their Practice profile shows open, by the profile's own rule.
+- The page asks for no estimate first. Every group shows at once, and every comparison leads back to
+  the reader's own group or practice on their Practice profile.
 - Workspace admins read nothing new. Instance administrators read the page through **View as user**,
   as they read every other practice page.
 
@@ -72,10 +75,8 @@ attention, Mixed feedback and Going well, counted in developers.
   look-back, the same evidence as *90 days*.
 - **Zero counts.** A bucket holding no other developer is treated as too small, which collapses more
   splits than strictly needed.
-- **When the page asks again**, per term or per changed standing, and whether to measure design C
-  against a page that does not ask.
-- **The link to Heph** after every group is answered is left out until Heph can talk about estimates
-  that never leave the browser.
+- **Whether to ask first.** A version that asked for the reader's estimate before showing each split
+  was built and set aside; whether reflecting first helps is left for a user test.
 
 ## Revisit trigger
 
