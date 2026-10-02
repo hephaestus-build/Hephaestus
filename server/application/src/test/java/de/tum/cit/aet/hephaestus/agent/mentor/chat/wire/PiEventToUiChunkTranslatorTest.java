@@ -457,6 +457,46 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
     // synthetic runner events (snake-case, runner-owned)
 
+    @ParameterizedTest
+    @ValueSource(strings = {"error", "aborted"})
+    void shouldFailWhenTheSettledAssistantDidNotFinish(String stopReason) throws Exception {
+        translator.translate(fixture("message_start_assistant.json"), state);
+        streamDeltas("Let me check.");
+        ObjectNode end = mapper.createObjectNode().put("type", "agent_end");
+        ObjectNode assistant = end.putArray("messages").addObject();
+        assistant
+                .put("role", "assistant")
+                .put("stopReason", stopReason)
+                .put("errorMessage", "502 private upstream details");
+        assistant.putArray("content").addObject().put("type", "text").put("text", "Let me check.");
+
+        List<UIMessageChunk> out = translator.translate(end, state);
+
+        assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "Error");
+        assertThat(((UIMessageChunk.Error) out.get(1)).errorText())
+                .isEqualTo("Heph couldn't finish this reply. Please try again.");
+        assertThat(state.partsSnapshot().toString()).contains("Let me check.");
+    }
+
+    @Test
+    void shouldFinishWhenTheLastAssistantRecoveredFromAnEarlierError() throws Exception {
+        ObjectNode failed = mapper.createObjectNode().put("role", "assistant").put("stopReason", "error");
+        failed.putArray("content");
+        ObjectNode messageEnd = mapper.createObjectNode().put("type", "message_end");
+        messageEnd.set("message", failed);
+        assertThat(translator.translate(messageEnd, state)).isEmpty();
+        streamMessage("Here is the answer.");
+        ObjectNode end = mapper.createObjectNode().put("type", "agent_end");
+        end.putArray("messages")
+                .add(failed)
+                .add(agentEnd("Here is the answer.").path("messages").get(0));
+
+        List<UIMessageChunk> out = translator.translate(end, state);
+
+        assertThat(out).hasSize(1).first().isInstanceOf(UIMessageChunk.Finish.class);
+        assertThat(((UIMessageChunk.Finish) out.get(0)).finishReason()).isEqualTo(UIMessageChunk.FinishReason.STOP);
+    }
+
     @Test
     void piError_emitsError() throws Exception {
         JsonNode event = mapper.readTree("{\"type\":\"pi_error\",\"error\":\"upstream timeout\"}");

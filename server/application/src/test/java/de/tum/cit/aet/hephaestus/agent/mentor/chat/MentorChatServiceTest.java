@@ -738,6 +738,54 @@ class MentorChatServiceTest extends BaseUnitTest {
         assertThat(emitter.recordedTypes()).doesNotContain("finish");
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldSettleTheFinalSdkAttemptWithoutCompletingAnExhaustedFailure(boolean recovered) {
+        scheduleResponses(sandbox, prompt -> {
+            for (int attempt = 0; attempt < 6; attempt++) {
+                sandbox.push(assistantStart());
+                sandbox.push(event("message_end", n -> {
+                    ObjectNode message = n.putObject("message");
+                    message.put("role", "assistant")
+                            .put("stopReason", "error")
+                            .put("errorMessage", "502 private upstream details");
+                    message.putArray("content");
+                }));
+            }
+            if (recovered) {
+                sandbox.push(assistantStart());
+                sandbox.push(textDelta("Here is the answer."));
+                sandbox.push(assistantEnd("Here is the answer."));
+            }
+            sandbox.push(event("agent_end", n -> {
+                ObjectNode message = n.putArray("messages").addObject();
+                message.put("role", "assistant")
+                        .put("stopReason", recovered ? "stop" : "error")
+                        .put("errorMessage", "502 private upstream details");
+                var content = message.putArray("content");
+                if (recovered) content.addObject().put("type", "text").put("text", "Here is the answer.");
+            }));
+        });
+
+        runTurnSync();
+
+        String wire = String.join("", emitter.rawData);
+        assertThat(wire).contains("[DONE]").doesNotContain("502", "private upstream");
+        if (recovered) {
+            assertThat(emitter.recordedTypes()).contains("finish").doesNotContain("error");
+            verify(persistence).complete(any(), any(), any());
+            verify(persistence, never()).interrupt(any(), any(), any());
+            assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
+        } else {
+            assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
+            assertThat(wire).contains("Heph couldn't finish this reply. Please try again.");
+            verify(persistence).interrupt(any(), any(), any());
+            verify(persistence, never()).complete(any(), any(), any());
+            verify(persistence, never()).recordDelivery(any(), any());
+            assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
+        }
+    }
+
     @Test
     void shouldRunTheNextTurnOnAFreshSandboxWhenTheStreamIsLostWhileASaveFails() throws Exception {
         FakeSandbox fresh = new FakeSandbox();
