@@ -925,16 +925,28 @@ class PracticeDetectionPipelineIntegrationTest extends BaseIntegrationTest {
                   {"practiceSlug": "error-handling", "summary": "Missing null check",
                    "assessmentStatus": "ASSESSED", "presence": "ABSENT", "assessment": "GOOD", "severity": "MAJOR",
                    "evidenceRationale": "The method does not check for null input."},
-                  {"practiceSlug": "error-handling", "summary": "Second unchecked input",
+                  {"practiceSlug": "input-validation", "summary": "Second unchecked input",
                    "assessmentStatus": "ASSESSED", "presence": "ABSENT", "assessment": "GOOD", "severity": "MINOR",
                    "evidenceRationale": "The parser does not check its input either."},
-                  {"practiceSlug": "pr-description-quality", "summary": "The description names the issue",
+                  {"practiceSlug": "links-the-issue", "summary": "The description names the issue",
                    "assessmentStatus": "ASSESSED", "presence": "PRESENT", "assessment": "GOOD", "severity": null,
                    "evidenceRationale": "The body closes the issue."}
                 ]}""";
 
         @Test
         void aLineNoteThatNeverLandsIsRecordedFailedAndNotBehindTheDeliveredComment() {
+            ObjectNode snapshot = (ObjectNode) agentJob.getEvidenceSnapshot().deepCopy();
+            for (Practice practice : List.of(
+                    createPractice("input-validation", "Input Validation"),
+                    createPractice("links-the-issue", "Links the Issue"))) {
+                EvidenceSnapshotFixtures.admittedPractice(
+                        snapshot,
+                        practice.getSlug(),
+                        java.util.Objects.requireNonNull(
+                                practice.getCurrentRevision().getId()));
+            }
+            agentJob.setEvidenceSnapshot(snapshot);
+            agentJob = agentJobRepository.saveAndFlush(agentJob);
             setJobOutput(FOUR_OBSERVATIONS);
             List<Observation> rows = observationRepository.findByAgentJobId(agentJob.getId(), workspace.getId());
             Observation summarised = row(rows, "The description never says why");
