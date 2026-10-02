@@ -22,10 +22,9 @@ VALUES ('GITLAB', 'https://gitlab.example.test', now())
 ON CONFLICT (type, server_url) DO NOTHING;
 
 INSERT INTO workspace (id, account_login, account_type, created_at, display_name, is_publicly_viewable, slug, status,
-  practices_enabled, leaderboard_enabled, progression_enabled, leagues_enabled,
-  practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled, mentor_enabled)
+  practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
 VALUES (20, 'ext', 'ORG', now(), 'Extension E2E', false, 'ext-e2e', 'ACTIVE',
-  true, false, false, false, true, true, false)
+  true, true, true)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO connection (workspace_id, kind, instance_key, state, config, created_at, updated_at, version)
@@ -41,8 +40,8 @@ SELECT 920001, now(), now(), 'https://gitlab.example.test/ext/demo', false, fals
 FROM identity_provider p WHERE p.type = 'GITLAB' AND p.server_url = 'https://gitlab.example.test'
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO repository_to_monitor (id, name_with_owner, workspace_id, native_id)
-VALUES (920001, 'ext/demo', 20, 920001)
+INSERT INTO repository_to_monitor (id, name_with_owner, workspace_id, native_id, generated_paths)
+VALUES (920001, 'ext/demo', 20, 920001, '[]'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO "user" (id, native_id, provider_id, login, name, type, avatar_url, html_url, created_at, updated_at)
@@ -70,8 +69,8 @@ VALUES ('6f1c2a90-2b7e-4c1d-9a8f-0e1d2c3b4a59', 20, 'scm.pull_request', 920010, 
   now() - interval '30 minutes', 'EVENT', 'SUPPRESSED', 'REVIEW_MODEL_UNBOUND', now() - interval '30 minutes')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at)
-VALUES (20, 900001, 'ADMIN', 0, false, now())
+INSERT INTO workspace_membership (workspace_id, user_id, role, hidden, created_at)
+VALUES (20, 900001, 'ADMIN', false, now())
 ON CONFLICT DO NOTHING;
 
 INSERT INTO issue (issue_type, id, created_at, updated_at, comments_count, html_url, is_locked, number, state, title,
@@ -94,8 +93,8 @@ JOIN identity_provider p ON p.type = 'GITLAB' AND p.server_url = 'https://gitlab
 WHERE a.primary_email = 'e2e-dev@dev.invalid'
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at)
-VALUES (20, 920003, 'MEMBER', 0, false, now())
+INSERT INTO workspace_membership (workspace_id, user_id, role, hidden, created_at)
+VALUES (20, 920003, 'MEMBER', false, now())
 ON CONFLICT DO NOTHING;
 
 INSERT INTO issue (issue_type, id, created_at, updated_at, comments_count, html_url, is_locked, number, state, title,
@@ -134,26 +133,25 @@ ON CONFLICT (id) DO NOTHING;
 -- A separate repository is monitored by two workspaces, for frame-local workspace choice.
 -- The ordinary ext/demo work remains unambiguous for the other browser tests.
 INSERT INTO workspace (id, account_login, account_type, created_at, display_name, is_publicly_viewable, slug, status,
-  practices_enabled, leaderboard_enabled, progression_enabled, leagues_enabled,
-  practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled, mentor_enabled)
+  practices_enabled, practice_review_auto_trigger_enabled, practice_review_manual_trigger_enabled)
 VALUES (21, 'ext-choice', 'ORG', now(), 'Extension E2E alternate', false, 'ext-e2e-alternate', 'ACTIVE',
-  true, false, false, false, false, false, false)
+  true, false, false)
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO connection (workspace_id, kind, instance_key, state, config, created_at, updated_at, version)
 VALUES (21, 'GITLAB', 'https://gitlab.example.test:', 'ACTIVE',
   '{"type":"GITLAB","serverUrl":"https://gitlab.example.test","gitlabGroupId":null,"gitlabWebhookId":null,"signingMode":"PLAINTEXT","enabledStreams":[]}'::jsonb,
   now(), now(), 0)
 ON CONFLICT (workspace_id, kind, instance_key) DO NOTHING;
-INSERT INTO workspace_membership (workspace_id, user_id, role, league_points, hidden, created_at)
-VALUES (21, 900001, 'ADMIN', 0, false, now()) ON CONFLICT DO NOTHING;
+INSERT INTO workspace_membership (workspace_id, user_id, role, hidden, created_at)
+VALUES (21, 900001, 'ADMIN', false, now()) ON CONFLICT DO NOTHING;
 INSERT INTO repository (id, created_at, updated_at, html_url, is_archived, is_disabled, is_private, name,
   name_with_owner, visibility, has_discussions_enabled, native_id, provider_id)
 SELECT 922001, now(), now(), 'https://gitlab.example.test/ext/choice', false, false, false, 'choice',
   'ext/choice', 'PUBLIC', false, 922001, p.id
 FROM identity_provider p WHERE p.type = 'GITLAB' AND p.server_url = 'https://gitlab.example.test'
 ON CONFLICT (id) DO NOTHING;
-INSERT INTO repository_to_monitor (id, name_with_owner, workspace_id, native_id)
-VALUES (922001, 'ext/choice', 20, 922001), (922002, 'ext/choice', 21, 922001)
+INSERT INTO repository_to_monitor (id, name_with_owner, workspace_id, native_id, generated_paths)
+VALUES (922001, 'ext/choice', 20, 922001, '[]'::jsonb), (922002, 'ext/choice', 21, 922001, '[]'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO issue (issue_type, id, created_at, updated_at, comments_count, html_url, is_locked, number, state, title,
   author_id, repository_id, native_id, provider_id)
