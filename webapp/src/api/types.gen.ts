@@ -7220,10 +7220,6 @@ export type WorkspaceSplit = {
    */
   goingWell?: number;
   /**
-   * Developers with a standing; set only for COLLAPSED
-   */
-  hasStanding?: number;
-  /**
    * Developers at Mixed feedback; set only for SPLIT
    */
   mixedFeedback?: number;
@@ -7232,13 +7228,13 @@ export type WorkspaceSplit = {
    */
   needsAttention?: number;
   /**
-   * Observed developers without one; set for SPLIT and COLLAPSED
+   * Observed developers without a standing here; set only for SPLIT
    */
   noneYet?: number;
   /**
    * How the split may be shown
    */
-  shape: 'SPLIT' | 'COLLAPSED' | 'WITHHELD';
+  shape: 'SPLIT' | 'WITHHELD';
 };
 
 /**

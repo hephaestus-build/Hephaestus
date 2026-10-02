@@ -7967,9 +7967,9 @@ paths:
   /workspaces/{workspaceSlug}/practices/workspace-overview:
     get:
       description: "Counts developers, never names them: a count is shown only when\
-        \ it holds at least 5 developers other than the reader, a group's or a practice's\
-        \ split collapses to has a standing against none yet before it is withheld,\
-        \ and each window is checked on its own."
+        \ it holds at least 3 developers other than the reader, a group's or a practice's\
+        \ split shows all four parts or is withheld, and each window is checked on\
+        \ its own."
       operationId: getPracticesAcrossWorkspace
       parameters:
       - description: Workspace slug
@@ -20620,10 +20620,6 @@ components:
           type: integer
           format: int32
           description: Developers at Going well; set only for SPLIT
-        hasStanding:
-          type: integer
-          format: int32
-          description: Developers with a standing; set only for COLLAPSED
         mixedFeedback:
           type: integer
           format: int32
@@ -20635,13 +20631,12 @@ components:
         noneYet:
           type: integer
           format: int32
-          description: Observed developers without one; set for SPLIT and COLLAPSED
+          description: Observed developers without a standing here; set only for SPLIT
         shape:
           type: string
           description: How the split may be shown
           enum:
           - SPLIT
-          - COLLAPSED
           - WITHHELD
       required:
       - shape

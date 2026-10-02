@@ -39,7 +39,7 @@ class CohortPrivacyPolicyTest {
     }
 
     private static Split split(List<Bucket> observed) {
-        return CohortPrivacyPolicy.split(observed, Shape.SPLIT);
+        return CohortPrivacyPolicy.split(observed);
     }
 
     @Test
@@ -54,52 +54,40 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
-    @DisplayName("every part holding six observed developers shows the split")
-    void shouldShowTheSplitWhenEveryPartHoldsSixDevelopers() {
-        Split split = split(developers(6, 7, 8, 6));
+    @DisplayName("every part holding four observed developers shows the split")
+    void shouldShowTheSplitWhenEveryPartHoldsFourDevelopers() {
+        Split split = split(developers(4, 5, 6, 4));
 
         assertThat(split.shape()).isEqualTo(Shape.SPLIT);
-        assertThat(split.needsAttention()).isEqualTo(6);
-        assertThat(split.mixedFeedback()).isEqualTo(7);
-        assertThat(split.goingWell()).isEqualTo(8);
-        assertThat(split.hasStanding()).isNull();
-        assertThat(split.noneYet()).isEqualTo(6);
+        assertThat(split.needsAttention()).isEqualTo(4);
+        assertThat(split.mixedFeedback()).isEqualTo(5);
+        assertThat(split.goingWell()).isEqualTo(6);
+        assertThat(split.noneYet()).isEqualTo(4);
     }
 
-    /** Five in a part are five others to a reader outside it and four to a reader inside: every reader collapses. */
+    /** Three in a part are three others to a reader outside it and two to a reader inside: every reader is held back. */
     @Test
-    @DisplayName("a part of five collapses the split for every reader, inside it or not")
-    void shouldCollapseAPartOfFiveWhoeverReadsIt() {
-        Split split = split(developers(5, 7, 8, 6));
-
-        assertThat(split.shape()).isEqualTo(Shape.COLLAPSED);
-        assertThat(split.needsAttention()).isNull();
-        assertThat(split.hasStanding()).isEqualTo(20);
-        assertThat(split.noneYet()).isEqualTo(6);
+    @DisplayName("a part of three withholds the whole split for every reader, inside it or not")
+    void shouldWithholdTheSplitWhenAStandingHoldsThree() {
+        assertThat(split(developers(3, 7, 8, 6))).isEqualTo(Split.WITHHELD);
     }
 
     @Test
-    @DisplayName("an empty part collapses the split")
-    void shouldCollapseWhenAPartIsEmpty() {
-        assertThat(split(developers(0, 9, 9, 6)).shape()).isEqualTo(Shape.COLLAPSED);
+    @DisplayName("an empty part withholds the split")
+    void shouldWithholdTheSplitWhenAPartIsEmpty() {
+        assertThat(split(developers(0, 9, 9, 6))).isEqualTo(Split.WITHHELD);
     }
 
     @Test
-    @DisplayName("five without a standing withholds even the collapsed split")
-    void shouldWithholdWhenEvenTheCollapsedSplitWouldCoverTooFew() {
-        assertThat(split(developers(6, 9, 9, 5))).isEqualTo(Split.WITHHELD);
+    @DisplayName("three without a standing withhold the split")
+    void shouldWithholdTheSplitWhenNoneYetHoldsThree() {
+        assertThat(split(developers(6, 9, 9, 3))).isEqualTo(Split.WITHHELD);
     }
 
     @Test
     @DisplayName("everyone at a standing is a none yet of zero and withholds the split")
     void shouldWithholdTheSplitWhenEveryoneHasAStanding() {
         assertThat(split(developers(6, 6, 6, 0))).isEqualTo(Split.WITHHELD);
-    }
-
-    @Test
-    @DisplayName("five with a standing withholds the split however many have none")
-    void shouldWithholdTheSplitWhenHasAStandingHoldsFive() {
-        assertThat(split(developers(1, 1, 3, 20))).isEqualTo(Split.WITHHELD);
     }
 
     @Test
@@ -119,64 +107,60 @@ class CohortPrivacyPolicyTest {
     }
 
     @Test
-    @DisplayName("fewer than ten others observed leaves no middle half")
-    void shouldLeaveNoMiddleHalfWhenFewerThanTenOthersAreObserved() {
-        List<Integer> values = IntStream.rangeClosed(1, 11).boxed().toList();
+    @DisplayName("fewer than six others observed leaves no middle half")
+    void shouldLeaveNoMiddleHalfWhenFewerThanSixOthersAreObserved() {
+        List<Integer> values = IntStream.rangeClosed(1, 7).boxed().toList();
 
-        assertThat(CohortPrivacyPolicy.middleHalf(values, 9)).isNull();
-        assertThat(CohortPrivacyPolicy.middleHalf(values, 10)).isNotNull();
+        assertThat(CohortPrivacyPolicy.middleHalf(values, 5)).isNull();
+        assertThat(CohortPrivacyPolicy.middleHalf(values, 6)).isNotNull();
     }
 
     @Test
-    @DisplayName("the observed total shows from five others, the eligible one while the difference is none or five")
-    void shouldShowEachTotalOnlyWhileItHoldsFiveOthers() {
-        assertThat(CohortPrivacyPolicy.totals(20, 15, true, true)).isEqualTo(new Totals(21, 16));
+    @DisplayName("the observed total shows from three others, the eligible one while the difference is none or three")
+    void shouldShowEachTotalOnlyWhileItHoldsThreeOthers() {
+        assertThat(CohortPrivacyPolicy.totals(20, 17, true, true)).isEqualTo(new Totals(21, 18));
         assertThat(CohortPrivacyPolicy.totals(20, 20, true, false)).isEqualTo(new Totals(21, 20));
-        // One other without a standing would be named by the difference, so the eligible total is held back.
-        assertThat(CohortPrivacyPolicy.totals(20, 19, true, true)).isEqualTo(new Totals(null, 20));
-        // Four others observed: the observed total is held back, and with it nothing to subtract from.
-        assertThat(CohortPrivacyPolicy.totals(6, 4, true, true)).isEqualTo(new Totals(7, null));
+        // Two others without a standing would be named by the difference, so the eligible total is held back.
+        assertThat(CohortPrivacyPolicy.totals(20, 18, true, true)).isEqualTo(new Totals(null, 19));
+        // Two others observed: the observed total is held back, and with it nothing to subtract from.
+        assertThat(CohortPrivacyPolicy.totals(6, 2, true, true)).isEqualTo(new Totals(7, null));
     }
 
     @Test
     @DisplayName("practices that move with their group show beside it")
-    void shouldShowPracticesWhoseCombinationsWithTheGroupHoldFive() {
+    void shouldShowPracticesThatMoveWithTheirGroup() {
         List<Row> others = new ArrayList<>();
-        for (Bucket bucket : developers(5, 5, 5, 5)) {
+        for (Bucket bucket : developers(4, 4, 5, 4)) {
             others.add(new Row(bucket, List.of(bucket, bucket)));
         }
 
-        others.add(new Row(GOING_WELL, List.of(GOING_WELL, GOING_WELL)));
-        others.add(new Row(NEEDS_ATTENTION, List.of(NEEDS_ATTENTION, NEEDS_ATTENTION)));
-        others.add(new Row(MIXED_FEEDBACK, List.of(MIXED_FEEDBACK, MIXED_FEEDBACK)));
-        others.add(new Row(NONE_YET, List.of(NONE_YET, NONE_YET)));
-
-        GroupRelease release = CohortPrivacyPolicy.group(others);
+        GroupRelease release =
+                CohortPrivacyPolicy.group(others, others.getFirst().practices().size());
 
         assertThat(release.group().shape()).isEqualTo(Shape.SPLIT);
         assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.SPLIT, Shape.SPLIT);
-        assertThat(release.practices().getFirst().goingWell()).isEqualTo(6);
+        assertThat(release.practices().getFirst().goingWell()).isEqualTo(5);
     }
 
     /**
-     * The review's case: eighteen judged only on A, eighteen only on B, six on neither and one, X, on both. Each
-     * split holds six on its own, and the group less either practice leaves eighteen, but A and B against the group
-     * would name X: 19 + 19 - 37 = 1 with a standing in both, and the group's counts less A's and B's give X's
-     * buckets.
+     * The review's case: twelve judged only on A, twelve only on B, four on neither and one, X, on both. Each
+     * split holds four in every part on its own, and the group less either practice leaves twelve, but A and B
+     * against the group would name X: 13 + 13 - 25 = 1 with a standing in both, and the group's counts less A's and
+     * B's give X's buckets.
      */
     @Test
     @DisplayName("a developer whom the group and two practices single out together holds the practices back")
     void shouldHoldThePracticesBackWhenTheyAndTheGroupWouldSingleOutOneDeveloper() {
         List<Row> others = new ArrayList<>();
-        for (Bucket bucket : developers(6, 6, 6, 0)) {
+        for (Bucket bucket : developers(4, 4, 4, 0)) {
             others.add(new Row(bucket, List.of(bucket, NONE_YET)));
             others.add(new Row(bucket, List.of(NONE_YET, bucket)));
         }
-        for (int index = 0; index < 6; index++) {
+        for (int index = 0; index < 4; index++) {
             others.add(new Row(NONE_YET, List.of(NONE_YET, NONE_YET)));
         }
         others.add(new Row(MIXED_FEEDBACK, List.of(NEEDS_ATTENTION, GOING_WELL)));
-        // On their own, each of the three splits holds five others in every part.
+        // On their own, each of the three splits holds three others in every part.
         assertThat(split(others.stream().map(row -> row.practices().get(0)).toList())
                         .shape())
                 .isEqualTo(Shape.SPLIT);
@@ -184,33 +168,35 @@ class CohortPrivacyPolicyTest {
                         .shape())
                 .isEqualTo(Shape.SPLIT);
 
-        GroupRelease release = CohortPrivacyPolicy.group(others);
+        GroupRelease release =
+                CohortPrivacyPolicy.group(others, others.getFirst().practices().size());
 
         assertThat(release.group().shape()).isEqualTo(Shape.SPLIT);
-        assertThat(release.group().mixedFeedback()).isEqualTo(13);
+        assertThat(release.group().mixedFeedback()).isEqualTo(9);
         assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.WITHHELD, Shape.WITHHELD);
     }
 
     /**
      * Whatever the cohort, nothing the page shows lets a reader work out how many others have a standing in both
-     * practices of a group but a number that is none or at least five: has a standing in A, plus in B, less in the
+     * practices of a group but a number that is none or at least K: has a standing in A, plus in B, less in the
      * group, which counts everyone with a standing in either.
      */
     @Test
-    @DisplayName("no cohort lets the group and its practices name 1 to 4 developers with a standing in both")
-    void shouldNeverLetTheGroupAndItsPracticesNameFewerThanFiveOthersInBoth() {
+    @DisplayName("no cohort lets the group and its practices name 1 to K - 1 developers with a standing in both")
+    void shouldNeverLetTheGroupAndItsPracticesNameFewerThanKOthersInBoth() {
         Random random = new Random(51);
         Bucket[] buckets = Bucket.values();
         for (int cohort = 0; cohort < 2000; cohort++) {
             List<Row> others = new ArrayList<>();
-            int size = 10 + random.nextInt(30);
+            int size = 8 + random.nextInt(30);
             for (int index = 0; index < size; index++) {
                 Bucket a = buckets[random.nextInt(buckets.length)];
                 Bucket b = buckets[random.nextInt(buckets.length)];
                 others.add(new Row(a != NONE_YET ? a : b, List.of(a, b)));
             }
 
-            GroupRelease release = CohortPrivacyPolicy.group(others);
+            GroupRelease release = CohortPrivacyPolicy.group(
+                    others, others.getFirst().practices().size());
 
             Integer group = hasStanding(release.group());
             Integer a = hasStanding(release.practices().get(0));
@@ -229,20 +215,30 @@ class CohortPrivacyPolicyTest {
      * practice would count those developers.
      */
     @Test
-    @DisplayName("a practice whose split falls short of its group's by fewer than five is withheld")
-    void shouldWithholdAPracticeThatFallsShortOfItsGroupByFewerThanFive() {
+    @DisplayName("a practice whose split falls short of its group's by fewer than three is withheld")
+    void shouldWithholdAPracticeThatFallsShortOfItsGroupByFewerThanThree() {
         List<Row> observed = new ArrayList<>();
-        for (Bucket bucket : developers(6, 6, 6, 8)) {
+        for (Bucket bucket : developers(4, 4, 4, 6)) {
             observed.add(new Row(bucket, List.of(bucket)));
         }
         // Two with a group standing from another practice, none yet in this one.
         observed.add(new Row(GOING_WELL, List.of(NONE_YET)));
         observed.add(new Row(GOING_WELL, List.of(NONE_YET)));
 
-        GroupRelease release = CohortPrivacyPolicy.group(observed);
+        GroupRelease release = CohortPrivacyPolicy.group(
+                observed, observed.getFirst().practices().size());
 
         assertThat(release.group().shape()).isEqualTo(Shape.SPLIT);
         assertThat(release.practices()).extracting(Split::shape).containsExactly(Shape.WITHHELD);
+    }
+
+    @Test
+    @DisplayName("a window nobody was observed in withholds every practice it names")
+    void shouldWithholdEveryPracticeWhenNobodyIsObserved() {
+        GroupRelease release = CohortPrivacyPolicy.group(List.of(), 2);
+
+        assertThat(release.group()).isEqualTo(Split.WITHHELD);
+        assertThat(release.practices()).containsExactly(Split.WITHHELD, Split.WITHHELD);
     }
 
     /** How many a split shows with a standing, or null when it shows no such count. */
@@ -252,7 +248,6 @@ class CohortPrivacyPolicyTest {
                 Objects.requireNonNull(split.needsAttention())
                         + Objects.requireNonNull(split.mixedFeedback())
                         + Objects.requireNonNull(split.goingWell());
-            case COLLAPSED -> split.hasStanding();
             case WITHHELD -> null;
         };
     }
