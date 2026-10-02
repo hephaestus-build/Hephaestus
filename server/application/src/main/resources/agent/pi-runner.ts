@@ -251,7 +251,7 @@ interface AdmittedCitation {
 interface AdmittedObservation {
 	id: string;
 	practiceSlug: string;
-	outcome: Outcome | null;
+	outcome: Outcome;
 	citations: AdmittedCitation[];
 	[key: string]: unknown;
 }
@@ -265,7 +265,7 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 		isRecord(value) &&
 		typeof value.id === "string" &&
 		typeof value.practiceSlug === "string" &&
-		(value.outcome === "MET" || value.outcome === "NOT_MET" || value.outcome === null) &&
+		OUTCOME_VALUES.some((outcome) => outcome === value.outcome) &&
 		Array.isArray(value.citations) &&
 		value.citations.every(isAdmittedCitation)
 	);
