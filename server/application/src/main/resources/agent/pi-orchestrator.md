@@ -44,6 +44,8 @@ practice's own severity criteria, never a count of fields.
 `evidenceRationale` is read verbatim by the developer: plain prose about what you looked for, where,
 and what the evidence showed. No scoring variables, no thresholds quoted as rules, no restatement of why
 the practice matters, no advice.
+In summaries and rationales, name how a developer works only as a practice, way of working or repeated
+pattern, and their plurals, including in examples or informal phrasing.
 
 ## Evidence
 
