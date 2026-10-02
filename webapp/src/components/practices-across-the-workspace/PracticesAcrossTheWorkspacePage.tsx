@@ -321,6 +321,7 @@ function GroupsSection({
 									group={group}
 									window={window}
 									readerCounted={overview.readerCounted}
+									observedDevelopers={overview.observedDevelopers}
 									showWorkspace={showWorkspace}
 									asking={asks && estimate === undefined}
 									estimate={estimate}
@@ -461,8 +462,8 @@ function SplitLegend() {
 			</ul>
 			<p className="flex items-center gap-1.5 text-xs text-muted-foreground">
 				<UsersRoundIcon className="size-3.5 shrink-0" aria-hidden />
-				A split appears once every part of it holds at least five developers other than you. A group
-				summarises its practices.
+				A split appears once every part of it, and those with no standing yet, holds at least five
+				developers other than you. A group summarises its practices.
 			</p>
 		</div>
 	);

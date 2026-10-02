@@ -80,13 +80,13 @@ export const Default: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"11 of the 24 developers observed here this term are Going well, so it is within reach.",
+				"8 of the 24 developers observed here this term are Going well, so it is within reach.",
 			),
 		).toBeVisible();
 		await expect(
 			canvas.getByRole("img", { name: /^24 developers observed/u }),
 		).toHaveAccessibleName(
-			"24 developers observed in this workspace this term: 7 Needs attention, 6 Mixed feedback, 11 Going well. You: Needs attention.",
+			"24 developers observed in this workspace this term: 6 Needs attention, 5 Mixed feedback, 8 Going well, 5 none yet. You: Needs attention.",
 		);
 		await expect(canvas.getByRole("img", { name: "1 of 8 answered" })).toBeVisible();
 	},
@@ -166,7 +166,7 @@ export const Gated: Story = {
 			canvas.getAllByText("Needs more data before the workspace shows here."),
 		).toHaveLength(3);
 		await expect(
-			canvas.getAllByText("Not enough developers observed here to compare yet."),
+			canvas.getAllByText("5 developers observed here this term; the split is held back."),
 		).toHaveLength(8);
 		await expect(canvas.queryAllByRole("img", { name: /developers observed/u })).toHaveLength(0);
 	},

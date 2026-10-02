@@ -19,6 +19,7 @@ import {
 	estimateSentence,
 	reachSentence,
 	standingLabel,
+	withheldSentence,
 } from "./across-workspace-copy";
 import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
@@ -27,6 +28,8 @@ export interface PracticeGroupSplitRowProps {
 	group: WorkspaceGroupSplit;
 	window: AcrossWorkspaceWindow;
 	readerCounted: boolean;
+	/** The workspace's observed total, the only count a withheld group shows. */
+	observedDevelopers: number;
 	/** Whether the workspace's split is shown at all; off, the row is the reader's own standing. */
 	showWorkspace: boolean;
 	/** Whether the row asks before it shows: no estimate yet, with "Ask me first" on. */
@@ -47,12 +50,14 @@ export function PracticeGroupSplitRow({
 	group,
 	window,
 	readerCounted,
+	observedDevelopers,
 	showWorkspace,
 	asking,
 	estimate,
 	onEstimate,
 }: PracticeGroupSplitRowProps) {
-	const reach = showWorkspace && !asking ? reachSentence(group, window) : undefined;
+	const reach =
+		showWorkspace && !asking ? reachSentence(group, window, observedDevelopers) : undefined;
 	return (
 		<li
 			className={cn(
@@ -76,10 +81,15 @@ export function PracticeGroupSplitRow({
 					{showWorkspace &&
 						(group.shape === "WITHHELD" ? (
 							<p className="text-xs text-muted-foreground">
-								Not enough developers observed here to compare yet.
+								{withheldSentence(observedDevelopers, window)}
 							</p>
 						) : (
-							<WorkspaceSplitBar group={group} window={window} readerCounted={readerCounted} />
+							<WorkspaceSplitBar
+								group={group}
+								window={window}
+								readerCounted={readerCounted}
+								observedDevelopers={observedDevelopers}
+							/>
 						))}
 					{estimate !== undefined && (
 						<p className="flex items-start gap-1.5 text-sm text-muted-foreground sm:col-span-2">

@@ -27,9 +27,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * {@code GET /practices/workspace-overview} over a workspace this class seeds: fifteen developers besides the
- * reader, split evenly over one group, thinly over a second and barely over a third, so the three shapes the
- * privacy rule allows each appear once. Every count asserted is one of these rows.
+ * {@code GET /practices/workspace-overview} over a workspace this class seeds: twenty developers besides the
+ * reader, split evenly over one group, thinly over a second, barely over a third and over all but one in a fourth,
+ * so the three shapes the privacy rule allows appear, the last for both of its reasons. Every count asserted is one
+ * of these rows.
  */
 class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewIntegrationTest {
 
@@ -50,6 +51,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     private Practice packaging;
     private Practice testing;
     private Practice issues;
+    private Practice craft;
     private int nextNumber = 100;
 
     @BeforeEach
@@ -60,44 +62,56 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 workspace, group(workspace, "review-ready-work", "Packaging"), "explain", "Explain", null);
         testing = persistPractice(workspace, group(workspace, "testing-discipline", "Testing"), "tests", "Tests", null);
         issues = persistPractice(workspace, group(workspace, "actionable-issues", "Issues"), "issue", "Issue", null);
+        craft = persistPractice(workspace, group(workspace, "code-craftsmanship", "Craft"), "craft", "Craft", null);
 
         reader = member("testuser"); // matches @WithUser
         strength(packaging, reader, NEWEST);
-        for (int index = 0; index < 15; index++) {
+        for (int index = 0; index < 20; index++) {
             User developer = member("across-dev-" + index);
-            // Packaging: five each at Needs attention, Mixed feedback and Going well.
-            switch (index % 3) {
-                case 0 -> problem(packaging, developer, NEWEST);
-                case 1 -> mixed(packaging, developer);
-                default -> strength(packaging, developer, NEWEST);
+            // Packaging: five each at Needs attention, Mixed feedback and Going well, five with none.
+            if (index < 15) {
+                switch (index % 3) {
+                    case 0 -> problem(packaging, developer, NEWEST);
+                    case 1 -> mixed(packaging, developer);
+                    default -> strength(packaging, developer, NEWEST);
+                }
             }
-            // Testing: five with a standing, none at Mixed feedback, ten with none.
-            if (index < 2) {
+            // Testing: five with a standing, none at Mixed feedback, fifteen with none.
+            if (index >= 18) {
                 strength(testing, developer, MIDDLE);
-            } else if (index < 5) {
+            } else if (index >= 15) {
                 problem(testing, developer, MIDDLE);
             }
             // Issues: three with a standing, so not even the collapsed split.
             if (index < 3) {
                 strength(issues, developer, MIDDLE);
             }
+            // Craft: six or seven at each standing and one with none, whom the observed total would name.
+            if (index > 0) {
+                switch (index % 3) {
+                    case 0 -> problem(craft, developer, NEWEST);
+                    case 1 -> mixed(craft, developer);
+                    default -> strength(craft, developer, NEWEST);
+                }
+            }
         }
     }
 
     @Test
     @WithUser
-    @DisplayName("an even group shows its split with the reader counted; a thin one collapses; a bare one is withheld")
+    @DisplayName(
+            "an even group splits with the reader counted; a thin one collapses; a bare or nearly full one is withheld")
     void shouldSplitCollapseAndWithholdByTheCountsOfOtherDevelopers() {
         read("TERM")
                 .jsonPath("$.window")
                 .isEqualTo("TERM")
                 .jsonPath("$.minimumOthers")
                 .isEqualTo(5)
-                // The owner, the reader and fifteen developers are eligible; the owner was never reviewed.
+                // The owner, the reader and twenty developers are eligible; the owner was never reviewed.
                 .jsonPath("$.eligibleDevelopers")
-                .isEqualTo(17)
+                .isEqualTo(22)
                 .jsonPath("$.observedDevelopers")
-                .isEqualTo(16)
+                .isEqualTo(21)
                 .jsonPath("$.readerCounted")
                 .isEqualTo(true)
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].shape")
@@ -117,14 +131,21 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].hasStanding")
                 .isEqualTo(5)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].noneYet")
-                .isEqualTo(11)
+                .isEqualTo(16)
                 .jsonPath("$.groups[?(@.groupSlug == 'testing-discipline')].goingWell")
                 .doesNotExist()
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].shape")
                 .isEqualTo("WITHHELD")
                 .jsonPath("$.groups[?(@.groupSlug == 'actionable-issues')].hasStanding")
                 .doesNotExist()
-                // The reader's own figures, then the middle half of all sixteen.
+                // Every standing holds six others, but 19 of 21 with one would leave a single other at none yet.
+                .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].shape")
+                .isEqualTo("WITHHELD")
+                .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].goingWell")
+                .doesNotExist()
+                .jsonPath("$.groups[?(@.groupSlug == 'code-craftsmanship')].noneYet")
+                .doesNotExist()
+                // The reader's own figures, then the middle half of all twenty one.
                 .jsonPath("$.reviewedWork.yours")
                 .isEqualTo(1)
                 .jsonPath("$.practicesGoingWell.yours")
@@ -139,12 +160,13 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     @WithUser
     @DisplayName("each window counts only its own evidence, and a window with too few developers shows no split")
     void shouldCheckEachWindowOnItsOwn() {
-        // Only the packaging runs stay inside the last 30 days; every other standing moves before them.
+        // Testing and issue standings move before the last 30 days; packaging and craft stay inside it.
         jdbc.update(
-                "UPDATE observation SET observed_at = ? WHERE workspace_id = ? AND practice_id <> ?",
+                "UPDATE observation SET observed_at = ? WHERE workspace_id = ? AND practice_id IN (?, ?)",
                 Timestamp.from(NOW.minus(Duration.ofDays(45))),
                 workspace.getId(),
-                packaging.getId());
+                testing.getId(),
+                issues.getId());
 
         read("DAYS_30")
                 .jsonPath("$.window")
@@ -202,13 +224,17 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
 
         read("TERM")
                 .jsonPath("$.eligibleDevelopers")
-                .isEqualTo(15)
+                .isEqualTo(20)
                 .jsonPath("$.observedDevelopers")
-                .isEqualTo(14)
-                // Two of the five at Needs attention are hidden, so the split no longer holds five there, and with
-                // every observed developer at a standing not even the collapsed split holds five on each side.
+                .isEqualTo(19)
+                // Two of the five at Needs attention are hidden, so the split no longer holds five there and
+                // collapses: thirteen others and the reader with a standing, five others with none.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].shape")
-                .isEqualTo("WITHHELD");
+                .isEqualTo("COLLAPSED")
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].hasStanding")
+                .isEqualTo(14)
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].noneYet")
+                .isEqualTo(5);
     }
 
     @Test

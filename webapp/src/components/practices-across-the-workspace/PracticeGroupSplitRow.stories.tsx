@@ -30,6 +30,7 @@ const meta = {
 		group: packaging,
 		window: "TERM",
 		readerCounted: true,
+		observedDevelopers: 24,
 		showWorkspace: true,
 		asking: true,
 		onEstimate: fn(),
@@ -75,12 +76,17 @@ export const CollapsedSplit: Story = {
 	},
 };
 
+/**
+ * Withheld: has a standing or none yet would cover fewer than five developers besides the reader,
+ * so the row gives only the observed total and draws no bar.
+ */
 export const Withheld: Story = {
 	args: { group: maintainable, asking: false },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("Not enough developers observed here to compare yet."),
+			canvas.getByText("24 developers observed here this term; the split is held back."),
 		).toBeVisible();
+		await expect(canvas.queryByRole("img")).toBeNull();
 		await expect(canvas.getByText("Going well")).toBeVisible();
 	},
 };

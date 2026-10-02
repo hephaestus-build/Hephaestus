@@ -47,23 +47,17 @@ export function isEstimateStanding(
 	return (ESTIMATE_STANDINGS as readonly string[]).includes(standing);
 }
 
-/** How many developers the row's bar stands for; zero for a group whose split is withheld. */
-export function splitTotal(group: WorkspaceGroupSplit): number {
-	return group.shape === "SPLIT"
-		? (group.needsAttention ?? 0) + (group.mixedFeedback ?? 0) + (group.goingWell ?? 0)
-		: (group.hasStanding ?? 0) + (group.noneYet ?? 0);
-}
-
 /**
  * The sentence under a group's name once its split is shown: the practice group and its named
- * reference group are the subject, never the reader, and it says whether the group is within reach.
+ * reference group, every developer observed in the window, are the subject, never the reader, and it
+ * says whether the group is within reach.
  */
 export function reachSentence(
 	group: WorkspaceGroupSplit,
 	window: AcrossWorkspaceWindow,
+	observedDevelopers: number,
 ): string | undefined {
-	const total = splitTotal(group);
-	const observed = `of the ${total} developers observed here ${windowPhrase(window)}`;
+	const observed = `of the ${observedDevelopers} developers observed here ${windowPhrase(window)}`;
 	if (group.shape === "COLLAPSED") {
 		return `${group.hasStanding ?? 0} ${observed} have a standing; the split is held back.`;
 	}
@@ -80,6 +74,18 @@ export function reachSentence(
 		return `${mixed} ${observed} get Mixed feedback; many find this group hard.`;
 	}
 	return `${needs} ${observed} need attention here; many find this group hard.`;
+}
+
+/**
+ * What a withheld group says in place of its split: the workspace's observed total, the one count a
+ * withheld group may carry, since a part of it could single out a developer.
+ */
+export function withheldSentence(
+	observedDevelopers: number,
+	window: AcrossWorkspaceWindow,
+): string {
+	const developers = observedDevelopers === 1 ? "developer" : "developers";
+	return `${observedDevelopers} ${developers} observed here ${windowPhrase(window)}; the split is held back.`;
 }
 
 /**
@@ -108,15 +114,19 @@ export function splitDescription(
 	group: WorkspaceGroupSplit,
 	window: AcrossWorkspaceWindow,
 	readerCounted: boolean,
+	observedDevelopers: number,
 ): string {
-	const total = splitTotal(group);
 	const you = `You: ${standingLabel(group.yourStanding)}`;
-	const reference = `${total} developers observed in this workspace ${windowPhrase(window)}`;
+	const reference = `${observedDevelopers} developers observed in this workspace ${windowPhrase(window)}`;
 	if (group.shape === "COLLAPSED") {
 		return `${reference}: ${group.hasStanding ?? 0} have a standing, ${group.noneYet ?? 0} none yet. The split is held back while one standing would cover fewer than five developers other than you. ${you}.`;
 	}
 	const counted = readerCounted && isEstimateStanding(group.yourStanding);
-	return `${reference}: ${group.needsAttention ?? 0} Needs attention, ${group.mixedFeedback ?? 0} Mixed feedback, ${group.goingWell ?? 0} Going well. ${you}${counted ? "" : ", not counted in the split"}.`;
+	const needs = group.needsAttention ?? 0;
+	const mixed = group.mixedFeedback ?? 0;
+	const well = group.goingWell ?? 0;
+	const noneYet = observedDevelopers - needs - mixed - well;
+	return `${reference}: ${needs} Needs attention, ${mixed} Mixed feedback, ${well} Going well, ${noneYet} none yet. ${you}${counted ? "" : ", not counted in the split"}.`;
 }
 
 /** Practice profile order: what needs attention first, then the silences; the name breaks a tie. */

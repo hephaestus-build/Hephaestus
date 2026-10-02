@@ -18,6 +18,8 @@ export interface WorkspaceSplitBarProps {
 	window: AcrossWorkspaceWindow;
 	/** Whether the reader is inside the counts; without it the bar carries no You marker. */
 	readerCounted: boolean;
+	/** The workspace's observed total, the reference group the text alternative names. */
+	observedDevelopers: number;
 }
 
 interface Segment {
@@ -72,7 +74,12 @@ function segmentsOf(group: WorkspaceGroupSplit): Segment[] {
  * reader's own segment, and only on a split that is shown with the reader inside it: on a collapsed
  * split it would point at a part that says nothing about the reader's standing.
  */
-export function WorkspaceSplitBar({ group, window, readerCounted }: WorkspaceSplitBarProps) {
+export function WorkspaceSplitBar({
+	group,
+	window,
+	readerCounted,
+	observedDevelopers,
+}: WorkspaceSplitBarProps) {
 	const segments = segmentsOf(group);
 	const total = segments.reduce((sum, segment) => sum + segment.count, 0);
 	const yourIndex =
@@ -89,7 +96,7 @@ export function WorkspaceSplitBar({ group, window, readerCounted }: WorkspaceSpl
 	return (
 		<div
 			role="img"
-			aria-label={splitDescription(group, window, readerCounted)}
+			aria-label={splitDescription(group, window, readerCounted, observedDevelopers)}
 			className="flex min-w-0 flex-col gap-0.5"
 		>
 			<div className="relative h-5" aria-hidden>

@@ -43,9 +43,12 @@ attention, Mixed feedback and Going well, counted in developers.
   standing and group standing rules the Practice profile uses. Hidden members are left out, as they are
   of every workspace total.
 - `CohortPrivacyPolicy` is the only place that decides what may be shown: a count appears only when it
-  holds at least five developers other than the reader. A three way split that fails collapses to *has
-  a standing* against *none yet*; when that fails too, the group shows no split. Collapse before omit,
-  omit rather than show a small number. Each window (term, 30 days, 90 days) is checked on its own.
+  holds at least five developers other than the reader. *Has a standing* against *none yet* is checked
+  first and for every split, since the page states how many developers were observed and a three way
+  split therefore states *none yet* as the rest. When it fails, the group shows no split, only that
+  total. When it holds, a three way split with a part under five collapses to those two. Collapse
+  before omit, omit rather than show a small number. Each window (term, 30 days, 90 days) is checked
+  on its own.
 - The tiles show the reader's own figure and the middle half of the observed developers, never a
   minimum, maximum, average or count at one value. There is no tile for feedback.
 - Design C: each group first asks where the reader thinks they stand. The estimate stays in the

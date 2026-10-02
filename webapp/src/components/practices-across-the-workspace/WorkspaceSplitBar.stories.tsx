@@ -18,7 +18,7 @@ const meta = {
 	component: WorkspaceSplitBar,
 	tags: ["autodocs"],
 	parameters: { layout: "padded" },
-	args: { group: acting, window: "TERM", readerCounted: true },
+	args: { group: acting, window: "TERM", readerCounted: true, observedDevelopers: 24 },
 } satisfies Meta<typeof WorkspaceSplitBar>;
 
 export default meta;
@@ -27,7 +27,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("img")).toHaveAccessibleName(
-			"23 developers observed in this workspace this term: 5 Needs attention, 9 Mixed feedback, 9 Going well. You: Mixed feedback.",
+			"24 developers observed in this workspace this term: 5 Needs attention, 7 Mixed feedback, 7 Going well, 5 none yet. You: Mixed feedback.",
 		);
 		await expect(canvas.getByText("You")).toBeVisible();
 	},
