@@ -1,13 +1,12 @@
-import { AlertCircleIcon } from "lucide-react";
 import { useState } from "react";
 
 import type { ChatMessageVote } from "@/api/types.gen";
 import { HephIcon } from "@/components/brand/HephIcon";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
-import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Message, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message";
 import type { ChatMessage } from "@/lib/types";
 
+import { InterruptedReplyNote } from "./InterruptedReplyNote";
 import { visibleTexts } from "./message-text";
 import { MessageActions } from "./MessageActions";
 import { MessageEditor } from "./MessageEditor";
@@ -78,17 +77,7 @@ export function MentorMessage({
 						</Bubble>
 					))
 				)}
-				{interrupted && (
-					<Marker>
-						<MarkerIcon>
-							<AlertCircleIcon />
-						</MarkerIcon>
-						<MarkerContent>
-							This reply was interrupted before it finished, so it is incomplete. Ask again for a
-							full answer.
-						</MarkerContent>
-					</Marker>
-				)}
+				{interrupted && <InterruptedReplyNote />}
 				{hasActions && (
 					<MessageFooter>
 						<MessageActions

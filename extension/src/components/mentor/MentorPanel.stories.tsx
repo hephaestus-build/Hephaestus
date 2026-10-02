@@ -128,6 +128,24 @@ export const Thinking: Story = {
 	},
 };
 
+/** The server explicitly reports a cold sandbox; the status explains the longer wait. */
+export const WarmingUp: Story = {
+	args: {
+		state: STARTED,
+		conversation: {
+			messages: MESSAGES.slice(0, 1),
+			status: "submitted",
+			restoring: false,
+			warmingUp: true,
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getAllByText("Getting ready. The first reply takes a little longer."),
+		).not.toHaveLength(0);
+	},
+};
+
 /** The reply is arriving: Send is Stop until it ends. */
 export const Streaming: Story = {
 	args: { state: STARTED, conversation: { ...TALKING, status: "streaming" } },

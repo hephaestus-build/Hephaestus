@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { browser } from "@wxt-dev/browser";
 import { useEffect, useRef, useState } from "react";
 
-import { parseThreadMessages } from "@/lib/chat-validation";
+import { isWarmingUp, parseThreadMessages } from "@/lib/chat-validation";
 import { retryPlan } from "@/lib/mentor-turn";
 import type { ChatMessage } from "@/lib/types";
 import {
@@ -65,12 +65,22 @@ function useConversation(panel: ReadyPanel | undefined, onTurnSettled: () => voi
 		staleTime: Number.POSITIVE_INFINITY,
 		refetchOnWindowFocus: false,
 	});
+	const [warmingUp, setWarmingUp] = useState(false);
+	const settled = () => {
+		setWarmingUp(false);
+		onTurnSettled();
+	};
 	const chat = useChat<ChatMessage>({
 		id: threadId,
 		transport: mentorTransport(threadId),
 		generateId: () => crypto.randomUUID(),
-		onFinish: onTurnSettled,
-		onError: onTurnSettled,
+		onFinish: settled,
+		onError: settled,
+		onData: (part) => {
+			if (isWarmingUp(part)) {
+				setWarmingUp(true);
+			}
+		},
 	});
 	const { setMessages, status, stop } = chat;
 	// A conversation the tab has left, or the reader replaced, stops answering with it.
@@ -100,6 +110,7 @@ function useConversation(panel: ReadyPanel | undefined, onTurnSettled: () => voi
 	const conversation: MentorConversation = {
 		messages: chat.messages,
 		status: chat.status,
+		warmingUp,
 		error: chat.error?.message,
 		restoring:
 			storedId !== undefined &&
@@ -120,14 +131,17 @@ function useConversation(panel: ReadyPanel | undefined, onTurnSettled: () => voi
 				return;
 			}
 			retryTarget.current = undefined;
+			setWarmingUp(false);
 			// A conversation's first message names the work, visibly, exactly as it is stored.
 			const opening = chat.messages.length === 0;
 			void chat.sendMessage({ text: opening ? firstMessage(panel.reference, text) : text });
 		},
 		stop: () => {
+			setWarmingUp(false);
 			void stop();
 		},
 		retry: () => {
+			setWarmingUp(false);
 			const plan = retryPlan(chat.messages, retryTarget.current);
 			retryTarget.current = plan.replaces;
 			void chat.regenerate(plan.options);

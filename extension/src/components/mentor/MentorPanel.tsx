@@ -26,6 +26,7 @@ export type MentorPanelState =
 export interface MentorConversation {
 	messages: ChatMessage[];
 	status: ChatStatus;
+	warmingUp?: boolean;
 	/** Why the last turn failed, as the server or the extension worded it. */
 	error?: string;
 	/** The stored conversation is being read back; nothing can be sent until it is. */
@@ -357,7 +358,10 @@ function Conversation({ panel, props }: { panel: ReadyPanel; props: MentorPanelP
 	const empty = conversation.messages.length === 0;
 	let announcement = "";
 	if (conversation.status === "submitted") {
-		announcement = "Heph is thinking…";
+		announcement =
+			conversation.warmingUp === true
+				? "Getting ready. The first reply takes a little longer."
+				: "Heph is thinking…";
 	} else if (conversation.status === "error") {
 		announcement = "Heph's reply failed.";
 	}
@@ -417,7 +421,11 @@ function Conversation({ panel, props }: { panel: ReadyPanel; props: MentorPanelP
 						<Greeting panel={panel} />
 					) : (
 						<div className="p-4">
-							<MentorTranscript messages={conversation.messages} status={conversation.status} />
+							<MentorTranscript
+								messages={conversation.messages}
+								status={conversation.status}
+								warmingUp={conversation.warmingUp}
+							/>
 						</div>
 					)}
 					{conversation.error === undefined || replying ? null : (

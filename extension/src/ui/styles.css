@@ -9,6 +9,7 @@
 @source "../../../webapp/src/components/mentor/MessageText.tsx";
 @source "../../../webapp/src/components/mentor/InterruptedReplyNote.tsx";
 @source "../../../webapp/src/components/common/MarkdownCode.tsx";
+@source "../../../webapp/src/components/ui/marker.tsx";
 
 /* The focus ring takes the mentor blue rather than the web app's neutral ring, so a focused control
    inside a provider's page keeps at least 3:1 against its surface. The frame's

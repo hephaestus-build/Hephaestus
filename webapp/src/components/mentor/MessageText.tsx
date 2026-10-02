@@ -3,7 +3,6 @@ import { Streamdown } from "streamdown";
 
 import { MarkdownCode } from "@/components/common/MarkdownCode";
 
-
 function MarkdownTaskCheckbox(props: InputHTMLAttributes<HTMLInputElement>) {
 	return (
 		<input {...props} aria-label={props.checked === true ? "Completed task" : "Incomplete task"} />

@@ -34,4 +34,3 @@ export const Markdown: Story = {
 		text: "Two things to check:\n\n1. The `retry` branch.\n2. The empty state.\n\n```ts\nconst done = true;\n```",
 	},
 };
-
