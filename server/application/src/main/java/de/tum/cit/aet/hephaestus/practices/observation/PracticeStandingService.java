@@ -99,7 +99,59 @@ public class PracticeStandingService {
                 .toList();
         Map<UUID, String> deliveredGuidance = deliveredGuidanceByObservation(
                 workspaceId, observations.stream().map(Observation::getId).collect(Collectors.toSet()));
+        Eligibility eligibility = eligibility(workspaceId);
 
+        return edges.stream()
+                .map(edge -> snapshot(
+                        latestVisible(
+                                window.stream()
+                                        .filter(observation ->
+                                                !observation.getObservedAt().isAfter(edge))
+                                        .toList(),
+                                visible),
+                        eligibility,
+                        deliveredGuidance))
+                .toList();
+    }
+
+    /**
+     * Every given developer's standings as they stand at {@code until}, over the evidence observed from
+     * {@code since}, read off one scan of the workspace rather than one query per developer. A developer with no
+     * evidence in the span gets the snapshot of someone nothing reached: every eligible practice silent.
+     *
+     * <p>The same classification as {@link #getStandingSnapshots}, minus the delivered guidance: a reader of the
+     * workspace as a whole sees counts, never what anyone was told.
+     */
+    public Map<Long, StandingSnapshot> getWorkspaceStandingSnapshots(
+            Long workspaceId, Set<Long> developerIds, Instant since, Instant until) {
+        List<Observation> window = observationRepository.findByWorkspaceBetween(workspaceId, since, until);
+        Set<UUID> visible =
+                visibilityPolicy.permitsAll(workspaceId, window, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        Map<Long, List<Observation>> byDeveloper = window.stream()
+                .filter(observation -> developerIds.contains(observation.getAboutUserId()))
+                .collect(Collectors.groupingBy(Observation::getAboutUserId));
+        Eligibility eligibility = eligibility(workspaceId);
+        Map<Long, StandingSnapshot> snapshots = new LinkedHashMap<>();
+        for (Long developerId : developerIds) {
+            snapshots.put(
+                    developerId,
+                    snapshot(
+                            latestVisible(byDeveloper.getOrDefault(developerId, List.of()), visible),
+                            eligibility,
+                            Map.of()));
+        }
+        return snapshots;
+    }
+
+    /** One developer's latest run per claim, then only what the visibility policy lets the reader see. */
+    private static List<Observation> latestVisible(List<Observation> observations, Set<UUID> visible) {
+        return LatestRun.perClaim(observations).stream()
+                .filter(observation -> visible.contains(observation.getId()))
+                .toList();
+    }
+
+    /** The practices review is admitted for in the workspace today, and their slugs per group slug. */
+    private Eligibility eligibility(Long workspaceId) {
         PracticeAutonomy workspaceDefault =
                 workspaceReviewDefaultsProvider.forWorkspace(workspaceId).defaultAutonomy();
         List<Practice> eligiblePractices = practiceRepository.findByWorkspaceId(workspaceId).stream()
@@ -115,21 +167,10 @@ public class PracticeStandingService {
                         .add(practice.getSlug());
             }
         }
-
-        return edges.stream()
-                .map(edge -> snapshot(
-                        LatestRun.perClaim(window.stream()
-                                        .filter(observation ->
-                                                !observation.getObservedAt().isAfter(edge))
-                                        .toList())
-                                .stream()
-                                .filter(observation -> visible.contains(observation.getId()))
-                                .toList(),
-                        eligiblePractices,
-                        eligiblePracticesByGroup,
-                        deliveredGuidance))
-                .toList();
+        return new Eligibility(eligiblePractices, eligiblePracticesByGroup);
     }
+
+    private record Eligibility(List<Practice> practices, Map<String, List<String>> practicesByGroup) {}
 
     /**
      * Every practice the developer should see, whether or not it has anything to say, as of one edge.
@@ -141,10 +182,7 @@ public class PracticeStandingService {
      * feedback was raised and delivered, and switching a practice off does not un-say it.
      */
     private StandingSnapshot snapshot(
-            List<Observation> observations,
-            List<Practice> eligiblePractices,
-            Map<String, List<String>> eligiblePracticesByGroup,
-            Map<UUID, String> deliveredGuidance) {
+            List<Observation> observations, Eligibility eligibility, Map<UUID, String> deliveredGuidance) {
         Map<String, List<Observation>> byPractice = new LinkedHashMap<>();
         for (Observation observation : observations) {
             byPractice
@@ -152,7 +190,7 @@ public class PracticeStandingService {
                     .add(observation);
         }
         Map<String, Practice> subjects = new LinkedHashMap<>();
-        eligiblePractices.forEach(practice -> subjects.put(practice.getSlug(), practice));
+        eligibility.practices().forEach(practice -> subjects.put(practice.getSlug(), practice));
         byPractice.forEach(
                 (slug, group) -> subjects.putIfAbsent(slug, group.getFirst().getPractice()));
 
@@ -174,7 +212,7 @@ public class PracticeStandingService {
                 .thenComparingInt(standing -> worstSeverityRank(standing.dto())));
         Map<String, StandingSnapshot.PracticeStanding> practices = new LinkedHashMap<>();
         standings.forEach(standing -> practices.put(standing.dto().slug(), standing));
-        return new StandingSnapshot(practices, eligiblePracticesByGroup);
+        return new StandingSnapshot(practices, eligibility.practicesByGroup());
     }
 
     /**

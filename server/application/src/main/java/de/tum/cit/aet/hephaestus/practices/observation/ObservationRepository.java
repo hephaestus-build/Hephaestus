@@ -834,6 +834,25 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("until") Instant until);
 
     /**
+     * {@link #findByDeveloperAndWorkspaceBetween} for every developer of the workspace at once, under the same
+     * guards: one scan of {@code idx_observation_workspace_observed} that the caller partitions by
+     * {@code about_user_id}, so a read over the whole workspace costs one query rather than one per developer.
+     * Only the page that shows the workspace as a whole reads it, through
+     * {@link PracticeStandingService#getWorkspaceStandingSnapshots}.
+     */
+    @Query(value = """
+                    SELECT f.* FROM observation f
+                    WHERE f.workspace_id = :workspaceId
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
+              AND f.superseded_at IS NULL
+              AND f.observed_at >= :since
+              AND f.observed_at <= :until
+            ORDER BY f.observed_at DESC
+            """, nativeQuery = true)
+    List<Observation> findByWorkspaceBetween(
+            @Param("workspaceId") Long workspaceId, @Param("since") Instant since, @Param("until") Instant until);
+
+    /**
      * The developer's review runs, newest first: one row per agent job that recorded an observation about
      * them, dated by its newest observation and naming the piece of work that observation is on — both
      * aggregates order the same way, so kind and id come from one row. Either bound
