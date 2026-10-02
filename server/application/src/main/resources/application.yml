@@ -594,6 +594,9 @@ hephaestus:
     # Layered safety: (1) this flag, (2) not in endpoint exposure list, (3) Spring Security auth.
     dev:
         trigger-enabled: ${HEPHAESTUS_DEV_TRIGGER_ENABLED:false}
+        # Dev-only: lets a local seed ask for the practice revision a review would pin
+        # (scripts/seed-practices-across-the-workspace.ts). Never enable in production.
+        seed-enabled: ${HEPHAESTUS_DEV_SEED_ENABLED:false}
 
     # ═══════════════════════════════════════════════════════════════════════════
     # AGENT JOB QUEUE (PostgreSQL-backed)

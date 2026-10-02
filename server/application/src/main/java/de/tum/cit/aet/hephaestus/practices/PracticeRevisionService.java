@@ -20,6 +20,10 @@ public class PracticeRevisionService {
 
     @Transactional
     public PracticeRevision forReview(Practice practice) {
+        return pin(practice);
+    }
+
+    private PracticeRevision pin(Practice practice) {
         Practice locked = practiceRepository
                 .findByIdForUpdate(practice.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Practice", String.valueOf(practice.getId())));
@@ -30,11 +34,18 @@ public class PracticeRevisionService {
         return appendLocked(locked);
     }
 
+    /** The revision a review pins for one practice, and whether asking for it appended it. */
+    public record ReviewRevision(PracticeRevision revision, boolean appended) {}
+
     /** {@link #forReview(Practice)} for each practice of the workspace with one of these slugs. */
     @Transactional
-    public List<PracticeRevision> forReview(Long workspaceId, Collection<String> slugs) {
+    public List<ReviewRevision> forReview(Long workspaceId, Collection<String> slugs) {
         return practiceRepository.findByWorkspaceIdAndSlugIn(workspaceId, slugs).stream()
-                .map(this::forReview)
+                .map(practice -> {
+                    PracticeRevision before = practice.getCurrentRevision();
+                    PracticeRevision pinned = pin(practice);
+                    return new ReviewRevision(pinned, pinned != before);
+                })
                 .toList();
     }
 
