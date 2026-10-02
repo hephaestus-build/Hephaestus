@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.*;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatService;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorRefusal;
 import de.tum.cit.aet.hephaestus.core.auth.domain.*;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
@@ -65,6 +67,9 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PersonProcessingSuppression suppression;
+
+    @Autowired
+    private MentorChatService mentor;
 
     @Autowired
     private ObservationInvalidationRepository invalidations;
@@ -537,6 +542,11 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(IssuedJwt.RevokedReason.ACCOUNT_DELETED);
         assertThat(suppression.isUserSuppressed(target.getId())).isTrue();
         assertThat(suppression.isUserSuppressed(other.getId())).isFalse();
+        for (var derived : targetDerived) {
+            assertThat(mentor.refusal(derived.workspaceId(), target.getId())).contains(MentorRefusal.PERSON_ERASED);
+            assertThat(mentor.refusal(derived.workspaceId(), other.getId()))
+                    .isNotEqualTo(Optional.of(MentorRefusal.PERSON_ERASED));
+        }
         for (long threadId : sharedThreads) {
             long workspaceId = Objects.requireNonNull(
                     jdbc.queryForObject("SELECT workspace_id FROM slack_thread WHERE id=?", Long.class, threadId));
@@ -582,6 +592,9 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                         .getStatus())
                 .isEqualTo(Account.Status.DELETED);
         assertThat(users.findById(target.getId()).orElseThrow().getLogin()).startsWith("erased-");
+        for (var derived : targetDerived) {
+            assertThat(mentor.refusal(derived.workspaceId(), target.getId())).contains(MentorRefusal.PERSON_ERASED);
+        }
         assertThat(jdbc.queryForObject(
                         "SELECT count(*) FROM config_audit_event WHERE actor_account_id=? AND acting_account_id IS NULL",
                         Long.class,
@@ -963,7 +976,12 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     private record DerivedConversation(
-            List<UUID> observationIds, UUID preparedId, UUID deliveredId, UUID messageId, UUID jobId) {}
+            List<UUID> observationIds,
+            UUID preparedId,
+            UUID deliveredId,
+            UUID messageId,
+            UUID jobId,
+            long workspaceId) {}
 
     private DerivedConversation seedDerivedConversation(Workspace workspace, long threadId, User owner) {
         ChatThread chatThread = new ChatThread();
@@ -1114,6 +1132,6 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .createdAt(Instant.now())
                 .build());
         return new DerivedConversation(
-                observationIds, prepared.getId(), delivered.getId(), message.getId(), job.getId());
+                observationIds, prepared.getId(), delivered.getId(), message.getId(), job.getId(), workspace.getId());
     }
 }

@@ -37,6 +37,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetExhaustedException;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUnpricedUsageBlockedException;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.security.CurrentScmIdentityHolder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
@@ -103,6 +104,7 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
     private final LlmAdmissionService llmAdmissionService;
     private final MentorProxyCredentialRegistry proxyCredentialRegistry;
     private final MemberAiRoutingAdapter memberAiRouting;
+    private final PersonProcessingSuppression personSuppression;
     private final MemberAiPreferences memberAiPreferences;
     private final MergeReadinessContentSource mergeReadiness;
     private final ObservationHistoryContentSource observationHistory;
@@ -277,6 +279,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
             throw new LlmUnpricedUsageBlockedException(mentorFunding);
         }
         User user = userRepository.getCurrentUserElseThrow();
+        if (personSuppression.isUserSuppressed(user.getId())) {
+            throw new MentorRefusedException(MentorRefusal.PERSON_ERASED);
+        }
         UUID retryOf = submitted.retryOfAssistantMessageId();
         // A retry answers a stored prompt, so it never opens a thread.
         if (retryOf != null
@@ -899,6 +904,9 @@ public class MentorChatService implements MentorTurnRunner, MentorChatStarter {
 
     /** Mentor admission for web and Slack alike: the member's AI choice, then a model within it. */
     private WorkspaceAgentBinding admittedBinding(long workspaceId, @Nullable Long developerId) {
+        if (developerId != null && personSuppression.isUserSuppressed(developerId)) {
+            throw new MentorRefusedException(MentorRefusal.PERSON_ERASED);
+        }
         return memberAiRouting
                 .binding(workspaceId, AgentPurpose.MENTOR, developerId)
                 .orElseThrow(() -> new MentorRefusedException(refusalWithoutModel(workspaceId, developerId)));

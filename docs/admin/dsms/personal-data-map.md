@@ -88,6 +88,9 @@ such row stops the request; display attribution is never used to resolve it. Per
 and native write locks use that same type, origin and native subject, including provider rows
 registered after erasure. Adding an equivalent provider row cannot reset a processing control.
 Slack workspace keys still distinguish suppression decisions; sharing a lock does not merge teams.
+Heph conversation admission and runtime preparation also check these exact processing controls.
+An eligible model or a recreated mirrored profile cannot bypass an erased developer identity.
+This entry-point check does not itself remove copies already held by an active runtime.
 
 Source connections register their provider instance even when nobody signs in through that provider.
 `server/application/src/main/java/de/tum/cit/aet/hephaestus/integration/core/connection/SourceProviderNamespaces.java`

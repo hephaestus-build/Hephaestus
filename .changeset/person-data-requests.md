@@ -85,3 +85,7 @@ will not accept the old confirmation. An unconfirmed write with no exact locator
 
 Review-package delivery waits for erasure admission and rejects revoked review jobs. Erasure
 waits for an already active provider request to record its outcome before it removes local data.
+
+Heph refuses new conversations and does not prepare a runtime for an erased identity, even if
+provider sync recreates its profile. The refusal applies to web and Slack entry points and is
+separate from Your AI choice.

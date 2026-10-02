@@ -238,6 +238,9 @@ class MentorChatServiceTest extends BaseUnitTest {
     private final List<Boolean> closedUnderSandboxLock = new CopyOnWriteArrayList<>();
 
     @Mock
+    de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression personSuppression;
+
+    @Mock
     UserRepository userRepository;
 
     @Mock
@@ -317,6 +320,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                 sandboxServiceProvider(interactiveSandboxService),
                 turnLock,
                 memberAiRouting,
+                personSuppression,
                 llmAdmissionService,
                 llmBudgetService,
                 mentorPiAdapter,
@@ -397,6 +401,7 @@ class MentorChatServiceTest extends BaseUnitTest {
                 llmAdmissionService,
                 proxyCredentialRegistry,
                 memberAiRouting,
+                personSuppression,
                 (workspaceId, developerId) -> aiDecision,
                 mergeReadiness,
                 observationHistory,
@@ -1410,6 +1415,31 @@ class MentorChatServiceTest extends BaseUnitTest {
         verify(interactiveSandboxService, never()).attach(any());
         assertThat(turnLock.activeKeys()).isZero();
         assertOutcomeRecorded(MentorChatMetrics.Outcome.ERROR);
+    }
+
+    @Test
+    void shouldRefuseErasedIdentityBeforeCreatingConversationOrAttachingRuntime() throws Exception {
+        when(personSuppression.isUserSuppressed(USER_ID)).thenReturn(true);
+
+        assertThat(service.refusal(WORKSPACE_ID, USER_ID)).contains(MentorRefusal.PERSON_ERASED);
+        runTurnSync();
+
+        assertThat(String.join("\n", emitter.rawData)).contains(MentorRefusal.PERSON_ERASED.userMessage());
+        verify(persistence, never()).ensureThread(anyLong(), any(), any(), any(), any());
+        verify(workspaceContextBuilder, never()).build(any());
+        verify(interactiveSandboxService, never()).attach(any());
+        assertThat(turnLock.activeKeys()).isZero();
+    }
+
+    @Test
+    void shouldNotPrepareRuntimeForErasedIdentity() {
+        when(personSuppression.isUserSuppressed(USER_ID)).thenReturn(true);
+
+        preparer.prepare(WORKSPACE_ID, USER_ID);
+
+        verify(mentorPiAdapter, never()).buildSandboxSpec(any(), any());
+        verify(interactiveSandboxService, never()).attach(any());
+        assertThat(turnLock.activeSandboxKeys()).isZero();
     }
 
     @Test
