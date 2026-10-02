@@ -1,51 +1,20 @@
-import type { Meta, StoryObj } from "@storybook/react";
-import { fn } from "storybook/test";
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { expect, fn } from "storybook/test";
 
 import { MessageEditor } from "./MessageEditor";
 
-/**
- * MessageEditor component provides an inline editing interface for chat messages.
- * Pure component that handles text editing with auto-resize and keyboard shortcuts.
- */
 const meta = {
 	component: MessageEditor,
+	parameters: { layout: "padded" },
 	tags: ["autodocs"],
-	argTypes: {
-		initialContent: {
-			description: "Initial text content to edit",
-			control: "text",
-		},
-		isSubmitting: {
-			description: "Whether the editor is currently submitting",
-			control: "boolean",
-		},
-		placeholder: {
-			description: "Placeholder text for the textarea",
-			control: "text",
-		},
-		onCancel: {
-			description: "Callback when cancel is clicked",
-			control: false,
-		},
-		onSend: {
-			description: "Callback when send is clicked with the edited content",
-			control: false,
-		},
-		className: {
-			description: "Optional CSS class name",
-			control: "text",
-		},
-	},
 	args: {
-		initialContent: "This is a sample message that can be edited.",
-		isSubmitting: false,
-		placeholder: "Edit your message...",
+		initialContent: "Can you show me what a better description looks like?",
 		onCancel: fn(),
 		onSend: fn(),
 	},
 	decorators: [
 		(Story) => (
-			<div className="w-full max-w-2xl">
+			<div className="mx-auto max-w-2xl">
 				<Story />
 			</div>
 		),
@@ -55,95 +24,47 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/**
- * Default editor state with sample content.
- */
-export const Default: Story = {};
+/** Send waits for a change; Ctrl+Enter sends it. */
+export const Default: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		const editor = canvas.getByRole("textbox", { name: "Edit message" });
+		await expect(editor).toHaveFocus();
+		await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
+		await userEvent.type(editor, " For a cache change.");
+		await expect(canvas.getByRole("button", { name: "Send" })).toBeEnabled();
+		await userEvent.keyboard("{Control>}{Enter}{/Control}");
+		await expect(args.onSend).toHaveBeenCalledWith(
+			"Can you show me what a better description looks like? For a cache change.",
+		);
+	},
+};
 
-/**
- * Editor with longer content that demonstrates auto-resize functionality.
- */
+export const CancelWithEscape: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.type(canvas.getByRole("textbox", { name: "Edit message" }), "{Escape}");
+		await expect(args.onCancel).toHaveBeenCalledOnce();
+		await expect(args.onSend).not.toHaveBeenCalled();
+	},
+};
+
+/** A message cleared to nothing cannot be sent. */
+export const Cleared: Story = {
+	play: async ({ canvas, userEvent }) => {
+		await userEvent.clear(canvas.getByRole("textbox", { name: "Edit message" }));
+		await expect(canvas.getByRole("button", { name: "Send" })).toBeDisabled();
+	},
+};
+
+/** The editor grows with the message up to a cap, then scrolls. */
 export const LongContent: Story = {
 	args: {
-		initialContent: `This is a much longer message that demonstrates how the MessageEditor component handles multi-line content.
-
-It includes multiple paragraphs and line breaks, showing how the textarea automatically resizes to fit the content.
-
-Here's some sample code:
-\`\`\`javascript
-function example() {
-  console.log("Hello, world!");
-  return "This shows how code blocks are handled";
-}
-\`\`\`
-
-The editor maintains all formatting and provides a smooth editing experience for both short and long content.`,
+		initialContent: Array.from(
+			{ length: 30 },
+			(_, line) => `Line ${line + 1} of a long question about the practice catalog cache.`,
+		).join("\n"),
 	},
-};
-
-/**
- * Editor in submitting state with disabled controls.
- */
-export const Submitting: Story = {
-	args: {
-		isSubmitting: true,
-	},
-};
-
-/**
- * Empty editor showing placeholder text.
- */
-export const Empty: Story = {
-	args: {
-		initialContent: "",
-		placeholder: "Start typing your message...",
-	},
-};
-
-/**
- * Editor with custom placeholder text.
- */
-export const CustomPlaceholder: Story = {
-	args: {
-		initialContent: "",
-		placeholder: "Write your thoughts here...",
-	},
-};
-
-/**
- * Code editing example with technical content.
- */
-export const CodeContent: Story = {
-	args: {
-		initialContent: `function calculateSum(a, b) {
-  return a + b;
-}
-
-// This function adds two numbers together
-const result = calculateSum(5, 3);
-console.log(result); // Output: 8`,
-		placeholder: "Edit your code...",
-	},
-};
-
-/**
- * Markdown content editing example.
- */
-export const MarkdownContent: Story = {
-	args: {
-		initialContent: `# Heading
-
-This is a **bold** statement with *italic* text.
-
-## Subheading
-
-- List item 1
-- List item 2
-- List item 3
-
-> This is a blockquote
-
-[Link to example](https://example.com)`,
-		placeholder: "Edit markdown content...",
+	play: async ({ canvas }) => {
+		const editor = canvas.getByRole("textbox", { name: "Edit message" });
+		await expect(editor.scrollHeight).toBeGreaterThan(editor.clientHeight);
 	},
 };

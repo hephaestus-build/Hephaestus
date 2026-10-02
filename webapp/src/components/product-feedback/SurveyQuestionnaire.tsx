@@ -265,7 +265,7 @@ function ScaleChoice({
 	return (
 		<QuestionnairePrimitive.Choice
 			className={cn(
-				"relative flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-input text-sm tabular-nums transition-colors select-none hover:bg-muted/50 has-[>input:focus-visible]:border-ring has-[>input:focus-visible]:ring-3 has-[>input:focus-visible]:ring-ring/50 data-checked:border-primary data-checked:bg-primary data-checked:font-semibold data-checked:text-primary-foreground data-invalid:border-destructive dark:bg-input/20",
+				"relative flex min-h-10 cursor-pointer items-center justify-center rounded-lg border border-input text-sm tabular-nums transition-colors select-none hover:not-data-checked:bg-muted/50 has-[>input:focus-visible]:border-ring has-[>input:focus-visible]:ring-3 has-[>input:focus-visible]:ring-ring/50 data-invalid:border-destructive dark:bg-input/20 data-checked:border-primary data-checked:bg-primary data-checked:font-semibold data-checked:text-primary-foreground dark:data-checked:bg-primary",
 				className,
 			)}
 			{...props}

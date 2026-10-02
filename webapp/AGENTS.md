@@ -302,6 +302,12 @@ Chrome extension; provider colours stay in `src/styles.css`) over a hard-coded v
 `text-muted-foreground`, `text-foreground`, `bg-background` and `border-border` carry most of the tree.
 Read that block rather than guessing a name.
 
+**A state variant loses to any other variant on the same property.** `shadcn/tailwind.css` defines
+`data-open:`, `data-checked:`, `data-active:` and their siblings as `:where()` selectors, the way the
+registry expects, so they add no specificity: `dark:bg-input/20` or `hover:bg-muted` beats
+`data-checked:bg-primary` whatever the class order. Compound the state the way upstream does —
+`dark:data-checked:bg-primary`, `hover:not-data-checked:bg-muted/50`.
+
 **A `*.module.css` is for what a utility cannot express, and for nothing else.** There are two in the
 tree — `HephIcon` and the landing scene — and each holds `@keyframes`, a generated `::before`, a
 `clip-path`, a grid whose placement descendants override at a breakpoint, or `HephIcon`'s size,

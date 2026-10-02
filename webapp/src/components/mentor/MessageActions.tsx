@@ -1,4 +1,4 @@
-import { Copy, PencilIcon, ThumbsDown, ThumbsUp } from "lucide-react";
+import { CopyIcon, PencilIcon, ThumbsDownIcon, ThumbsUpIcon } from "lucide-react";
 
 import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
@@ -6,64 +6,22 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface MessageActionsProps {
-	/** Optional CSS class name */
-	className?: string;
-	/** The text content to copy */
-	messageContentToCopy: string;
-	/** The role of the message (user or assistant) */
-	messageRole: "user" | "assistant" | "system";
-	/** Current vote state for the message */
+	/** The words the copy action puts on the clipboard. */
+	content: string;
+	/** The reader's vote on this reply, if they cast one. */
 	vote?: ChatMessageVote;
-	/** Whether actions are currently loading */
-	isLoading?: boolean;
-	/** Whether the message is in edit mode */
-	isInEditMode?: boolean;
-	/** Callback when copy action is triggered */
 	onCopy: (text: string) => void;
-	/** Callback when vote action is triggered (assistant messages only) */
+	/** Offered on Heph's replies. */
 	onVote?: (isUpvote: boolean) => void;
-	/** Callback when edit action is triggered (user messages only) */
+	/** Offered on the reader's own messages. */
 	onEdit?: () => void;
 }
 
-export function MessageActions({
-	className,
-	messageContentToCopy,
-	messageRole,
-	vote,
-	isLoading = false,
-	isInEditMode = false,
-	onCopy,
-	onVote,
-	onEdit,
-}: MessageActionsProps) {
-	if (isLoading) {
-		return null;
-	}
-	if (!messageContentToCopy.trim()) {
-		return null;
-	}
-	if (messageRole === "user" && isInEditMode) {
-		return null;
-	}
-
-	const isUserMessage = messageRole === "user";
-	const isAssistantMessage = messageRole === "assistant";
-
-	// For user messages, align actions to the right
-	const containerClassName = cn(
-		"flex flex-row gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100",
-		{
-			"justify-end": isUserMessage,
-			"justify-start": isAssistantMessage,
-		},
-		className,
-	);
-
+/** The row under one message. It rests hidden until the message is hovered or a control in it is focused. */
+export function MessageActions({ content, vote, onCopy, onVote, onEdit }: MessageActionsProps) {
 	return (
 		<TooltipProvider delay={0}>
-			<div className={containerClassName}>
-				{/* Copy button for all messages */}
+			<div className="flex flex-row gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
 				<Tooltip>
 					<TooltipTrigger
 						render={
@@ -72,17 +30,16 @@ export function MessageActions({
 								className="pointer-coarse:w-10"
 								variant="quiet"
 								size="icon"
-								onClick={() => onCopy(messageContentToCopy)}
+								onClick={() => onCopy(content)}
 							/>
 						}
 					>
-						<Copy />
+						<CopyIcon />
 					</TooltipTrigger>
-					<TooltipContent side={isAssistantMessage ? "top" : "bottom"}>Copy</TooltipContent>
+					<TooltipContent>Copy</TooltipContent>
 				</Tooltip>
 
-				{/* Edit button for user messages only */}
-				{isUserMessage && onEdit && (
+				{onEdit && (
 					<Tooltip>
 						<TooltipTrigger
 							render={
@@ -95,14 +52,13 @@ export function MessageActions({
 								/>
 							}
 						>
-							<PencilIcon size={14} />
+							<PencilIcon />
 						</TooltipTrigger>
-						<TooltipContent side="bottom">Edit message</TooltipContent>
+						<TooltipContent>Edit message</TooltipContent>
 					</Tooltip>
 				)}
 
-				{/* Vote buttons for assistant messages only */}
-				{isAssistantMessage && onVote && (
+				{onVote && (
 					<>
 						<Tooltip>
 							<TooltipTrigger
@@ -123,9 +79,9 @@ export function MessageActions({
 									/>
 								}
 							>
-								<ThumbsUp size={14} />
+								<ThumbsUpIcon />
 							</TooltipTrigger>
-							<TooltipContent side="top">Good response</TooltipContent>
+							<TooltipContent>Good response</TooltipContent>
 						</Tooltip>
 
 						<Tooltip>
@@ -147,9 +103,9 @@ export function MessageActions({
 									/>
 								}
 							>
-								<ThumbsDown size={14} />
+								<ThumbsDownIcon />
 							</TooltipTrigger>
-							<TooltipContent side="top">Bad response</TooltipContent>
+							<TooltipContent>Bad response</TooltipContent>
 						</Tooltip>
 					</>
 				)}

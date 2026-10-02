@@ -1,66 +1,78 @@
-import type { UseChatHelpers } from "@ai-sdk/react";
-import { AlertCircle, ArrowDown, RotateCcw } from "lucide-react";
+import type { ChatStatus } from "ai";
+import { AlertCircleIcon, RotateCcwIcon } from "lucide-react";
 
-import { AnimatePresence, motion } from "motion/react";
-
-import { cn } from "cn";
 import type { ChatMessageVote } from "@/api/types.gen";
-import { useScrollToBottom } from "@/components/mentor/use-scroll-to-bottom";
+import { HephIcon } from "@/components/brand/HephIcon";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import type { Attachment, ChatMessage } from "@/lib/types";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import {
+	MessageScroller,
+	MessageScrollerButton,
+	MessageScrollerContent,
+	MessageScrollerItem,
+	MessageScrollerProvider,
+	MessageScrollerViewport,
+} from "@/components/ui/message-scroller";
+import type { ChatMessage } from "@/lib/types";
 
-import { Messages } from "./Messages";
-import { type AttachmentUpload, MultimodalInput } from "./MultimodalInput";
+import { ChatComposer } from "./ChatComposer";
+import { Greeting } from "./Greeting";
+import { MentorMessage } from "./MentorMessage";
+import { visibleTexts } from "./message-text";
 
 export interface ChatProps {
 	messages: ChatMessage[];
 	votes?: ChatMessageVote[];
-	status: UseChatHelpers<ChatMessage>["status"];
+	status: ChatStatus;
+	/** The turn in flight is waiting for Heph's sandbox to start, so its first words come late. */
+	warmingUp?: boolean;
 	errorMessage?: string;
+	/** A saved conversation the reader can look at but not continue: no composer, no actions. */
 	readonly?: boolean;
-	isAtBottom?: boolean;
-	scrollToBottom?: () => void;
-	attachments: Attachment[];
-	onMessageSubmit: (data: { text: string; attachments: Attachment[] }) => void;
+	onMessageSubmit: (text: string) => void;
 	onStop: () => void;
-	attachmentUpload?: AttachmentUpload;
 	onMessageEdit?: (messageId: string, content: string) => void;
-	onCopy?: (content: string) => void;
+	onCopy: (content: string) => void;
 	onVote?: (messageId: string, isUpvote: boolean) => void;
 	onReload?: () => void;
 	inputPlaceholder?: string;
-	className?: string;
 }
 
+/**
+ * A conversation with Heph. The reader's newest message scrolls to the top so the reply reads down
+ * from it, the view follows the reply while the reader stays at the end, and a saved conversation
+ * opens at its last exchange.
+ */
 export function Chat({
 	messages,
 	votes,
 	status,
+	warmingUp = false,
 	errorMessage,
 	readonly = false,
-	isAtBottom: parentIsAtBottom = true,
-	scrollToBottom: parentScrollToBottom,
-	attachments,
 	onMessageSubmit,
 	onStop,
-	attachmentUpload,
 	onMessageEdit,
 	onCopy,
 	onVote,
 	onReload,
-	inputPlaceholder = "Send a message...",
-	className,
+	inputPlaceholder,
 }: ChatProps) {
-	const { containerRef, endRef, isAtBottom, scrollToBottom } = useScrollToBottom();
-
-	const actualIsAtBottom = parentScrollToBottom ? parentIsAtBottom : isAtBottom;
-	const actualScrollToBottom = parentScrollToBottom ?? scrollToBottom;
+	const busy = status === "submitted" || status === "streaming";
+	const lastMessage = messages.at(-1);
+	// Until a reply shows words, it is a status line rather than an empty message.
+	const replyPending =
+		busy && (lastMessage?.role !== "assistant" || visibleTexts(lastMessage).length === 0);
+	const shownMessages =
+		replyPending && lastMessage?.role === "assistant" ? messages.slice(0, -1) : messages;
+	const pendingStatus = warmingUp
+		? "Getting ready. The first reply takes a little longer."
+		: "Thinking…";
 
 	// The live error is gone once the conversation is reopened, but a reply saved as interrupted can still
 	// be tried again.
-	const isBusy = status === "error" && errorMessage === "Heph is busy. Please try again.";
-	const lastMessage = messages.at(-1);
+	const isBusyError = status === "error" && errorMessage === "Heph is busy. Please try again.";
 	const canRetry =
 		status === "error" ||
 		(onReload !== undefined &&
@@ -69,90 +81,95 @@ export function Chat({
 			lastMessage.metadata?.status === "interrupted");
 
 	return (
-		<div className={cn("relative h-full", className)}>
-			<div className="flex h-full flex-col">
-				<Messages
-					messages={messages}
-					votes={votes}
-					status={status}
-					readonly={readonly}
-					showThinking={status === "submitted" || status === "streaming"}
-					showGreeting={messages.length === 0}
-					variant="default"
-					containerRef={containerRef}
-					endRef={endRef}
-					onMessageEdit={onMessageEdit}
-					onCopy={onCopy}
-					onVote={onVote}
-				/>
-
-				<div className="relative z-10 -mt-20 flex w-full flex-col items-center gap-2 bg-gradient-to-t from-muted from-60% to-transparent px-4 pt-8 pb-2 dark:from-background/30">
-					<AnimatePresence>
-						{!actualIsAtBottom && !readonly && (
-							<motion.div
-								initial={{ opacity: 0, y: 10 }}
-								animate={{ opacity: 1, y: 0 }}
-								exit={{ opacity: 0, y: 10 }}
-								transition={{ type: "spring", stiffness: 300, damping: 20 }}
-								className="absolute -top-4 left-1/2 z-[95] -translate-x-1/2 rounded-full backdrop-blur-sm"
-							>
-								<Button
-									aria-label="Scroll to latest message"
-									shape="pill"
-									className="border-border/50 bg-background/80 shadow-lg hover:bg-background/90 dark:bg-background/80 dark:hover:bg-background/90"
-									size="icon"
-									variant="outline"
-									onClick={(event) => {
-										event.preventDefault();
-										actualScrollToBottom();
-									}}
+		<MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
+			<div className="flex h-full min-h-0 flex-col">
+				<MessageScroller className="flex-1">
+					<MessageScrollerViewport aria-label="Conversation with Heph">
+						<MessageScrollerContent
+							// Busy while words arrive, so assistive technology can wait for the whole reply.
+							aria-busy={status === "streaming"}
+							className="mx-auto w-full max-w-3xl px-4 py-6"
+						>
+							{messages.length === 0 && (
+								// The viewport stays hidden until it has placed a row, so the greeting is one.
+								<MessageScrollerItem>
+									<Greeting />
+								</MessageScrollerItem>
+							)}
+							{shownMessages.map((message) => (
+								<MessageScrollerItem
+									key={message.id}
+									messageId={message.id}
+									scrollAnchor={message.role === "user"}
 								>
-									<ArrowDown />
-								</Button>
-							</motion.div>
-						)}
-					</AnimatePresence>
+									<MentorMessage
+										message={message}
+										vote={votes?.find((vote) => vote.messageId === message.id)}
+										streaming={status === "streaming" && message === lastMessage}
+										readonly={readonly}
+										onMessageEdit={onMessageEdit}
+										onCopy={onCopy}
+										onVote={onVote}
+									/>
+								</MessageScrollerItem>
+							))}
+							{replyPending && (
+								<MessageScrollerItem>
+									<Marker aria-hidden>
+										<MarkerIcon>
+											<HephIcon size={16} pad={1} animated={false} />
+										</MarkerIcon>
+										<MarkerContent>
+											{/* One sweep per status, so the motion stops while the words stay (WCAG 2.2.2). */}
+											<span key={pendingStatus} className="shimmer shimmer-once">
+												{pendingStatus}
+											</span>
+										</MarkerContent>
+									</Marker>
+								</MessageScrollerItem>
+							)}
+						</MessageScrollerContent>
+					</MessageScrollerViewport>
+					<MessageScrollerButton />
+				</MessageScroller>
+				{/* Outside the log, which announces rows as they arrive but not a row whose words change. */}
+				<p role="status" className="sr-only">
+					{replyPending ? pendingStatus : ""}
+				</p>
+
+				<div className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-4 pb-2">
 					{canRetry && (
-						<div className="mb-2 w-full max-w-3xl">
-							<Alert variant={isBusy ? "warning" : "destructive"}>
-								<AlertCircle className="size-4" />
-								<AlertTitle>{isBusy ? "Heph is busy" : "Something went wrong"}</AlertTitle>
-								<AlertDescription className="flex items-center justify-between gap-4">
-									<span>
-										{isBusy
-											? "Please try again in a moment."
-											: "An error occurred while generating the response. Please try again."}
-									</span>
-									{onReload && (
-										<Button variant="outline" size="sm" onClick={onReload} className="shrink-0">
-											<RotateCcw className="size-4" />
-											Try again
-										</Button>
-									)}
-								</AlertDescription>
-							</Alert>
-						</div>
+						<Alert variant={isBusyError ? "warning" : "destructive"}>
+							<AlertCircleIcon />
+							<AlertTitle>{isBusyError ? "Heph is busy" : "Something went wrong"}</AlertTitle>
+							<AlertDescription className="flex items-center justify-between gap-4">
+								<span>
+									{isBusyError
+										? "Please try again in a moment."
+										: "An error occurred while generating the response. Please try again."}
+								</span>
+								{onReload && (
+									<Button variant="outline" size="sm" onClick={onReload} className="shrink-0">
+										<RotateCcwIcon />
+										Try again
+									</Button>
+								)}
+							</AlertDescription>
+						</Alert>
 					)}
 					{!readonly && (
-						<div className="w-full max-w-3xl">
-							<MultimodalInput
-								status={status === "streaming" ? "submitted" : status}
-								onStop={onStop}
-								attachments={attachments}
-								attachmentUpload={attachmentUpload}
-								onSubmit={onMessageSubmit}
-								placeholder={inputPlaceholder}
-								readonly={readonly}
-								scrollToBottom={actualScrollToBottom}
-								className="bg-background dark:bg-muted"
-							/>
-						</div>
+						<ChatComposer
+							busy={busy}
+							onSubmit={onMessageSubmit}
+							onStop={onStop}
+							placeholder={inputPlaceholder}
+						/>
 					)}
-					<p className="px-4 text-center text-xs text-balance text-muted-foreground">
+					<p className="text-center text-xs text-balance text-muted-foreground">
 						Heph can make mistakes. Consider verifying important information.
 					</p>
 				</div>
 			</div>
-		</div>
+		</MessageScrollerProvider>
 	);
 }
