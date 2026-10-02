@@ -77,6 +77,8 @@ public final class TranslatorState {
     /** Pi compacted, or tried to, during this turn: its summary calls are not all in the usage it reports. */
     private boolean compactionAttempted;
 
+    private boolean retryAttempted;
+
     /** Model id observed on the first AssistantMessage; used for pricing lookup. */
     @Nullable
     private String observedModel;
@@ -346,6 +348,14 @@ public final class TranslatorState {
 
     public synchronized boolean compactionAttempted() {
         return compactionAttempted;
+    }
+
+    public synchronized void markRetryAttempted() {
+        retryAttempted = true;
+    }
+
+    public synchronized boolean retryAttempted() {
+        return retryAttempted;
     }
 
     /** Authoritative totals from {@code agent_end}; a runner may omit them, keeping what was streamed. */
