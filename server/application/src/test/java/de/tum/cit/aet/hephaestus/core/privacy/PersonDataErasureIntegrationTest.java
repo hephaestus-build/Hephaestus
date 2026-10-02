@@ -265,6 +265,27 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 .as("Frozen preview/export parity for %s", store)
                 .isEqualTo(count));
         assertThat(export.path("stores").path("chat_thread").toString()).doesNotContain("session_jsonl");
+        assertThat(export.path("stores")
+                        .path("chat_message")
+                        .get(0)
+                        .path("parts")
+                        .size())
+                .isEqualTo(1);
+        assertThat(export.path("stores")
+                        .path("chat_message")
+                        .get(0)
+                        .path("parts")
+                        .get(0)
+                        .path("text")
+                        .asString())
+                .isEqualTo("Delivered guidance");
+        assertThat(export.path("stores")
+                        .path("chat_message")
+                        .get(0)
+                        .path("metadata")
+                        .path("inputTokens")
+                        .asLong())
+                .isEqualTo(12L);
         assertThat(export.toString())
                 .doesNotContain(
                         "Unrelated conversation",
@@ -492,8 +513,24 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         message.setThread(chatThread);
         message.setRole(ChatMessage.Role.ASSISTANT);
         message.setStatus(ChatMessage.Status.completed);
-        message.setParts(mapper.valueToTree(List.of(Map.of("type", "text", "text", "Delivered guidance"))));
-        message.setMetadata(mapper.createObjectNode());
+        message.setParts(mapper.valueToTree(List.of(
+                Map.of("type", "text", "text", "Delivered guidance", "privateCredential", "credential-canary"),
+                Map.of(
+                        "type",
+                        "tool-fetchContext",
+                        "toolCallId",
+                        "context-call",
+                        "input",
+                        Map.of("authorization", "credential-canary"),
+                        "output",
+                        Map.of("profile", "unrelated-profile-canary")))));
+        message.setMetadata(mapper.valueToTree(Map.of(
+                "inputTokens",
+                12,
+                "error",
+                Map.of("secret", "credential-canary"),
+                "toolCalls",
+                List.of(Map.of("profile", "unrelated-profile-canary")))));
         chatMessageRepository.save(message);
 
         Practice practice = new Practice();

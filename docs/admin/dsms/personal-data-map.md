@@ -129,3 +129,9 @@ Shared Outline documents and co-authored commits can contain the person's work e
 person is the primary author. Export includes those exact source-content copies without the other
 author's profile. Erasure clears the inseparable local content copy and keeps the other author's
 stable attribution and operational facts. Names and email addresses are not used to split content.
+
+Conversation exports contain visible message text and numeric usage facts. Tool input/output,
+arbitrary error metadata and hidden reasoning are excluded: they can contain credentials or copied
+profiles from another person. The projection is implemented in
+`server/application/src/main/java/de/tum/cit/aet/hephaestus/mentor/MentorMessagePersonDataStore.java`;
+canonical stored messages are not changed by export.

@@ -29,16 +29,7 @@ public class MentorPersonDataCatalog implements PersonDataCatalog {
                         "message_id",
                         "",
                         -120),
-                new JdbcPersonDataStore(
-                        jdbc,
-                        mapper,
-                        "chat_message",
-                        "chat_message",
-                        "t.thread_id IN (SELECT id FROM chat_thread WHERE user_id = ANY(:users))",
-                        "id,created_at,metadata,role,parent_message_id,thread_id,parts,version,status,llm_total_calls,llm_total_input_tokens,llm_total_output_tokens,llm_total_reasoning_tokens,llm_cache_read_tokens,llm_cache_write_tokens",
-                        "id",
-                        "",
-                        -110),
+                new MentorMessagePersonDataStore(jdbc, mapper),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,
