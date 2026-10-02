@@ -51,7 +51,7 @@ export const Default: Story = {
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
-				"The grey band shows the middle half of 28 developers observed in the last 30 days, and your marker shows you. A tile compares you once at least 10 other developers have reviewed work in this window; until then it shows only your own value.",
+				"The typical range is the middle half of 28 developers observed in the last 30 days; your marker shows you. A tile compares you once at least 10 other developers have reviewed work in this window; until then it shows only your own value.",
 			),
 		).toBeVisible();
 		await expect(

@@ -21,13 +21,13 @@ type Story = StoryObj<typeof meta>;
 /** Three to a row: the fourth tile, open feedback, starts the second. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText(/^Middle half here:/u)).toHaveLength(4);
+		await expect(canvas.getAllByText(/^Typical range:/u)).toHaveLength(4);
 		await expect(canvas.getByText("11 to 21")).toBeVisible();
 		await expect(canvas.getAllByText("of your 18 practices")).toHaveLength(2);
 		await expect(canvas.getByText("pieces open now")).toBeVisible();
 		await expect(
 			canvas.getByRole("img", {
-				name: "You: 3. The middle half of developers here: 1 to 4.",
+				name: "You: 3. Typical range here: 1 to 4.",
 			}),
 		).toBeVisible();
 		// Where a figure comes from sits behind an info icon, so every tile keeps one height.
@@ -60,7 +60,7 @@ export const NoOpenFeedbackHere: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Most developers here have no open feedback.")).toBeVisible();
-		await expect(canvas.getAllByText(/^Middle half here:/u)).toHaveLength(3);
+		await expect(canvas.getAllByText(/^Typical range:/u)).toHaveLength(3);
 	},
 };
 

@@ -30,7 +30,7 @@ export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("11 to 21")).toBeVisible();
 		await expect(
-			canvas.getByRole("img", { name: "You: 17. The middle half of developers here: 11 to 21." }),
+			canvas.getByRole("img", { name: "You: 17. Typical range here: 11 to 21." }),
 		).toBeVisible();
 		// Who the band is of is said once, under the tiles, not on every tile.
 		await expect(canvas.queryByText(/developers observed/u)).toBeNull();
@@ -42,9 +42,7 @@ export const OneValue: Story = {
 	args: { figure: { yours: 0, middleLow: 2, middleHigh: 2 } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("2")).toBeVisible();
-		await expect(
-			canvas.getByRole("img", { name: "You: 0. The middle half of developers here: 2." }),
-		).toBeVisible();
+		await expect(canvas.getByRole("img", { name: "You: 0. Typical range here: 2." })).toBeVisible();
 	},
 };
 
