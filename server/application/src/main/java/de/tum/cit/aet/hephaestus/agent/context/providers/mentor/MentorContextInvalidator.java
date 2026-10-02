@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
+import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -68,10 +69,21 @@ public class MentorContextInvalidator {
     @Async
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIssueUpdated(ScmDomainEvent.IssueUpdated event) {
-        Long workspaceId = resolveWorkspaceId(event.context());
-        if (workspaceId == null) return;
-        Long authorId = event.issue() != null ? event.issue().authorId() : null;
-        evictPerUser(workspaceId, authorId);
+        evictForIssue(event.context(), event.issue());
+    }
+
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onIssueClosed(ScmDomainEvent.IssueClosed event) {
+        evictForIssue(event.context(), event.issue());
+    }
+
+    private void evictForIssue(EventContext context, ScmEventPayload.IssueData issue) {
+        if (context.repository() == null) return;
+        for (Long workspaceId : workspaceRepository.findWorkspaceIdsByRepositoryId(
+                context.repository().id(), Pageable.unpaged())) {
+            evictPerUser(workspaceId, issue.authorId());
+        }
     }
 
     /**
