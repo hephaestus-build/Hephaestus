@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.privacy.spi;
 
 import java.util.List;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /** Verified identity closure, never inferred from names, logins, email or cached actor ids. */
@@ -10,9 +11,20 @@ public record PersonScope(
         List<Long> userIds,
         List<Long> conversationIds,
         List<Long> outlineDocumentIds,
-        List<Long> scmArtifactIds) {
+        List<Long> scmArtifactIds,
+        List<UUID> derivedJobIds) {
     public PersonScope(@Nullable Long accountId, List<PersonIdentity> identities, List<Long> userIds) {
-        this(accountId, identities, userIds, List.of(), List.of(), List.of());
+        this(accountId, identities, userIds, List.of(), List.of(), List.of(), List.of());
+    }
+
+    public PersonScope(
+            @Nullable Long accountId,
+            List<PersonIdentity> identities,
+            List<Long> userIds,
+            List<Long> conversationIds,
+            List<Long> outlineDocumentIds,
+            List<Long> scmArtifactIds) {
+        this(accountId, identities, userIds, conversationIds, outlineDocumentIds, scmArtifactIds, List.of());
     }
 
     public PersonScope {
@@ -21,5 +33,6 @@ public record PersonScope(
         conversationIds = List.copyOf(conversationIds);
         outlineDocumentIds = List.copyOf(outlineDocumentIds);
         scmArtifactIds = List.copyOf(scmArtifactIds);
+        derivedJobIds = List.copyOf(derivedJobIds);
     }
 }

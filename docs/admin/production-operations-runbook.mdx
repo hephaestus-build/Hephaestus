@@ -273,6 +273,12 @@ privacy contact in the instance notice; this page is not a data-subject request 
    subject keys. Working request keys are cleared on completion; abandoned previews are cleared on
    expiry. Failed jobs retain the working keys required to resume.
 
+The preview also includes reviews whose captured evidence contains the person's exact native identity,
+not only reviews addressed to that person. Their derived observations and feedback are included in
+erasure, including feedback copied into someone else's Heph conversation. The other developer's
+profile, replies and unrelated reviews stay. Repository history alone does not select another
+developer's derived feedback. Check this shared-evidence scope before starting erasure.
+
 Exact provider-key suppression is held separately from the audit receipt. It prevents the erased
 identity from being processed again and is not a reversible workspace consent choice. Provider sync
 can still mirror records that remain upstream. Tell the requester what remains outside the active

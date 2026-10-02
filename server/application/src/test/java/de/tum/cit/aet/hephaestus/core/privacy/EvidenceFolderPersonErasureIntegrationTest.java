@@ -444,6 +444,73 @@ class EvidenceFolderPersonErasureIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("Another developer's recorded result");
     }
 
+    @Test
+    void shouldRejectChangedNativeOwnershipEvenWhenTheSelectedCopyKeyIsUnchanged() {
+        databaseTestUtils.cleanDatabase();
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://same-copy-key.example"));
+        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "not-a-matching-key", provider));
+        var administrator = new de.tum.cit.aet.hephaestus.core.auth.domain.Account("Administrator");
+        administrator.setAppRole(de.tum.cit.aet.hephaestus.core.auth.domain.Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        var rows = new SchemaRowSeeder(jdbc);
+        rows.insert(
+                "repository",
+                Map.of("id", 997801L, "native_id", 997801L, "provider_id", Objects.requireNonNull(provider.getId())));
+        rows.insert(
+                "git_commit",
+                Map.of(
+                        "id",
+                        997802L,
+                        "repository_id",
+                        997801L,
+                        "sha",
+                        "b".repeat(40),
+                        "author_id",
+                        target.getId(),
+                        "message",
+                        "Upstream cache"));
+        var recorder = new ExactPersonDataCopyRecorder(jdbc);
+        var catalog = catalog(root, recorder);
+        var job = job("folder-same-copy-key");
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.systemUTC(), catalog);
+        files.beginPersonCapture(job);
+        recorder.recordRepository(997801L);
+        var prepared =
+                files.prepare(job, new PreparedEvidence(Map.of("repos/reviewed/cache", new byte[] {1}), null), null);
+        Path copiedCache = Objects.requireNonNull(prepared.filesOnDisk().get("repos/reviewed/cache"));
+        prepared.close();
+        var identities = List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null));
+        var preview = personData.preview(administratorId, null, identities);
+        UUID requestId = preview.request().getId();
+        var original = mapper.readValue(Objects.requireNonNull(preview.request().getScopeJson()), PersonScope.class);
+        assertThat(original.derivedJobIds()).isEmpty();
+        var store = catalog.contributors().getFirst();
+        var selected = store.select(original);
+        assertThat(selected.rows()).hasSize(1);
+        // Capture may add a secondary native subject to an existing repository-only receipt.
+        jdbc.update(
+                """
+                UPDATE person_evidence_copy SET payload=jsonb_set(payload,'{identities}',CAST(? AS jsonb))
+                WHERE job_id=?
+                """,
+                mapper.writeValueAsString(
+                        List.of(new PersonCopyIdentity("GITLAB", "https://same-copy-key.example", "42", null))),
+                job.getId());
+        assertThat(store.select(original)).isEqualTo(selected);
+        assertThat(catalog.jobsContaining(original)).containsExactly(job.getId());
+        assertThatThrownBy(() -> personData.export(requestId))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("preview scope changed");
+        assertThatThrownBy(() -> personData.requestErasure(requestId, administratorId, true))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("preview scope changed");
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.PREVIEW);
+        assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(AgentJobStatus.RUNNING);
+        assertThat(copiedCache).exists();
+    }
+
     private void awaitErasureRequest(UUID jobId) throws InterruptedException {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {

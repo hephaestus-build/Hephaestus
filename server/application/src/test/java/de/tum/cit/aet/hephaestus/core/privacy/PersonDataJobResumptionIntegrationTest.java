@@ -126,6 +126,7 @@ class PersonDataJobResumptionIntegrationTest extends BaseIntegrationTest {
         var service = new PersonDataService(
                 resolver,
                 registry,
+                List.of(),
                 requests,
                 suppression,
                 fence,

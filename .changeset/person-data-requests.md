@@ -61,3 +61,8 @@ folder deletion; deleting a database job alone does not count as removing its fi
 Person requests include existing provider records that differ only in the spelling of the same
 network origin, such as host case or a default HTTPS port. Native identities still match exactly.
 A link to another account on any equivalent provider record stops the request.
+
+Erasure also includes observations and feedback derived from copied evidence about the person, even
+when the review's primary developer is someone else. Confirmed folder removal does not discard that
+exact provenance before the counted erasure step. Unrelated reviews and the other developer's profile
+and replies stay.

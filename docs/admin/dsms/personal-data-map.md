@@ -185,3 +185,11 @@ commits with the workspace purge; it does not wait for a worker inside that data
 An offline mounted store keeps its receipt and exact identity keys until it returns and confirms
 folder deletion. After that confirmation, purged-workspace receipts keep only technical coordinates and
 the deletion state. Person erasure still waits for every selected store to acknowledge deletion.
+
+### Copied evidence and secondary subjects
+
+A person can appear in a review's captured evidence without being its primary developer. The preview
+freezes the exact job IDs from native-identity capture receipts. Observation, feedback and delivery
+contributors use those same IDs for export and erasure. A receipt's native provenance stays after
+folder deletion is acknowledged until the person-erasure step clears it. Unrelated review jobs and
+other people's profiles and replies are not selected through repository history alone.

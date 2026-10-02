@@ -302,7 +302,7 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
         return new PersonDataSelection(namedJdbc.query(
                 """
             SELECT c.job_id,c.id,c.workspace_id FROM person_evidence_copy c
-            WHERE c.state<>'ERASED' AND
+            WHERE c.payload<>'{}'::jsonb AND
               (EXISTS(
                 SELECT 1 FROM jsonb_to_recordset(COALESCE(c.payload->'identities','[]'::jsonb))
                   AS k("providerType" text,"providerOrigin" text,subject text,"teamId" text)

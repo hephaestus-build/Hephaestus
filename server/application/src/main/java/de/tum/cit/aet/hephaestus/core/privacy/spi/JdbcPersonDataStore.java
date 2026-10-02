@@ -64,6 +64,8 @@ public class JdbcPersonDataStore implements PersonDataContributor {
 
     public static Map<String, Object> parameters(PersonScope scope, ObjectMapper mapper) {
         return Map.of(
+                "derivedJobs",
+                new SqlArrayValue("uuid", scope.derivedJobIds().toArray()),
                 "users",
                 new SqlArrayValue("bigint", scope.userIds().toArray()),
                 "conversations",

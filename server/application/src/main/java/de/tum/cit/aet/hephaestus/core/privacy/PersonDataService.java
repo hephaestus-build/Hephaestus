@@ -26,6 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 public class PersonDataService {
     private final PersonIdentityResolver resolver;
     private final PersonDataRegistry registry;
+    private final List<PersonEvidenceErasure> evidenceStores;
     private final PersonDataRequestRepository requests;
     private final PersonSuppressionService suppression;
     private final PersonDataWriteFence writeFence;
@@ -41,7 +42,7 @@ public class PersonDataService {
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public Snapshot preview(
             Long administratorId, @org.jspecify.annotations.Nullable Long accountId, List<PersonIdentity> identities) {
-        PersonScope scope = resolver.resolve(accountId, identities);
+        PersonScope scope = withEvidenceJobs(resolver.resolve(accountId, identities));
         PersonDataRequest request = new PersonDataRequest();
         request.setAdministratorAccountId(administratorId);
         request.setScopeJson(mapper.writeValueAsString(scope));
@@ -226,9 +227,25 @@ public class PersonDataService {
 
     private void requireUnchanged(PersonDataRequest r, Map<String, PersonDataSelection> selected) {
         PersonScope scope = scope(r);
-        if (!scope.equals(resolver.resolve(scope.accountId(), scope.identities()))
+        if (!scope.equals(withEvidenceJobs(resolver.resolve(scope.accountId(), scope.identities())))
                 || !selected.equals(registry.select(scope)))
             throw new ResponseStatusException(HttpStatus.CONFLICT, "The preview scope changed; create a new preview");
+    }
+
+    private PersonScope withEvidenceJobs(PersonScope resolved) {
+        var derivedJobs = evidenceStores.stream()
+                .flatMap(store -> store.jobsContaining(resolved).stream())
+                .distinct()
+                .sorted()
+                .toList();
+        return new PersonScope(
+                resolved.accountId(),
+                resolved.identities(),
+                resolved.userIds(),
+                resolved.conversationIds(),
+                resolved.outlineDocumentIds(),
+                resolved.scmArtifactIds(),
+                derivedJobs);
     }
 
     private PersonScope scope(PersonDataRequest r) {

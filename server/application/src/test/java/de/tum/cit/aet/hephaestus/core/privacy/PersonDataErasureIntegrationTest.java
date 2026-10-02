@@ -491,6 +491,102 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(accounts.findById(administratorId).orElseThrow().getStatus()).isEqualTo(Account.Status.ACTIVE);
     }
 
+    @Test
+    void shouldEraseSecondaryEvidenceDerivationsAfterFolderRemovalWithoutErasingUnrelatedWork() {
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://secondary-evidence.example"));
+        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", provider));
+        var other = users.saveAndFlush(TestUserFactory.createUser(84L, "OTHER-PROFILE-CANARY", provider));
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        long administratorId =
+                Objects.requireNonNull(accounts.saveAndFlush(administrator).getId());
+        List<DerivedConversation> affected = new ArrayList<>();
+        List<UUID> copiedJobs = new ArrayList<>();
+        for (int index = 0; index < 2; index++) {
+            var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("secondary-" + index));
+            var derived = seedDerivedConversation(workspace, 1000L + index, other);
+            affected.add(derived);
+            UUID jobId = feedbackRepository
+                    .findById(derived.preparedId())
+                    .orElseThrow()
+                    .getAgentJobId();
+            copiedJobs.add(jobId);
+            // Folder removal has already been acknowledged. Exact provenance remains until its counted
+            // person step: the absence of the folder must not hide the observations derived from it.
+            jdbc.update(
+                    """
+                    INSERT INTO person_evidence_copy(id,workspace_id,job_id,store_id,state,payload)
+                    VALUES (?,?,?,?,'ERASED',CAST(? AS jsonb))
+                    """,
+                    UUID.randomUUID(),
+                    workspace.getId(),
+                    jobId,
+                    UUID.randomUUID(),
+                    mapper.writeValueAsString(Map.of(
+                            "identities",
+                            List.of(new PersonCopyIdentity("GITLAB", provider.getServerUrl(), "42", null)),
+                            "repositories",
+                            List.of())));
+        }
+        var unrelatedWorkspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("secondary-keep"));
+        var unrelated = seedDerivedConversation(unrelatedWorkspace, 2000L, other);
+        var unrelatedBefore = feedbackRepository
+                .findById(unrelated.preparedId())
+                .orElseThrow()
+                .getBody();
+        var preview = personData.preview(
+                administratorId,
+                null,
+                List.of(new PersonIdentity(Objects.requireNonNull(provider.getId()), "42", null)));
+        UUID requestId = preview.request().getId();
+        var scope = mapper.readValue(Objects.requireNonNull(preview.request().getScopeJson()), PersonScope.class);
+        assertThat(scope.derivedJobIds()).containsExactlyInAnyOrderElementsOf(copiedJobs);
+        var export = personData.export(requestId);
+        assertThat(export.path("stores").path("observation")).hasSize(4);
+        assertThat(export.path("stores").path("feedback")).hasSize(6);
+        assertThat(export.path("stores").path("person_evidence_copy")).hasSize(2);
+        assertThat(export.toString()).doesNotContain("OTHER-PROFILE-CANARY", "credential-canary");
+        personData.requestErasure(requestId, administratorId, true);
+        personData.run(requestId);
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+        for (var derived : affected) {
+            assertThat(observationRepository.findById(derived.observationIds().getFirst()))
+                    .isEmpty();
+            assertThat(observationRepository.findById(derived.observationIds().getLast()))
+                    .isEmpty();
+            assertThat(feedbackRepository.findById(derived.preparedId())).isEmpty();
+            assertThat(feedbackRepository.findById(derived.deliveredId())).isEmpty();
+            var message = chatMessageRepository.findById(derived.messageId()).orElseThrow();
+            assertThat(message.getParts().toString()).contains("This feedback was erased.");
+            assertThat(jdbc.queryForObject("""
+                    SELECT t.user_id FROM chat_thread t JOIN chat_message m ON m.thread_id=t.id WHERE m.id=?
+                    """, Long.class, derived.messageId()))
+                    .isEqualTo(other.getId());
+        }
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM person_evidence_copy WHERE payload<>'{}'::jsonb", Long.class))
+                .isZero();
+        assertThat(feedbackRepository
+                        .findById(unrelated.preparedId())
+                        .orElseThrow()
+                        .getBody())
+                .isEqualTo(unrelatedBefore);
+        assertThat(observationRepository.findById(unrelated.observationIds().getFirst()))
+                .isPresent();
+        assertThat(chatMessageRepository
+                        .findById(unrelated.messageId())
+                        .orElseThrow()
+                        .getParts()
+                        .toString())
+                .contains("Delivered guidance");
+        assertThat(users.findById(other.getId()).orElseThrow().getLogin()).isEqualTo("OTHER-PROFILE-CANARY");
+        assertThat(suppression.isUserSuppressed(Objects.requireNonNull(target.getId())))
+                .isTrue();
+        personData.run(requestId);
+        assertThat(personData.get(requestId).request().getState()).isEqualTo(PersonDataRequest.State.COMPLETE);
+    }
+
     private void link(
             Account account,
             IdentityProvider provider,
