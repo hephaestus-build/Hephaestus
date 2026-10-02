@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.integration.core.conformance;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.framework.ArtifactDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationFrameworkBootstrap;
@@ -19,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest.ReviewContribution;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Signal;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -134,6 +137,16 @@ class ReviewContractViolationTest extends BaseUnitTest {
                     .singleElement()
                     .asString()
                     .contains("names nobody to attribute an observation to");
+        }
+
+        @Test
+        void aReviewableKindWithoutEvidenceLimitationsIsRefused() {
+            var descriptor = spy(FixtureIntegration.descriptor());
+            when(descriptor.reviewCapabilities()).thenReturn(ReviewCapabilities.NONE);
+            assertThat(validateDescriptors(descriptor))
+                    .singleElement()
+                    .asString()
+                    .contains("names nothing its evidence cannot settle");
         }
 
         @Test

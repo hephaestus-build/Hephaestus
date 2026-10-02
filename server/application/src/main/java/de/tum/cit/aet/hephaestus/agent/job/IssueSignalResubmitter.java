@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,17 +30,17 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
 
     private final AgentJobService agentJobService;
     private final IssueRepository issueRepository;
-    private final PracticeReviewDetectionGate practiceReviewDetectionGate;
+    private final ReviewGate reviewGate;
     private final SignalRecorder signalRecorder;
 
     public IssueSignalResubmitter(
             AgentJobService agentJobService,
             IssueRepository issueRepository,
-            PracticeReviewDetectionGate practiceReviewDetectionGate,
+            ReviewGate reviewGate,
             SignalRecorder signalRecorder) {
         this.agentJobService = agentJobService;
         this.issueRepository = issueRepository;
-        this.practiceReviewDetectionGate = practiceReviewDetectionGate;
+        this.reviewGate = reviewGate;
         this.signalRecorder = signalRecorder;
     }
 
@@ -78,8 +78,7 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
             return;
         }
 
-        switch (practiceReviewDetectionGate.evaluateIssue(
-                issue, key.workspaceId(), key.signalName(), TriggerMode.AUTO)) {
+        switch (reviewGate.evaluateIssue(issue, key.workspaceId(), key.signalName(), TriggerMode.AUTO)) {
             case GateDecision.Skip skip -> {
                 log.debug(
                         "Pending signal now skipped by practice gate: issueId={}, reason={}",

@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.practices.observation.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
@@ -26,17 +25,11 @@ public record PracticeStandingObservationDTO(
                         + "observation to this developer (null if nothing was said)")
         String deliveredFeedback,
 
-        @Nullable @Schema(description = "Impact level (null unless assessed BAD)")
+        @Nullable @Schema(description = "Impact level (null unless NOT_MET)")
         Severity severity,
 
-        @NonNull
-        @Schema(
-                description = "What this observation says about the developer: a behaviour "
-                        + "demonstrated, a trap avoided, something harmful done, or something needed left out. The "
-                        + "lists only separate positive from negative, so this is what tells the two kinds of each apart. "
-                        + "Only assessed observations reach a standing, so NOT_APPLICABLE and UNDETERMINED "
-                        + "never appear here.")
-        ObservationKind kind,
+        @NonNull @Schema(description = "MET or NOT_MET result supporting this standing")
+        Outcome outcome,
 
         @NonNull @Schema(description = "The kind of reviewed work this is about")
         ArtifactKind workKind,
@@ -52,22 +45,13 @@ public record PracticeStandingObservationDTO(
                 description = "Why this observation was recorded. BACKFILL means it came from a review of past work "
                         + "rather than from something that just happened, and nothing was posted anywhere at the time.")
         ObservationOrigin origin) {
-    @com.fasterxml.jackson.annotation.JsonProperty("outcome")
-    @Schema(
-            description = "Positive or negative consequence of this assessed observation",
-            accessMode = Schema.AccessMode.READ_ONLY)
-    public Outcome getOutcome() {
-        if (!kind.isApplicable()) throw new IllegalStateException("Standing observations must be assessed");
-        return kind.isPositive() ? Outcome.POSITIVE : Outcome.NEGATIVE;
-    }
-
     public static PracticeStandingObservationDTO from(Observation observation, @Nullable String deliveredFeedback) {
         return new PracticeStandingObservationDTO(
                 observation.getId(),
                 observation.getSummary(),
                 deliveredFeedback,
                 observation.getSeverity(),
-                ObservationKind.of(observation),
+                observation.getOutcome(),
                 observation.getArtifactKind(),
                 observation.getArtifactId(),
                 locatorOf(observation.getEvidence()),

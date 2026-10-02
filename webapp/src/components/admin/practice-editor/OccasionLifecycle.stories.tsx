@@ -4,13 +4,13 @@ import { expect, fn, within } from "storybook/test";
 import type { PracticeWorkTypeDefinitionOptions } from "@/api/types.gen";
 import { artifactKindLabel } from "@/lib/artifact-kinds";
 import {
-	mockConversationBinding,
+	mockConversationReviewFields,
 	mockConversationWorkType,
-	mockDocumentBinding,
+	mockDocumentReviewFields,
 	mockDocumentWorkType,
-	mockIssueBinding,
+	mockIssueReviewFields,
 	mockIssueWorkType,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
 import { expectNoOverflowingElement } from "@/stories/reflow";
@@ -22,10 +22,10 @@ const meta = {
 	component: OccasionLifecycle,
 	args: {
 		workType: mockPullRequestWorkType,
-		selected: mockPullRequestBinding.signals,
+		selected: mockPullRequestReviewFields.signals,
 		onToggle: fn(),
-		includeDrafts: false,
-		onIncludeDraftsChange: fn(),
+		reviewWhen: mockPullRequestReviewFields.reviewWhen,
+		onReviewWhenChange: fn(),
 	},
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
@@ -34,12 +34,12 @@ const meta = {
 	// `meta.args`'s `fn()` unreachable: the Actions panel stays empty for a component whose whole job
 	// is reporting changes, and no play function in the file can assert what was reported.
 	render: (args) => (
-		<StatefulPatch initial={{ selected: [...args.selected], includeDrafts: args.includeDrafts }}>
+		<StatefulPatch initial={{ selected: [...args.selected], reviewWhen: args.reviewWhen }}>
 			{(state, patch) => (
 				<OccasionLifecycle
 					{...args}
 					selected={state.selected}
-					includeDrafts={state.includeDrafts}
+					reviewWhen={state.reviewWhen}
 					onToggle={(signal, chosen) => {
 						args.onToggle(signal, chosen);
 						patch({
@@ -48,9 +48,9 @@ const meta = {
 								: state.selected.filter((value) => value !== signal),
 						});
 					}}
-					onIncludeDraftsChange={(includeDrafts) => {
-						args.onIncludeDraftsChange(includeDrafts);
-						patch({ includeDrafts });
+					onReviewWhenChange={(reviewWhen) => {
+						args.onReviewWhenChange(reviewWhen);
+						patch({ reviewWhen });
 					}}
 				/>
 			)}
@@ -70,7 +70,7 @@ export const PullRequest: Story = {
 };
 
 export const Conversation: Story = {
-	args: { workType: mockConversationWorkType, selected: mockConversationBinding.signals },
+	args: { workType: mockConversationWorkType, selected: mockConversationReviewFields.signals },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Ends")).toBeNull();
 	},
@@ -80,10 +80,10 @@ const ALL_WORK_TYPES: {
 	workType: PracticeWorkTypeDefinitionOptions;
 	selected: readonly string[];
 }[] = [
-	{ workType: mockPullRequestWorkType, selected: mockPullRequestBinding.signals },
-	{ workType: mockIssueWorkType, selected: mockIssueBinding.signals },
-	{ workType: mockDocumentWorkType, selected: mockDocumentBinding.signals },
-	{ workType: mockConversationWorkType, selected: mockConversationBinding.signals },
+	{ workType: mockPullRequestWorkType, selected: mockPullRequestReviewFields.signals },
+	{ workType: mockIssueWorkType, selected: mockIssueReviewFields.signals },
+	{ workType: mockDocumentWorkType, selected: mockDocumentReviewFields.signals },
+	{ workType: mockConversationWorkType, selected: mockConversationReviewFields.signals },
 ];
 
 /** Side by side, which is the only way to judge whether one visual language holds across them. */
@@ -118,7 +118,7 @@ export const TheHandAskedReviewIsNotOnTheStrip: Story = {
  */
 export const AMomentTheWorkTypeNoLongerOffers: Story = {
 	args: {
-		selected: [...mockPullRequestBinding.signals, "scm.pull_request.manual_review"],
+		selected: [...mockPullRequestReviewFields.signals, "scm.pull_request.manual_review"],
 	},
 	play: async ({ args, canvas, userEvent }) => {
 		const stray = canvas.getByRole("checkbox", { name: /^Review requested by hand/u });
@@ -132,7 +132,7 @@ export const AMomentTheWorkTypeNoLongerOffers: Story = {
 
 /** The fault is drawn on the strip, not only in the message. */
 export const NoMomentChosen: Story = {
-	args: { selected: [], errorId: "practice-bindings-error" },
+	args: { selected: [], errorId: "practice-reviewSettings-error" },
 };
 
 export const Disabled: Story = {
@@ -147,36 +147,25 @@ export const Disabled: Story = {
  */
 export const TogglingMoments: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		const merged = canvas.getByRole("checkbox", { name: /^Merged/u });
+		const moments = within(canvas.getByRole("group", { name: "Reviews when" }));
+		const merged = moments.getByRole("checkbox", { name: /^Merged/u });
 		await expect(merged).not.toBeChecked();
 
-		await userEvent.click(canvas.getByText("Merged"));
-		await expect(canvas.getByRole("checkbox", { name: /^Merged/u })).toBeChecked();
+		await userEvent.click(moments.getByText("Merged"));
+		await expect(moments.getByRole("checkbox", { name: /^Merged/u })).toBeChecked();
 		await expect(args.onToggle).toHaveBeenCalledWith("scm.pull_request.merged", true);
 
-		const drafts = canvas.getByRole("switch", { name: /^Include drafts/u });
+		const drafts = canvas.getByRole("checkbox", { name: "Draft" });
 		await userEvent.click(drafts);
-		await expect(canvas.getByRole("switch", { name: /^Include drafts/u })).toBeChecked();
-		await expect(args.onIncludeDraftsChange).toHaveBeenCalledWith(true);
-	},
-};
-
-/**
- * A description nested inside the label joins the switch's accessible name and puts a `<p>` inside a
- * `<label>`, which no content model allows.
- */
-export const DraftsSwitchIsNamedByItsLabelAlone: Story = {
-	play: async ({ canvas }) => {
-		// Exact string: a prefix match would pass against a name the description had run on to.
-		const drafts = canvas.getByRole("switch", { name: "Include drafts" });
-		const hint = canvas.getByText(/Off by default/u);
-		await expect(drafts).toHaveAccessibleName("Include drafts");
-		await expect(drafts).toHaveAccessibleDescription(
-			"Off by default: read the work once it is offered as finished.",
+		await expect(canvas.getByRole("checkbox", { name: "Draft" })).toBeChecked();
+		await expect(args.onReviewWhenChange).toHaveBeenCalledWith({});
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Use recommended review conditions" }),
 		);
-		// The description is a paragraph, and it is outside the label rather than inside it.
-		await expect(hint.tagName).toBe("P");
-		await expect(hint.closest("label")).toBeNull();
+		await expect(drafts).not.toBeChecked();
+		await expect(canvas.getByRole("checkbox", { name: "Ready for review" })).toBeChecked();
+		await userEvent.click(canvas.getByRole("checkbox", { name: "Ready for review" }));
+		await expect(canvas.getByRole("checkbox", { name: "Ready for review" })).toBeChecked();
 	},
 };
 

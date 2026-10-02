@@ -7,7 +7,6 @@ import {
 	type ObservationResultFacts,
 	observationResult,
 } from "@/components/practice-vocabulary/observation-result";
-import { derivedOutcome } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { hasText } from "@/lib/text";
 
@@ -28,17 +27,13 @@ export function ObservationResultBadge({
 }
 
 /**
- * Severity is only ever read alongside a shortfall — a "Minor" beside a positive outcome would be
+ * Severity is only ever read alongside a shortfall — a "Minor" beside a met observation would be
  * a cost for something that cost nothing.
  */
 export function observationSeverity(
 	observation: ObservationResultFacts & Pick<ReviewObservation, "severity">,
 ): StatusDef | undefined {
-	return observation.assessmentStatus === "ASSESSED" &&
-		observation.presence &&
-		observation.assessment &&
-		derivedOutcome(observation.presence, observation.assessment) === "NEGATIVE" &&
-		observation.severity
+	return observation.outcome === "NOT_MET" && observation.severity
 		? SEVERITY_DEFS[observation.severity]
 		: undefined;
 }
@@ -60,7 +55,7 @@ export function ObservationOriginBadge({ origin }: { origin: ReviewObservation["
  * count at a different x on every row, reflow under the reader as a poll refreshes, and make an
  * absent count indistinguishable from one this screen does not render at all.
  *
- * Each number keeps its word beside it, so a screen reader gets "0 negative outcomes" rather than a
+ * Each number keeps its word beside it, so a screen reader gets "0 not met observations" rather than a
  * bare nought.
  */
 export function ReviewCountStrip({ slots, label }: { slots: OutcomeSlot[]; label: string }) {
@@ -77,7 +72,7 @@ export function ReviewCountStrip({ slots, label }: { slots: OutcomeSlot[]; label
 						{slot.count}
 					</span>
 					{
-						// A real space, so the pair reads "0 negative outcomes" to a screen reader and in a
+						// A real space, so the pair reads "0 not met observations" to a screen reader and in a
 						// test. Flex drops whitespace-only children, so the visible gap is still the one
 						// `gap-1` sets and this adds nothing to the layout.
 						" "

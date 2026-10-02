@@ -85,16 +85,16 @@ export const Default: Story = {
 		).toHaveAttribute("href", "/w/demo/admin/practices/review");
 		const observed = within(panel.getByRole("list", { name: "Observations by outcome" }));
 		await expect(observed.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-			"18 positive outcomes",
-			"9 negative outcomes",
+			"18 met observations",
+			"9 not met observations",
 			"4 not applicable",
 			"2 undetermined",
 		]);
 		// An observation count opens the list narrowed to this practice as well as the value.
 		const negative = new URL(
-			observed.getByRole<HTMLAnchorElement>("link", { name: "9 negative outcomes" }).href,
+			observed.getByRole<HTMLAnchorElement>("link", { name: "9 not met observations" }).href,
 		);
-		await expect(negative.searchParams.get("outcome")).toBe('["NEGATIVE"]');
+		await expect(negative.searchParams.get("outcome")).toBe('["NOT_MET"]');
 		await expect(negative.searchParams.get("practiceSlug")).toBe(`["${SLUG}"]`);
 		// What an admin marked incorrect, out of all of them, and what that share means.
 		within(panel.getByRole("list", { name: "Observations checked by an admin" })).getByRole(

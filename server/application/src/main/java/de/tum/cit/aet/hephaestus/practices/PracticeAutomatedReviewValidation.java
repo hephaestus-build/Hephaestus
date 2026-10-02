@@ -26,8 +26,6 @@ public record PracticeAutomatedReviewValidation(
         Objects.requireNonNull(sourceContractVersion, "sourceContractVersion");
         Objects.requireNonNull(policyDigest, "policyDigest");
         Objects.requireNonNull(reviewRuleFingerprint, "reviewRuleFingerprint");
-        // Both are compared against values earlier releases stored, so a malformed one does not fail
-        // here — it fails later as a review claim that silently never matches anything.
         if (!policyDigest.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("Invalid policy digest");
         }

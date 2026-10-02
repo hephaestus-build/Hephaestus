@@ -7,7 +7,7 @@ import { mockPractices } from "@/components/admin/practices/fixtures";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { server } from "@/mocks/server";
@@ -29,7 +29,7 @@ const preview: CatalogPracticePreview = {
 	definition: {
 		name: "Describe what changed and why",
 		artifactKind: "scm.pull_request",
-		bindings: [mockPullRequestBinding],
+		...mockPullRequestReviewFields,
 		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,
 		automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,

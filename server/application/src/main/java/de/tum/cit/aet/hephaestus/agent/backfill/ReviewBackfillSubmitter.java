@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import java.time.Instant;
 import java.util.Optional;
@@ -62,19 +62,19 @@ public class ReviewBackfillSubmitter {
     private final AgentJobService agentJobService;
     private final PullRequestRepository pullRequestRepository;
     private final IssueRepository issueRepository;
-    private final PracticeReviewDetectionGate detectionGate;
+    private final ReviewGate reviewGate;
     private final SignalRecorder signalRecorder;
 
     public ReviewBackfillSubmitter(
             AgentJobService agentJobService,
             PullRequestRepository pullRequestRepository,
             IssueRepository issueRepository,
-            PracticeReviewDetectionGate detectionGate,
+            ReviewGate reviewGate,
             SignalRecorder signalRecorder) {
         this.agentJobService = agentJobService;
         this.pullRequestRepository = pullRequestRepository;
         this.issueRepository = issueRepository;
-        this.detectionGate = detectionGate;
+        this.reviewGate = reviewGate;
         this.signalRecorder = signalRecorder;
     }
 
@@ -98,7 +98,7 @@ public class ReviewBackfillSubmitter {
             return Outcome.PASSED;
         }
 
-        switch (detectionGate.evaluate(pr, key.get().signalName(), TriggerMode.MANUAL)) {
+        switch (reviewGate.evaluate(pr, key.get().signalName(), TriggerMode.MANUAL)) {
             case GateDecision.Skip skip -> {
                 log.debug("Backfill skipped by practice gate: prId={}, reason={}", pr.getId(), skip.reason());
                 signalRecorder.markRefused(key.get(), skip.resolvedSignalReason());
@@ -135,7 +135,7 @@ public class ReviewBackfillSubmitter {
             return Outcome.PASSED;
         }
 
-        switch (detectionGate.evaluateIssue(issue, workspaceId, key.get().signalName(), TriggerMode.MANUAL)) {
+        switch (reviewGate.evaluateIssue(issue, workspaceId, key.get().signalName(), TriggerMode.MANUAL)) {
             case GateDecision.Skip skip -> {
                 log.debug("Backfill skipped by practice gate: issueId={}, reason={}", issue.getId(), skip.reason());
                 signalRecorder.markRefused(key.get(), skip.resolvedSignalReason());

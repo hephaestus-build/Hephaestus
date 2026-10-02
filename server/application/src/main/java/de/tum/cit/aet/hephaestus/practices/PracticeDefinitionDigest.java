@@ -6,7 +6,15 @@ final class PracticeDefinitionDigest {
 
     static String digest(String slug, PracticeDefinition definition) {
         CanonicalDigest digest = new CanonicalDigest().add(slug).add(definition.name());
-        ReviewRuleFingerprint.addBindings(digest, definition.bindings());
+        digest.addInt(definition.signals().size());
+        definition.signals().forEach(signal -> digest.add(signal.value()));
+        digest.addInt(definition.reviewWhen().size());
+        definition.reviewWhen().forEach((dimension, values) -> {
+            digest.add(dimension).addInt(values.size());
+            values.forEach(digest::add);
+        });
+        ReviewRuleFingerprint.addAssessment(
+                digest, definition.evidenceRequirements(), definition.subject(), definition.precondition());
         digest.add(definition.criteria())
                 .addNullable(definition.precomputeScript())
                 .add(PracticeAutomatedReviewPolicyDigest.digest(definition.automatedReviewPolicy()))

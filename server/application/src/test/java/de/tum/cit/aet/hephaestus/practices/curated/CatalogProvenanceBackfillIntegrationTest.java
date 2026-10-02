@@ -76,7 +76,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(stampedPractices(matching)).isOne();
         assertThat(stampedPractices(edited)).isOne();
         assertThat(baseSource(matching)).isEqualTo("BUNDLED_FINGERPRINT_MATCH");
-        assertThat(unfingerprintedRevisions()).isZero();
+        assertThat(unfingerprintedRevisions()).isEqualTo(2);
         assertThat(workspacesAwaiting()).isZero();
     }
 
@@ -115,77 +115,8 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
 
         assertThat(stamped.practices()).isZero();
         assertThat(stampedPractices(matching)).isZero();
-        assertThat(unfingerprintedRevisions()).isZero();
+        assertThat(unfingerprintedRevisions()).isEqualTo(2);
         assertThat(workspacesAwaiting()).isZero();
-    }
-
-    @Test
-    void upgradesAnUneditedV1SourceCopyToTheExactBundledEvidence() {
-        PracticeDefinition shipped = shipped();
-        String v1Fingerprint = "v1:" + "a".repeat(64);
-        seedLegacyWorkspace(
-                matching, shipped.criteria(), false, evidenceDefaults.policyFor(shipped.artifactKind()), v1Fingerprint);
-
-        backfill.run();
-
-        assertThat(jdbcTemplate.queryForObject(
-                        "SELECT automated_review_policy = ?::jsonb FROM practice WHERE workspace_id = ?",
-                        Boolean.class,
-                        evidenceJson(shipped),
-                        matching.getId()))
-                .isTrue();
-        assertThat(jdbcTemplate.queryForObject(
-                        "SELECT source_curated_fingerprint FROM practice WHERE workspace_id = ?",
-                        String.class,
-                        matching.getId()))
-                .isEqualTo(shipped.provenanceFingerprint(SHIPPED_SLUG));
-        assertThat(count(
-                        "SELECT count(*) FROM practice_revision r JOIN practice p ON p.id = r.practice_id WHERE p.workspace_id = ?",
-                        matching.getId()))
-                .isEqualTo(3);
-    }
-
-    @Test
-    void shouldContinueAligningWhenAPracticeIsMalformed() {
-        String v1Fingerprint = "v1:" + "a".repeat(64);
-        seedLegacyWorkspace(
-                matching,
-                shipped().criteria(),
-                false,
-                evidenceDefaults.policyFor(shipped().artifactKind()),
-                v1Fingerprint);
-        seedLegacyWorkspace(
-                edited,
-                shipped().criteria(),
-                false,
-                evidenceDefaults.policyFor(shipped().artifactKind()),
-                v1Fingerprint);
-        jdbcTemplate.update(
-                "UPDATE practice SET automated_review_policy = '{\"subject\":\"INVALID\"}'::jsonb WHERE workspace_id = ?",
-                matching.getId());
-
-        backfill.run();
-
-        assertThat(sourceFingerprint(edited)).isEqualTo(shipped().provenanceFingerprint(SHIPPED_SLUG));
-        assertThat(sourceFingerprint(matching)).isEqualTo(v1Fingerprint);
-    }
-
-    @Test
-    void shouldKeepCustomizedV1DefinitionWhenItDiffersFromTheCatalog() {
-        String v1Fingerprint = "v1:" + "a".repeat(64);
-        seedLegacyWorkspace(
-                matching,
-                "The workspace intentionally changed these criteria",
-                false,
-                evidenceDefaults.policyFor(shipped().artifactKind()),
-                v1Fingerprint);
-
-        backfill.run();
-
-        assertThat(sourceFingerprint(matching)).isEqualTo(v1Fingerprint);
-        assertThat(jdbcTemplate.queryForObject(
-                        "SELECT criteria FROM practice WHERE workspace_id = ?", String.class, matching.getId()))
-                .isEqualTo("The workspace intentionally changed these criteria");
     }
 
     @Test
@@ -205,14 +136,47 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
     }
 
     @Test
-    void shouldUseCurrentDefinitionWhenOldFingerprintDoesNotMatch() {
+    void shouldUseCurrentDefinitionWhenNeitherTheCatalogNorTheHistoryRecordsTheSourceFingerprint() {
         seedLegacyWorkspace(
                 matching, "Locally changed criteria", false, shipped().automatedReviewPolicy(), "v3:" + "a".repeat(64));
+        jdbcTemplate.update(
+                "UPDATE practice SET source_curated_fingerprint = ? WHERE workspace_id = ?",
+                "v3:" + "b".repeat(64),
+                matching.getId());
 
         backfill.run();
 
         assertThat(baseSource(matching)).isEqualTo("CURRENT_DEFINITION");
         assertThat(baseCriteria(matching)).isEqualTo("Locally changed criteria");
+    }
+
+    @Test
+    void shouldRecoverTheBaseFromTheRevisionRecordedUnderAReleasedSchemeFingerprint() {
+        String released = "v4:3c6f0e9a1b7d24c58e0f6a2d9b4c1e7f05a8d3b6c9e2f1a4d7b0c3e6f9a2d5b8";
+        seedLegacyWorkspace(
+                matching, "Criteria as the copy recorded them", false, shipped().automatedReviewPolicy(), released);
+        Long practiceId = jdbcTemplate.queryForObject(
+                "SELECT id FROM practice WHERE workspace_id = ?", Long.class, matching.getId());
+        jdbcTemplate.update("UPDATE practice SET criteria = 'Criteria edited here' WHERE id = ?", practiceId);
+        jdbcTemplate.update(
+                "UPDATE practice_revision SET criteria = 'Criteria edited here' WHERE practice_id = ? AND revision_number = 2",
+                practiceId);
+
+        backfill.run();
+
+        assertThat(baseSource(matching)).isEqualTo("REVISION_FINGERPRINT_MATCH");
+        assertThat(baseCriteria(matching)).isEqualTo("Criteria as the copy recorded them");
+        assertThat(sourceFingerprint(matching)).isEqualTo(released);
+        assertThat(jdbcTemplate.queryForObject(
+                        "SELECT review_rule_fingerprint FROM practice_revision WHERE practice_id = ? AND revision_number = 1",
+                        String.class,
+                        practiceId))
+                .isEqualTo(released);
+
+        backfill.run();
+
+        assertThat(baseSource(matching)).isEqualTo("REVISION_FINGERPRINT_MATCH");
+        assertThat(baseCriteria(matching)).isEqualTo("Criteria as the copy recorded them");
     }
 
     @Test
@@ -259,26 +223,6 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
         assertThat(kept.getAdoptedBase()).isEqualTo(bundled);
         assertThat(kept.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.EXACT_ADOPTION);
-    }
-
-    @Test
-    void preservesAnAcceptedBundledVersionWhenOnlyTheDigestGainedDeliveryBehavior() {
-        PracticeDefinition bundled = shipped();
-        CuratedPracticeOverride override = new CuratedPracticeOverride(SHIPPED_SLUG, Instant.now());
-        override.write(
-                withCriteria(bundled, "Local criteria"),
-                CuratedDefinitionDigest.beforeDeliveryBehavior(SHIPPED_SLUG, bundled),
-                Instant.now());
-        overrideRepository.save(override);
-
-        backfill.run();
-
-        CuratedPracticeOverride saved =
-                overrideRepository.findBySlug(SHIPPED_SLUG).orElseThrow();
-        assertThat(saved.getAdoptedBase()).isEqualTo(bundled);
-        assertThat(saved.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.BUNDLED_DIGEST_MATCH);
-        assertThat(saved.getAcceptedBundledDigest()).isEqualTo(CuratedDefinitionDigest.of(SHIPPED_SLUG, bundled));
-        assertThat(catalogService.practice(SHIPPED_SLUG).state()).isEqualTo(CatalogEntryState.EDITED_HERE);
     }
 
     @Test
@@ -330,7 +274,11 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
     private PracticeDefinition withCriteria(PracticeDefinition definition, String criteria) {
         return new PracticeDefinition(
                 definition.name(),
-                definition.bindings(),
+                definition.signals(),
+                definition.evidenceRequirements(),
+                definition.reviewWhen(),
+                definition.subject(),
+                definition.precondition(),
                 criteria,
                 definition.precomputeScript(),
                 definition.automatedReviewPolicy(),
@@ -360,30 +308,12 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
     }
 
     @Test
-    void fingerprintsAnUpgradedInstallCarryingAPreContractRevision() {
-        // An instance upgraded across the contract migration keeps its first-generation revisions, whose
-        // automated_review_policy the migration left null. Those rows must not enter the fingerprint pass:
-        // digesting a null policy aborts the whole workspace, leaving every review claim UNVERIFIABLE.
+    void preservesUnknownHistoricalReviewFingerprint() {
         seedLegacyWorkspace(matching, shipped().criteria(), true);
-        transactionOperations.executeWithoutResult(
-                ignored -> jdbcTemplate.update("""
-                INSERT INTO practice_revision (
-                    practice_id, revision_number, slug, name, applies_to, bindings, criteria,
-                    automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                )
-                SELECT id, 0, slug, name, applies_to, bindings, criteria,
-                       NULL, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now()
-                FROM practice WHERE workspace_id = ?
-                """, shipped().groupSlug(), matching.getId()));
 
         backfill.run();
 
-        Integer stillMissing = jdbcTemplate.queryForObject("""
-            SELECT count(*) FROM practice_revision r JOIN practice p ON p.id = r.practice_id
-            WHERE p.workspace_id = ? AND r.automated_review_policy IS NOT NULL
-              AND r.review_rule_fingerprint IS NULL
-            """, Integer.class, matching.getId());
-        assertThat(stillMissing).isZero();
+        assertThat(unfingerprintedRevisions()).isOne();
     }
 
     private void seedLegacyWorkspace(Workspace workspace, String criteria, boolean provenancePending) {
@@ -419,10 +349,10 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
             Long practiceId = jdbcTemplate.queryForObject(
                     """
                 INSERT INTO practice (
-                    workspace_id, practice_group_id, slug, name, applies_to, display_order, bindings,
+                    workspace_id, practice_group_id, slug, name, applies_to, display_order, signals, evidence_requirements, review_when, subject, precondition,
                     criteria, automated_review_policy, delivery_behavior, why_it_matters, source_curated_slug,
                     source_curated_fingerprint, autonomy, created_at
-                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
+                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
                 RETURNING id
                 """,
                     Long.class,
@@ -431,7 +361,13 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     slug,
                     shipped.name(),
                     shipped.artifactKind().value(),
-                    bindingsJson(shipped),
+                    objectMapper.valueToTree(shipped.signals()).toString(),
+                    objectMapper.valueToTree(shipped.evidenceRequirements()).toString(),
+                    objectMapper.valueToTree(shipped.reviewWhen()).toString(),
+                    shipped.subject().name(),
+                    shipped.precondition() == null
+                            ? null
+                            : objectMapper.valueToTree(shipped.precondition()).toString(),
                     criteria,
                     evidenceJson(evidence),
                     fingerprint == null ? null : slug,
@@ -439,9 +375,9 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
             Long revisionId = jdbcTemplate.queryForObject(
                     """
                 INSERT INTO practice_revision (
-                    practice_id, revision_number, slug, name, applies_to, bindings, criteria,
+                    practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, review_when, subject, precondition, criteria,
                     automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, now())
+                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, now())
                 RETURNING id
                 """,
                     Long.class,
@@ -449,7 +385,13 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     slug,
                     shipped.name(),
                     shipped.artifactKind().value(),
-                    bindingsJson(shipped),
+                    objectMapper.valueToTree(shipped.signals()).toString(),
+                    objectMapper.valueToTree(shipped.evidenceRequirements()).toString(),
+                    objectMapper.valueToTree(shipped.reviewWhen()).toString(),
+                    shipped.subject().name(),
+                    shipped.precondition() == null
+                            ? null
+                            : objectMapper.valueToTree(shipped.precondition()).toString(),
                     criteria,
                     evidenceJson(evidence),
                     shipped.groupSlug(),
@@ -458,9 +400,9 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 revisionId = jdbcTemplate.queryForObject(
                         """
                     INSERT INTO practice_revision (
-                        practice_id, revision_number, slug, name, applies_to, bindings, criteria,
+                        practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, review_when, subject, precondition, criteria,
                         automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now())
+                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now())
                     RETURNING id
                     """,
                         Long.class,
@@ -468,7 +410,15 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                         slug,
                         shipped.name(),
                         shipped.artifactKind().value(),
-                        bindingsJson(shipped),
+                        objectMapper.valueToTree(shipped.signals()).toString(),
+                        objectMapper.valueToTree(shipped.evidenceRequirements()).toString(),
+                        objectMapper.valueToTree(shipped.reviewWhen()).toString(),
+                        shipped.subject().name(),
+                        shipped.precondition() == null
+                                ? null
+                                : objectMapper
+                                        .valueToTree(shipped.precondition())
+                                        .toString(),
                         criteria,
                         evidenceJson(evidence),
                         shipped.groupSlug());
@@ -479,11 +429,6 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 VALUES (?, now(), CASE WHEN ? THEN NULL ELSE now() END)
                 """, workspace.getId(), provenancePending);
         });
-    }
-
-    /** The bindings column, as the legacy rows this backfill reads carry it. */
-    private String bindingsJson(PracticeDefinition definition) {
-        return objectMapper.valueToTree(definition.bindings()).toString();
     }
 
     private String evidenceJson(PracticeDefinition definition) {

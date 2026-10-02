@@ -33,7 +33,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -544,12 +544,9 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
             Practice theirs = persistPractice(workspace, null, "theirs", "Their practice", null);
             AgentJob job = persistPullRequestReview(workspace, (int) ARTIFACT_ID, ARTIFACT_ID, READY_AT);
             recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, job.getId());
-            UUID aboutMember =
-                    observe(shared, job, ARTIFACT_ID, member, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
-            UUID aboutAuthor =
-                    observe(shared, job, ARTIFACT_ID, author, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
-            UUID onlyAuthor =
-                    observe(theirs, job, ARTIFACT_ID, author, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
+            UUID aboutMember = observe(shared, job, ARTIFACT_ID, member, Outcome.MET, null, READY_AT);
+            UUID aboutAuthor = observe(shared, job, ARTIFACT_ID, author, Outcome.MET, null, READY_AT);
+            UUID onlyAuthor = observe(theirs, job, ARTIFACT_ID, author, Outcome.MET, null, READY_AT);
             feedback(job, 1, aboutMember, member, FeedbackDeliveryState.DELIVERED, null);
             feedback(job, 2, aboutAuthor, author, FeedbackDeliveryState.DELIVERED, null);
             feedback(
@@ -585,9 +582,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
             Practice shared = persistPractice(workspace, null, "shared", "Shared practice", null);
             AgentJob job = persistPullRequestReview(workspace, (int) ARTIFACT_ID, ARTIFACT_ID, READY_AT);
             recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, job.getId());
-            observe(shared, job, ARTIFACT_ID, member, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
-            UUID aboutAuthor =
-                    observe(shared, job, ARTIFACT_ID, author, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
+            observe(shared, job, ARTIFACT_ID, member, Outcome.MET, null, READY_AT);
+            UUID aboutAuthor = observe(shared, job, ARTIFACT_ID, author, Outcome.MET, null, READY_AT);
             feedback(
                     job,
                     1,
@@ -698,16 +694,17 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
     }
 
     private void assertOwnTraceCounts(User developer, boolean ownEndpoint) {
+        // Historical reviews can have multiple observations per practice; access filters still apply to every row.
         Practice shared = persistPractice(workspace, null, "shared", "Shared practice", null);
         AgentJob job = persistPullRequestReview(workspace, (int) ARTIFACT_ID, ARTIFACT_ID, READY_AT);
         recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, job.getId());
-        UUID own = observe(shared, job, ARTIFACT_ID, developer, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
+        UUID own = observe(shared, job, ARTIFACT_ID, developer, Outcome.MET, null, READY_AT);
         observe(
                 shared,
                 job,
                 ARTIFACT_ID,
                 developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
+                Outcome.MET,
                 null,
                 READY_AT.plusSeconds(60),
                 "{\"citations\":[{\"sourceKind\":\"workspace.project-inventory\","
@@ -730,22 +727,15 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                 job,
                 ARTIFACT_ID,
                 developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
+                Outcome.MET,
                 null,
                 READY_AT.plusSeconds(30),
                 "{\"citations\":[{\"sourceKind\":\"slack.conversation.thread\","
                         + "\"artifactPath\":\"context/conversation_thread.json\","
                         + "\"sourceReference\":{\"records\":[{\"type\":\"chat\","
                         + "\"channel\":\"trace-channel\",\"message\":\"1.000001\"}]}}]}");
-        observe(
-                shared,
-                job,
-                ARTIFACT_ID + 1,
-                developer,
-                ObservationKind.DEMONSTRATED_STRENGTH,
-                null,
-                READY_AT.plusSeconds(120));
-        UUID theirs = observe(shared, job, ARTIFACT_ID, author, ObservationKind.DEMONSTRATED_STRENGTH, null, READY_AT);
+        observe(shared, job, ARTIFACT_ID + 1, developer, Outcome.MET, null, READY_AT.plusSeconds(120));
+        UUID theirs = observe(shared, job, ARTIFACT_ID, author, Outcome.MET, null, READY_AT);
         feedback(job, 1, own, developer, FeedbackDeliveryState.DELIVERED, null);
         feedback(
                 job,
@@ -832,7 +822,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                 persistPractice(workspace, null, "observed-" + UUID.randomUUID(), "Observed practice", null);
         AgentJob job = persistPullRequestReview(workspace, (int) ARTIFACT_ID, ARTIFACT_ID, readyAt);
         recordSignal(workspace, ScmSignals.PULL_REQUEST_READY, SignalState.TRIGGERED, null, job.getId(), readyAt);
-        observe(practice, job, ARTIFACT_ID, developer, ObservationKind.DEMONSTRATED_STRENGTH, null, readyAt);
+        observe(practice, job, ARTIFACT_ID, developer, Outcome.MET, null, readyAt);
         return job;
     }
 
@@ -861,7 +851,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
         practice.setSlug(slug);
         practice.setName(name);
         practice.setCriteria("Criteria for " + slug);
-        practice.setBindings(PracticeTestEvidence.bindings(signal));
+        PracticeTestEvidence.configure(practice, signal);
         practice.setAutonomy(autonomy);
         return practiceRepository.save(practice);
     }
@@ -964,9 +954,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                 ARTIFACT_ID,
                 author.getId(),
                 "Something was observed",
-                "ASSESSED",
-                "PRESENT",
-                "GOOD",
+                "MET",
                 null,
                 "{\"citations\":[]}",
                 "Because the diff says so",

@@ -29,7 +29,6 @@ void describe("planUpstreamSubjects", () => {
 		assert.deepEqual(subjects.map((subject) => subject.image).toSorted(), [
 			"alpine",
 			"nats",
-			"nginx",
 			"traefik",
 		]);
 		// A tag would resolve to whatever it points at today rather than to the artefact the release

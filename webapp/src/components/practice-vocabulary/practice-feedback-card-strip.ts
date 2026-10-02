@@ -34,7 +34,7 @@ export function stripPieces(
 		...cleanWork.map((clean) => ({
 			...clean,
 			key: `${clean.ref.kind} ${clean.ref.id} clean`,
-			outcome: "DEMONSTRATED_STRENGTH" as const,
+			outcome: "MET" as const,
 		})),
 	]
 		.sort((a, b) => a.date.getTime() - b.date.getTime())

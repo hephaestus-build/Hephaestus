@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.practices.curated;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import java.util.Map;
 
 final class CuratedCatalogFixtures {
 
@@ -12,7 +14,11 @@ final class CuratedCatalogFixtures {
     static PracticeDefinition practice(String name, String criteria, String whyItMatters) {
         return new PracticeDefinition(
                 name,
-                PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+                Map.of(),
+                ActorRole.AUTHOR,
+                null,
                 criteria,
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),

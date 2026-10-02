@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
  * start.
  *
  * <p>It also closes the seam on the other side, because it is the only place holding the run-able set: a
- * kind that can be run but has no branch in {@code PracticeDetectionDeliveryService#resolveTarget} would
+ * kind that can be run but has no branch in {@code ReviewOutputService#resolveTarget} would
  * otherwise announce itself through the first review that failed after being paid for.
  */
 @Component
@@ -35,10 +35,10 @@ public class JobTypeReviewExecutionCatalog implements ReviewExecutionCatalog {
                 .map(handler -> AgentJobService.artifactKindFor(handler.jobType()))
                 .collect(Collectors.toUnmodifiableSet());
         Set<ArtifactKind> undeliverable = new HashSet<>(executableKinds);
-        undeliverable.removeAll(PracticeDetectionDeliveryService.ROUTABLE_KINDS);
+        undeliverable.removeAll(ReviewOutputService.ROUTABLE_KINDS);
         if (!undeliverable.isEmpty()) {
             throw new IllegalStateException("Reviewable artifact kinds can be run but not delivered: " + undeliverable
-                    + ". Give each one a branch in PracticeDetectionDeliveryService#resolveTarget.");
+                    + ". Give each one a branch in ReviewOutputService#resolveTarget.");
         }
     }
 

@@ -19,8 +19,7 @@ const twoClean = [clean(21, "2026-09-07"), clean(22, "2026-09-09")];
 const threeClean = [clean(20, "2026-09-07"), clean(21, "2026-09-08"), clean(22, "2026-09-09")];
 
 /** The strip's outcome icons, matched by the names they carry for a screen reader. */
-const OUTCOME_NAME =
-	/^(?:Strength shown|Risk avoided|Needs improvement|Expected practice missing)$/u;
+const OUTCOME_NAME = /^(?:Met|Not met)$/u;
 const names = (icons: HTMLElement[]) => icons.map((icon) => icon.getAttribute("aria-label"));
 
 const meta = {
@@ -181,11 +180,11 @@ export const TwoOfThreeClean: Story = {
 		await expect(meter).toHaveAttribute("aria-valuemax", "3");
 		await expect(meter).toHaveAttribute("aria-valuetext", "2 of 3 clean");
 		await expect(names(canvas.getAllByRole("button", { name: OUTCOME_NAME }))).toStrictEqual([
-			"Needs improvement",
-			"Needs improvement",
-			"Needs improvement",
-			"Strength shown",
-			"Strength shown",
+			"Not met",
+			"Not met",
+			"Not met",
+			"Met",
+			"Met",
 		]);
 		// A clean piece is dated like the evidence beside it.
 		await expect(canvas.getByRole("link", { name: /^#22/u })).toBeVisible();
@@ -331,13 +330,13 @@ export const EveryOutcome: Story = {
 			headline: "Descriptions named the what, rarely the why",
 			body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
 			reviewedWork: [
-				{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "OMISSION_GAP" },
-				{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "COMMISSION_PROBLEM" },
-				{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "SAFE_AVOIDANCE" },
+				{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "NOT_MET" },
+				{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "NOT_MET" },
+				{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "MET" },
 				{
 					ref: pullRequest(21),
 					date: new Date("2026-09-08T00:00"),
-					outcome: "DEMONSTRATED_STRENGTH",
+					outcome: "MET",
 				},
 			],
 			nextStep:
@@ -348,10 +347,10 @@ export const EveryOutcome: Story = {
 		// Each outcome names itself once in the strip, oldest first whatever order the work was
 		// given in — #16 on 24 Aug, #20 on 3 Sep, #19 on 6 Sep, #21 on 8 Sep.
 		await expect(names(canvas.getAllByRole("button", { name: OUTCOME_NAME }))).toStrictEqual([
-			"Expected practice missing",
-			"Risk avoided",
-			"Needs improvement",
-			"Strength shown",
+			"Not met",
+			"Met",
+			"Not met",
+			"Met",
 		]);
 	},
 };
@@ -392,8 +391,8 @@ export const MixedWork: Story = {
 			...card,
 			state: "open",
 			reviewedWork: [
-				{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "COMMISSION_PROBLEM" },
-				{ ref: issue(13), date: new Date("2026-09-03T00:00"), outcome: "OMISSION_GAP" },
+				{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "NOT_MET" },
+				{ ref: issue(13), date: new Date("2026-09-03T00:00"), outcome: "NOT_MET" },
 			],
 			cleanWork: [{ ref: conversation("#releases"), date: new Date("2026-09-05T00:00") }],
 		},
@@ -434,7 +433,7 @@ export const WorkWithoutAnAddress: Story = {
 				{
 					ref: conversation("#backend-review"),
 					date: new Date("2026-08-12T00:00"),
-					outcome: "OMISSION_GAP",
+					outcome: "NOT_MET",
 				},
 			],
 			cleanWork: [{ ref: conversation("#releases"), date: new Date("2026-08-20T00:00") }],

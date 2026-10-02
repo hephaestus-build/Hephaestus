@@ -3,7 +3,7 @@ import { ArrowRightIcon, CheckIcon, ChevronRightIcon, ClockIcon, PackageIcon } f
 import { type ComponentType, type Ref, useId, useState } from "react";
 
 import { cn } from "cn";
-import type { InAppFeedback, ReviewedWorkRef } from "@/api/types.gen";
+import type { InAppEvidence, InAppFeedback, ReviewedWorkRef } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
@@ -29,11 +29,7 @@ import { type FeedbackTextSegment, linkWork } from "./feedback-text";
 import { FEEDBACK_USEFULNESS_DEFS, type FeedbackUsefulness } from "./feedback-usefulness-defs";
 import { FeedbackText } from "./FeedbackText";
 import { GroupName } from "./GroupName";
-import {
-	OBSERVATION_OUTCOME_OF_WORK,
-	OBSERVATION_OUTCOME_PRESENTATION,
-	type ReviewedWorkKind,
-} from "./observation-outcome";
+import { OUTCOME_DEFS } from "./outcome-defs";
 import { countedStripWork, type StripPiece, stripPieces } from "./practice-feedback-card-strip";
 import { PracticePill } from "./PracticePill";
 import { StatusIcon } from "./StatusTooltip";
@@ -68,7 +64,7 @@ export interface ReviewedWorkOutcome {
 	ref: ReviewedWorkRef;
 	/** When the work was reviewed; the strip orders by it and shows it as the short day, "28 Aug". */
 	date: Date;
-	outcome: ReviewedWorkKind;
+	outcome: InAppEvidence["outcome"];
 }
 
 /**
@@ -521,9 +517,7 @@ function StripPieceView({ piece, arrow }: { piece: StripPiece; arrow: boolean })
 	return (
 		<span className="inline-flex items-center gap-2 whitespace-nowrap">
 			{arrow && <ChevronRightIcon className="size-3 shrink-0 text-muted-foreground" aria-hidden />}
-			<StatusIcon
-				def={OBSERVATION_OUTCOME_PRESENTATION[OBSERVATION_OUTCOME_OF_WORK[piece.outcome]]}
-			/>
+			<StatusIcon def={OUTCOME_DEFS[piece.outcome]} />
 			<InlineLink href={piece.ref.url} external className="font-medium">
 				{piece.ref.label}
 			</InlineLink>

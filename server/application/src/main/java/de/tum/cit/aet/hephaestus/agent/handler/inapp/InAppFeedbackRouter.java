@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.handler.ObservationOrder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
@@ -107,8 +106,7 @@ public final class InAppFeedbackRouter {
         Comparator<Observation> worstFirst = ObservationOrder.worstFirst();
         Map<ReviewedWorkKey, Observation> worstPerWork = new LinkedHashMap<>();
         for (Observation observation : LatestRun.perWork(evidence)) {
-            if (observation.getAssessmentStatus() != AssessmentStatus.ASSESSED
-                    || observation.getOutcome() != Outcome.NEGATIVE) {
+            if (!observation.getOutcome().isDecided() || observation.getOutcome() != Outcome.NOT_MET) {
                 continue;
             }
             worstPerWork.merge(

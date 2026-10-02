@@ -15,12 +15,10 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -74,7 +72,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     @InjectMocks
     ObservationHistoryContentSource provider;
 
-    private static final List<String> VERDICTS = List.of("ASSESSED");
+    private static final List<String> VERDICTS = List.of("MET", "NOT_MET");
     private static final List<String> ABSTENTIONS = List.of("NOT_APPLICABLE", "UNDETERMINED");
 
     @BeforeEach
@@ -117,9 +115,9 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         JsonNode root = objectMapper.readTree(bytes);
         assertThat(root.get("user").get("login").asString()).isEqualTo("octo");
         assertThat(root.get("summary").get("includedObservations").asLong()).isEqualTo(0L);
-        // All presence states present even when count is 0 — keeps the wire shape stable.
-        for (Presence v : Presence.values()) {
-            assertThat(root.get("summary").get("byPresence").has(v.name())).isTrue();
+        // All outcome states present even when count is 0 — keeps the wire shape stable.
+        for (Outcome v : Outcome.values()) {
+            assertThat(root.get("summary").get("byOutcome").has(v.name())).isTrue();
         }
         for (Severity s : Severity.values()) {
             assertThat(root.get("summary").get("bySeverity").has(s.name())).isTrue();
@@ -164,9 +162,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .agentJobId(UUID.randomUUID())
                 .summary("Swallowed IOException")
                 .practice(practice)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.PRESENT)
-                .assessment(Assessment.BAD)
+                .outcome(Outcome.NOT_MET)
                 .severity(Severity.MINOR)
                 .observedAt(Instant.now())
                 .evidenceRationale(reasoning)
@@ -185,7 +181,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("rows: (presence,assessment) matrix nulls + populated reviewsReceived row")
+    @DisplayName("decided outcomes and abstentions stay separate from received reviews")
     void recentObservationsAndReviewsPopulated() throws Exception {
         User user = new User();
         user.setLogin("octo");
@@ -201,9 +197,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .practice(practiceBad)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(123L)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.PRESENT)
-                .assessment(Assessment.BAD)
+                .outcome(Outcome.NOT_MET)
                 .severity(Severity.MAJOR)
                 .observedAt(observedBad)
                 .evidence(
@@ -215,15 +209,13 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         var practiceNa = new Practice();
         practiceNa.setSlug("writes-tests");
         Instant observedNa = Instant.parse("2025-06-09T08:00:00Z");
-        // NOT_APPLICABLE: assessment AND severity are null — must serialise as JSON null, not the enum name.
+        // An abstention carries no severity.
         var naObservation = Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(UUID.randomUUID())
                 .summary("No test surface")
                 .practice(practiceNa)
-                .assessmentStatus(AssessmentStatus.NOT_APPLICABLE)
-                .presence(null)
-                .assessment(null)
+                .outcome(Outcome.NOT_APPLICABLE)
                 .severity(null)
                 .observedAt(observedNa)
                 .evidenceRationale("Docs-only change.")
@@ -261,8 +253,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         JsonNode bad = obs.get(0);
         assertThat(bad.get("practiceSlug").asString()).isEqualTo("robust-error-handling");
         assertThat(bad.get("summary").asString()).isEqualTo("Swallowed IOException");
-        assertThat(bad.get("presence").asString()).isEqualTo("PRESENT");
-        assertThat(bad.get("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(bad.has("presence")).isFalse();
+        assertThat(bad.get("outcome").asString()).isEqualTo("NOT_MET");
         assertThat(bad.has("assessment")).isFalse();
         assertThat(bad.get("severity").asString()).isEqualTo("MAJOR");
         assertThat(bad.get("observedAt").asString()).isEqualTo(observedBad.toString());
@@ -296,9 +288,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
 
         assertThat(root.get("abstentions")).hasSize(1);
         JsonNode na = root.get("abstentions").get(0);
-        assertThat(na.get("assessmentStatus").asString()).isEqualTo("NOT_APPLICABLE");
-        // outcome/severity must be JSON null (not the string "null", not absent).
-        assertThat(na.get("outcome").isNull()).isTrue();
+        assertThat(na.get("outcome").asString()).isEqualTo("NOT_APPLICABLE");
+        // An abstention retains its outcome and carries explicit null severity.
         assertThat(na.get("severity").isNull()).isTrue();
 
         JsonNode reviews = root.get("reviewsReceived");
@@ -319,12 +310,11 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         List<Observation> verdicts = new java.util.ArrayList<>();
         List<Observation> abstentions = new java.util.ArrayList<>();
         for (int i = 0; i < 50; i++) {
-            verdicts.add(
-                    observation(AssessmentStatus.ASSESSED, "Summary " + i, citations(1, 6_000), "r".repeat(1_500)));
+            verdicts.add(observation(Outcome.NOT_MET, "Summary " + i, citations(1, 6_000), "r".repeat(1_500)));
         }
         for (int i = 0; i < 20; i++) {
-            abstentions.add(observation(
-                    AssessmentStatus.NOT_APPLICABLE, "Summary " + i, citations(1, 6_000), "r".repeat(1_500)));
+            abstentions.add(
+                    observation(Outcome.NOT_APPLICABLE, "Summary " + i, citations(1, 6_000), "r".repeat(1_500)));
         }
         givenHistory(verdicts, abstentions);
 
@@ -345,7 +335,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         givenDeveloper();
         List<Observation> verdicts = new java.util.ArrayList<>();
         for (int i = 0; i < 50; i++) {
-            verdicts.add(observation(AssessmentStatus.ASSESSED, "s".repeat(1_000 + i), citations(1, 10), "r"));
+            verdicts.add(observation(Outcome.NOT_MET, "s".repeat(1_000 + i), citations(1, 10), "r"));
         }
         givenHistory(verdicts, List.of());
 
@@ -386,9 +376,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .summary("Reason missing")
                 .practice(practice)
                 .practiceRevision(revision)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.ABSENT)
-                .assessment(Assessment.GOOD)
+                .outcome(Outcome.NOT_MET)
                 .observedAt(Instant.now())
                 .evidence(citations(1, 10))
                 .build();
@@ -402,7 +390,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(row.get("practiceRevisionId").asLong()).isEqualTo(1731L);
         assertThat(row.get("criteria").asString()).isEqualTo(criteria);
         assertThat(row.path("criteriaNotLoaded").asBoolean(false)).isFalse();
-        assertThat(row.get("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(row.get("outcome").asString()).isEqualTo("NOT_MET");
     }
 
     @ParameterizedTest
@@ -423,9 +411,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .summary("Reason missing")
                 .practice(practice)
                 .practiceRevision(revision)
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.ABSENT)
-                .assessment(Assessment.GOOD)
+                .outcome(Outcome.NOT_MET)
                 .observedAt(Instant.now())
                 .evidence(evidence)
                 .evidenceRationale(rationale)
@@ -453,7 +439,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         String rationale = "r".repeat(10_000);
         ObjectNode evidence = objectMapper.createObjectNode();
         evidence.putArray("citations").add(citation("src/Big.java", quote)).add(citation("src/Small.java", "ok()"));
-        Observation observation = observation(AssessmentStatus.ASSESSED, "Big quote", evidence, rationale);
+        Observation observation = observation(Outcome.NOT_MET, "Big quote", evidence, rationale);
         givenHistory(List.of(observation), List.of());
 
         ObjectNode detail = provider.inspect(1L, 2L, observation.getId());
@@ -486,7 +472,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     void detailThatCannotFitSaysSo() {
         Observation observation =
                 // About 64 KiB of citations, as many as admission accepts, each with a short quote.
-                observation(AssessmentStatus.ASSESSED, "Many citations", citations(350, 10), "Because.");
+                observation(Outcome.NOT_MET, "Many citations", citations(350, 10), "Because.");
         givenHistory(List.of(observation), List.of());
 
         ObjectNode detail = provider.inspect(1L, 2L, observation.getId());
@@ -503,7 +489,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     @Test
     @DisplayName("a detail answers alike for an unknown id and one this conversation may not use")
     void detailOfAnUnlistedObservationIsNotFound() {
-        Observation withheld = observation(AssessmentStatus.ASSESSED, "Hidden", citations(1, 10), "r");
+        Observation withheld = observation(Outcome.NOT_MET, "Hidden", citations(1, 10), "r");
         givenHistory(List.of(withheld), List.of());
         when(visibilityPolicy.permitsAll(1L, List.of(withheld), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .thenReturn(Set.of());
@@ -534,10 +520,10 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .thenReturn(abstentions);
     }
 
-    private Observation observation(AssessmentStatus status, String summary, JsonNode evidence, String rationale) {
+    private Observation observation(Outcome outcome, String summary, JsonNode evidence, String rationale) {
         var practice = new Practice();
         practice.setSlug("practice-" + UUID.randomUUID());
-        boolean assessed = status == AssessmentStatus.ASSESSED;
+        boolean assessed = outcome == Outcome.NOT_MET;
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(UUID.randomUUID())
@@ -545,9 +531,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
                 .practice(practice)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(7L)
-                .assessmentStatus(status)
-                .presence(assessed ? Presence.PRESENT : null)
-                .assessment(assessed ? Assessment.BAD : null)
+                .outcome(outcome)
                 .severity(assessed ? Severity.MINOR : null)
                 .observedAt(Instant.parse("2025-06-10T08:00:00Z"))
                 .evidence(evidence)
@@ -591,7 +575,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         givenDeveloper();
         List<Observation> verdicts = new java.util.ArrayList<>();
         for (int i = 0; i < 50; i++) {
-            verdicts.add(observation(AssessmentStatus.ASSESSED, "Summary " + i, citations(1, 10), "r"));
+            verdicts.add(observation(Outcome.NOT_MET, "Summary " + i, citations(1, 10), "r"));
         }
         givenHistory(verdicts, List.of());
         List<PullRequestReview> reviews = new java.util.ArrayList<>();

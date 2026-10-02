@@ -2,11 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
@@ -29,20 +27,6 @@ class AgentVocabularySyncTest extends BaseUnitTest {
     private static final Path ORCHESTRATOR = resolveResource("agent/pi-orchestrator.md");
 
     @Test
-    void presenceVocabularyMatches() throws IOException {
-        assertThat(jsArray("PRESENCE_VALUES"))
-                .as("PRESENCE_VALUES in pi-observation-normalize.ts vs Presence.values()")
-                .containsExactlyInAnyOrderElementsOf(names(Presence.values()));
-    }
-
-    @Test
-    void assessmentVocabularyMatches() throws IOException {
-        assertThat(jsArray("ASSESSMENT_VALUES"))
-                .as("ASSESSMENT_VALUES in pi-observation-normalize.ts vs Assessment.values()")
-                .containsExactlyInAnyOrderElementsOf(names(Assessment.values()));
-    }
-
-    @Test
     void severityVocabularyMatches() throws IOException {
         assertThat(jsArray("SEVERITY_VALUES"))
                 .as("SEVERITY_VALUES in pi-observation-normalize.ts vs Severity.values()")
@@ -50,13 +34,11 @@ class AgentVocabularySyncTest extends BaseUnitTest {
     }
 
     @Test
-    void assessmentStatusVocabularyMatches() throws IOException {
-        assertThat(jsArray("ASSESSMENT_STATUS_VALUES"))
-                .containsExactlyInAnyOrderElementsOf(names(AssessmentStatus.values()));
-        String runner = Files.readString(RUNNER, StandardCharsets.UTF_8);
-        assertThat(runner)
-                .contains("assessmentStatus:", "presence:", "assessment:", "severity:")
-                .doesNotContain("BEHAVIOR_PRESENT_GOOD", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE");
+    void shouldUseTheSameOutcomeVocabularyInRuntimeAndAdmission() throws IOException {
+        assertThat(jsArray("OUTCOME_VALUES")).containsExactlyInAnyOrderElementsOf(names(Outcome.values()));
+        assertThat(Files.readString(RUNNER, StandardCharsets.UTF_8))
+                .contains("outcome:", "severity:")
+                .doesNotContain("assessmentStatus:", "presence:", "assessment:");
     }
 
     @Test
@@ -67,8 +49,8 @@ class AgentVocabularySyncTest extends BaseUnitTest {
                 .as("MAX_SUMMARY_CHARS is declared in pi-observation-normalize.ts")
                 .isTrue();
         assertThat(Integer.parseInt(matcher.group(1)))
-                .as("MAX_SUMMARY_CHARS vs PracticeDetectionResultParser.MAX_SUMMARY_LENGTH")
-                .isEqualTo(PracticeDetectionResultParser.MAX_SUMMARY_LENGTH);
+                .as("MAX_SUMMARY_CHARS vs ReviewResultParser.MAX_SUMMARY_LENGTH")
+                .isEqualTo(ReviewResultParser.MAX_SUMMARY_LENGTH);
     }
 
     @Test
@@ -117,7 +99,7 @@ class AgentVocabularySyncTest extends BaseUnitTest {
     void orchestratorPromptCoversEveryOutcome() throws IOException {
         String body = Files.readString(ORCHESTRATOR, StandardCharsets.UTF_8);
         assertThat(body)
-                .contains("ASSESSED", "PRESENT", "ABSENT", "GOOD", "BAD", "NOT_APPLICABLE", "UNDETERMINED")
+                .contains("MET", "NOT_MET", "NOT_APPLICABLE", "UNDETERMINED")
                 .doesNotContain("BEHAVIOR_PRESENT_", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE", "INCONCLUSIVE");
     }
 

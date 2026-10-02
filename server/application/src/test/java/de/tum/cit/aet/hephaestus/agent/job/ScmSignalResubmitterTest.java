@@ -33,7 +33,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.manifest.GitHubManifest;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.manifest.GitLabManifest;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -68,7 +68,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
     private IssueRepository issueRepository;
 
     @Mock
-    private PracticeReviewDetectionGate gate;
+    private ReviewGate gate;
 
     @Mock
     private SignalRecorder signalRecorder;

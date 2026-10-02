@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepositor
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -112,18 +112,18 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
 
     private void persistStrengthPractice(String slug, String name, long artifactId) {
         Practice target = persistPractice(workspace, group, slug, name);
-        insertObservation(agentJob, target, developer, "Strength in " + name, "PRESENT", null, artifactId);
+        insertObservation(agentJob, target, developer, "Strength in " + name, "MET", null, artifactId);
     }
 
     private void persistDevelopingPractice(String slug, String name, long artifactId) {
         Practice target = persistPractice(workspace, group, slug, name);
-        insertObservation(agentJob, target, developer, "Gap in " + name, "ABSENT", "MAJOR", artifactId);
+        insertObservation(agentJob, target, developer, "Gap in " + name, "NOT_MET", "MAJOR", artifactId);
     }
 
     private void persistMixedPractice(String slug, String name, long artifactId) {
         Practice target = persistPractice(workspace, group, slug, name);
-        insertObservation(agentJob, target, developer, "Strength in " + name, "PRESENT", null, artifactId);
-        insertObservation(agentJob, target, developer, "Gap in " + name, "ABSENT", "MAJOR", artifactId);
+        insertObservation(agentJob, target, developer, "Strength in " + name, "MET", null, artifactId);
+        insertObservation(agentJob, target, developer, "Gap in " + name, "NOT_MET", "MAJOR", artifactId);
     }
 
     private AgentJob persistAgentJob(Workspace ws) {
@@ -140,10 +140,10 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
             Practice targetPractice,
             User user,
             String title,
-            String presence,
+            String outcome,
             @Nullable String severity,
             Long artifactId) {
-        return insertObservation(job, targetPractice, user, title, presence, severity, artifactId, Instant.now());
+        return insertObservation(job, targetPractice, user, title, outcome, severity, artifactId, Instant.now());
     }
 
     private UUID insertObservation(
@@ -151,7 +151,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
             Practice targetPractice,
             User user,
             String title,
-            String presence,
+            String outcome,
             @Nullable String severity,
             Long artifactId,
             Instant observedAt) {
@@ -160,7 +160,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                 targetPractice,
                 user,
                 title,
-                presence,
+                outcome,
                 severity,
                 artifactId,
                 observedAt,
@@ -172,7 +172,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
             Practice targetPractice,
             User user,
             String title,
-            String presence,
+            String outcome,
             @Nullable String severity,
             Long artifactId,
             Instant observedAt,
@@ -189,10 +189,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                 artifactId,
                 user.getId(),
                 title,
-                "ASSESSED",
-                presence,
-                "GOOD",
-                "ABSENT".equals(presence) ? severity : null,
+                outcome,
+                "NOT_MET".equals(outcome) ? severity : null,
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for " + title,
                 null,
@@ -201,8 +199,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         return id;
     }
 
-    private void insertInapplicableObservation(
-            Practice targetPractice, AssessmentStatus assessmentStatus, Long artifactId) {
+    private void insertInapplicableObservation(Practice targetPractice, Outcome outcome, Long artifactId) {
         UUID id = UUID.randomUUID();
         observationRepository.insertIfAbsent(
                 id,
@@ -215,9 +212,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                 artifactId,
                 developer.getId(),
                 "Nothing to judge here",
-                assessmentStatus.name(),
-                null,
-                null,
+                outcome.name(),
                 null,
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for an inapplicable run",
@@ -253,7 +248,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("derives DEVELOPING from a confident problem and carries the delivered feedback")
         void shouldReturnDevelopingWithEvidence() {
             UUID observationId =
-                    insertObservation(agentJob, practice, developer, "Missing rollout plan", "ABSENT", "MAJOR", 1L);
+                    insertObservation(agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L);
             deliverFeedbackFor(observationId, "Add a rollout section describing how the change ships.");
 
             webTestClient
@@ -301,15 +296,15 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("counts distinct contributing artifacts per kind for the provenance line")
         void shouldCountDistinctSourceArtifactsPerKind() {
-            insertObservation(agentJob, practice, developer, "Gap on PR one", "ABSENT", "MAJOR", 1L);
-            insertObservation(agentJob, practice, developer, "Second gap on PR one", "ABSENT", "MINOR", 1L);
-            insertObservation(agentJob, practice, developer, "Gap on PR two", "ABSENT", "MAJOR", 2L);
+            insertObservation(agentJob, practice, developer, "Gap on PR one", "NOT_MET", "MAJOR", 1L);
+            insertObservation(agentJob, practice, developer, "Second gap on PR one", "NOT_MET", "MINOR", 1L);
+            insertObservation(agentJob, practice, developer, "Gap on PR two", "NOT_MET", "MAJOR", 2L);
             insertObservation(
                     agentJob,
                     practice,
                     developer,
                     "Vague issue description",
-                    "ABSENT",
+                    "NOT_MET",
                     "MINOR",
                     7L,
                     Instant.now(),
@@ -339,7 +334,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("derives STRENGTH when the group only has strengths")
         void shouldReturnStrengthForGoodOnly() {
-            insertObservation(agentJob, practice, developer, "Clear motivation section", "PRESENT", null, 1L);
+            insertObservation(agentJob, practice, developer, "Clear motivation section", "MET", null, 1L);
 
             webTestClient
                     .get()
@@ -398,7 +393,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("returns NO_OPPORTUNITY when every practice ran but produced no verdict")
         void shouldReturnNoOpportunityWhenEveryRunWasInapplicable() {
-            insertInapplicableObservation(practice, AssessmentStatus.NOT_APPLICABLE, 1L);
+            insertInapplicableObservation(practice, Outcome.NOT_APPLICABLE, 1L);
 
             webTestClient
                     .get()
@@ -422,7 +417,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("an INCONCLUSIVE run counts as an opportunity that produced no verdict")
         void shouldReturnNoOpportunityForInconclusiveRun() {
-            insertInapplicableObservation(practice, AssessmentStatus.UNDETERMINED, 2L);
+            insertInapplicableObservation(practice, Outcome.UNDETERMINED, 2L);
 
             webTestClient
                     .get()
@@ -440,8 +435,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("an inapplicable run never displaces the verdict a real observation supports")
         void shouldPreferVerdictOverInapplicableRuns() {
-            insertObservation(agentJob, practice, developer, "Coin-flip hunch", "ABSENT", "MINOR", 1L);
-            insertInapplicableObservation(practice, AssessmentStatus.NOT_APPLICABLE, 2L);
+            insertObservation(agentJob, practice, developer, "Coin-flip hunch", "NOT_MET", "MINOR", 1L);
+            insertInapplicableObservation(practice, Outcome.NOT_APPLICABLE, 2L);
 
             webTestClient
                     .get()
@@ -461,7 +456,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         @DisplayName("a problem seen on a single piece of reviewed work still yields a verdict, not an empty state")
         void shouldReportDevelopingForSingleArtifactProblem() {
-            insertObservation(agentJob, practice, developer, "Coin-flip hunch", "ABSENT", "MINOR", 1L);
+            insertObservation(agentJob, practice, developer, "Coin-flip hunch", "NOT_MET", "MINOR", 1L);
 
             webTestClient
                     .get()
@@ -483,8 +478,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldComposeMixedGuidanceAcrossPractices() {
             Practice reviewPractice =
                     persistPractice(workspace, group, "review-comments", "Actionable Review Comments");
-            insertObservation(agentJob, practice, developer, "Missing rollout plan", "ABSENT", "MAJOR", 1L);
-            insertObservation(agentJob, reviewPractice, developer, "Concrete line references", "PRESENT", null, 1L);
+            insertObservation(agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L);
+            insertObservation(agentJob, reviewPractice, developer, "Concrete line references", "MET", null, 1L);
 
             webTestClient
                     .get()
@@ -633,7 +628,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
             Practice retired = persistPractice(workspace, group, "test-coverage", "Test Coverage");
             retired.setAutonomy(PracticeAutonomy.OFF);
             practiceRepository.saveAndFlush(retired);
-            insertObservation(agentJob, retired, developer, "Gap in Test Coverage", "ABSENT", "MAJOR", 2L);
+            insertObservation(agentJob, retired, developer, "Gap in Test Coverage", "NOT_MET", "MAJOR", 2L);
 
             webTestClient
                     .get()
@@ -656,9 +651,9 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
             Practice reviewPractice =
                     persistPractice(workspace, group, "review-comments", "Actionable Review Comments");
             for (long artifactId = 1; artifactId <= 5; artifactId++) {
-                insertObservation(agentJob, practice, developer, "Gap " + artifactId, "ABSENT", "MAJOR", artifactId);
+                insertObservation(agentJob, practice, developer, "Gap " + artifactId, "NOT_MET", "MAJOR", artifactId);
             }
-            insertObservation(agentJob, reviewPractice, developer, "Concrete line references", "PRESENT", null, 6L);
+            insertObservation(agentJob, reviewPractice, developer, "Concrete line references", "MET", null, 6L);
 
             webTestClient
                     .get()
@@ -681,8 +676,8 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("a thin record still yields a verdict, but never a direction")
         void shouldNotDeriveADirectionFromTwoObservations() {
             Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
-            insertObservation(agentJob, practice, developer, "Speculative gap", "ABSENT", "MINOR", 1L, previousDay);
-            insertObservation(agentJob, practice, developer, "Clear motivation section", "PRESENT", null, 2L);
+            insertObservation(agentJob, practice, developer, "Speculative gap", "NOT_MET", "MINOR", 1L, previousDay);
+            insertObservation(agentJob, practice, developer, "Clear motivation section", "MET", null, 2L);
 
             webTestClient
                     .get()
@@ -713,14 +708,14 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                         practice,
                         developer,
                         "Previous gap " + artifactId,
-                        "ABSENT",
+                        "NOT_MET",
                         "MAJOR",
                         artifactId,
                         previousDay);
             }
             for (long artifactId = 5; artifactId <= 8; artifactId++) {
                 insertObservation(
-                        agentJob, practice, developer, "Current strength " + artifactId, "PRESENT", null, artifactId);
+                        agentJob, practice, developer, "Current strength " + artifactId, "MET", null, artifactId);
             }
 
             webTestClient
@@ -750,14 +745,14 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                         practice,
                         developer,
                         "Previous strength " + artifactId,
-                        "PRESENT",
+                        "MET",
                         null,
                         artifactId,
                         previousDay);
             }
             for (long artifactId = 5; artifactId <= 8; artifactId++) {
                 insertObservation(
-                        agentJob, practice, developer, "Current gap " + artifactId, "ABSENT", "MAJOR", artifactId);
+                        agentJob, practice, developer, "Current gap " + artifactId, "NOT_MET", "MAJOR", artifactId);
             }
 
             webTestClient
@@ -782,11 +777,11 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
                     persistPractice(workspace, group, "review-comments", "Actionable Review Comments");
             Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
             insertObservation(
-                    agentJob, practice, developer, "Missing rollout plan", "ABSENT", "MAJOR", 1L, previousDay);
+                    agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L, previousDay);
             insertObservation(
-                    agentJob, reviewPractice, developer, "Concrete line references", "PRESENT", null, 1L, previousDay);
+                    agentJob, reviewPractice, developer, "Concrete line references", "MET", null, 1L, previousDay);
             AgentJob laterJob = persistAgentJob(workspace);
-            insertObservation(laterJob, reviewPractice, developer, "Still concrete", "PRESENT", null, 1L);
+            insertObservation(laterJob, reviewPractice, developer, "Still concrete", "MET", null, 1L);
 
             webTestClient
                     .get()
@@ -810,9 +805,9 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldSupersedeObservationsTheLaterRunRevisited() {
             Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
             insertObservation(
-                    agentJob, practice, developer, "Missing rollout plan", "ABSENT", "MAJOR", 1L, previousDay);
+                    agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L, previousDay);
             AgentJob laterJob = persistAgentJob(workspace);
-            insertObservation(laterJob, practice, developer, "Rollout plan added", "PRESENT", null, 1L);
+            insertObservation(laterJob, practice, developer, "Rollout plan added", "MET", null, 1L);
 
             webTestClient
                     .get()
@@ -836,10 +831,10 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldKeepObservationsWhenTheLaterRunWasAboutAnotherDeveloper() {
             Instant previousDay = Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS);
             insertObservation(
-                    agentJob, practice, developer, "Missing rollout plan", "ABSENT", "MAJOR", 1L, previousDay);
+                    agentJob, practice, developer, "Missing rollout plan", "NOT_MET", "MAJOR", 1L, previousDay);
             User otherContributor = persistUser("other-contributor");
             AgentJob laterJob = persistAgentJob(workspace);
-            insertObservation(laterJob, practice, otherContributor, "Someone else's gap", "ABSENT", "MAJOR", 1L);
+            insertObservation(laterJob, practice, otherContributor, "Someone else's gap", "NOT_MET", "MAJOR", 1L);
 
             webTestClient
                     .get()
@@ -862,7 +857,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("does not leak another contributor's or another workspace's observations")
         void shouldNotLeakOtherContributorOrWorkspace() {
             User otherUser = persistUser("other-user");
-            insertObservation(agentJob, practice, otherUser, "Someone else's gap", "ABSENT", "MAJOR", 2L);
+            insertObservation(agentJob, practice, otherUser, "Someone else's gap", "NOT_MET", "MAJOR", 2L);
 
             User otherOwner = persistUser("other-ws-owner");
             Workspace otherWorkspace =
@@ -871,7 +866,7 @@ class PracticeGroupStandingIntegrationTest extends AbstractWorkspaceIntegrationT
             Practice otherPractice =
                     persistPractice(otherWorkspace, otherGroup, "pr-description-quality", "PR Quality");
             AgentJob otherJob = persistAgentJob(otherWorkspace);
-            insertObservation(otherJob, otherPractice, developer, "Cross-workspace gap", "ABSENT", "MAJOR", 3L);
+            insertObservation(otherJob, otherPractice, developer, "Cross-workspace gap", "NOT_MET", "MAJOR", 3L);
 
             webTestClient
                     .get()

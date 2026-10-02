@@ -692,7 +692,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
         practice.setName("Cited practice");
         practice.setCriteria("Criteria");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
         AgentJob job = new AgentJob();
         job.setWorkspace(workspace);
@@ -711,9 +711,7 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
                 WORK,
                 RECIPIENT,
                 "Six parts and nothing to check off",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 null,
                 null,

@@ -10,9 +10,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.WithheldObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.WithheldObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
@@ -27,10 +27,8 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -370,8 +368,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         assertThat(saved.getValue().getReviewedRevision()).isEqualTo("abc123");
         assertThat(saved.getValue().getDeliveryState()).isEqualTo(FeedbackDeliveryState.AWAITING_APPROVAL);
         verify(eventPublisher)
-                .publishEvent(new de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent(
-                        job.getId(), job.getWorkspace().getId()));
+                .publishEvent(
+                        new de.tum.cit.aet.hephaestus.agent.handler.conversation
+                                .PracticeFeedbackPreparationRequestedEvent(
+                                job.getId(), job.getWorkspace().getId()));
         assertThat(saved.getValue().getProposedPracticeSlugs()).containsExactly("practice");
         assertThat(saved.getValue().getProposedPlacements())
                 .extracting(placement -> placement.type().name())
@@ -535,7 +535,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         // The chat and in-app lanes are signalled despite the failed direct delivery.
         verify(eventPublisher)
                 .publishEvent(any(
-                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent
+                                .class));
     }
 
     @Test
@@ -553,7 +554,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         // the ApplicationEvent overload this code never calls — which passes whatever the code does.
         verify(eventPublisher, org.mockito.Mockito.never())
                 .publishEvent(any(
-                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent
+                                .class));
     }
 
     @Test
@@ -565,7 +567,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         verify(eventPublisher)
                 .publishEvent(any(
-                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent
+                                .class));
         verify(feedbackRepository, org.mockito.Mockito.never()).save(any());
     }
 
@@ -589,7 +592,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         assertThat(saved.getValue().getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.INSTANCE_SILENCED);
         verify(eventPublisher)
                 .publishEvent(any(
-                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent
+                                .class));
     }
 
     /**
@@ -620,7 +624,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         assertThat(saved.getValue().getSuppressionReason()).isEqualTo(reason);
         verify(eventPublisher, wakes ? org.mockito.Mockito.times(1) : org.mockito.Mockito.never())
                 .publishEvent(any(
-                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent
+                                .class));
     }
 
     @Test
@@ -638,7 +643,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
         verify(eventPublisher)
                 .publishEvent(any(
-                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent
+                                .class));
         verify(feedbackRepository, org.mockito.Mockito.never()).save(any());
     }
 
@@ -702,7 +708,8 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
         assertThat(saved.getValue().getSuppressionReason()).isEqualTo(FeedbackSuppressionReason.COMPOSER_WITHHELD);
         verify(eventPublisher)
                 .publishEvent(any(
-                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeDetectionDeliveredEvent.class));
+                        de.tum.cit.aet.hephaestus.agent.handler.conversation.PracticeFeedbackPreparationRequestedEvent
+                                .class));
     }
 
     @Test
@@ -886,14 +893,9 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation strength() {
         Observation pf = mock(Observation.class);
-        lenient()
-                .when(pf.getOutcome())
-                .thenAnswer(invocation ->
-                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
+
         lenient().when(pf.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(pf.getPresence()).thenReturn(Presence.PRESENT);
-        org.mockito.Mockito.lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
-        lenient().when(pf.getAssessment()).thenReturn(Assessment.GOOD);
+        lenient().when(pf.getOutcome()).thenReturn(Outcome.MET);
         lenient().when(pf.getSeverity()).thenReturn(null); // GOOD strengths carry no severity (ADR 0022)
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(pf.getArtifactId()).thenReturn(100L);
@@ -903,13 +905,10 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation notApplicable() {
         Observation pf = mock(Observation.class);
-        lenient()
-                .when(pf.getOutcome())
-                .thenAnswer(invocation ->
-                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
+
         lenient().when(pf.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.NOT_APPLICABLE);
-        lenient().when(pf.getAssessment()).thenReturn(null); // NA carries no valence (ADR 0022)
+        lenient().when(pf.getOutcome()).thenReturn(Outcome.NOT_APPLICABLE);
+
         lenient().when(pf.getSeverity()).thenReturn(null);
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(pf.getArtifactId()).thenReturn(100L);
@@ -919,16 +918,11 @@ class FeedbackLedgerRecorderTest extends BaseUnitTest {
 
     private Observation problem() {
         Observation pf = mock(Observation.class);
-        lenient()
-                .when(pf.getOutcome())
-                .thenAnswer(invocation ->
-                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(pf.getPresence(), pf.getAssessment()));
+
         UUID id = UUID.randomUUID();
         lenient().when(pf.getId()).thenReturn(id);
         lenient().when(pf.getOccurrenceKey()).thenReturn("occ-" + id);
-        lenient().when(pf.getPresence()).thenReturn(Presence.ABSENT);
-        org.mockito.Mockito.lenient().when(pf.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
-        lenient().when(pf.getAssessment()).thenReturn(Assessment.GOOD);
+        lenient().when(pf.getOutcome()).thenReturn(Outcome.NOT_MET);
         lenient().when(pf.getSeverity()).thenReturn(Severity.MINOR);
         lenient().when(pf.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(pf.getArtifactId()).thenReturn(100L);

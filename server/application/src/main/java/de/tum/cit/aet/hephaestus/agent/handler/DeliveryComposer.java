@@ -3,12 +3,12 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout.REPO_MOUNT_RELATIVE;
 
 import de.tum.cit.aet.hephaestus.agent.context.providers.RepositoryTreeContentSource;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DeliveryContent;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DeliveryContent;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedbackUnit;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
@@ -46,11 +46,11 @@ class DeliveryComposer {
 
     /** Package-private: {@link ReviewCoverage} reads it so the two cannot disagree on what a problem is. */
     static boolean isProblem(ValidatedObservation f) {
-        return f.outcome() == Outcome.NEGATIVE;
+        return f.outcome() == Outcome.NOT_MET;
     }
 
     private static boolean isStrength(ValidatedObservation f) {
-        return f.outcome() == Outcome.POSITIVE;
+        return f.outcome() == Outcome.MET;
     }
 
     @Nullable
@@ -285,7 +285,7 @@ class DeliveryComposer {
         return withheld;
     }
 
-    private static List<PracticeDetectionResultParser.WithheldObservation> withheldObservations(
+    private static List<ReviewResultParser.WithheldObservation> withheldObservations(
             List<ValidatedObservation> dedupDropped,
             List<ValidatedObservation> capDropped,
             List<ValidatedObservation> composerWithheld) {
@@ -298,10 +298,10 @@ class DeliveryComposer {
                 .toList();
     }
 
-    private static PracticeDetectionResultParser.@Nullable WithheldObservation withheld(
+    private static ReviewResultParser.@Nullable WithheldObservation withheld(
             ValidatedObservation f, FeedbackSuppressionReason reason) {
         String key = f.occurrenceKey();
-        return key == null ? null : new PracticeDetectionResultParser.WithheldObservation(key, reason);
+        return key == null ? null : new ReviewResultParser.WithheldObservation(key, reason);
     }
 
     private static List<ValidatedObservation> dedupOverlappingPractices(List<ValidatedObservation> negatives) {
@@ -662,7 +662,7 @@ class DeliveryComposer {
         JsonNode first = citations.get(0);
         if (!first.isObject()) return null;
         String sourceKind = first.path("sourceKind").asString();
-        if (!sourceKind.equals(PracticeSubjectClause.DIFF_SOURCE.value())
+        if (!sourceKind.equals(PracticePreconditionClause.DIFF_SOURCE.value())
                 && !sourceKind.equals(RepositoryTreeContentSource.KIND.value())) return null;
         JsonNode pathNode = first.get("path");
         if (pathNode == null || !pathNode.isString()) return null;
@@ -694,7 +694,7 @@ class DeliveryComposer {
         List<ValidatedObservation> unplaced = new ArrayList<>();
 
         for (ValidatedObservation f : negatives) {
-            if (notes.size() >= PracticeDetectionResultParser.MAX_DELIVERY_DIFF_NOTES) {
+            if (notes.size() >= ReviewResultParser.MAX_DELIVERY_DIFF_NOTES) {
                 unplaced.add(f);
                 continue;
             }
@@ -764,7 +764,7 @@ class DeliveryComposer {
     private static boolean verifiedAnchor(
             JsonNode citation, String path, int line, ComposedFeedbackUnit.@Nullable ResolvedAnchor selected) {
         return "VERIFIED".equals(citation.path("verification").path("status").asString())
-                && PracticeSubjectClause.DIFF_SOURCE
+                && PracticePreconditionClause.DIFF_SOURCE
                         .value()
                         .equals(citation.path("sourceKind").asString())
                 && "NEW".equals(citation.path("side").asString())

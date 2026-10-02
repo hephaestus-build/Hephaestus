@@ -144,3 +144,7 @@ The accepted cost is that a second behaviour of the same practice at the same pl
 also held back. It fails toward saying less, the direction "feedback earns trust or it is not sent" chooses,
 and workspace admins see every dispute on its observation under Practice reviews, where they can mark the
 observation incorrect or withdraw the feedback.
+
+## Update — 2026-10-02
+
+[ADR 0050](0050-one-practice-standard-one-outcome.md) supersedes the observation-axis decision with a single conformance outcome. The original rationale remains as design history.

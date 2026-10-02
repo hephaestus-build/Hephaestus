@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.practices.AdoptedBaseSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReview;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewMode;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
@@ -120,7 +119,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .expectBody()
                 .jsonPath("$.definition.criteria")
                 .isNotEmpty()
-                .jsonPath("$.definition.bindings.length()")
+                .jsonPath("$.definition.signals.length()")
                 .value(value -> assertThat((Integer) value).isPositive())
                 .jsonPath("$.group.disposition")
                 .isEqualTo("CREATE_CATALOG_GROUP")
@@ -131,7 +130,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .jsonPath("$.initialAutonomy")
                 .isEqualTo("HUMAN_APPROVAL")
                 .jsonPath("$.sourceReviewRuleFingerprint")
-                .value(value -> assertThat((String) value).matches("v4:[0-9a-f]{64}"))
+                .value(value -> assertThat((String) value).matches("v5:[0-9a-f]{64}"))
                 .jsonPath("$.definition.automatedReviewValidation.status")
                 .isEqualTo("AUTHOR_DECLARED");
     }
@@ -218,7 +217,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(practice.getSourceCuratedSlug()).isEqualTo(PRACTICE);
         assertThat(practice.getAdoptedBase()).isEqualTo(PracticeDefinition.from(practice));
         assertThat(practice.getAdoptedBaseSource()).isEqualTo(AdoptedBaseSource.EXACT_ADOPTION);
-        assertThat(practice.getSourceCuratedFingerprint()).matches("v4:[0-9a-f]{64}");
+        assertThat(practice.getSourceCuratedFingerprint()).matches("v5:[0-9a-f]{64}");
         assertThat(practice.getAutonomy()).isEqualTo(PracticeAutonomy.HUMAN_APPROVAL);
         assertThat(groupRepository.findByWorkspaceIdAndSlug(workspace.getId(), GROUP))
                 .isPresent();
@@ -226,7 +225,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .get()
                 .extracting(revision -> revision.getReviewRuleFingerprint())
                 .asString()
-                .matches("v4:[0-9a-f]{64}");
+                .matches("v5:[0-9a-f]{64}");
         assertThat(jdbcTemplate.queryForObject(
                         "SELECT count(*) FROM config_audit_event WHERE workspace_id = ? AND entity_type IN ('PRACTICE_GROUP', 'PRACTICE_DEFINITION', 'PRACTICE_USAGE')",
                         Long.class,
@@ -308,12 +307,11 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                         .withdrawnFor(new PracticeEvidenceLimitation("A_MENTOR_DECIDES", "A mentor decides this."));
         var customized = new PracticeDefinition(
                 shipped.name(),
-                guidanceOnly
-                        ? shipped.bindings().stream()
-                                .map(binding -> new PracticeBinding(
-                                        binding.signals(), List.of(), binding.onDrafts(), binding.subject(), null))
-                                .toList()
-                        : shipped.bindings(),
+                shipped.signals(),
+                guidanceOnly ? List.of() : shipped.evidenceRequirements(),
+                shipped.reviewWhen(),
+                shipped.subject(),
+                guidanceOnly ? null : shipped.precondition(),
                 "Judge the closure with a mentor.",
                 null,
                 policy,
@@ -338,8 +336,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .isEqualTo("Judge the closure with a mentor.")
                 .jsonPath("$.definition.automatedReviewPolicy.automatedReview.mode")
                 .isEqualTo(guidanceOnly ? "NONE" : "LANGUAGE_MODEL")
-                .jsonPath("$.definition.bindings[0].needs.length()")
-                .isEqualTo(customized.bindings().getFirst().needs().size())
+                .jsonPath("$.definition.evidenceRequirements.length()")
+                .isEqualTo(customized.evidenceRequirements().size())
                 .jsonPath("$.definition.automatedReviewPolicy.insufficiencyReason.code");
         if (guidanceOnly) {
             shown.doesNotExist();
@@ -360,7 +358,11 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
         // Customized on the instance before the upgrade, still asking the model about the close.
         PracticeDefinition automated = new PracticeDefinition(
                 shipped.name(),
-                shipped.bindings(),
+                shipped.signals(),
+                shipped.evidenceRequirements(),
+                shipped.reviewWhen(),
+                shipped.subject(),
+                shipped.precondition(),
                 "Judge the closure from the current checklist.",
                 null,
                 evidenceDefaults.policyFor(shipped.artifactKind()),

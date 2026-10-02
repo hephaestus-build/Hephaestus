@@ -25,10 +25,9 @@ import de.tum.cit.aet.hephaestus.agent.task.Task;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.util.List;
@@ -52,9 +51,9 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private final JsonMapper objectMapper;
     private final PracticeCatalogInjector practiceCatalogInjector;
     private final PracticeReviewPreparation preparation;
-    private final PracticeDetectionResultParser resultParser;
+    private final ReviewResultParser resultParser;
     private final FeedbackCompositionResultParser compositionResultParser;
-    private final PracticeDetectionDeliveryService deliveryService;
+    private final ReviewOutputService deliveryService;
     private final FeedbackDeliveryService feedbackService;
     private final FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter;
     private final InContextDeliveryGate inContextDeliveryGate;
@@ -65,9 +64,9 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             JsonMapper objectMapper,
             PracticeCatalogInjector practiceCatalogInjector,
             PracticeReviewPreparation preparation,
-            PracticeDetectionResultParser resultParser,
+            ReviewResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
-            PracticeDetectionDeliveryService deliveryService,
+            ReviewOutputService deliveryService,
             FeedbackDeliveryService feedbackService,
             FeedbackResponseSuppressionFilter feedbackResponseSuppressionFilter,
             InContextDeliveryGate inContextDeliveryGate,
@@ -102,7 +101,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
 
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put(
-                PracticeDetectionDeliveryService.ORIGIN_METADATA_KEY,
+                ReviewOutputService.ORIGIN_METADATA_KEY,
                 Objects.requireNonNull(submissionRequest.observationOrigin()).name());
         metadata.put("repository_id", pullRequestData.repository().id());
         metadata.put("repository_full_name", pullRequestData.repository().nameWithOwner());
@@ -131,8 +130,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             metadata.put(
                     PracticeCatalogInjector.SIGNAL_METADATA_KEY,
                     submissionRequest.triggerSignal().value());
-            // Use the signal-time draft state for both gate and catalog selection.
-            metadata.put(PracticeCatalogInjector.DRAFT_METADATA_KEY, pullRequestData.isDraft());
         }
         if (submissionRequest.linkedIssueRevision() != null) {
             metadata.put("linked_issue_revision", submissionRequest.linkedIssueRevision());
@@ -189,7 +186,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 () -> buildTaskEnvelope(job, metadata),
                 files -> {
                     // Compose feedback after observations are final. Backfills omit composition.
-                    FeedbackCompositionInputs.stage(files, PracticeDetectionDeliveryService.originOf(metadata));
+                    FeedbackCompositionInputs.stage(files, ReviewOutputService.originOf(metadata));
                 });
 
         long elapsedMs = (System.nanoTime() - startNanos) / 1_000_000;
@@ -239,7 +236,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
     private void deliverAdmitted(AgentJob job) {
         List<Observation> persisted = observationRepository.findByAgentJobId(
                 job.getId(), job.getWorkspace().getId());
-        List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations = persisted.stream()
+        List<ReviewResultParser.ValidatedObservation> scopedObservations = persisted.stream()
                 .map(observation -> {
                     CitationVerification.requireVerified(job, observation.getEvidence());
                     return validated(observation);
@@ -248,26 +245,24 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         if (scopedObservations.isEmpty()) throw new JobDeliveryException("Admitted observation set is empty");
         Set<String> recurring = recurringLapses.recurringSlugs(persisted);
         if (feedbackService.recoverAutomaticPackageIfPresent(job)) return;
-        List<PracticeDetectionResultParser.ValidatedObservation> eligible = feedbackResponseSuppressionFilter
+        List<ReviewResultParser.ValidatedObservation> eligible = feedbackResponseSuppressionFilter
                 .evaluate(job, scopedObservations)
                 .deliverable();
-        List<PracticeDetectionResultParser.ValidatedObservation> proposals =
-                inContextDeliveryGate.awaitingApproval(job, eligible);
-        List<PracticeDetectionResultParser.ValidatedObservation> loudEnough =
-                inContextDeliveryGate.admitInContext(job, eligible);
-        List<PracticeDetectionResultParser.ValidatedObservation> deliverable = loudEnough;
+        List<ReviewResultParser.ValidatedObservation> proposals = inContextDeliveryGate.awaitingApproval(job, eligible);
+        List<ReviewResultParser.ValidatedObservation> loudEnough = inContextDeliveryGate.admitInContext(job, eligible);
+        List<ReviewResultParser.ValidatedObservation> deliverable = loudEnough;
         List<ComposedFeedbackUnit> units = compositionResultParser.parse(job.getOutput(), FeedbackChannel.IN_CONTEXT);
         String lead = compositionResultParser.lead(job.getOutput());
         Map<String, String> why = practiceCatalogInjector.whyBySlug(job.getWorkspace(), ArtifactKinds.PULL_REQUEST);
         // Everything either surface would compose from: both render an all-clear when no problem
         // survives the gates, so the coverage question is asked once, over the union.
-        List<PracticeDetectionResultParser.ValidatedObservation> composable = java.util.stream.Stream.concat(
+        List<ReviewResultParser.ValidatedObservation> composable = java.util.stream.Stream.concat(
                         proposals.stream(), deliverable.stream())
                 .toList();
         Set<String> included = composable.stream()
-                .map(PracticeDetectionResultParser.ValidatedObservation::occurrenceKey)
+                .map(ReviewResultParser.ValidatedObservation::occurrenceKey)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        List<PracticeDetectionResultParser.ValidatedObservation> reviewPackage = scopedObservations.stream()
+        List<ReviewResultParser.ValidatedObservation> reviewPackage = scopedObservations.stream()
                 .filter(observation -> included.contains(observation.occurrenceKey()))
                 .toList();
         // The lead is unattributed prose that may speak for any practice, so automatic content goes without it.
@@ -292,13 +287,11 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                 job, automatic, automatic == null ? Set.of() : automatic.contributingPracticeSlugs(reviewPackage));
     }
 
-    private PracticeDetectionResultParser.ValidatedObservation validated(Observation observation) {
-        return new PracticeDetectionResultParser.ValidatedObservation(
+    private ReviewResultParser.ValidatedObservation validated(Observation observation) {
+        return new ReviewResultParser.ValidatedObservation(
                 observation.getPractice().getSlug(),
                 observation.getSummary(),
-                observation.getAssessmentStatus(),
-                observation.getPresence(),
-                observation.getAssessment(),
+                observation.getOutcome(),
                 observation.getSeverity(),
                 observation.getEvidence(),
                 observation.getEvidenceRationale(),
@@ -330,8 +323,8 @@ public class PullRequestReviewHandler implements JobTypeHandler {
         CapturedEvidence captured = CapturedEvidence.of(job, objectMapper);
         // Refuse an entirely unassessed review only when it also reports no use of the captured diff.
         boolean nothingDecided =
-                parsed.validObservations().stream().noneMatch(f -> (f.assessmentStatus() == AssessmentStatus.ASSESSED));
-        boolean changeCaptured = captured.availableSources().contains(PracticeSubjectClause.DIFF_SOURCE);
+                parsed.validObservations().stream().noneMatch(f -> (f.outcome().isDecided()));
+        boolean changeCaptured = captured.availableSources().contains(PracticePreconditionClause.DIFF_SOURCE);
         if (nothingDecided && changeCaptured && !readTheDiff(parsed.validObservations())) {
             throw new ObservationsRefusedException(
                     "did_not_read_the_diff",
@@ -339,10 +332,9 @@ public class PullRequestReviewHandler implements JobTypeHandler {
                             + " review answered without reading it. Refusing to deliver. jobId="
                             + job.getId());
         }
-        List<PracticeDetectionResultParser.ValidatedObservation> scopedObservations = parsed.validObservations();
+        List<ReviewResultParser.ValidatedObservation> scopedObservations = parsed.validObservations();
 
-        var admissible =
-                deliveryService.prepare(job, PracticeDetectionResultParser.validateCoherence(scopedObservations));
+        var admissible = deliveryService.prepare(job, ReviewResultParser.validateCoherence(scopedObservations));
         return admitted -> deliveryService.publish(admitted, admissible);
     }
 
@@ -360,14 +352,14 @@ public class PullRequestReviewHandler implements JobTypeHandler {
      * Whether an observation cites the diff or names it in a consulted-source warrant.
      * This prevents a refusal; it does not replace citation verification at admission.
      */
-    static boolean readTheDiff(List<PracticeDetectionResultParser.ValidatedObservation> observations) {
+    static boolean readTheDiff(List<ReviewResultParser.ValidatedObservation> observations) {
         for (var observation : observations) {
             JsonNode evidence = observation.evidence();
             if (evidence == null) {
                 continue;
             }
             for (JsonNode citation : evidence.path("citations")) {
-                if (PracticeSubjectClause.DIFF_SOURCE
+                if (PracticePreconditionClause.DIFF_SOURCE
                         .value()
                         .equals(citation.path("sourceKind").asString())) {
                     return true;
@@ -376,7 +368,7 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             // Metadata-only practices can report consulting the diff without quoting it.
             for (String warrant : List.of("search", "inapplicability", "undecidability")) {
                 for (JsonNode consulted : evidence.path(warrant).path("consulted")) {
-                    if (PracticeSubjectClause.DIFF_SOURCE.value().equals(consulted.asString())) {
+                    if (PracticePreconditionClause.DIFF_SOURCE.value().equals(consulted.asString())) {
                         return true;
                     }
                 }

@@ -64,16 +64,16 @@ public final class PracticeTrend {
     }
 
     /**
-     * The recency-weighted share of positive outcomes across the newest {@code window} evidence opportunities,
+     * The recency-weighted share of MET outcomes across the newest {@code window} evidence opportunities,
      * or empty when none of them produced a verdict.
      *
      * <p>Opportunity-indexed like the trend itself, so a single busy day cannot manufacture a standing and a
      * quiet week cannot erode one — the unit is a reviewed work item, never a calendar bin. Opportunities that
-     * carry no applicable outcome are skipped rather than counted as either side, so a review that had no
+     * carry no decided outcome are skipped rather than counted as either side, so a review that had no
      * chance to exercise the practice neither helps nor hurts, and it does not push genuine evidence out of
      * the window either.
      *
-     * <p>Each opportunity contributes its own {@link OutcomeVector#positiveShare()}, not a clean/dirty bit, so
+     * <p>Each opportunity contributes its own {@link OutcomeVector#metShare()}, not a clean/dirty bit, so
      * a piece of reviewed work that went half well is counted as half well rather than rounded to a problem.
      *
      * <p>Weights fall geometrically with age ({@code decay^0, decay^1, …} from the newest), which is what lets
@@ -82,29 +82,28 @@ public final class PracticeTrend {
      * A {@code decay} strictly below 0.5 is what makes the two newest opportunities outweigh everything older
      * — see the caller that chooses it.
      *
-     * @param window how many of the newest applicable opportunities to consider, at least one
+     * @param window how many of the newest decided opportunities to consider, at least one
      * @param decay per-opportunity weight factor in {@code (0,1]}; 1.0 is an unweighted mean
      */
-    public OptionalDouble recentPositiveShare(int window, double decay) {
-        List<EvidenceOpportunity> applicable =
-                opportunities.stream().filter(EvidenceOpportunity::applicable).toList();
-        if (applicable.isEmpty()) {
+    public OptionalDouble recentMetShare(int window, double decay) {
+        List<EvidenceOpportunity> decided =
+                opportunities.stream().filter(EvidenceOpportunity::decided).toList();
+        if (decided.isEmpty()) {
             return OptionalDouble.empty();
         }
-        List<EvidenceOpportunity> recent =
-                applicable.subList(Math.max(0, applicable.size() - window), applicable.size());
+        List<EvidenceOpportunity> recent = decided.subList(Math.max(0, decided.size() - window), decided.size());
         double weighted = 0.0;
         double totalWeight = 0.0;
         for (int index = recent.size() - 1, age = 0; index >= 0; index--, age++) {
             double weight = Math.pow(decay, age);
-            weighted += weight * recent.get(index).outcomes().positiveShare();
+            weighted += weight * recent.get(index).outcomes().metShare();
             totalWeight += weight;
         }
         return OptionalDouble.of(weighted / totalWeight);
     }
 
     /**
-     * How many of the newest applicable opportunities came back with no problem at all, and what they were.
+     * How many of the newest decided opportunities came back with no problem at all, and what they were.
      *
      * <p>Counted from the newest backwards and stopped at the first opportunity that raised a problem, so
      * the number reads as "held across N pieces of work". An opportunity that produced no verdict is skipped
@@ -113,23 +112,23 @@ public final class PracticeTrend {
      * {@link WorkResolution} counts the same clean opportunities forwards from a piece of feedback.
      */
     public CleanWork cleanWork() {
-        List<EvidenceOpportunity> applicable =
-                opportunities.stream().filter(EvidenceOpportunity::applicable).toList();
+        List<EvidenceOpportunity> decided =
+                opportunities.stream().filter(EvidenceOpportunity::decided).toList();
         List<EvidenceOpportunity> clean = new ArrayList<>();
-        for (int index = applicable.size() - 1; index >= 0; index--) {
-            EvidenceOpportunity opportunity = applicable.get(index);
+        for (int index = decided.size() - 1; index >= 0; index--) {
+            EvidenceOpportunity opportunity = decided.get(index);
             if (!opportunity.clean()) {
                 break;
             }
             clean.add(opportunity);
         }
         if (clean.isEmpty()) {
-            return new CleanWork(0, applicable.size(), null, null, List.of());
+            return new CleanWork(0, decided.size(), null, null, List.of());
         }
         ArtifactKind kind = CleanWork.mostOf(clean.stream().map(EvidenceOpportunity::artifactKind));
         return new CleanWork(
                 clean.size(),
-                applicable.size(),
+                decided.size(),
                 kind,
                 clean.getLast().occurredAt(),
                 clean.stream().map(EvidenceOpportunity::jobId).toList());
@@ -137,14 +136,14 @@ public final class PracticeTrend {
 
     /**
      * @param count the newest pieces of work in a row that raised no problem
-     * @param applicableWork every piece of work that produced a verdict, the ceiling of {@code count}
+     * @param decidedWork every piece of work that produced a verdict, the ceiling of {@code count}
      * @param kind the kind of work most of the clean work is, or null with none
      * @param since when the oldest piece of the clean work was reviewed, or null with none
      * @param jobIds the runs that reviewed the clean work, newest first; what resolves where the work lives
      */
     public record CleanWork(
             int count,
-            int applicableWork,
+            int decidedWork,
             @Nullable ArtifactKind kind,
             @Nullable Instant since,
             List<UUID> jobIds) {
@@ -199,10 +198,8 @@ public final class PracticeTrend {
                                     opportunity.artifactKind(),
                                     opportunity.artifactId(),
                                     new OutcomeVectorDTO(
-                                            opportunity.outcomes().demonstratedStrengths(),
-                                            opportunity.outcomes().safeAvoidances(),
-                                            opportunity.outcomes().commissionProblems(),
-                                            opportunity.outcomes().omissionGaps(),
+                                            opportunity.outcomes().met(),
+                                            opportunity.outcomes().notMet(),
                                             opportunity.outcomes().notApplicable(),
                                             opportunity.outcomes().undetermined()),
                                     opportunity.bundle());

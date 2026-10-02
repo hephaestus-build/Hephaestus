@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.observation;
 
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.web.QueryFilterSupport;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -36,10 +35,8 @@ public record ObservationFeedFilterParams(
         @Nullable
         String groupSlug,
 
-        @Parameter(description = "Filter by presence") @RequestParam(required = false) @Nullable
-        Presence presence,
-
-        @RequestParam(required = false) @Nullable AssessmentStatus assessmentStatus,
+        @Parameter(description = "Filter by review outcome") @RequestParam(required = false) @Nullable
+        Outcome outcome,
         /**
          * Bare strings, not {@link ArtifactKind}s — {@link QueryFilterSupport#artifactKind} has the reason,
          * and parses them in {@link #toQuery()}, where a malformed value becomes a 400.
@@ -118,8 +115,7 @@ public record ObservationFeedFilterParams(
         return new ObservationFeedQuery(
                 practiceSlug,
                 groupSlug,
-                assessmentStatus,
-                presence,
+                outcome,
                 QueryFilterSupport.artifactKinds(artifactKinds),
                 QueryFilterSupport.artifactKind(artifactKind),
                 artifactId,

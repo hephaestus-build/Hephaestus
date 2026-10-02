@@ -28,7 +28,11 @@ type Choice = "CURRENT" | "OFFERED";
 
 const FIELDS = {
 	NAME: { label: "Name", key: "name" },
-	BINDINGS: { label: "When and what to review", key: "bindings" },
+	SIGNALS: { label: "When to review", key: "signals" },
+	EVIDENCE_REQUIREMENTS: { label: "Evidence to read", key: "evidenceRequirements" },
+	REVIEW_WHEN: { label: "Review conditions", key: "reviewWhen" },
+	SUBJECT: { label: "Person judged", key: "subject" },
+	PRECONDITION: { label: "Only review when", key: "precondition" },
 	CRITERIA: { label: "Review criteria", key: "criteria" },
 	PRECOMPUTE_SCRIPT: { label: "Static analysis", key: "precomputeScript" },
 	AUTOMATED_REVIEW_POLICY: { label: "Automated review settings", key: "automatedReviewPolicy" },
@@ -42,7 +46,10 @@ const BASE_SOURCE = {
 	EXACT_ADOPTION: "The exact version previously accepted",
 	BUNDLED_DIGEST_MATCH: "A bundled version matched by its saved digest",
 	BUNDLED_FINGERPRINT_MATCH: "A bundled version matched by its review fingerprint",
-	CURRENT_DEFINITION: "The current definition; the original adopted version could not be proved",
+	REVISION_FINGERPRINT_MATCH:
+		"A recorded version matched by its saved source fingerprint; it may not show the original guidance or delivery. Choose a version for each changed field.",
+	CURRENT_DEFINITION:
+		"The current definition; the original adopted version could not be proved. Choose a version for each changed field.",
 } satisfies Record<PracticeReleaseProposal["baseSource"], string>;
 
 function fieldText(definition: PracticeDefinition, field: Field): string {
@@ -74,11 +81,16 @@ export function PracticeReleaseReview({
 	onDecline,
 }: PracticeReleaseReviewProps) {
 	const id = useId();
+	// Without a proved base, a local edit is indistinguishable from a catalog change, so nothing is chosen
+	// for the reader. A recorded version matched by fingerprint need not carry the original guidance.
+	const baseProved =
+		proposal.baseSource !== "CURRENT_DEFINITION" &&
+		proposal.baseSource !== "REVISION_FINGERPRINT_MATCH";
 	const [choices, setChoices] = useState(
 		() =>
 			new Map<Field, Choice>(
 				proposal.fields
-					.filter((field) => field.offeredChanged && !field.conflict)
+					.filter((field) => baseProved && field.offeredChanged && !field.conflict)
 					.map((field) => [field.field, "OFFERED"]),
 			),
 	);
@@ -103,7 +115,7 @@ export function PracticeReleaseReview({
 					update.
 				</p>
 			</div>
-			<Alert variant={proposal.baseSource === "CURRENT_DEFINITION" ? "warning" : "default"}>
+			<Alert variant={baseProved ? "default" : "warning"}>
 				<AlertTitle>Comparison base</AlertTitle>
 				<AlertDescription>{BASE_SOURCE[proposal.baseSource]}</AlertDescription>
 			</Alert>

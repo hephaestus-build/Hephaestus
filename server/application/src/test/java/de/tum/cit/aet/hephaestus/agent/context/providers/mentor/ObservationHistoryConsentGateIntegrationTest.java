@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,13 +65,13 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
         databaseTestUtils.cleanDatabase();
         setUpWorkspaceAndRecipient("obs-consent-gate-test");
         practice = new Practice();
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.CONVERSATION_THREAD);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         practice.setWorkspace(workspace);
         practice.setSlug("test-practice");
         practice.setName("Test Practice");
         practice.setCriteria("Test description");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
         practice.setCurrentRevision(revision);
@@ -133,20 +134,19 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
     @DisplayName("an earlier review stays beside the latest one, abstentions are listed, and no other row is")
     void shouldKeepEarlierReviewsAndAbstentionsBesideEachClaimsLatestRun() {
         Instant base = Instant.now().minus(1, ChronoUnit.DAYS);
-        UUID earlier = observe(newJob(), practice, 3L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
+        UUID earlier = observe(newJob(), practice, 3L, recipient.getId(), "NOT_MET", "MAJOR", EVIDENCE, base);
         AgentJob repair = newJob();
-        UUID latest = observe(
-                repair, practice, 3L, recipient.getId(), "PRESENT", "GOOD", null, EVIDENCE, base.plusSeconds(60));
-        UUID abstention =
-                observe(newJob(), practice, 4L, recipient.getId(), null, null, null, EVIDENCE, base.plusSeconds(60));
+        UUID latest = observe(repair, practice, 3L, recipient.getId(), "MET", null, EVIDENCE, base.plusSeconds(60));
+        UUID abstention = observe(
+                newJob(), practice, 4L, recipient.getId(), "NOT_APPLICABLE", null, EVIDENCE, base.plusSeconds(60));
         // A later run this conversation may not use hides its claim entirely rather than exposing its earlier run.
-        observe(newJob(), practice, 5L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
-        observe(newJob(), practice, 5L, recipient.getId(), "PRESENT", "GOOD", null, NO_CITATIONS, base.plusSeconds(60));
+        observe(newJob(), practice, 5L, recipient.getId(), "NOT_MET", "MAJOR", EVIDENCE, base);
+        observe(newJob(), practice, 5L, recipient.getId(), "MET", null, NO_CITATIONS, base.plusSeconds(60));
         User colleague = userRepository.save(TestUserFactory.createUser(101L, "colleague", recipient.getProvider()));
-        observe(repair, practice, 3L, colleague.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base.plusSeconds(120));
+        observe(repair, practice, 3L, colleague.getId(), "NOT_MET", "MAJOR", EVIDENCE, base.plusSeconds(120));
         Workspace own = workspace;
         workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("obs-history-other"));
-        observe(repair, practice("test-practice"), 3L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
+        observe(repair, practice("test-practice"), 3L, recipient.getId(), "NOT_MET", "MAJOR", EVIDENCE, base);
         workspace = own;
 
         JsonNode root = contribute();
@@ -159,11 +159,9 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                         o -> o.get("origin").asString())
                 .containsExactly(tuple(earlier.toString(), "MAJOR", "LIVE"));
         assertThat(root.get("abstentions"))
-                .extracting(
-                        o -> o.get("id").asString(),
-                        o -> o.get("assessmentStatus").asString())
+                .extracting(o -> o.get("id").asString(), o -> o.get("outcome").asString())
                 .containsExactly(tuple(abstention.toString(), "NOT_APPLICABLE"));
-        assertThat(root.get("summary").get("byPresence").get("ABSENT").asLong()).isZero();
+        assertThat(root.get("summary").get("byOutcome").get("NOT_MET").asLong()).isZero();
         assertThat(root.get("summary").get("bySeverity").get("MAJOR").asLong()).isZero();
         assertThat(root.get("coverage")
                         .get("maxEntries")
@@ -177,23 +175,13 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
     void shouldAnswerAlikeWhetherOrNotWithheldRowsExist() {
         Instant base = Instant.now().minus(1, ChronoUnit.DAYS);
         for (int i = 0; i < 60; i++) {
+            observe(newJob(), practice, i, recipient.getId(), "NOT_MET", "MAJOR", NO_CITATIONS, base.plusSeconds(i));
             observe(
                     newJob(),
                     practice,
                     i,
                     recipient.getId(),
-                    "ABSENT",
-                    "BAD",
-                    "MAJOR",
-                    NO_CITATIONS,
-                    base.plusSeconds(i));
-            observe(
-                    newJob(),
-                    practice,
-                    i,
-                    recipient.getId(),
-                    null,
-                    null,
+                    "UNDETERMINED",
                     null,
                     NO_CITATIONS,
                     base.plusSeconds(100 + i));
@@ -222,8 +210,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                     practice,
                     i,
                     recipient.getId(),
-                    "ABSENT",
-                    "BAD",
+                    "NOT_MET",
                     "MAJOR",
                     EVIDENCE,
                     base.plusSeconds(i),
@@ -233,8 +220,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                     practice,
                     i,
                     recipient.getId(),
-                    "PRESENT",
-                    "GOOD",
+                    "MET",
                     null,
                     EVIDENCE,
                     base.plusSeconds(100 + i),
@@ -272,27 +258,26 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
     @DisplayName("a detail answers only for an observation the overview lists, and alike for every other")
     void detailAnswersOnlyForListedObservations() {
         Instant base = Instant.now().minus(1, ChronoUnit.DAYS);
-        UUID earlier = observe(newJob(), practice, 3L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
+        UUID earlier = observe(newJob(), practice, 3L, recipient.getId(), "NOT_MET", "MAJOR", EVIDENCE, base);
         AgentJob repair = newJob();
-        UUID latest = observe(
-                repair, practice, 3L, recipient.getId(), "PRESENT", "GOOD", null, EVIDENCE, base.plusSeconds(60));
+        UUID latest = observe(repair, practice, 3L, recipient.getId(), "MET", null, EVIDENCE, base.plusSeconds(60));
         // A later run this conversation may not use hides its claim's earlier run too.
-        UUID orphaned = observe(newJob(), practice, 5L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
-        UUID unusable = observe(
-                newJob(), practice, 5L, recipient.getId(), "PRESENT", "GOOD", null, NO_CITATIONS, base.plusSeconds(60));
+        UUID orphaned = observe(newJob(), practice, 5L, recipient.getId(), "NOT_MET", "MAJOR", EVIDENCE, base);
+        UUID unusable =
+                observe(newJob(), practice, 5L, recipient.getId(), "MET", null, NO_CITATIONS, base.plusSeconds(60));
         User colleague = userRepository.save(TestUserFactory.createUser(101L, "colleague", recipient.getProvider()));
-        UUID colleagues = observe(
-                repair, practice, 3L, colleague.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base.plusSeconds(120));
+        UUID colleagues =
+                observe(repair, practice, 3L, colleague.getId(), "NOT_MET", "MAJOR", EVIDENCE, base.plusSeconds(120));
         Workspace own = workspace;
         workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("obs-history-detail-other"));
-        UUID foreign = observe(
-                repair, practice("test-practice"), 3L, recipient.getId(), "ABSENT", "BAD", "MAJOR", EVIDENCE, base);
+        UUID foreign =
+                observe(repair, practice("test-practice"), 3L, recipient.getId(), "NOT_MET", "MAJOR", EVIDENCE, base);
         workspace = own;
 
         ObjectNode current = contentSource.inspect(workspace.getId(), recipient.getId(), latest);
         assertThat(current.get("list").asString()).isEqualTo("recentObservations");
         assertThat(current.get("observation").get("practiceRevisionId").asLong())
-                .isEqualTo(practice.getCurrentRevision().getId());
+                .isEqualTo(Objects.requireNonNull(practice.getCurrentRevision()).getId());
         assertThat(current.get("observation").get("criteria").asString()).isEqualTo(practice.getCriteria());
         assertThat(current.get("observation").get("evidence").get("citations")).hasSize(1);
         assertThat(contentSource
@@ -371,14 +356,12 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                 job.getId(),
                 job.getWorkspace().getId(),
                 practice.getId(),
-                practice.getCurrentRevision().getId(),
+                Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                 artifactKind,
                 artifactId,
                 recipient.getId(),
                 "Observation title",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 evidence(artifactKind),
                 null,
@@ -409,32 +392,20 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
             Practice practice,
             long mergeRequestId,
             long aboutUserId,
-            @Nullable String presence,
-            @Nullable String assessment,
+            String outcome,
             @Nullable String severity,
             String evidence,
             Instant observedAt) {
-        return observe(
-                review,
-                practice,
-                mergeRequestId,
-                aboutUserId,
-                presence,
-                assessment,
-                severity,
-                evidence,
-                observedAt,
-                "");
+        return observe(review, practice, mergeRequestId, aboutUserId, outcome, severity, evidence, observedAt, "");
     }
 
-    /** One observation on a merge request; a null presence records it as {@code NOT_APPLICABLE}. */
+    /** One observation on a merge request; with its explicit outcome. */
     private UUID observe(
             AgentJob review,
             Practice practice,
             long mergeRequestId,
             long aboutUserId,
-            @Nullable String presence,
-            @Nullable String assessment,
+            String outcome,
             @Nullable String severity,
             String evidence,
             Instant observedAt,
@@ -446,14 +417,12 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
                 review.getId(),
                 workspace.getId(),
                 practice.getId(),
-                practice.getCurrentRevision().getId(),
+                Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                 ArtifactKinds.PULL_REQUEST.value(),
                 mergeRequestId,
                 aboutUserId,
                 "Observation " + id,
-                presence == null ? "NOT_APPLICABLE" : "ASSESSED",
-                presence,
-                assessment,
+                outcome,
                 severity,
                 evidence,
                 rationale,
@@ -470,7 +439,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
         created.setName(slug);
         created.setCriteria("Criteria");
         created.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
-        created.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(created, ScmSignals.PULL_REQUEST_OPENED);
         created = practiceRepository.saveAndFlush(created);
         created.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(created, 1)));
         return practiceRepository.saveAndFlush(created);

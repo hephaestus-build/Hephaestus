@@ -10,9 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeveloperTextSanitizer;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.LatestRun;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -190,7 +189,7 @@ public class ObservationHistoryContentSource implements ContentSource {
                         developerId,
                         workspaceId,
                         since,
-                        List.of(AssessmentStatus.ASSESSED.name()),
+                        List.of(Outcome.MET.name(), Outcome.NOT_MET.name()),
                         PageRequest.of(0, MAX_RECENT_OBSERVATIONS))));
         List<Observation> abstentions = new ArrayList<>(usable(
                 workspaceId,
@@ -198,7 +197,7 @@ public class ObservationHistoryContentSource implements ContentSource {
                         developerId,
                         workspaceId,
                         since,
-                        List.of(AssessmentStatus.NOT_APPLICABLE.name(), AssessmentStatus.UNDETERMINED.name()),
+                        List.of(Outcome.NOT_APPLICABLE.name(), Outcome.UNDETERMINED.name()),
                         PageRequest.of(0, MAX_ABSTENTIONS))));
         List<Observation> latest = new ArrayList<>(recent);
         latest.addAll(abstentions);
@@ -331,15 +330,13 @@ public class ObservationHistoryContentSource implements ContentSource {
         ObjectNode summary = root.putObject("summary");
         summary.put("includedObservations", recent.size());
 
-        ObjectNode presenceSummary = summary.putObject("byPresence");
-        for (Presence v : Presence.values()) {
-            presenceSummary.put(v.name(), 0L);
+        ObjectNode outcomeSummary = summary.putObject("byOutcome");
+        for (Outcome outcome : Outcome.values()) {
+            outcomeSummary.put(outcome.name(), 0L);
         }
         for (Observation observation : recent) {
-            String presence = observation.getPresence() == null
-                    ? observation.getAssessmentStatus().name()
-                    : observation.getPresence().name();
-            presenceSummary.put(presence, presenceSummary.path(presence).asLong() + 1);
+            String outcome = observation.getOutcome().name();
+            outcomeSummary.put(outcome, outcomeSummary.path(outcome).asLong() + 1);
         }
 
         ObjectNode severityNode = summary.putObject("bySeverity");
@@ -410,9 +407,8 @@ public class ObservationHistoryContentSource implements ContentSource {
         node.put("origin", o.getOrigin().name());
         node.put("summary", o.getSummary());
         node.put("practiceSlug", o.getPractice().getSlug());
-        node.put("assessmentStatus", o.getAssessmentStatus().name());
-        node.put("outcome", o.getOutcome() == null ? null : o.getOutcome().name());
-        node.put("presence", o.getPresence() == null ? null : o.getPresence().name());
+
+        node.put("outcome", o.getOutcome().name());
         Severity severity = o.getSeverity();
         node.put("severity", severity == null ? null : severity.name());
         node.put("observedAt", o.getObservedAt().toString());

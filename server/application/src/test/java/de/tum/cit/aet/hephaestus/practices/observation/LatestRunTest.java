@@ -3,9 +3,9 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
@@ -22,10 +22,10 @@ class LatestRunTest extends BaseUnitTest {
     void shouldKeepOnlyEachPieceOfWorksNewestRunWhenAWorkWasReviewedTwice() {
         UUID earlier = UUID.randomUUID();
         UUID later = UUID.randomUUID();
-        Observation slipped = observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Assessment.BAD);
-        Observation recovered = observation(7L, later, NOW, Assessment.GOOD);
-        Observation alsoRecovered = observation(7L, later, NOW, Assessment.GOOD);
-        Observation other = observation(8L, earlier, NOW.minus(Duration.ofDays(1)), Assessment.BAD);
+        Observation slipped = observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Outcome.NOT_MET);
+        Observation recovered = observation(7L, later, NOW, Outcome.MET);
+        Observation alsoRecovered = observation(7L, later, NOW, Outcome.MET);
+        Observation other = observation(8L, earlier, NOW.minus(Duration.ofDays(1)), Outcome.NOT_MET);
 
         assertThat(LatestRun.perWork(List.of(recovered, alsoRecovered, other, slipped)))
                 .containsExactly(recovered, alsoRecovered, other);
@@ -37,8 +37,8 @@ class LatestRunTest extends BaseUnitTest {
         UUID later = UUID.randomUUID();
 
         assertThat(LatestRun.of(List.of(
-                        observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Assessment.BAD),
-                        observation(7L, later, NOW, Assessment.GOOD))))
+                        observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Outcome.NOT_MET),
+                        observation(7L, later, NOW, Outcome.MET))))
                 .isEqualTo(later);
     }
 
@@ -53,16 +53,16 @@ class LatestRunTest extends BaseUnitTest {
         UUID campaign = UUID.randomUUID();
         Practice sizing = practice("reviewable-diff-size");
         Practice describing = practice("describe-what-and-why");
-        Observation sizeSlipped = observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Assessment.BAD, sizing);
-        Observation sizeRecovered = observation(7L, later, NOW, Assessment.GOOD, sizing);
-        Observation described = observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Assessment.GOOD, describing);
+        Observation sizeSlipped = observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Outcome.NOT_MET, sizing);
+        Observation sizeRecovered = observation(7L, later, NOW, Outcome.MET, sizing);
+        Observation described = observation(7L, earlier, NOW.minus(Duration.ofDays(1)), Outcome.MET, describing);
         Observation backfilled = Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(campaign)
                 .practice(sizing)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(7L)
-                .assessment(Assessment.BAD)
+                .outcome(Outcome.NOT_MET)
                 .origin(ObservationOrigin.BACKFILL)
                 .observedAt(NOW.plus(Duration.ofDays(1)))
                 .build();
@@ -77,7 +77,7 @@ class LatestRunTest extends BaseUnitTest {
         UUID larger = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
         assertThat(LatestRun.of(List.of(
-                        observation(1L, larger, NOW, Assessment.BAD), observation(1L, smaller, NOW, Assessment.GOOD))))
+                        observation(1L, larger, NOW, Outcome.NOT_MET), observation(1L, smaller, NOW, Outcome.MET))))
                 .isEqualTo(larger);
     }
 
@@ -92,24 +92,24 @@ class LatestRunTest extends BaseUnitTest {
         UUID highBitClear = UUID.fromString("0f000000-0000-0000-0000-000000000000");
 
         assertThat(LatestRun.of(List.of(
-                        observation(1L, highBitClear, NOW, Assessment.GOOD),
-                        observation(1L, highBitSet, NOW, Assessment.BAD))))
+                        observation(1L, highBitClear, NOW, Outcome.MET),
+                        observation(1L, highBitSet, NOW, Outcome.NOT_MET))))
                 .isEqualTo(highBitSet);
     }
 
-    private static Observation observation(long artifactId, UUID run, Instant observedAt, Assessment assessment) {
-        return observation(artifactId, run, observedAt, assessment, practice("reviewable-diff-size"));
+    private static Observation observation(long artifactId, UUID run, Instant observedAt, Outcome outcome) {
+        return observation(artifactId, run, observedAt, outcome, practice("reviewable-diff-size"));
     }
 
     private static Observation observation(
-            long artifactId, UUID run, Instant observedAt, Assessment assessment, Practice practice) {
+            long artifactId, UUID run, Instant observedAt, Outcome outcome, Practice practice) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .agentJobId(run)
                 .practice(practice)
                 .artifactKind(ArtifactKinds.PULL_REQUEST)
                 .artifactId(artifactId)
-                .assessment(assessment)
+                .outcome(outcome)
                 .observedAt(observedAt)
                 .build();
     }

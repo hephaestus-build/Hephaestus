@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewExecutionCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
@@ -39,7 +40,7 @@ import java.util.Set;
  * <ul>
  *   <li>It borrows an existing {@link IntegrationKind} rather than adding a fixture-only constant, since
  *       that enum is persisted on connections and jobs.
- *   <li>It cannot be driven through {@code PracticeReviewDetectionGate} (which takes a
+ *   <li>It cannot be driven through {@code ReviewGate} (which takes a
  *       {@code PullRequest}/{@code Issue}), so the practices-side proof runs through the kind-agnostic
  *       {@code PracticeSignalCoverage} instead.
  * </ul>
@@ -125,10 +126,13 @@ final class FixtureIntegration {
             }
 
             @Override
-            public List<ReviewLimitation> reviewLimitations() {
-                // A reviewable kind must name what its evidence cannot settle.
-                return List.of(new ReviewLimitation(
-                        "FIXTURE_OBSERVES_NOTHING", "A fixture widget has no real work behind it."));
+            public ReviewCapabilities reviewCapabilities() {
+                return new ReviewCapabilities(
+                        List.of(new ReviewLimitation(
+                                "FIXTURE_OBSERVES_NOTHING", "A fixture widget has no real work behind it.")),
+                        List.of(),
+                        Set.of(),
+                        Set.of());
             }
         };
     }

@@ -45,8 +45,8 @@ describe("review history corrections", () => {
 			const corrected: ObservationDetail = {
 				...valid,
 				id: detailObservation.id,
-				presence: "PRESENT",
-				assessment: "GOOD",
+				outcome: "MET",
+				severity: undefined,
 				summary,
 				invalidatedAt: daysBefore(1),
 				invalidationReason: "The review imported the linked issue's reason.",

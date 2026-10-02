@@ -421,18 +421,17 @@ export function lastDecisionPerReviewer(decisions: readonly ReviewDecision[]): R
 }
 
 /**
- * One record row per thread the record does not mark RESOLVED, and one per thread resolved after
- * the merge when the record dates the resolution: a thread closed after the fact was open at the
- * merge, which is what the practice asks.
+ * Candidate rows for historical review: currently unresolved threads and resolutions dated after
+ * the merge. Opening times still determine whether each thread existed at the merge.
  */
 export function unresolvedThreadRows(
 	threads: readonly ReviewThread[],
 	contextReference: string,
 	mergedAt?: string,
 ): Hint[] {
-	const openAtMerge = (t: ReviewThread) =>
+	const candidate = (t: ReviewThread) =>
 		t.state !== "RESOLVED" || (mergedAt !== undefined && later(t.resolvedAt, mergedAt));
-	return threads.filter(openAtMerge).map((t) => ({
+	return threads.filter(candidate).map((t) => ({
 		file: t.path ?? contextFile(contextReference, "review_threads.json"),
 		line: t.line ?? 0,
 		pattern: t.state === "RESOLVED" ? "thread resolved after the merge" : "unresolved thread",

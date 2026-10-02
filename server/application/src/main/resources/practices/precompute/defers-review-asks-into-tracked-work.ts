@@ -76,17 +76,17 @@ export default async function defersReviewAsksIntoTrackedWork(
 		);
 	}
 	const directions: string[] = [];
-	if (inline === null && general === null) {
+	if (inline === null || general === null) {
 		directions.push(
-			"No comments file was captured (neither comments.json nor general_comments.json): the record of asks is not available here.",
+			"A required comments file is missing or malformed (comments.json or general_comments.json): report a collection gap and record no observation; an unread source does not establish that no ask exists.",
 		);
 	} else if (hints.length === 0) {
 		directions.push(
-			`No comment by anyone other than the author in the captured record (${inline === null ? "comments.json not captured" : `${inline.length} inline comment(s)`}, ${general === null ? "general_comments.json not captured" : `${general.length} conversation comment(s)`}): with no ask, the occasion did not arise.`,
+			`No comment by anyone other than the author in the captured record (${inline.length} inline comment(s), ${general.length} conversation comment(s)): with no ask, the occasion did not arise.`,
 		);
 	} else {
 		directions.push(
-			`${String(hints.length)} comment(s) by others are listed, one row each; a remark that asks nothing of this change is not an ask. Decide every ask against the head diff: addressed when the diff carries the change asked for; deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up, or approves after the author's stated reason; otherwise deferred bare. A RESOLVED thread says nothing by itself, and "approved on the condition that you do it next time" is a deferral to track, not a waiver.`,
+			`${String(hints.length)} comment(s) by others are listed, one row each; a remark that asks nothing of this change is not an ask. Decide every ask against the head diff: addressed when the diff carries the change asked for; deferred into tracked work when the author's reply names an issue or the description defers it to one; waived when the reviewer drops the ask in their own words, in the ask or in a follow-up, otherwise deferred bare. A later approval alone does not establish a waiver. A RESOLVED thread says nothing by itself, and "approved on the condition that you do it next time" is a deferral to track, not a waiver.`,
 			"A two-part ask is two asks: address one part and the other still stands.",
 		);
 	}

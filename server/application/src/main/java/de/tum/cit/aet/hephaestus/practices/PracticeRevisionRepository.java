@@ -5,7 +5,6 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -26,31 +25,6 @@ public interface PracticeRevisionRepository
 
     Optional<PracticeRevision> findFirstByPracticeIdOrderByRevisionNumberDesc(Long practiceId);
 
-    @Query("""
-        SELECT DISTINCT r.practice.workspace.id FROM PracticeRevision r
-        WHERE r.slug IS NOT NULL
-          AND r.reviewRuleFingerprint IS NULL
-          AND r.automatedReviewPolicy IS NOT NULL
-        ORDER BY r.practice.workspace.id
-        """)
-    List<Long> findWorkspaceIdsWithDefinitionRevisionsMissingFingerprint();
-
-    @Query("""
-        SELECT r FROM PracticeRevision r
-        WHERE r.practice.workspace.id = :workspaceId
-          AND r.slug IS NOT NULL
-          AND r.reviewRuleFingerprint IS NULL
-          AND r.automatedReviewPolicy IS NOT NULL
-        ORDER BY r.id
-        """)
-    List<PracticeRevision> findDefinitionRevisionsMissingFingerprint(@Param("workspaceId") Long workspaceId);
-
-    @Modifying
-    @Query(
-            value = "UPDATE practice_revision SET review_rule_fingerprint = :fingerprint WHERE id = :revisionId",
-            nativeQuery = true)
-    void setReviewRuleFingerprint(@Param("revisionId") long revisionId, @Param("fingerprint") String fingerprint);
-
     /**
      * The first revision after {@code revisionNumber} whose review rules differ from {@code fingerprint}:
      * when the rules a past observation was measured against stopped being the ones in force. A later edit
@@ -59,6 +33,10 @@ public interface PracticeRevisionRepository
     Optional<PracticeRevision>
             findFirstByPracticeIdAndRevisionNumberGreaterThanAndReviewRuleFingerprintNotOrderByRevisionNumberAsc(
                     Long practiceId, int revisionNumber, String fingerprint);
+
+    /** The earliest revision of a practice recorded under exactly this review-rule fingerprint. */
+    Optional<PracticeRevision> findFirstByPracticeIdAndReviewRuleFingerprintOrderByRevisionNumberAsc(
+            Long practiceId, String fingerprint);
 
     /**
      * Returns the definition available at {@code asOf}, so an edit during detection cannot change the

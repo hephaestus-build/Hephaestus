@@ -16,11 +16,11 @@ final class BetaPosterior {
         this.beta = beta;
     }
 
-    static BetaPosterior from(int opportunities, double positiveShareSum) {
-        if (opportunities < 0 || positiveShareSum < 0 || positiveShareSum > opportunities) {
+    static BetaPosterior from(int opportunities, double metShareSum) {
+        if (opportunities < 0 || metShareSum < 0 || metShareSum > opportunities) {
             throw new IllegalArgumentException("Invalid opportunity evidence");
         }
-        return new BetaPosterior(JEFFREYS_PRIOR + positiveShareSum, JEFFREYS_PRIOR + opportunities - positiveShareSum);
+        return new BetaPosterior(JEFFREYS_PRIOR + metShareSum, JEFFREYS_PRIOR + opportunities - metShareSum);
     }
 
     double mean() {

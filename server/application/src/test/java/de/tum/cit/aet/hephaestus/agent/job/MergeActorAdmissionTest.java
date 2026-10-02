@@ -11,12 +11,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.github.manifest.GitHubManifest;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.manifest.GitLabManifest;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class MergeActorAdmissionTest extends BaseUnitTest {
@@ -77,11 +77,11 @@ class MergeActorAdmissionTest extends BaseUnitTest {
 
     private static Practice merger() {
         Practice practice = new Practice();
-        practice.setBindings(List.of(new PracticeBinding(
-                List.of(ScmSignals.PULL_REQUEST_MERGED),
-                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
-                ActorRole.MERGER)));
+        practice.setSignals(List.of(ScmSignals.PULL_REQUEST_MERGED));
+        practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
+        practice.setReviewWhen(Map.of());
+        practice.setSubject(ActorRole.MERGER);
+        practice.setPrecondition(null);
         return practice;
     }
 }

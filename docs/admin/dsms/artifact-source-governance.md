@@ -21,7 +21,7 @@ defines the governance decision that permits collection, retention, processing, 
 2. **Necessity before benefit.** Name the capability that requires the source and why a less intrusive source is
    insufficient. Accuracy, convenience, and possible reuse are not purposes.
 3. **Minimize the catalog, not each invocation.** For an admitted review, the runtime captures every governed
-   source in the permitted workspace scope. Practice bindings control whether a practice may use a source; they
+   source in the permitted workspace scope. Practice evidence requirements control whether a practice may use a source; they
    do not reduce what is staged for that invocation. Keep each source's selection scope minimal, and
    remove a source from the next contract version when no approved consumer remains.
 4. **Separate purposes.** Product feedback, mentoring, operator quality assurance, and research evaluation require

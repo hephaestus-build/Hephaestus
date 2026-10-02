@@ -2,7 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { mockPracticeDefinitionOptions } from "@/mocks/fixtures/practice";
+import {
+	mockPracticeDefinitionOptions,
+	mockPullRequestReviewFields,
+	mockPullRequestPolicy,
+} from "@/mocks/fixtures/practice";
 import { deferred } from "@/test/async";
 import { renderWithRouter } from "@/test/router-harness";
 
@@ -55,6 +59,83 @@ describe("the gate field", () => {
 		expect(onSubmit).not.toHaveBeenCalled();
 		expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", "{");
 		expect(screen.getAllByText("Enter valid JSON for the gate.").length).toBeGreaterThan(0);
+	});
+});
+
+it("restores a work-type draft without a gate instead of submitting another draft’s gate", async () => {
+	const onSubmit = vi.fn();
+	await renderCreateForm(onSubmit);
+	fillValidDraft();
+	fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+	fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
+		target: {
+			value: '{"skipReason":"No matching paths","anyOf":[{"changedPathMatches":["**/*.ts"]}]}',
+		},
+	});
+	fireEvent.click(screen.getByRole("radio", { name: /^Pull or merge request/u }));
+	expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", "");
+	fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
+	await waitFor(() =>
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "Explain what changed and why" }),
+		),
+	);
+	expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty("precondition");
+});
+
+it("restores each gate draft and refuses an invalid restored draft", async () => {
+	const onSubmit = vi.fn();
+	await renderCreateForm(onSubmit);
+	fillValidDraft();
+	const gate = '{"skipReason":"No matching paths","anyOf":[{"changedPathMatches":["**/*.ts"]}]}';
+	fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+	fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
+		target: { value: gate },
+	});
+	fireEvent.click(screen.getByRole("radio", { name: /^Pull or merge request/u }));
+	fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+	expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", gate);
+	fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
+		target: { value: "{" },
+	});
+	fireEvent.click(screen.getByRole("radio", { name: /^Pull or merge request/u }));
+	fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+	expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", "{");
+	fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
+	expect(onSubmit).not.toHaveBeenCalled();
+	expect(screen.getAllByText("Enter valid JSON for the gate.").length).toBeGreaterThan(0);
+});
+
+describe("the identifier of an existing practice", () => {
+	it("does not change when the practice is renamed", async () => {
+		const onSubmit = vi.fn();
+		await renderWithRouter(
+			<PracticeDefinitionForm
+				mode="edit"
+				groups={[]}
+				definitionOptions={mockPracticeDefinitionOptions}
+				initialData={{
+					...mockPullRequestReviewFields,
+					slug: "reviewable-diffs",
+					name: "Small changes",
+					criteria: "Changes must remain reviewable.",
+					automatedReviewPolicy: mockPullRequestPolicy,
+				}}
+				isPending={false}
+				cancelAction={<Link to="/">Cancel</Link>}
+				onSubmit={onSubmit}
+			/>,
+			"/admin/practices/new",
+		);
+		await openTechnicalSettings();
+		fireEvent.change(nameField(), { target: { value: "Small, reviewable changes" } });
+		expect(slugField().value).toBe("reviewable-diffs");
+		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+		await waitFor(() =>
+			expect(onSubmit).toHaveBeenCalledWith(
+				expect.objectContaining({ slug: "reviewable-diffs", name: "Small, reviewable changes" }),
+			),
+		);
 	});
 });
 

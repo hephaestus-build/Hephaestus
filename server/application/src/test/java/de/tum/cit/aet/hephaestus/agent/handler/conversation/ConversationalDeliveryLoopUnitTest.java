@@ -25,12 +25,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.PlacementType;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
@@ -512,14 +510,9 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation problem(@Nullable ObjectNode evidence, @Nullable String recurrenceKey, UUID id) {
         Observation o = mock(Observation.class);
-        lenient()
-                .when(o.getOutcome())
-                .thenAnswer(invocation ->
-                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
+
         lenient().when(o.getId()).thenReturn(id);
-        lenient().when(o.getPresence()).thenReturn(Presence.ABSENT);
-        org.mockito.Mockito.lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
-        lenient().when(o.getAssessment()).thenReturn(Assessment.GOOD);
+        lenient().when(o.getOutcome()).thenReturn(Outcome.NOT_MET);
         lenient().when(o.getSeverity()).thenReturn(Severity.MAJOR);
         lenient().when(o.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(o.getArtifactId()).thenReturn(100L);
@@ -532,14 +525,9 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation strength() {
         Observation o = mock(Observation.class);
-        lenient()
-                .when(o.getOutcome())
-                .thenAnswer(invocation ->
-                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
+
         lenient().when(o.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(o.getPresence()).thenReturn(Presence.PRESENT);
-        org.mockito.Mockito.lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.ASSESSED);
-        lenient().when(o.getAssessment()).thenReturn(Assessment.GOOD);
+        lenient().when(o.getOutcome()).thenReturn(Outcome.MET);
         lenient().when(o.getAboutUserId()).thenReturn(RECIPIENT);
         lenient().when(o.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(o.getOrigin()).thenReturn(ObservationOrigin.LIVE);
@@ -548,13 +536,10 @@ class ConversationalDeliveryLoopUnitTest extends BaseUnitTest {
 
     private Observation notApplicable() {
         Observation o = mock(Observation.class);
-        lenient()
-                .when(o.getOutcome())
-                .thenAnswer(invocation ->
-                        de.tum.cit.aet.hephaestus.practices.model.Outcome.of(o.getPresence(), o.getAssessment()));
+
         lenient().when(o.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(o.getAssessmentStatus()).thenReturn(AssessmentStatus.NOT_APPLICABLE);
-        lenient().when(o.getAssessment()).thenReturn(null);
+        lenient().when(o.getOutcome()).thenReturn(Outcome.NOT_APPLICABLE);
+
         lenient().when(o.getAboutUserId()).thenReturn(RECIPIENT);
         lenient().when(o.getArtifactKind()).thenReturn(ArtifactKinds.PULL_REQUEST);
         lenient().when(o.getOrigin()).thenReturn(ObservationOrigin.LIVE);

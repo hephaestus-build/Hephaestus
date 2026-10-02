@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Map;
@@ -12,7 +13,11 @@ class PracticeDefinitionMergeTest extends BaseUnitTest {
 
     private static final PracticeDefinition BASE = new PracticeDefinition(
             "Original",
-            PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST),
+            PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
+            PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
+            Map.of(),
+            ActorRole.AUTHOR,
+            null,
             "Original criteria",
             null,
             PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
@@ -59,7 +64,7 @@ class PracticeDefinitionMergeTest extends BaseUnitTest {
                         Map.of(
                                 PracticeDefinitionField.NAME, PracticeReleaseChoice.OFFERED,
                                 PracticeDefinitionField.CRITERIA, PracticeReleaseChoice.CURRENT,
-                                PracticeDefinitionField.BINDINGS, PracticeReleaseChoice.OFFERED)))
+                                PracticeDefinitionField.SIGNALS, PracticeReleaseChoice.OFFERED)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -67,7 +72,11 @@ class PracticeDefinitionMergeTest extends BaseUnitTest {
     void includesDeclaredDeliveryBehaviorInComparisonAndMerge() {
         PracticeDefinition offered = new PracticeDefinition(
                 BASE.name(),
-                BASE.bindings(),
+                BASE.signals(),
+                BASE.evidenceRequirements(),
+                BASE.reviewWhen(),
+                BASE.subject(),
+                BASE.precondition(),
                 BASE.criteria(),
                 BASE.precomputeScript(),
                 BASE.automatedReviewPolicy(),
@@ -91,7 +100,11 @@ class PracticeDefinitionMergeTest extends BaseUnitTest {
     private static PracticeDefinition change(String name, String criteria, String rationale) {
         return new PracticeDefinition(
                 name,
-                BASE.bindings(),
+                BASE.signals(),
+                BASE.evidenceRequirements(),
+                BASE.reviewWhen(),
+                BASE.subject(),
+                BASE.precondition(),
                 criteria,
                 BASE.precomputeScript(),
                 BASE.automatedReviewPolicy(),

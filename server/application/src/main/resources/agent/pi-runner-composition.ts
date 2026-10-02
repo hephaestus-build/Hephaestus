@@ -36,14 +36,14 @@ export interface CitedObservation {
 }
 
 /**
- * The NEGATIVE observations that quote the same lines, grouped: two practices that cite one line
+ * The NOT_MET observations that quote the same lines, grouped: two practices that cite one line
  * usually measured one event from two angles, and the composer's rule is one message per event. The
  * grouping names the candidates; whether they are one event is the composer's call.
  */
 export function sameLinesNote(observations: readonly CitedObservation[]): string {
 	const byLine = new Map<string, CitedObservation[]>();
 	for (const observation of observations) {
-		if (observation.outcome !== "NEGATIVE") {
+		if (observation.outcome !== "NOT_MET") {
 			continue;
 		}
 		const lines = new Set(
@@ -63,7 +63,7 @@ export function sameLinesNote(observations: readonly CitedObservation[]): string
 		);
 	return groups.length === 0
 		? ""
-		: `NEGATIVE measurements that quote the same line, so likely one event seen from two practices — one message, the best-named practice as its practiceSlug and the rest in basedOn, unless they are separate events:\n${groups.map((g) => `- ${g}`).join("\n")}\n\n`;
+		: `NOT_MET measurements that quote the same line, so likely one event seen from two practices — one message, the best-named practice as its practiceSlug and the rest in basedOn, unless they are separate events:\n${groups.map((g) => `- ${g}`).join("\n")}\n\n`;
 }
 
 /** Unevaluated practices support neither positive nor negative claims. */
@@ -105,12 +105,11 @@ export function validateFeedbackEvidence(
 			const observation = observations.get(id);
 			return (
 				observation?.practiceSlug === primaryPractice &&
-				(observation.outcome === "NEGATIVE" ||
-					(!requiresNegative && observation.outcome === "POSITIVE"))
+				(observation.outcome === "NOT_MET" || (!requiresNegative && observation.outcome === "MET"))
 			);
 		})
 	) {
-		return `At least one basedOn observation must ${requiresNegative ? "be NEGATIVE" : "have a POSITIVE or NEGATIVE outcome"} for the primary practice '${primaryPractice}'; skipped.`;
+		return `At least one basedOn observation must ${requiresNegative ? "be NOT_MET" : "have a MET or NOT_MET outcome"} for the primary practice '${primaryPractice}'; skipped.`;
 	}
 	return null;
 }

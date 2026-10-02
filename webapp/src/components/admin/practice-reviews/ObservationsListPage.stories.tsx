@@ -77,8 +77,6 @@ function observationPage(
 			(!query.to || row.observedAt < new Date(query.to)) &&
 			selects(query.groupSlug, row.group?.slug) &&
 			selects(query.practiceSlug, row.practiceSlug) &&
-			selects(query.presence, row.presence) &&
-			selects(query.assessment, row.assessment) &&
 			selects(query.severity, row.severity) &&
 			selects(query.origin, row.origin) &&
 			(query.subjectUserId === undefined || row.subject?.id === query.subjectUserId),
@@ -107,8 +105,7 @@ const meta = {
 		workspaceSlug: "demo",
 		search: {
 			outcome: undefined,
-			presence: undefined,
-			assessment: undefined,
+
 			severity: undefined,
 			origin: undefined,
 		},
@@ -169,15 +166,7 @@ async function pickFacet(
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByText("12 observations.");
-		for (const name of [
-			"Group",
-			"Practice",
-			"Outcome",
-			"Behaviour",
-			"Severity",
-			"Assessment status",
-			"Presence",
-		]) {
+		for (const name of ["Group", "Practice", "Outcome", "Severity"]) {
 			canvas.getByRole("combobox", { name });
 		}
 		canvas.getByRole("combobox", { name: "Developer" });
@@ -226,8 +215,8 @@ export const FilteredToNothing: Story = {
 };
 
 /**
- * `ACTIONABILITY` is the server's ordering, not one the browser applies: negative outcomes
- * worst-first, then positive outcomes, then the observations that judged nothing. The control's only
+ * `ACTIONABILITY` is the server's ordering, not one the browser applies: not met observations
+ * worst-first, then met observations, then the observations that judged nothing. The control's only
  * job is to put the choice in the search the route turns into a request — that the endpoint spells it
  * `sort` is pinned by `-lists-route.test.tsx`, which is the only place the wire name can be checked.
  */
@@ -304,8 +293,7 @@ export const MoreThanOnePage: Story = {
 		search: {
 			page: 1,
 			outcome: undefined,
-			presence: undefined,
-			assessment: undefined,
+
 			severity: undefined,
 			origin: undefined,
 		},

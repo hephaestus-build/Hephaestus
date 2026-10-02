@@ -2,7 +2,7 @@
 id: artifact-source-contract
 sidebar_position: 6
 title: Artifact-source contract
-description: Versioned evidence sources, explicit absence states, per-binding evidence, and conservative skipping.
+description: Versioned evidence sources, explicit absence states, practice evidence requirements, and conservative skipping.
 ---
 
 # Artifact-source contract
@@ -32,14 +32,14 @@ The contract separates three identities:
 
 1. **Source catalog:** logical source kinds and their authority, identity anchoring, completeness, required
    capture quality, privacy, and absence-state semantics.
-2. **Practice binding:** the occasion a review runs on and the evidence that review *requires* before it may
+2. **Practice definition:** the occasion a review runs on and the evidence that review *requires* before it may
    run at all. A source declares the artifact kinds it applies to, so the catalog constrains which sources a
-   binding may name.
+   practice may name.
 3. **Folder index:** the state, provenance facts, and materialized artifacts for one invocation.
 
-A binding's `needs` decide **readiness**, not staging. Every source permitted for the workspace and purpose
+A practice's `evidenceRequirements` decide **readiness**, not staging. Every source permitted for the workspace and purpose
 is rendered for every review, whether or not a practice named it: relevance is a
-question for the practice criteria and the reviewing model, not a reason to withhold data from it. A binding
+question for the practice criteria and the reviewing model, not a reason to withhold data from it. A practice
 that names a source with a refusing stance still refuses the review when that source did not arrive, and an
 `EXHAUSTIVE` stance still fences what the review may assert an absence over. Neither cuts the sandbox down.
 
@@ -217,25 +217,18 @@ terms. A practice makes two separate statements.
 runs at all, the refusal behaviour, and the claims that kind of evidence can never support whatever the
 occasion. It does not itself list sources.
 
-**The binding** is the occasion, carrying the evidence a review occasioned that way reads. A practice
-declares exactly one; `PracticeDefinitionValidator` refuses a second, and the wire schema caps `on` at one
-entry. Evidence belongs on the binding rather than on the practice because what a review needs is a function
-of what occasioned it: a review that runs when a change merges may have to establish that no decision was
-ever recorded, while a review of the same question when the change was opened is only reading what is in
-front of it. Those are two practices, not two occasions on one — one row, one autonomy setting and one feedback
-history then describe one practice. The `on` array keeps its list shape so that relaxing the rule stays a
-validator change rather than a data migration.
+**The definition** carries the review signals, evidence requirements, draft behavior, subject, and
+optional precondition as flat fields. Different evidence or expectations at another review moment
+belong in another practice, not a nested occasion list. One practice has one autonomy setting and
+one feedback history.
 
-One occasion may still name several signals, which is how a practice judged all the way along a piece of
-work is written. Its artifact kind is read off those signals' shared prefix and is never written down
-separately: a second statement of the same fact is a second thing to keep in agreement, and a practice whose
-declared kind contradicts its own signals cannot be resolved. All signals in the binding must therefore share
-one artifact kind.
+A practice may name several signals, but all must refer to one artifact kind. The runtime derives
+that kind from the signals; it does not store a second declaration that can contradict them.
 
 A signal that names a hand-requested review is refused: such a review already covers every practice on that
 kind of work whatever state the work is in, so it is a door rather than an occasion an author opts into.
 
-Each entry in `needs` names a source and the stance the practice takes towards it:
+Each entry in `evidenceRequirements` names a source and the stance the practice takes towards it:
 
 | Stance       | Meaning                                                                                                                                                                               |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -251,16 +244,14 @@ quiet `NOT_APPLICABLE`.
 
 ```json
 {
-  "on": [
-    {
-      "signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
-      "needs": [
-        { "sourceKind": "scm.pull-request.core", "stance": "REQUIRED" },
-        { "sourceKind": "scm.pull-request.diff", "stance": "REQUIRED" },
-        { "sourceKind": "scm.repository.tree", "stance": "CONTEXTUAL" }
-      ]
-    }
+  "signals": ["scm.pull_request.opened", "scm.pull_request.ready"],
+  "evidenceRequirements": [
+    { "sourceKind": "scm.pull-request.core", "stance": "REQUIRED" },
+    { "sourceKind": "scm.pull-request.diff", "stance": "REQUIRED" },
+    { "sourceKind": "scm.repository.tree", "stance": "CONTEXTUAL" }
   ],
+  "reviewWhen": { "draftStatus": ["NOT_DRAFT"] },
+  "subject": "AUTHOR",
   "automatedReviewPolicy": {
     "sourceContractVersion": "1.3.0",
     "automatedReview": {
@@ -278,19 +269,23 @@ quiet `NOT_APPLICABLE`.
 }
 ```
 
-In the bundled catalog a binding may also be written as a bare signal name, which is shorthand for a binding
-on that signal reading the artifact kind's default evidence. A binding may set `onDrafts: true` to be
-occasioned by an artifact still marked draft; it defaults to false, because most practices judge work that
-has been handed over.
+`reviewWhen` selects finite state values supplied by the work type's descriptor. Values within one
+dimension are alternatives; every selected dimension must match. An omitted dimension is unrestricted,
+and `{}` imposes no state restriction. A missing required state fact does not match. Pull and merge
+requests recommend `draftStatus: ["NOT_DRAFT"]`; issues, documents and conversations recommend `{}`.
+Manual requests bypass scheduling, not consent, source requirements or the automated-review policy.
 
-Validation rejects unknown versions or source kinds, signals no registered domain declares, a signal that
-names a hand-requested review, sources that do not apply to the binding's artifact kind, duplicate sources
-within one binding, a binding with no signal, a second binding, a binding whose signals mix artifact kinds, an
-`EXHAUSTIVE` stance over a source that can never report a complete capture, and a policy that carries `needs`
-or a retired `evidenceProfile`. An `EXHAUSTIVE` stance over a
-source that could never be captured whole is caught at authoring time rather than at review time, because
-"switched on and permanently refusing" is indistinguishable from "nobody has done this yet" in the report it
-produces.
+The descriptor owns supported dimensions, their values, and precondition capabilities. Pull and merge
+requests expose draft status and lifecycle; issues expose open or closed; documents expose active or
+archived from the stored source state. Conversations expose no invented lifecycle. Unsupported keys,
+values, precondition aspects and evidence collections are rejected. Signals and evidence requirements
+are explicit arrays; no shorthand supplies hidden defaults.
+
+Validation rejects unknown source-contract versions or source kinds, unregistered signals, manual
+request signals, empty or duplicate signals, mixed artifact kinds, unsupported subjects, duplicate
+sources, sources that do not apply to the practice's artifact kind, and an `EXHAUSTIVE` stance over a
+source that cannot report complete capture. Evidence requirements belong on the practice definition,
+not inside its automated-review policy.
 
 `knownLimitations` records the claims the selected evidence cannot support even when every requirement passes.
 The runtime appends them to the criteria it stages for the reviewing model, because a limitation the author records
@@ -301,11 +296,11 @@ evidence cannot show. Folded into the limitation list it stops being answerable,
 practice nobody reviews reads as one more caveat rather than the reason there is no review.
 
 Every bundled practice that requires the pull-request diff lists `scm.repository.tree` as `CONTEXTUAL`.
-The tree supplies surrounding code that the diff may not show. This binding does not remove the
+The tree supplies surrounding code that the diff may not show. These requirements do not remove the
 repository requirement for capturing the pinned diff: if that required capture fails, the practice
 cannot proceed. A missing local mirror can be cloned during review preparation.
 
-`automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared bindings, and
+`automatedReview` is explicitly relative to Hephaestus, the pinned source contract, the declared evidence requirements, and
 the governed integrations. It does not claim that a practice is universally observable. A developer, peer, or human mentor may have different context for a particular practice. This contract makes no claim that human review is always possible.
 
 `mode` is `LANGUAGE_MODEL` or `NONE`. `evidenceSufficiency` says whether passing every requirement is
@@ -361,8 +356,8 @@ concern — they decide whether evidence is collected at all.
 
 ### Required evidence is insufficient
 
-`scope-one-reviewable-change` is bound to `scm.pull_request.opened` and `scm.pull_request.ready`, and that
-binding requires `scm.pull-request.core` and `scm.pull-request.diff` and reads `scm.repository.tree`
+`scope-one-reviewable-change` is bound to `scm.pull_request.opened` and `scm.pull_request.ready`, and
+requires `scm.pull-request.core` and `scm.pull-request.diff` and reads `scm.repository.tree`
 contextually. The diff's contract demands a complete capture, including a verified empty range. If the diff cannot be read, or the
 pinned commit is gone from the mirror, readiness refuses the practice and no observation is created. The
 runtime makes no claim that the change is focused, sprawling, or `NOT_APPLICABLE`. No stance can demand
@@ -379,7 +374,7 @@ practice taking an `EXHAUSTIVE` stance is refused by a partial one.
 
 The runtime resolves exact practice revisions before capture and then stages **every governed source the
 purpose permits in the workspace** — all of them, on every review. There is no per-run
-source selection: practice bindings decide which practices may run, never which sources are captured, so a
+source selection: practice review configuration decide which practices may run, never which sources are captured, so a
 source listed as anything other than `AVAILABLE` always says why in a typed reason code and never because
 no practice asked for it. Bindings enter afterwards, in the readiness check. Readiness is evaluated per
 practice. A `CONTEXTUAL` failure does not skip an otherwise eligible practice; a `REQUIRED` or `EXHAUSTIVE`
@@ -424,9 +419,9 @@ Historical records keep their original contract and practice revision. Currentne
 
 - source resources are immutable within a published contract version; any semantic change creates a new
   version;
-- moving a practice to that version changes what its bindings may name and stales that practice's earlier claims;
-- changing a practice's bindings or automated-review policy stales that practice's claims;
-- adding a source cannot silently alter existing requirements because each binding names its sources explicitly;
+- moving a practice to that version changes what its evidence requirements may name and stales that practice's earlier claims;
+- changing a practice's review configuration or automated-review policy stales that practice's claims;
+- adding a source cannot silently alter existing requirements because each practice names its sources explicitly;
 - governance withdrawal disables its exact future use, including collection, observation persistence and delivery,
   mentoring reuse, or evidence disclosure, without rewriting historical semantics; and
 - erasure or expiry may make a claim unreplayable without making the historical result false.
@@ -460,7 +455,7 @@ The rules are enforced mechanically, in two places:
 - `gate:contracts` validates every contract resource and the bundled practice catalog against their schemas,
   rejects duplicate source kinds, holds each schema's pinned catalog digest to the catalog's actual hash, and
   exercises the policy schema against deliberately broken fixtures — including a retired evidence profile and
-  evidence needs written onto a policy instead of a binding — because a guard whose failure path never runs is
+  evidence requirements written onto a policy instead of the definition — because a guard whose failure path never runs is
   indistinguishable from one that cannot fail.
 - The server, when it reads the catalog at startup, rejects a mirror that pins an identity, a lossy derivation
   that claims completeness, a required capture quality the source can never report, a source whose use

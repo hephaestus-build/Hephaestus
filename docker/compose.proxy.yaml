@@ -68,7 +68,7 @@ services:
       - traefik.http.middlewares.errorpage.errors.service=maintenance
       - traefik.http.middlewares.errorpage.errors.query=/index.html
     healthcheck:
-      test: 'wget -qO- http://localhost:80/ping || exit 1'
+      test: "wget -qO- http://localhost:80/ping || exit 1"
       interval: 4s
       timeout: 2s
       retries: 5
@@ -82,11 +82,12 @@ services:
         max-file: "3"
 
   maintenance:
-    image: ${HEPHAESTUS_IMAGE_NGINX:?verified release lock required}
+    image: ${HEPHAESTUS_IMAGE_WEBAPP:?verified release lock required}
+    entrypoint: ["nginx", "-g", "daemon off;"]
     restart: unless-stopped
     configs:
       - source: maintenance-page
-        target: /usr/share/nginx/html/index.html
+        target: /usr/share/nginx/maintenance/index.html
       - source: nginx-default-config
         target: /etc/nginx/conf.d/default.conf
     labels:
@@ -137,7 +138,7 @@ configs:
         listen 80;
         server_name _;
 
-        root /usr/share/nginx/html;
+        root /usr/share/nginx/maintenance;
 
         # No per-request access line. This server answers on a catch-all Host rule
         # whenever the webapp router is down, so the URL it would log is the deep

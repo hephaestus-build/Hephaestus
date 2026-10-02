@@ -50,7 +50,7 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
         practice.setSlug("review-quality");
         practice.setName("Review quality");
         practice.setCriteria("Review the change");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practice = practiceRepository.save(practice);
 
@@ -69,9 +69,7 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
                 7L,
                 owner.getId(),
                 "Stored finding",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 "{}",
                 "Reasoning",

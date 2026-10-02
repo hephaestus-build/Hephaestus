@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices;
 
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
@@ -12,20 +14,27 @@ import org.jspecify.annotations.Nullable;
  */
 public final class ReviewRuleFingerprint {
 
-    private static final String SCHEME = "v4:";
+    public static final String SCHEME = "v5:";
 
     private ReviewRuleFingerprint() {}
+
+    public static boolean isCurrentScheme(@Nullable String fingerprint) {
+        return fingerprint != null && fingerprint.startsWith(SCHEME);
+    }
 
     public static String of(
             String slug,
             String name,
-            List<PracticeBinding> bindings,
+            ArtifactKind artifactKind,
+            List<PracticeEvidenceRequirement> evidenceRequirements,
+            ActorRole subject,
+            @Nullable PracticePrecondition precondition,
             String criteria,
             @Nullable String precomputeScript,
             PracticeAutomatedReviewPolicy automatedReviewPolicy,
             @Nullable String groupSlug) {
-        CanonicalDigest digest = new CanonicalDigest().add(slug).add(name);
-        addBindings(digest, bindings);
+        CanonicalDigest digest = new CanonicalDigest().add(slug).add(name).add(artifactKind.value());
+        addAssessment(digest, evidenceRequirements, subject, precondition);
         return (SCHEME
                 + digest.add(criteria)
                         .addNullable(precomputeScript)
@@ -34,30 +43,27 @@ public final class ReviewRuleFingerprint {
                         .hex());
     }
 
-    /** The subject determines whose work is judged, so it is part of the rule. */
-    static void addBindings(CanonicalDigest digest, List<PracticeBinding> bindings) {
-        digest.addInt(bindings.size());
-        for (PracticeBinding binding : bindings) {
-            digest.addInt(binding.signals().size());
-            binding.signals().forEach(signal -> digest.add(signal.value()));
-            digest.add(String.valueOf(binding.onDrafts()));
-            digest.add(binding.subject().name());
-            digest.addInt(binding.needs().size());
-            binding.needs()
-                    .forEach(need -> digest.add(need.sourceKind().value())
-                            .add(need.stance().name()));
-            addAppliesWhen(digest, binding.appliesWhen());
-        }
+    static void addAssessment(
+            CanonicalDigest digest,
+            List<PracticeEvidenceRequirement> evidenceRequirements,
+            ActorRole subject,
+            @Nullable PracticePrecondition precondition) {
+        digest.add(subject.name());
+        digest.addInt(evidenceRequirements.size());
+        evidenceRequirements.forEach(
+                requirement -> digest.add(requirement.sourceKind().value())
+                        .add(requirement.stance().name()));
+        addPrecondition(digest, precondition);
     }
 
-    private static void addAppliesWhen(CanonicalDigest digest, @Nullable PracticeSubject subject) {
+    private static void addPrecondition(CanonicalDigest digest, @Nullable PracticePrecondition subject) {
         if (subject == null) {
             return;
         }
-        digest.add("appliesWhen")
-                .add(subject.absentSays())
+        digest.add("precondition")
+                .add(subject.skipReason())
                 .addInt(subject.anyOf().size());
-        for (PracticeSubjectClause clause : subject.anyOf()) {
+        for (PracticePreconditionClause clause : subject.anyOf()) {
             digest.add(clause.aspect().name()).add(clause.describe());
         }
     }

@@ -74,8 +74,9 @@ public class PracticeReviewOutputController {
             @RequestParam(defaultValue = "50") @Min(1) @Max(100) int size,
             @Parameter(
                             description =
-                                    "Sorting strategy. ACTIONABILITY orders negative outcomes from CRITICAL to INFO, then "
-                                            + "positive outcomes, then not-applicable observations; ties are newest first.")
+                                    "Sorting strategy. ACTIONABILITY orders NOT_MET by severity (CRITICAL, MAJOR, MINOR, INFO), "
+                                            + "then MET, then NOT_APPLICABLE and UNDETERMINED together. Within each rank, "
+                                            + "observation time and ID are descending.")
                     @RequestParam(defaultValue = "NEWEST")
                     ReviewObservationSort sort,
             @Valid @ParameterObject ReviewObservationFilterParams filter) {

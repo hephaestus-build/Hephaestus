@@ -14,7 +14,6 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -65,7 +64,7 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
         var revision = new PracticeRevision();
         ReflectionTestUtils.setField(revision, "id", Math.abs((long) slug.hashCode()) + 1);
         p.setCurrentRevision(revision);
-        p.setBindings(PracticeTestEvidence.bindings(signals));
+        PracticeTestEvidence.configure(p, signals);
         return p;
     }
 
@@ -82,9 +81,14 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     private AgentJob job(@Nullable SignalName signal) {
         AgentJob j = new AgentJob();
         j.setWorkspace(workspace());
+        j.setPracticeTriggerMode(
+                signal == null
+                        ? de.tum.cit.aet.hephaestus.practices.review.TriggerMode.MANUAL
+                        : de.tum.cit.aet.hephaestus.practices.review.TriggerMode.AUTO);
         if (signal != null) {
             var meta = objectMapper.createObjectNode();
             meta.put("signal", signal.value());
+            meta.putObject(PracticeCatalogInjector.REVIEW_STATE_METADATA_KEY).put("draftStatus", "NOT_DRAFT");
             j.setMetadata(meta);
         }
         return j;
@@ -100,6 +104,42 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
 
     private static String md(String slug) {
         return SandboxLayout.PRACTICES_PREFIX + slug + ".md";
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"{}", "{\"signal\":\"\"}", "{\"signal\":7}"})
+    void automaticReviewRequiresARecordedSignal(String metadata) {
+        when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
+                .thenReturn(List.of(practice("describe", ScmSignals.PULL_REQUEST_OPENED)));
+        var job = job(ScmSignals.PULL_REQUEST_OPENED);
+        job.setMetadata(objectMapper.readTree(metadata));
+        assertThatThrownBy(() -> injector.resolveEligiblePractices(job, ArtifactKinds.PULL_REQUEST))
+                .isInstanceOf(JobPreparationException.class)
+                .hasMessage("Automatic review requires a recorded signal");
+    }
+
+    @Test
+    void missingSelectedStateCannotAdmitAnAutomaticReview() {
+        when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
+                .thenReturn(List.of(practice("describe", ScmSignals.PULL_REQUEST_OPENED)));
+        var job = job(ScmSignals.PULL_REQUEST_OPENED);
+        ((ObjectNode) java.util.Objects.requireNonNull(job.getMetadata()))
+                .remove(PracticeCatalogInjector.REVIEW_STATE_METADATA_KEY);
+        assertThatThrownBy(() -> injector.resolveEligiblePractices(job, ArtifactKinds.PULL_REQUEST))
+                .isInstanceOf(JobPreparationException.class);
+    }
+
+    @Test
+    void manualReviewDoesNotApplyAutomaticStateRestrictions() {
+        when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
+                .thenReturn(List.of(practice("describe", ScmSignals.PULL_REQUEST_OPENED)));
+        var job = job(ScmSignals.PULL_REQUEST_OPENED);
+        job.setPracticeTriggerMode(de.tum.cit.aet.hephaestus.practices.review.TriggerMode.MANUAL);
+        ((ObjectNode) java.util.Objects.requireNonNull(job.getMetadata()))
+                .remove(PracticeCatalogInjector.REVIEW_STATE_METADATA_KEY);
+        assertThat(injector.resolveEligiblePractices(job, ArtifactKinds.PULL_REQUEST))
+                .extracting(Practice::getSlug)
+                .containsExactly("describe");
     }
 
     @Test
@@ -136,7 +176,7 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
                 .containsExactly("describe", "tests");
         Map<String, byte[]> files = new HashMap<>();
         injector.inject(files, job, ArtifactKinds.PULL_REQUEST);
-        // Read under its own binding, not the push's, so its evidence is still required of the capture.
+        // Read under its own requirements, not the push's, so its evidence is still required of the capture.
         var describe = objectMapper
                 .readTree(java.util.Objects.requireNonNull(files.get(SandboxLayout.PRACTICES_PREFIX + "index.json")))
                 .get(0);
@@ -147,17 +187,19 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     @Test
     @DisplayName("a review of a draft materialises only the practices that review drafts, as the gate admitted")
     void shouldSelectOnlyDraftPracticesWhenTheWorkWasADraft() {
-        Practice onDrafts = practice("handoff", ScmSignals.PULL_REQUEST_OPENED);
-        onDrafts.setBindings(List.of(new PracticeBinding(
-                List.of(ScmSignals.PULL_REQUEST_OPENED),
-                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                true,
-                ActorRole.AUTHOR)));
+        Practice reviewsDrafts = practice("handoff", ScmSignals.PULL_REQUEST_OPENED);
+        reviewsDrafts.setSignals(List.of(ScmSignals.PULL_REQUEST_OPENED));
+        reviewsDrafts.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
+        reviewsDrafts.setReviewWhen(java.util.Map.of());
+        reviewsDrafts.setSubject(ActorRole.AUTHOR);
+        reviewsDrafts.setPrecondition(null);
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
-                .thenReturn(List.of(onDrafts, practice("describe", ScmSignals.PULL_REQUEST_OPENED)));
+                .thenReturn(List.of(reviewsDrafts, practice("describe", ScmSignals.PULL_REQUEST_OPENED)));
         AgentJob job = job(ScmSignals.PULL_REQUEST_OPENED);
         org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, job.getMetadata())
-                .put(PracticeCatalogInjector.DRAFT_METADATA_KEY, true);
+                .set(
+                        PracticeCatalogInjector.REVIEW_STATE_METADATA_KEY,
+                        objectMapper.createObjectNode().put("draftStatus", "DRAFT"));
         Map<String, byte[]> files = new HashMap<>();
 
         injector.inject(files, job, ArtifactKinds.PULL_REQUEST);
@@ -170,11 +212,11 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     void shouldSelectOnlyReviewerPracticesWhenSubmittedReviewNamesReviewer() {
         Practice author = practice("author-engagement", ScmSignals.PULL_REQUEST_REVIEWED);
         Practice reviewer = practice("review-comment-quality", ScmSignals.PULL_REQUEST_REVIEWED);
-        reviewer.setBindings(List.of(new PracticeBinding(
-                List.of(ScmSignals.PULL_REQUEST_REVIEWED),
-                PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
-                ActorRole.REVIEWER)));
+        reviewer.setSignals(List.of(ScmSignals.PULL_REQUEST_REVIEWED));
+        reviewer.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
+        reviewer.setReviewWhen(java.util.Map.of("draftStatus", java.util.Set.of("NOT_DRAFT")));
+        reviewer.setSubject(ActorRole.REVIEWER);
+        reviewer.setPrecondition(null);
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
                 .thenReturn(List.of(author, reviewer));
         Map<String, byte[]> files = new HashMap<>();
@@ -186,7 +228,7 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a job with no trigger event keeps the full focus set (legacy / bot-command path)")
+    @DisplayName("a job with no trigger event keeps the full focus set (manual request)")
     void noTriggerEventKeepsFullSet() {
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.PULL_REQUEST))
                 .thenReturn(List.of(

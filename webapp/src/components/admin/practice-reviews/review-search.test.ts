@@ -18,7 +18,7 @@ describe("practice review search", () => {
 			page: -4,
 		});
 		const findings = observationsSearchSchema.parse({
-			assessment: ["GOOD", "GOOD", "unknown"],
+			outcome: ["MET", "MET", "unknown"],
 			severity: "MAJOR",
 			from: "2026-08-10",
 			to: "2026-08-01",
@@ -31,7 +31,7 @@ describe("practice review search", () => {
 		expect(feedback.channel).toStrictEqual(["IN_APP", "IN_CHAT"]);
 		expect(feedback.from).toBeUndefined();
 		expect(feedback.page).toBeUndefined();
-		expect(findings).toMatchObject({ assessment: ["GOOD"], severity: ["MAJOR"] });
+		expect(findings).toMatchObject({ outcome: ["MET"], severity: ["MAJOR"] });
 		expect(findings.to).toBeUndefined();
 		expect(feedbackSearchSchema.parse({ to: "2026-07-03" }).to).toBeUndefined();
 	});
@@ -91,25 +91,11 @@ describe("practice review search", () => {
 	});
 });
 
-describe("observation assessment status filter", () => {
-	it("sends status independently of presence and assessment", () => {
-		const unassessed = observationsSearchSchema.parse({
-			assessmentStatus: ["NOT_APPLICABLE", "UNDETERMINED"],
-		});
-		expect(observationsQuery(unassessed, 25)).toMatchObject({
-			assessmentStatus: ["NOT_APPLICABLE", "UNDETERMINED"],
-			presence: undefined,
-			assessment: undefined,
-		});
-		const assessed = observationsSearchSchema.parse({
-			assessmentStatus: ["ASSESSED"],
-			presence: ["ABSENT"],
-			assessment: ["GOOD"],
-		});
-		expect(observationsQuery(assessed, 25)).toMatchObject({
-			assessmentStatus: ["ASSESSED"],
-			presence: ["ABSENT"],
-			assessment: ["GOOD"],
-		});
+describe("observation outcome filter", () => {
+	it("sends all four outcomes through one filter", () => {
+		const outcome = ["MET", "NOT_MET", "NOT_APPLICABLE", "UNDETERMINED"];
+		expect(
+			observationsQuery(observationsSearchSchema.parse({ outcome }), 25).outcome,
+		).toStrictEqual(outcome);
 	});
 });

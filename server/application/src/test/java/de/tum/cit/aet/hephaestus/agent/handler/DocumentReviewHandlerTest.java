@@ -56,7 +56,7 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
     private PracticeCatalogInjector practiceCatalogInjector;
 
     @Mock
-    private PracticeDetectionDeliveryService deliveryService;
+    private ReviewOutputService deliveryService;
 
     private DocumentReviewHandler handler;
 
@@ -69,8 +69,13 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
                         practiceCatalogInjector,
                         new TaskEnvelopeWriter(objectMapper),
                         gitRepositoryManager,
-                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer()),
-                new PracticeDetectionResultParser(objectMapper),
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer(),
+                        org.mockito.Mockito.mock(
+                                de.tum.cit.aet.hephaestus.practices.PracticeRevisionService.class,
+                                invocation -> ((de.tum.cit.aet.hephaestus.practices.model.Practice)
+                                                invocation.getArgument(0))
+                                        .getCurrentRevision())),
+                new ReviewResultParser(objectMapper),
                 deliveryService);
     }
 
@@ -124,8 +129,7 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
             assertThat(metadata.get("about_user_id").asLong()).isEqualTo(42L);
             assertThat(metadata.get(PracticeCatalogInjector.SIGNAL_METADATA_KEY).asString())
                     .isEqualTo("docs.document.published");
-            assertThat(metadata.get(PracticeDetectionDeliveryService.ORIGIN_METADATA_KEY)
-                            .asString())
+            assertThat(metadata.get(ReviewOutputService.ORIGIN_METADATA_KEY).asString())
                     .isEqualTo("LIVE");
         }
 
@@ -203,7 +207,7 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
             AgentJob job = documentJob();
             Practice practice = new Practice();
             practice.setSlug("keeps-linked-docs-consistent");
-            practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.DOCUMENT));
+            PracticeTestEvidence.configure(practice, ArtifactKinds.DOCUMENT);
             practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.DOCUMENT));
             var revision = new PracticeRevision();
             ReflectionTestUtils.setField(revision, "id", 12L);
@@ -214,7 +218,7 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
                     .thenReturn(new PreparedEvidence(
                             Map.of(SandboxLayout.CONTEXT_PREFIX + "document.md", "# Runbook".getBytes()),
                             mock(JobFolderIndex.class)));
-            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
+            when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any()))
                     .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                             List.of(practice), mock(AutomatedReviewReadinessReport.class)));
 
@@ -244,8 +248,7 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
             [{
               "practiceSlug": "explains-why",
               "summary": "States the motivation",
-              "assessmentStatus": "ASSESSED", "presence": "PRESENT",
-              "assessment": "GOOD",
+              "outcome": "MET",
               "severity": null,
               "evidenceRationale": "The text says why.",
               "evidence": {}
@@ -269,7 +272,7 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
         void shouldRecordThroughTheDeliveryServiceOnlyWhenAsked() {
             var job = new AgentJob();
             job.setId(UUID.randomUUID());
-            var admissible = mock(PracticeDetectionDeliveryService.PreparedObservations.class);
+            var admissible = mock(ReviewOutputService.PreparedObservations.class);
             when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
                     .thenReturn(admissible);
 

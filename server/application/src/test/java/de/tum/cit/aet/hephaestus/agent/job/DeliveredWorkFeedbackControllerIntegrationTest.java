@@ -610,7 +610,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends AbstractWorkspaceIn
         practice.setName("Meaningful guidance");
         practice.setCriteria("Evidence bounded guidance");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practices.save(practice);
         UUID observation = UUID.randomUUID();
         observations.insertIfAbsent(
@@ -624,9 +624,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends AbstractWorkspaceIn
                 work.getId(),
                 recipient.getId(),
                 "An observation",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 null,
                 null,

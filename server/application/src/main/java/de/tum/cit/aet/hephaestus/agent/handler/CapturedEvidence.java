@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.practices.PracticeSubjectClause;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -114,7 +114,7 @@ final class CapturedEvidence {
 
     /** The reviewed range as {@code {base, head}}, from the change the diff source pinned. */
     String[] reviewRange() {
-        String identity = immutableIdentity(PracticeSubjectClause.DIFF_SOURCE);
+        String identity = immutableIdentity(PracticePreconditionClause.DIFF_SOURCE);
         String[] range = identity == null ? new String[0] : identity.split(":", -1);
         if (range.length != 2
                 || !range[0].matches(CitationVerification.GIT_OBJECT_ID)

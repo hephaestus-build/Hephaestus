@@ -61,7 +61,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
     private PracticeRepository practiceRepository;
 
     @Mock
-    private PracticeDetectionDeliveryService deliveryService;
+    private ReviewOutputService deliveryService;
 
     @Mock
     private PullRequestCommentPoster commentPoster;
@@ -106,9 +106,14 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                         practiceCatalogInjector,
                         new TaskEnvelopeWriter(objectMapper),
                         gitRepositoryManager,
-                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer()),
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer(),
+                        org.mockito.Mockito.mock(
+                                de.tum.cit.aet.hephaestus.practices.PracticeRevisionService.class,
+                                invocation -> ((de.tum.cit.aet.hephaestus.practices.model.Practice)
+                                                invocation.getArgument(0))
+                                        .getCurrentRevision())),
                 practiceCatalogInjector,
-                new PracticeDetectionResultParser(objectMapper),
+                new ReviewResultParser(objectMapper),
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
                 deliveryService,
                 InContextDeliveryGateFixtures.gate(
@@ -165,7 +170,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
         var practice = new Practice();
         practice.setSlug("issue-practice");
         practice.setCriteria("Review the issue.");
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.ISSUE));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.ISSUE);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
         var revision = new PracticeRevision();
         ReflectionTestUtils.setField(revision, "id", 12L);
@@ -176,7 +181,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                 .thenReturn(new PreparedEvidence(
                         Map.of(SandboxLayout.CONTEXT_PREFIX + "metadata.json", "{}".getBytes(StandardCharsets.UTF_8)),
                         mock(JobFolderIndex.class)));
-        when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
+        when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any()))
                 .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                         java.util.List.of(practice), mock(AutomatedReviewReadinessReport.class)));
         try (var prepared = handler.prepareInputs(job)) {
@@ -313,8 +318,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
             [{
               "practiceSlug": "explains-why",
               "summary": "States the motivation",
-              "assessmentStatus": "ASSESSED", "presence": "PRESENT",
-              "assessment": "GOOD",
+              "outcome": "MET",
               "severity": null,
               "evidenceRationale": "The text says why.",
               "evidence": {}
@@ -341,7 +345,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
             var snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper, ArtifactKinds.ISSUE.value());
             EvidenceSnapshotFixtures.admittedPractice(snapshot, "explains-why", 1);
             job.setEvidenceSnapshot(snapshot);
-            var admissible = mock(PracticeDetectionDeliveryService.PreparedObservations.class);
+            var admissible = mock(ReviewOutputService.PreparedObservations.class);
             when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
                     .thenReturn(admissible);
 

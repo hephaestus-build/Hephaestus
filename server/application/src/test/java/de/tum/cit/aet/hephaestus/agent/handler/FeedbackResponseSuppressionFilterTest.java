@@ -13,15 +13,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackResolution;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -79,17 +77,10 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
 
     @Test
     void shouldSuppressAndLedgerWhenTheFeedbackAboutThisObservationWasDisputed() {
-        Observation observation = persisted(CK, "occ-a", Presence.ABSENT, Assessment.GOOD);
-        answers(answer(
-                observation.getId(),
-                THIS_REVIEW,
-                CK,
-                Presence.ABSENT,
-                Assessment.GOOD,
-                FeedbackResolution.DISPUTED,
-                LATER));
+        Observation observation = persisted(CK, "occ-a", Outcome.NOT_MET);
+        answers(answer(observation.getId(), THIS_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.DISPUTED, LATER));
 
-        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Presence.ABSENT)));
+        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Outcome.NOT_MET)));
 
         assertThat(decision.deliverable()).isEmpty();
         assertThat(decision.suppressedCount()).isEqualTo(1);
@@ -99,21 +90,15 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
 
     @Test
     void shouldStillSuppressWhenTheLedgerWriteFails() {
-        Observation observation = persisted(CK, "occ-a", Presence.ABSENT, Assessment.GOOD);
+        Observation observation = persisted(CK, "occ-a", Outcome.NOT_MET);
         answers(answer(
-                observation.getId(),
-                THIS_REVIEW,
-                CK,
-                Presence.ABSENT,
-                Assessment.GOOD,
-                FeedbackResolution.NOT_APPLICABLE,
-                LATER));
+                observation.getId(), THIS_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.NOT_APPLICABLE, LATER));
         doThrow(new RuntimeException("ledger down"))
                 .when(feedbackLedgerRecorder)
                 .recordSuppressed(any(), any(), any(), anyInt());
         var filter = filter();
         var job = job();
-        var in = List.of(vf(CK, "occ-a", Presence.ABSENT));
+        var in = List.of(vf(CK, "occ-a", Outcome.NOT_MET));
 
         assertThatCode(() -> filter.evaluate(job, in)).doesNotThrowAnyException();
         assertThat(filter.evaluate(job, in).deliverable()).isEmpty();
@@ -121,10 +106,10 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
 
     @Test
     void shouldDeliverWhenNothingWasAnswered() {
-        persisted(CK, "occ-a", Presence.ABSENT, Assessment.GOOD);
+        persisted(CK, "occ-a", Outcome.NOT_MET);
         answers();
 
-        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Presence.ABSENT)));
+        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Outcome.NOT_MET)));
 
         assertThat(decision.deliverable()).hasSize(1);
         assertThat(decision.suppressedCount()).isZero();
@@ -132,17 +117,10 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
 
     @Test
     void shouldDeliverWithItsEvidenceWhenTheDeveloperMarkedItAddressed() {
-        Observation observation = persisted(CK, "occ-a", Presence.ABSENT, Assessment.GOOD);
-        answers(answer(
-                observation.getId(),
-                THIS_REVIEW,
-                CK,
-                Presence.ABSENT,
-                Assessment.GOOD,
-                FeedbackResolution.ADDRESSED,
-                LATER));
+        Observation observation = persisted(CK, "occ-a", Outcome.NOT_MET);
+        answers(answer(observation.getId(), THIS_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.ADDRESSED, LATER));
 
-        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Presence.ABSENT)));
+        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Outcome.NOT_MET)));
 
         assertThat(decision.deliverable()).hasSize(1);
         assertThat(decision.deliverable().getFirst().evidenceRationale()).isEqualTo("because reasons");
@@ -156,15 +134,9 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
                 TARGET,
                 CONTRIBUTOR,
                 null);
-        Observation observation = persisted(secretKey, "occ-" + secretKey, Presence.PRESENT, Assessment.BAD);
+        Observation observation = persisted(secretKey, "occ-" + secretKey, Outcome.NOT_MET);
         answers(answer(
-                observation.getId(),
-                THIS_REVIEW,
-                secretKey,
-                Presence.PRESENT,
-                Assessment.BAD,
-                FeedbackResolution.DISPUTED,
-                LATER));
+                observation.getId(), THIS_REVIEW, secretKey, Outcome.NOT_MET, FeedbackResolution.DISPUTED, LATER));
 
         var decision = filter().evaluate(job(), List.of(secretScannerObservation(secretKey)));
 
@@ -174,11 +146,10 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
 
     @Test
     void shouldAskOnlyForTheExactObservationWhenItRecordedNoPlace() {
-        UUID observationId =
-                persisted(null, "occ-a", Presence.ABSENT, Assessment.GOOD).getId();
+        UUID observationId = persisted(null, "occ-a", Outcome.NOT_MET).getId();
         answers();
 
-        filter().evaluate(job(), List.of(vf(null, "occ-a", Presence.ABSENT)));
+        filter().evaluate(job(), List.of(vf(null, "occ-a", Outcome.NOT_MET)));
 
         ArgumentCaptor<String[]> keys = ArgumentCaptor.forClass(String[].class);
         verify(reactionRepository).findCurrentResolutions(eq(1L), eq(List.of(observationId)), keys.capture());
@@ -188,13 +159,12 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
     /** Within one review two observations may share a place and still be two behaviours. */
     @Test
     void shouldSuppressOnlyTheAnsweredObservationWhenTwoInOneReviewShareAPlace() {
-        Observation first = persisted(CK, "occ-first", Presence.ABSENT, Assessment.GOOD);
-        persisted(CK, "occ-second", Presence.ABSENT, Assessment.GOOD);
-        answers(answer(
-                first.getId(), THIS_REVIEW, CK, Presence.ABSENT, Assessment.GOOD, FeedbackResolution.DISPUTED, LATER));
-        var otherBehaviour = vf(CK, "occ-second", Presence.ABSENT);
+        Observation first = persisted(CK, "occ-first", Outcome.NOT_MET);
+        persisted(CK, "occ-second", Outcome.NOT_MET);
+        answers(answer(first.getId(), THIS_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.DISPUTED, LATER));
+        var otherBehaviour = vf(CK, "occ-second", Outcome.NOT_MET);
 
-        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-first", Presence.ABSENT), otherBehaviour));
+        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-first", Outcome.NOT_MET), otherBehaviour));
 
         assertThat(decision.deliverable()).containsExactly(otherBehaviour);
         verify(feedbackLedgerRecorder)
@@ -203,17 +173,10 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
 
     @Test
     void shouldSuppressTheSameClaimWhenAnEarlierReviewOfTheWorkWasDisputed() {
-        Observation observation = persisted(CK, "occ-a", Presence.ABSENT, Assessment.GOOD);
-        answers(answer(
-                UUID.randomUUID(),
-                EARLIER_REVIEW,
-                CK,
-                Presence.ABSENT,
-                Assessment.GOOD,
-                FeedbackResolution.DISPUTED,
-                EARLIER));
+        Observation observation = persisted(CK, "occ-a", Outcome.NOT_MET);
+        answers(answer(UUID.randomUUID(), EARLIER_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.DISPUTED, EARLIER));
 
-        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Presence.ABSENT)));
+        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Outcome.NOT_MET)));
 
         assertThat(decision.deliverable()).isEmpty();
         verify(feedbackLedgerRecorder)
@@ -223,58 +186,47 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
     /** A dispute of "this is missing" says nothing about a later "this is present" at the same place. */
     @Test
     void shouldDeliverADifferentClaimAtTheSamePlaceWhenAnEarlierOneWasDisputed() {
-        persisted(CK, "occ-a", Presence.PRESENT, Assessment.GOOD);
-        answers(answer(
-                UUID.randomUUID(),
-                EARLIER_REVIEW,
-                CK,
-                Presence.ABSENT,
-                Assessment.GOOD,
-                FeedbackResolution.DISPUTED,
-                EARLIER));
+        persisted(CK, "occ-a", Outcome.MET);
+        answers(answer(UUID.randomUUID(), EARLIER_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.DISPUTED, EARLIER));
 
-        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Presence.PRESENT)));
+        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Outcome.MET)));
 
         assertThat(decision.deliverable()).hasSize(1);
     }
 
     @Test
     void shouldDeliverWhenANewerAnswerAboutTheClaimNoLongerDisputesIt() {
-        persisted(CK, "occ-a", Presence.ABSENT, Assessment.GOOD);
+        persisted(CK, "occ-a", Outcome.NOT_MET);
         answers(
-                answer(
-                        UUID.randomUUID(),
-                        EARLIER_REVIEW,
-                        CK,
-                        Presence.ABSENT,
-                        Assessment.GOOD,
-                        FeedbackResolution.DISPUTED,
-                        EARLIER),
-                answer(
-                        UUID.randomUUID(),
-                        EARLIER_REVIEW,
-                        CK,
-                        Presence.ABSENT,
-                        Assessment.GOOD,
-                        FeedbackResolution.ADDRESSED,
-                        LATER));
+                answer(UUID.randomUUID(), EARLIER_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.DISPUTED, EARLIER),
+                answer(UUID.randomUUID(), EARLIER_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.ADDRESSED, LATER));
 
-        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Presence.ABSENT)));
+        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Outcome.NOT_MET)));
+
+        assertThat(decision.deliverable()).hasSize(1);
+    }
+
+    @Test
+    void shouldDeliverADifferentStatementWithTheSameOutcomeAtTheSamePlace() {
+        Observation current = persisted(CK, "occ-a", Outcome.NOT_MET);
+        when(current.getSummary()).thenReturn("The test does not cover the failure path");
+        answers(answer(UUID.randomUUID(), EARLIER_REVIEW, CK, Outcome.NOT_MET, FeedbackResolution.DISPUTED, EARLIER));
+
+        var decision = filter().evaluate(job(), List.of(vf(CK, "occ-a", Outcome.NOT_MET)));
 
         assertThat(decision.deliverable()).hasSize(1);
     }
 
     // --- helpers ---
 
-    private Observation persisted(
-            @Nullable String recurrenceKey, String occurrenceKey, Presence presence, Assessment assessment) {
+    private Observation persisted(@Nullable String recurrenceKey, String occurrenceKey, Outcome outcome) {
         Observation observation = mock(Observation.class);
         lenient().when(observation.getRecurrenceKey()).thenReturn(recurrenceKey);
         lenient().when(observation.getOccurrenceKey()).thenReturn(occurrenceKey);
         lenient().when(observation.getId()).thenReturn(id(occurrenceKey));
         lenient().when(observation.getAgentJobId()).thenReturn(THIS_REVIEW);
-        lenient().when(observation.getPresence()).thenReturn(presence);
-        lenient().when(observation.getAssessment()).thenReturn(assessment);
+        lenient().when(observation.getOutcome()).thenReturn(outcome);
+        lenient().when(observation.getSummary()).thenReturn(SLUG + " title");
         lenient().when(observation.getAboutUserId()).thenReturn(CONTRIBUTOR);
         List<Observation> all = new java.util.ArrayList<>(persistedSoFar);
         all.add(observation);
@@ -291,16 +243,15 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
             UUID observationId,
             UUID agentJobId,
             String recurrenceKey,
-            Presence presence,
-            Assessment assessment,
+            Outcome outcome,
             FeedbackResolution resolution,
             Instant respondedAt) {
         var row = mock(ObservationResolutionProjection.class);
         when(row.getObservationId()).thenReturn(observationId);
         when(row.getAgentJobId()).thenReturn(agentJobId);
         when(row.getRecurrenceKey()).thenReturn(recurrenceKey);
-        when(row.getPresence()).thenReturn(presence.name());
-        when(row.getAssessment()).thenReturn(assessment.name());
+        when(row.getOutcome()).thenReturn(outcome.name());
+        when(row.getSummary()).thenReturn(SLUG + " title");
         when(row.getResolution()).thenReturn(resolution.name());
         when(row.getRespondedAt()).thenReturn(respondedAt);
         return row;
@@ -310,14 +261,12 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         return UUID.nameUUIDFromBytes(occurrence.getBytes(StandardCharsets.UTF_8));
     }
 
-    private static ValidatedObservation vf(@Nullable String recurrenceKey, String occurrenceKey, Presence presence) {
+    private static ValidatedObservation vf(@Nullable String recurrenceKey, String occurrenceKey, Outcome outcome) {
         return new ValidatedObservation(
                 SLUG,
                 SLUG + " title",
-                AssessmentStatus.ASSESSED,
-                presence,
-                Assessment.GOOD,
-                Severity.MINOR,
+                outcome,
+                outcome == Outcome.NOT_MET ? Severity.MINOR : null,
                 null,
                 "because reasons",
                 new ObservationKeys(occurrenceKey, recurrenceKey));
@@ -330,9 +279,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         return new ValidatedObservation(
                 "avoids-insecure-defaults-and-over-broad-permissions",
                 "Hardcoded secret on a changed line",
-                AssessmentStatus.ASSESSED,
-                Presence.PRESENT,
-                Assessment.BAD,
+                Outcome.NOT_MET,
                 Severity.CRITICAL,
                 evidence,
                 "A credential is committed.",

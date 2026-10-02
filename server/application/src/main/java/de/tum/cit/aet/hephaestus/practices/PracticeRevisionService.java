@@ -16,11 +16,27 @@ public class PracticeRevisionService {
     private final PracticeRepository practiceRepository;
     private final PracticeRevisionRepository practiceRevisionRepository;
 
+    @Transactional
+    public PracticeRevision forReview(Practice practice) {
+        Practice locked = practiceRepository
+                .findByIdForUpdate(practice.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Practice", String.valueOf(practice.getId())));
+        PracticeRevision current = locked.getCurrentRevision();
+        if (current != null && ReviewRuleFingerprint.isCurrentScheme(current.getReviewRuleFingerprint())) {
+            return current;
+        }
+        return appendLocked(locked);
+    }
+
     @Transactional(propagation = Propagation.MANDATORY)
     public PracticeRevision append(Practice practice) {
         practiceRepository
                 .findByIdForUpdate(practice.getId())
                 .orElseThrow(() -> new EntityNotFoundException("Practice", String.valueOf(practice.getId())));
+        return appendLocked(practice);
+    }
+
+    private PracticeRevision appendLocked(Practice practice) {
         int revisionNumber = practiceRevisionRepository
                 .findFirstByPracticeIdOrderByRevisionNumberDesc(practice.getId())
                 .map(revision -> revision.getRevisionNumber() + 1)

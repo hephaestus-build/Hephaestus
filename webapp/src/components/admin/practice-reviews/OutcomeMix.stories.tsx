@@ -25,8 +25,8 @@ const FEEDBACK = feedbackSlots(practiceReviewOverview.feedback, reviewOverviewSc
  * count wears the words, icon and tone of the registry that owns its value, and opens the list of
  * exactly the rows it counts. A count that opens a list carries a faint underline at rest.
  *
- * A flag such as "marked incorrect" overlaps the parts — a positive outcome marked incorrect is
- * still a positive outcome — so it is listed apart, under its own name, and never added.
+ * A flag such as "marked incorrect" overlaps the parts — a met observation marked incorrect is
+ * still a met observation — so it is listed apart, under its own name, and never added.
  */
 const meta = {
 	component: OutcomeMix,
@@ -70,16 +70,16 @@ export const Observations: Story = {
 	play: async ({ canvas }) => {
 		const legend = within(canvas.getByRole("list", { name: "Observations by outcome" }));
 		await expect(legend.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-			"35 positive outcomes",
-			"27 negative outcomes",
+			"35 met observations",
+			"27 not met observations",
 			"10 not applicable",
 			"6 undetermined",
 		]);
 		const positive = new URL(
-			legend.getByRole<HTMLAnchorElement>("link", { name: "35 positive outcomes" }).href,
+			legend.getByRole<HTMLAnchorElement>("link", { name: "35 met observations" }).href,
 		);
 		await expect(positive.pathname).toBe("/w/demo/admin/practices/reviews/observations");
-		await expect(positive.searchParams.get("outcome")).toBe('["POSITIVE"]');
+		await expect(positive.searchParams.get("outcome")).toBe('["MET"]');
 		await expect(positive.searchParams.get("from")).toBe(reviewOverviewScope.from);
 		const flags = within(canvas.getByRole("list", { name: "Observations checked by an admin" }));
 		const incorrect = new URL(
@@ -161,7 +161,7 @@ export const WordsOnly: Story = {
 export const NothingCounted: Story = {
 	args: {
 		total: 0,
-		slots: observationSlots({ strengths: 0, problems: 0, notApplicable: 0, undetermined: 0 }),
+		slots: observationSlots({ met: 0, notMet: 0, notApplicable: 0, undetermined: 0 }),
 		flags: { label: "Observations checked by an admin", slots: [markedIncorrectSlot(0)] },
 		delta: "Same as the previous 30 days",
 		children: undefined,

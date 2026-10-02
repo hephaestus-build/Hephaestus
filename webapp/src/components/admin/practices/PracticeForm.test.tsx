@@ -7,30 +7,27 @@ import type { Practice, UpdatePracticeRequest } from "@/api/types.gen";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
-	mockPullRequestBinding,
-	mockMergeBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 } from "@/mocks/fixtures/practice";
 import { renderWithRouter } from "@/test/router-harness";
 
+import type { PracticeReviewFields } from "@/components/admin/practice-editor/review-settings";
 import { PracticeForm } from "./PracticeForm";
 
 vi.mock("@/components/common/CodeEditor", () => ({ CodeEditor: () => <div /> }));
 
 const gate = {
-	absentSays: "the change has no Swift code",
+	skipReason: "the change has no Swift code",
 	anyOf: [{ changedPathMatches: ["**/*.swift"] }],
 };
 
-function practice(
-	binding: Practice["bindings"][number],
-	extraBindings: Practice["bindings"] = [],
-): Practice {
+function practice(reviewFields: PracticeReviewFields): Practice {
 	return {
 		id: 1,
 		slug: "review-swift",
 		name: "Review Swift",
-		bindings: [binding, ...extraBindings],
+		...reviewFields,
 		criteria: "Check the work carefully.",
 		deliveryBehavior: { summaryOnly: false },
 		automatedReviewPolicy: mockPullRequestPolicy,
@@ -44,9 +41,8 @@ function practice(
 }
 
 async function renderPractice(
-	binding: Practice["bindings"][number],
+	reviewFields: PracticeReviewFields,
 	onSubmit: (slug: string, request: UpdatePracticeRequest, group: string | null) => void,
-	extraBindings: Practice["bindings"] = [],
 ) {
 	return renderWithRouter(
 		<PracticeForm
@@ -54,7 +50,7 @@ async function renderPractice(
 			workspaceSlug="team"
 			groups={[]}
 			definitionOptions={mockPracticeDefinitionOptions}
-			initialData={practice(binding, extraBindings)}
+			initialData={practice(reviewFields)}
 			isPending={false}
 			cancel={<Link to="/">Cancel</Link>}
 			onSubmit={onSubmit}
@@ -67,7 +63,7 @@ describe("workspace practice scope", () => {
 	it("sends declared feedback delivery choices from the shared editor", async () => {
 		const onSubmit =
 			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
-		await renderPractice(mockPullRequestBinding, onSubmit);
+		await renderPractice(mockPullRequestReviewFields, onSubmit);
 		const user = userEvent.setup();
 		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
 		await user.click(screen.getByRole("switch", { name: /Show this practice in the summary/u }));
@@ -88,7 +84,7 @@ describe("workspace practice scope", () => {
 
 	it("keeps an invalid preferred slug in the editor with a field error", async () => {
 		const onSubmit = vi.fn();
-		await renderPractice(mockPullRequestBinding, onSubmit);
+		await renderPractice(mockPullRequestReviewFields, onSubmit);
 		const user = userEvent.setup();
 		await user.click(screen.getByRole("button", { name: /Technical settings/u }));
 		await user.type(
@@ -107,8 +103,8 @@ describe("workspace practice scope", () => {
 	});
 
 	it.each([
-		["gate", { ...mockPullRequestBinding, appliesWhen: gate }],
-		["reviewer", { ...mockPullRequestBinding, subject: "REVIEWER" as const }],
+		["gate", { ...mockPullRequestReviewFields, precondition: gate }],
+		["reviewer", { ...mockPullRequestReviewFields, subject: "REVIEWER" as const }],
 	])("keeps the %s on a name-only save", async (_label, binding) => {
 		const onSubmit =
 			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
@@ -120,8 +116,8 @@ describe("workspace practice scope", () => {
 		expect(onSubmit).toHaveBeenCalledWith(
 			"review-swift",
 			expect.objectContaining({
-				bindings: undefined,
-				bindingChanges: undefined,
+				...binding,
+				definitionChanges: undefined,
 			}),
 			null,
 		);
@@ -129,7 +125,7 @@ describe("workspace practice scope", () => {
 
 	it("shows the gate and reviewer when both are set", async () => {
 		await renderPractice(
-			{ ...mockPullRequestBinding, appliesWhen: gate, subject: "REVIEWER" },
+			{ ...mockPullRequestReviewFields, precondition: gate, subject: "REVIEWER" },
 			vi.fn(),
 		);
 		expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty(
@@ -141,25 +137,10 @@ describe("workspace practice scope", () => {
 		).toContain("Reviewer");
 	});
 
-	it("does not collapse an older two-occasion practice on a name-only save", async () => {
-		const onSubmit =
-			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
-		await renderPractice(mockPullRequestBinding, onSubmit, [mockMergeBinding]);
-		fireEvent.change(screen.getByRole("textbox", { name: /Name/u }), {
-			target: { value: "Review Swift code" },
-		});
-		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-		expect(onSubmit).toHaveBeenCalledWith(
-			"review-swift",
-			expect.objectContaining({ bindings: undefined }),
-			null,
-		);
-	});
-
 	it("marks a reviewer-to-author change as deliberate", async () => {
 		const onSubmit =
 			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
-		await renderPractice({ ...mockPullRequestBinding, subject: "REVIEWER" }, onSubmit);
+		await renderPractice({ ...mockPullRequestReviewFields, subject: "REVIEWER" }, onSubmit);
 		const user = userEvent.setup();
 		await user.click(screen.getByRole("combobox", { name: "Person this practice judges" }));
 		await user.click(await screen.findByRole("option", { name: "Author" }));
@@ -172,8 +153,8 @@ describe("workspace practice scope", () => {
 		expect(onSubmit).toHaveBeenCalledWith(
 			"review-swift",
 			expect.objectContaining({
-				bindingChanges: ["SUBJECT"],
-				bindings: [expect.objectContaining({ subject: "AUTHOR" })],
+				definitionChanges: ["SUBJECT"],
+				subject: "AUTHOR",
 			}),
 			null,
 		);
@@ -182,7 +163,7 @@ describe("workspace practice scope", () => {
 	it("marks a gate removal as deliberate", async () => {
 		const onSubmit =
 			vi.fn<(slug: string, request: UpdatePracticeRequest, group: string | null) => void>();
-		await renderPractice({ ...mockPullRequestBinding, appliesWhen: gate }, onSubmit);
+		await renderPractice({ ...mockPullRequestReviewFields, precondition: gate }, onSubmit);
 		fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
 			target: { value: "" },
 		});
@@ -190,8 +171,9 @@ describe("workspace practice scope", () => {
 		expect(onSubmit).toHaveBeenCalledWith(
 			"review-swift",
 			expect.objectContaining({
-				bindingChanges: ["APPLIES_WHEN"],
-				bindings: [expect.not.objectContaining({ appliesWhen: gate })],
+				definitionChanges: ["PRECONDITION"],
+				precondition: undefined,
+				clear: ["PRECONDITION", "PRECOMPUTE_SCRIPT", "WHY_IT_MATTERS", "WHAT_GOOD_LOOKS_LIKE"],
 			}),
 			null,
 		);

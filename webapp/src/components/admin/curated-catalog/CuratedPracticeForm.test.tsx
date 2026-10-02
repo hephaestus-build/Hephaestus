@@ -3,12 +3,12 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { assert, describe, expect, it, vi } from "vitest";
 
-import { bindingsProblem } from "@/components/admin/practice-editor/bindings";
+import { reviewSettingsProblem } from "@/components/admin/practice-editor/review-settings";
 import { buttonVariants } from "@/components/ui/button";
 import {
 	mockAuthorDeclaredEvidenceValidation,
 	mockPracticeDefinitionOptions,
-	mockPullRequestBinding,
+	mockPullRequestReviewFields,
 	mockPullRequestPolicy,
 	mockPullRequestWorkType,
 } from "@/mocks/fixtures/practice";
@@ -37,7 +37,7 @@ vi.mock("@/components/common/CodeEditor", () => ({
 const initialData: CuratedPracticeFormInitialValue = {
 	slug: "clear-pr-description",
 	name: "Write a clear pull request description",
-	bindings: [mockPullRequestBinding],
+	...mockPullRequestReviewFields,
 	criteria: "Review whether the description explains the change.",
 	automatedReviewPolicy: mockPullRequestPolicy,
 	automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
@@ -92,36 +92,38 @@ describe("CuratedPracticeForm", () => {
 		[
 			"gate",
 			{
-				...mockPullRequestBinding,
-				appliesWhen: {
-					absentSays: "the change has no Swift code",
+				...mockPullRequestReviewFields,
+				precondition: {
+					skipReason: "the change has no Swift code",
 					anyOf: [{ changedPathMatches: ["**/*.swift"] }],
 				},
 			},
 		],
-		["reviewer", { ...mockPullRequestBinding, subject: "REVIEWER" as const }],
+		["reviewer", { ...mockPullRequestReviewFields, subject: "REVIEWER" as const }],
 	])("keeps the %s on a name-only catalog save", async (_label, binding) => {
 		const onSubmit = submitSpy();
-		await renderForm({ bindings: [binding] }, onSubmit);
+		await renderForm({ ...binding }, onSubmit);
 		fireEvent.change(screen.getByRole("textbox", { name: /Name/u }), {
 			target: { value: "Review Swift code" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onSubmit).toHaveBeenCalledWith(
 			expect.objectContaining({
-				bindings: [expect.objectContaining(binding)],
-				bindingChanges: undefined,
+				...binding,
+				definitionChanges: undefined,
 			}),
 		);
 	});
 
 	it("shows the gate and reviewer when both are set", async () => {
 		const gate = {
-			absentSays: "the change has no Swift code",
+			skipReason: "the change has no Swift code",
 			anyOf: [{ changedPathMatches: ["**/*.swift"] }],
 		};
 		await renderForm({
-			bindings: [{ ...mockPullRequestBinding, appliesWhen: gate, subject: "REVIEWER" }],
+			...mockPullRequestReviewFields,
+			precondition: gate,
+			subject: "REVIEWER",
 		});
 		expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty(
 			"value",
@@ -135,16 +137,16 @@ describe("CuratedPracticeForm", () => {
 	it("marks a catalog gate removal as deliberate", async () => {
 		const onSubmit = submitSpy();
 		const gate = {
-			absentSays: "the change has no Swift code",
+			skipReason: "the change has no Swift code",
 			anyOf: [{ changedPathMatches: ["**/*.swift"] }],
 		};
-		await renderForm({ bindings: [{ ...mockPullRequestBinding, appliesWhen: gate }] }, onSubmit);
+		await renderForm({ ...mockPullRequestReviewFields, precondition: gate }, onSubmit);
 		fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
 			target: { value: "" },
 		});
 		fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 		expect(onSubmit).toHaveBeenCalledWith(
-			expect.objectContaining({ bindingChanges: ["APPLIES_WHEN"] }),
+			expect.objectContaining({ definitionChanges: ["PRECONDITION"] }),
 		);
 	});
 
@@ -221,7 +223,7 @@ describe("CuratedPracticeForm", () => {
 	it("does not call a freshly loaded practice edited", async () => {
 		await renderForm();
 
-		// The server sorts a binding's signals and needs on the way in. Loading one and touching
+		// The server sorts a practice's signals and evidence requirements on the way in. Loading one and touching
 		// nothing must not look like an edit, or every visit would offer to discard a draft.
 		fireEvent.click(screen.getByRole("link", { name: "Cancel" }));
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
@@ -282,19 +284,15 @@ describe("CuratedPracticeForm", () => {
 		const onSubmit = submitSpy();
 		await renderForm({}, onSubmit);
 
-		// Nothing adds a second: a practice that would read different evidence at a different moment is
-		// a second practice, which is what the server asks for.
 		expect(screen.queryByRole("button", { name: /Add occasion/u })).toBeNull();
 		await user.click(occasion().getByRole("checkbox", { name: /^Merged/u }));
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 
 		const submitted = onSubmit.mock.calls[0]?.[0];
 		assert(submitted);
-		expect(submitted.bindings).toHaveLength(1);
-		const [occasionSubmitted] = submitted.bindings;
-		// Sorted the way the server stores them, so an untouched practice is not dirty on the way back.
+		const occasionSubmitted = submitted;
 		expect(occasionSubmitted.signals).toStrictEqual(
-			["scm.pull_request.merged", ...mockPullRequestBinding.signals].sort(),
+			["scm.pull_request.merged", ...mockPullRequestReviewFields.signals].sort(),
 		);
 	});
 
@@ -303,7 +301,7 @@ describe("CuratedPracticeForm", () => {
 		const onSubmit = submitSpy();
 		await renderForm({}, onSubmit);
 
-		for (const signal of mockPullRequestBinding.signals) {
+		for (const signal of mockPullRequestReviewFields.signals) {
 			await user.click(occasion().getByRole("checkbox", { name: moment(signal) }));
 		}
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
@@ -346,7 +344,7 @@ describe("CuratedPracticeForm", () => {
 		);
 		await user.click(screen.getByRole("button", { name: "Save changes" }));
 
-		expect(onSubmit.mock.calls[0]?.[0].bindings[0].needs).toContainEqual({
+		expect(onSubmit.mock.calls[0]?.[0].evidenceRequirements).toContainEqual({
 			sourceKind: "scm.review-threads",
 			stance: "EXHAUSTIVE",
 		});
@@ -383,7 +381,7 @@ describe("CuratedPracticeForm", () => {
 
 		const submitted = onSubmit.mock.calls[0]?.[0];
 		assert(submitted);
-		expect(submitted.bindings.map((binding) => binding.needs)).toStrictEqual([[]]);
+		expect(submitted.evidenceRequirements).toStrictEqual([]);
 		expect(submitted.automatedReviewPolicy.automatedReview).toStrictEqual({
 			mode: "NONE",
 			evidenceSufficiency: "NONE",
@@ -406,9 +404,9 @@ describe("CuratedPracticeForm", () => {
 		// still refused, so what has to hold is the rule the form itself enforces.
 		const submitted = onSubmit.mock.calls[0]?.[0];
 		assert(submitted);
-		const [resumed] = submitted.bindings;
+		const resumed = submitted;
 		expect(
-			bindingsProblem(resumed, submitted.automatedReviewPolicy, mockPullRequestWorkType),
+			reviewSettingsProblem(resumed, submitted.automatedReviewPolicy, mockPullRequestWorkType),
 		).toBeUndefined();
 	});
 
@@ -486,14 +484,14 @@ describe("CuratedPracticeForm", () => {
 	it("shows each work type's own gate draft after a switch", async () => {
 		const user = userEvent.setup();
 		const pullRequestGate = {
-			absentSays: "the change has no Swift code",
+			skipReason: "the change has no Swift code",
 			anyOf: [{ changedPathMatches: ["**/*.swift"] }],
 		};
 		const issueGate = {
-			absentSays: "the issue has no review comment",
+			skipReason: "the issue has no review comment",
 			anyOf: [{ diffContains: ["review"] }],
 		};
-		await renderForm({ bindings: [{ ...mockPullRequestBinding, appliesWhen: pullRequestGate }] });
+		await renderForm({ ...mockPullRequestReviewFields, precondition: pullRequestGate });
 		const gateField = screen.getByRole<HTMLTextAreaElement>("textbox", {
 			name: "Only review when",
 		});
@@ -510,7 +508,7 @@ describe("CuratedPracticeForm", () => {
 	it("keeps an unsupported reviewer visible until the admin chooses an issue subject", async () => {
 		const user = userEvent.setup();
 		const onSubmit = submitSpy();
-		await renderForm({ bindings: [{ ...mockPullRequestBinding, subject: "REVIEWER" }] }, onSubmit);
+		await renderForm({ ...mockPullRequestReviewFields, subject: "REVIEWER" }, onSubmit);
 		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
 		const subject = screen.getByRole("combobox", { name: "Person this practice judges" });
 		expect(subject.textContent).toContain("Reviewer (not available for this work)");
@@ -526,11 +524,11 @@ describe("CuratedPracticeForm", () => {
 		const user = userEvent.setup();
 		await renderForm();
 
-		screen.getByRole("switch", { name: /^Include drafts/u });
+		screen.getByRole("checkbox", { name: "Draft" });
 
 		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
 
 		// An issue can never be a draft, so the control for that state is gone rather than inert.
-		expect(screen.queryByRole("switch", { name: /^Include drafts/u })).toBeNull();
+		expect(screen.queryByRole("checkbox", { name: "Draft" })).toBeNull();
 	});
 });

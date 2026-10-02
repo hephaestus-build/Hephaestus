@@ -6,7 +6,9 @@ import jakarta.validation.constraints.NotNull;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-@Schema(description = "Author-declared automated review and evidence sufficiency for one practice")
+@Schema(
+        description = "Author-declared automated review and evidence sufficiency for one practice",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record PracticeAutomatedReview(
         @NonNull @NotNull @Schema(description = "Implementation Hephaestus uses for automated review")
         PracticeAutomatedReviewMode mode,
@@ -14,7 +16,8 @@ public record PracticeAutomatedReview(
         @NonNull
         @NotNull
         @Schema(description = "Whether meeting every evidence requirement provides enough context to review the work")
-        PracticeEvidenceSufficiency evidenceSufficiency) {
+        PracticeEvidenceSufficiency evidenceSufficiency)
+        implements ClosedPracticeInput {
     public PracticeAutomatedReview {
         Objects.requireNonNull(mode, "mode");
         Objects.requireNonNull(evidenceSufficiency, "evidenceSufficiency");

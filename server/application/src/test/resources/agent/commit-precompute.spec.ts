@@ -5,9 +5,35 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import type { ChangedFile } from "../../../../../../docker/agents/precompute/lib/change.ts";
+import {
+	readCapturedCommits,
+	readCommits,
+	type ChangedFile,
+} from "../../../../../../docker/agents/precompute/lib/change.ts";
 import { subjectFacts } from "../../../../../../docker/agents/precompute/lib/commit-subjects.ts";
 import { isPracticeModule } from "../../../../../../docker/agents/precompute/lib/practice-contract.ts";
+
+void test("captured commits distinguish empty history from missing or malformed records", async () => {
+	const root = mkdtempSync(path.join(tmpdir(), "captured-commits-"));
+	try {
+		assert.equal(await readCapturedCommits(root), null);
+		for (const source of ["{", '{"commits":[null]}', '{"commits":{}}']) {
+			writeFileSync(path.join(root, "commits.json"), source);
+			assert.equal(await readCapturedCommits(root), null);
+			assert.deepEqual(await readCommits(root), []);
+		}
+		writeFileSync(path.join(root, "commits.json"), '{"commits":[]}');
+		assert.deepEqual(await readCapturedCommits(root), []);
+		writeFileSync(
+			path.join(root, "commits.json"),
+			JSON.stringify({ commits: [{ sha: "1234567", authoredAt: "" }] }),
+		);
+		const captured = await readCapturedCommits(root);
+		assert.equal(captured?.[0]?.authoredAt, "");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
 
 const repositoryRoot = fileURLToPath(new URL("../../../../../../", import.meta.url));
 

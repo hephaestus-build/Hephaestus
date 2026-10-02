@@ -8,11 +8,15 @@ import type {
 	PracticeEvidenceSourceOption,
 	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
-import { type EvidenceRole, roleOf, withRole } from "@/components/admin/practice-editor/bindings";
 import {
 	evidenceQualityRequirement,
 	groupEvidenceSources,
 } from "@/components/admin/practice-editor/evidence-presentation";
+import {
+	type EvidenceRole,
+	roleOf,
+	withRole,
+} from "@/components/admin/practice-editor/review-settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -61,8 +65,8 @@ function selectedRole(role: EvidenceRole): SegmentedRole {
 export interface PracticeEvidenceEditorProps {
 	options: PracticeWorkTypeDefinitionOptions;
 	/** What this practice's review reads. */
-	needs: PracticeEvidenceRequirement[];
-	onChange: (needs: PracticeEvidenceRequirement[]) => void;
+	evidenceRequirements: PracticeEvidenceRequirement[];
+	onChange: (evidenceRequirements: PracticeEvidenceRequirement[]) => void;
 	/** Prefix for control ids, so a form-level error can send focus to the control that failed. */
 	idPrefix: string;
 	disabled?: boolean;
@@ -73,7 +77,7 @@ export interface PracticeEvidenceEditorProps {
 /** What the review reads: collapsed, the answer is the chips; open, a source is one line. */
 export function PracticeEvidenceEditor({
 	options,
-	needs,
+	evidenceRequirements,
 	onChange,
 	idPrefix,
 	disabled = false,
@@ -94,10 +98,17 @@ export function PracticeEvidenceEditor({
 		}
 	}
 	const required = options.allowedSources.filter(
-		(source) => roleOf(needs, source.sourceKind) !== "NOT_USED" && !isContextual(needs, source),
+		(source) =>
+			roleOf(evidenceRequirements, source.sourceKind) !== "NOT_USED" &&
+			!isContextual(evidenceRequirements, source),
 	);
-	const contextual = options.allowedSources.filter((source) => isContextual(needs, source));
-	const usesRecommendedNeeds = deepEqual(needs, options.recommendedNeeds);
+	const contextual = options.allowedSources.filter((source) =>
+		isContextual(evidenceRequirements, source),
+	);
+	const usesRecommendedNeeds = deepEqual(
+		evidenceRequirements,
+		options.recommendedEvidenceRequirements,
+	);
 
 	return (
 		<FieldSet
@@ -118,7 +129,7 @@ export function PracticeEvidenceEditor({
 								{source.displayName}
 								{/* "captured whole", never "nothing in the world is missing": the claim is about
 								    this capture of this source, which is all the review can see. */}
-								{roleOf(needs, source.sourceKind) === "EXHAUSTIVE" && (
+								{roleOf(evidenceRequirements, source.sourceKind) === "EXHAUSTIVE" && (
 									<span className="text-muted-foreground">· captured whole</span>
 								)}
 							</Badge>
@@ -158,7 +169,7 @@ export function PracticeEvidenceEditor({
 							variant="ghost"
 							size="sm"
 							disabled={disabled}
-							onClick={() => onChange([...options.recommendedNeeds])}
+							onClick={() => onChange([...options.recommendedEvidenceRequirements])}
 						>
 							<RotateCcwIcon className="size-4" />
 							Use recommended evidence
@@ -181,10 +192,12 @@ export function PracticeEvidenceEditor({
 									<SourceRow
 										key={source.sourceKind}
 										source={source}
-										role={roleOf(needs, source.sourceKind)}
+										role={roleOf(evidenceRequirements, source.sourceKind)}
 										idPrefix={idPrefix}
 										disabled={disabled}
-										onRoleChange={(role) => onChange(withRole(needs, source.sourceKind, role))}
+										onRoleChange={(role) =>
+											onChange(withRole(evidenceRequirements, source.sourceKind, role))
+										}
 									/>
 								))}
 							</ul>
@@ -197,10 +210,10 @@ export function PracticeEvidenceEditor({
 }
 
 function isContextual(
-	needs: readonly PracticeEvidenceRequirement[],
+	evidenceRequirements: readonly PracticeEvidenceRequirement[],
 	source: PracticeEvidenceSourceOption,
 ): boolean {
-	return roleOf(needs, source.sourceKind) === "CONTEXTUAL";
+	return roleOf(evidenceRequirements, source.sourceKind) === "CONTEXTUAL";
 }
 
 interface SourceRowProps {

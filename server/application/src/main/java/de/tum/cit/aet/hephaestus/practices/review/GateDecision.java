@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -34,17 +35,28 @@ public sealed interface GateDecision permits GateDecision.Detect, GateDecision.S
             List<Practice> matchedPractices,
             long rolloutRevision,
             TriggerMode triggerMode,
-            Set<String> recheckedPractices)
+            Set<String> recheckedPractices,
+            Map<String, String> reviewState)
             implements GateDecision {
         public Detect {
             Objects.requireNonNull(workspace, "workspace must not be null");
             matchedPractices = List.copyOf(matchedPractices);
             recheckedPractices = Set.copyOf(recheckedPractices);
+            reviewState = Map.copyOf(reviewState);
+        }
+
+        public Detect(
+                Workspace workspace,
+                List<Practice> matchedPractices,
+                long rolloutRevision,
+                TriggerMode triggerMode,
+                Set<String> recheckedPractices) {
+            this(workspace, matchedPractices, rolloutRevision, triggerMode, recheckedPractices, Map.of());
         }
 
         public Detect(
                 Workspace workspace, List<Practice> matchedPractices, long rolloutRevision, TriggerMode triggerMode) {
-            this(workspace, matchedPractices, rolloutRevision, triggerMode, Set.of());
+            this(workspace, matchedPractices, rolloutRevision, triggerMode, Set.of(), Map.of());
         }
     }
 

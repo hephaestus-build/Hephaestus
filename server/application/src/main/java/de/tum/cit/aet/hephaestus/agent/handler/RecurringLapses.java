@@ -46,7 +46,7 @@ class RecurringLapses {
         Set<String> recurring = new HashSet<>();
         Set<String> seen = new HashSet<>();
         for (Observation observation : persisted) {
-            if (observation.getOutcome() != Outcome.NEGATIVE || observation.getPractice() == null) {
+            if (observation.getOutcome() != Outcome.NOT_MET || observation.getPractice() == null) {
                 continue;
             }
             String slug = observation.getPractice().getSlug();
@@ -62,7 +62,7 @@ class RecurringLapses {
                             observation.getWorkspaceId(), observation.getAboutUserId(), slug, since, RECENT)
                     .forEach(o -> latestByArtifact.putIfAbsent(o.getArtifactId(), o.getOutcome()));
             long others = latestByArtifact.entrySet().stream()
-                    .filter(e -> e.getValue() == Outcome.NEGATIVE && !Objects.equals(e.getKey(), artifact))
+                    .filter(e -> e.getValue() == Outcome.NOT_MET && !Objects.equals(e.getKey(), artifact))
                     .count();
             if (others >= RECURRING_MIN_ARTIFACTS) {
                 recurring.add(slug);

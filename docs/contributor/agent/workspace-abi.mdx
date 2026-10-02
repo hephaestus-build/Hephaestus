@@ -147,7 +147,7 @@ execute on Node; see
 - **`inputs/history/`** — earlier observations and feedback, present on every review. These are uncapped authorized subject projections from the same snapshot. `COMPLETE` means complete
   for that permitted mirror scope, not a guarantee about upstream records.
 - **`INDEX.json`** — the source and artifact index, and the authoritative statement of what a run
-  staged. **Every source permitted for the workspace and purpose is rendered on every review** — practice bindings decide which practices may run, never which files the agent can see. A
+  staged. **Every source permitted for the workspace and purpose is rendered on every review** — practice definitions decide which practices may run, never which files the agent can see. A
   source listed as anything other than `AVAILABLE` says why in a typed reason code (`NO_PROVIDER`,
   `GOVERNANCE_NOT_EFFECTIVE`, `COLLECTION_ERROR`, …); none of those reasons is "no practice asked for it".
   It indexes context files but is not itself a source artifact.
@@ -251,7 +251,8 @@ neither a provider count nor a child.
 
 **`inputs/history/observations.json`** — every authorized prior verdict about the reviewed developer,
 newest first, with no age window or per-practice cap. Entries carry `practiceSlug`, `summary`,
-`assessmentStatus`, `outcome`, `presence`, `assessment`, `severity`, `observedAt` and `artifact`.
+`outcome`, `severity`, `observedAt` and `artifact`. `outcome` is one of `MET`, `NOT_MET`,
+`NOT_APPLICABLE` and `UNDETERMINED`; only `NOT_MET` carries severity.
 The composition projections use the same snapshot and visibility checks as person-scoped JSONL.
 They omit hidden, withdrawn, stale or otherwise refused bodies through the existing source-owner checks.
 The prompt can summarize or point to a file; prompt-size bounds never remove records from the folder.

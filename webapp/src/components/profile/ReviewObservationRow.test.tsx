@@ -13,9 +13,7 @@ const observation: ObservationDetail = {
 	practiceSlug: "explain-decisions",
 	practiceName: "Explain significant decisions",
 	summary: "The reason for the timeout is missing",
-	assessmentStatus: "ASSESSED",
-	presence: "PRESENT",
-	assessment: "BAD",
+	outcome: "NOT_MET",
 	severity: "MINOR",
 };
 

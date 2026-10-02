@@ -103,7 +103,7 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
         practice.setName("Issue linking");
         practice.setCriteria("Link the issue the change resolves.");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
         practice.setCurrentRevision(revision);
@@ -575,9 +575,7 @@ class DeliveredFeedbackStatesIntegrationTest extends AbstractSlackConsentGateInt
                 artifactId,
                 recipient.getId(),
                 "Links the issue it closes",
-                "ASSESSED",
-                "PRESENT",
-                "GOOD",
+                "MET",
                 null,
                 evidence(artifactKind),
                 null,

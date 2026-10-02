@@ -121,7 +121,7 @@ class InAppCooldownQueryIntegrationTest extends BaseIntegrationTest {
                     created.setName("Ships Tests With Changes");
                     created.setCriteria("Criteria");
                     created.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
-                    created.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+                    PracticeTestEvidence.configure(created, ScmSignals.PULL_REQUEST_OPENED);
                     return practiceRepository.saveAndFlush(created);
                 });
 
@@ -143,9 +143,7 @@ class InAppCooldownQueryIntegrationTest extends BaseIntegrationTest {
                 42L,
                 recipient.getId(),
                 "Observation title",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 null,
                 "reasoning",

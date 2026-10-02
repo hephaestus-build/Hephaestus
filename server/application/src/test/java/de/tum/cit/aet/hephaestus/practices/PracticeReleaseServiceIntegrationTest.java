@@ -150,7 +150,11 @@ class PracticeReleaseServiceIntegrationTest extends AbstractWorkspaceIntegration
     private static PracticeDefinition withCriteria(PracticeDefinition source, String criteria) {
         return new PracticeDefinition(
                 source.name(),
-                source.bindings(),
+                source.signals(),
+                source.evidenceRequirements(),
+                source.reviewWhen(),
+                source.subject(),
+                source.precondition(),
                 criteria,
                 source.precomputeScript(),
                 source.automatedReviewPolicy(),

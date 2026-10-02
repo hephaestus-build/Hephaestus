@@ -1,35 +1,29 @@
-# Hardcoded Secrets
+# Keep credentials out of source code
 
-## Definition
+## The standard
 
-Flag literal API keys, passwords, tokens, credentials, or other secret-shaped strings
-that are checked into source code as constants.
+Added code must not contain a usable credential. Read the complete captured diff. Secret-shaped
+strings are leads to inspect, not proof that a credential is real. Explicit nonfunctional examples,
+placeholder values, and test fixtures are not usable credentials by their names alone.
 
-## Detection signals
+## Outcomes
 
-- String literals assigned to identifiers named `apiKey`, `api_key`, `password`, `secret`,
-  `token`, `credential`, `dbPassword`, `accessKey`, or similar.
-- Strings matching common provider prefixes: `sk-`, `ghp_`, `AKIA…`, `xoxb-`, `Bearer …`,
-  Base64-encoded blocks adjacent to keywords like "secret" or "token".
-- High-entropy strings stored as constants in committed code.
+- **NOT_MET:** an added literal is an evidenced usable credential. Cite the added line and explain
+  what establishes that it is a credential. Never reproduce its value in feedback.
+- **MET:** a complete bounded search establishes no usable credential in the added code, including
+  cases that use environment variables or a secret manager. Record the search boundary.
+- **NOT_APPLICABLE:** the captured change adds no code or configuration to review.
+- **UNDETERMINED:** complete captured evidence leaves the authenticity of a material secret-shaped
+  value unresolved. Name the question, without asserting exposure.
 
-## Verdict rules
-
-- **PRESENT / BAD** when any such literal is present in added (`+`) lines.
-- **PRESENT / GOOD** when secrets are referenced via env vars / a config service / a vault.
-- **NOT_APPLICABLE** when the diff contains no secret-shaped material at all.
+Missing or truncated required capture stops the review and creates no observation.
 
 ## Severity
 
-- **CRITICAL** for production credentials, real-looking provider keys, database
-  passwords, or anything that resembles a live access token.
-- **MAJOR** for sandbox/test secrets, sample keys clearly marked as fake, or low-risk
-  internal tokens that still should not be committed.
-- **MINOR** for placeholder secrets in test fixtures explicitly named as such (e.g.
-  `"PLACEHOLDER"`).
+NOT_MET only. CRITICAL for usable production credentials or live provider access tokens. MAJOR for
+usable sandbox credentials with a contained consequence. A nonfunctional placeholder earns no severity.
 
 ## Guidance
 
-Move the secret to an environment variable or secret manager. Rotate the exposed
-credential. Update history removal (BFG / `git filter-repo`) for any real production
-credential that was committed.
+Move the credential to an environment variable or secret manager and rotate the exposed credential.
+Use the repository's incident procedure for a real credential committed to history.

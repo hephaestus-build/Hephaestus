@@ -52,7 +52,7 @@ class PracticeRepositoryIntegrationTest extends BaseIntegrationTest {
         practice.setSlug(slug);
         practice.setName(name);
         practice.setCriteria("Default criteria for " + slug);
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         return practice;
     }
 
@@ -84,7 +84,7 @@ class PracticeRepositoryIntegrationTest extends BaseIntegrationTest {
             Practice found = practiceRepository.findById(saved.getId()).orElseThrow();
             assertThat(found.getSlug()).isEqualTo("test-slug");
             assertThat(found.getName()).isEqualTo("Test Practice");
-            assertThat(found.getBindings()).isEqualTo(saved.getBindings());
+            assertThat(found.getSignals()).isEqualTo(saved.getSignals());
             assertThat(found.getCriteria()).isEqualTo("Check for quality");
             assertThat(found.getAutonomy()).isEqualTo(PracticeAutonomy.OFF);
         }
@@ -168,7 +168,7 @@ class PracticeRepositoryIntegrationTest extends BaseIntegrationTest {
         void workTypeQueryNarrowsToTheRequestedKind() {
             Practice pullRequest = createPractice("on-pull-requests", "On pull requests");
             Practice issue = createPractice("on-issues", "On issues");
-            issue.setBindings(PracticeTestEvidence.bindings(ScmSignals.ISSUE_OPENED));
+            PracticeTestEvidence.configure(issue, ScmSignals.ISSUE_OPENED);
             issue.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
             practiceRepository.saveAll(List.of(pullRequest, issue));
 

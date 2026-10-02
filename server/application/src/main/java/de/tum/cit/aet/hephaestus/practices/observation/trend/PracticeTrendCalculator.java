@@ -56,7 +56,7 @@ final class PracticeTrendCalculator {
 
     private static BetaPosterior posterior(List<EvidenceOpportunity> opportunities) {
         double sum = opportunities.stream()
-                .mapToDouble(opportunity -> opportunity.outcomes().positiveShare())
+                .mapToDouble(opportunity -> opportunity.outcomes().metShare())
                 .sum();
         return BetaPosterior.from(opportunities.size(), sum);
     }

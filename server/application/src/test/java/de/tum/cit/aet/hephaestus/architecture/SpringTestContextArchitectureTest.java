@@ -26,7 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBeans;
 class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
-            assignment("agent.handler.PracticeDetectionPipelineIntegrationTest", "workspace-folder"),
+            assignment("agent.handler.PracticeReviewPipelineIntegrationTest", "workspace-folder"),
             assignment(
                     "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment("testconfig.BaseIntegrationTest", "base"),
@@ -122,7 +122,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
-            "agent.handler.PracticeDetectionPipelineIntegrationTest",
+            "agent.handler.PracticeReviewPipelineIntegrationTest",
             "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
             "notification.AccountDeletionEmailIntegrationTest",
             "notification.AccountSecurityEmailIntegrationTest",

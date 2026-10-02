@@ -255,7 +255,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             JobFolderIndexBuilder manifestBuilder = new JobFolderIndexBuilder(
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC()),
-                    new PracticeSubjectEvaluator(mapper),
+                    new PracticePreconditionEvaluator(mapper),
                     new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(bad), new SimpleMeterRegistry(), manifestBuilder);
@@ -391,7 +391,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             JobFolderIndexBuilder manifests = new JobFolderIndexBuilder(
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
-                    new PracticeSubjectEvaluator(mapper),
+                    new PracticePreconditionEvaluator(mapper),
                     new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
@@ -683,7 +683,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             JobFolderIndexBuilder manifests = new JobFolderIndexBuilder(
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
-                    new PracticeSubjectEvaluator(mapper),
+                    new PracticePreconditionEvaluator(mapper),
                     new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(folder(), issue), new SimpleMeterRegistry(), manifests);

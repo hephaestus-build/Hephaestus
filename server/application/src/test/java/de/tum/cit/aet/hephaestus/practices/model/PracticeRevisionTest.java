@@ -20,7 +20,7 @@ class PracticeRevisionTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("clear-feedback");
         practice.setName("Clear feedback");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setCriteria("Detect clear feedback");
         practice.setPrecomputeScript("export default {}");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
@@ -29,14 +29,14 @@ class PracticeRevisionTest extends BaseUnitTest {
         practice.setGroup(group);
 
         PracticeRevision revision = new PracticeRevision(practice, 3);
-        // The revision copies the list; a later edit to the practice's bindings must not reach it.
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_REVIEWED));
+        // The revision copies the list; a later edit to the practice's signals must not reach it.
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_REVIEWED);
 
         assertThat(revision.getRevisionNumber()).isEqualTo(3);
         assertThat(revision.getSlug()).isEqualTo("clear-feedback");
         assertThat(revision.getName()).isEqualTo("Clear feedback");
         assertThat(revision.getArtifactKind()).isEqualTo(ArtifactKinds.PULL_REQUEST);
-        assertThat(revision.getBindings()).isEqualTo(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        assertThat(revision.getSignals()).isEqualTo(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
         assertThat(revision.getCriteria()).isEqualTo("Detect clear feedback");
         assertThat(revision.getPrecomputeScript()).isEqualTo("export default {}");
         assertThat(revision.getAutomatedReviewPolicy()).isEqualTo(practice.getAutomatedReviewPolicy());
@@ -50,6 +50,6 @@ class PracticeRevisionTest extends BaseUnitTest {
                         PracticeRevision::getGroupIcon,
                         PracticeRevision::getGroupColor)
                 .containsExactly("review-quality", "Review quality", "Review work", "MessageSquare", "cyan");
-        assertThat(revision.getReviewRuleFingerprint()).hasSize(67).startsWith("v4:");
+        assertThat(revision.getReviewRuleFingerprint()).hasSize(67).startsWith("v5:");
     }
 }

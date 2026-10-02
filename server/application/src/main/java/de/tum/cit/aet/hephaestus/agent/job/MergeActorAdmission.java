@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.List;
 
@@ -36,8 +35,6 @@ final class MergeActorAdmission {
                         .filter(manifest ->
                                 manifest.rolesNamedAfterTheOccasion().contains(ActorRole.MERGER))
                         .isPresent()
-                && matchedPractices.stream()
-                        .anyMatch(practice ->
-                                PracticeBinding.subjectRoleOf(practice.getBindings(), signal) == ActorRole.MERGER);
+                && matchedPractices.stream().anyMatch(practice -> practice.getSubject() == ActorRole.MERGER);
     }
 }

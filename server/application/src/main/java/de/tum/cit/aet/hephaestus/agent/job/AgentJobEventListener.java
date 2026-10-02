@@ -20,7 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
@@ -59,7 +59,7 @@ public class AgentJobEventListener {
 
     private final AgentJobService agentJobService;
     private final PullRequestRepository pullRequestRepository;
-    private final PracticeReviewDetectionGate practiceReviewDetectionGate;
+    private final ReviewGate reviewGate;
     private final WorkspaceResolver workspaceResolver;
     private final SignalRecorder signalRecorder;
     private final IntegrationManifestRegistry manifests;
@@ -67,13 +67,13 @@ public class AgentJobEventListener {
     public AgentJobEventListener(
             AgentJobService agentJobService,
             PullRequestRepository pullRequestRepository,
-            PracticeReviewDetectionGate practiceReviewDetectionGate,
+            ReviewGate reviewGate,
             WorkspaceResolver workspaceResolver,
             SignalRecorder signalRecorder,
             IntegrationManifestRegistry manifests) {
         this.agentJobService = agentJobService;
         this.pullRequestRepository = pullRequestRepository;
-        this.practiceReviewDetectionGate = practiceReviewDetectionGate;
+        this.reviewGate = reviewGate;
         this.workspaceResolver = workspaceResolver;
         this.signalRecorder = signalRecorder;
         this.manifests = manifests;
@@ -246,8 +246,8 @@ public class AgentJobEventListener {
             }
 
             GateDecision decision = reviewData == null
-                    ? practiceReviewDetectionGate.evaluate(pr, key.signalName(), TriggerMode.AUTO)
-                    : practiceReviewDetectionGate.evaluate(
+                    ? reviewGate.evaluate(pr, key.signalName(), TriggerMode.AUTO)
+                    : reviewGate.evaluate(
                             pr,
                             key.signalName(),
                             TriggerMode.AUTO,

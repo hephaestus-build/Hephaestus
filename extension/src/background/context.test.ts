@@ -241,13 +241,13 @@ function ownRow(overrides: Partial<ObservationList> = {}): ObservationList {
 		id: OBSERVATION,
 		artifactId: 101,
 		artifactKind: "scm.pull_request",
-		assessmentStatus: "ASSESSED",
+
 		claimCurrentness: "CURRENT",
 		observedAt: "2026-09-26T11:00:00Z",
 		origin: "LIVE",
 		practiceName: "Descriptive merge request",
 		practiceSlug: "descriptive-merge-request",
-		outcome: "NEGATIVE",
+		outcome: "NOT_MET",
 		severity: "MAJOR",
 		summary: "The description never says why.",
 		...overrides,
@@ -332,9 +332,9 @@ describe("the reader's own observations on the tab's work", () => {
 			practiceName: "Descriptive merge request",
 			practiceSlug: "descriptive-merge-request",
 			summary: "The description never says why.",
-			outcome: "NEGATIVE",
+			outcome: "NOT_MET",
 			severity: "MAJOR",
-			assessmentStatus: "ASSESSED",
+
 			claimCurrentness: "CURRENT",
 			observedAt: "2026-09-26T11:00:00Z",
 		});

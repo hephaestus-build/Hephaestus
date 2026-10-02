@@ -20,7 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
@@ -55,7 +55,7 @@ class BotPracticeReviewIntegrationTest extends AbstractWorkspaceIntegrationTest 
     private ArtifactSignalRepository signals;
 
     @Autowired
-    private PracticeReviewDetectionGate gate;
+    private ReviewGate gate;
 
     @Autowired
     private SignalRecorder recorder;

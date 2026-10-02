@@ -71,7 +71,7 @@ export function practicePolicyErrorTarget(policy: PracticeAutomatedReviewPolicy)
 
 /**
  * Only what holds however the review was occasioned. What a review reads belongs to the occasion and
- * is checked per binding.
+ * is checked per reviewFields.
  */
 export function practicePolicyError(policy: PracticeAutomatedReviewPolicy) {
 	if (policy.automatedReview.mode === "NONE" && policy.knownLimitations.length > 0) {

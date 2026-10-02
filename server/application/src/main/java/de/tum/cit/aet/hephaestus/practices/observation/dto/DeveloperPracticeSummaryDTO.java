@@ -6,8 +6,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Per-practice aggregation of observations for a developer (ADR 0022). Used by dashboard practice cards
- * to display strength/problem counts and last activity.
+ * Per-practice aggregation of current observations for a developer (ADR 0022).
  */
 @Schema(description = "Per-practice observation summary for a developer")
 public record DeveloperPracticeSummaryDTO(
@@ -17,11 +16,14 @@ public record DeveloperPracticeSummaryDTO(
         @NonNull @Schema(description = "Total number of observations")
         Long totalObservations,
 
-        @NonNull @Schema(description = "Number of positive outcomes")
-        Long positiveCount,
+        @NonNull @Schema(description = "Number of MET observations")
+        Long met,
 
-        @NonNull @Schema(description = "Number of negative outcomes")
-        Long negativeCount,
+        @NonNull @Schema(description = "Number of NOT_MET observations")
+        Long notMet,
+
+        @NonNull Long notApplicable,
+        @NonNull Long undetermined,
 
         @Nullable @Schema(description = "Timestamp of most recent observation")
         Instant lastObservedAt) {
@@ -30,8 +32,10 @@ public record DeveloperPracticeSummaryDTO(
                 p.getPracticeSlug(),
                 p.getPracticeName(),
                 p.getTotalObservations(),
-                p.getPositiveCount(),
-                p.getNegativeCount(),
+                p.getMet(),
+                p.getNotMet(),
+                p.getNotApplicable(),
+                p.getUndetermined(),
                 p.getLastObservedAt());
     }
 }

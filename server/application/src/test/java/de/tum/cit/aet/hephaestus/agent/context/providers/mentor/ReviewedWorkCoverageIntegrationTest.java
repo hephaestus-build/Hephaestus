@@ -32,7 +32,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
@@ -146,15 +146,15 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         PullRequest mr = mergeRequest(course, "MR !2", "Closes #12");
         AgentJob reviewed = review(mr, "MR !2", "Plans the work", HEAD);
         // Recorded after the repair was stored: when a review completes says nothing about what it read.
-        observe(practice, reviewed, mr.getId(), student, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(practice, reviewed, mr.getId(), student, Outcome.NOT_MET, Severity.MINOR, NOW);
         AgentJob pending = persistPullRequestReview(workspace, mr.getNumber(), mr.getId(), null);
         pending.setStatus(recheck);
         agentJobRepository.save(pending);
 
         JsonNode entry = history().path("recentObservations").get(0);
 
-        assertThat(entry.path("outcome").asString()).isEqualTo("NEGATIVE");
-        assertThat(entry.path("presence").asString()).isEqualTo("ABSENT");
+        assertThat(entry.path("outcome").asString()).isEqualTo("NOT_MET");
+        assertThat(entry.has("presence")).isFalse();
         assertThat(entry.has("assessment")).isFalse();
         assertThat(entry.path("reviewId").asString()).isEqualTo(reviewed.getId().toString());
         JsonNode work = entry.path("reviewedWork");
@@ -178,11 +178,11 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         AgentJob reviewed = review(mr, "MR !2", "Closes #12", HEAD);
         reviewed.setStatus(status);
         agentJobRepository.saveAndFlush(reviewed);
-        observe(practice, reviewed, mr.getId(), student, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(practice, reviewed, mr.getId(), student, Outcome.NOT_MET, Severity.MINOR, NOW);
 
         JsonNode entry = history().path("recentObservations").get(0);
         assertThat(entry.path("reviewId").asString()).isEqualTo(reviewed.getId().toString());
-        assertThat(entry.path("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(entry.path("outcome").asString()).isEqualTo("NOT_MET");
         assertThat(entry.path("reviewedWork").path("coreCoverage").asString()).isEqualTo("MATCHES_STORED_WORK");
         assertThat(entry.path("reviewedWork").path("producingReviewStatus").asString())
                 .isEqualTo(status.name());
@@ -196,7 +196,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
     void shouldTellNothingOfTheCapturedCoreWhenOnlyTheDiffMayBeUsedInConversation() {
         PullRequest mr = mergeRequest(course, "MR !2", "Closes #12");
         AgentJob reviewed = review(mr, "MR !2", "Plans the work", HEAD);
-        observe(practice, reviewed, mr.getId(), student, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        observe(practice, reviewed, mr.getId(), student, Outcome.NOT_MET, Severity.MINOR, NOW);
         ArtifactSourceCatalogRegistry coreDenied =
                 mock(ArtifactSourceCatalogRegistry.class, AdditionalAnswers.delegatesTo(sourceCatalogs));
         doReturn(false)
@@ -225,7 +225,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
                 .get(0);
 
         assertThat(entry.path("reviewId").asString()).isEqualTo(reviewed.getId().toString());
-        assertThat(entry.path("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(entry.path("outcome").asString()).isEqualTo("NOT_MET");
         JsonNode work = entry.path("reviewedWork");
         assertThat(work.path("coreCoverage").asString()).isEqualTo("UNKNOWN");
         assertThat(work.path("titleAndDescriptionCoverage").asString()).isEqualTo("UNKNOWN");
@@ -275,43 +275,34 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
                 review(mr, "MR !2", "Plans the work", HEAD),
                 mr.getId(),
                 student,
-                ObservationKind.OMISSION_GAP,
+                Outcome.NOT_MET,
                 Severity.MINOR,
                 NOW.minus(1, ChronoUnit.HOURS));
-        observe(
-                practice,
-                review(mr, "MR !2", "Closes #12", HEAD),
-                mr.getId(),
-                student,
-                ObservationKind.DEMONSTRATED_STRENGTH,
-                null,
-                NOW);
+        observe(practice, review(mr, "MR !2", "Closes #12", HEAD), mr.getId(), student, Outcome.MET, null, NOW);
 
         JsonNode payload = history();
-        assertThat(result(payload.path("recentObservations").get(0)))
-                .containsExactly("POSITIVE", "MATCHES_STORED_WORK");
+        assertThat(result(payload.path("recentObservations").get(0))).containsExactly("MET", "MATCHES_STORED_WORK");
         assertThat(result(payload.path("earlierObservations").get(0)))
-                .containsExactly("NEGATIVE", "DIFFERS_FROM_STORED_WORK");
+                .containsExactly("NOT_MET", "DIFFERS_FROM_STORED_WORK");
 
         mr.setBody("Closes #12 and #13");
         pullRequestRepository.save(mr);
 
         assertThat(result(history().path("recentObservations").get(0)))
-                .containsExactly("POSITIVE", "DIFFERS_FROM_STORED_WORK");
+                .containsExactly("MET", "DIFFERS_FROM_STORED_WORK");
     }
 
     @Test
     void shouldKeepALaterAbstentionAnAbstention() {
         PullRequest mr = mergeRequest(course, "MR !2", "Closes #12");
         AgentJob abstained = review(mr, "MR !2", "Closes #12", HEAD);
-        observe(practice, abstained, mr.getId(), student, ObservationKind.NOT_APPLICABLE, null, NOW);
+        observe(practice, abstained, mr.getId(), student, Outcome.NOT_APPLICABLE, null, NOW);
 
         JsonNode entry = history().path("abstentions").get(0);
 
         assertThat(entry.path("reviewId").asString())
                 .isEqualTo(abstained.getId().toString());
-        assertThat(entry.path("assessmentStatus").asString()).isEqualTo("NOT_APPLICABLE");
-        assertThat(entry.path("outcome").isNull()).isTrue();
+        assertThat(entry.path("outcome").asString()).isEqualTo("NOT_APPLICABLE");
     }
 
     @Test
@@ -351,7 +342,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
                 issue.getId(),
                 student,
                 null,
-                ObservationKind.OMISSION_GAP,
+                Outcome.NOT_MET,
                 Severity.MINOR,
                 NOW,
                 DIFF_EVIDENCE_JSON,
@@ -395,8 +386,8 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         foreignJob.setEvidenceSnapshot(capture(mr, "MR !6", "Closes #17", HEAD));
         agentJobRepository.save(foreignJob);
         Practice foreignPractice = persistPractice(foreign, null, "links-the-issue", "Links the issue", null);
-        UUID foreignObservation = observe(
-                foreignPractice, foreignJob, mr.getId(), student, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        UUID foreignObservation =
+                observe(foreignPractice, foreignJob, mr.getId(), student, Outcome.NOT_MET, Severity.MINOR, NOW);
 
         List<UUID> ids = List.of(
                 deletedObservation, samePathObservation, malformedObservation, misboundObservation, foreignObservation);
@@ -436,7 +427,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
     }
 
     private UUID observed(PullRequest mr, AgentJob job) {
-        return observe(practice, job, mr.getId(), student, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+        return observe(practice, job, mr.getId(), student, Outcome.NOT_MET, Severity.MINOR, NOW);
     }
 
     private Observation observation(UUID id) {

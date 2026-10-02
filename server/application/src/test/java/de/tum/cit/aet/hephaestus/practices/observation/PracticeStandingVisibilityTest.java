@@ -11,11 +11,9 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.PracticeTrendService;
@@ -72,7 +70,6 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        when(currentDeveloperLookup.currentDeveloperId()).thenReturn(Optional.of(USER_ID));
         when(clock.instant()).thenReturn(NOW);
         lenient()
                 .when(workspaceReviewDefaultsProvider.forWorkspace(WORKSPACE_ID))
@@ -95,6 +92,11 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 clock);
     }
 
+    private List<PracticeStandingDTO> standings() {
+        when(currentDeveloperLookup.currentDeveloperId()).thenReturn(Optional.of(USER_ID));
+        return practiceStandingService.getStandings(WORKSPACE_ID);
+    }
+
     private Observation bad(Practice practice, @org.jspecify.annotations.Nullable Severity severity) {
         return Observation.builder()
                 .id(UUID.randomUUID())
@@ -104,9 +106,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 .observedAt(NOW.minusSeconds(3600))
                 .agentJobId(new UUID(0L, 42L))
                 .summary("a problem")
-                .assessmentStatus(AssessmentStatus.ASSESSED)
-                .presence(Presence.ABSENT)
-                .assessment(Assessment.GOOD)
+                .outcome(Outcome.NOT_MET)
                 .severity(severity)
                 .build();
     }
@@ -120,6 +120,32 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
     }
 
     @Test
+    void latestInvisibleClaimShadowsAnOlderVisibleClaimAtEachSnapshotEdge() {
+        Practice practice = practice("robust-error-handling");
+        Observation earlier = bad(practice, Severity.MAJOR);
+        Observation later = Observation.builder()
+                .id(UUID.randomUUID())
+                .practice(practice)
+                .artifactKind(ArtifactKinds.PULL_REQUEST)
+                .artifactId(42L)
+                .observedAt(NOW.minusSeconds(60))
+                .agentJobId(new UUID(0L, 43L))
+                .summary("A later claim whose rules no longer match")
+                .outcome(Outcome.MET)
+                .build();
+        feeds(earlier, later);
+        when(visibilityPolicy.permitsAll(
+                        WORKSPACE_ID, List.of(earlier, later), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                .thenReturn(Set.of(earlier.getId()));
+
+        var snapshots = practiceStandingService.getStandingSnapshots(
+                WORKSPACE_ID, USER_ID, List.of(earlier.getObservedAt(), NOW));
+
+        assertThat(snapshots.get(0).practices()).containsKey(practice.getSlug());
+        assertThat(snapshots.get(1).practices()).isEmpty();
+    }
+
+    @Test
     void withholdsObservationRejectedByFeedbackVisibilityPolicy() {
         Practice practice = practice("robust-error-handling");
         Observation observation = bad(practice, Severity.MAJOR);
@@ -130,7 +156,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                         WORKSPACE_ID, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .thenReturn(Set.of());
 
-        assertThat(practiceStandingService.getStandings(WORKSPACE_ID)).isEmpty();
+        assertThat(standings()).isEmpty();
         verifyNoInteractions(feedbackObservationRepository);
     }
 
@@ -148,7 +174,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         when(feedbackObservationRepository.findLatestFeedbackBodiesByObservationIds(any(), any(), any()))
                 .thenReturn(List.of());
 
-        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+        List<PracticeStandingDTO> standings = standings();
 
         assertThat(standings).hasSize(1);
         List<Severity> order =
@@ -157,7 +183,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         assertThat(order).containsExactly(Severity.CRITICAL, null);
     }
 
-    private Observation strength(Practice practice, @Nullable Presence presence) {
+    private Observation strength(Practice practice, @Nullable Outcome outcome) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .practice(practice)
@@ -166,9 +192,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
                 .observedAt(NOW.minusSeconds(3600))
                 .agentJobId(new UUID(0L, 42L))
                 .summary("nothing swallowed on the paths you added")
-                .assessmentStatus(presence == null ? AssessmentStatus.NOT_APPLICABLE : AssessmentStatus.ASSESSED)
-                .presence(presence)
-                .assessment(presence == null ? null : presence == Presence.PRESENT ? Assessment.GOOD : Assessment.BAD)
+                .outcome(outcome == null ? Outcome.NOT_APPLICABLE : outcome)
                 .build();
     }
 
@@ -184,9 +208,9 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
     @DisplayName("ABSENT/BAD is shown as a strength")
     void shouldShowAbsentBadAsStrength() {
         Practice practice = practice("handles-errors-instead-of-swallowing-them");
-        feeds(strength(practice, Presence.ABSENT));
+        feeds(strength(practice, Outcome.MET));
 
-        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+        List<PracticeStandingDTO> standings = standings();
 
         assertThat(standings).hasSize(1);
         assertThat(standings.get(0).strengths()).hasSize(1);
@@ -197,9 +221,9 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
     @DisplayName("PRESENT/GOOD supports the standing for an error-handling practice")
     void shouldShowPresentGoodAsStrengthForErrorHandling() {
         Practice practice = practice("handles-errors-instead-of-swallowing-them");
-        feeds(strength(practice, Presence.PRESENT));
+        feeds(strength(practice, Outcome.MET));
 
-        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+        List<PracticeStandingDTO> standings = standings();
 
         assertThat(standings).hasSize(1);
         assertThat(standings.get(0).strengths()).hasSize(1);
@@ -210,9 +234,9 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
     @DisplayName("an ordinary practice keeps both shapes of strength")
     void ordinaryPracticeKeepsBothShapesOfStrength() {
         Practice practice = practice("robust-error-handling");
-        feeds(strength(practice, Presence.PRESENT), strength(practice, Presence.ABSENT));
+        feeds(strength(practice, Outcome.MET), strength(practice, Outcome.MET));
 
-        List<PracticeStandingDTO> standings = practiceStandingService.getStandings(WORKSPACE_ID);
+        List<PracticeStandingDTO> standings = standings();
 
         assertThat(standings).hasSize(1);
         assertThat(standings.get(0).strengths()).hasSize(2);

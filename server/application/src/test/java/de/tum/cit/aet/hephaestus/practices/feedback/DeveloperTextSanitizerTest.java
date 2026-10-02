@@ -9,6 +9,15 @@ import org.junit.jupiter.api.Test;
 class DeveloperTextSanitizerTest extends BaseUnitTest {
 
     @Test
+    void shouldRemoveOutcomeLabelsWithoutRemovingTheActionableAdvice() {
+        for (String outcome : new String[] {"MET", "NOT_MET", "NOT_APPLICABLE", "UNDETERMINED"}) {
+            assertThat(DeveloperTextSanitizer.sanitize(
+                            "The outcome is " + outcome + ". Add a test for the retry path."))
+                    .isEqualTo("Add a test for the retry path.");
+        }
+    }
+
+    @Test
     @DisplayName("a leading-dot name keeps the space before it while a dangling punctuation mark loses it")
     void shouldKeepTheSpaceBeforeALeadingDotNameWhenSanitizing() {
         assertThat(DeveloperTextSanitizer.sanitize(

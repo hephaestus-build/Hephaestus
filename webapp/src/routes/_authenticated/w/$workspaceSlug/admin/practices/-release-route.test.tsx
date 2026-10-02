@@ -3,13 +3,13 @@ import { HttpResponse, http } from "msw";
 import { expect, it } from "vitest";
 
 import type { PracticeReleaseProposal } from "@/api/types.gen";
-import { mockPullRequestBinding, mockPullRequestPolicy } from "@/mocks/fixtures/practice";
+import { mockPullRequestReviewFields, mockPullRequestPolicy } from "@/mocks/fixtures/practice";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
 const base = {
 	name: "Explain the change",
-	bindings: [mockPullRequestBinding],
+	...mockPullRequestReviewFields,
 	criteria: "Earlier criteria",
 	automatedReviewPolicy: mockPullRequestPolicy,
 	deliveryBehavior: { summaryOnly: false },

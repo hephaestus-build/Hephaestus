@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.DiffNote;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliverySuppressedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;

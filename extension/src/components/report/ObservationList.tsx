@@ -1,6 +1,6 @@
 import { useId } from "react";
 
-import { ASSESSMENT_STATUS_DEFS } from "@/components/practice-vocabulary/assessment-status-defs";
+import { claimCurrentnessNote } from "@/components/practice-vocabulary/claim-currentness";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 
@@ -15,32 +15,28 @@ export interface ObservationListProps {
 	onRetry: () => void;
 }
 
-const TONE = { POSITIVE: "text-success", NEGATIVE: "text-destructive" } as const;
-
-/**
- * What one observation concluded, as the web app's registries say it: a positive or negative outcome
- * with its severity, or the status under which nothing was settled. The icon carries the outcome
- * without colour; the label is there for a screen reader and a tooltip.
- */
+/** Labels and icons come from the shared outcome registry; severity applies only to Not met. */
 function verdict(row: ObservationRow) {
-	if (row.assessmentStatus === "ASSESSED" && row.outcome !== undefined) {
-		const def = OUTCOME_DEFS[row.outcome];
-		const severity =
-			row.outcome === "NEGATIVE" && row.severity !== undefined
-				? statusDefOr(SEVERITY_DEFS, row.severity).label
-				: undefined;
-		return { def, tone: TONE[row.outcome], severity };
+	let tone = "text-muted-foreground";
+	if (row.outcome === "MET") {
+		tone = "text-success";
+	} else if (row.outcome === "NOT_MET") {
+		tone = "text-destructive";
 	}
 	return {
-		def: statusDefOr(ASSESSMENT_STATUS_DEFS, row.assessmentStatus),
-		tone: "text-muted-foreground",
-		severity: undefined,
+		def: OUTCOME_DEFS[row.outcome],
+		tone,
+		severity:
+			row.outcome === "NOT_MET" && row.severity !== undefined
+				? statusDefOr(SEVERITY_DEFS, row.severity).label
+				: undefined,
 	};
 }
 
 function Observation({ row }: { row: ObservationRow }) {
 	const { def, tone, severity } = verdict(row);
 	const Icon = def.icon;
+	const currentnessNote = claimCurrentnessNote(row.claimCurrentness);
 	return (
 		<li className={cn(INDENT, "flex min-w-0 items-start gap-2 py-1.5 text-sm")}>
 			<Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", tone)} />
@@ -50,7 +46,7 @@ function Observation({ row }: { row: ObservationRow }) {
 					<span className="text-xs text-muted-foreground">
 						{def.label}
 						{severity === undefined ? null : ` · ${severity}`}
-						{row.claimCurrentness === "CURRENT" ? null : " · no longer current"}
+						{currentnessNote === undefined ? null : ` · ${currentnessNote}`}
 					</span>
 				</span>
 				<span className="break-words text-muted-foreground">{row.summary}</span>

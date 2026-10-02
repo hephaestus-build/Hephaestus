@@ -19,12 +19,9 @@ import { isRecord } from "../../../main/resources/agent/pi-observation-normalize
 // process: this file re-enters itself with the SDK mocked and drives one review through it.
 
 const admittedObservation = {
-	assessmentStatus: "ASSESSED",
-	presence: "PRESENT",
-	outcome: "NEGATIVE",
+	outcome: "NOT_MET",
 	id: "observation-1",
 	practiceSlug: "test-practice",
-	assessment: "BAD",
 	severity: "MAJOR",
 	anchorable: true,
 	citations: [
@@ -62,9 +59,7 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 	return {
 		practiceSlug: slug,
 		summary,
-		assessmentStatus: "ASSESSED",
-		presence: "PRESENT",
-		assessment: "BAD",
+		outcome: "NOT_MET",
 		severity: "MAJOR",
 		evidenceRationale: "The changed authentication code calls insecure().",
 		evidence: { citations: [citation] },
@@ -75,9 +70,7 @@ function observation(slug: string, summary: string, citation: unknown = changeCi
 const undecided = (consulted: string[]) => ({
 	practiceSlug: "test-practice",
 	summary: "Nothing to assess in this change",
-	assessmentStatus: "NOT_APPLICABLE",
-	presence: null,
-	assessment: null,
+	outcome: "NOT_APPLICABLE",
 	severity: null,
 	evidenceRationale: "The change touches only metadata.",
 	evidence: {
@@ -135,7 +128,7 @@ if (scenario !== undefined && scenario !== "") {
 			admissionDigest: "admitted-digest",
 			observations: [
 				scenario === "compose-quiet"
-					? { ...admittedObservation, outcome: "POSITIVE", assessment: "GOOD", severity: null }
+					? { ...admittedObservation, outcome: "MET", severity: null }
 					: admittedObservation,
 			],
 		});
@@ -282,7 +275,7 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							if (text.includes("## Undecided")) {
 								// The composer's finishing prompt: the runner asks once more for the practices
-								// with a NEGATIVE observation, and a WITHHOLD is a recorded decision.
+								// with a NOT_MET observation, and a WITHHOLD is a recorded decision.
 								const withheld = await tool("report_feedback").execute("f-9", {
 									units: [
 										{
@@ -317,7 +310,7 @@ if (scenario !== undefined && scenario !== "") {
 									return;
 								}
 								if (scenario === "compose-quiet") {
-									// Nothing to withhold on a practice that is not NEGATIVE: the unit is skipped
+									// Nothing to withhold on a practice that is not NOT_MET: the unit is skipped
 									// with the reason, and with no negatives the runner does not ask again.
 									const quiet = await tool("report_feedback")
 										.execute("f-q", {
@@ -431,7 +424,7 @@ if (scenario !== undefined && scenario !== "") {
 										observations: [
 											{
 												practiceSlug: "test-practice",
-												outcome: "NEGATIVE",
+												outcome: "NOT_MET",
 												artifact: { kind: "scm.pull_request", number: 7, title: "Earlier change" },
 											},
 										],
@@ -647,10 +640,35 @@ if (scenario !== undefined && scenario !== "") {
 								writeFileSync(nodePath.join(cwd, "out", "stray.txt"), "left by a session");
 								return;
 							}
+							if (scenario === "replacement-witness") {
+								const provisional = observation(
+									"test-practice",
+									"Retained changed authentication evidence",
+								);
+								await report.execute("provisional-diff", { observations: [provisional] });
+								const beforeReplacement = readFileSync(
+									nodePath.join(cwd, "out/review-state.json"),
+									"utf8",
+								);
+								await assert.rejects(
+									report.execute("replacement-without-diff", {
+										observations: [
+											{ ...undecided(["scm.pull-request.core"]), revises: "test-practice" },
+										],
+									}),
+									/must show it read the change/u,
+								);
+								assert.equal(
+									readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
+									beforeReplacement,
+								);
+								record("replacement-witness:preserved");
+								return;
+							}
 							if (scenario === "draft-revision") {
 								const positive = {
 									...observation("test-practice", "Authentication call"),
-									assessment: "GOOD",
+									outcome: "MET",
 									severity: null,
 								};
 								const negative = observation("test-practice", "Authentication call");
@@ -684,7 +702,7 @@ if (scenario !== undefined && scenario !== "") {
 									}),
 									/citation does not match/u,
 								);
-								assert.equal(readState()[0]?.assessment, "GOOD");
+								assert.equal(readState()[0]?.outcome, "MET");
 								const corrected = await report.execute("correct", {
 									observations: [{ ...negative, revises: "test-practice" }],
 								});
@@ -803,6 +821,7 @@ if (scenario !== undefined && scenario !== "") {
 		"compose-settle-deadline",
 		"provider-error",
 		"batch",
+		"replacement-witness",
 		"draft-revision",
 		"finish",
 		"refusal-cap",
@@ -829,6 +848,7 @@ if (scenario !== undefined && scenario !== "") {
 				batch: "normalizes corrections and answers distinct practices per item",
 				"draft-revision":
 					"replaces only an explicitly corrected valid draft and refuses an ambiguous batch atomically",
+				"replacement-witness": "refuses a replacement that relies on its superseded diff witness",
 				finish: "asks once more, in the same session, for the practices no turn recorded",
 				"refusal-cap": "stops accepting a practice after eight refused submissions",
 				repeat: "nudges a turn that repeats one call and ends it when the call keeps coming",
@@ -1024,6 +1044,12 @@ if (scenario !== undefined && scenario !== "") {
 							})),
 						});
 					switch (stage) {
+						case "replacement-witness": {
+							assert.equal(child.status, 0, child.stderr);
+							assert.ok(events.includes("replacement-witness:preserved"), child.stderr);
+							break;
+						}
+
 						case "settle-budget": {
 							assert.equal(child.status, 1, child.stderr);
 							assert.ok(!events.some((event) => event.startsWith("prompt:")), events.join("\n"));
@@ -1109,7 +1135,7 @@ if (scenario !== undefined && scenario !== "") {
 								result.filter((item) => item.practiceSlug === "test-practice").length,
 								1,
 							);
-							assert.equal(result[0]?.assessment, "BAD");
+							assert.equal(result[0]?.outcome, "NOT_MET");
 							const admission = readObservations(nodePath.join(cwd, "admission.json"));
 							assert.deepEqual(admission, result);
 							assert.ok(!JSON.stringify(admission).includes("revises"));
@@ -1118,11 +1144,11 @@ if (scenario !== undefined && scenario !== "") {
 								/Measurement is closed/u,
 							);
 							const notes = readFileSync(nodePath.join(cwd, "work/notes/review.md"), "utf8");
-							assert.match(notes, /test-practice: PRESENT\/BAD/u);
-							assert.doesNotMatch(notes, /PRESENT\/GOOD/u);
+							assert.match(notes, /test-practice: NOT_MET/u);
+							assert.doesNotMatch(notes, /test-practice: MET —/u);
 							const finishing = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
-							assert.match(finishing, /test-practice: PRESENT\/BAD/u);
-							assert.doesNotMatch(finishing, /PRESENT\/GOOD/u);
+							assert.match(finishing, /test-practice: NOT_MET/u);
+							assert.doesNotMatch(finishing, /test-practice: MET —/u);
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;
 						}
@@ -1164,7 +1190,7 @@ if (scenario !== undefined && scenario !== "") {
 							const second = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
 							assert.match(
 								second,
-								/## Recorded so far\n(?:- test-practice: .*\n)*- test-practice: PRESENT\/BAD/u,
+								/## Recorded so far\n(?:- test-practice: .*\n)*- test-practice: NOT_MET/u,
 							);
 							assert.match(second, /No observation was recorded for: second-practice/u);
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
@@ -1232,7 +1258,7 @@ if (scenario !== undefined && scenario !== "") {
 							assert.ok(!events.includes("compact"), child.stderr);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-alone:")) ?? "",
-								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NEGATIVE on 1/u,
+								/IN_APP needs a pattern across at least 2 pieces of work, and test-practice is NOT_MET on 1/u,
 								child.stderr,
 							);
 							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
@@ -1326,11 +1352,11 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8"),
-								/## Undecided[\s\S]*NEGATIVE observation: test-practice/u,
+								/## Undecided[\s\S]*NOT_MET observation: test-practice/u,
 							);
 							assert.match(
 								child.stderr,
-								/composition left 1 NEGATIVE practice\(s\) undecided — asking once more/u,
+								/composition left 1 NOT_MET practice\(s\) undecided — asking once more/u,
 							);
 							assert.equal(
 								(
@@ -1365,7 +1391,7 @@ if (scenario !== undefined && scenario !== "") {
 							);
 							assert.match(
 								events.find((event) => event.startsWith("feedback-quiet:")) ?? "",
-								/NEGATIVE for the primary practice 'test-practice'/u,
+								/NOT_MET for the primary practice 'test-practice'/u,
 							);
 							assert.doesNotMatch(child.stderr, /asking once more/u);
 							break;

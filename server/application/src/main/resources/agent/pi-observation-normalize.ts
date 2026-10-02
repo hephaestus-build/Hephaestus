@@ -2,17 +2,13 @@
 // Each list mirrors an enum on the server. They are hand-maintained on both sides, so
 // AgentVocabularySyncTest parses these literals and asserts equality with the Java enum's
 // values(), preventing the runtime and persistence contracts from accepting different labels.
-export const ASSESSMENT_STATUS_VALUES = ["ASSESSED", "NOT_APPLICABLE", "UNDETERMINED"] as const;
-export const PRESENCE_VALUES = ["PRESENT", "ABSENT"] as const;
-export const ASSESSMENT_VALUES = ["GOOD", "BAD"] as const;
+export const OUTCOME_VALUES = ["MET", "NOT_MET", "NOT_APPLICABLE", "UNDETERMINED"] as const;
 export const SEVERITY_VALUES = ["CRITICAL", "MAJOR", "MINOR", "INFO"] as const;
 
 // The vocabularies above are the values; these are the types every consumer spells them with. They are
 // derived from the arrays rather than written twice, so the arrays stay the single thing Java is synced
 // against and a value cannot be added to one without being added to the other.
-export type AssessmentStatus = (typeof ASSESSMENT_STATUS_VALUES)[number];
-export type Presence = (typeof PRESENCE_VALUES)[number];
-export type Assessment = (typeof ASSESSMENT_VALUES)[number];
+export type Outcome = (typeof OUTCOME_VALUES)[number];
 export type Severity = (typeof SEVERITY_VALUES)[number];
 
 /** Which side of a diff hunk a citation quotes; absent on every non-diff source. */
@@ -35,7 +31,7 @@ export interface NormalizedCitation {
 	quote: string;
 }
 
-/** The recorded scope of a search that came up empty — the warrant an ABSENT observation owes. */
+/** The recorded scope of a search that came up empty — the warrant an absence claim owes. */
 export interface RecordedSearch {
 	consulted: string[];
 	lookedFor: string;
@@ -57,7 +53,7 @@ export interface RecordedUndecidability {
 
 /**
  * Citations plus, at most, the one extra warrant this observation requires. Which branch is
- * present is decided by assessment status and presence and enforced in {@link normalizeEvidence}; the optionality here is the
+ * present is decided by outcome and enforced in {@link normalizeEvidence}; the optionality here is the
  * shape, not the rule.
  */
 export interface NormalizedEvidence {
@@ -68,7 +64,7 @@ export interface NormalizedEvidence {
 }
 
 /** One measurement, checked. This is what reaches result.json and, from there, Java. */
-export type NormalizedObservation = ObservationAssessment & {
+export type NormalizedObservation = ObservationOutcome & {
 	practiceSlug: string;
 	summary: string;
 	evidence: NormalizedEvidence;
@@ -79,26 +75,14 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-// Tool descriptions distinguish status, target presence and judgment at the point of annotation.
-export const ASSESSMENT_STATUS_DESCRIPTIONS: Record<AssessmentStatus, string> = {
-	ASSESSED:
-		"The evidence settles the result. Supply presence and assessment; severity only for a NEGATIVE outcome.",
+export const OUTCOME_DESCRIPTIONS: Record<Outcome, string> = {
+	MET: "The applicable practice standard is met in the captured evidence. Cite the evidence. Claims based on absence require a bounded, complete search; do not infer mastery or unseen work.",
+	NOT_MET:
+		"The applicable practice standard is not met. Cite the contradiction or record a bounded search for the required work. Supply severity and explain the consequence.",
 	NOT_APPLICABLE:
-		"A concrete fact rules out the practice's prerequisite occasion. Name it in evidence.inapplicability. Not a missing target: avoiding a harmful target in an applicable corpus is ASSESSED/ABSENT/BAD.",
+		"A concrete fact rules out the practice's prerequisite occasion. Record the prerequisite and exclusion in evidence.inapplicability. This is not missing or incomplete evidence.",
 	UNDETERMINED:
-		"Relevant evidence was captured and read but does not settle the question. Record the open question and what would settle it in evidence.undecidability. Missing or failed capture is a review readiness failure, not an observation.",
-};
-export const PRESENCE_DESCRIPTIONS: Record<Presence, string> = {
-	PRESENT:
-		"The specific behavior named in the observation occurred. Cite it and assess its desirability in context. Partial or misleading guidance is present; name a missing component precisely if assessing its absence.",
-	ABSENT:
-		"The practice applies and the specified behavior is absent from the bounded searched corpus. Record that same behavior in evidence.search. Missing desirable behavior yields NEGATIVE; absent undesirable behavior yields POSITIVE only with an applicable opportunity and complete coverage.",
-};
-
-/** Contextual desirability of the specified behavior, independent of its presence. */
-export const ASSESSMENT_DESCRIPTIONS: Record<Assessment, string> = {
-	GOOD: "The specified behavior is desirable in the evidenced context. PRESENT yields POSITIVE; ABSENT yields NEGATIVE. Explain why the behavior is desirable here.",
-	BAD: "The specified behavior is undesirable in the evidenced context. PRESENT yields NEGATIVE; ABSENT yields POSITIVE. Optional or unnecessary behavior is not automatically undesirable.",
+		"Relevant evidence was captured and read, but does not settle whether the applicable standard is met. Record the open question and what would settle it in evidence.undecidability. A capture failure is a review readiness failure, not an observation.",
 };
 
 /**
@@ -116,7 +100,7 @@ export const SEVERITY_DESCRIPTIONS: Record<Severity, string> = {
 	MINOR:
 		"A craft-level improvement worth making that nobody would block a merge on. Differs from INFO by " +
 		"whether there is a specific edit to make.",
-	INFO: "An advisory, low-impact problem. Still a NEGATIVE outcome; strengths and unassessed observations require null severity.",
+	INFO: "An advisory, low-impact problem. Still a NOT_MET outcome; strengths and unassessed observations require null severity.",
 };
 
 /** Require a model-facing description for each enum value. */
@@ -135,15 +119,8 @@ export function describeVocabulary<T extends string>(
 		.join("\n");
 }
 
-/** Reject non-string values instead of coercing objects into non-empty required fields. */
 function trimmedText(value: unknown): string {
-	if (typeof value === "string") {
-		return value.trim();
-	}
-	if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
-		return String(value);
-	}
-	return "";
+	return typeof value === "string" ? value.trim() : "";
 }
 
 /**
@@ -202,17 +179,22 @@ export function normalizeInapplicability(inapplicability: unknown): RecordedInap
 	return { consulted: [...new Set(consulted)].toSorted(), subject, ruledOutBy };
 }
 
-export function normalizeEvidence(
-	evidence: unknown,
-	assessmentStatus: AssessmentStatus,
-	presence: Presence | null,
-): NormalizedEvidence {
+export function normalizeEvidence(evidence: unknown, outcome: Outcome): NormalizedEvidence {
 	if (
 		!isRecord(evidence) ||
 		!Array.isArray(evidence.citations) ||
 		evidence.citations.length === 0
 	) {
 		throw new Error("evidence citations are required");
+	}
+	if (evidence.inapplicability != null && outcome !== "NOT_APPLICABLE") {
+		throw new Error("evidence.inapplicability is permitted only for NOT_APPLICABLE");
+	}
+	if (evidence.undecidability != null && outcome !== "UNDETERMINED") {
+		throw new Error("evidence.undecidability is permitted only for UNDETERMINED");
+	}
+	if (evidence.search != null && outcome !== "MET" && outcome !== "NOT_MET") {
+		throw new Error("evidence.search is permitted only for MET or NOT_MET");
 	}
 	const citations = evidence.citations.map((citation: unknown): NormalizedCitation => {
 		// A citation that is not an object reads as one with every field missing, which is what the
@@ -299,17 +281,8 @@ export function normalizeEvidence(
 			quote,
 		};
 	});
-	// Absence needs a bounded search, not just a citation to something else.
-	if (presence === "ABSENT") {
-		if (evidence.search == null) {
-			throw new Error(
-				"an ABSENT observation must record its search: evidence.search with consulted, lookedFor and boundary",
-			);
-		}
-		return { citations, search: normalizeSearch(evidence.search) };
-	}
 	// Inapplicability is a positive claim about scope, not an uncertain assessment.
-	if (assessmentStatus === "NOT_APPLICABLE") {
+	if (outcome === "NOT_APPLICABLE") {
 		if (evidence.inapplicability == null) {
 			throw new Error(
 				"a NOT_APPLICABLE observation must say why the practice does not apply: " +
@@ -320,7 +293,7 @@ export function normalizeEvidence(
 		return { citations, inapplicability: normalizeInapplicability(evidence.inapplicability) };
 	}
 	// Make unresolved evidence explicit so uncertainty cannot silently become a verdict.
-	if (assessmentStatus === "UNDETERMINED") {
+	if (outcome === "UNDETERMINED") {
 		if (evidence.undecidability == null) {
 			throw new Error(
 				"an UNDETERMINED observation must say what it could not settle: evidence.undecidability with " +
@@ -336,7 +309,7 @@ export function normalizeEvidence(
 
 /**
  * The recorded shape of a question the evidence left open. Sibling of {@link normalizeSearch} and
- * {@link normalizeInapplicability}: each presence that makes a claim beyond its citations has to ground it.
+ * {@link normalizeInapplicability}: each observation that makes a claim beyond its citations has to ground it.
  */
 export function normalizeUndecidability(undecidability: unknown): RecordedUndecidability {
 	if (!isRecord(undecidability)) {
@@ -353,20 +326,8 @@ export function normalizeUndecidability(undecidability: unknown): RecordedUndeci
 	return { openQuestion, wouldSettleIt };
 }
 
-/**
- * A word of a closed vocabulary as the session wrote it — case, and a space or hyphen for the
- * underscore, are not what the vocabulary is about. A word outside it, or none, is answered with the
- * whole list, so the session corrects the field rather than guessing at it.
- */
 function parseVocabulary<T extends string>(values: readonly T[], value: unknown, field: string): T {
-	const word =
-		typeof value === "string"
-			? value
-					.trim()
-					.toUpperCase()
-					.replaceAll(/[-\s]+/gu, "_")
-			: value;
-	const admitted = values.find((candidate) => candidate === word);
+	const admitted = values.find((candidate) => candidate === value);
 	if (admitted === undefined) {
 		const missing = nullish(value) ? " (missing)" : "";
 		throw new Error(`invalid ${field} '${String(value)}'${missing}: one of ${values.join(", ")}`);
@@ -374,97 +335,23 @@ function parseVocabulary<T extends string>(values: readonly T[], value: unknown,
 	return admitted;
 }
 
-/** A field left out, or written as the word "null", says the same as null. */
 function nullish(value: unknown): boolean {
-	return value == null || (typeof value === "string" && /^(?:null|none)?$/iu.test(value.trim()));
+	return value == null;
 }
 
-export type Outcome = "POSITIVE" | "NEGATIVE";
+type ObservationOutcome =
+	| { outcome: "NOT_MET"; severity: Severity }
+	| { outcome: "MET" | "NOT_APPLICABLE" | "UNDETERMINED"; severity: null };
 
-export function deriveOutcome(
-	presence: Presence | null,
-	assessment: Assessment | null,
-): Outcome | null {
-	if (presence === null && assessment === null) {
-		return null;
+function parseOutcome(sent: Record<string, unknown>): ObservationOutcome {
+	const outcome = parseVocabulary(OUTCOME_VALUES, sent.outcome, "outcome");
+	if (outcome === "NOT_MET") {
+		return { outcome, severity: parseVocabulary(SEVERITY_VALUES, sent.severity, "severity") };
 	}
-	if (presence === null || assessment === null) {
-		throw new Error("Presence and assessment must agree on whether the observation is assessed");
+	if (!nullish(sent.severity)) {
+		throw new Error("Severity is permitted only for NOT_MET");
 	}
-	return (presence === "PRESENT") === (assessment === "GOOD") ? "POSITIVE" : "NEGATIVE";
-}
-
-type ObservationAssessment =
-	| {
-			assessmentStatus: "ASSESSED";
-			presence: Presence;
-			assessment: Assessment;
-			severity: Severity | null;
-	  }
-	| {
-			assessmentStatus: "NOT_APPLICABLE" | "UNDETERMINED";
-			presence: null;
-			assessment: null;
-			severity: null;
-	  };
-
-function parseAssessment(
-	sent: Record<string, unknown>,
-	practiceSlug: string,
-	ruledOut: ReadonlySet<string>,
-): ObservationAssessment {
-	// A presence value written as the status names a presence and nothing else; it is read as such
-	// unless the presence field says otherwise.
-	const status =
-		typeof sent.assessmentStatus === "string" ? sent.assessmentStatus.toUpperCase() : null;
-	const statusAsPresence = PRESENCE_VALUES.find((value) => value === status);
-	const fields =
-		statusAsPresence !== undefined && (nullish(sent.presence) || sent.presence === statusAsPresence)
-			? { ...sent, assessmentStatus: "ASSESSED", presence: statusAsPresence }
-			: sent;
-	const assessmentStatus = parseVocabulary(
-		ASSESSMENT_STATUS_VALUES,
-		fields.assessmentStatus,
-		"assessmentStatus",
-	);
-	if (assessmentStatus !== "ASSESSED") {
-		if (!nullish(fields.presence) || !nullish(fields.assessment) || !nullish(fields.severity)) {
-			throw new Error(
-				"Unassessed observations require explicit null presence, assessment and severity",
-			);
-		}
-		return { assessmentStatus, presence: null, assessment: null, severity: null };
-	}
-	const presence = parseVocabulary(PRESENCE_VALUES, fields.presence, "presence");
-	const assessment = parseVocabulary(ASSESSMENT_VALUES, fields.assessment, "assessment");
-	// Before the severity is asked for: a cell the practice rules out is a wrong cell, and asking for
-	// a severity first would have the session decorate the wrong cell rather than leave it.
-	refuseRuledOutCell(practiceSlug, presence, assessment, ruledOut);
-	// A severity beside a POSITIVE outcome says nothing wrong; it is surplus and dropped, not refused.
-	if (deriveOutcome(presence, assessment) === "POSITIVE") {
-		return { assessmentStatus, presence, assessment, severity: null };
-	}
-	if (nullish(fields.severity)) {
-		throw new Error(
-			`${presence}/${assessment} is a NEGATIVE outcome and needs a severity: one of ${SEVERITY_VALUES.join(", ")}`,
-		);
-	}
-	const severity = parseVocabulary(SEVERITY_VALUES, fields.severity, "severity");
-	return { assessmentStatus, presence, assessment, severity };
-}
-
-/** The evidence branch an outcome calls for: the search behind an absence, the warrant behind a non-verdict. */
-function evidenceBranchOf(
-	assessmentStatus: AssessmentStatus,
-	presence: Presence | null,
-): string | null {
-	if (presence === "ABSENT") {
-		return "search";
-	}
-	if (assessmentStatus === "NOT_APPLICABLE") {
-		return "inapplicability";
-	}
-	return assessmentStatus === "UNDETERMINED" ? "undecidability" : null;
+	return { outcome, severity: null };
 }
 
 /** The summary heads the developer's practice page; a phrase, not the rationale. Mirrored by admission. */
@@ -533,17 +420,8 @@ function rehomed(observation: Record<string, unknown>, notes: string[]): Record<
 	return Object.fromEntries(beside);
 }
 
-/**
- * @param ruledOut the cells the practice's Judge section rules out, from {@link cellsRuledOut}; an
- *   assessed observation in one of them is refused before anything else about it is asked for.
- * @param notes receives one line per correction made on the way in — a field moved to its home — so
- *   the caller can echo what was recorded.
- */
-export function normalizeObservation(
-	raw: unknown,
-	ruledOut: ReadonlySet<string> = new Set(),
-	notes: string[] = [],
-): NormalizedObservation {
+/** Validate the model output before recording an observation. */
+export function normalizeObservation(raw: unknown, notes: string[] = []): NormalizedObservation {
 	if (!isRecord(raw)) {
 		throw new Error("observation must be an object");
 	}
@@ -551,9 +429,7 @@ export function normalizeObservation(
 	const allowed = new Set([
 		"practiceSlug",
 		"summary",
-		"assessmentStatus",
-		"presence",
-		"assessment",
+		"outcome",
 		"severity",
 		"evidence",
 		"evidenceRationale",
@@ -563,8 +439,6 @@ export function normalizeObservation(
 		throw new Error(`unknown observation field(s): ${unknownFields.join(", ")}`);
 	}
 	const practiceSlug = normalizePracticeSlug(observation.practiceSlug);
-	// Named before the cell is parsed: an item with no slug is usually not an observation at all (a
-	// wrapper, a fragment), and "invalid presence" would send the session looking at the wrong field.
 	if (!practiceSlug) {
 		throw new Error(
 			`practiceSlug is required: each item of observations is one observation object (received keys: ${Object.keys(observation).join(", ") || "none"})`,
@@ -572,8 +446,7 @@ export function normalizeObservation(
 	}
 	const sent = trimmedText(observation.summary).replaceAll(/\s+/gu, " ");
 	const reasoning = trimmedText(observation.evidenceRationale);
-	const result = parseAssessment(observation, practiceSlug, ruledOut);
-	const { assessmentStatus, presence } = result;
+	const result = parseOutcome(observation);
 	if (!sent) {
 		throw new Error("summary is required");
 	}
@@ -604,18 +477,7 @@ export function normalizeObservation(
 	if (unknownEvidence.length > 0) {
 		throw new Error(`unknown evidence field(s): ${unknownEvidence.join(", ")}`);
 	}
-	const expectedBranch = evidenceBranchOf(assessmentStatus, presence);
-	// A branch the outcome does not call for is surplus, not a contradiction: a search recorded beside
-	// a PRESENT claim says nothing wrong, so it is dropped rather than refused. The branch the outcome
-	// does call for is checked by normalizeEvidence, which names what is missing.
-	const evidence = normalizeEvidence(
-		{
-			citations: externalEvidence.citations,
-			...(expectedBranch == null ? {} : { [expectedBranch]: externalEvidence[expectedBranch] }),
-		},
-		assessmentStatus,
-		presence,
-	);
+	const evidence = normalizeEvidence(externalEvidence, result.outcome);
 	const out: NormalizedObservation = {
 		practiceSlug,
 		summary: sent,
@@ -672,7 +534,7 @@ function describeAvailableSources(sourceKinds: ReadonlySet<string>): string {
 
 /**
  * Requires searched sources to be staged and every declared exhaustive source to be consulted.
- * ABSENT/BAD additionally requires an exhaustive source policy: a positive absence claim needs a
+ * MET based on absence additionally requires an exhaustive source policy: a positive absence claim needs a
  * closed search boundary. These checks validate the declared search, not whether the model read it.
  */
 export function validateSearchScope(
@@ -680,19 +542,13 @@ export function validateSearchScope(
 	exhaustiveSourceKinds: ReadonlySet<string>,
 	availableSourceKinds: ReadonlySet<string>,
 ): void {
-	if (observation.presence !== "ABSENT") {
-		return;
-	}
 	const { search } = observation.evidence;
 	if (!search) {
-		throw new Error("an ABSENT observation must record its search");
+		return;
 	}
-	if (
-		deriveOutcome(observation.presence, observation.assessment) === "POSITIVE" &&
-		exhaustiveSourceKinds.size === 0
-	) {
+	if (observation.outcome === "MET" && exhaustiveSourceKinds.size === 0) {
 		throw new Error(
-			`cannot conclude ABSENT + BAD for '${observation.practiceSlug}': it declares no source it searches ` +
+			`cannot conclude MET from an absence claim for '${observation.practiceSlug}': it declares no source it searches ` +
 				`exhaustively, so "this is not anywhere in the work" ranges over a corpus it has not bounded — ` +
 				`say UNDETERMINED instead`,
 		);
@@ -711,61 +567,17 @@ export function validateSearchScope(
 		.toSorted();
 	if (unsearched.length > 0) {
 		throw new Error(
-			`cannot conclude ABSENT for '${observation.practiceSlug}' without searching ${unsearched.join(", ")} — ` +
+			`cannot conclude an absence claim for '${observation.practiceSlug}' without searching ${unsearched.join(", ")} — ` +
 				`say UNDETERMINED instead, or record the search`,
 		);
 	}
-}
-
-/** A NOT_APPLICABLE warrant may name only sources staged for this run. */
-const CELL = String.raw`(?:PRESENT|ABSENT)\/(?:GOOD|BAD)`;
-const RULED_OUT_LINE = new RegExp(
-	String.raw`^-\s*(${CELL}(?:\s*(?:and|,|or)\s*${CELL})*)\s*(?:\([A-Z]+\))?\s*:\s*no ordinary case\b`,
-	"iu",
-);
-
-/** Read forbidden cells from "no ordinary case" Judge bullets; unlisted cells remain allowed. */
-export function cellsRuledOut(criteria: string): Set<string> {
-	const judge = criteria.split(/^## Judge\s*$/mu)[1]?.split(/^## /mu)[0] ?? "";
-	const cells = new Set<string>();
-	for (const line of judge.split("\n")) {
-		const match = RULED_OUT_LINE.exec(line.trim());
-		if (!match) {
-			continue;
-		}
-		for (const cell of match[1]?.match(new RegExp(CELL, "gu")) ?? []) {
-			cells.add(cell.toUpperCase());
-		}
-	}
-	return cells;
-}
-
-/** An assessed observation lands in a cell its practice names; the ruled-out ones are refused. */
-function refuseRuledOutCell(
-	practiceSlug: string,
-	presence: Presence,
-	assessment: Assessment,
-	ruledOut: ReadonlySet<string>,
-): void {
-	const cell = `${presence}/${assessment}`;
-	if (!ruledOut.has(cell)) {
-		return;
-	}
-	const all = ["PRESENT/GOOD", "PRESENT/BAD", "ABSENT/GOOD", "ABSENT/BAD"];
-	const ordinary = all.filter((candidate) => !ruledOut.has(candidate));
-	throw new Error(
-		`${cell} is no ordinary case for '${practiceSlug}' — its Judge section names ` +
-			`${ordinary.join(" and ")}. assessment says whether the behaviour in focus is desirable, ` +
-			`not whether the outcome is good: an undesirable behaviour that is absent is ABSENT/BAD, the ` +
-			`positive outcome. Record the cell the evidence supports`,
-	);
 }
 
 export function validateInapplicabilityScope(
 	observation: NormalizedObservation,
 	availableSourceKinds: ReadonlySet<string>,
 ): void {
-	if (observation.assessmentStatus !== "NOT_APPLICABLE") {
+	if (observation.outcome !== "NOT_APPLICABLE") {
 		return;
 	}
 	const { inapplicability } = observation.evidence;

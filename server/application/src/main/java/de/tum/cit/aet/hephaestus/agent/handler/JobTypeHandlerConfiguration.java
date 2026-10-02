@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
@@ -51,8 +52,8 @@ public class JobTypeHandlerConfiguration {
     }
 
     @Bean
-    PracticeDetectionResultParser practiceDetectionResultParser() {
-        return new PracticeDetectionResultParser(objectMapper);
+    ReviewResultParser practiceDetectionResultParser() {
+        return new ReviewResultParser(objectMapper);
     }
 
     @Bean
@@ -95,22 +96,24 @@ public class JobTypeHandlerConfiguration {
     PracticeReviewPreparation practiceReviewPreparation(
             PracticeCatalogInjector practiceCatalogInjector,
             GitRepositoryManager gitRepositoryManager,
-            JobEvidenceFiles evidenceFiles) {
+            JobEvidenceFiles evidenceFiles,
+            PracticeRevisionService practiceRevisionService) {
         return new PracticeReviewPreparation(
                 workspaceContextBuilder,
                 practiceCatalogInjector,
                 taskEnvelopeWriter,
                 gitRepositoryManager,
-                evidenceFiles);
+                evidenceFiles,
+                practiceRevisionService);
     }
 
     @Bean
     PullRequestReviewHandler pullRequestReviewHandler(
             PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
-            PracticeDetectionResultParser resultParser,
+            ReviewResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
-            PracticeDetectionDeliveryService deliveryService,
+            ReviewOutputService deliveryService,
             FeedbackDeliveryService feedbackService,
             InContextDeliveryGate inContextDeliveryGate,
             ObservationRepository observationRepository,
@@ -133,9 +136,9 @@ public class JobTypeHandlerConfiguration {
     IssueReviewHandler issueReviewHandler(
             PracticeReviewPreparation preparation,
             PracticeCatalogInjector practiceCatalogInjector,
-            PracticeDetectionResultParser resultParser,
+            ReviewResultParser resultParser,
             FeedbackCompositionResultParser compositionResultParser,
-            PracticeDetectionDeliveryService deliveryService,
+            ReviewOutputService deliveryService,
             InContextDeliveryGate inContextDeliveryGate,
             PullRequestCommentPoster commentPoster,
             FeedbackLedgerRecorder feedbackLedgerRecorder,
@@ -168,8 +171,8 @@ public class JobTypeHandlerConfiguration {
     @Bean
     JobTypeHandler conversationReviewHandler(
             PracticeReviewPreparation preparation,
-            PracticeDetectionResultParser resultParser,
-            PracticeDetectionDeliveryService deliveryService,
+            ReviewResultParser resultParser,
+            ReviewOutputService deliveryService,
             ApplicationEventPublisher eventPublisher,
             TransactionTemplate transactionTemplate) {
         return new ConversationReviewHandler(
@@ -179,8 +182,8 @@ public class JobTypeHandlerConfiguration {
     @Bean
     JobTypeHandler documentReviewHandler(
             PracticeReviewPreparation preparation,
-            PracticeDetectionResultParser resultParser,
-            PracticeDetectionDeliveryService deliveryService) {
+            ReviewResultParser resultParser,
+            ReviewOutputService deliveryService) {
         return new DocumentReviewHandler(objectMapper, preparation, resultParser, deliveryService);
     }
 

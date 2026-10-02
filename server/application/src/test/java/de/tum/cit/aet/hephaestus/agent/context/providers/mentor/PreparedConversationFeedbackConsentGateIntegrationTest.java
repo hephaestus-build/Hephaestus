@@ -133,7 +133,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
         when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(recipient.getId()))
                 .thenReturn(true);
         practice = new Practice();
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.CONVERSATION_THREAD));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.CONVERSATION_THREAD);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
         practice.setWorkspace(workspace);
         practice.setSlug("test-practice");
@@ -180,7 +180,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
     @Test
     @DisplayName("Slack consent does not suppress an otherwise-authorized pull-request observation")
     void nonSlackArtifactFactAlwaysSurfaces() {
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 2));
         practice.setCurrentRevision(revision);
@@ -258,7 +258,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
 
     @Test
     void namesTheReviewBehindAPreparedItemRatherThanTheJobThatComposedIt() {
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));
         practice = practiceRepository.saveAndFlush(practice);
@@ -271,8 +271,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
         JsonNode item = contribute().get("preparedConversationFeedback").get(0);
 
         assertThat(item.get("reviewId").asString()).isEqualTo(review.getId().toString());
-        assertThat(item.get("assessmentStatus").asString()).isEqualTo("ASSESSED");
-        assertThat(item.get("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(item.get("outcome").asString()).isEqualTo("NOT_MET");
         assertThat(item.path("reviewedWork").path("coreCoverage").asString()).isEqualTo("UNKNOWN");
     }
 
@@ -347,7 +346,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
     @Test
     @DisplayName("composed notes reach the mentor as notes, and an uncomposed unit carries none")
     void stagesTheComposedNotes() {
-        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.PULL_REQUEST));
+        PracticeTestEvidence.configure(practice, ArtifactKinds.PULL_REQUEST);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 2));
         practice.setCurrentRevision(revision);
@@ -508,9 +507,7 @@ class PreparedConversationFeedbackConsentGateIntegrationTest extends AbstractSla
                 artifactId,
                 recipient.getId(),
                 "Observation title",
-                "ASSESSED",
-                "ABSENT",
-                "GOOD",
+                "NOT_MET",
                 "MAJOR",
                 (artifactKind.equals("chat.conversation_thread")
                                 ? AdmittedObservationFixtures.evidence(

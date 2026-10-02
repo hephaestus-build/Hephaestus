@@ -23,7 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -54,14 +54,14 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
     private IssueRepository issueRepository;
 
     @Mock
-    private PracticeReviewDetectionGate detectionGate;
+    private ReviewGate reviewGate;
 
     @Mock
     private SignalRecorder signalRecorder;
 
     private ReviewBackfillSubmitter submitter() {
         return new ReviewBackfillSubmitter(
-                agentJobService, pullRequestRepository, issueRepository, detectionGate, signalRecorder);
+                agentJobService, pullRequestRepository, issueRepository, reviewGate, signalRecorder);
     }
 
     /**
@@ -75,7 +75,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(signalRecorder.record(any(), any(), eq(DiscoveredVia.BACKFILL))).thenReturn(true);
         Workspace workspace = workspace();
-        when(detectionGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL)))
+        when(reviewGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL)))
                 .thenReturn(automaticDetection(workspace, List.of()));
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.SUBMITTED);
@@ -103,7 +103,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         PullRequest pr = mergedPullRequest();
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(signalRecorder.record(any(), any(), eq(DiscoveredVia.SWEEP))).thenReturn(true);
-        when(detectionGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL)))
+        when(reviewGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL)))
                 .thenReturn(automaticDetection(workspace(), List.of()));
         ReviewBackfillRun run = run();
         run.setDiscoveredVia(DiscoveredVia.SWEEP);
@@ -129,7 +129,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.PASSED);
 
-        Mockito.verifyNoInteractions(detectionGate, agentJobService);
+        Mockito.verifyNoInteractions(reviewGate, agentJobService);
     }
 
     @Test
@@ -137,7 +137,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         PullRequest pr = mergedPullRequest();
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(signalRecorder.record(any(), any(), eq(DiscoveredVia.BACKFILL))).thenReturn(true);
-        when(detectionGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL)))
+        when(reviewGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL)))
                 .thenReturn(new GateDecision.Skip("manual trigger disabled for workspace"));
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.PASSED);
@@ -153,7 +153,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.PASSED);
-        Mockito.verifyNoInteractions(signalRecorder, detectionGate, agentJobService);
+        Mockito.verifyNoInteractions(signalRecorder, reviewGate, agentJobService);
     }
 
     @Test
@@ -161,7 +161,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.empty());
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.PASSED);
-        Mockito.verifyNoInteractions(signalRecorder, detectionGate, agentJobService);
+        Mockito.verifyNoInteractions(signalRecorder, reviewGate, agentJobService);
     }
 
     private PullRequest mergedPullRequest() {

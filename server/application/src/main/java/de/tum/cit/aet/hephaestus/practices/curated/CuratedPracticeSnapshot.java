@@ -2,12 +2,17 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.CanonicalDigest;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicyDigest;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 record CuratedPracticeSnapshot(
@@ -17,7 +22,11 @@ record CuratedPracticeSnapshot(
         int position,
         String name,
         ArtifactKind artifactKind,
-        List<PracticeBinding> bindings,
+        List<SignalName> signals,
+        List<PracticeEvidenceRequirement> evidenceRequirements,
+        Map<String, Set<String>> reviewWhen,
+        ActorRole subject,
+        @Nullable PracticePrecondition precondition,
         String criteriaSha256,
         @Nullable String precomputeScriptSha256,
         String automatedReviewPolicySha256,
@@ -36,7 +45,11 @@ record CuratedPracticeSnapshot(
                 entry.position(),
                 definition.name(),
                 definition.artifactKind(),
-                definition.bindings(),
+                definition.signals(),
+                definition.evidenceRequirements(),
+                definition.reviewWhen(),
+                definition.subject(),
+                definition.precondition(),
                 CanonicalDigest.sha256Hex(definition.criteria()),
                 definition.precomputeScript() == null ? null : CanonicalDigest.sha256Hex(definition.precomputeScript()),
                 PracticeAutomatedReviewPolicyDigest.digest(definition.automatedReviewPolicy()),

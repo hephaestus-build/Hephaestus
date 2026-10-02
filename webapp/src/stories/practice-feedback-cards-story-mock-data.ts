@@ -41,9 +41,9 @@ export const NEW_FEEDBACK_CARD: PracticeFeedbackCardEntry = {
 	feedbackId: "scope-one-concern-new",
 	...SCOPE_ONE_CONCERN,
 	reviewedWork: [
-		{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "COMMISSION_PROBLEM" },
-		{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "COMMISSION_PROBLEM" },
-		{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "COMMISSION_PROBLEM" },
+		{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "NOT_MET" },
+		{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "NOT_MET" },
+		{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "NOT_MET" },
 	],
 	cleanWork: [],
 	state: "new",
@@ -68,9 +68,9 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		cleanNeeded: SCOPE_ONE_CONCERN.cleanNeeded,
 		timestamp: SCOPE_ONE_CONCERN.timestamp,
 		reviewedWork: [
-			{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "NOT_MET" },
+			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "NOT_MET" },
+			{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "NOT_MET" },
 		],
 		cleanWork: [clean(21, new Date("2026-09-07T00:00")), clean(22, new Date("2026-09-09T00:00"))],
 		state: "open",
@@ -83,8 +83,8 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		headline: "Descriptions name the files, not the problem",
 		body: "#16 and #18 opened with the list of files touched and no sentence on the problem behind them; on #18 the first review comment asked what the change was for.",
 		reviewedWork: [
-			{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(18), date: new Date("2026-09-01T00:00"), outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "NOT_MET" },
+			{ ref: pullRequest(18), date: new Date("2026-09-01T00:00"), outcome: "NOT_MET" },
 		],
 		cleanWork: [clean(20, new Date("2026-09-03T00:00"))],
 		nextStep:
@@ -105,10 +105,10 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 			{
 				ref: pullRequest(19),
 				date: new Date("2026-09-06T00:00"),
-				outcome: "DEMONSTRATED_STRENGTH",
+				outcome: "MET",
 			},
-			{ ref: pullRequest(21), date: new Date("2026-09-07T00:00"), outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(22), date: new Date("2026-09-09T00:00"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(21), date: new Date("2026-09-07T00:00"), outcome: "NOT_MET" },
+			{ ref: pullRequest(22), date: new Date("2026-09-09T00:00"), outcome: "NOT_MET" },
 		],
 		// A strength before the problems: the clean work it started was emptied, so nothing is clean
 		// since.
@@ -135,8 +135,8 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		headline: "Pull requests were merged over open review threads",
 		body: "#17 merged with two threads still open, and on #20 the reviewer's question about the retry limit was never answered; the reviewer had to reopen it in the next review.",
 		reviewedWork: [
-			{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "COMMISSION_PROBLEM" },
-			{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "COMMISSION_PROBLEM" },
+			{ ref: pullRequest(17), date: new Date("2026-08-28T00:00"), outcome: "NOT_MET" },
+			{ ref: pullRequest(20), date: new Date("2026-09-03T00:00"), outcome: "NOT_MET" },
 		],
 		cleanWork: [clean(21, new Date("2026-09-07T00:00")), clean(22, new Date("2026-09-09T00:00"))],
 		nextStep:
@@ -154,9 +154,9 @@ const OPEN_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		headline: "Pull requests closed their issue without saying what was met",
 		body: "#16 and #19 each closed an issue with three acceptance criteria and mentioned none of them; #13 was reopened a week later for the criterion the change had skipped.",
 		reviewedWork: [
-			{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "OMISSION_GAP" },
-			{ ref: pullRequest(22), date: new Date("2026-09-09T00:00"), outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(16), date: new Date("2026-08-24T00:00"), outcome: "NOT_MET" },
+			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "NOT_MET" },
+			{ ref: pullRequest(22), date: new Date("2026-09-09T00:00"), outcome: "NOT_MET" },
 		],
 		// Two clean pieces before #22 put the run at two of three; #22 emptied it again, which is
 		// the fall back the overview's "What needs your attention" reports.
@@ -183,7 +183,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		headline: "Descriptions named the what, rarely the why",
 		body: "#16 and #19 listed the files touched but not the problem behind them; the reviewer on #19 asked in the first comment what the change was for.",
 		reviewedWork: [
-			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "OMISSION_GAP" },
+			{ ref: pullRequest(19), date: new Date("2026-09-06T00:00"), outcome: "NOT_MET" },
 		],
 		cleanWork: [
 			clean(20, new Date("2026-09-07T00:00")),
@@ -217,9 +217,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 		practiceName: "Leave specific, actionable review comments",
 		headline: "Review comments said something was off, not what",
 		body: 'On #2 the comments read "this looks wrong" and "can we do better here?", and the author replied to each one asking what to change.',
-		reviewedWork: [
-			{ ref: pullRequest(2), date: new Date("2026-08-20T00:00"), outcome: "COMMISSION_PROBLEM" },
-		],
+		reviewedWork: [{ ref: pullRequest(2), date: new Date("2026-08-20T00:00"), outcome: "NOT_MET" }],
 		cleanWork: [
 			clean(1, new Date("2026-08-25T00:00")),
 			clean(4, new Date("2026-08-29T00:00")),
@@ -257,7 +255,7 @@ const RESOLVED_FEEDBACK_CARDS: PracticeFeedbackCardEntry[] = [
 			{
 				ref: conversation("#backend-review"),
 				date: new Date("2026-08-12T00:00"),
-				outcome: "OMISSION_GAP",
+				outcome: "NOT_MET",
 			},
 		],
 		// The one the reader resolved, before the work did: the clean work stays where the work

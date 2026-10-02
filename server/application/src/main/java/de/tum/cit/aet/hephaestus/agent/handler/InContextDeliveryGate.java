@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
@@ -43,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
  * failure never blocks the delivery of the observations that survived.
  *
  * <p>A slug the catalogue read does not resolve is kept when only autonomy would have withheld it — it is
- * never an unknown practice ({@code PracticeDetectionDeliveryService.deliver} refuses those first), only a
+ * never an unknown practice ({@code ReviewOutputService.deliver} refuses those first), only a
  * practice renamed mid-review. Dropping it would cost a developer feedback over a rename, so it is logged
  * instead.
  */
@@ -86,7 +86,7 @@ class InContextDeliveryGate {
             recordWithheld(job, observations, rolloutRefusal);
             return List.of();
         }
-        ObservationOrigin origin = PracticeDetectionDeliveryService.originOf(job.getMetadata());
+        ObservationOrigin origin = ReviewOutputService.originOf(job.getMetadata());
         if (!origin.delivers(FeedbackChannel.IN_CONTEXT)) {
             log.info(
                     "Provenance withheld all {} observation(s) from the artifact: origin={}, jobId={}",
@@ -139,7 +139,7 @@ class InContextDeliveryGate {
                 || job.getWorkspace().getId() == null) return List.of();
         long workspaceId = job.getWorkspace().getId();
         if (refusalIfRolloutRevisionMoved(job.getPracticeRolloutRevision(), workspaceId) != null) return List.of();
-        ObservationOrigin origin = PracticeDetectionDeliveryService.originOf(job.getMetadata());
+        ObservationOrigin origin = ReviewOutputService.originOf(job.getMetadata());
         if (!origin.delivers(FeedbackChannel.IN_CONTEXT)) return List.of();
         WorkspaceReviewDefaults defaults = workspaceDefaults.forWorkspace(workspaceId);
         Map<String, PracticeAutonomy> autonomyBySlug = new HashMap<>();

@@ -25,7 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -62,7 +62,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     private ManualReviewRateLimits rateLimits;
 
     @Mock
-    private PracticeReviewDetectionGate gate;
+    private ReviewGate gate;
 
     @Mock
     private PracticeSignalOptions signalOptions;

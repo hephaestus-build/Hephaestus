@@ -220,19 +220,17 @@ class PracticeRunnerLiveLlmTest {
             assertThat(observation.path("practiceSlug").asString())
                     .as(tag + ".practiceSlug")
                     .isEqualTo("avoids-insecure-defaults-and-over-broad-permissions");
-            assertThat(observation.path("presence").asString())
-                    .as(tag + ".presence")
-                    .isIn("PRESENT", "ABSENT", "NOT_APPLICABLE", "INCONCLUSIVE");
-            // The two valence-free presences carry no assessment.
-            if (!"NOT_APPLICABLE".equals(observation.path("presence").asString())
-                    && !"INCONCLUSIVE".equals(observation.path("presence").asString())) {
-                assertThat(observation.path("assessment").asString())
-                        .as(tag + ".assessment")
-                        .isIn("GOOD", "BAD");
+            String outcome = observation.path("outcome").asString();
+            assertThat(outcome).as(tag + ".outcome").isIn("MET", "NOT_MET", "NOT_APPLICABLE", "UNDETERMINED");
+            if ("NOT_MET".equals(outcome)) {
+                assertThat(observation.path("severity").asString())
+                        .as(tag + ".severity")
+                        .isIn("CRITICAL", "MAJOR", "MINOR", "INFO");
+            } else {
+                assertThat(observation.path("severity").isNull())
+                        .as(tag + ".severity")
+                        .isTrue();
             }
-            assertThat(observation.path("severity").asString())
-                    .as(tag + ".severity")
-                    .isIn("CRITICAL", "MAJOR", "MINOR", "INFO");
             assertThat(observation.has("confidence"))
                     .as(tag + " has no confidence field")
                     .isFalse();
@@ -248,8 +246,7 @@ class PracticeRunnerLiveLlmTest {
         for (JsonNode observation : observations) {
             if ("avoids-insecure-defaults-and-over-broad-permissions"
                             .equals(observation.path("practiceSlug").asString())
-                    && "PRESENT".equals(observation.path("presence").asString())
-                    && "BAD".equals(observation.path("assessment").asString())) {
+                    && "NOT_MET".equals(observation.path("outcome").asString())) {
                 foundViolation = true;
                 break;
             }

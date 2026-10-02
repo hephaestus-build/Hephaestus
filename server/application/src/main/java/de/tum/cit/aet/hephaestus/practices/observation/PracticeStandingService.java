@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.ObservationFeedbackBody;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
-import de.tum.cit.aet.hephaestus.practices.model.ObservationKind;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
@@ -118,9 +118,12 @@ public class PracticeStandingService {
 
         return edges.stream()
                 .map(edge -> snapshot(
-                        observations.stream()
-                                .filter(observation ->
-                                        !observation.getObservedAt().isAfter(edge))
+                        LatestRun.perClaim(window.stream()
+                                        .filter(observation ->
+                                                !observation.getObservedAt().isAfter(edge))
+                                        .toList())
+                                .stream()
+                                .filter(observation -> visible.contains(observation.getId()))
                                 .toList(),
                         eligiblePractices,
                         eligiblePracticesByGroup,
@@ -143,7 +146,7 @@ public class PracticeStandingService {
             Map<String, List<String>> eligiblePracticesByGroup,
             Map<UUID, String> deliveredGuidance) {
         Map<String, List<Observation>> byPractice = new LinkedHashMap<>();
-        for (Observation observation : LatestRun.perClaim(observations)) {
+        for (Observation observation : observations) {
             byPractice
                     .computeIfAbsent(observation.getPractice().getSlug(), ignored -> new ArrayList<>())
                     .add(observation);
@@ -236,7 +239,7 @@ public class PracticeStandingService {
      * {@link #LOOKBACK_DAYS} days, since a standing exists only where some observation produced a verdict.
      */
     private static double standingShare(PracticeEvidence evidence, PracticeTrend trend) {
-        return trend.recentPositiveShare(STANDING_WINDOW, STANDING_DECAY)
+        return trend.recentMetShare(STANDING_WINDOW, STANDING_DECAY)
                 .orElseGet(() -> evidence.problems().isEmpty() ? 1.0 : 0.0);
     }
 
@@ -258,26 +261,21 @@ public class PracticeStandingService {
          */
         static PracticeEvidence classify(List<Observation> group) {
             Practice practice = group.get(0).getPractice();
-            Map<ObservationKind, List<Observation>> byOutcome =
-                    group.stream().collect(Collectors.groupingBy(ObservationKind::of));
-            List<Observation> demonstrated = bucket(byOutcome, ObservationKind.DEMONSTRATED_STRENGTH);
-            List<Observation> avoided = bucket(byOutcome, ObservationKind.SAFE_AVOIDANCE);
+            Map<Outcome, List<Observation>> byOutcome =
+                    group.stream().collect(Collectors.groupingBy(Observation::getOutcome));
             return new PracticeEvidence(
                     practice,
-                    Stream.concat(
-                                    bucket(byOutcome, ObservationKind.COMMISSION_PROBLEM).stream(),
-                                    bucket(byOutcome, ObservationKind.OMISSION_GAP).stream())
+                    bucket(byOutcome, Outcome.NOT_MET).stream()
                             .sorted(Comparator.comparingInt(PracticeStandingService::severityOrdinal))
                             .toList(),
-                    Stream.concat(demonstrated.stream(), avoided.stream()).toList(),
+                    bucket(byOutcome, Outcome.MET),
                     Stream.concat(
-                                    bucket(byOutcome, ObservationKind.NOT_APPLICABLE).stream(),
-                                    bucket(byOutcome, ObservationKind.UNDETERMINED).stream())
+                                    bucket(byOutcome, Outcome.NOT_APPLICABLE).stream(),
+                                    bucket(byOutcome, Outcome.UNDETERMINED).stream())
                             .toList());
         }
 
-        private static List<Observation> bucket(
-                Map<ObservationKind, List<Observation>> byOutcome, ObservationKind outcome) {
+        private static List<Observation> bucket(Map<Outcome, List<Observation>> byOutcome, Outcome outcome) {
             return byOutcome.getOrDefault(outcome, List.of());
         }
 
@@ -338,7 +336,7 @@ public class PracticeStandingService {
             public boolean isHolding() {
                 PracticeTrend.CleanWork cleanWork = trend.cleanWork();
                 return dto.standing() == PracticeStandingDTO.Standing.STRENGTH
-                        && cleanWork.count() >= Math.min(STANDING_WINDOW, cleanWork.applicableWork());
+                        && cleanWork.count() >= Math.min(STANDING_WINDOW, cleanWork.decidedWork());
             }
         }
 

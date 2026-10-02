@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceContract;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
-import de.tum.cit.aet.hephaestus.evidence.PracticeSubjectCheck;
+import de.tum.cit.aet.hephaestus.evidence.PracticePreconditionCheck;
 import de.tum.cit.aet.hephaestus.evidence.RequiredCaptureQuality;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceState;
@@ -24,8 +24,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import java.io.IOException;
@@ -42,7 +40,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
@@ -110,14 +107,14 @@ public class JobFolderIndexBuilder {
 
     private final JsonMapper objectMapper;
     private final ArtifactSourceCatalogRegistry catalogs;
-    private final PracticeSubjectEvaluator subjectEvaluator;
+    private final PracticePreconditionEvaluator subjectEvaluator;
     private final AutomatedReviewFence fence;
     private final Clock clock;
 
     public JobFolderIndexBuilder(
             JsonMapper objectMapper,
             ArtifactSourceCatalogRegistry catalogs,
-            PracticeSubjectEvaluator subjectEvaluator,
+            PracticePreconditionEvaluator subjectEvaluator,
             AutomatedReviewFence fence,
             Clock clock) {
         this.objectMapper = objectMapper;
@@ -313,11 +310,10 @@ public class JobFolderIndexBuilder {
             JobFolderIndex manifest,
             List<Practice> practices,
             Instant temporalAnchor,
-            Function<Practice, @Nullable SignalName> occasion,
             Map<String, byte[]> staged,
             @Nullable ReviewChange change) {
         AutomatedReviewReadinessResult result =
-                checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, occasion, staged, change);
+                checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, staged, change);
         if (result.decisions().isEmpty()) {
             throw new IllegalArgumentException("Cannot persist an empty automated-review readiness report");
         }
@@ -339,22 +335,10 @@ public class JobFolderIndexBuilder {
      */
     public AutomatedReviewReadinessResult checkAutomatedReviewReadinessAsOfNow(
             JobFolderIndex manifest, List<Practice> practices) {
-        return checkAutomatedReviewReadiness(manifest, practices, clock.instant(), practice -> null, Map.of(), null);
+        return checkAutomatedReviewReadiness(manifest, practices, clock.instant(), Map.of(), null);
     }
 
     /**
-     * Readiness judged without the staged bytes, which makes every subject declaration undecidable and
-     * therefore asks every practice whose evidence is readable. The safe reading for a caller — a
-     * replay, a test — that holds a manifest but not the capture it describes.
-     */
-    public AutomatedReviewReadinessResult checkAutomatedReviewReadiness(
-            JobFolderIndex manifest, List<Practice> practices, Instant temporalAnchor, @Nullable SignalName signal) {
-        return checkAutomatedReviewReadiness(manifest, practices, temporalAnchor, practice -> signal, Map.of(), null);
-    }
-
-    /**
-     * @param occasion what occasioned each practice's review, which decides which of its bindings speaks
-     *               for it; {@code null} means nobody named an occasion and every binding does
      * @param staged the capture's own bytes, from which a practice's declared subject is decided. Empty
      *               means "not supplied", which leaves every subject undecided and every practice asked
      * @param change the reviewed change, read from the mirror for the clauses about it; null leaves those
@@ -364,7 +348,6 @@ public class JobFolderIndexBuilder {
             JobFolderIndex manifest,
             List<Practice> practices,
             Instant temporalAnchor,
-            Function<Practice, @Nullable SignalName> occasion,
             Map<String, byte[]> staged,
             @Nullable ReviewChange change) {
         Objects.requireNonNull(temporalAnchor, "temporalAnchor");
@@ -414,10 +397,7 @@ public class JobFolderIndexBuilder {
                 case SUFFICIENT_WHEN_REQUIREMENTS_MET, NONE -> {}
             }
             List<SourceReadinessCheck> sourceChecks = new ArrayList<>();
-            // Only the bindings this occasion matched speak here, and within them only the sources the
-            // practice takes a refusing stance on.
-            @Nullable SignalName signal = occasion.apply(practice);
-            for (var need : PracticeBinding.needsFor(practice.getBindings(), signal)) {
+            for (var need : practice.getEvidenceRequirements()) {
                 if (!need.refuses()) {
                     // A contextual source is read when it is there and noted when it is not, which is a
                     // fact for the manifest to carry rather than a reason to withhold the review.
@@ -464,9 +444,8 @@ public class JobFolderIndexBuilder {
             // it would dress an instrument failure up as a fact about somebody's work.
             boolean readableAndDeclared = decisionReasons.isEmpty()
                     && sourceChecks.stream().allMatch(SourceReadinessCheck::meetsRequirements);
-            PracticeSubjectCheck subjectCheck = readableAndDeclared
-                    ? subjectEvaluator.evaluate(
-                            PracticeBinding.subjectFor(practice.getBindings(), signal), manifest, staged, change)
+            PracticePreconditionCheck subjectCheck = readableAndDeclared
+                    ? subjectEvaluator.evaluate(practice.getPrecondition(), manifest, staged, change)
                     : null;
             if (subjectCheck != null && subjectCheck.absent()) {
                 decisionReasons.add(AutomatedReviewReadinessReason.SUBJECT_NOT_IN_THE_WORK);

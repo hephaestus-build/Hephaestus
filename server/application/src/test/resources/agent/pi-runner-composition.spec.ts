@@ -73,8 +73,8 @@ void test("an envelope missing the fields entirely reports nothing rather than t
 
 void test("one feedback intervention may synthesize related practice observations", () => {
 	const practices = new Map([
-		["primary-1", { practiceSlug: "review-loop", outcome: "NEGATIVE" }],
-		["support-1", { practiceSlug: "handoff", outcome: "POSITIVE" }],
+		["primary-1", { practiceSlug: "review-loop", outcome: "NOT_MET" }],
+		["support-1", { practiceSlug: "handoff", outcome: "MET" }],
 	]);
 
 	assert.equal(
@@ -99,15 +99,15 @@ void test("one feedback intervention may synthesize related practice observation
 
 void test("a related negative cannot anchor private feedback on a positive primary practice", () => {
 	const observations = new Map([
-		["confirmed-criteria", { practiceSlug: "acceptance-criteria", outcome: "POSITIVE" }],
-		["unconfirmed-outcome", { practiceSlug: "issue-outcome", outcome: "NEGATIVE" }],
+		["confirmed-criteria", { practiceSlug: "acceptance-criteria", outcome: "MET" }],
+		["unconfirmed-outcome", { practiceSlug: "issue-outcome", outcome: "NOT_MET" }],
 	]);
 	const basedOn = ["confirmed-criteria", "unconfirmed-outcome"];
 
 	for (const channel of ["IN_CHAT", "IN_APP"] as const) {
 		assert.match(
 			validateFeedbackEvidence("acceptance-criteria", basedOn, observations, channel, "NEW") ?? "",
-			/NEGATIVE for the primary practice 'acceptance-criteria'/u,
+			/NOT_MET for the primary practice 'acceptance-criteria'/u,
 		);
 		assert.equal(
 			validateFeedbackEvidence("issue-outcome", basedOn, observations, channel, "NEW"),
@@ -117,9 +117,7 @@ void test("a related negative cannot anchor private feedback on a positive prima
 });
 
 void test("feedback on the work may reinforce a strength but cannot withhold it", () => {
-	const observations = new Map([
-		["strength", { practiceSlug: "review-loop", outcome: "POSITIVE" }],
-	]);
+	const observations = new Map([["strength", { practiceSlug: "review-loop", outcome: "MET" }]]);
 	for (const action of ["NEW", "SUPERSEDE"] as const) {
 		assert.equal(
 			validateFeedbackEvidence("review-loop", ["strength"], observations, "IN_CONTEXT", action),
@@ -129,7 +127,7 @@ void test("feedback on the work may reinforce a strength but cannot withhold it"
 	assert.match(
 		validateFeedbackEvidence("review-loop", ["strength"], observations, "IN_CONTEXT", "WITHHOLD") ??
 			"",
-		/NEGATIVE for the primary practice/u,
+		/NOT_MET for the primary practice/u,
 	);
 });
 
@@ -154,43 +152,43 @@ void test("negatives that quote the same line are named as one likely event; one
 		{
 			id: "a",
 			practiceSlug: "scope-one-reviewable-change",
-			outcome: "NEGATIVE",
+			outcome: "NOT_MET",
 			citations: [cite("inputs/context/metadata.json", 18)],
 		},
 		{
 			id: "b",
 			practiceSlug: "ready-and-traceable-handoff",
-			outcome: "NEGATIVE",
+			outcome: "NOT_MET",
 			citations: [cite("inputs/context/metadata.json", 18)],
 		},
 		{
 			id: "c",
 			practiceSlug: "ships-tests-with-the-change",
-			outcome: "NEGATIVE",
+			outcome: "NOT_MET",
 			citations: [cite("App/Model.swift", 9)],
 		},
 		{
 			id: "d",
 			practiceSlug: "ships-tests-with-the-change",
-			outcome: "NEGATIVE",
+			outcome: "NOT_MET",
 			citations: [cite("App/Model.swift", 9)],
 		},
-		// A POSITIVE on the same line is not part of an event to write about.
+		// A MET on the same line is not part of an event to write about.
 		{
 			id: "e",
 			practiceSlug: "describe-what-and-why",
-			outcome: "POSITIVE",
+			outcome: "MET",
 			citations: [cite("inputs/context/metadata.json", 18)],
 		},
 	]);
-	assert.match(note, /^NEGATIVE measurements that quote the same line/u);
+	assert.match(note, /^NOT_MET measurements that quote the same line/u);
 	assert.match(
 		note,
 		/- inputs\/context\/metadata\.json:18: scope-one-reviewable-change \(a\), ready-and-traceable-handoff \(b\)\n/u,
 	);
 	assert.doesNotMatch(note, /App\/Model\.swift/u);
 	assert.equal(
-		sameLinesNote([{ id: "a", practiceSlug: "x", outcome: "NEGATIVE", citations: [] }]),
+		sameLinesNote([{ id: "a", practiceSlug: "x", outcome: "NOT_MET", citations: [] }]),
 		"",
 	);
 });

@@ -409,7 +409,7 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
         practice.setSlug("describes-the-change");
         practice.setName("Describes the change");
         practice.setCriteria("The description says what changed and why.");
-        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
         practiceRepository.save(practice);
 

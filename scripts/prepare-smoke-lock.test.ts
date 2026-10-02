@@ -41,7 +41,7 @@ await test("a boot runs this run's own application server, agent image and datab
 		}
 	}
 	// The edge and the webapp are rendered but never started, so nothing has to exist for them.
-	for (const name of ["WEBAPP", "NGINX", "TRAEFIK"]) {
+	for (const name of ["WEBAPP", "TRAEFIK"]) {
 		assert.match(String(booted[`HEPHAESTUS_IMAGE_${name}`]), /^example\.invalid\//u);
 	}
 });

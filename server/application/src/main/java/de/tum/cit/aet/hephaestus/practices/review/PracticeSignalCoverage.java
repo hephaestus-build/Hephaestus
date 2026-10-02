@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SignalCoverage;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -110,7 +109,7 @@ public class PracticeSignalCoverage {
     }
 
     public Set<SignalName> signalsOf(Practice practice) {
-        return new LinkedHashSet<>(PracticeBinding.signalsOf(practice.getBindings()));
+        return new LinkedHashSet<>(practice.getSignals());
     }
 
     private Set<SignalName> offeredSignals() {

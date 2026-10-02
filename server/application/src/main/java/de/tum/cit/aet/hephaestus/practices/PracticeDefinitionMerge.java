@@ -41,8 +41,16 @@ public final class PracticeDefinitionMerge {
         }
         return new PracticeDefinition(
                 source(PracticeDefinitionField.NAME, current, offered, choices).name(),
-                source(PracticeDefinitionField.BINDINGS, current, offered, choices)
-                        .bindings(),
+                source(PracticeDefinitionField.SIGNALS, current, offered, choices)
+                        .signals(),
+                source(PracticeDefinitionField.EVIDENCE_REQUIREMENTS, current, offered, choices)
+                        .evidenceRequirements(),
+                source(PracticeDefinitionField.REVIEW_WHEN, current, offered, choices)
+                        .reviewWhen(),
+                source(PracticeDefinitionField.SUBJECT, current, offered, choices)
+                        .subject(),
+                source(PracticeDefinitionField.PRECONDITION, current, offered, choices)
+                        .precondition(),
                 source(PracticeDefinitionField.CRITERIA, current, offered, choices)
                         .criteria(),
                 source(PracticeDefinitionField.PRECOMPUTE_SCRIPT, current, offered, choices)
@@ -70,7 +78,11 @@ public final class PracticeDefinitionMerge {
     private static @Nullable Object value(PracticeDefinitionField field, PracticeDefinition definition) {
         return switch (field) {
             case NAME -> definition.name();
-            case BINDINGS -> definition.bindings();
+            case SIGNALS -> definition.signals();
+            case EVIDENCE_REQUIREMENTS -> definition.evidenceRequirements();
+            case REVIEW_WHEN -> definition.reviewWhen();
+            case SUBJECT -> definition.subject();
+            case PRECONDITION -> definition.precondition();
             case CRITERIA -> definition.criteria();
             case PRECOMPUTE_SCRIPT -> definition.precomputeScript();
             case AUTOMATED_REVIEW_POLICY -> definition.automatedReviewPolicy();

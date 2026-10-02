@@ -57,11 +57,11 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		// The result is each row's leading icon, named by its label rather than repeated as a badge.
-		await expect(canvas.getAllByRole("button", { name: "Negative outcome" })).toHaveLength(7);
-		await expect(canvas.queryByText("Negative outcome")).not.toBeInTheDocument();
+		await expect(canvas.getAllByRole("button", { name: "Not met" })).toHaveLength(7);
+		await expect(canvas.queryByText("Not met")).not.toBeInTheDocument();
 		canvas.getByRole("button", { name: "Not applicable" });
 		await expect(canvas.queryByRole("button", { name: "Undetermined" })).not.toBeInTheDocument();
-		// Severity qualifies a negative outcome, so it is the badge the row keeps.
+		// Severity qualifies a not met observation, so it is the badge the row keeps.
 		canvas.getByText("Critical");
 		canvas.getByText("Informational");
 		await expect(canvas.getAllByText("Minor")).toHaveLength(3);
@@ -75,7 +75,7 @@ export const Default: Story = {
 	},
 };
 
-/** Captured evidence can remain ambiguous without implying a positive or negative outcome. */
+/** Captured evidence can remain ambiguous without implying a positive or not met observation. */
 export const Undetermined: Story = {
 	args: {
 		state: {
@@ -83,10 +83,8 @@ export const Undetermined: Story = {
 			observations: [
 				{
 					...firstObservation,
-					assessmentStatus: "UNDETERMINED",
-					presence: undefined,
-					assessment: undefined,
-					outcome: undefined,
+					outcome: "UNDETERMINED",
+
 					severity: undefined,
 					summary: "The captured discussion leaves the chosen approach ambiguous",
 				},

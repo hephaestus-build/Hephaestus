@@ -80,17 +80,44 @@ export function selectPracticePatch(
 ): Partial<Practice> {
 	const clear = new Set(request.clear);
 	return {
-		// The kind of work is read off the bindings server-side, so replacing them can move it — and can
+		// The kind of work is read off the signals server-side, so replacing them can move it — and can
 		// therefore swap in a different work type's recommended review settings.
-		...("bindings" in request
-			? { bindings: practice.bindings, artifactKind: practice.artifactKind }
+		...("signals" in request ||
+		"evidenceRequirements" in request ||
+		"reviewWhen" in request ||
+		"subject" in request ||
+		"precondition" in request ||
+		clear.has("PRECONDITION")
+			? {
+					signals: practice.signals,
+					evidenceRequirements: practice.evidenceRequirements,
+					reviewWhen: practice.reviewWhen,
+					subject: practice.subject,
+					precondition: practice.precondition,
+					artifactKind: practice.artifactKind,
+				}
+			: {}),
+		...("signals" in request || "reviewWhen" in request
+			? { automatedReviewPolicy: practice.automatedReviewPolicy }
 			: {}),
 		...("criteria" in request ? { criteria: practice.criteria } : {}),
-		...("automatedReviewPolicy" in request || "bindings" in request
+		// A signal edit can change the kind of assessed work; use the server's resulting validation basis.
+		...("signals" in request ||
+		"criteria" in request ||
+		"precomputeScript" in request ||
+		clear.has("PRECOMPUTE_SCRIPT") ||
+		"automatedReviewPolicy" in request ||
+		"evidenceRequirements" in request ||
+		"subject" in request ||
+		"precondition" in request ||
+		clear.has("PRECONDITION")
 			? {
 					automatedReviewPolicy: practice.automatedReviewPolicy,
 					automatedReviewValidation: practice.automatedReviewValidation,
 				}
+			: {}),
+		...("name" in request || "group" in request
+			? { automatedReviewValidation: practice.automatedReviewValidation }
 			: {}),
 		...("name" in request ? { name: practice.name } : {}),
 		...("precomputeScript" in request || clear.has("PRECOMPUTE_SCRIPT")

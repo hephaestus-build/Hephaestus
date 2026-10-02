@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
-import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
+import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -30,19 +31,16 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
-import de.tum.cit.aet.hephaestus.practices.PracticeBinding;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.curated.CatalogProvenanceBackfill;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
-import de.tum.cit.aet.hephaestus.practices.model.Assessment;
-import de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus;
+import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
-import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.AdmittedReviewJobFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -81,7 +79,7 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     @Autowired
-    private PracticeDetectionDeliveryService deliveryService;
+    private ReviewOutputService deliveryService;
 
     @Autowired
     private JobFolderIndexBuilder manifests;
@@ -210,10 +208,9 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
     void shouldAdmitNoClaimFromAReviewPreparedBeforeTheWithdrawal(Provider provider) {
         Installed installed = install(provider);
         AgentJob job = queuedCloseReview(installed);
-        ValidatedObservation lapse = claim(Presence.PRESENT, Severity.MAJOR);
-        ValidatedObservation cleanClose = claim(Presence.ABSENT, null);
+        ValidatedObservation lapse = claim(Outcome.NOT_MET, Severity.MAJOR);
+        ValidatedObservation cleanClose = claim(Outcome.MET, null);
 
-        // Named, because an unverifiable quote is withheld through the same refusal.
         for (ValidatedObservation observation : List.of(lapse, cleanClose)) {
             assertThatThrownBy(() -> deliveryService.prepare(job, List.of(observation)))
                     .isInstanceOf(ObservationsRefusedException.class)
@@ -298,11 +295,13 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         practice.setCriteria("Judge the closure from the current checklist.");
         practice.setSourceCuratedSlug(sourceCuratedSlug);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
-        practice.setBindings(List.of(PracticeBinding.on(
-                ScmSignals.ISSUE_CLOSED,
-                List.of(
-                        new PracticeEvidenceRequirement(CORE, EvidenceStance.REQUIRED),
-                        new PracticeEvidenceRequirement(COMMENTS, EvidenceStance.EXHAUSTIVE)))));
+        practice.setSignals(List.of(ScmSignals.ISSUE_CLOSED));
+        practice.setEvidenceRequirements(List.of(
+                new PracticeEvidenceRequirement(CORE, EvidenceStance.REQUIRED),
+                new PracticeEvidenceRequirement(COMMENTS, EvidenceStance.EXHAUSTIVE)));
+        practice.setReviewWhen(Map.of());
+        practice.setSubject(ActorRole.AUTHOR);
+        practice.setPrecondition(null);
         practice.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
         practice = practiceRepository.saveAndFlush(practice);
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
@@ -370,21 +369,13 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         return agentJobRepository.save(job);
     }
 
-    private static ValidatedObservation claim(Presence presence, @Nullable Severity severity) {
+    private static ValidatedObservation claim(Outcome outcome, @Nullable Severity severity) {
         ObjectNode evidence = OBJECT_MAPPER.createObjectNode();
         evidence.putArray("citations")
                 .addObject()
                 .put("sourceKind", CORE.value())
                 .put("artifactPath", "context/description.md")
                 .put("quote", "- [ ] Export to CSV");
-        return new ValidatedObservation(
-                WITHDRAWN,
-                "Closed with an unchecked item",
-                AssessmentStatus.ASSESSED,
-                presence,
-                Assessment.BAD,
-                severity,
-                evidence,
-                null);
+        return new ValidatedObservation(WITHDRAWN, "Closed with an unchecked item", outcome, severity, evidence, null);
     }
 }

@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -27,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,14 +104,12 @@ public class WorkspaceContextBuilder {
             JobFolderIndex manifest,
             List<Practice> practices,
             Instant temporalAnchor,
-            Function<Practice, @Nullable SignalName> occasion,
             Map<String, byte[]> staged,
             @Nullable ReviewChange change) {
         if (manifestBuilder == null) {
             throw new IllegalStateException("Evidence readiness requires a manifest builder");
         }
-        return manifestBuilder.prepareAutomatedReviewReadiness(
-                manifest, practices, temporalAnchor, occasion, staged, change);
+        return manifestBuilder.prepareAutomatedReviewReadiness(manifest, practices, temporalAnchor, staged, change);
     }
 
     private Map<String, byte[]> buildWithoutManifest(ContextRequest request) {

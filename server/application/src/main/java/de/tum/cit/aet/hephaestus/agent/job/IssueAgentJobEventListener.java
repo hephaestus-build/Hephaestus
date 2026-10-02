@@ -19,7 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
-import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewDetectionGate;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
@@ -39,7 +39,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Issue-side mirror of {@link AgentJobEventListener}: listens for issue domain events and submits
  * practice-aware {@code ISSUE_REVIEW} jobs through the same gate. Only ISSUE-focused practices carry
- * issue trigger events, so {@link PracticeReviewDetectionGate#evaluateIssue} short-circuits with no
+ * issue trigger events, so {@link ReviewGate#evaluateIssue} short-circuits with no
  * cost for PR-only workspaces (no matching practices → skip before any agent-config / role work).
  *
  * <p>Created and closed events run after commit, with a separate transaction for each workspace.
@@ -58,7 +58,7 @@ public class IssueAgentJobEventListener {
 
     private final IssueRepository issueRepository;
     private final PullRequestRepository pullRequestRepository;
-    private final PracticeReviewDetectionGate practiceReviewDetectionGate;
+    private final ReviewGate reviewGate;
     private final WorkspaceResolver workspaceResolver;
     private final SignalRecorder signalRecorder;
     private final TransactionTemplate workspaceTransaction;
@@ -67,14 +67,14 @@ public class IssueAgentJobEventListener {
             AgentJobService agentJobService,
             IssueRepository issueRepository,
             PullRequestRepository pullRequestRepository,
-            PracticeReviewDetectionGate practiceReviewDetectionGate,
+            ReviewGate reviewGate,
             WorkspaceResolver workspaceResolver,
             SignalRecorder signalRecorder,
             PlatformTransactionManager transactionManager) {
         this.agentJobService = agentJobService;
         this.issueRepository = issueRepository;
         this.pullRequestRepository = pullRequestRepository;
-        this.practiceReviewDetectionGate = practiceReviewDetectionGate;
+        this.reviewGate = reviewGate;
         this.workspaceResolver = workspaceResolver;
         this.signalRecorder = signalRecorder;
         this.workspaceTransaction = new TransactionTemplate(transactionManager);
@@ -222,7 +222,7 @@ public class IssueAgentJobEventListener {
             return;
         }
 
-        switch (practiceReviewDetectionGate.evaluateIssue(issue, workspace, key.signalName(), TriggerMode.AUTO)) {
+        switch (reviewGate.evaluateIssue(issue, workspace, key.signalName(), TriggerMode.AUTO)) {
             case GateDecision.Skip skip -> {
                 log.debug(
                         "Issue agent job skipped by practice gate: issueId={}, event={}, reason={}",

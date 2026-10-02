@@ -66,7 +66,15 @@ const PRACTICE_FIELDS = {
 	automatedReviewPolicy: "How it is reviewed",
 	deliveryBehavior: "Feedback delivery",
 } satisfies Record<
-	Exclude<keyof CuratedPracticeDefinition, "automatedReviewValidation" | "bindings">,
+	Exclude<
+		keyof CuratedPracticeDefinition,
+		| "automatedReviewValidation"
+		| "signals"
+		| "evidenceRequirements"
+		| "reviewWhen"
+		| "subject"
+		| "precondition"
+	>,
 	string
 >;
 
@@ -167,10 +175,11 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 											value = shippedDefinitionOptions ? (
 												<PracticeEvidenceSummary
 													policy={shippedPractice.automatedReviewPolicy}
-													bindings={shippedPractice.bindings}
+													{...shippedPractice}
 													validation={shippedPractice.automatedReviewValidation}
 													sources={shippedDefinitionOptions.allowedSources}
-													signals={shippedDefinitionOptions.signals}
+													signalOptions={shippedDefinitionOptions.signals}
+													reviewWhenDimensions={shippedDefinitionOptions.reviewWhenDimensions}
 													workTypeLabel={artifactKindLabel(shippedPractice.artifactKind)}
 												/>
 											) : (
