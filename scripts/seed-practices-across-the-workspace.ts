@@ -24,6 +24,11 @@ import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
  * Flags, environment and defaults: docs/contributor/local-development.mdx § Seeding Practices
  * across the workspace.
  *
+ * The reader, an existing member (`--reader`, default `ValentinGruener`), gets synthetic reviews too,
+ * under the same revisions, so the page shows their own place on every split and their own figures
+ * on the tiles. Their observations say they are synthetic and carry the seed's ids, so removing the
+ * seed removes them and leaves every real observation about the reader in place.
+ *
  * Each practice group gets its own split of the 24 developers over Needs attention, Mixed feedback,
  * Going well and no standing, chosen so the page shows every shape the privacy rule allows: most
  * groups split, one collapses to has a standing against none yet, and one is withheld. The
@@ -36,6 +41,7 @@ const { values: flags, positionals } = parseArgs({
 		workspace: { type: "string" },
 		"pull-request-repository": { type: "string" },
 		"issue-repository": { type: "string" },
+		reader: { type: "string" },
 	},
 	allowPositionals: true,
 });
@@ -53,6 +59,8 @@ const ISSUE_REPOSITORY = setting(
 	"SEED_ISSUE_REPOSITORY",
 	"HephaestusTest/MaxTestRepo",
 );
+
+const READER_LOGIN = setting("reader", "SEED_READER_LOGIN", "ValentinGruener");
 
 const DEVELOPERS = 24;
 /** Logins no provider hands out to a person, so a synthetic developer is never mistaken for one. */
@@ -87,6 +95,20 @@ const SPLITS: Record<string, [number, number, number, number]> = {
 	"actionable-issue-authoring": [5, 7, 6, 6],
 	"code-craftsmanship": [6, 6, 7, 5],
 };
+
+/**
+ * The reader's own bucket per group, in the order of `SPLITS`: every standing and a group with none,
+ * so the You marker lands on each part of a split somewhere on the page.
+ */
+const READER_BUCKETS: readonly Bucket[] = [
+	"mixed",
+	"needs",
+	"well",
+	"needs",
+	"well",
+	"none",
+	"mixed",
+];
 
 /** Which bucket developer `index` falls in for the group at `groupIndex`, shuffled per group. */
 function bucketOf(
@@ -333,6 +355,20 @@ async function pinReviewRevisions(
 	return response.text();
 }
 
+/** The member whose page the seed is for; they must already belong to the workspace. */
+async function readerOf(client: Client, workspaceId: number): Promise<number> {
+	const rows = await client.query<{ id: number }>(
+		`SELECT u.id FROM "user" u JOIN workspace_membership wm ON wm.user_id = u.id
+		 WHERE u.login = $1 AND wm.workspace_id = $2`,
+		[READER_LOGIN, workspaceId],
+	);
+	const id = rows.rows[0]?.id;
+	if (id === undefined) {
+		throw new Error(`${READER_LOGIN} is not a member of ${WORKSPACE_SLUG}`);
+	}
+	return id;
+}
+
 async function seed(
 	client: Client,
 	workspaceId: number,
@@ -342,17 +378,25 @@ async function seed(
 	const pullRequests = await artifactsOf(client, PULL_REQUEST_REPOSITORY, "scm.pull_request");
 	const issues = await artifactsOf(client, ISSUE_REPOSITORY, "scm.issue");
 	const developers = await insertDevelopers(client, workspaceId);
+	const reader = await readerOf(client, workspaceId);
+	// The reader reviews last, so every synthetic developer keeps the runs and ordinals it had before.
+	const readerIndex = developers.length;
 
-	/** The bucket developer `index` falls in for one practice's group. */
+	/** The bucket developer `index` falls in for one practice's group; the reader's is fixed. */
 	const bucketFor = (practice: SeedPractice, index: number): Bucket => {
 		const split = SPLITS[practice.groupSlug];
 		const group = groupIndex.get(practice.groupSlug);
-		return split === undefined || group === undefined ? "none" : bucketOf(split, group, index);
+		if (split === undefined || group === undefined) {
+			return "none";
+		}
+		return index === readerIndex
+			? (READER_BUCKETS[group % READER_BUCKETS.length] ?? "none")
+			: bucketOf(split, group, index);
 	};
 
 	let jobs = 0;
 	let observations = 0;
-	for (const [index, developerId] of developers.entries()) {
+	for (const [index, developerId] of [...developers, reader].entries()) {
 		for (const kind of ["scm.pull_request", "scm.issue"] as const) {
 			const pool = kind === "scm.pull_request" ? pullRequests : issues;
 			const runCount = kind === "scm.pull_request" ? 3 + (index % 5) : 3 + (index % 2);
@@ -528,7 +572,9 @@ async function main(): Promise<void> {
 		await removeSeed(client, workspaceId);
 		await client.query("COMMIT");
 		if (mode === "remove") {
-			console.log(`Removed the synthetic developers from ${WORKSPACE_SLUG}.`);
+			console.log(
+				`Removed the synthetic developers and the synthetic reviews of ${READER_LOGIN} from ${WORKSPACE_SLUG}.`,
+			);
 			return;
 		}
 		// Outside a transaction: the server locks each practice row to append its revision.
@@ -543,7 +589,7 @@ async function main(): Promise<void> {
 		const counts = await seed(client, workspaceId);
 		await client.query("COMMIT");
 		console.log(
-			`Seeded ${DEVELOPERS} synthetic developers in ${WORKSPACE_SLUG}: ${counts.jobs} agent_job, ${counts.observations} observation`,
+			`Seeded ${DEVELOPERS} synthetic developers and synthetic reviews of ${READER_LOGIN} in ${WORKSPACE_SLUG}: ${counts.jobs} agent_job, ${counts.observations} observation`,
 		);
 	} catch (error) {
 		await client.query("ROLLBACK").catch(() => undefined);
