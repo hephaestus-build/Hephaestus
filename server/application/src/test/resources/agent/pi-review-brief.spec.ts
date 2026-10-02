@@ -21,20 +21,19 @@ void test("the brief shows each captured file under its workspace path, the chan
 	const root = workspace({
 		"INDEX.md": "# Permitted workspace\n",
 		"context/metadata.json": '{"title": "Add login"}',
+		"context/description.md": "# Add login\n",
 		"context/review_threads.json": '{"threads": []}',
 		"work/change/files.json": '{"files": [{"status": "M", "path": "a.ts"}]}',
 		"work/change/diff.patch": "diff --git a/a.ts b/a.ts\n@@ -1 +1 @@\n[L1] -x\n[L1] +y\n",
-		"work/precompute-out/summary.md": "# hints\n",
 	});
 	try {
 		const brief = buildBrief(root, paths);
 		const order = [
 			"### `INDEX.md`",
 			"### `context/metadata.json`",
-			"### `work/change/files.json`",
+			"### `work/change/files.json` — derived here, not citable",
 			"### `context/review_threads.json`",
-			"### `work/precompute-out/summary.md`",
-			"### `work/change/diff.patch`",
+			"### `work/change/diff.patch` — derived here, not citable",
 		].map((heading) => brief.indexOf(heading));
 		assert.ok(
 			order.every((index) => index >= 0),
@@ -48,9 +47,11 @@ void test("the brief shows each captured file under its workspace path, the chan
 			brief,
 			/```diff\ndiff --git a\/a\.ts b\/a\.ts\n@@ -1 \+1 @@\n\[L1\] -x\n\[L1\] \+y\n```/u,
 		);
-		// Every other file is numbered the same way, so a citation can name the line it read.
+		// Every captured file is numbered the same way, so a citation can name the line it read.
 		assert.match(brief, /```json\n\[L1\] \{"title": "Add login"\}\n```/u);
-		assert.match(brief, /```markdown\n\[L1\] # hints\n```/u);
+		// A derived view is shown as written: numbering it would offer a coordinate no citation can use.
+		assert.match(brief, /```json\n\{"files": \[\{"status": "M", "path": "a\.ts"\}\]\}\n```/u);
+		assert.match(brief, /```markdown\n\[L1\] # Add login\n```/u);
 		assert.doesNotMatch(brief, /Too large/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });

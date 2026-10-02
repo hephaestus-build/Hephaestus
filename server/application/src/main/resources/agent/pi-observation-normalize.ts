@@ -179,7 +179,58 @@ export function normalizeInapplicability(inapplicability: unknown): RecordedInap
 	return { consulted: [...new Set(consulted)].toSorted(), subject, ruledOutBy };
 }
 
-export function normalizeEvidence(evidence: unknown, outcome: Outcome): NormalizedEvidence {
+/**
+ * How a citation is completed when it leaves out what the run already knows, and where the repairs made
+ * on the way in are reported, one line each.
+ */
+export interface CitationRepairs {
+	/** The source kind the manifest staged an artifact under; undefined when it staged no such artifact. */
+	sourceOf?: (artifactPath: string) => string | undefined;
+	notes?: string[];
+}
+
+/**
+ * A line number as the session writes it: an integer, or the `[L<n>]`, `L<n>` or `"<n>"` it copied from
+ * a view. NaN when it is none of these, so the range checks name what was received.
+ */
+function citedLine(value: unknown): number {
+	if (typeof value === "number") {
+		return value;
+	}
+	const written = typeof value === "string" ? /^\s*\[?L?(?<line>\d+)\]?\s*$/iu.exec(value) : null;
+	return written?.groups?.line === undefined ? Number.NaN : Number(written.groups.line);
+}
+
+/**
+ * What the manifest already knows is filled in, not asked for: the artifact a staged record is its own
+ * path, and the source an artifact was staged by. Each fill is noted.
+ */
+function completedFromManifest(
+	fields: Record<string, unknown>,
+	path: string,
+	which: string,
+	sourceOf: CitationRepairs["sourceOf"],
+	notes: string[],
+): { artifactPath: string; sourceKind: string } {
+	let artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
+	if (!artifactPath.trim() && path.trim() && sourceOf?.(path) !== undefined) {
+		artifactPath = path;
+		notes.push(`${which}artifactPath filled in as ${path}, the staged record the path names`);
+	}
+	let sourceKind = trimmedText(fields.sourceKind);
+	const staged = artifactPath.trim() ? sourceOf?.(artifactPath) : undefined;
+	if (!sourceKind && staged !== undefined) {
+		sourceKind = staged;
+		notes.push(`${which}sourceKind filled in as ${staged}, the source that staged ${artifactPath}`);
+	}
+	return { artifactPath, sourceKind };
+}
+
+export function normalizeEvidence(
+	evidence: unknown,
+	outcome: Outcome,
+	{ sourceOf, notes = [] }: CitationRepairs = {},
+): NormalizedEvidence {
 	if (
 		!isRecord(evidence) ||
 		!Array.isArray(evidence.citations) ||
@@ -196,32 +247,51 @@ export function normalizeEvidence(evidence: unknown, outcome: Outcome): Normaliz
 	if (evidence.search != null && outcome !== "MET" && outcome !== "NOT_MET") {
 		throw new Error("evidence.search is permitted only for MET or NOT_MET");
 	}
-	const citations = evidence.citations.map((citation: unknown): NormalizedCitation => {
+	const many = evidence.citations.length > 1;
+	const citations = evidence.citations.map((citation: unknown, index): NormalizedCitation => {
+		// With several citations, a problem names the one it is about.
+		const which = many ? `citation ${index + 1}: ` : "";
 		// A citation that is not an object reads as one with every field missing, which is what the
 		// required-field checks below already reject by name.
 		const fields: Record<string, unknown> = isRecord(citation) ? citation : {};
-		const sourceKind = trimmedText(fields.sourceKind);
-		const artifactPath = typeof fields.artifactPath === "string" ? fields.artifactPath : "";
 		const path = typeof fields.path === "string" ? fields.path : "";
+		const { artifactPath, sourceKind } = completedFromManifest(
+			fields,
+			path,
+			which,
+			sourceOf,
+			notes,
+		);
 		const declaredSide = fields.side == null ? null : trimmedText(fields.side).toUpperCase();
 		const revision = fields.revision == null ? null : trimmedText(fields.revision);
-		if (
-			revision !== null &&
-			(sourceKind !== "scm.repository.tree" || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(revision))
-		) {
-			throw new Error("historical citations require scm.repository.tree and a full commit SHA");
+		// Whether a revision applies is settled once the source is (the caller drops it elsewhere); its
+		// form is not the caller's to guess.
+		if (revision !== null && !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(revision)) {
+			throw new Error(
+				`${which}revision must be a full commit SHA, received ${JSON.stringify(fields.revision)}`,
+			);
 		}
-		const startLine = Number(fields.startLine);
-		const endLine = fields.endLine == null ? startLine : Number(fields.endLine);
+		const startLine = citedLine(fields.startLine);
+		const endLine = nullish(fields.endLine) ? startLine : citedLine(fields.endLine);
+		for (const [name, value, read] of [
+			["startLine", fields.startLine, startLine],
+			["endLine", fields.endLine, endLine],
+		] as const) {
+			if (typeof value === "string" && Number.isSafeInteger(read)) {
+				notes.push(`${which}${name} ${JSON.stringify(value)} read as ${read}`);
+			}
+		}
 		const quote = withoutCoordinates(
 			typeof fields.quote === "string" ? fields.quote : "",
 			startLine,
 		);
 		if (!sourceKind) {
-			throw new Error("evidence citation sourceKind is required");
+			throw new Error(`${which}evidence citation sourceKind is required`);
 		}
 		if (!artifactPath.trim()) {
-			throw new Error("evidence citation artifactPath is required");
+			throw new Error(
+				`${which}evidence citation artifactPath is required: the staged artifact the lines are in`,
+			);
 		}
 		if (sourceKind === "scm.repository.tree" && !artifactPath.endsWith("/.git/HEAD")) {
 			throw new Error(
@@ -229,7 +299,7 @@ export function normalizeEvidence(evidence: unknown, outcome: Outcome): Normaliz
 			);
 		}
 		if (!path.trim()) {
-			throw new Error("evidence citation path is required");
+			throw new Error(`${which}evidence citation path is required`);
 		}
 		if (sourceKind === "scm.pull-request.diff" && /(?:^|\/)change\.json$/u.test(path)) {
 			throw new Error(
@@ -251,18 +321,19 @@ export function normalizeEvidence(evidence: unknown, outcome: Outcome): Normaliz
 		// as a bad integer, or the session cannot tell which of the two it did.
 		if (nullish(fields.startLine) || fields.startLine === "") {
 			throw new Error(
-				"evidence citation startLine is required: the 1-based line of the quoted text in the artifact " +
+				`${which}evidence citation startLine is required:` +
+					" the 1-based line of the quoted text in the artifact " +
 					"(for a quote of the change, the [L<n>] coordinate of work/change/diff.patch)",
 			);
 		}
 		if (!Number.isSafeInteger(startLine) || startLine <= 0 || startLine > 2_147_483_647) {
 			throw new Error(
-				`evidence citation startLine must be a positive integer, received ${JSON.stringify(fields.startLine)}; lines are 1-based`,
+				`${which}evidence citation startLine must be a positive integer, received ${JSON.stringify(fields.startLine)}; lines are 1-based`,
 			);
 		}
 		if (!Number.isSafeInteger(endLine) || endLine < startLine || endLine > 2_147_483_647) {
 			throw new Error(
-				`evidence citation endLine must be an integer >= startLine, received ${JSON.stringify(fields.endLine)} with startLine ${startLine}`,
+				`${which}evidence citation endLine must be an integer >= startLine, received ${JSON.stringify(fields.endLine)} with startLine ${startLine}`,
 			);
 		}
 		// An empty quote is a citation by coordinates alone; resolveQuote fills it from the artifact.
@@ -379,8 +450,16 @@ export function boundedAtSentenceEnd(text: string, max: number): string | undefi
 
 /** The evidence fields, in the order the session tends to put them beside the observation instead. */
 const EVIDENCE_FIELDS = ["citations", "search", "inapplicability", "undecidability"] as const;
-/** The search fields, which arrive beside the observation when the session forgets `search` wraps them. */
-const SEARCH_FIELDS = ["consulted", "lookedFor", "boundary"] as const;
+/**
+ * The fields of each evidence branch, which arrive loose — beside the observation or straight under
+ * evidence — when the session forgets the branch that wraps them. `consulted` is shared by two, so a
+ * branch is named by its own fields; a lone `consulted` belongs to the search.
+ */
+const BRANCH_FIELDS = [
+	{ branch: "inapplicability", own: ["subject", "ruledOutBy"], consulted: true },
+	{ branch: "undecidability", own: ["openQuestion", "wouldSettleIt"], consulted: false },
+	{ branch: "search", own: ["lookedFor", "boundary", "consulted"], consulted: true },
+] as const;
 
 /** Move misplaced evidence fields and report corrections; conflicting copies remain invalid. */
 function rehomed(observation: Record<string, unknown>, notes: string[]): Record<string, unknown> {
@@ -395,24 +474,39 @@ function rehomed(observation: Record<string, unknown>, notes: string[]): Record<
 			moved.push(key);
 		}
 	}
-	if (!evidence.has("search") && SEARCH_FIELDS.some((key) => beside.has(key))) {
-		const search: Record<string, unknown> = {};
-		for (const key of SEARCH_FIELDS) {
-			if (beside.has(key)) {
-				search[key] = beside.get(key);
-				beside.delete(key);
-			}
+	const loose = (key: string) => beside.has(key) || evidence.has(key);
+	const take = (key: string) => {
+		if (beside.has(key) && evidence.has(key)) {
+			throw new Error(
+				`${key} was sent both beside the observation and under evidence; send one value`,
+			);
 		}
-		evidence.set("search", search);
-		moved.push("search{consulted, lookedFor, boundary}");
+		const value = beside.has(key) ? beside.get(key) : evidence.get(key);
+		beside.delete(key);
+		evidence.delete(key);
+		return value;
+	};
+	for (const { branch, own, consulted } of BRANCH_FIELDS) {
+		if (evidence.has(branch) || !own.some(loose)) {
+			continue;
+		}
+		const fields =
+			consulted && !own.some((key) => key === "consulted") ? [...own, "consulted"] : own;
+		const value = Object.fromEntries(fields.filter(loose).map((key) => [key, take(key)]));
+		evidence.set(branch, value);
+		moved.push(`${branch}{${Object.keys(value).join(", ")}}`);
 	}
 	if (evidence.has("evidenceRationale") && !beside.has("evidenceRationale")) {
 		beside.set("evidenceRationale", evidence.get("evidenceRationale"));
 		evidence.delete("evidenceRationale");
-		notes.push("evidenceRationale read from under evidence; it belongs beside evidence, not in it");
+		notes.push(
+			"evidenceRationale read from under evidence and recorded beside it, where it belongs; nothing to resend",
+		);
 	}
 	if (moved.length > 0) {
-		notes.push(`${moved.join(", ")} read from beside the observation; they belong under evidence`);
+		notes.push(
+			`${moved.join(", ")} read from where they were sent and recorded under evidence, where they belong; nothing to resend`,
+		);
 	}
 	if (moved.length > 0 || beside.has("evidence")) {
 		beside.set("evidence", Object.fromEntries(evidence));
@@ -420,8 +514,16 @@ function rehomed(observation: Record<string, unknown>, notes: string[]): Record<
 	return Object.fromEntries(beside);
 }
 
-/** Validate the model output before recording an observation. */
-export function normalizeObservation(raw: unknown, notes: string[] = []): NormalizedObservation {
+/**
+ * Validate the model output before recording an observation.
+ * @param notes receives one line per correction made on the way in — a field moved to its home, a
+ *   value filled in from the manifest — so the caller can echo what was recorded.
+ */
+export function normalizeObservation(
+	raw: unknown,
+	notes: string[] = [],
+	sourceOf?: (artifactPath: string) => string | undefined,
+): NormalizedObservation {
 	if (!isRecord(raw)) {
 		throw new Error("observation must be an object");
 	}
@@ -434,9 +536,21 @@ export function normalizeObservation(raw: unknown, notes: string[] = []): Normal
 		"evidence",
 		"evidenceRationale",
 	]);
+	// A stray key with no value (`practiceSlug2: null`) carries nothing: dropped, and said so.
+	const empty = Object.keys(observation).filter(
+		(key) => !allowed.has(key) && (nullish(observation[key]) || observation[key] === ""),
+	);
+	for (const key of empty) {
+		Reflect.deleteProperty(observation, key);
+	}
+	if (empty.length > 0) {
+		notes.push(`empty field(s) ${empty.join(", ")} dropped`);
+	}
 	const unknownFields = Object.keys(observation).filter((key) => !allowed.has(key));
 	if (unknownFields.length > 0) {
-		throw new Error(`unknown observation field(s): ${unknownFields.join(", ")}`);
+		throw new Error(
+			`unknown observation field(s): ${unknownFields.join(", ")}; an observation has only ${[...allowed].join(", ")}`,
+		);
 	}
 	const practiceSlug = normalizePracticeSlug(observation.practiceSlug);
 	if (!practiceSlug) {
@@ -446,28 +560,36 @@ export function normalizeObservation(raw: unknown, notes: string[] = []): Normal
 	}
 	const sent = trimmedText(observation.summary).replaceAll(/\s+/gu, " ");
 	const reasoning = trimmedText(observation.evidenceRationale);
-	const result = parseOutcome(observation);
+	// Every problem of the observation is named at once: one per resend costs a model call each.
+	const problems: string[] = [];
+	const attempt = <T>(check: () => T): T | undefined => {
+		try {
+			return check();
+		} catch (error) {
+			problems.push(error instanceof Error ? error.message : String(error));
+			return undefined;
+		}
+	};
+	const result = attempt(() => parseOutcome(observation));
 	if (!sent) {
-		throw new Error("summary is required");
-	}
-	// The summary is what the developer reads on their practice page, above the practice's own name and
-	// with no evidence beside it, so a single word there ("Test") names nothing the practice did not.
-	if (!/\S\s+\S/u.test(sent)) {
-		throw new Error(
+		problems.push("summary is required");
+	} else if (!/\S\s+\S/u.test(sent)) {
+		// The summary is what the developer reads on their practice page, above the practice's own name
+		// and with no evidence beside it, so a single word there ("Test") names nothing the practice did not.
+		problems.push(
 			"summary must say what was observed as a short phrase, not one word — e.g. " +
 				"'Debug print left in the request handler'",
 		);
-	}
-	// Refused, never shortened: a cut the runner chooses changes what the observation says.
-	if (sent.length > MAX_SUMMARY_CHARS) {
-		throw new Error(
+	} else if (sent.length > MAX_SUMMARY_CHARS) {
+		// Refused, never shortened: a cut the runner chooses changes what the observation says.
+		problems.push(
 			`summary must be at most ${MAX_SUMMARY_CHARS} characters; this one is ${sent.length}. Resend the ` +
 				"observation with a shorter summary that reads as a complete phrase on its own — name the " +
 				"behavior, and move titles, quotes and reasons into evidenceRationale",
 		);
 	}
 	if (!reasoning) {
-		throw new Error("evidenceRationale is required");
+		problems.push("evidenceRationale is required");
 	}
 	const externalEvidence: Record<string, unknown> = isRecord(observation.evidence)
 		? observation.evidence
@@ -475,17 +597,22 @@ export function normalizeObservation(raw: unknown, notes: string[] = []): Normal
 	const evidenceFields = new Set(["citations", "search", "inapplicability", "undecidability"]);
 	const unknownEvidence = Object.keys(externalEvidence).filter((key) => !evidenceFields.has(key));
 	if (unknownEvidence.length > 0) {
-		throw new Error(`unknown evidence field(s): ${unknownEvidence.join(", ")}`);
+		problems.push(`unknown evidence field(s): ${unknownEvidence.join(", ")}`);
 	}
-	const evidence = normalizeEvidence(externalEvidence, result.outcome);
-	const out: NormalizedObservation = {
+	const evidence =
+		result === undefined
+			? undefined
+			: attempt(() => normalizeEvidence(externalEvidence, result.outcome, { sourceOf, notes }));
+	if (problems.length > 0 || result === undefined || evidence === undefined) {
+		throw new Error(problems.join("; also: "));
+	}
+	return {
 		practiceSlug,
 		summary: sent,
 		...result,
 		evidence,
 		evidenceRationale: reasoning,
 	};
-	return out;
 }
 
 export function normalizePracticeSlug(value: unknown): string {
@@ -548,9 +675,10 @@ export function validateSearchScope(
 	}
 	if (observation.outcome === "MET" && exhaustiveSourceKinds.size === 0) {
 		throw new Error(
-			`cannot conclude MET from an absence claim for '${observation.practiceSlug}': it declares no source it searches ` +
-				`exhaustively, so "this is not anywhere in the work" ranges over a corpus it has not bounded — ` +
-				`say UNDETERMINED instead`,
+			`MET for '${observation.practiceSlug}' rests on an absence claim, and the practice declares no ` +
+				`source it searches exhaustively, so no search can bound that claim. Record what the evidence ` +
+				`does show: MET from cited evidence, NOT_APPLICABLE when the work gives the practice no ` +
+				`occasion, or UNDETERMINED with what would settle it`,
 		);
 	}
 	const consulted = new Set(search.consulted);
@@ -567,8 +695,9 @@ export function validateSearchScope(
 		.toSorted();
 	if (unsearched.length > 0) {
 		throw new Error(
-			`cannot conclude an absence claim for '${observation.practiceSlug}' without searching ${unsearched.join(", ")} — ` +
-				`say UNDETERMINED instead, or record the search`,
+			`an absence claim for '${observation.practiceSlug}' rests on searching ${unsearched.join(", ")} as ` +
+				`well: add ${unsearched.length > 1 ? "them" : "it"} to evidence.search.consulted once you have ` +
+				`searched ${unsearched.length > 1 ? "them" : "it"}`,
 		);
 	}
 }
@@ -676,9 +805,16 @@ function resolveQuoteText(
 			: "";
 		return { mismatch: `${where} reads ${excerpt(citedText)}, not ${excerpt(quote)}${hint}` };
 	}
-	const citedLines = diffLinesOf(citation, content);
-	if (typeof citedLines === "string") {
-		return { mismatch: citedLines };
+	const lines = annotatedDiff(content);
+	if (typeof lines === "string") {
+		return { mismatch: lines };
+	}
+	if (citation.path === DIFF_VIEW) {
+		return placedInDiff(lines, quote);
+	}
+	const citedLines = lines.get(diffKey(citation.path, citation.side));
+	if (citedLines === undefined || citedLines.size === 0) {
+		return { mismatch: noLinesToCite(lines, citation.path, citation.side ?? "NEW") };
 	}
 	const citedLineCount = citation.endLine - citation.startLine + 1;
 	const quoteLines = quote === "" ? null : quote.split(/\r\n|\r|\n/u);
@@ -688,6 +824,16 @@ function resolveQuoteText(
 		: {
 				mismatch: `the quote is ${quoteLines.length} line(s) and the citation covers ${citedLineCount}`,
 			};
+	// The coordinate may be the line of diff.patch itself, as a numbered view prints it: when that line
+	// of the view is a line of the cited file and side and holds the text, it is the one meant.
+	const viewed = viewLines.get(lines)?.get(citation.startLine);
+	if (!("text" in atCited) && viewed?.key === diffKey(citation.path, citation.side)) {
+		const count = quoteLines?.length ?? citedLineCount;
+		const atView = diffLinesMatch(citedLines, viewed.line, count, quoteLines);
+		if ("text" in atView) {
+			return { quote: atView.text, startLine: viewed.line, endLine: viewed.line + count - 1 };
+		}
+	}
 	if ("text" in atCited) {
 		return quoteLines === null && atCited.text.length > COORDINATE_QUOTE_MAX_CHARS
 			? {
@@ -719,12 +865,41 @@ function resolveQuoteText(
 	return atCited;
 }
 
+/**
+ * Why a changed file has no line to cite on the side named, and what to cite instead: its other side,
+ * the commit that touches it when the diff shows its header alone, or the file the change does touch.
+ */
+function noLinesToCite(
+	lines: ReadonlyMap<string, ReadonlyMap<number, string>>,
+	path: string,
+	side: DiffSide,
+): string {
+	const other: DiffSide = side === "OLD" ? "NEW" : "OLD";
+	if ((lines.get(diffKey(path, other))?.size ?? 0) > 0) {
+		return `${path} has no lines on the ${side} side of the change; its changed lines are on the ${other} side`;
+	}
+	if (lines.has(diffKey(path, side)) || lines.has(diffKey(path, other))) {
+		return (
+			`${path} has no numbered lines in the diff — a binary file, a rename without edits or a mode ` +
+			'change shows only its header — so no [L<n>] of it can be cited: cite the "path" line of its ' +
+			"entry in the files of the commit that touches it, in commits.json"
+		);
+	}
+	return `the change does not touch ${path}: name the changed file as the \`+++ b/\` header of its hunk does`;
+}
+
 /** A quote as recorded, with corrected coordinates when the text was found elsewhere than cited. */
 export interface ResolvedQuote {
 	quote: string;
 	startLine?: number;
 	endLine?: number;
+	/** The changed file and side the quote is on, when the citation named the diff view itself. */
+	path?: string;
+	side?: DiffSide;
 }
+
+/** The derived view of the change; its own line numbers are not the coordinates a citation needs. */
+const DIFF_VIEW = "work/change/diff.patch";
 
 /**
  * The diff's lines from `start` matched against the quote's lines, one each: the content they carry
@@ -788,20 +963,63 @@ function findAsWritten(text: string, quote: string): string | null {
 	return null;
 }
 
+function diffKey(path: string | null, side: DiffSide | undefined): string {
+	return `${side ?? "NEW"} ${path ?? ""}`;
+}
+
 /**
- * The annotated diff's lines on the cited side of the cited path, by line number, or why they could
- * not be read.
+ * For each parsed diff, which [L<n>] of which file and side each line of the diff view itself carries:
+ * a coordinate copied from `sed -n` or `grep -n` over diff.patch names a line of the view.
  */
-function diffLinesOf(citation: NormalizedCitation, content: string): Map<number, string> | string {
+const viewLines = new WeakMap<
+	ReadonlyMap<string, ReadonlyMap<number, string>>,
+	ReadonlyMap<number, { key: string; line: number }>
+>();
+
+/**
+ * The annotated diff's lines by file and side (keyed by {@link diffKey}), each by its line number, or
+ * why they could not be read.
+ */
+function annotatedDiff(content: string): Map<string, Map<number, string>> | string {
 	let oldPath: string | null = null;
 	let newPath: string | null = null;
-	const citedLines = new Map<number, string>();
-	for (const storedLine of content.split("\n")) {
+	const byFile = new Map<string, Map<number, string>>();
+	const atViewLine = new Map<number, { key: string; line: number }>();
+	viewLines.set(byFile, atViewLine);
+	// A file the diff names without a hunk — binary, renamed without edits, mode only — is known with no
+	// lines, so a citation of it is told why rather than that the change does not touch it.
+	const known = (side: DiffSide, filePath: string) => {
+		const key = diffKey(filePath, side);
+		if (!byFile.has(key)) {
+			byFile.set(key, new Map());
+		}
+	};
+	for (const [index, storedLine] of content.split("\n").entries()) {
 		// Both groups are mandatory, so binding them here is what lets the annotated branch below turn
 		// on a value the compiler has seen rather than on the match object being non-null.
 		const [, annotatedLineNumber, annotatedText] =
 			/^\[L(?<line>\d+)\] (?<text>[\s\S]*)$/u.exec(storedLine) ?? [];
 		const line = annotatedText ?? storedLine;
+		if (annotatedLineNumber === undefined && line.startsWith("diff --git ")) {
+			// `a/<path> b/<path>`: only an unrenamed header splits unambiguously, and a rename says its
+			// paths on the lines below.
+			const header = line.slice("diff --git ".length);
+			const middle = (header.length - 1) / 2;
+			const filePath = header.slice(2, middle);
+			if (header[middle] === " " && header === `a/${filePath} b/${filePath}`) {
+				known("OLD", filePath);
+				known("NEW", filePath);
+			}
+			continue;
+		}
+		if (annotatedLineNumber === undefined && line.startsWith("rename from ")) {
+			known("OLD", line.slice("rename from ".length));
+			continue;
+		}
+		if (annotatedLineNumber === undefined && line.startsWith("rename to ")) {
+			known("NEW", line.slice("rename to ".length));
+			continue;
+		}
 		if (annotatedLineNumber === undefined && line.startsWith("--- ")) {
 			oldPath = diffPath(line.slice(4));
 			continue;
@@ -816,13 +1034,55 @@ function diffLinesOf(citation: NormalizedCitation, content: string): Map<number,
 				return "invalid annotated line number";
 			}
 			const side: DiffSide = line.startsWith("-") ? "OLD" : "NEW";
-			const path = side === "OLD" ? oldPath : newPath;
-			if (side === citation.side && path === citation.path) {
-				citedLines.set(lineNumber, line);
-			}
+			const key = diffKey(side === "OLD" ? oldPath : newPath, side);
+			const lines = byFile.get(key) ?? new Map<number, string>();
+			lines.set(lineNumber, line);
+			byFile.set(key, lines);
+			atViewLine.set(index + 1, { key, line: lineNumber });
 		}
 	}
-	return citedLines;
+	return byFile;
+}
+
+/**
+ * A citation that names the diff view is a citation of a changed file: when its quote occurs once in
+ * the change, the file, side and [L<n>] it occurs at are what it cites. Otherwise the session is told
+ * what a citation of the change names.
+ */
+function placedInDiff(
+	lines: ReadonlyMap<string, ReadonlyMap<number, string>>,
+	quote: string,
+): ResolvedQuote | { mismatch: string } {
+	const how =
+		`${DIFF_VIEW} is the view of the change, not a file in it: cite the changed file's path (the ` +
+		"`+++ b/<path>` above its hunk) and the [L<n>] that prefixes the line";
+	if (quote === "") {
+		return { mismatch: `${how}, with the quoted text` };
+	}
+	const quoteLines = quote.split(/\r\n|\r|\n/u);
+	const found = [...lines].flatMap(([key, fileLines]) =>
+		[...fileLines.keys()].flatMap((start) => {
+			const match = diffLinesMatch(fileLines, start, quoteLines.length, quoteLines);
+			return "text" in match ? [{ key, start, text: match.text }] : [];
+		}),
+	);
+	const only = found[0];
+	if (found.length === 1 && only !== undefined) {
+		const [side, ...path] = only.key.split(" ");
+		return {
+			quote: only.text,
+			startLine: only.start,
+			endLine: only.start + quoteLines.length - 1,
+			path: path.join(" "),
+			side: side === "OLD" ? "OLD" : "NEW",
+		};
+	}
+	return {
+		mismatch:
+			found.length === 0
+				? `${how}; the quoted text is not a line of the change`
+				: `${how}; the quoted text occurs ${found.length} times in the change, so name the one you mean`,
+	};
 }
 
 /** Compare text at pinned coordinates, allowing diff markers and horizontal whitespace variants. */

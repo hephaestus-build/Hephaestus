@@ -151,8 +151,8 @@ const INTENTIONALLY_MISSING_PATHS = [
 	},
 	{
 		document: "docs/contributor/practice-catalogue.md",
-		value: "work/precompute-out/summary.md",
-		reason: "the precompute summary, written inside the agent workspace for the brief",
+		value: "work/precompute-out/<slug>.md",
+		reason: "a practice's precompute section, written inside the agent workspace for its turn",
 	},
 	{
 		document: "MIGRATION.md",

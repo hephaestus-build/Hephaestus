@@ -600,17 +600,23 @@ void test("a compaction the watchdog interrupts is not checkpointed and the turn
 		"agent_end",
 	]);
 
-	// Pi compacts again once the aborted run ends and that summary never returns here: the session stays
-	// claimed, so no next turn starts on it and none of its late events is sent.
+	// The aborted run settles with its compaction (Pi 1.0 starts none after an abort), so the session is
+	// free: the next turn is accepted, and it begins with a compaction of its own — nothing of the
+	// interrupted one reaches it.
+	assert.equal(runner.events.length, types.length);
 	runner.send({
 		jsonrpc: "2.0",
 		id: "again",
 		method: "prompt",
 		params: { threadId: THREAD, text: "again" },
 	});
-	const refused = await runner.next((frame) => frame.id === "again");
-	assert.ok(isRecord(refused.error) && refused.error.code === -32_001, JSON.stringify(refused));
-	assert.equal(runner.events.length, types.length);
+	const accepted = await runner.next((frame) => frame.id === "again");
+	assert.ok(
+		isRecord(accepted.result) && accepted.result.accepted === true,
+		JSON.stringify(accepted),
+	);
+	await runner.next(isEvent("compaction_start"));
+	assert.deepEqual(typesOf(runner).slice(types.length), ["compaction_start"]);
 });
 
 void test("each native request receives this turn's evidence without persisting or reusing the prior receipt", async (t) => {
@@ -760,17 +766,18 @@ void test("a restored tool batch too large to cut sends no ordinary request", as
 	const root = runnerRoot();
 	const model = await fakeModel(t, () => ({ text: "answer", promptTokens: 3000 }));
 	const runner = spawnRealRunner(t, root, model);
-	// The turn ended on a tool result past Pi's retention target, which Pi never splits from its call.
+	// The turn ended on a tool result past the trigger by itself, which Pi never splits from its call:
+	// shortening the rest cannot bring the conversation under it, so the ordinary request is never sent.
 	await openAndPrompt(
 		runner,
 		"and the tests?",
-		longHistory(root, { toolResultChars: 120_000, inputTokens: 100_000 }),
+		longHistory(root, { toolResultChars: 400_000, inputTokens: 100_000 }),
 	);
 	await runner.next(isEvent("agent_end"));
 
-	assert.deepEqual(model.calls, []);
+	assert.ok(!model.calls.includes("turn"), JSON.stringify(model.calls));
 	assert.deepEqual(typesOf(runner).slice(-2), ["pi_error", "agent_end"]);
-	assert.match(piError(runner), /could not be shortened/u);
+	assert.match(piError(runner), /still too long after shortening/u);
 });
 
 void test("a path built from a pull request number is refused before the server, saying where its resource is", async (t) => {

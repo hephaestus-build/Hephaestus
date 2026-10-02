@@ -32,7 +32,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 new PiRuntimeFactory(mapper),
                 new PiResultParser(mapper, new SimpleMeterRegistry()),
                 new AgentImageProperties(IMAGE, ImagePullPolicy.IF_NOT_PRESENT),
-                new PracticeReviewProperties(false, 15, 5, samplingTemperature));
+                new PracticeReviewProperties(false, 15, 5, samplingTemperature, 12, 16000));
     }
 
     @Test
@@ -46,6 +46,13 @@ class PracticePiAdapterTest extends BaseUnitTest {
     private PracticeAgentRequest proxyRequest() {
         return new PracticeAgentRequest(
                 "azure-openai-responses", "gpt-5.4-mini", null, null, null, "job-token-123", 600);
+    }
+
+    @Test
+    void shouldHandTheRunnerTheWorkEachPracticeIsOwed() {
+        assertThat(adapter.buildSandboxSpec(proxyRequest()).environment())
+                .containsEntry(PracticePiAdapter.PRACTICE_MODEL_CALLS_ENV, "12")
+                .containsEntry(PracticePiAdapter.PRACTICE_OUTPUT_TOKENS_ENV, "16000");
     }
 
     @Test

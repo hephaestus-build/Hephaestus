@@ -9,7 +9,7 @@ export interface Hint {
 	flags: Record<string, HintFlag>;
 }
 
-/** A hint flag renders into summary.md verbatim, so it stays a JSON scalar. */
+/** A hint flag renders into its practice's section verbatim, so it stays a JSON scalar. */
 export type HintFlag = boolean | number | string;
 
 /** Metadata varies by reviewed artifact; scripts validate the fields they use. */

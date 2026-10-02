@@ -9,6 +9,7 @@ import {
 	type AgentSessionEvent,
 	type AgentToolResult,
 	createAgentSession,
+	createCodemodeExtension,
 	DefaultResourceLoader,
 	getAgentDir,
 	defineTool,
@@ -46,7 +47,15 @@ import {
 import { PracticeCoverageLedger } from "./pi-practice-coverage.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
 import { buildBrief } from "./pi-review-brief.ts";
-import { deriveWindows, missingSlugs, planTurns, turnShare } from "./pi-review-turns.ts";
+import {
+	type Work,
+	deriveWindows,
+	missingSlugs,
+	planTurns,
+	shouldRecordNow,
+	spent,
+	turnBudget,
+} from "./pi-review-turns.ts";
 import {
 	ACTIONS,
 	CHANNELS,
@@ -64,6 +73,7 @@ import {
 	addAssistantUsage,
 	extractUsageFromSession,
 	newUsageLedger,
+	outputTokensOf,
 	type UsageReport,
 } from "./pi-runner-usage.ts";
 import { stopSession } from "./pi-session-lifecycle.ts";
@@ -96,18 +106,59 @@ function listOrEmpty<T>(items: T[] | undefined): T[] {
 }
 
 /** Accept array, single-item and serialized-list forms; validate each parsed item separately. */
-function submittedList(value: unknown): { items: unknown[] } | { error: string } {
+function submittedList(
+	value: unknown,
+	itemKeys: ReadonlySet<string>,
+): { items: unknown[]; repaired: boolean } | { error: string } {
 	if (typeof value === "string") {
+		// Only a string that does not parse is repaired: valid JSON is read as written.
 		try {
-			return { items: listOrItem(parseJson(repairedClosers(value))) };
+			return { items: listOrItem(parseJson(value)), repaired: false };
+		} catch {
+			// Repaired below.
+		}
+		const repaired = repairedClosers(value, itemKeys);
+		try {
+			return { items: listOrItem(parseJson(repaired)), repaired: true };
 		} catch (error) {
+			// Where the parse stopped, shown: resending the same text cannot fix a fault nobody located.
+			const at = /position (?<position>\d+)/u.exec(errorText(error))?.groups?.position;
+			const near =
+				at === undefined
+					? ""
+					: `; it breaks here: ${JSON.stringify(repaired.slice(Math.max(0, Number(at) - 60), Number(at)))} ⟵ ${JSON.stringify(repaired.slice(Number(at), Number(at) + 20))}`;
 			return {
-				error: `the list arrived as a string that is not a JSON array (${errorText(error)}); send the array itself, not a string`,
+				error: `the list arrived as a string that is not valid JSON (${errorText(error)})${near}. Fix that spot — usually a quote inside a text left unescaped — or send the array itself`,
 			};
 		}
 	}
-	return { items: listOrItem(value) };
+	return { items: listOrItem(value), repaired: false };
 }
+
+/**
+ * The keys of an observation that never belong to an object inside it. evidenceRationale is sometimes
+ * written under evidence on purpose; closing back to the item before it puts it where it belongs either way.
+ */
+const OBSERVATION_ITEM_KEYS: ReadonlySet<string> = new Set([
+	"revises",
+	"evidenceRationale",
+	"practiceSlug",
+	"summary",
+	"outcome",
+	"severity",
+]);
+/** The keys of a feedback unit that never belong to an object inside it. */
+const UNIT_ITEM_KEYS: ReadonlySet<string> = new Set([
+	"channel",
+	"practiceSlug",
+	"action",
+	"basedOn",
+	"title",
+	"body",
+	"nextStep",
+	"withholdReason",
+	"supersedesThreadKey",
+]);
 
 /** The list, or the one item that was sent where a list of them was asked for. */
 function listOrItem(value: unknown): unknown[] {
@@ -117,8 +168,12 @@ function listOrItem(value: unknown): unknown[] {
 	return isRecord(value) ? [value] : [];
 }
 
-/** Repair missing or unmatched closers without changing quoted strings; JSON.parse rejects other faults. */
-function repairedClosers(text: string): string {
+/**
+ * Repair missing or unmatched closers without changing quoted strings; JSON.parse rejects other faults.
+ * `itemKeys` are keys that belong to an item of the list and never to an object inside one: met inside
+ * a nested object, they mean that object was left open, and it is closed before them.
+ */
+function repairedClosers(text: string, itemKeys: ReadonlySet<string>): string {
 	const owed: string[] = [];
 	let out = "";
 	let changed = false;
@@ -139,6 +194,14 @@ function repairedClosers(text: string): string {
 		}
 		if (char === '"') {
 			inString = true;
+		} else if (char === "," && owed.length > 2 && owed[0] === "]") {
+			const key = followingKey(text, index);
+			if (key !== null && itemKeys.has(key)) {
+				while (owed.length > 2) {
+					out += owed.pop() ?? "";
+				}
+				changed = true;
+			}
 		} else if (char === "{" || char === "[") {
 			const comma = out.trimEnd().length - 1;
 			if (char === "{" && owed.at(-1) === "}" && owed.includes("]") && out[comma] === ",") {
@@ -155,7 +218,12 @@ function repairedClosers(text: string): string {
 				changed = true;
 				continue;
 			}
-			if (char === "}" && owed.length === 2 && owed[0] === "]" && keyFollows(text, index + 1)) {
+			if (
+				char === "}" &&
+				owed.length === 2 &&
+				owed[0] === "]" &&
+				followingKey(text, index + 1) !== null
+			) {
 				changed = true;
 				continue;
 			}
@@ -169,8 +237,11 @@ function repairedClosers(text: string): string {
 	return out.trimEnd() + owed.toReversed().join("");
 }
 
-/** Whether `, "key":` is what comes next — a member of an object, not the next item of a list. */
-function keyFollows(text: string, from: number): boolean {
+/**
+ * The key, when `, "key":` is what comes next — a member of an object, not the next item of a list;
+ * null otherwise.
+ */
+function followingKey(text: string, from: number): string | null {
 	let index = from;
 	const skipSpace = () => {
 		while (index < text.length && /\s/u.test(text[index] ?? "")) {
@@ -179,13 +250,14 @@ function keyFollows(text: string, from: number): boolean {
 	};
 	skipSpace();
 	if (text[index] !== ",") {
-		return false;
+		return null;
 	}
 	index += 1;
 	skipSpace();
 	if (text[index] !== '"') {
-		return false;
+		return null;
 	}
+	const start = index + 1;
 	index += 1;
 	while (index < text.length && text[index] !== '"') {
 		if (text[index] === "\\") {
@@ -193,9 +265,10 @@ function keyFollows(text: string, from: number): boolean {
 		}
 		index += 1;
 	}
+	const key = text.slice(start, index);
 	index += 1;
 	skipSpace();
-	return text[index] === ":";
+	return text[index] === ":" ? key : null;
 }
 
 /** The schema for such a list: the array, or the same array as a JSON string. */
@@ -273,7 +346,9 @@ function isAdmittedObservation(value: unknown): value is AdmittedObservation {
 
 const WORKSPACE_ROOT = "/workspace";
 const EVIDENCE_TOOLS = ["read", "grep", "find", "ls"] as const;
-const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "write", "edit", "bash"] as const;
+// Codemode runs a script that calls the other tools, so a chain of reads and searches, or a large
+// result filtered down to what a criterion needs, costs one model call rather than one per step.
+const PRACTICE_TOOLS = [...EVIDENCE_TOOLS, "write", "edit", "bash", "codemode"] as const;
 const CWD = process.env.PI_RUNNER_CWD ?? WORKSPACE_ROOT;
 const ENVELOPE_MISMATCH_EXIT = 42;
 const TASK_PATH = `${CWD}/task.json`;
@@ -298,12 +373,42 @@ const AGENT_DIR = process.env.PI_CODING_AGENT_DIR;
 if (!hasText(AGENT_DIR)) {
 	throw new Error("PI_CODING_AGENT_DIR env var is required");
 }
+function positiveIntegerEnv(name: string): number {
+	const value = Number(process.env[name]);
+	if (!Number.isInteger(value) || value <= 0) {
+		throw new Error(
+			`${name} env var is required and must be a positive integer, got: ${process.env[name]}`,
+		);
+	}
+	return value;
+}
 /** Practices a turn carries at once; a catalog group larger than this is split. */
 const PRACTICES_PER_TURN = hasText(process.env.PI_PRACTICE_BATCH_SIZE)
 	? Number(process.env.PI_PRACTICE_BATCH_SIZE)
 	: 6;
 /** Per-practice refusal cap; an exhausted practice remains NOT_REACHED. */
 const MAX_REFUSALS_PER_PRACTICE = 8;
+/** What one practice may spend in a turn; a turn is owed {@link turnBudget} of it. Set by the server. */
+const PER_PRACTICE_WORK: Work = {
+	modelCalls: positiveIntegerEnv("PI_PRACTICE_MODEL_CALLS"),
+	outputTokens: positiveIntegerEnv("PI_PRACTICE_OUTPUT_TOKENS"),
+};
+/**
+ * How long a turn may go without a single session event — no streamed token, no tool progress — before
+ * it counts as stalled and is aborted. Liveness, not a budget: the stream-idle bound Claude Code and
+ * Codex both default to.
+ */
+const STALL_MS = 300_000;
+/**
+ * The most output tokens one model call may write, from the model's registration; a call that reaches
+ * it was cut off, and the tool it called received it incomplete.
+ */
+let outputLimit = Number.POSITIVE_INFINITY;
+/** A turn whose calls run into the output limit this often is stuck writing one runaway call. */
+const CUT_OFF_ABORT = 2;
+
+/** How often the stall watchdog looks: a clock read, so often enough that a stall is caught promptly. */
+const STALL_CHECK_MS = 1000;
 const WINDOWS = deriveWindows(AGENT_BUDGET_MS, existsSync(INPUT_PATHS.compositionRequest));
 
 // The instant the watchdog below counts from. Every stage deadline starts later than this, so it is
@@ -356,9 +461,8 @@ function readPracticeIndex(): PracticeIndexEntry[] {
 	});
 }
 
-const { availableSourceKinds, artifactSources } = folderCitationIndex(
-	parseJson(readFileSync(INPUT_PATHS.manifest, "utf8")),
-);
+const folderIndex = parseJson(readFileSync(INPUT_PATHS.manifest, "utf8"));
+const { availableSourceKinds, artifactSources } = folderCitationIndex(folderIndex);
 const availableSourceKindValues = [...availableSourceKinds].toSorted();
 const stagedArtifactPaths = [...artifactSources.keys()].toSorted();
 const practiceIndex = readPracticeIndex();
@@ -383,8 +487,6 @@ interface UsageTotals {
 interface AttemptDebug {
 	label: string;
 	durationMs: number;
-	softTimeoutFired?: boolean;
-	hardAborted: boolean;
 	assistantMessages: number;
 	stopReasons: Record<string, number>;
 	usage: UsageReport;
@@ -418,9 +520,21 @@ interface TurnTrace {
 	repeatedCalls: number;
 	compactions: number;
 	providerRetries: number;
-	softTimeoutFired: boolean;
-	hardAborted: boolean;
+	outputTokens: number;
+	/** Calls that ran into the model's output limit, and so reached their tool incomplete. */
+	cutOff: number;
+	/** What the turn may spend; it ends after the model call that spends it. */
+	budget: Work;
+	/** Whether the turn was told to record what it owes before its budget ran out. */
+	askedToRecord: boolean;
+	/** Why the runner ended the turn; null when the model ended it. */
+	stoppedBy: StopReason | null;
 }
+/**
+ * Why the runner ended a turn: its work budget was spent, the session stalled, the run neared its safety
+ * ceiling, or a loop guard fired.
+ */
+type StopReason = "budget" | "stall" | "safety" | "loop";
 const runnerDebug: { attempts: AttemptDebug[]; turns: TurnTrace[]; usageTotals: UsageTotals } = {
 	attempts: [],
 	turns: [],
@@ -509,6 +623,11 @@ const evidenceSchema = {
 	type: "object",
 	additionalProperties: false,
 	required: ["citations"],
+	description:
+		"citations always: the lines that decide the outcome. Beside them, at most the one branch the " +
+		"outcome takes: search for a MET or NOT_MET that rests on something missing — what you looked " +
+		"for, where, and what the search did not cover; inapplicability for NOT_APPLICABLE; " +
+		"undecidability for UNDETERMINED.",
 	properties: {
 		search: searchSchema,
 		inapplicability: inapplicabilitySchema,
@@ -588,7 +707,7 @@ const observationSchema = {
 		severity: {
 			type: ["string", "null"],
 			enum: [...SEVERITY_VALUES, null],
-			description: `Only for a NOT_MET outcome, otherwise null. ${describeVocabulary(SEVERITY_VALUES, SEVERITY_DESCRIPTIONS)}`,
+			description: `Required for a NOT_MET outcome, from the practice's Severity section; null otherwise. ${describeVocabulary(SEVERITY_VALUES, SEVERITY_DESCRIPTIONS)}`,
 		},
 		evidence: {
 			...evidenceSchema,
@@ -679,15 +798,19 @@ interface Validated {
 
 function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 	const notes: string[] = [];
-	const observation = normalizeObservation(rawObservation, notes);
+	const observation = normalizeObservation(rawObservation, notes, (artifact) =>
+		artifactSources.get(artifact),
+	);
 	if (!admittedPractices.has(observation.practiceSlug)) {
-		throw new Error(`unknown practice '${observation.practiceSlug}'`);
+		throw new Error(
+			`unknown practice '${observation.practiceSlug}'; this turn's practices are ${currentTurnSlugs.join(", ")}`,
+		);
 	}
 	// The manifest says which source staged an artifact; a citation that names the artifact under
 	// another source kind is read as the manifest reads it, and the correction is echoed back.
 	for (const citation of observation.evidence.citations) {
 		// A quote of a staged record (description.md, comments.json) named as its path under the pinned
-		// change is a quote of that record: the artifact is the path, and a diff side says nothing of it.
+		// change is a quote of that record: the artifact is the path.
 		const stagedAtPath = artifactSources.get(citation.path);
 		if (stagedAtPath !== undefined && citation.artifactPath !== citation.path) {
 			notes.push(
@@ -695,7 +818,6 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 			);
 			citation.artifactPath = citation.path;
 			citation.sourceKind = stagedAtPath;
-			delete citation.side;
 		}
 		const staged = artifactSources.get(citation.artifactPath);
 		if (staged !== undefined && staged !== citation.sourceKind) {
@@ -703,6 +825,19 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 				`${citation.artifactPath} is staged by ${staged}, not ${citation.sourceKind}; recorded as ${staged}`,
 			);
 			citation.sourceKind = staged;
+		}
+		// Once the source is settled: a side selects a line of the change and a revision a commit of the
+		// checkout, and neither says anything of another source. Admission refuses either one elsewhere, and
+		// with it every observation the review recorded, so neither leaves the runner on any other source.
+		if (citation.sourceKind !== DIFF_SOURCE && citation.side !== undefined) {
+			notes.push(`${citation.path}: side dropped — only a line of the change has a side`);
+			delete citation.side;
+		}
+		if (citation.sourceKind !== TREE_SOURCE && citation.revision !== undefined) {
+			notes.push(
+				`${citation.path}: revision dropped — only a repository file is read at a revision`,
+			);
+			delete citation.revision;
 		}
 	}
 	validateEvidenceSources(observation, availableSourceKinds, artifactSources);
@@ -737,16 +872,21 @@ function normalizeAndValidateObservation(rawObservation: unknown): Validated {
 			throw new Error(
 				`citation does not match ${citation.path}:${citation.startLine}-${citation.endLine} ` +
 					`(${citation.side ?? "text"}) in '${citation.artifactPath}': ${resolved.mismatch}. Copy the exact ` +
-					`artifact text and, for the change, the [L<n>] coordinates and OLD/NEW side of ${CHANGE_ROOT}/diff.patch`,
+					`artifact text and, for the change, the [L<n>] coordinates and OLD/NEW side of ${CHANGE_ROOT}/diff.patch ` +
+					"(the numbers sed -n or grep -n print are lines of diff.patch, not these coordinates)",
 			);
 		}
 		const cited = `${citation.path}:${citation.startLine}-${citation.endLine}`;
 		if (!citation.quote.trim()) {
 			notes.push(`${cited} recorded ${excerptOf(resolved.quote)}`);
 		}
+		if (resolved.path !== undefined && resolved.side !== undefined) {
+			citation.path = resolved.path;
+			citation.side = resolved.side;
+		}
 		if (resolved.startLine !== undefined && resolved.endLine !== undefined) {
 			notes.push(
-				`${cited} does not hold that text; it is at ${citation.path}:${resolved.startLine}-${resolved.endLine}, recorded there`,
+				`${cited} does not hold that text; it is at ${citation.path}:${resolved.startLine}-${resolved.endLine}${resolved.side === undefined ? "" : ` (${resolved.side})`}, recorded there`,
 			);
 			citation.startLine = resolved.startLine;
 			citation.endLine = resolved.endLine;
@@ -782,6 +922,7 @@ function excerptOf(text: string): string {
 }
 
 const DIFF_SOURCE = "scm.pull-request.diff";
+const TREE_SOURCE = "scm.repository.tree";
 
 /** Whether an observation cites the change or names it among the sources its warrant consulted. */
 function readTheChange(observation: NormalizedObservation): boolean {
@@ -800,12 +941,12 @@ const BINARY = Symbol("binary");
 
 /** What a citation quotes: the checkout at HEAD or at the named revision, or the derived change view. */
 function citedContent(citation: NormalizedCitation): string | typeof BINARY | null {
-	if (citation.sourceKind === "scm.repository.tree") {
+	if (citation.sourceKind === TREE_SOURCE) {
 		return citation.revision === undefined
 			? readCheckoutFile(citation.path, citationRepository(citation))
 			: readRevisionFile(citation.path, citation.revision, citationRepository(citation));
 	}
-	if (citation.sourceKind === "scm.pull-request.diff") {
+	if (citation.sourceKind === DIFF_SOURCE) {
 		return readFileSync(`${CWD}/${CHANGE_ROOT}/diff.patch`, "utf8");
 	}
 	return readFileSync(`${CWD}/${citation.artifactPath}`, "utf8");
@@ -827,7 +968,8 @@ function resolveCited(
 	if (content === BINARY) {
 		return {
 			mismatch:
-				"that file is binary and has no lines to quote; cite the change that adds it (work/change/files.json) or the text that embeds it",
+				`that file is binary and has no lines to quote; cite the commit that adds it in ` +
+				`${taskEnvelope.paths.contextRoot}/commits.json, or the text that embeds it`,
 		};
 	}
 	return resolveOnEitherSide(citation, content);
@@ -895,6 +1037,12 @@ const MAX_RECORDING_ATTEMPTS_PER_TURN = 24;
 /** Per-turn thresholds for nudging and aborting identical tool calls. */
 const REPEATED_CALL_NUDGE = 3;
 const REPEATED_CALL_ABORT = 6;
+/**
+ * The same thresholds for a recording call: its answer is a function of its arguments, so the second
+ * identical call already shows a loop, and a nudge has never broken one.
+ */
+const REPEATED_RECORDING_NUDGE = 2;
+const REPEATED_RECORDING_ABORT = 3;
 
 /** Avoid logging SDK error events again when the tool already logged its refusal. */
 const answeredRefusals = new Set<string>();
@@ -932,6 +1080,140 @@ function firstLine(text: string): string {
 /** The session the turn events belong to, once it exists; what the loop bound aborts. */
 let activeSession: AgentSession | null = null;
 
+/**
+ * What the turn in flight still owes and how it is told to record it; set and cleared with its trace.
+ * Measuring owes one observation per practice, composition one decision per NOT_MET practice.
+ * `endsWhenPaid` marks a turn that exists only to pay what it owes, so it ends once nothing is owed.
+ */
+interface TurnDemand {
+	owed: () => number;
+	nudge: string;
+	endsWhenPaid?: true;
+}
+let turnDemand: TurnDemand | null = null;
+
+/**
+ * Output tokens the model spends per observation it records, averaged over its recording messages: what
+ * a turn must keep back to record what it owes. The prior is a slow open model's pace until the session
+ * has recorded once.
+ */
+let tokensPerObservation = 1500;
+/** Output tokens of the last assistant message, when that message carries a recording call. */
+let recordingMessageTokens = 0;
+/** When the session last showed any sign of life; what the stall watchdog reads. */
+let lastEventAt = Date.now();
+
+/** How many observations a report_observation call carried, stored, duplicate or refused alike. */
+function observationsIn(result: unknown): number {
+	const details = isRecord(result) ? result.details : undefined;
+	if (!isRecord(details)) {
+		return 0;
+	}
+	return [details.inserted, details.duplicates, details.refused]
+		.map((count) => (typeof count === "number" ? count : 0))
+		.reduce((sum, count) => sum + count, 0);
+}
+
+/**
+ * Charges each model call to the turn in flight. The turn is told once to record what it owes when its
+ * remaining work only pays for that, and is ended between model calls — after the tools of the call that
+ * spent the budget have run, so a recording in that call lands — never within one.
+ */
+function chargeWork(event: AgentSessionEvent): void {
+	lastEventAt = Date.now();
+	const turn = currentTurn;
+	if (event.type === "message_end" && event.message.role === "assistant") {
+		const output = outputTokensOf(event.message);
+		recordingMessageTokens = listOrEmpty(event.message.content).some(
+			(c) => c.type === "toolCall" && c.name === "report_observation",
+		)
+			? output
+			: 0;
+		if (!turn || !turnDemand) {
+			return;
+		}
+		turn.calls += 1;
+		turn.outputTokens += output;
+		noteCutOff(turn, event.message.stopReason === "length" || output >= outputLimit);
+		const used: Work = { modelCalls: turn.calls, outputTokens: turn.outputTokens };
+		if (
+			!turn.askedToRecord &&
+			turn.stoppedBy === null &&
+			shouldRecordNow(used, turn.budget, turnDemand.owed(), tokensPerObservation)
+		) {
+			turn.askedToRecord = true;
+			console.error(
+				`[pi-runner] ${turn.label}: ${turn.calls} of ${turn.budget.modelCalls} calls and ` +
+					`${turn.outputTokens} of ${turn.budget.outputTokens} output tokens spent — nudging to record`,
+			);
+			if (activeSession) {
+				void steer(activeSession, turnDemand.nudge);
+			}
+		}
+		return;
+	}
+	if (event.type === "tool_execution_end" && event.toolName === "report_observation") {
+		const written = observationsIn(event.result);
+		if (written > 0 && recordingMessageTokens > 0) {
+			tokensPerObservation = Math.round(
+				(tokensPerObservation + recordingMessageTokens / written) / 2,
+			);
+		}
+		recordingMessageTokens = 0;
+		return;
+	}
+	if (
+		event.type === "turn_end" &&
+		turn?.stoppedBy === null &&
+		spent({ modelCalls: turn.calls, outputTokens: turn.outputTokens }, turn.budget)
+	) {
+		stopTurn(
+			"budget",
+			`work budget spent (${turn.calls} calls, ${turn.outputTokens} output tokens) — ending this turn`,
+		);
+	}
+}
+
+/**
+ * A call cut off at the output limit reaches its tool incomplete, and the tool's error reads like the
+ * model's mistake: the model is told it was the cut, once; a second cut in the turn ends it.
+ */
+function noteCutOff(turn: TurnTrace, cutOff: boolean): void {
+	if (!cutOff) {
+		return;
+	}
+	turn.cutOff += 1;
+	if (turn.cutOff >= CUT_OFF_ABORT) {
+		stopTurn(
+			"loop",
+			`${turn.cutOff} calls in this turn ran into the ${outputLimit}-token output limit — aborting this turn`,
+		);
+		return;
+	}
+	console.error(`[pi-runner] ${turn.label}: a call ran into the output limit — telling the model`);
+	if (activeSession) {
+		void steer(
+			activeSession,
+			`Your last call was cut off at the ${outputLimit}-token output limit, so its tool received it ` +
+				"incomplete and failed: the error it reports is the cut, not your syntax. Send a short call " +
+				"instead — a search with a pattern rather than a list of every value, and a few " +
+				"observations per call.",
+		);
+	}
+}
+
+/** End the turn in flight for a reason of the runner's own; the first reason is the one the trace keeps. */
+function stopTurn(reason: StopReason, why: string): void {
+	const turn = currentTurn;
+	console.error(`[pi-runner] ${turn?.label ?? "review"}: ${why}`);
+	if (turn && turn.stoppedBy === null) {
+		turn.stoppedBy = reason;
+	}
+	if (activeSession) {
+		void abortSession(activeSession);
+	}
+}
+
 /** Refused submissions per practice; a practice past MAX_REFUSALS_PER_PRACTICE accepts no more. */
 const refusals = new Map<string, number>();
 const blockedPractices = new Set<string>();
@@ -948,6 +1230,15 @@ function slugOf(raw: unknown): string {
 	return (isRecord(raw) ? normalizePracticeSlug(raw.practiceSlug) : "") || "unknown";
 }
 
+/**
+ * The items refused in this turn, as sent, with why: an identical resend gets the same answer, so it is
+ * told so at once rather than checked again; cleared with the turn.
+ */
+const refusedItems = new Map<string, { reason: string; resent: number }>();
+
+/** An identical refused item sent this many times more ends the turn: the circuit breaker. */
+const IDENTICAL_REFUSAL_ABORT = 2;
+
 function record(raw: unknown): Recorded {
 	const slug = slugOf(raw);
 	// An item with no slug is answered with what it lacks, never with the bound of a practice named
@@ -956,7 +1247,26 @@ function record(raw: unknown): Recorded {
 		return {
 			kind: "refused",
 			slug,
-			reason: `${MAX_REFUSALS_PER_PRACTICE} submissions for '${slug}' were refused; no more are accepted for it. Move on.`,
+			reason: `${MAX_REFUSALS_PER_PRACTICE} submissions for '${slug}' were refused; no more are accepted for it, so it is not owed any more. Record the other practices.`,
+		};
+	}
+	const sent = JSON.stringify(raw);
+	const earlier = refusedItems.get(sent);
+	if (earlier !== undefined) {
+		earlier.resent += 1;
+		countRefusal(slug);
+		if (earlier.resent >= IDENTICAL_REFUSAL_ABORT) {
+			stopTurn(
+				"loop",
+				`the same refused ${slug} observation sent ${earlier.resent + 1} times — aborting this turn`,
+			);
+		}
+		return {
+			kind: "refused",
+			slug,
+			reason:
+				`identical to an item this turn already refused, so the answer is the same: ${earlier.reason}. ` +
+				"Change what that names, or leave this practice and record the others",
 		};
 	}
 	const revises = isRecord(raw) ? raw.revises : undefined;
@@ -977,7 +1287,9 @@ function record(raw: unknown): Recorded {
 		validated = normalizeAndValidateObservation(candidate);
 	} catch (error) {
 		countRefusal(slug);
-		return { kind: "refused", slug, reason: errorText(error) };
+		const reason = errorText(error);
+		refusedItems.set(sent, { reason, resent: 0 });
+		return { kind: "refused", slug, reason };
 	}
 	const { observation, notes } = validated;
 	const index = reviewState.observations.findIndex((draft) => draft.practiceSlug === slug);
@@ -1061,6 +1373,12 @@ function logRefusal(slug: string, reason: string): void {
 /** The practices the current turn asked about; a recorded result for one of them is what the turn owes. */
 let currentTurnSlugs: readonly string[] = [];
 
+/** The practices of the turn in flight with no recorded result that may still get one. */
+function owedPractices(): string[] {
+	const observed = new Set(reviewState.observations.map((item) => item.practiceSlug));
+	return currentTurnSlugs.filter((slug) => !observed.has(slug) && !blockedPractices.has(slug));
+}
+
 /** JSON Schema keywords that refuse; what they say is applied per observation instead. */
 const RULE_KEYWORDS = new Set([
 	"required",
@@ -1086,7 +1404,9 @@ function documentedShape(schema: unknown): unknown {
 		return schema;
 	}
 	const out: Record<string, unknown> = {};
-	// Pi coerces scalar types; remove container types to permit serialized lists and per-item errors.
+	// Container types go, so a list may arrive serialized and each item is answered on its own; scalar
+	// types stay, because they tell the model what a value is. The tool still reads a mistyped scalar
+	// itself where it can ("L12" for a line), so the SDK's coercion is not the only reader.
 	const structural = schema.type === "object" || schema.type === "array";
 	const noted = (note: string) => {
 		const description = typeof out.description === "string" ? out.description : "";
@@ -1124,6 +1444,7 @@ function documentedShape(schema: unknown): unknown {
 function buildReportObservationTool() {
 	return defineTool({
 		name: "report_observation",
+		exposure: "model-only",
 		label: "Report Observations",
 		description:
 			"Record one or more evidenced practice observations in local review state, for server admission " +
@@ -1151,13 +1472,13 @@ function buildReportObservationTool() {
 					},
 				};
 			}
-			const submitted = submittedList(isRecord(params) ? params.observations : null);
+			const submitted = submittedList(
+				isRecord(params) ? params.observations : null,
+				OBSERVATION_ITEM_KEYS,
+			);
 			if ("error" in submitted) {
-				// Counted against every practice of the turn, so a session that keeps sending the same
-				// unparseable string runs out of tries like any other refusal.
-				for (const slug of currentTurnSlugs) {
-					countRefusal(slug);
-				}
+				// No practice is charged for a list nobody could read: the repeated-call guard ends a session
+				// that keeps sending the same string, and the practices stay owed.
 				logRefusal("(unparsed list)", submitted.error);
 				return refusal(toolCallId, `observations refused — ${submitted.error}`);
 			}
@@ -1193,23 +1514,31 @@ function buildReportObservationTool() {
 				persistPracticeCoverage();
 				persistRecordedNotes();
 			}
-			const observed = new Set(reviewState.observations.map((item) => item.practiceSlug));
-			const remainingPractices = currentTurnSlugs.filter((slug) => !observed.has(slug));
+			// A practice past its refusal limit is not owed any more: listing it as owed invites the resend
+			// it can no longer accept.
+			const remainingPractices = owedPractices();
+			const closed = currentTurnSlugs.filter((slug) => blockedPractices.has(slug));
 			const lines = outcomes.map((outcome, index) => {
 				const head = `#${index + 1} ${outcome.slug}:`;
 				if (outcome.kind === "stored" || outcome.kind === "revised") {
 					return `${head} ${outcome.kind}${outcome.negative ? " (negative)" : ""}. Draft reference: '${outcome.slug}'.${outcome.filled.map((line) => `\n   ${line}`).join("")}`;
 				}
 				if (outcome.kind === "duplicate") {
-					return `${head} duplicate of one already stored; skipped.`;
+					return `${head} already recorded; this item changed nothing, so do not send it again.`;
 				}
 				return `${head} refused — ${outcome.reason}`;
 			});
+			if (submitted.repaired) {
+				lines.push("(The list's brackets did not balance; it was read with them balanced.)");
+			}
 			lines.push(
 				remainingPractices.length > 0
 					? `No recorded result yet for: ${remainingPractices.join(", ")}.`
 					: "Every practice of this turn has a recorded result.",
 			);
+			if (closed.length > 0) {
+				lines.push(`No longer accepted (refusal limit): ${closed.join(", ")}.`);
+			}
 			const text = lines.join("\n");
 			const details: ReportObservationDetails = {
 				inserted: outcomes.filter((outcome) => outcome.kind === "stored").length,
@@ -1219,12 +1548,19 @@ function buildReportObservationTool() {
 				totalObservations: reviewState.observations.length,
 				remainingPractices,
 			};
-			// A call that stored nothing is an error the session must correct; one that stored some of
-			// what it sent is an answer, with the refusals named in it.
-			if (stored.length === 0 && details.duplicates === 0) {
+			// A call that stored nothing is an error the session must correct — a resend of what is already
+			// recorded included, or it reads as success and is sent again; one that stored some of what it
+			// sent is an answer, with the refusals named in it.
+			if (stored.length === 0) {
 				return refusal(toolCallId, text);
 			}
-			return { content: [{ type: "text", text }], details };
+			// The turn owes nothing more once each of its practices has a result; ending the run here
+			// spares the wrap-up calls a session otherwise makes after its last recording.
+			return {
+				content: [{ type: "text", text }],
+				details,
+				terminate: remainingPractices.length === 0,
+			};
 		},
 	});
 }
@@ -1281,6 +1617,11 @@ const COMPOSITION_EXPLORATION_NUDGE = 12;
 const PERSIST_DISCIPLINE =
 	`Record the outcome the evidence supports, MET, NOT_MET, NOT_APPLICABLE, or UNDETERMINED; there is no quota ` +
 	`and no next step to write. Use tools only from this point onward; no planning prose.`;
+
+/** What a turn is told once its remaining work only pays for recording what it owes. */
+const RECORD_NUDGE =
+	`This turn has the work left to write its observations and no more. Stop exploring and record what ` +
+	`the inspected evidence supports for the listed practices, in one report_observation call. ${PERSIST_DISCIPLINE}`;
 
 /** Tells the server to retry a review whose admission endpoint was unreachable. */
 const SERVER_UNREACHABLE_EXIT = 75;
@@ -1395,6 +1736,7 @@ function buildSummaryTool() {
 
 	return defineTool({
 		name: "report_summary",
+		exposure: "model-only",
 		label: "Report Summary",
 		description:
 			"Write how this review opens, in your own words: one or two sentences, at most " +
@@ -1669,7 +2011,8 @@ function buildFeedbackTool(
 
 	/** One unit stored, or the reason it was not. */
 	const store = (value: unknown): { stored: boolean; text: string } => {
-		const read = readFeedbackUnit(value, practiceSlugs);
+		const repairs: string[] = [];
+		const read = readFeedbackUnit(withholdBasis(value, observations, repairs), practiceSlugs);
 		if (typeof read === "string") {
 			return { stored: false, text: read };
 		}
@@ -1686,11 +2029,15 @@ function buildFeedbackTool(
 		}
 		const key = `${unit.channel}:${unit.practiceSlug}`;
 		if (seen.has(key)) {
-			return skipped(`already have a ${unit.channel} unit for ${unit.practiceSlug}; skipped.`);
+			return skipped(
+				`already have a ${unit.channel} unit for ${unit.practiceSlug}, and the first one stands; nothing to resend for it. Skipped.`,
+			);
 		}
 		const delivers = unit.action !== "WITHHOLD";
 		if (delivers && usedPerChannel[unit.channel] >= bounds.maxUnits) {
-			return skipped(`${unit.channel} cap of ${bounds.maxUnits} reached; skipped.`);
+			return skipped(
+				`${unit.channel} holds at most ${bounds.maxUnits} unit(s) and is full: this one does not fit — WITHHOLD it with BELOW_BAR or leave it out. Skipped.`,
+			);
 		}
 		const rejection = validateUnit(unit, observationsById, preparedTargets, placementKinds);
 		if (rejection !== null) {
@@ -1714,12 +2061,13 @@ function buildFeedbackTool(
 		composedFeedback.units.push(unit);
 		return {
 			stored: true,
-			text: `stored a ${unit.channel} unit for ${unit.practiceSlug} (${unit.action}); ${usedPerChannel[unit.channel]}/${bounds.maxUnits} used on that lane.`,
+			text: `stored a ${unit.channel} unit for ${unit.practiceSlug} (${unit.action}); ${usedPerChannel[unit.channel]}/${bounds.maxUnits} used on that lane.${repairs.map((repair) => ` ${repair}.`).join("")}`,
 		};
 	};
 
 	return defineTool({
 		name: "report_feedback",
+		exposure: "model-only",
 		label: "Report Feedback",
 		description:
 			"Persist feedback units, one per channel and practice. Send every unit you have ready in one " +
@@ -1873,7 +2221,7 @@ function buildFeedbackTool(
 					details: { stored: 0 },
 				};
 			}
-			const submitted = submittedList(isRecord(params) ? params.units : null);
+			const submitted = submittedList(isRecord(params) ? params.units : null, UNIT_ITEM_KEYS);
 			if ("error" in submitted) {
 				return refusal(toolCallId, `units refused — ${submitted.error}`);
 			}
@@ -1900,6 +2248,7 @@ function buildFeedbackTool(
 			return {
 				content: [{ type: "text", text }],
 				details: { stored, total: composedFeedback.units.length },
+				terminate: turnDemand?.endsWhenPaid === true && turnDemand.owed() === 0,
 			};
 		},
 	});
@@ -1979,6 +2328,33 @@ function boundedText(
 }
 
 /** Validate one feedback item; the outer tool schema intentionally permits partial batch success. */
+/**
+ * A WITHHOLD sent with no basedOn rests on its practice's NOT_MET observations, the only ones it can
+ * withhold: they are filled in, and said so.
+ */
+function withholdBasis(
+	value: unknown,
+	observations: readonly AdmittedObservation[],
+	repairs: string[],
+): unknown {
+	if (
+		!isRecord(value) ||
+		String(value.action).toUpperCase() !== "WITHHOLD" ||
+		listOrSingle(value.basedOn).length > 0
+	) {
+		return value;
+	}
+	const slug = normalizePracticeSlug(value.practiceSlug);
+	const ids = observations
+		.filter((observation) => observation.practiceSlug === slug && observation.outcome === "NOT_MET")
+		.map((observation) => observation.id);
+	if (ids.length === 0) {
+		return value;
+	}
+	repairs.push(`basedOn filled in with ${slug}'s NOT_MET observation(s) ${ids.join(", ")}`);
+	return { ...value, basedOn: ids };
+}
+
 function readFeedbackUnit(value: unknown, practiceSlugs: readonly string[]): FeedbackUnit | string {
 	if (!isRecord(value)) {
 		return `each item of units is one unit object with channel, practiceSlug, basedOn and action (received ${typeof value}); skipped.`;
@@ -2099,20 +2475,50 @@ function listOrSingle(value: unknown): unknown[] {
 	return value === undefined || value === null ? [] : [value];
 }
 
+/** Kind and provider URL distinguish work without treating a display number as its identity. */
+function workIdentity(kind: unknown, url: unknown): string | undefined {
+	return typeof kind === "string" &&
+		kind.trim() !== "" &&
+		typeof url === "string" &&
+		url.trim() !== ""
+		? `${kind}:${url}`
+		: undefined;
+}
+
+const THIS_WORK = ((): string | undefined => {
+	const metadataPath = nodePath.join(INPUT_PATHS.contextRoot, "metadata.json");
+	if (!existsSync(metadataPath) || !isRecord(folderIndex)) {
+		return undefined;
+	}
+	const metadata = parseJson(readFileSync(metadataPath, "utf8"));
+	if (!isRecord(metadata)) {
+		return undefined;
+	}
+	const kind = folderIndex.artifactKind;
+	if (kind !== "scm.pull_request" && kind !== "scm.issue") {
+		return undefined;
+	}
+	return workIdentity(kind, metadata[kind === "scm.pull_request" ? "pr_url" : "html_url"]);
+})();
+
 // Enforce snapshot-dependent constraints here for fast model correction; Java rechecks them.
-/** Count distinct artifacts with NOT_MET observations, including this review. */
+/**
+ * Count distinct artifacts with NOT_MET observations, including this review. An earlier review of the
+ * same work is the same piece, as the server counts it (InAppFeedbackRouter.distinctArtifacts).
+ */
 function negativePiecesOfWork(
 	practiceSlug: string,
 	current: readonly AdmittedObservation[],
 ): number {
 	const pieces = new Set<string>();
 	if (
+		THIS_WORK !== undefined &&
 		current.some(
 			(observation) =>
 				observation.practiceSlug === practiceSlug && observation.outcome === "NOT_MET",
 		)
 	) {
-		pieces.add("this work");
+		pieces.add(THIS_WORK);
 	}
 	const historyPath = `${nodePath.dirname(PREPARED_FEEDBACK_PATH)}/observations.json`;
 	if (!existsSync(historyPath)) {
@@ -2126,11 +2532,9 @@ function negativePiecesOfWork(
 			continue;
 		}
 		const artifact = isRecord(entry.artifact) ? entry.artifact : {};
-		const name = [artifact.url, artifact.number, artifact.title].find(
-			(value) => typeof value === "string" || typeof value === "number",
-		);
-		if (name !== undefined) {
-			pieces.add(`${typeof artifact.kind === "string" ? artifact.kind : ""}:${name}`);
+		const identity = workIdentity(artifact.kind, artifact.url);
+		if (identity !== undefined) {
+			pieces.add(identity);
 		}
 	}
 	return pieces.size;
@@ -2290,6 +2694,12 @@ function normalizeQuotedText(value: string): string {
 
 /** Omit duplicated quotes and verification digests; the full admission record remains on disk. */
 function composerView(observation: AdmittedObservation): Record<string, unknown> {
+	// Feedback is composed from NOT_MET observations; the others are shown by what they found, and
+	// their full record stays in work/composition/observations.json.
+	if (observation.outcome !== "NOT_MET") {
+		const { id, practiceSlug, outcome, summary } = observation;
+		return { id, practiceSlug, outcome, summary };
+	}
 	const { evidence, citations, ...rest } = observation;
 	const { citations: _measured, ...branches } = isRecord(evidence) ? evidence : {};
 	return {
@@ -2343,7 +2753,7 @@ function buildCompositionTurn(
 		.filter((block) => block !== "")
 		.join("\n");
 	return `## This turn
-The review just finished. Its ${observations.length} admitted measurement(s) follow; ${anchorable} of them cite a line inside this change and can therefore carry a note on the work. The citations are shown by their coordinates; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
+The review just finished. Its ${observations.length} admitted measurement(s) follow; ${anchorable} of them cite a line inside this change and can therefore carry a note on the work. The NOT_MET ones carry their rationale and their citations by coordinates, the others only what they found; the full record, quoted lines included, is \`work/composition/observations.json\`. The history follows them.
 
 \`\`\`json
 ${admitted}
@@ -2487,29 +2897,34 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 	const repeats = (repeatedCalls.get(signature) ?? 0) + 1;
 	repeatedCalls.set(signature, repeats);
 	turn.repeatedCalls = Math.max(turn.repeatedCalls, repeats);
-	if (repeats === REPEATED_CALL_NUDGE) {
+	const recording = RECORDING_TOOLS.has(toolName);
+	if (repeats === (recording ? REPEATED_RECORDING_NUDGE : REPEATED_CALL_NUDGE)) {
 		console.error(
 			`[pi-runner] ${turn.label}: the same ${toolName} call ${repeats} times — nudging to record`,
 		);
+		// Naming what is still owed matters most when the repeated call is the recording itself: "record"
+		// alone reads as "send that again".
+		const owed = measuring ? owedPractices() : [];
+		const next =
+			owed.length > 0
+				? `Still owed: ${owed.join(", ")}. Record what the evidence you have read supports for these`
+				: "Record what the evidence you have read supports";
 		void steer(
 			activeSession,
-			`You have run the same ${toolName} call ${repeats} times; its result will not change. Record what the evidence you have read supports, in one ${measuring ? "report_observation" : "report_feedback"} call. ${PERSIST_DISCIPLINE}`,
+			`You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one ${measuring ? "report_observation" : "report_feedback"} call. ${PERSIST_DISCIPLINE}`,
 		);
 	}
-	if (repeats >= REPEATED_CALL_ABORT) {
-		console.error(
-			`[pi-runner] ${turn.label}: the same ${toolName} call ${repeats} times — aborting this turn`,
-		);
-		void abortSession(activeSession);
+	if (repeats >= (recording ? REPEATED_RECORDING_ABORT : REPEATED_CALL_ABORT)) {
+		stopTurn("loop", `the same ${toolName} call ${repeats} times — aborting this turn`);
 	}
 	// SDK schema refusals bypass tool execution and its per-practice cap; count attempts here too.
 	if (RECORDING_TOOLS.has(toolName)) {
 		turn.recordingCalls += 1;
 		if (turn.recordingCalls >= MAX_RECORDING_ATTEMPTS_PER_TURN && turn.stored === 0) {
-			console.error(
-				`[pi-runner] ${measuring ? "review" : "composer"}: ${turn.recordingCalls} recording calls without a record — aborting this turn`,
+			stopTurn(
+				"loop",
+				`${turn.recordingCalls} recording calls without a record — aborting this turn`,
 			);
-			void abortSession(activeSession);
 		}
 	}
 }
@@ -2517,8 +2932,10 @@ function noteToolCall(turn: TurnTrace, toolName: string, args: unknown, measurin
 /** How often each call of the current turn has been made: the loop guard's memory, reset per turn. */
 const repeatedCalls = new Map<string, number>();
 
-function openTurnTrace(label: string): TurnTrace {
+function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTrace {
 	repeatedCalls.clear();
+	refusedItems.clear();
+	lastEventAt = Date.now();
 	currentTurn = {
 		label,
 		durationMs: Date.now(),
@@ -2533,9 +2950,13 @@ function openTurnTrace(label: string): TurnTrace {
 		repeatedCalls: 0,
 		compactions: 0,
 		providerRetries: 0,
-		softTimeoutFired: false,
-		hardAborted: false,
+		outputTokens: 0,
+		cutOff: 0,
+		budget,
+		askedToRecord: false,
+		stoppedBy: null,
 	};
+	turnDemand = demand;
 	return currentTurn;
 }
 
@@ -2543,9 +2964,11 @@ function closeTurnTrace(trace: TurnTrace): void {
 	trace.durationMs = Date.now() - trace.durationMs;
 	runnerDebug.turns.push(trace);
 	currentTurn = null;
+	turnDemand = null;
 	persistRunnerDebug();
 	console.error(
-		`[pi-runner] ${trace.label}: ${(trace.durationMs / 1000).toFixed(1)}s, calls=${trace.calls}, ` +
+		`[pi-runner] ${trace.label}: ${(trace.durationMs / 1000).toFixed(1)}s, calls=${trace.calls}/${trace.budget.modelCalls}, ` +
+			`outputTokens=${trace.outputTokens}/${trace.budget.outputTokens}${trace.stoppedBy ? `, stoppedBy=${trace.stoppedBy}` : ""}, ` +
 			`tools=${JSON.stringify(trace.toolCalls)}, stored=${trace.stored}, refused=${trace.refused}` +
 			`${trace.toolErrors ? `, toolErrors=${trace.toolErrors}` : ""}${trace.compactions ? `, compactions=${trace.compactions}` : ""}${trace.providerRetries ? `, providerRetries=${trace.providerRetries}` : ""}`,
 	);
@@ -2618,7 +3041,16 @@ function criteriaFileOf(slug: string): string | null {
 	return existsSync(file) ? readFileSync(file, "utf8").trim() : null;
 }
 
-/** The criteria of the turn's practices, inlined: the turn carries what it asks about. */
+/** The leads the practice's precompute script derived, when it ran; empty when it did not. */
+function precomputeSectionOf(slug: string): string {
+	const file = `${CWD}/work/precompute-out/${slug}.md`;
+	const section = existsSync(file) ? readFileSync(file, "utf8").trim() : "";
+	return section
+		? `\n\n#### Precomputed leads for \`${slug}\` — starting points to check against the criteria, not verdicts\n${section}`
+		: "";
+}
+
+/** The criteria of the turn's practices and their precomputed leads, inlined: the turn carries what it asks about. */
 function criteriaOf(slugs: readonly string[]): string {
 	return slugs
 		.map((slug) => {
@@ -2628,23 +3060,131 @@ function criteriaOf(slugs: readonly string[]): string {
 				exhaustive.length > 0
 					? `Exhaustive sources (an absence claim must have searched all of them): ${exhaustive.join(", ")}.\n\n`
 					: "";
-			return `### Practice \`${slug}\`\n${scope}${criteria}`;
+			return `### Practice \`${slug}\`\n${scope}${criteria}${precomputeSectionOf(slug)}`;
 		})
 		.join("\n\n");
 }
 
-function measureTurnText(
-	turn: { id: string; slugs: string[] },
-	turnNumber: number,
-	turnCount: number,
-	brief: string,
-): string {
-	const opening =
-		turnNumber === 1 ? `${prompt}\n\n${brief}\n\n` : `## Recorded so far\n${recordedSoFar()}\n\n`;
-	return `${opening}## Turn ${turnNumber} of ${turnCount}: ${turn.id}
-Evaluate these practices: ${turn.slugs.join(", ")}. Their criteria follow and decide the outcome. What the brief shows is yours to quote; read more only when a criterion needs it. Record one observation per practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation, every one that is ready in one call.
+/**
+ * Whether the task, the brief and the example are still in the session's context. The first turn
+ * carries them; a compaction summarizes them away, so the turn after it carries them again, with what
+ * was recorded, and the model quotes the exact text rather than a summary of it.
+ */
+let openingInContext = false;
 
-${criteriaOf(turn.slugs)}`;
+/**
+ * The task, the brief and the example, when the context no longer holds them; nothing otherwise. The
+ * composer records no observation, so it gets the task and the brief alone.
+ */
+function openingIfNeeded(brief: string, composing = false): string {
+	if (openingInContext) {
+		return "";
+	}
+	openingInContext = true;
+	return composing
+		? `${prompt}\n\n${brief}\n\n`
+		: `${prompt}\n\n${brief}\n\n${OBSERVATION_EXAMPLE}\n\n${
+				reviewState.observations.length === 0 ? "" : `## Recorded so far\n${recordedSoFar()}\n\n`
+			}`;
+}
+
+/**
+ * Three observations written out, with this review's real artifact paths: the shape of a call the model
+ * has not yet made, shown once with the brief. One each of met, not met and not applicable, so no
+ * outcome reads as the expected one.
+ */
+const OBSERVATION_EXAMPLE = (() => {
+	const context = taskEnvelope.paths.contextRoot;
+	const example = [
+		{
+			practiceSlug: "<the practice's slug>",
+			summary: "Date parser added with tests for empty and malformed input",
+			outcome: "MET",
+			severity: null,
+			evidenceRationale:
+				"The change adds DateParser and, beside it, tests that feed it an empty string and a malformed date.",
+			evidence: {
+				citations: [
+					{
+						sourceKind: "scm.pull-request.diff",
+						artifactPath: `${context}/change.json`,
+						path: "Tests/DateParserTests.swift",
+						side: "NEW",
+						startLine: 12,
+						endLine: 12,
+						quote: "func testRejectsMalformedDate() {",
+					},
+				],
+			},
+		},
+		{
+			practiceSlug: "<the practice's slug>",
+			summary: "New error branch of the parser ships without a test",
+			outcome: "NOT_MET",
+			severity: "MINOR",
+			evidenceRationale:
+				"The change adds a branch that rejects an empty string; no added test feeds the parser one.",
+			evidence: {
+				citations: [
+					{
+						sourceKind: "scm.pull-request.diff",
+						artifactPath: `${context}/change.json`,
+						path: "App/DateParser.swift",
+						side: "NEW",
+						startLine: 30,
+						endLine: 30,
+						quote: "guard !text.isEmpty else { throw ParseError.empty }",
+					},
+				],
+				search: {
+					consulted: ["scm.pull-request.diff"],
+					lookedFor: "an added test that passes an empty string to the parser",
+					boundary: "the added test files of this change; tests outside the change were not read",
+				},
+			},
+		},
+		{
+			practiceSlug: "<the practice's slug>",
+			summary: "No persisted model changes in this change",
+			outcome: "NOT_APPLICABLE",
+			severity: null,
+			evidenceRationale:
+				"Every changed file is a view or a test; none declares or migrates a stored type.",
+			evidence: {
+				citations: [
+					{
+						sourceKind: "scm.pull-request.core",
+						artifactPath: `${context}/metadata.json`,
+						path: `${context}/metadata.json`,
+						startLine: 3,
+						endLine: 3,
+						quote: '"title": "Add date parser"',
+					},
+				],
+				inapplicability: {
+					consulted: ["scm.pull-request.diff", "scm.pull-request.core"],
+					subject: "a persisted model or schema",
+					ruledOutBy: "the changed files are views and tests only",
+				},
+			},
+		},
+	];
+	return `## How report_observation takes observations
+\`observations\` is a JSON array with one object per practice, every object carrying every key shown (null where the contract says so). An illustration, not evidence from this work:
+\`\`\`json
+${JSON.stringify({ observations: example }, null, 1)}
+\`\`\``;
+})();
+
+/**
+ * A turn of practices, after the opening when the context does not hold it. Its work budget is not stated:
+ * told its call budget up front, an open model read less and missed more not-met practices.
+ */
+function practicesTurnText(heading: string, slugs: readonly string[], brief: string): string {
+	return `${openingIfNeeded(brief)}${heading}
+Evaluate these practices: ${slugs.join(", ")}. Their criteria follow and decide the outcome. What the brief shows is yours to quote; read more only when a criterion needs it, and when it needs more than one read or search, run them together in one codemode script that prints only the lines you will quote. Record one observation per practice — the outcome the criteria and the evidence support, NOT_APPLICABLE and UNDETERMINED included — with report_observation, every one that is ready in one call.
+
+${criteriaOf(slugs)}`;
 }
 
 /**
@@ -2685,48 +3225,73 @@ function notMetPractices(observations: readonly AdmittedObservation[]): string[]
 	].toSorted();
 }
 
-/** Retry undecided composition once, with a fresh loop guard and the original deadline. */
+/**
+ * Composition's budget: a unit per NOT_MET practice, but never more than a full turn's worth — the
+ * lanes cap what it can write, so work beyond that is a loop, not more feedback.
+ */
+function compositionBudget(notMet: number): Work {
+	return turnBudget(Math.min(Math.max(1, notMet), PRACTICES_PER_TURN), PER_PRACTICE_WORK);
+}
+
+/** Retry undecided composition once, under its own work budget and the run's safety line. */
 async function askComposerOnceMore(
 	session: AgentSession,
 	notMet: readonly string[],
-	deadline: ReturnType<typeof scheduleDeadline>,
+	undecided: () => readonly string[],
+	request: CompositionRequest,
+	safety: ReturnType<typeof scheduleDeadline>,
 ): Promise<void> {
 	console.error(
 		`[pi-runner] composition left ${notMet.length} NOT_MET practice(s) undecided — asking once more`,
 	);
-	if (!(await settleSession(session, "composition", ABORT_SETTLE_MS))) {
-		throw new Error("the session was still busy when the composition was asked once more");
+	const trace = openTurnTrace("composition once more", compositionBudget(notMet.length), {
+		owed: () => undecided().length,
+		nudge: COMPOSITION_NUDGE,
+		endsWhenPaid: true,
+	});
+	try {
+		if (!(await settleSession(session, "composition", ABORT_SETTLE_MS))) {
+			throw new Error("the session was still busy when the composition was asked once more");
+		}
+		if (!safety.expired()) {
+			await Promise.race([session.prompt(finishCompositionText(notMet, request)), safety.elapsed]);
+		}
+	} catch (error) {
+		console.error(`[pi-runner] composition failed: ${errorText(error)}`);
+	} finally {
+		if (trace.stoppedBy !== null) {
+			await settleSession(session, "composition", ABORT_SETTLE_MS);
+		}
+		closeTurnTrace(trace);
 	}
-	if (deadline.expired()) {
-		return;
-	}
-	repeatedCalls.clear();
-	await Promise.race([session.prompt(finishCompositionText(notMet)), deadline.elapsed]);
 }
 
-function finishCompositionText(notMet: readonly string[]): string {
+function finishCompositionText(notMet: readonly string[], request: CompositionRequest): string {
+	// The lanes as they stand: a retry that does not know a lane is full writes units that are skipped.
+	const room = CHANNELS.filter((channel) => request.channels[channel].enabled)
+		.map((channel) => {
+			const { maxUnits } = request.channels[channel];
+			const used = composedFeedback.units.filter(
+				(unit) => unit.channel === channel && unit.action !== "WITHHOLD",
+			).length;
+			return `${channel} ${Math.max(0, maxUnits - used)} of ${maxUnits}`;
+		})
+		.join(", ");
 	return (
 		`## Undecided\nThe turn ended with no unit and no WITHHOLD for these practices, each with a ` +
 		`NOT_MET observation: ${notMet.join(", ")}. For each, persist the unit you decided on, or a ` +
 		`WITHHOLD with its reason (NO_MATERIAL_CHANGE, ALREADY_SAID, BELOW_BAR), in one report_feedback ` +
-		`call. The admitted observations are in \`work/composition/observations.json\`. Use tools only ` +
-		`from this point onward; no prose.`
-	);
-}
-
-function finishTurnText(missing: readonly string[]): string {
-	return (
-		`## Recorded so far\n${recordedSoFar()}\n\n## Unfinished practices\n` +
-		`No observation was recorded for: ${missing.join(", ")}. Record the outcome the evidence you have ` +
-		`read supports for each, in one report_observation call; read more only to settle a specific open ` +
-		`question. Evaluate no other practice. ${PERSIST_DISCIPLINE}`
+		`call. Room left for new units: ${room}; a lane with none left takes only a WITHHOLD. The ` +
+		`admitted observations are in \`work/composition/observations.json\`. Use tools only from this ` +
+		`point onward; no prose.`
 	);
 }
 
 async function main() {
 	console.error(`[pi-runner] One-session review`);
 	console.error(
-		`[pi-runner] Budget: total=${AGENT_BUDGET_MS}ms, measure=${WINDOWS.measureMs}ms, composition=${WINDOWS.compositionMs}ms`,
+		`[pi-runner] Work per practice: ${PER_PRACTICE_WORK.modelCalls} model calls, ${PER_PRACTICE_WORK.outputTokens} output tokens; ` +
+			`safety ceiling ${AGENT_BUDGET_MS}ms, measuring hands in by ${WINDOWS.measureMs}ms`,
 	);
 
 	// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
@@ -2743,6 +3308,8 @@ async function main() {
 		agentsFilesOverride: () => ({
 			agentsFiles: [{ path: orchestratorPath, content: orchestrator }],
 		}),
+		// "on" keeps every tool callable directly as well; scripts get no model catalog to call.
+		extensionFactories: [createCodemodeExtension({ mode: "on", models: false })],
 	});
 	await loader.reload();
 	const modelRuntime = await ModelRuntime.create({
@@ -2762,6 +3329,7 @@ async function main() {
 	if (!model) {
 		throw new Error(`Hephaestus model was not registered: ${providerConfig.modelId}`);
 	}
+	outputLimit = model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY;
 	console.error(
 		`[pi-runner] registered hephaestus provider: apiProtocol=${providerConfig.apiProtocol} ` +
 			`model=${providerConfig.modelId} contextWindow=${model.contextWindow}`,
@@ -2785,11 +3353,22 @@ async function main() {
 	let measuring = true;
 	const subscribeSession = (trackedSession: AgentSession) =>
 		trackedSession.subscribe((event: AgentSessionEvent) => {
+			chargeWork(event);
 			const label = measuring ? "review" : "composer";
 			if (event.type === "tool_execution_start") {
-				console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
-				if (currentTurn) {
-					noteToolCall(currentTurn, event.toolName, event.args, measuring);
+				// A call a codemode script makes is the script's work, not a call the model sent: the loop
+				// guards count only the latter, and the trace keeps the former apart.
+				if (event.parentToolCallId === undefined) {
+					console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
+					if (currentTurn) {
+						noteToolCall(currentTurn, event.toolName, event.args, measuring);
+					}
+				} else {
+					console.error(`[pi-runner] ${label} tool: codemode → ${event.toolName}`);
+					if (currentTurn) {
+						const key = `codemode.${event.toolName}`;
+						currentTurn.toolCalls[key] = (currentTurn.toolCalls[key] ?? 0) + 1;
+					}
 				}
 			}
 			// SDK validation errors do not reach the tool, so log them from the session event.
@@ -2800,16 +3379,21 @@ async function main() {
 			) {
 				const result: unknown = event.result;
 				const reason = firstLine(toolResultText(result));
-				console.error(`[pi-runner] ${label} tool error: ${event.toolName} — ${reason}`);
+				const tool =
+					event.parentToolCallId === undefined ? event.toolName : `codemode → ${event.toolName}`;
+				console.error(`[pi-runner] ${label} tool error: ${tool} — ${reason}`);
 				if (currentTurn) {
 					currentTurn.toolErrors += 1;
-					currentTurn.toolErrorReasons.push(`${event.toolName}: ${reason}`);
+					currentTurn.toolErrorReasons.push(`${tool}: ${reason}`);
 				}
 			}
 			if (event.type === "compaction_end") {
 				console.error(
 					`[pi-runner] ${label} context compacted (${event.reason})${hasText(event.errorMessage) ? `: ${event.errorMessage}` : ""}`,
 				);
+				if (!event.aborted && !hasText(event.errorMessage)) {
+					openingInContext = false;
+				}
 				if (currentTurn && !event.aborted) {
 					currentTurn.compactions += 1;
 				}
@@ -2837,9 +3421,6 @@ async function main() {
 			}
 			if (event.type === "message_end" && event.message.role === "assistant") {
 				addAssistantUsage(streamUsage, event.message);
-				if (currentTurn) {
-					currentTurn.calls += 1;
-				}
 				const { stopReason } = event.message;
 				const types = listOrEmpty(event.message.content).map((c) => c.type);
 				const toolCalls = types.filter((t) => t === "toolCall").length;
@@ -2872,19 +3453,19 @@ async function main() {
 	);
 
 	const measureEnd = PROCESS_START_MS + WINDOWS.measureMs;
-	let hardAborted = false;
-	let softTimeoutFired = false;
 	const startMs = Date.now();
-	if (Date.now() >= measureEnd) {
-		console.error(`[pi-runner] FAILED: the review budget was spent before the session could start`);
-		hardAborted = true;
+	const tooLate = Date.now() >= measureEnd;
+	if (tooLate) {
+		console.error(
+			`[pi-runner] FAILED: the run reached its safety ceiling before the session could start`,
+		);
 	}
 
 	const customTools = [buildReportObservationTool()];
 	if (feedbackTool) {
 		customTools.push(feedbackTool, buildSummaryTool());
 	}
-	if (hardAborted) {
+	if (tooLate) {
 		logPracticeCoverage();
 		finalizeOutput();
 		process.exit(1);
@@ -2911,81 +3492,97 @@ async function main() {
 	activeSession = session;
 	const unsubscribe = subscribeSession(session);
 
-	/** One prompt of the session under a fair share of what is left; true when it ran to its own end. */
-	async function runTurn(label: string, text: string, remainingTurns: number): Promise<boolean> {
-		const turnStart = Date.now();
-		const remainingMs = measureEnd - turnStart;
-		let share = turnShare(Math.max(0, remainingMs), remainingTurns);
-		if (share.hardMs <= 0) {
-			console.error(`[pi-runner] ${label}: no budget left — skipped`);
-			hardAborted = true;
-			return false;
+	// Liveness, not a budget: a turn that shows no sign of life for STALL_MS is aborted.
+	const stallWatch = setInterval(() => {
+		if (currentTurn?.stoppedBy === null && Date.now() - lastEventAt >= STALL_MS) {
+			if (measuring) {
+				providerFailures += 1;
+			}
+			stopTurn("stall", `no model or tool event for ${STALL_MS / 1000}s — aborting this turn`);
 		}
-		if (!(await settleSession(session, label, share.hardMs))) {
+	}, STALL_CHECK_MS);
+	stallWatch.unref();
+
+	/**
+	 * One turn under its own work budget, whatever the turns before it spent; the safety line ends it only
+	 * when the run nears its ceiling. Returns why the runner ended it, or null when the model did.
+	 */
+	async function runTurn(
+		label: string,
+		text: string,
+		slugs: readonly string[],
+	): Promise<StopReason | null> {
+		if (!(await settleSession(session, label, ABORT_SETTLE_MS))) {
 			console.error(`[pi-runner] ${label}: session still busy — skipped`);
-			hardAborted = true;
-			return false;
+			return "stall";
 		}
-		// Waiting for the previous turn spends this turn's share, not the composition reserve.
-		const hardMs = Math.max(0, share.hardMs - (Date.now() - turnStart));
-		share = turnShare(hardMs, 1);
-		if (share.hardMs <= 0) {
-			hardAborted = true;
-			return false;
+		const safetyMs = measureEnd - Date.now();
+		if (safetyMs <= 0) {
+			console.error(`[pi-runner] ${label}: the run is near its safety ceiling — skipped`);
+			return "safety";
 		}
-		const trace = openTurnTrace(label);
-		const softTimer = setTimeout(() => {
-			softTimeoutFired = true;
-			trace.softTimeoutFired = true;
-			console.error(`[pi-runner] ${label}: share nearly spent — nudging to record`);
-			void steer(
-				session,
-				`This turn has used most of its share of the review budget. Stop exploring and record what the inspected evidence supports for the listed practices, in one report_observation call. ${PERSIST_DISCIPLINE}`,
-			);
-		}, share.softMs);
-		let aborting: Promise<void> | undefined;
-		const hard = scheduleDeadline(share.hardMs, () => {
-			hardAborted = true;
-			console.error(`[pi-runner] ${label}: share exhausted — aborting this turn`);
-			aborting = abortSession(session);
+		const budget = turnBudget(slugs.length, PER_PRACTICE_WORK);
+		console.error(
+			`[pi-runner] ${label}: ${slugs.length} practice(s), up to ${budget.modelCalls} calls and ` +
+				`${budget.outputTokens} output tokens (${tokensPerObservation} tokens per observation so far)`,
+		);
+		const trace = openTurnTrace(label, budget, {
+			owed: () => owedPractices().length,
+			nudge: RECORD_NUDGE,
+		});
+		const safety = scheduleDeadline(safetyMs, () => {
+			stopTurn("safety", "the run is near its safety ceiling — aborting this turn");
 		});
 		try {
-			await Promise.race([session.prompt(text), hard.elapsed]);
-			return !hard.expired();
+			await Promise.race([session.prompt(text), safety.elapsed]);
 		} catch (error) {
 			console.error(`[pi-runner] ${label} failed: ${errorText(error)}`);
-			return false;
 		} finally {
-			clearTimeout(softTimer);
-			clearTimeout(hard.timer);
-			if (aborting) {
+			clearTimeout(safety.timer);
+			if (trace.stoppedBy !== null) {
 				await settleSession(session, label, ABORT_SETTLE_MS);
 			}
-			trace.hardAborted = hard.expired();
 			closeTurnTrace(trace);
 		}
+		return trace.stoppedBy;
 	}
 
 	try {
+		let stalls = 0;
 		for (const [index, turn] of turns.entries()) {
 			currentTurnSlugs = turn.slugs;
-			await runTurn(
+			const stop = await runTurn(
 				`turn ${index + 1}/${turns.length} (${turn.id})`,
-				measureTurnText(turn, index + 1, turns.length, brief),
-				turns.length - index,
+				practicesTurnText(`## Turn ${index + 1} of ${turns.length}: ${turn.id}`, turn.slugs, brief),
+				turn.slugs,
 			);
+			stalls = stop === "stall" ? stalls + 1 : 0;
+			if (stop === "safety" || stalls >= 2) {
+				console.error(
+					`[pi-runner] Measuring ends early: ${stop === "safety" ? "safety ceiling" : "the session stalled twice in a row"}`,
+				);
+				break;
+			}
 		}
 		const missing = missingSlugs(
 			allSlugs,
 			reviewState.observations.map((item) => item.practiceSlug),
 		);
 		const unfinished = missing.filter((slug) => !blockedPractices.has(slug));
-		if (unfinished.length > 0 && Date.now() < measureEnd) {
+		if (unfinished.length > 0 && stalls < 2 && Date.now() < measureEnd) {
 			console.error(
 				`[pi-runner] Finishing ${unfinished.length} practice(s): ${unfinished.join(", ")}`,
 			);
 			currentTurnSlugs = unfinished;
-			await runTurn("finish", finishTurnText(unfinished), 1);
+			await runTurn(
+				"finish",
+				practicesTurnText(
+					"## Unfinished practices\nNo turn recorded a result for these practices; evaluate them now.",
+					unfinished,
+					brief,
+				),
+				unfinished,
+			);
 		}
 	} finally {
 		measuring = false;
@@ -2997,8 +3594,6 @@ async function main() {
 	runnerDebug.attempts.push({
 		label: "measure",
 		durationMs: measureDurationMs,
-		softTimeoutFired,
-		hardAborted,
 		assistantMessages: measureUsage.assistantMessages,
 		stopReasons: measureUsage.stopReasons,
 		usage: measureUsage,
@@ -3008,7 +3603,10 @@ async function main() {
 	persistUsage();
 	console.error(
 		`[pi-runner] Measured: ${(measureDurationMs / 1000).toFixed(1)}s, calls=${measureUsage.totalCalls}, ` +
-			`softTimeout=${softTimeoutFired}, hardAbort=${hardAborted}, observations=${reviewState.observations.length}`,
+			`stopped=[${runnerDebug.turns
+				.filter((turn) => turn.stoppedBy !== null)
+				.map((turn) => `${turn.label}: ${turn.stoppedBy}`)
+				.join("; ")}], observations=${reviewState.observations.length}`,
 	);
 
 	const notReached = missingSlugs(
@@ -3043,56 +3641,66 @@ async function main() {
 	persistComposedFeedback();
 	maybeWriteResultFile();
 	if (compositionRequest && feedbackTool && admittedObservations.length > 0) {
-		const remainingMs = AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS);
-		const compositionMs = Math.min(
-			remainingMs,
-			WINDOWS.compositionMs + Math.max(0, measureEnd - Date.now()),
-		);
-		if (compositionMs <= 0) {
-			console.error("[pi-runner] Composition budget exhausted — preserving admitted observations");
+		const safetyMs = AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS);
+		if (safetyMs <= 0) {
+			console.error(
+				"[pi-runner] The run reached its safety ceiling before composition — preserving admitted observations",
+			);
 		} else {
 			const instructions = readFileSync(COMPOSER_PROMPT_PATH, "utf8");
-			const deadline = scheduleDeadline(compositionMs, () => {
-				console.error(
-					`[pi-runner] Composition timeout — preserving observations and composed units so far`,
+			const safety = scheduleDeadline(safetyMs, () => {
+				stopTurn(
+					"safety",
+					"the run is near its safety ceiling — preserving observations and composed units so far",
 				);
-				void abortSession(session);
 			});
-			const trace = openTurnTrace("composition");
-			const softTimer = setTimeout(
-				() => {
-					trace.softTimeoutFired = true;
-					console.error(`[pi-runner] composition: budget nearly spent — nudging to persist`);
-					void steer(session, COMPOSITION_NUDGE);
-				},
-				Math.floor(compositionMs * 0.6),
+			const notMet = notMetPractices(admittedObservations);
+			// A NOT_MET practice is decided by a unit of its own, or by one that folds its observation in.
+			const practiceOf = new Map(
+				admittedObservations.map((observation) => [observation.id, observation.practiceSlug]),
 			);
-			try {
-				if (!(await settleSession(session, "composition", compositionMs)) || deadline.expired()) {
-					throw new Error("the session was still busy when the composition budget ran out");
-				}
-				const compositionText = `${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations, notReached)}`;
-				await makeRoomFor(session, model, compositionText);
-				if (deadline.expired()) {
-					throw new Error("the composition budget ran out while the session was compacted");
-				}
-				await Promise.race([session.prompt(compositionText), deadline.elapsed]);
-				// Ask once more for undecided not-met practices; otherwise they have no composed next step.
-				const undecided = notMetPractices(admittedObservations).filter(
-					(slug) => !composedFeedback.units.some((unit) => unit.practiceSlug === slug),
+			const undecided = () => {
+				const decided = new Set(
+					composedFeedback.units.flatMap((unit) => [
+						unit.practiceSlug,
+						...unit.basedOn.flatMap((id) => practiceOf.get(id) ?? []),
+					]),
 				);
-				if (!deadline.expired() && undecided.length > 0) {
-					await askComposerOnceMore(session, undecided, deadline);
+				return notMet.filter((slug) => !decided.has(slug));
+			};
+			const trace = openTurnTrace("composition", compositionBudget(notMet.length), {
+				owed: () => undecided().length,
+				nudge: COMPOSITION_NUDGE,
+			});
+			try {
+				if (!(await settleSession(session, "composition", ABORT_SETTLE_MS)) || safety.expired()) {
+					throw new Error("the session was still busy when composition was due");
 				}
+				const compositionTurn = `${instructions}\n\n${buildCompositionTurn(compositionRequest, admittedObservations, notReached)}`;
+				await makeRoomFor(session, model, compositionTurn);
+				// When room had to be made, the brief goes with the turn again.
+				const compositionText = `${openingIfNeeded(brief, true)}${compositionTurn}`;
+				if (safety.expired()) {
+					throw new Error("the run reached its safety ceiling while the session was compacted");
+				}
+				await Promise.race([session.prompt(compositionText), safety.elapsed]);
 			} catch (error) {
 				console.error(`[pi-runner] composition failed: ${errorText(error)}`);
 			} finally {
-				clearTimeout(softTimer);
-				clearTimeout(deadline.timer);
-				trace.hardAborted = deadline.expired();
 				closeTurnTrace(trace);
-				persistComposedFeedback();
 			}
+			// A composer that ended on its own, or was cut off by a loop guard, is asked once more for the
+			// NOT_MET practices it left undecided; otherwise they have no composed next step.
+			const left = undecided();
+			if (
+				(trace.stoppedBy === null || trace.stoppedBy === "loop") &&
+				left.length > 0 &&
+				!safety.expired()
+			) {
+				await askComposerOnceMore(session, left, undecided, compositionRequest, safety);
+			}
+			clearTimeout(safety.timer);
+			persistComposedFeedback();
 			const combinedUsage = extractUsageFromSession(session.state, streamUsage);
 			accumulateUsage(measureUsage, combinedUsage);
 			persistUsage();

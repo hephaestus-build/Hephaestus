@@ -24,6 +24,22 @@ A working deployment must:
 
 Each workspace enables practice review and chooses its own coverage.
 
+A review works through its practices a group at a time, and each group is bounded by work, not by
+time. `PRACTICE_REVIEW_PRACTICE_MODEL_CALLS` (default 12) and `PRACTICE_REVIEW_PRACTICE_OUTPUT_TOKENS`
+(default 16000) set what one practice may spend: a group of five practices may make 60 model calls and
+write 80,000 output tokens, and a group never gets less than three practices' worth. The defaults are
+a cap for a group that runs away, several times what a group normally uses, so a review spends what
+its practices need and no more. Each group gets its own budget, whatever the groups before it spent.
+Near the end of its budget the model is asked to record what it has; the group ends after the call
+that spends the budget. Composition gets at most one full group's worth. Raise the output tokens for a
+model that reasons at length.
+
+The timeout of the workspace's practice-review model binding is the whole-run safety ceiling. It
+can stop a productive review too, leaving later practices `NOT_REACHED`; independent group budgets
+do not reserve time for every group. A review that shows no sign of life for five minutes — no streamed
+token, no tool progress — has that group stopped; two such stalls in a row end the review with what
+it has recorded.
+
 `PRACTICE_REVIEW_SAMPLING_TEMPERATURE` sets the sampling temperature for practice-review
 model calls, not mentor calls. If unset, the provider default applies. Use a value supported by the
 selected model and confirm that your deployment forwards the setting. A low temperature does not

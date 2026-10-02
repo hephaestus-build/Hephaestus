@@ -20,7 +20,10 @@ async function run(scripts: Record<string, string>) {
 		{ encoding: "utf8", stdio: ["ignore", "ignore", "pipe"] },
 	);
 	assert.equal(status, 0, stderr);
-	return { output, summary: await readFile(path.join(output, "summary.md"), "utf8") };
+	return {
+		output,
+		section: async (slug: string) => readFile(path.join(output, `${slug}.md`), "utf8"),
+	};
 }
 
 /** A script whose result is the given JSON, spelled inline. */
@@ -29,7 +32,7 @@ function script(result: object): string {
 }
 
 void test("runner executes a staged practice and writes its public artifact contract", async () => {
-	const { output, summary } = await run({
+	const { output, section } = await run({
 		sample: script({
 			hints: [
 				{
@@ -58,10 +61,8 @@ void test("runner executes a staged practice and writes its public artifact cont
 	assert.equal(Reflect.get(written, "practice"), "sample");
 	assert.equal(Reflect.get(written, "status"), "ok");
 	assert.deepEqual(Reflect.get(written, "metrics"), { found: 1 });
-	assert.match(summary, /## sample/u);
-	// The header says how the diff view's lines are prefixed, so the model greps for added lines the
-	// way they are written.
-	assert.match(summary, /an added line matches `\^\\\[L\[0-9\]\+\\\] \\\+`, never `\^\\\+`/u);
+	const summary = await section("sample");
+	assert.match(summary, /^- inspect sample\n/u);
 	// A changed-line row is cited the way the diff view prints the line; a false flag is left out.
 	assert.match(
 		summary,
@@ -76,31 +77,30 @@ void test("runner executes a staged practice and writes its public artifact cont
 });
 
 void test("a practice that scanned the diff and found nothing says what it scanned; one that scanned nothing says only its directions", async () => {
-	const { summary } = await run({
+	const { section } = await run({
 		scanned: script({ hints: [], metrics: { linesAdded: 120, filesScanned: 4 }, directions: [] }),
 		bare: script({ hints: [], metrics: {}, directions: ["no record captured"] }),
 	});
 	assert.match(
-		summary,
-		/## scanned\n\nScanned 120 added lines in 4 files for this practice's line patterns; none matched\. A pattern sees one line/u,
+		await section("scanned"),
+		/^Scanned 120 added lines in 4 files for this practice's line patterns; none matched\. A pattern sees one line/u,
 	);
-	assert.match(summary, /## bare\n\n- no record captured\n\n(?!Nothing matched)/u);
-	assert.doesNotMatch(summary, /Nothing matched/u);
+	assert.equal(await section("bare"), "- no record captured\n");
 });
 
 /** A long row of the given kind, so a handful of practices overrun the budget. */
-function row(i: number, inDiff: boolean) {
+function row(i: number, inDiff: boolean, width = 150) {
 	return {
 		file: inDiff ? `src/file${i}.ts` : "context/comments.json",
 		line: i,
 		pattern: inDiff ? "candidate" : "reviewer comment",
-		context: "x".repeat(150),
+		context: "x".repeat(width),
 		inDiff,
-		flags: { note: "y".repeat(120), later: false },
+		flags: { note: "y".repeat(width - 30), later: false },
 	};
 }
 
-void test("the summary stays under its budget by trimming changed-line rows first, never the JSON pointer nor the last record rows", async () => {
+void test("each practice's section stays under its own budget, keeping a sample of changed-line rows, record rows, and the JSON pointer", async () => {
 	const record = Array.from({ length: 60 }, (_, i) => row(i, false));
 	const inDiff = Array.from({ length: 30 }, (_, i) => row(i, true));
 	const scripts = Object.fromEntries(
@@ -109,20 +109,49 @@ void test("the summary stays under its budget by trimming changed-line rows firs
 			script({ hints: [...record, ...inDiff], metrics: {}, directions: [] }),
 		]),
 	);
-	const { summary } = await run(scripts);
-	assert.ok(summary.length <= 20_000, `summary is ${summary.length} chars`);
-	// Every practice keeps the pointer to the file that holds all of its rows, and at least three of
-	// its record rows: the facts a record practice decides on are never all trimmed away.
+	const { section } = await run(scripts);
+	// One busy practice does not trim another: each is bounded alone and keeps a sample of both kinds.
 	for (let n = 0; n < 8; n += 1) {
-		assert.match(summary, new RegExp(`- \\.\\.\\. and \\d+ more in \`[^\`]*/p${n}\\.json\``, "u"));
+		const text = await section(`p${n}`);
+		assert.ok(text.length <= 3000, `p${n} is ${text.length} chars`);
+		assert.match(text, new RegExp(`- \\.\\.\\. and \\d+ more in \`[^\`]*/p${n}\\.json\``, "u"));
 		assert.match(
-			summary,
+			text,
 			new RegExp(`\\*\\*30 hints on changed lines\\*\\* — see \`[^\`]*/p${n}\\.json\``, "u"),
 		);
+		assert.equal(text.match(/candidate:/gu)?.length, 5);
+		assert.ok((text.match(/reviewer comment:/gu)?.length ?? 0) >= 3);
 	}
-	assert.ok((summary.match(/reviewer comment:/gu)?.length ?? 0) >= 8 * 3);
 	// Under budget, twenty record rows are shown before the pointer.
-	const small = await run({ one: script({ hints: record, metrics: {}, directions: [] }) });
-	assert.equal(small.summary.match(/reviewer comment:/gu)?.length, 20);
-	assert.match(small.summary, /- \.\.\. and 40 more in/u);
+	const small = await run({
+		one: script({
+			hints: Array.from({ length: 22 }, (_, i) => row(i, false, 40)),
+			metrics: {},
+			directions: [],
+		}),
+	});
+	const one = await small.section("one");
+	assert.equal(one.match(/reviewer comment:/gu)?.length, 20);
+	assert.match(one, /- \.\.\. and 2 more in/u);
+});
+
+void test("a section whose directions alone overrun the budget is cut and points at the full result", async () => {
+	const { section } = await run({
+		lines: script({
+			hints: [],
+			metrics: {},
+			directions: Array.from({ length: 10 }, (_, i) => `${i} ${"d".repeat(400)}`),
+		}),
+		one: script({ hints: [], metrics: {}, directions: ["e".repeat(5000)] }),
+	});
+	for (const slug of ["lines", "one"]) {
+		const text = await section(slug);
+		assert.ok(text.length <= 3000, `${slug} is ${text.length} chars`);
+		assert.match(
+			text,
+			new RegExp(`\\n- \\.\\.\\. the rest is in \`[^\`]*/${slug}\\.json\`\\n$`, "u"),
+		);
+	}
+	assert.match(await section("lines"), /^- 0 d+\n/u);
+	assert.match(await section("one"), /^- e{100}/u);
 });

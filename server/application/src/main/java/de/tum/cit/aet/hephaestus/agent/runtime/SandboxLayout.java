@@ -161,13 +161,13 @@ public final class SandboxLayout {
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 3;
+    public static final int RUNTIME_CONTRACT_VERSION = 4;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;
 
     /** Pi SDK major required by the staged runners. */
-    public static final int PI_SDK_MAJOR = 0;
+    public static final int PI_SDK_MAJOR = 1;
 
     /** Practice slug pattern enforced at the handler boundary as defense-in-depth against FS-path injection. */
     public static final Pattern PRACTICE_SLUG = Pattern.compile("[a-z0-9][a-z0-9-]{0,63}");
