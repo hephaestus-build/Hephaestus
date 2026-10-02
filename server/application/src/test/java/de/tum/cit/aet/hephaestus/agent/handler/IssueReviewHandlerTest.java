@@ -8,6 +8,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
@@ -15,13 +18,17 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -36,6 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -97,7 +105,8 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                         workspaceContextBuilder,
                         practiceCatalogInjector,
                         new TaskEnvelopeWriter(objectMapper),
-                        gitRepositoryManager),
+                        gitRepositoryManager,
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer()),
                 practiceCatalogInjector,
                 new PracticeDetectionResultParser(objectMapper),
                 new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
@@ -145,6 +154,42 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                 "https://github.com/owner/repo/issues/12",
                 java.time.Instant.ofEpochMilli(1_700_000_000_000L),
                 null);
+    }
+
+    @Test
+    void shouldPointToCapturedIssueFilesWhenPreparingTheTask() {
+        var job = new AgentJob();
+        job.setId(UUID.randomUUID());
+        job.setWorkspace(activePracticeWorkspace());
+        job.setMetadata(handler.createSubmission(sampleRequest()).metadata());
+        var practice = new Practice();
+        practice.setSlug("issue-practice");
+        practice.setCriteria("Review the issue.");
+        practice.setBindings(PracticeTestEvidence.bindings(ArtifactKinds.ISSUE));
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.ISSUE));
+        var revision = new PracticeRevision();
+        ReflectionTestUtils.setField(revision, "id", 12L);
+        practice.setCurrentRevision(revision);
+        when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.ISSUE))
+                .thenReturn(java.util.List.of(practice));
+        when(workspaceContextBuilder.prepare(any(), any()))
+                .thenReturn(new PreparedEvidence(
+                        Map.of(SandboxLayout.CONTEXT_PREFIX + "metadata.json", "{}".getBytes(StandardCharsets.UTF_8)),
+                        mock(JobFolderIndex.class)));
+        when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any(), any()))
+                .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
+                        java.util.List.of(practice), mock(AutomatedReviewReadinessReport.class)));
+        try (var prepared = handler.prepareInputs(job)) {
+            var files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(prepared);
+            var task = objectMapper.readTree(
+                    java.util.Objects.requireNonNull(files.get(SandboxLayout.TASK_ENVELOPE_FILENAME)));
+            assertThat(task.path("prompt").asString())
+                    .contains(
+                            SandboxLayout.CONTEXT_PREFIX + "metadata.json",
+                            SandboxLayout.CONTEXT_PREFIX + "comments.json",
+                            SandboxLayout.CONTEXT_PREFIX + "project_inventory.json")
+                    .doesNotContain("inputs/context/");
+        }
     }
 
     @Nested

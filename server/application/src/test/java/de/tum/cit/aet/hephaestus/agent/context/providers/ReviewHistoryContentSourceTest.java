@@ -134,11 +134,9 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                     .filter(thread -> !inactiveThreads.contains(thread))
                     .collect(Collectors.toSet());
         });
+        lenient().when(observationRepository.findForPersonHistory(any(), any())).thenReturn(List.of());
         lenient()
-                .when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
-                .thenReturn(List.of());
-        lenient()
-                .when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+                .when(feedbackRepository.findDeliveredForPersonHistory(any(), any()))
                 .thenReturn(List.of());
         lenient()
                 .when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
@@ -200,7 +198,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         void theUnaskedHalfIsNotQueried() {
             provider.capture(prRequest(), Set.of(ReviewHistoryContentSource.OBSERVATION_HISTORY));
 
-            verify(feedbackRepository, never()).findRecentDeliveredForRecipient(any(), any(), any(), any());
+            verify(feedbackRepository, never()).findDeliveredForPersonHistory(any(), any());
             verify(feedbackRepository, never()).findPreparedForRecipient(any(), any(), any());
         }
     }
@@ -224,32 +222,18 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     class TheBoundsEachFileStates {
 
         @Test
-        void observationsAndFeedbackCarryTheWindowStartAndTheLimitAsValues() {
-            Instant before = Instant.now();
+        void shouldNotAdvertiseAHistoryWindowOrRecordLimit() {
             JsonNode observations = read(captureObservationHistory().files().get("inputs/history/observations.json"));
-            var feedbackCapture = captureFeedbackHistory();
-            JsonNode feedback = read(feedbackCapture.files().get("inputs/history/feedback.json"));
-
-            assertThat(observations.propertyNames())
-                    .containsExactlyInAnyOrder("since", "limit", "perPracticeLimit", "observations");
-            assertThat(feedback.propertyNames()).containsExactlyInAnyOrder("since", "limit", "feedback");
-            assertThat(observations.get("limit").isInt()).isTrue();
-            assertThat(observations.get("limit").asInt()).isPositive();
-            assertThat(observations.get("perPracticeLimit").asInt())
-                    .isEqualTo(ReviewHistoryContentSource.MAX_OBSERVATIONS_PER_PRACTICE);
-            assertThat(feedback.get("limit").asInt()).isPositive();
-            Instant observationsSince = Instant.parse(observations.get("since").asString());
-            Instant feedbackSince = Instant.parse(feedback.get("since").asString());
-            assertThat(observationsSince).isBefore(before);
-            assertThat(feedbackSince).isBefore(before);
+            JsonNode feedback = read(captureFeedbackHistory().files().get("inputs/history/feedback.json"));
+            assertThat(observations.propertyNames()).containsExactly("observations");
+            assertThat(feedback.propertyNames()).containsExactly("feedback");
         }
 
         @Test
         void preparedFeedbackCarriesTheLimitOnly() {
             JsonNode prepared = read(captureFeedbackHistory().files().get("inputs/history/prepared.json"));
 
-            assertThat(prepared.propertyNames()).containsExactlyInAnyOrder("limit", "prepared");
-            assertThat(prepared.get("limit").asInt()).isPositive();
+            assertThat(prepared.propertyNames()).containsExactly("prepared");
         }
     }
 
@@ -257,9 +241,9 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     void stagesTheRecordedTextAsItWasWritten() {
         String rationale = "The practice requires a test; the assessment is BAD -> MAJOR severity band.";
         String body = "Per the fixed bucketing this is a MINOR severity tier finding.";
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+        when(observationRepository.findForPersonHistory(any(), any()))
                 .thenReturn(List.of(observationWithRationale(rationale)));
-        when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+        when(feedbackRepository.findDeliveredForPersonHistory(any(), any()))
                 .thenReturn(List.of(Feedback.builder()
                         .id(UUID.randomUUID())
                         .channel(FeedbackChannel.IN_CONTEXT)
@@ -301,7 +285,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     @Test
     void stagesEarlierObservationsAsThePracticeTheVerdictAndTheSummary() {
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+        when(observationRepository.findForPersonHistory(any(), any()))
                 .thenReturn(List.of(observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID)));
 
         var captured = captureObservationHistory();
@@ -327,14 +311,13 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepOnlyTheNewestFewObservationsOfOnePracticeWhenItRecursMoreOften() {
+    void shouldKeepTheWholePermittedHistoryOfARecurringPractice() {
         List<Observation> newestFirst = new ArrayList<>();
-        for (int i = 0; i < ReviewHistoryContentSource.MAX_OBSERVATIONS_PER_PRACTICE + 2; i++) {
+        for (int i = 0; i < 3 + 2; i++) {
             newestFirst.add(observation("swallows-errors", "rec-" + i, "Caught and ignored " + i));
         }
         newestFirst.add(observation("verification-guidance", "rec-v", "Missing restart check"));
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
-                .thenReturn(newestFirst);
+        when(observationRepository.findForPersonHistory(any(), any())).thenReturn(newestFirst);
 
         JsonNode records = read(captureObservationHistory().files().get("inputs/history/observations.json"))
                 .get("observations");
@@ -344,12 +327,14 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
                         "Caught and ignored 0",
                         "Caught and ignored 1",
                         "Caught and ignored 2",
+                        "Caught and ignored 3",
+                        "Caught and ignored 4",
                         "Missing restart check");
     }
 
     @Test
     void stagesFeedbackThatWasAlreadyDeliveredWithItsChannel() {
-        when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+        when(feedbackRepository.findDeliveredForPersonHistory(any(), any()))
                 .thenReturn(List.of(Feedback.builder()
                         .id(UUID.randomUUID())
                         .channel(FeedbackChannel.IN_CONTEXT)
@@ -390,7 +375,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldPreserveSeparateBehaviorRecordsAtTheSameLocation() {
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+        when(observationRepository.findForPersonHistory(any(), any()))
                 .thenReturn(List.of(
                         observation("verification-guidance", "same-location", "Missing restart check"),
                         observation("verification-guidance", "same-location", "Misleading setup instruction")));
@@ -405,13 +390,13 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     @Test
     void neverReportsCompleteBecauseTheWindowIsBounded() {
-        assertThat(captureObservationHistory().completeness().values()).containsOnly(SourceCompleteness.PARTIAL);
-        assertThat(captureFeedbackHistory().completeness().values()).containsOnly(SourceCompleteness.PARTIAL);
+        assertThat(captureObservationHistory().completeness().values()).containsOnly(SourceCompleteness.COMPLETE);
+        assertThat(captureFeedbackHistory().completeness().values()).containsOnly(SourceCompleteness.COMPLETE);
     }
 
     @Test
     void withholdsAnObservationTheVisibilityPolicyRefuses() {
-        when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+        when(observationRepository.findForPersonHistory(any(), any()))
                 .thenReturn(List.of(observation("swallows-errors", "rec-1", "Caught and ignored")));
         doReturn(Set.of()).when(visibilityPolicy).permitsAll(anyLong(), any(), any());
 
@@ -451,7 +436,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
         @Test
         void anObservationCarriesTheHandleOfTheWorkItWasFiledAgainst() {
-            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+            when(observationRepository.findForPersonHistory(any(), any()))
                     .thenReturn(List.of(observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID)));
 
             JsonNode artifact = read(captureObservationHistory().files().get("inputs/history/observations.json"))
@@ -468,7 +453,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
         @Test
         void deliveredFeedbackCarriesTheSameHandle() {
-            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+            when(feedbackRepository.findDeliveredForPersonHistory(any(), any()))
                     .thenReturn(List.of(deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID)));
 
             JsonNode artifact = read(captureFeedbackHistory().files().get("inputs/history/feedback.json"))
@@ -482,7 +467,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
         @Test
         void workNoResolverCanNameIsStagedAsItsKindWithoutANumber() {
-            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+            when(observationRepository.findForPersonHistory(any(), any()))
                     .thenReturn(
                             List.of(observationAgainst(ArtifactKinds.CONVERSATION_THREAD, UNNAMEABLE_ARTIFACT_ROW_ID)));
 
@@ -499,11 +484,11 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
         @Test
         void noHistoryFileCarriesARowIdAnywhere() {
-            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+            when(observationRepository.findForPersonHistory(any(), any()))
                     .thenReturn(List.of(
                             observationAgainst(ArtifactKinds.PULL_REQUEST, OBSERVED_ARTIFACT_ROW_ID),
                             observationAgainst(ArtifactKinds.CONVERSATION_THREAD, UNNAMEABLE_ARTIFACT_ROW_ID)));
-            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
+            when(feedbackRepository.findDeliveredForPersonHistory(any(), any()))
                     .thenReturn(List.of(deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID)));
             when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
                     .thenReturn(List.of(deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID)));
@@ -537,8 +522,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
             Feedback brief = queued("in-chat:7:subtasks", "None of the four issues has a task list.");
             boundTo.put(note.getId(), List.of(boundObservation(true)));
             boundTo.put(brief.getId(), List.of(boundObservation(true)));
-            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
-                    .thenReturn(List.of(note));
+            when(feedbackRepository.findDeliveredForPersonHistory(any(), any())).thenReturn(List.of(note));
             when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
                     .thenReturn(List.of(brief));
 
@@ -615,8 +599,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
             Observation readable = boundObservation(false);
             boundTo.put(note.getId(), List.of(readable, boundObservation(false)));
             boundTo.put(brief.getId(), List.of(boundObservation(false)));
-            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
-                    .thenReturn(List.of(note));
+            when(feedbackRepository.findDeliveredForPersonHistory(any(), any())).thenReturn(List.of(note));
             when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
                     .thenReturn(List.of(brief));
             when(visibilityPolicy.permitsShown(anyLong(), any(), eq(SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW)))
@@ -644,7 +627,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
         @Test
         void stagesNoObservationFromAConversationWhoseChannelNoLongerConsents() {
             inactiveThreads.add(PAUSED_THREAD);
-            when(observationRepository.findRecentByDeveloperAndWorkspace(any(), any(), any(), any(), any()))
+            when(observationRepository.findForPersonHistory(any(), any()))
                     .thenReturn(List.of(
                             observation(
                                     "paused-practice",
@@ -699,8 +682,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
             Feedback onCode = deliveredAgainst(ArtifactKinds.PULL_REQUEST, DELIVERED_ARTIFACT_ROW_ID);
             Feedback onActive = queued("in-chat:1:active", "From the active conversation.");
             boundTo.put(onActive.getId(), List.of(boundConversation(ACTIVE_THREAD)));
-            when(feedbackRepository.findRecentDeliveredForRecipient(any(), any(), any(), any()))
-                    .thenReturn(List.of(onCode));
+            when(feedbackRepository.findDeliveredForPersonHistory(any(), any())).thenReturn(List.of(onCode));
             when(feedbackRepository.findPreparedForRecipient(any(), any(), any()))
                     .thenReturn(List.of(mixed, aboutPaused, threadless, unanchored, onActive));
 

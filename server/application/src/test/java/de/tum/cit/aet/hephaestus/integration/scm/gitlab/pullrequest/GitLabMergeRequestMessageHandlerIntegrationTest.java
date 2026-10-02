@@ -55,6 +55,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabWebhookContextResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabIssueCommentProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.dto.GitLabMergeRequestEventDTO;
@@ -1081,6 +1082,146 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
+        void shouldRemoveAGuessedApprovalDateOnlyOnAnAcceptedWholeSnapshotWithoutAnotherApprovalEvent()
+                throws Exception {
+            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            PullRequestReview initial = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(initial.getSubmittedAt()).isNull();
+            Instant legacyDate = Instant.parse("2026-01-31T21:00:00Z");
+            transactionTemplate.executeWithoutResult(tx ->
+                    reviewRepository.findById(initial.getId()).orElseThrow().setSubmittedAt(legacyDate));
+            eventListener.clear();
+
+            read(facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, null, "mergeable"), readAt);
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(legacyDate);
+            read(
+                    facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(approver()), "approvals_syncing"),
+                    readAt.plusSeconds(1));
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(legacyDate);
+            assertThat(read(
+                            facts(
+                                    FIXTURE_HEAD,
+                                    GitLabHeadPipeline.NOT_CAPTURED,
+                                    true,
+                                    List.of(approver()),
+                                    "mergeable"),
+                            readAt.plusSeconds(2)))
+                    .isFalse();
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(legacyDate);
+            read(
+                    facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(approver()), "mergeable"),
+                    readAt.minusSeconds(1));
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(legacyDate);
+
+            read(
+                    facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(approver()), "mergeable"),
+                    readAt.plusSeconds(3));
+            PullRequestReview current = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(current.getId()).isEqualTo(initial.getId());
+            assertThat(current.getSubmittedAt()).isNull();
+            assertThat(current.getState()).isEqualTo(PullRequestReview.State.APPROVED);
+            assertThat(current.isDismissed()).isFalse();
+            assertThat(current.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
+        }
+
+        @Test
+        void shouldPersistAMatchingMergedNativeDateWithoutAnotherApprovalEvent() throws Exception {
+            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            PullRequestReview initial = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            transactionTemplate.executeWithoutResult(tx -> {
+                PullRequest merged = pullRequestRepository
+                        .findByRepositoryIdAndNumber(savedRepo.getId(), MR4_IID)
+                        .orElseThrow();
+                merged.setState(Issue.State.MERGED);
+                reviewRepository
+                        .findById(initial.getId())
+                        .orElseThrow()
+                        .setSubmittedAt(Instant.parse("2026-01-31T20:00:00Z"));
+            });
+            eventListener.clear();
+            var actualDate = Instant.parse("2026-01-31T21:00:19.087Z");
+            var rows = new GitLabApprovalClient.Snapshot(
+                    NATIVE_MR4_ID,
+                    MR4_IID,
+                    savedRepo.getNativeId(),
+                    "merged",
+                    null,
+                    null,
+                    null,
+                    List.of(new GitLabApprovalClient.Approval(
+                            new GitLabApprovalClient.Approver(NATIVE_APPROVER_ID), actualDate)));
+            var opened = facts(NEXT_HEAD, GitLabHeadPipeline.NOT_CAPTURED, true, List.of(approver()), "mergeable");
+            var merged = new GitLabMergeRequestReadinessReader.Facts(
+                    opened.projectNativeId(),
+                    opened.mergeRequestNativeId(),
+                    "merged",
+                    opened.updatedAt(),
+                    opened.headSha(),
+                    opened.mergeable(),
+                    opened.detailedMergeStatus(),
+                    opened.approved(),
+                    opened.headPipeline(),
+                    opened.reviewers(),
+                    opened.approvers(),
+                    opened.merge(),
+                    rows);
+
+            assertThat(read(merged, readAt)).isTrue();
+            PullRequestReview dated = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(dated.getSubmittedAt()).isEqualTo(actualDate);
+            assertThat(dated.getCommitId()).isEqualTo(NEXT_HEAD);
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
+            assertThat(read(merged.withApprovalRows(null), readAt.plusSeconds(1)))
+                    .isTrue();
+            assertThat(Objects.requireNonNull(approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(actualDate);
+        }
+
+        @ParameterizedTest
+        @ValueSource(booleans = {true, false})
+        void shouldKeepSnapshotApprovalMembershipWhenOldDecisionNotesAreReplayed(boolean listed) throws Exception {
+            receive(approvalEvent("merge_request.approved", NEXT_HEAD, "2026-01-31 22:31:00 +0100"));
+            read(
+                    facts(
+                            NEXT_HEAD,
+                            GitLabHeadPipeline.NOT_CAPTURED,
+                            listed,
+                            listed ? List.of(approver()) : List.of(),
+                            "mergeable"),
+                    readAt);
+            PullRequestReview current = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            transactionTemplate.executeWithoutResult(tx -> {
+                PullRequest mr = pullRequestRepository
+                        .findByRepositoryIdAndNumber(savedRepo.getId(), MR4_IID)
+                        .orElseThrow();
+                var author = Objects.requireNonNull(
+                        reviewRepository.findById(current.getId()).orElseThrow().getAuthor());
+                for (String body :
+                        List.of("unapproved this merge request", "approved this merge request", "requested changes")) {
+                    reviewReconciler.recordSystemNote(
+                            mr,
+                            author,
+                            new GitLabReviewReconciler.SystemNote(
+                                    body, Instant.parse("2026-01-01T10:00:00Z"), "gid://gitlab/Note/987654", false),
+                            savedRepo.getProvider());
+                }
+            });
+            PullRequestReview after = Objects.requireNonNull(approval(NATIVE_APPROVER_ID));
+            assertThat(after.getState())
+                    .isEqualTo(listed ? PullRequestReview.State.APPROVED : PullRequestReview.State.DISMISSED);
+            assertThat(after.isDismissed()).isEqualTo(!listed);
+            assertThat(after.getSubmittedAt()).isNull();
+            assertThat(after.getCommitId()).isEqualTo(NEXT_HEAD);
+        }
+
+        @Test
         void shouldRecordThatTheCurrentHeadHasNoPipeline() {
             assertThat(read(facts(NEXT_HEAD, GitLabHeadPipeline.NO_PIPELINE, true, List.of(), "mergeable"), readAt))
                     .isTrue();
@@ -1177,7 +1318,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     GitLabHeadPipeline.NOT_CAPTURED,
                     List.of(),
                     List.of(approver()),
-                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                    null);
         }
 
         private void setReadiness(boolean mergeable, MergeStateStatus status, ReviewDecision decision) {
@@ -1229,7 +1371,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     GitLabHeadPipeline.NOT_CAPTURED,
                     List.of(),
                     mergeable ? List.of(approver()) : List.of(),
-                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                    null);
         }
 
         @Test
@@ -1348,7 +1491,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     pipeline,
                     List.of(),
                     approvers,
-                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
+                    GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                    null);
         }
     }
 
@@ -1418,6 +1562,60 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(after.getHeadCheckSha()).isEqualTo(FIRST_HEAD);
             assertThat(after.getMergeStateStatus()).isEqualTo(MergeStateStatus.CLEAN);
             assertThat(mr2Approval(NATIVE_TUTOR_ID)).isNull();
+        }
+
+        @Test
+        void shouldRecoverNativeApprovalDatesThroughTheMergedDiscoveryPage() {
+            var node = page(FIRST_HEAD, "2026-01-31T18:30:00Z", null, "mergeable", List.of(approverNode()));
+            node.put("state", "merged");
+            node.put("description", "Why this change is needed");
+            var actualDate = Instant.parse("2026-01-31T18:20:19.087Z");
+            var rows = new GitLabApprovalClient.Snapshot(
+                    NATIVE_MR2_ID,
+                    MR2_IID,
+                    savedRepo.getNativeId(),
+                    "merged",
+                    null,
+                    null,
+                    null,
+                    List.of(new GitLabApprovalClient.Approval(
+                            new GitLabApprovalClient.Approver(NATIVE_APPROVER_ID), actualDate)));
+            syncPage(node, List.of(), rows);
+
+            PullRequestReview approval = Objects.requireNonNull(mr2Approval(NATIVE_APPROVER_ID));
+            assertThat(mr2().getState()).isEqualTo(Issue.State.MERGED);
+            assertThat(approval.getSubmittedAt()).isEqualTo(actualDate);
+            assertThat(approval.getCommitId()).isEqualTo(FIRST_HEAD);
+            eventListener.clear();
+            syncPage(node, List.of(), rows);
+            assertThat(Objects.requireNonNull(mr2Approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(actualDate);
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
+            var preciseVersion = Instant.parse("2026-01-31T18:30:00.080Z");
+            transactionTemplate.executeWithoutResult(tx -> {
+                var mr = pullRequestRepository
+                        .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                        .orElseThrow();
+                mr.setUpdatedAt(preciseVersion);
+                reviewRepository.findById(approval.getId()).orElseThrow().setSubmittedAt(null);
+            });
+            var mirrored = mr2();
+            var preciseRows = new GitLabApprovalClient.Snapshot(
+                    NATIVE_MR2_ID,
+                    MR2_IID,
+                    savedRepo.getNativeId(),
+                    "merged",
+                    preciseVersion,
+                    mirrored.getTitle(),
+                    mirrored.getBody(),
+                    rows.approvedBy());
+            syncPage(node, List.of(), preciseRows);
+            assertThat(Objects.requireNonNull(mr2Approval(NATIVE_APPROVER_ID)).getSubmittedAt())
+                    .isEqualTo(actualDate);
+            assertThat(mr2().getUpdatedAt()).isEqualTo(preciseVersion);
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
         }
 
         /** Merge request !2 as GitLab's listing gives it; a null head, version or pipeline is sent as null. */
@@ -1550,6 +1748,13 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
 
     /** Runs the merge request sync over one page GitLab answered with {@code node} and {@code errors}. */
     private void syncPage(Map<String, @Nullable Object> node, List<Map<String, ?>> errors) {
+        syncPage(node, errors, null);
+    }
+
+    private void syncPage(
+            Map<String, @Nullable Object> node,
+            List<Map<String, ?>> errors,
+            GitLabApprovalClient.@Nullable Snapshot rows) {
         Map<String, @Nullable Object> pageInfo = new HashMap<>();
         pageInfo.put("hasNextPage", false);
         pageInfo.put("endCursor", null);
@@ -1560,13 +1765,18 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 errors);
         GitLabGraphQlClientProvider provider = mock(GitLabGraphQlClientProvider.class);
         when(provider.forScope(any())).thenReturn(ScriptedGraphQlClient.of(request -> Mono.just(response)));
+        var approvalClient = mock(GitLabApprovalClient.class);
+        if (rows != null)
+            when(approvalClient.read(1L, savedRepo.getNativeId(), Integer.parseInt(Objects.toString(node.get("iid")))))
+                    .thenReturn(rows);
         new GitLabMergeRequestSyncService(
                         provider,
                         graphQlResponseHandler,
                         mergeRequestProcessor,
                         mock(GitLabDiscussionSyncService.class),
                         mock(GitLabClosingIssueClient.class),
-                        gitLabProperties)
+                        gitLabProperties,
+                        approvalClient)
                 .syncMergeRequests(1L, savedRepo, null);
     }
 
@@ -2296,6 +2506,73 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
         }
 
         @Test
+        void shouldRecoverOnlyTheStandingNativeDateAfterAMillisecondMergeHook() throws Exception {
+            receive(loadPayload("merge_request.update"));
+            transactionTemplate.executeWithoutResult(tx -> {
+                PullRequest mr = pullRequestRepository
+                        .findByRepositoryIdAndNumber(savedRepo.getId(), MR2_IID)
+                        .orElseThrow();
+                var author = Objects.requireNonNull(mr.getAuthor());
+                var approval = new PullRequestReview();
+                approval.setNativeId(
+                        GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR2_ID, author.getNativeId()));
+                approval.setProvider(savedRepo.getProvider());
+                approval.setAuthor(author);
+                approval.setPullRequest(mr);
+                approval.setState(PullRequestReview.State.APPROVED);
+                approval.setCommitId(MR2_HEAD);
+                reviewRepository.save(approval);
+                mr.addReview(approval);
+            });
+            eventListener.clear();
+            var hook = millisecondMerge();
+            var attrs = Objects.requireNonNull(hook.objectAttributes());
+            var actualDate = Instant.parse("2026-01-31T18:03:19.087Z");
+            long nativeApprover = GitLabSyncConstants.extractNumericId(Objects.requireNonNull(author().globalId()));
+            var rows = new GitLabApprovalClient.Snapshot(
+                    NATIVE_MR2_ID,
+                    MR2_IID,
+                    savedRepo.getNativeId(),
+                    "merged",
+                    Instant.parse("2026-01-31T18:04:07.317Z"),
+                    attrs.title(),
+                    attrs.description(),
+                    List.of(new GitLabApprovalClient.Approval(
+                            new GitLabApprovalClient.Approver(nativeApprover), actualDate)));
+            var terminal = mergedFacts(author());
+            var response = new GitLabMergeRequestReadinessReader.Facts(
+                    terminal.projectNativeId(),
+                    terminal.mergeRequestNativeId(),
+                    terminal.state(),
+                    terminal.updatedAt(),
+                    terminal.headSha(),
+                    true,
+                    "mergeable",
+                    true,
+                    GitLabHeadPipeline.NO_PIPELINE,
+                    List.of(),
+                    List.of(author()),
+                    terminal.merge(),
+                    rows);
+            var reader = mock(GitLabMergeRequestReadinessReader.class);
+            when(reader.read(any(), anyString(), eq(MR2_IID))).thenReturn(response);
+
+            handlerReading(reader).dispatchEvent(hook, Instant.now());
+
+            var merged = mr2();
+            var approval = reviewRepository
+                    .findByNativeIdAndProviderId(
+                            GitLabMergeRequestProcessor.generateApprovalNativeId(NATIVE_MR2_ID, nativeApprover),
+                            Objects.requireNonNull(savedRepo.getProvider().getId()))
+                    .orElseThrow();
+            assertThat(approval.getSubmittedAt()).isEqualTo(actualDate);
+            assertThat(approval.getCommitId()).isEqualTo(MR2_HEAD);
+            assertThat(merged.getHeadCheckState()).isNull();
+            assertThat(eventListener.ofType(ScmDomainEvent.ReviewSubmitted.class))
+                    .isEmpty();
+        }
+
+        @Test
         void shouldLetASyncNameTheMergerOfAMillisecondMergeHookWithoutTakingAnythingElseFromTheOlderPage()
                 throws Exception {
             receive(loadPayload("merge_request.update"));
@@ -2390,7 +2667,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                     GitLabHeadPipeline.NOT_CAPTURED,
                     null,
                     null,
-                    new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, MERGE_SHA));
+                    new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, MERGE_SHA),
+                    null);
         }
 
         /** MR !2's merge hook as GitLab 19 sends it: its times to the millisecond, and no merger. */
@@ -2427,7 +2705,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                             GitLabHeadPipeline.NOT_CAPTURED,
                             null,
                             null,
-                            new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, commit)));
+                            new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, commit),
+                            null));
         }
 
         private boolean mergeRead(
@@ -2447,7 +2726,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                             GitLabHeadPipeline.NOT_CAPTURED,
                             null,
                             null,
-                            new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, MERGE_SHA)));
+                            new GitLabMergeRequestReadinessReader.Merge(merger, MERGED_AT, MERGE_SHA),
+                            null));
         }
 
         /** MR !2 merged by its author, as a sync reads it after the merge. */
@@ -2686,6 +2966,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
                 null, // syncParticipants
                 null, // milestoneIid
                 headPipeline,
+                null,
                 null); // closingIssueNumbers
     }
 

@@ -62,7 +62,6 @@ public class SlackStreamingMentorChannel implements MentorChannel {
     private final Duration forcedShutdownTimeout;
     private final long initialFlushDelayMillis;
     private final long flushIntervalMillis;
-    private final SlackMentorTextFilter textFilter = new SlackMentorTextFilter();
 
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "slack-mentor-stream");
@@ -71,6 +70,7 @@ public class SlackStreamingMentorChannel implements MentorChannel {
     });
 
     private final StringBuilder pending = new StringBuilder();
+    private boolean hasVisibleText;
     private final ReentrantLock lock = new ReentrantLock();
     private final AtomicBoolean done = new AtomicBoolean(false);
     private final AtomicBoolean terminated = new AtomicBoolean(false);
@@ -149,14 +149,14 @@ public class SlackStreamingMentorChannel implements MentorChannel {
             return;
         }
         if (chunk instanceof UIMessageChunk.TextDelta delta) {
-            append(textFilter.onDelta(delta.delta()));
+            append(delta.delta());
             ensureFlushing();
         } else if (chunk instanceof UIMessageChunk.DataObservation observation) {
-            append(textFilter.feedback(observation.data().text()));
+            appendFeedback(observation.data().text());
             ensureFlushing();
         } else if (chunk instanceof UIMessageChunk.Error error) {
             // Surface mid-turn errors in the visible stream rather than dropping them.
-            append(textFilter.finish() + "\n\n⚠️ " + SlackMentorTextFilter.normalize(safeError(error.errorText())));
+            append("\n\n⚠️ " + safeError(error.errorText()));
             ensureFlushing();
         } else if (chunk instanceof UIMessageChunk.ToolInputStart) {
             slack.setStatus(workspaceId, channel, threadTs, "Reviewing your practice history...");
@@ -173,7 +173,7 @@ public class SlackStreamingMentorChannel implements MentorChannel {
 
     @Override
     public void completeWithError(String errorText) {
-        finish("\n\n⚠️ " + SlackMentorTextFilter.normalize(safeError(errorText)));
+        finish("\n\n⚠️ " + safeError(errorText));
     }
 
     @Override
@@ -205,6 +205,20 @@ public class SlackStreamingMentorChannel implements MentorChannel {
         lock.lock();
         try {
             pending.append(text);
+            hasVisibleText = true;
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    private void appendFeedback(String text) {
+        lock.lock();
+        try {
+            if (hasVisibleText) {
+                pending.append("\n\n");
+            }
+            pending.append(text).append("\n\n");
+            hasVisibleText = true;
         } finally {
             lock.unlock();
         }
@@ -363,7 +377,6 @@ public class SlackStreamingMentorChannel implements MentorChannel {
         String remainder;
         lock.lock();
         try {
-            pending.append(textFilter.finish());
             if (suffix != null) {
                 pending.append(suffix);
             }

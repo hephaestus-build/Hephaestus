@@ -22,13 +22,13 @@ import tools.jackson.databind.json.JsonMapper;
  * of us reads instead of the Java, so with no enforcement it rots silently as the record's shape drifts.
  *
  * <p>Only the shape is pinned here. Whether the schema enforces what it declares is exercised by
- * {@code scripts/validate-artifact-source-contracts.ts}'s JSON Schema validator; this has a compiler and
+ * {@code scripts/validate-source-use-contracts.ts}'s JSON Schema validator; this has a compiler and
  * a record, so it checks what only those can see.
  */
 class PracticeAutomatedReviewPolicySchemaTest extends BaseUnitTest {
 
     private static final String SCHEMA_RESOURCE =
-            "contracts/artifact-source/1.2.0/practice-automated-review-policy.schema.json";
+            "contracts/source-use/1.2.0/practice-automated-review-policy.schema.json";
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
 

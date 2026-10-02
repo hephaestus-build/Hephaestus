@@ -112,7 +112,7 @@ PR titles follow the [Conventional Commits](https://www.conventionalcommits.org/
 
 ### Releases and Changesets (Important)
 
-**Release ≠ deploy.** Every PR that changes shipped code (`server/`, `webapp/`, `docker/`, excluding
+**Release ≠ deploy.** Every PR that changes shipped code (`server/`, `webapp/`, `docker/` or `extension/`, excluding
 tests and in-tree docs) carries a changeset; `Verify changesets` enforces it, and commit types never
 affect versioning. `.changeset/README.md` has the format and the pre-1.0 rule; the
 [release management guide](https://docs.hephaestus.build/contributor/release-management) has the flow
@@ -138,6 +138,7 @@ version number promises.
 **Service scopes** (where the code lives):
 
 - `webapp`: React frontend
+- `extension`: Chrome extension
 - `server`: Java application server (includes the in-process Pi mentor agent and the webhook receiver)
 - `docs`: Documentation
 

@@ -8,7 +8,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -35,7 +34,7 @@ public class AccountService {
 
     private final AccountRepository accountRepository;
     private final IdentityLinkRepository identityLinkRepository;
-    private final IssuedJwtRepository issuedJwtRepository;
+    private final SessionRevocation sessionRevocation;
     private final AuthEventLogger authEventLogger;
     private final AuthProperties authProperties;
     private final ApplicationEventPublisher eventPublisher;
@@ -44,14 +43,14 @@ public class AccountService {
     public AccountService(
             AccountRepository accountRepository,
             IdentityLinkRepository identityLinkRepository,
-            IssuedJwtRepository issuedJwtRepository,
+            SessionRevocation sessionRevocation,
             AuthEventLogger authEventLogger,
             AuthProperties authProperties,
             ApplicationEventPublisher eventPublisher,
             Clock clock) {
         this.accountRepository = accountRepository;
         this.identityLinkRepository = identityLinkRepository;
-        this.issuedJwtRepository = issuedJwtRepository;
+        this.sessionRevocation = sessionRevocation;
         this.authEventLogger = authEventLogger;
         this.authProperties = authProperties;
         this.eventPublisher = eventPublisher;
@@ -78,6 +77,8 @@ public class AccountService {
      */
     @Transactional
     public void softDelete(Long accountId) {
+        // Lock before reading, so the status change and the revocation are one step to every issuance.
+        sessionRevocation.lockAccount(accountId);
         Account account = requireById(accountId);
         if (account.getStatus() == Account.Status.DELETING || account.getStatus() == Account.Status.DELETED) {
             // Idempotent: only ACTIVE/SUSPENDED → DELETING starts the Art.17 cooldown. A re-invocation
@@ -88,7 +89,7 @@ public class AccountService {
         account.setStatus(Account.Status.DELETING);
         account.setDeletedAt(deletedAt);
         accountRepository.save(account);
-        issuedJwtRepository.revokeAllForAccount(accountId, deletedAt, IssuedJwt.RevokedReason.ACCOUNT_DELETED);
+        sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ACCOUNT_DELETED, null, null);
         authEventLogger
                 .event(AuthEvent.EventType.ACCOUNT_DELETED, AuthEvent.Result.SUCCESS)
                 .account(accountId)
@@ -150,6 +151,9 @@ public class AccountService {
 
     @Transactional
     public Account adminSetRole(Long accountId, @Nullable String appRole, Long actingAccountId) {
+        // No target lock up front: two demotions would each hold their target while waiting for the other
+        // in the admin-set lock below. The role UPDATE holds the row until commit, and every issuance
+        // re-reads the role once it gets the row, so none can mint the old role after this commits.
         Account account = requireById(accountId);
         if (appRole != null) {
             Account.AppRole role;
@@ -188,8 +192,7 @@ public class AccountService {
                 // lapses. The revoked rows carry revoked_reason=ADMIN_REVOKE for forensics. Promotion is
                 // deliberately NOT revoked — the new role is picked up on the next silent refresh with no
                 // forced re-login.
-                issuedJwtRepository.revokeAllForAccount(
-                        accountId, clock.instant(), IssuedJwt.RevokedReason.ADMIN_REVOKE);
+                sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null);
             }
             // Dedicated APP_ROLE_CHANGED type so the most security-sensitive mutation (granting/revoking
             // APP_ADMIN) is queryable and alertable on the indexed event_type column — the ADR's stated
@@ -214,8 +217,7 @@ public class AccountService {
     @Transactional
     public int adminRevokeAllSessions(Long accountId, Long actingAccountId) {
         requireById(accountId); // 404 if the account does not exist
-        int revoked = issuedJwtRepository.revokeAllForAccount(
-                accountId, clock.instant(), IssuedJwt.RevokedReason.ADMIN_REVOKE);
+        int revoked = sessionRevocation.revokeAccount(accountId, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null);
         authEventLogger
                 .event(AuthEvent.EventType.JWT_REVOKED, AuthEvent.Result.SUCCESS)
                 .account(accountId)

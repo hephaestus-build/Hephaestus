@@ -3,8 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.documentation;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import org.jspecify.annotations.Nullable;
 
 /**
  * The documentation projection for a deployment that mirrors no documentation.
@@ -19,6 +17,10 @@ import org.jspecify.annotations.Nullable;
  * no vendor is switched on.
  */
 final class NoDocumentationMirror implements DocumentProjection {
+    @Override
+    public boolean workspaceReadable(long workspaceId) {
+        return false;
+    }
 
     @Override
     public List<ProjectedDocument> documentsForWorkspace(long workspaceId) {
@@ -38,15 +40,5 @@ final class NoDocumentationMirror implements DocumentProjection {
     @Override
     public List<ProjectedDocument> searchDocuments(long workspaceId, String queryText, int limit) {
         return List.of();
-    }
-
-    /**
-     * No references, rather than the link grammar of a vendor that is not installed. What counts as a
-     * documentation reference is vendor knowledge; a deployment with no documentation vendor has none,
-     * and returning matches nothing could resolve would only produce lookups that find nothing.
-     */
-    @Override
-    public Set<String> extractReferences(@Nullable String text) {
-        return Set.of();
     }
 }

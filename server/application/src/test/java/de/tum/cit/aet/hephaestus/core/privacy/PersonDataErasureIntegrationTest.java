@@ -147,6 +147,23 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
                 targetTokenId,
                 Objects.requireNonNull(targetAccount.getId()),
                 Instant.now().plusSeconds(3600)));
+        UUID targetSession = UUID.randomUUID();
+        UUID otherSession = UUID.randomUUID();
+        for (var entry :
+                Map.of(targetSession, targetAccount, otherSession, otherAccount).entrySet()) {
+            jdbc.update("""
+                    INSERT INTO client_session(id,account_id,client_kind,client_id,session_expires_at,auth_time,created_at)
+                    VALUES (?,?,'BROWSER_EXTENSION','privacy-client',CURRENT_TIMESTAMP+INTERVAL '1 hour',
+                        CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                    """, entry.getKey(), entry.getValue().getId());
+            jdbc.update("""
+                    INSERT INTO client_sign_in_handoff(code_hash,account_id,client_kind,client_id,redirect_uri,
+                        code_challenge,session_expires_at,auth_time,expires_at,created_at)
+                    VALUES (?,?,'BROWSER_EXTENSION','privacy-client','https://client.example.test/callback',
+                        'pkce-credential-canary',CURRENT_TIMESTAMP+INTERVAL '1 hour',CURRENT_TIMESTAMP,
+                        CURRENT_TIMESTAMP+INTERVAL '60 seconds',CURRENT_TIMESTAMP)
+                    """, entry.getKey().toString(), entry.getValue().getId());
+        }
         User target = users.saveAndFlush(TestUserFactory.createUser(42L, "target", scm));
         User other = users.saveAndFlush(TestUserFactory.createUser(84L, "other", scm));
         link(targetAccount, scm, "42", null, target.getId());
@@ -223,6 +240,11 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
         var export = personData.export(requestId);
         Map<String, Long> counts = mapper.readValue(preview.request().getCountsJson(), new TypeReference<>() {});
         assertThat(counts.get("oauth_state_nonce")).isEqualTo(1L);
+        assertThat(counts.get("client_session")).isEqualTo(1L);
+        assertThat(counts.get("client_sign_in_handoff")).isEqualTo(1L);
+        assertThat(export.path("stores").path("client_sign_in_handoff").toString())
+                .doesNotContain(targetSession.toString(), "code_hash", "code_challenge");
+
         assertThat(counts.get("feedback")).isEqualTo(4L);
         assertThat(counts.get("observation")).isEqualTo(4L);
         assertThat(counts.get("observation_invalidation")).isEqualTo(2L);

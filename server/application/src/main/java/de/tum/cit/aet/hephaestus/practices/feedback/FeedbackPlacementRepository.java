@@ -21,12 +21,13 @@ public interface FeedbackPlacementRepository extends JpaRepository<FeedbackPlace
     @Query(value = """
         INSERT INTO feedback_placement (
             id, feedback_id, placement_type, anchor_kind, anchor_path, anchor_start_line,
-            anchor_end_line, anchor_side, posted_comment_ref, created_at
+            anchor_end_line, anchor_side, posted_comment_ref, posted_comment_url, created_at
         )
         SELECT :#{#placement.id()}, :#{#placement.feedbackId()}, :#{#placement.placementType()},
                :#{#placement.anchorKind()}, CAST(:#{#placement.anchorPath()} AS varchar),
                CAST(:#{#placement.anchorStartLine()} AS integer), CAST(:#{#placement.anchorEndLine()} AS integer),
-               :#{#placement.anchorSide()}, CAST(:#{#placement.postedCommentRef()} AS varchar), CURRENT_TIMESTAMP
+               :#{#placement.anchorSide()}, CAST(:#{#placement.postedCommentRef()} AS varchar),
+                CAST(:#{#placement.postedCommentUrl()} AS varchar), CURRENT_TIMESTAMP
         WHERE NOT EXISTS (
             SELECT 1 FROM feedback_placement existing
             WHERE existing.feedback_id = :#{#placement.feedbackId()}
@@ -49,7 +50,8 @@ public interface FeedbackPlacementRepository extends JpaRepository<FeedbackPlace
             @Nullable Integer anchorStartLine,
             @Nullable Integer anchorEndLine,
             @Nullable String anchorSide,
-            @Nullable String postedCommentRef) {}
+            @Nullable String postedCommentRef,
+            @Nullable String postedCommentUrl) {}
 
     @Query("""
         SELECT p FROM FeedbackPlacement p

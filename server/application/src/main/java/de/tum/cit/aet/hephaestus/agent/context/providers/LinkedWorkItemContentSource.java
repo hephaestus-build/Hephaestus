@@ -3,17 +3,22 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceContribution;
-import de.tum.cit.aet.hephaestus.agent.context.EvidenceLimits;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceSource;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -23,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -63,7 +67,9 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
     /** Title and unescaped body for line-based citations; the JSON projection escapes the same text. */
     static final String ITEMS_PREFIX = OUTPUT_PREFIX + "linked_work_items/";
 
-    static final int MAX_ITEMS = EvidenceLimits.MAX_ITEMS_PER_SOURCE;
+    private static final String BODY_PROVENANCE =
+            "The body below is the issue's text as mirrored when this was captured; these dates are the issue's, "
+                    + "not when any line of it was written.";
 
     /**
      * {@code #N} standing on its own. The leading boundary {@code (?<![\w/.-])} rejects a number that
@@ -147,46 +153,26 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             // provider's UI matches no `#N`.
             Map<Integer, Issue> closing = new LinkedHashMap<>();
             if (pullRequest != null) {
-                // A closing link is the provider's word that this change names the issue, so like the
-                // author's own references none may fall past the bound unseen. Counted before loading,
-                // and the loaded list checked again, since a sync may add links between the two reads.
-                if (pullRequestRepository.countClosingIssuesById(pullRequest.getId()) > MAX_ITEMS) {
-                    throw tooManyClosingIssues();
-                }
                 List<Issue> closingIssues = pullRequestRepository.findClosingIssuesById(pullRequest.getId());
-                if (closingIssues.size() > MAX_ITEMS) {
-                    throw tooManyClosingIssues();
-                }
                 for (Issue issue : closingIssues) {
                     closing.put(issue.getNumber(), issue);
                 }
             }
             Set<Integer> numbers = new LinkedHashSet<>(closing.keySet());
-            // The author's own references are what a review reads as the issues this change names, so
-            // none of them may fall past the bound unseen either: one more than it holds fails the
-            // capture, and only numbers mentioned in commit history are ever cut off.
-            boolean authoredFit = collect(NUMBER_REF, pullRequest == null ? null : pullRequest.getTitle(), numbers)
-                    && collect(
-                            NUMBER_REF,
-                            pullRequest == null ? null : withoutHtmlComments(pullRequest.getBody()),
-                            numbers)
-                    && collect(
-                            BRANCH_REF,
-                            firstNonBlank(
-                                    MetaJson.optString(m, "source_branch"),
-                                    pullRequest == null ? null : pullRequest.getHeadRefName()),
-                            numbers);
-            if (!authoredFit) {
-                throw new EvidenceCollectionException(
-                        "The title, description and branch name mention more issue numbers than the capture holds",
-                        null);
-            }
-            AtomicBoolean truncated = new AtomicBoolean();
+            collect(NUMBER_REF, pullRequest == null ? null : pullRequest.getTitle(), numbers);
+            collect(NUMBER_REF, pullRequest == null ? null : withoutHtmlComments(pullRequest.getBody()), numbers);
+            collect(
+                    BRANCH_REF,
+                    firstNonBlank(
+                            MetaJson.optString(m, "source_branch"),
+                            pullRequest == null ? null : pullRequest.getHeadRefName()),
+                    numbers);
             if (prepared != null) {
                 gitRepositoryManager.forEachCommitMessage(
-                        prepared.key(), prepared.target(), prepared.head(), message -> {
-                            if (!truncated.get() && !collect(NUMBER_REF, message, numbers)) truncated.set(true);
-                        });
+                        prepared.key(),
+                        prepared.target(),
+                        prepared.head(),
+                        message -> collect(NUMBER_REF, message, numbers));
             }
 
             ArrayNode items = objectMapper.createArrayNode();
@@ -210,7 +196,7 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
             root.set("workItems", items);
             ArrayNode unresolvedRefs = root.putArray("unresolvedReferences");
             unresolved.forEach(unresolvedRefs::add);
-            root.put("truncated", truncated.get());
+            root.put("truncated", false);
 
             files.put(OUTPUT_FILE, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsBytes(root));
             log.info("Linked work items: wrote {} item(s), unresolved={}", items.size(), unresolved.size());
@@ -229,13 +215,60 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         }
     }
 
-    private static byte[] asText(Issue issue) {
+    public static Optional<SignalKey> currentClosingMaterialKey(
+            long workspaceId, PullRequest pullRequest, List<Issue> closingIssues) {
+        if (closingIssues.isEmpty() || closingIssues.stream().anyMatch(issue -> issue.getDeletedAt() != null)) {
+            return Optional.empty();
+        }
+        List<String> parts = new ArrayList<>();
+        parts.add(pullRequest.getHeadRefOid());
+        parts.add(pullRequest.getTitle());
+        parts.add(pullRequest.getBody());
+        closingIssues.stream()
+                .sorted(java.util.Comparator.comparingInt(Issue::getNumber))
+                .forEach(issue -> {
+                    parts.add(String.valueOf(issue.getNumber()));
+                    parts.add(text(issue));
+                });
+        return Optional.of(new SignalKey(
+                workspaceId,
+                pullRequest.getId(),
+                ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED,
+                SignalRevision.ofContentDigest(parts.toArray(String[]::new))));
+    }
+
+    public static byte[] asText(Issue issue) {
+        return text(issue).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** The same staged issue-file projection capture wrote, compared only for provider closing candidates. */
+    public static Optional<Boolean> capturedClosingMaterialMatches(JobFolderIndex manifest, List<Issue> closingIssues) {
+        var capture = manifest.sources().stream()
+                .filter(source -> KIND.equals(source.kind()) && source.state() instanceof SourceCaptureState.Available)
+                .findFirst()
+                .orElse(null);
+        if (capture == null
+                || closingIssues.isEmpty()
+                || closingIssues.stream().anyMatch(issue -> issue.getDeletedAt() != null)) return Optional.empty();
+        for (Issue issue : closingIssues) {
+            String path = ITEMS_PREFIX + issue.getNumber() + ".md";
+            var artifact = capture.artifacts().stream()
+                    .filter(candidate -> path.equals(candidate.path()))
+                    .findFirst()
+                    .orElse(null);
+            if (artifact == null) return Optional.empty();
+            if (!artifact.sha256().equals(ProvenanceDigest.sha256Hex(asText(issue)))) return Optional.of(false);
+        }
+        return Optional.of(true);
+    }
+
+    private static String text(Issue issue) {
         String body = issue.getBody() == null ? "" : issue.getBody();
         // The dates as a quotable line, so a review can cite the opening or the close from the text it reads.
         String dates = "Opened " + (issue.getCreatedAt() == null ? "at an unknown time" : issue.getCreatedAt())
                 + (issue.getClosedAt() == null ? "" : ", closed " + issue.getClosedAt())
                 + (issue.getState() == null ? "" : ", state " + issue.getState().name()) + ".";
-        return ("# " + issue.getTitle() + "\n\n" + dates + "\n\n" + body).getBytes(StandardCharsets.UTF_8);
+        return "# " + issue.getTitle() + "\n\n" + dates + "\n" + BODY_PROVENANCE + "\n\n" + body;
     }
 
     /**
@@ -281,17 +314,13 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
         return node;
     }
 
-    private static EvidenceCollectionException tooManyClosingIssues() {
-        return new EvidenceCollectionException("The provider records more closing issues than the capture holds", null);
-    }
-
     private static @Nullable String withoutHtmlComments(@Nullable String text) {
         return text == null ? null : HTML_COMMENT.matcher(text).replaceAll("");
     }
 
-    /** Adds what the pattern finds; false, adding nothing more, once a new number would pass the bound. */
-    private static boolean collect(Pattern pattern, @Nullable String text, Set<Integer> numbers) {
-        if (text == null || text.isBlank()) return true;
+    /** Adds every provider-shaped reference; malformed and overflowing issue numbers are not references. */
+    private static void collect(Pattern pattern, @Nullable String text, Set<Integer> numbers) {
+        if (text == null || text.isBlank()) return;
         Matcher matcher = pattern.matcher(text);
         while (matcher.find()) {
             int number;
@@ -304,10 +333,8 @@ public class LinkedWorkItemContentSource implements EvidenceSource {
                 continue;
             }
             if (numbers.contains(number)) continue;
-            if (numbers.size() >= MAX_ITEMS) return false;
             numbers.add(number);
         }
-        return true;
     }
 
     private static @Nullable String firstNonBlank(@Nullable String a, @Nullable String b) {

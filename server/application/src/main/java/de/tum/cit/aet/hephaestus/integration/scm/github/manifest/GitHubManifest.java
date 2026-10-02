@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -37,6 +38,14 @@ public class GitHubManifest implements IntegrationManifest {
     }
 
     @Override
+    public String reviewCommitFor(@Nullable String recordedCommit, @Nullable String currentHead) {
+        if (recordedCommit == null || recordedCommit.isBlank() || currentHead == null || currentHead.isBlank()) {
+            return "UNKNOWN";
+        }
+        return recordedCommit.equals(currentHead) ? "CURRENT_HEAD" : "OTHER_COMMIT";
+    }
+
+    @Override
     public Set<Capability> declaredCapabilities() {
         return Set.of(
                 Capability.WEBHOOK_INGEST,
@@ -62,6 +71,7 @@ public class GitHubManifest implements IntegrationManifest {
                                 ScmSignals.PULL_REQUEST_READY,
                                 ScmSignals.PULL_REQUEST_SYNCHRONIZED,
                                 ScmSignals.PULL_REQUEST_EDITED,
+                                ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED,
                                 ScmSignals.PULL_REQUEST_REVIEWED,
                                 ScmSignals.PULL_REQUEST_MERGED,
                                 ScmSignals.PULL_REQUEST_CLOSED),

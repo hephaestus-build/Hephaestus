@@ -60,25 +60,30 @@ for (const invalid of [
 }
 void test("ignores additive metadata without relaxing required path validation", () => {
 	assert.deepEqual(taskPaths({ ...paths, interactiveFrames: { url: "/frames" } }), paths);
-	assert.throws(() => taskPaths({ ...paths, manifest: 42 }), /paths.manifest/u);
+	assert.throws(() => taskPaths({ ...paths, manifest: 42 }), /manifest/u);
 });
 
 void test("accepts the envelope produced by the Java task writer", () => {
 	const envelope: unknown = JSON.parse(
-		readFileSync(new URL("../task-fixtures/v2/practice-review.json", import.meta.url), "utf8"),
+		readFileSync(new URL("../task-fixtures/v3/practice-review.json", import.meta.url), "utf8"),
 	);
 	assert.ok(typeof envelope === "object" && envelope !== null);
-	assert.deepEqual(taskPaths(Reflect.get(envelope, "paths")), Reflect.get(envelope, "paths"));
+	assert.equal(taskPaths(envelope).contextRoot, Reflect.get(envelope, "contextRoot"));
+	assert.equal(Reflect.get(envelope, "schemaVersion"), 3);
+	assert.equal(Reflect.has(envelope, "kind"), false);
+	assert.equal(Reflect.has(envelope, "task"), false);
+	assert.equal(Reflect.has(envelope, "paths"), false);
 });
 
 for (const [name, envelope] of Object.entries({
-	"old schema": { schemaVersion: 1, paths, task: { kind: "practice_review", prompt: "Review" } },
+	"old schema": { schemaVersion: 2, ...paths, prompt: "Review" },
 
-	"missing paths": { schemaVersion: 2, task: { kind: "practice_review", prompt: "Review" } },
+	"missing paths": { schemaVersion: 3, prompt: "Review" },
 	traversal: {
-		schemaVersion: 2,
-		paths: { ...paths, manifest: "../secret" },
-		task: { kind: "practice_review", prompt: "Review" },
+		schemaVersion: 3,
+		...paths,
+		manifest: "../secret",
+		prompt: "Review",
 	},
 })) {
 	void test(`runner exits with contract drift before execution for ${name}`, () => {
@@ -91,9 +96,11 @@ for (const [name, envelope] of Object.entries({
 				{
 					env: { ...process.env, PI_RUNNER_CWD: root },
 					encoding: "utf8",
-					timeout: 10_000,
+					// Boot the full runner and its SDK; this asserts the exit contract, not startup speed.
+					timeout: 30_000,
 				},
 			);
+			assert.equal(child.error, undefined, "The runner must finish before its exit is checked");
 			assert.equal(child.status, 42, child.stderr);
 		} finally {
 			rmSync(root, { recursive: true, force: true });

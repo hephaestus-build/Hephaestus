@@ -71,8 +71,8 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
 
         // Required so a missing thread aborts rather than emitting a hollow positive — mirrors IssueContentSource.
         assertThat(source.required()).isTrue();
-        assertThat(files).containsKey("inputs/context/conversation_thread.json");
-        String written = new String(files.get("inputs/context/conversation_thread.json"));
+        assertThat(files).containsKey("context/conversation_thread.json");
+        String written = new String(files.get("context/conversation_thread.json"));
         assertThat(written).contains("\"channel\" : \"C0ABC\"").contains("\"messageCount\" : 3");
     }
 

@@ -7,7 +7,6 @@ import {
 	ASSESSMENT_VALUES,
 	citationMatchesArtifact,
 	describeCitationMismatch,
-	dedupeKeyForObservation,
 	cellsRuledOut,
 	describeVocabulary,
 	MAX_SUMMARY_CHARS,
@@ -157,14 +156,10 @@ void test("NOT_APPLICABLE carries explicit null axes", () => {
 	assert.equal(out.severity, null);
 });
 
-void test("dedupe key uses the normalized hyphenated slug", () => {
-	const a = dedupeKeyForObservation(
-		normalizeObservation(baseObservation({ practiceSlug: "writes_focused_pull_requests" })),
-	);
-	const b = dedupeKeyForObservation(
-		normalizeObservation(baseObservation({ practiceSlug: "WRITES-FOCUSED-PULL-REQUESTS" })),
-	);
-	assert.equal(a, b, "underscored and upper-hyphenated slugs must dedupe to the same key");
+void test("practice slugs normalize to one canonical identity", () => {
+	const a = normalizeObservation(baseObservation({ practiceSlug: "writes_focused_pull_requests" }));
+	const b = normalizeObservation(baseObservation({ practiceSlug: "WRITES-FOCUSED-PULL-REQUESTS" }));
+	assert.equal(a.practiceSlug, b.practiceSlug);
 });
 
 void test("a one-word summary is refused, because it names nothing on the practice page", () => {

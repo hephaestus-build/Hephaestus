@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.PrivacyClass;
-import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUseBasis;
@@ -41,7 +40,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
 
         assertThat(registry.current().version()).isEqualTo(ClasspathArtifactSourceCatalogRegistry.CURRENT_VERSION);
         assertThat(registry.catalogDigest())
-                .isEqualTo(read("contracts/artifact-source/1.2.0/artifact-source-manifest.schema.json")
+                .isEqualTo(read("contracts/source-use/1.3.0/automated-review-readiness-report.schema.json")
                         .path("properties")
                         .path("catalogDigest")
                         .path("const")
@@ -165,13 +164,13 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
         org.junit.jupiter.api.Assertions.assertNotNull(feedback);
 
         assertThat(assessment.permitsAt(
-                        Instant.parse("2026-08-03T12:00:00Z"), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                        Instant.parse("2026-10-01T12:00:00Z"), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .isTrue();
         assertThat(assessment.permitsAt(
-                        Instant.parse("2026-08-03T12:00:00Z"), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                        Instant.parse("2026-10-01T12:00:00Z"), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isFalse();
         assertThat(feedback.permitsAt(
-                        Instant.parse("2026-08-03T12:00:00Z"), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
+                        Instant.parse("2026-10-01T12:00:00Z"), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .isTrue();
     }
 
@@ -182,7 +181,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
                 read(ClasspathArtifactSourceCatalogRegistry.USE_DECISIONS_RESOURCE));
         var decision = decisions.get("use-docs-document-core-automated-review");
         org.junit.jupiter.api.Assertions.assertNotNull(decision);
-        Instant expiry = Instant.parse("2027-08-07T00:00:00Z");
+        Instant expiry = Instant.parse("2027-10-01T00:00:00Z");
 
         assertThat(decision.permitsAt(expiry.minusMillis(1), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .isTrue();
@@ -197,7 +196,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
                 read(ClasspathArtifactSourceCatalogRegistry.USE_DECISIONS_RESOURCE));
         var decision = decisions.get("use-docs-document-core-automated-review");
         org.junit.jupiter.api.Assertions.assertNotNull(decision);
-        Instant decided = Instant.parse("2026-08-07T00:00:00Z");
+        Instant decided = Instant.parse("2026-10-01T00:00:00Z");
 
         assertThat(decision.permitsAt(decided, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .isTrue();
@@ -258,49 +257,22 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
     void shouldKeepMachineReadableSchemasVersionedAndClosed() throws IOException {
         for (String name : new String[] {
             "artifact-source-catalog.schema.json",
-            "artifact-source-manifest.schema.json",
             "practice-automated-review-policy.schema.json",
             "automated-review-readiness-report.schema.json",
             "source-use-decisions.schema.json",
         }) {
-            JsonNode schema = read("contracts/artifact-source/1.2.0/" + name);
+            JsonNode schema = read("contracts/source-use/1.2.0/" + name);
             assertThat(schema.path("$schema").asString()).isEqualTo("https://json-schema.org/draft/2020-12/schema");
             assertThat(schema.path("$id").asString()).contains("/1.2.0/");
             assertThat(schema.path("additionalProperties").asBoolean()).isFalse();
         }
     }
 
-    @Test
-    void shouldPinTheAbsenceReasonVocabularyToTheJavaEnum() throws IOException {
-        // The schema restates this "closed vocabulary" by hand; nothing validates a manifest against the
-        // schema in production, so the restatement is held to the enum here instead.
-        JsonNode schema = read("contracts/artifact-source/1.2.0/artifact-source-manifest.schema.json");
-        List<String> expected =
-                Stream.of(SourceAbsenceReason.values()).map(Enum::name).toList();
-
-        List<JsonNode> vocabularies = schema.findValues("reasonCode");
-        vocabularies.addAll(schema.findValues("errorCode"));
-        assertThat(vocabularies)
-                .as("both the absence and the collection-error vocabularies")
-                .hasSize(2);
-
-        for (JsonNode vocabulary : vocabularies) {
-            List<String> declared = vocabulary
-                    .path("enum")
-                    .valueStream()
-                    .map(JsonNode::asString)
-                    .toList();
-            assertThat(declared)
-                    .as("schema vocabulary vs SourceAbsenceReason.values()")
-                    .containsExactlyInAnyOrderElementsOf(expected);
-        }
-    }
-
     /** The same hand-restatement problem as the absence reasons, on the three governance vocabularies. */
     @Test
     void shouldPinTheGovernanceVocabulariesToTheirJavaEnums() throws IOException {
-        JsonNode catalogSchema = read("contracts/artifact-source/1.2.0/artifact-source-catalog.schema.json");
-        JsonNode decisionsSchema = read("contracts/artifact-source/1.2.0/source-use-decisions.schema.json");
+        JsonNode catalogSchema = read("contracts/source-use/1.2.0/artifact-source-catalog.schema.json");
+        JsonNode decisionsSchema = read("contracts/source-use/1.2.0/source-use-decisions.schema.json");
         JsonNode source = catalogSchema.path("$defs").path("source").path("properties");
         JsonNode decision = decisionsSchema
                 .path("properties")
@@ -329,17 +301,6 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
 
     private static List<String> names(Enum<?>[] constants) {
         return Stream.of(constants).map(Enum::name).toList();
-    }
-
-    @Test
-    void shouldAllowCaptureFactsWithoutAWatermarkOrImmutableIdentity() throws IOException {
-        JsonNode factsSchema = read("contracts/artifact-source/1.2.0/artifact-source-manifest.schema.json")
-                .path("$defs")
-                .path("facts");
-
-        assertThat(factsSchema.has("anyOf")).isFalse();
-        assertThat(factsSchema.path("required").toString())
-                .doesNotContain("sourceEffectiveAt", "observedAt", "immutableIdentity");
     }
 
     private JsonNode read(String resource) throws IOException {

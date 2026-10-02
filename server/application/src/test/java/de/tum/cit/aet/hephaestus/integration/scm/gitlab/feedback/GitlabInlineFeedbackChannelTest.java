@@ -146,6 +146,8 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
             assertThat(s.deliveryKey()).isEqualTo("observation:ck-new");
             assertThat(s.disposition()).isEqualTo(Disposition.POSTED);
             assertThat(s.externalRef()).isEqualTo("gid://Note/NEW");
+            assertThat(s.externalUrl())
+                    .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
             assertThat(s.threadExternalRef()).isEqualTo("gid://Disc/NEW");
         });
         // The correlation key must be embedded in the posted body so the next run can match it.
@@ -248,6 +250,8 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
         assertThat(result.signals()).singleElement().satisfies(s -> {
             assertThat(s.disposition()).isEqualTo(Disposition.POSTED);
             assertThat(s.externalRef()).isEqualTo("gid://Note/OLD");
+            assertThat(s.externalUrl())
+                    .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
             assertThat(s.threadExternalRef()).isEqualTo("gid://Disc/OLD");
         });
         // A matched key must NOT create a fresh thread.
@@ -279,6 +283,8 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
         assertThat(result.signals()).singleElement().satisfies(s -> {
             assertThat(s.disposition()).isEqualTo(Disposition.PRESERVED_EXISTING);
             assertThat(s.externalRef()).isEqualTo("gid://Note/B");
+            assertThat(s.externalUrl())
+                    .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_876543");
         });
     }
 
@@ -328,6 +334,10 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
         ClientGraphQlResponse noteResponse = mock(ClientGraphQlResponse.class);
         stubField(noteResponse, "createNote.errors", List.of());
         stubField(noteResponse, "createNote.note.id", "gid://Note/FALLBACK");
+        stubField(
+                noteResponse,
+                "createNote.note.url",
+                "https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         when(noteSpec.execute()).thenReturn(Mono.just(noteResponse));
 
         InlineResult result = channel.postInlineFeedback(
@@ -339,6 +349,8 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
         assertThat(result.signals()).singleElement().satisfies(s -> {
             assertThat(s.disposition()).isEqualTo(Disposition.FELL_BACK);
             assertThat(s.externalRef()).isEqualTo("gid://Note/FALLBACK");
+            assertThat(s.externalUrl())
+                    .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         });
     }
 
@@ -531,6 +543,10 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
         ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
         stubField(response, "createDiffNote.errors", List.of());
         stubField(response, "createDiffNote.note.id", noteId);
+        stubField(
+                response,
+                "createDiffNote.note.url",
+                "https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         stubField(response, "createDiffNote.note.discussion.id", discussionId);
         when(spec.execute()).thenReturn(Mono.just(response));
         return bodyCaptor;
@@ -548,6 +564,11 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
     private static ClientGraphQlResponse emptyErrors(String errorsPath) {
         ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
         stubField(response, errorsPath, List.of());
+        if (errorsPath.equals("updateNote.errors"))
+            stubField(
+                    response,
+                    "updateNote.note.url",
+                    "https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         return response;
     }
 
@@ -571,6 +592,7 @@ class GitlabInlineFeedbackChannelTest extends BaseUnitTest {
         // HashMap-backed (not Map.of) so null discussion ids in tests don't throw.
         Map<String, Object> n = new HashMap<>();
         n.put("id", id);
+        n.put("url", "https://gitlab.example.com/group/project/-/merge_requests/42#note_876543");
         n.put("body", body);
         n.put("system", system);
         return n;

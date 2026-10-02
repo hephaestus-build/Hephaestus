@@ -1,0 +1,539 @@
+{
+  "version": "1.3.0",
+  "sources": [
+    {
+      "kind": "scm.pull-request.core",
+      "displayName": "Pull request details",
+      "description": "The pull request record: its fields as the provider holds them.",
+      "selectionScope": "Every permitted pull request in monitored workspace repositories, with its mirrored fields. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request"
+      ],
+      "defaultRequirement": true,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": false
+      },
+      "requiredQuality": "COMPLETE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-pull-request-core-automated-review",
+        "use-scm-pull-request-core-feedback-delivery",
+        "use-scm-pull-request-core-mentor-context",
+        "use-scm-pull-request-core-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "scm.pull-request.diff",
+      "displayName": "Code changes",
+      "description": "The change the pull request introduces: the pinned base and head commits, from which the review derives the diff.",
+      "selectionScope": "The base and head commit of one pull request, both pinned, both present in the captured repository. GitLab records the review diff base; providers that record the target tip require its merge base with the reviewed head. The diff itself, its statistics, the changed paths and the commits are derived inside the review from the captured repository with git, so nothing about the change is truncated or rendered before the review reads it. A quote of the change names a side of that range and a repository path; it is verified against the blob at that side's commit and refused when the path is not one the change touches. A pinned range with no changes is complete and empty. A range that cannot be pinned is a collection error.",
+      "artifactKinds": [
+        "scm.pull_request"
+      ],
+      "defaultRequirement": true,
+      "authority": "DETERMINISTIC_DERIVATION",
+      "identity": {
+        "mode": "PINNED_IDENTITY"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": false,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "COMPLETE",
+      "privacyClass": "INTERNAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-pull-request-diff-automated-review",
+        "use-scm-pull-request-diff-feedback-delivery",
+        "use-scm-pull-request-diff-mentor-context",
+        "use-scm-pull-request-diff-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "scm.pull-request.comments",
+      "displayName": "Inline review comments",
+      "description": "Review comments left on specific lines of the pull request.",
+      "selectionScope": "All permitted inline review comments on workspace pull requests. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request"
+      ],
+      "defaultRequirement": true,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-pull-request-comments-automated-review",
+        "use-scm-pull-request-comments-feedback-delivery",
+        "use-scm-pull-request-comments-mentor-context",
+        "use-scm-pull-request-comments-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "scm.repository.tree",
+      "displayName": "Repository files and history",
+      "description": "Repository files and reachable Git history, supplied as context for reading the change. Not reviewed on their own.",
+      "selectionScope": "Full reachable Git history and a working copy of each permitted repository, copied from the worker's bare mirrors. The reviewed repository is pinned to the job's commit. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request"
+      ],
+      "defaultRequirement": false,
+      "authority": "UPSTREAM_SNAPSHOT",
+      "identity": {
+        "mode": "PINNED_IDENTITY"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "INTERNAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-repository-tree-automated-review",
+        "use-scm-repository-tree-feedback-delivery",
+        "use-scm-repository-tree-mentor-context",
+        "use-scm-repository-tree-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "scm.issue.core",
+      "displayName": "Issue details",
+      "description": "The issue record: title, description, author, state, labels, and assignees.",
+      "selectionScope": "Every permitted issue in monitored workspace repositories, with its mirrored fields. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.issue"
+      ],
+      "defaultRequirement": true,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": false
+      },
+      "requiredQuality": "COMPLETE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-issue-core-automated-review",
+        "use-scm-issue-core-feedback-delivery",
+        "use-scm-issue-core-mentor-context",
+        "use-scm-issue-core-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "scm.issue.comments",
+      "displayName": "Issue comments",
+      "description": "The discussion recorded on the issue.",
+      "selectionScope": "All permitted comments on workspace issues. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.issue"
+      ],
+      "defaultRequirement": true,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-issue-comments-automated-review",
+        "use-scm-issue-comments-feedback-delivery",
+        "use-scm-issue-comments-mentor-context",
+        "use-scm-issue-comments-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "docs.document.core",
+      "displayName": "Document under review",
+      "description": "The written document a review is about: its prose, title, collection, author, and upstream timestamps.",
+      "selectionScope": "The permitted mirrored document selected as the reviewed work, with its current body and metadata. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "docs.document"
+      ],
+      "defaultRequirement": true,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": false,
+        "supportsEmpty": false
+      },
+      "requiredQuality": "COMPLETE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-docs-document-core-automated-review",
+        "use-docs-document-core-feedback-delivery",
+        "use-docs-document-core-mentor-context",
+        "use-docs-document-core-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "slack.conversation.thread",
+      "displayName": "Slack thread",
+      "description": "One Slack thread in chronological order, read only from channels whose consent is active.",
+      "selectionScope": "All retained, non-deleted messages in workspace Slack channels with active consent, excluding opted-out authors. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "chat.conversation_thread"
+      ],
+      "defaultRequirement": true,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "COMPLETE",
+      "privacyClass": "SENSITIVE_PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-slack-conversation-thread-automated-review",
+        "use-slack-conversation-thread-feedback-delivery",
+        "use-slack-conversation-thread-mentor-context",
+        "use-slack-conversation-thread-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "scm.linked-work-items",
+      "displayName": "Linked work items",
+      "description": "Issues the pull request refers to by number in its description, branch name or commit subjects, as this repository stores them.",
+      "selectionScope": "Every permitted linked work items record in the job workspace, without record-count or history-window caps. Existing visibility, consent, withdrawal, tenancy, processor, retention and erasure checks apply before rendering.",
+      "artifactKinds": [
+        "scm.pull_request"
+      ],
+      "defaultRequirement": false,
+      "authority": "LOSSY_DERIVATION",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": false,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-linked-work-items-automated-review",
+        "use-scm-linked-work-items-feedback-delivery",
+        "use-scm-linked-work-items-mentor-context",
+        "use-scm-linked-work-items-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "scm.review-threads",
+      "displayName": "Review threads and decisions",
+      "description": "Review conversations on the pull request, whether each was resolved, and each reviewer's decision.",
+      "selectionScope": "All permitted review threads in workspace pull requests, including resolution state. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request"
+      ],
+      "defaultRequirement": false,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-review-threads-automated-review",
+        "use-scm-review-threads-feedback-delivery",
+        "use-scm-review-threads-mentor-context",
+        "use-scm-review-threads-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "scm.general-review-comments",
+      "displayName": "General review comments",
+      "description": "Review comments addressing the pull request as a whole rather than a specific line.",
+      "selectionScope": "All permitted pull-request discussion comments and submitted reviews in the workspace. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request"
+      ],
+      "defaultRequirement": false,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-scm-general-review-comments-automated-review",
+        "use-scm-general-review-comments-feedback-delivery",
+        "use-scm-general-review-comments-mentor-context",
+        "use-scm-general-review-comments-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "workspace.project-inventory",
+      "displayName": "Related workspace work",
+      "description": "Other work items in the same workspace, supplied so a change can be read against related work.",
+      "selectionScope": "All permitted issues, pull requests, workspace member profiles and practice definitions. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request",
+        "scm.issue",
+        "chat.conversation_thread"
+      ],
+      "defaultRequirement": false,
+      "authority": "DETERMINISTIC_DERIVATION",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-workspace-project-inventory-automated-review",
+        "use-workspace-project-inventory-feedback-delivery",
+        "use-workspace-project-inventory-mentor-context",
+        "use-workspace-project-inventory-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "outline.documents",
+      "displayName": "Outline documents",
+      "description": "Mirrored documents in permitted workspace Outline collections.",
+      "selectionScope": "Every permitted mirrored Outline document in the workspace. Deleted documents are excluded; an evicted body is an explicit refusal, not an empty document. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request",
+        "scm.issue"
+      ],
+      "defaultRequirement": false,
+      "authority": "SYNCHRONIZED_MIRROR",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-outline-documents-automated-review",
+        "use-outline-documents-feedback-delivery",
+        "use-outline-documents-mentor-context",
+        "use-outline-documents-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "hephaestus.observation-history",
+      "displayName": "Earlier observations about this person",
+      "description": "Observations earlier reviews in this workspace recorded about the person whose work is under review, with the practice, presence, assessment and recurrence key each was filed under.",
+      "selectionScope": "All currently visible prior observations about permitted workspace members, after currentness, withdrawal and consent checks. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request",
+        "scm.issue",
+        "chat.conversation_thread",
+        "docs.document"
+      ],
+      "defaultRequirement": false,
+      "authority": "DETERMINISTIC_DERIVATION",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-hephaestus-observation-history-automated-review",
+        "use-hephaestus-observation-history-feedback-delivery",
+        "use-hephaestus-observation-history-mentor-context",
+        "use-hephaestus-observation-history-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    },
+    {
+      "kind": "hephaestus.feedback-history",
+      "displayName": "Feedback already delivered to this person",
+      "description": "Feedback earlier reviews already delivered to the person whose work is under review, with the channel it went to and the recurrence keys it spoke to.",
+      "selectionScope": "All currently visible delivered feedback about permitted workspace members, plus prepared feedback for the reviewed developer, after currentness, withdrawal and consent checks. No review record-count cap or history window applies. Existing visibility, tenancy, processor, retention and erasure checks remain in force.",
+      "artifactKinds": [
+        "scm.pull_request",
+        "scm.issue",
+        "chat.conversation_thread",
+        "docs.document"
+      ],
+      "defaultRequirement": false,
+      "authority": "DETERMINISTIC_DERIVATION",
+      "identity": {
+        "mode": "NOT_APPLICABLE"
+      },
+      "completeness": {
+        "supportsComplete": true,
+        "supportsPartial": true,
+        "supportsEmpty": true
+      },
+      "requiredQuality": "ANY_CAPTURE",
+      "privacyClass": "PERSONAL",
+      "retentionPolicy": "AGENT_EVIDENCE_RETENTION",
+      "erasurePolicy": "WORKSPACE_AND_PERSON_ERASURE",
+      "useDecisionIds": [
+        "use-hephaestus-feedback-history-automated-review",
+        "use-hephaestus-feedback-history-feedback-delivery",
+        "use-hephaestus-feedback-history-mentor-context",
+        "use-hephaestus-feedback-history-operator-review"
+      ],
+      "supportedAbsenceStates": [
+        "NOT_COLLECTED",
+        "UNAVAILABLE",
+        "REDACTED",
+        "COLLECTION_ERROR"
+      ]
+    }
+  ]
+}

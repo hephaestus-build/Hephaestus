@@ -3,7 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 import de.tum.cit.aet.hephaestus.agent.context.ContentSource;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest.MentorChatRequest;
-import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewThreadContentSource;
+import de.tum.cit.aet.hephaestus.integration.core.framework.IntegrationManifestRegistry;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
@@ -105,6 +106,7 @@ public class MergeReadinessContentSource implements ContentSource {
     private final PullRequestReviewRepository reviewRepository;
     private final IssueCommentRepository commentRepository;
     private final ObjectMapper objectMapper;
+    private final IntegrationManifestRegistry manifests;
 
     @Override
     public boolean supports(ContextRequest request) {
@@ -281,7 +283,7 @@ public class MergeReadinessContentSource implements ContentSource {
         ArrayNode reviews = node.putArray("latestReviews");
         Set<Long> seen = new HashSet<>();
         boolean reviewsCut = recent.size() == MAX_REVIEWS_READ;
-        // Newest first, so the first review per reviewer is their current one.
+        // Standing GitLab approvals precede review history; this order is not approval chronology.
         for (PullRequestReview review : recent) {
             User reviewer = review.getAuthor();
             if (reviewer == null || !seen.add(reviewer.getId())) {
@@ -303,10 +305,17 @@ public class MergeReadinessContentSource implements ContentSource {
             } else {
                 entry.put("state", review.getState().name());
             }
-            entry.put("submittedAt", review.getSubmittedAt().toString());
-            // A review stands for the commit it was given on; one given on an earlier head says nothing of this one.
+            Instant submittedAt = review.getSubmittedAt();
+            if (submittedAt != null) {
+                entry.put("submittedAt", submittedAt.toString());
+            }
             entry.put("commit", review.getCommitId());
-            entry.put("commitFor", commitFor(review.getCommitId(), pr.getHeadRefOid()));
+            entry.put(
+                    "commitFor",
+                    manifests
+                            .manifestFor(pr.getProvider().kind())
+                            .map(manifest -> manifest.reviewCommitFor(review.getCommitId(), pr.getHeadRefOid()))
+                            .orElse("UNKNOWN"));
             if (review.getBody() != null && !review.getBody().isBlank()) {
                 reviewsCut |= putBody(entry, review.getBody());
             }
@@ -460,7 +469,7 @@ public class MergeReadinessContentSource implements ContentSource {
         }
         c.put("createdAt", createdAt == null ? null : createdAt.toString());
         // Not in the ledger yet carrying the marker: Hephaestus's note under an unmatched ref, or a person quoting one.
-        if (body.contains(ReviewThreadContentSource.HEPHAESTUS_MARKER)) {
+        if (body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER)) {
             c.put("quotesHephaestusMarker", true);
         }
         return putBody(c, body);

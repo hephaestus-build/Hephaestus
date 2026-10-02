@@ -19,8 +19,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitFileChange.ChangeType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
@@ -37,7 +35,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -159,11 +156,11 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
         @Test
         void shouldMapEveryStagedFileToItsSourceKind() {
-            assertThat(provider.sourceKindFor("inputs/context/metadata.json")).isEqualTo(CORE);
-            assertThat(provider.sourceKindFor("inputs/context/comments.json")).isEqualTo(COMMENTS);
+            assertThat(provider.sourceKindFor("context/metadata.json")).isEqualTo(CORE);
+            assertThat(provider.sourceKindFor("context/comments.json")).isEqualTo(COMMENTS);
             assertThat(provider.sourceKindFor(PullRequestContentSource.CHANGE_FILE))
                     .isEqualTo(DIFF);
-            assertThat(PullRequestContentSource.CHANGE_FILE).isEqualTo("inputs/context/change.json");
+            assertThat(PullRequestContentSource.CHANGE_FILE).isEqualTo("context/change.json");
         }
     }
 
@@ -171,10 +168,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     class MetadataAndComments {
 
         @Test
-        void shouldRefuseCoreWithoutGitBecauseItsCommitHistoryIsUnavailable() {
-            assertThatThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(CORE)))
-                    .isInstanceOf(JobPreparationException.class)
-                    .hasMessageContaining("Git local storage is disabled");
+        void shouldReadCoreFromTheSnapshotWithoutRequiringGit() {
+            assertThat(provider.capture(request(sampleMetadata()), Set.of(CORE)).files())
+                    .containsKey("context/metadata.json");
         }
 
         @Test
@@ -185,8 +181,8 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
 
-            assertThat(files).containsKey("inputs/context/metadata.json");
-            JsonNode metadataJson = objectMapper.readTree(files.get("inputs/context/metadata.json"));
+            assertThat(files).containsKey("context/metadata.json");
+            JsonNode metadataJson = objectMapper.readTree(files.get("context/metadata.json"));
             assertThat(metadataJson.get("pr_number").asInt()).isEqualTo(42);
             assertThat(metadataJson.get("repository_full_name").asString()).isEqualTo("owner/repo");
         }
@@ -211,7 +207,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
 
-            JsonNode metadataJson = objectMapper.readTree(files.get("inputs/context/metadata.json"));
+            JsonNode metadataJson = objectMapper.readTree(files.get("context/metadata.json"));
             assertThat(metadataJson.get("title").asString()).isEqualTo("Fix authentication bug");
             assertThat(metadataJson.get("author").asString()).isEqualTo("testuser");
             assertThat(metadataJson.get("additions").asInt()).isEqualTo(10);
@@ -239,7 +235,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
                     .files()
-                    .get("inputs/context/metadata.json"));
+                    .get("context/metadata.json"));
 
             assertThat(metadataJson.get("state").asString()).isEqualTo("CLOSED");
             assertThat(metadataJson.get("is_merged").asBoolean()).isTrue();
@@ -263,7 +259,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
                     .files()
-                    .get("inputs/context/metadata.json"));
+                    .get("context/metadata.json"));
 
             assertThat(metadataJson.get("author").asString()).isEqualTo("group_12_bot_9f3a");
             assertThat(metadataJson.get("author_bot").asBoolean()).isTrue();
@@ -282,13 +278,13 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(current));
             JsonNode fresh = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
                     .files()
-                    .get("inputs/context/metadata.json"));
+                    .get("context/metadata.json"));
             assertThat(fresh.get("head_checks").asString()).isEqualTo("FAILURE");
 
             when(pullRequestRepository.findByIdForReviewContext(456L)).thenReturn(Optional.of(stale));
             JsonNode outdated = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
                     .files()
-                    .get("inputs/context/metadata.json"));
+                    .get("context/metadata.json"));
             assertThat(outdated.has("head_checks")).isFalse();
         }
 
@@ -298,7 +294,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
                     .files()
-                    .get("inputs/context/metadata.json"));
+                    .get("context/metadata.json"));
 
             assertThat(metadataJson.get("is_merged").asBoolean()).isFalse();
             assertThat(metadataJson.has("author_bot")).isFalse();
@@ -340,7 +336,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
 
-            JsonNode comments = objectMapper.readTree(files.get("inputs/context/comments.json"));
+            JsonNode comments = objectMapper.readTree(files.get("context/comments.json"));
             assertThat(comments).hasSize(3);
             assertThat(comments.get(0).get("created_at").asString()).isEqualTo("2025-06-01T12:00:00Z");
             assertThat(comments.get(0).get("author").asString()).isEqualTo("reviewer");
@@ -379,7 +375,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             JsonNode comments = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(COMMENTS))
                     .files()
-                    .get("inputs/context/comments.json"));
+                    .get("context/comments.json"));
 
             JsonNode first = comments.get(0);
             assertThat(first.propertyNames())
@@ -408,9 +404,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void truncatesComments() throws Exception {
+        void shouldKeepAllCommentsAboveTheFormerCaptureLimit() throws Exception {
             var comments = new ArrayList<PullRequestReviewComment>();
-            for (int i = 0; i < PullRequestContentSource.MAX_COMMENTS + 100; i++) {
+            for (int i = 0; i < 10_000 + 100; i++) {
                 PullRequestReviewComment c = new PullRequestReviewComment();
                 c.setPath("file.java");
                 c.setLine(i);
@@ -426,15 +422,15 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
             Map<String, byte[]> files = captureFiles(request(sampleMetadata()));
 
-            JsonNode commentsJson = objectMapper.readTree(files.get("inputs/context/comments.json"));
-            assertThat(commentsJson).hasSize(PullRequestContentSource.MAX_COMMENTS);
-            assertThat(commentsJson.get(0).get("body").asString()).isEqualTo("Comment 100");
+            JsonNode commentsJson = objectMapper.readTree(files.get("context/comments.json"));
+            assertThat(commentsJson).hasSize(comments.size());
+            assertThat(commentsJson.get(0).get("body").asString()).isEqualTo("Comment 0");
         }
 
         @Test
-        void reportsExactLimitAsCompleteAndOverflowAsPartial() {
+        void shouldReportCompleteWithoutACommentLimit() {
             List<PullRequestReviewComment> comments = new ArrayList<>();
-            for (int i = 0; i < PullRequestContentSource.MAX_COMMENTS; i++) {
+            for (int i = 0; i < 10_000; i++) {
                 PullRequestReviewComment comment = new PullRequestReviewComment();
                 comment.setBody("Comment " + i);
                 comments.add(comment);
@@ -450,80 +446,12 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(provider.capture(request(sampleMetadata()), Set.of(COMMENTS))
                             .completeness()
                             .get(COMMENTS))
-                    .isEqualTo(SourceCompleteness.PARTIAL);
+                    .isEqualTo(SourceCompleteness.COMPLETE);
         }
     }
 
     @Nested
     class Commits {
-
-        @Test
-        void shouldStageTheCommitsOfTheChangeOldestFirstWithTheirMessagesAndFiles() throws Exception {
-            stubGit();
-            var first = new CommitDetails(
-                    "1".repeat(40),
-                    "docs: describe usage",
-                    null,
-                    "Ada",
-                    "ada@example.com",
-                    Instant.parse("2026-04-09T10:00:00Z"),
-                    "Ada",
-                    "ada@example.com",
-                    Instant.parse("2026-04-09T10:00:00Z"),
-                    2,
-                    0,
-                    1,
-                    List.of(new CommitDetails.FileChange("README.md", ChangeType.MODIFIED, 2, 0, 2, null)),
-                    List.of(BASE));
-            var second = new CommitDetails(
-                    "2".repeat(40),
-                    "feat: move a to b",
-                    "Closes #7",
-                    "Ada",
-                    "ada@example.com",
-                    Instant.parse("2026-04-09T11:00:00Z"),
-                    "Bot",
-                    "bot@example.com",
-                    Instant.parse("2026-04-09T11:30:00Z"),
-                    1,
-                    1,
-                    1,
-                    List.of(new CommitDetails.FileChange("b.txt", ChangeType.RENAMED, 1, 1, 2, "a.txt")),
-                    List.of("1".repeat(40)));
-            when(gitRepositoryManager.commitsBetween(REPOSITORY, BASE, HEAD)).thenReturn(List.of(first, second));
-
-            var captured = provider.capture(request(sampleMetadata()), Set.of(CORE));
-
-            assertThat(provider.sourceKindFor(PullRequestContentSource.COMMITS_FILE))
-                    .isEqualTo(CORE);
-            JsonNode root = objectMapper.readTree(captured.files().get(PullRequestContentSource.COMMITS_FILE));
-            assertThat(root.propertyNames()).containsExactly("commits");
-            JsonNode commits = root.get("commits");
-            assertThat(commits).hasSize(2);
-            JsonNode one = commits.get(0);
-            assertThat(one.propertyNames())
-                    .containsExactly(
-                            "sha", "parents", "author", "authoredAt", "committer", "committedAt", "message", "files");
-            assertThat(one.get("sha").asString()).isEqualTo("1".repeat(40));
-            assertThat(one.get("parents").get(0).asString()).isEqualTo(BASE);
-            assertThat(one.get("author").asString()).isEqualTo("Ada");
-            assertThat(one.get("authoredAt").asString()).isEqualTo("2026-04-09T10:00:00Z");
-            assertThat(one.get("message").asString()).isEqualTo("docs: describe usage");
-            JsonNode readme = one.get("files").get(0);
-            assertThat(readme.propertyNames()).containsExactly("path", "status", "additions", "deletions");
-            assertThat(readme.get("path").asString()).isEqualTo("README.md");
-            assertThat(readme.get("status").asString()).isEqualTo("M");
-            assertThat(readme.get("additions").asInt()).isEqualTo(2);
-            JsonNode two = commits.get(1);
-            assertThat(two.get("message").asString()).isEqualTo("feat: move a to b\n\nCloses #7");
-            assertThat(two.get("committer").asString()).isEqualTo("Bot");
-            assertThat(two.get("committedAt").asString()).isEqualTo("2026-04-09T11:30:00Z");
-            JsonNode renamed = two.get("files").get(0);
-            assertThat(renamed.get("status").asString()).isEqualTo("R");
-            assertThat(renamed.get("oldPath").asString()).isEqualTo("a.txt");
-            assertThat(new String(captured.files().get(PullRequestContentSource.COMMITS_FILE), StandardCharsets.UTF_8))
-                    .doesNotContain("@example.com");
-        }
 
         @Test
         void shouldStageNoCommitsWhenTheCloneIsNotPrepared() {
@@ -668,7 +596,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                 .thenThrow(new JobPreparationException("SCM credentials are unavailable"));
         var request = request(sampleMetadata());
 
-        for (var kind : List.of(CORE, DIFF)) {
+        for (var kind : List.of(DIFF, DIFF)) {
             assertThatThrownBy(() -> provider.capture(request, Set.of(kind)))
                     .isInstanceOf(JobPreparationException.class)
                     .hasMessage("SCM credentials are unavailable");
@@ -684,15 +612,13 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
         assertThat(captured.files().keySet())
                 .containsExactlyInAnyOrder(
-                        "inputs/context/metadata.json",
+                        "context/metadata.json",
                         PullRequestContentSource.DESCRIPTION_FILE,
-                        PullRequestContentSource.COMMITS_FILE,
                         PullRequestContentSource.CHANGE_FILE);
         assertThat(provider.sourceKindFor(PullRequestContentSource.DESCRIPTION_FILE))
                 .isEqualTo(CORE);
-        assertThat(captured.immutableIdentities().get(CORE)).isEqualTo(BASE + ":" + HEAD);
-        assertThat(captured.immutableIdentities().get(CORE))
-                .isEqualTo(captured.immutableIdentities().get(DIFF));
+        assertThat(captured.immutableIdentities()).doesNotContainKey(CORE);
+        assertThat(captured.immutableIdentities().get(DIFF)).isEqualTo(BASE + ":" + HEAD);
     }
 
     @Test
@@ -701,9 +627,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         var metadata = sampleMetadata();
         metadata.remove("base_ref_oid");
 
-        var captured = provider.capture(request(metadata), Set.of(CORE));
+        var captured = provider.capture(request(metadata), Set.of(DIFF));
 
-        assertThat(captured.immutableIdentities().get(CORE)).isEqualTo(BASE + ":" + HEAD);
-        assertThat(captured.files()).doesNotContainKey(PullRequestContentSource.CHANGE_FILE);
+        assertThat(captured.immutableIdentities().get(DIFF)).isEqualTo(BASE + ":" + HEAD);
+        assertThat(captured.files()).containsKey(PullRequestContentSource.CHANGE_FILE);
     }
 }

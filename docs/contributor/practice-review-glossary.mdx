@@ -47,7 +47,7 @@ For how the words fit together at runtime — the four stages, and the refusal v
 | **Review readiness**                | For one review, Hephaestus supports the configured mode, the declared evidence is sufficient, and every required source passes its checks.                                                                                                 | validation, activation                                            |
 | **Practice autonomy**               | Who may authorize feedback pushed onto the work for one practice: nobody (`OFF`), a workspace owner or administrator (`HUMAN_APPROVAL`), or the system (`AUTOMATIC`). The pull lanes — the practice page and the mentor — deliver at every autonomy but `OFF`. Nullable at practice and group levels, where null means “inherit”. | review tier, loudness tier, shadow mode, enabled                  |
 | **Effective autonomy**              | The autonomy in force after resolving practice → group → workspace. Always server-resolved and reported with its source.                                                                                                                    | autonomy override                                                 |
-| **Review coverage**                 | Which repositories' and which workspace members' work may be reviewed. Repository and person modes are independent; effective coverage is their intersection.                                                                                      | filter, audience, pilot allowlist, review scope                   |
+| **Review coverage**                 | Which work may be reviewed. Repository and person modes follow the [kind of reviewed work](#review-coverage-and-delivery-status).                                                                                      | filter, audience, pilot allowlist, review scope                   |
 | **Sandbox gateway**                 | The only listener a review's sandbox may reach on a worker. Defined for operators in [runtime roles](/admin/runtime-roles).                                                                                                            | LLM proxy port, internal API, agent gateway                       |
 | **Delivery status**                 | Whether new external practice feedback may leave a workspace (`ACTIVE` or `PAUSED`). Pausing does not stop review or erase coverage.                                                                                                       | review status, practice autonomy, Silent Mode                     |
 | **Delivery family**                 | Defined in the [practice feedback language](./practice-feedback-language.md).                                                                                                                                                              | delivery status, delivery state                                   |
@@ -221,13 +221,18 @@ independent modes:
 
 | Axis       | Broad mode      | Narrow mode                                                              | Selected-empty means |
 | ---------- | --------------- | ------------------------------------------------------------------------ | -------------------- |
-| Repository | `ALL_MONITORED` | `SELECTED` repositories, each optionally narrowed to exact base branches | no repositories      |
+| Repository | `ALL_MONITORED` | `SELECTED` repositories, each optionally narrowed to exact base branches | no repository work   |
 | Person     | `ALL_ELIGIBLE`  | `SELECTED` people                                                        | no people            |
 
-Both axes must admit an artifact; within one axis, any entry matches. An empty base-branch list on a
-selected repository means every branch in that repository. Branch restrictions apply to pull and merge
-requests; issues have no base branch and are matched by repository and person only. Names are exact —
-there are no glob or path rules.
+Both axes must admit repository-backed work; within one axis, any entry matches. An empty base-branch
+list on a selected repository means every branch in that repository. Branch restrictions apply to pull
+and merge requests; issues have no base branch and are matched by repository and person only. Names are
+exact — there are no glob or path rules.
+
+Documents and conversations have no repository. Only the person axis applies to their review coverage;
+source collection permissions, participant consent and AI choices remain independent gates. Their
+repository and branch match facts are `NOT_APPLICABLE`. An empty person selection excludes every kind
+of work; an empty repository selection excludes only repository-backed work.
 
 **`ALL_ELIGIBLE` means every human `WorkspaceMembership`, and that is the only definition.** Eligibility is
 a membership row plus `User.Type.USER`; nothing consults accounts, sign-ins or identity links, so never
@@ -296,9 +301,10 @@ two checks read the stage:
   being honoured. There is deliberately no separate `HUMAN_APPROVAL` check — it could only ever report
   `PASSED` or `NOT_APPLICABLE`, and approval authority is exactly what this check already resolves.
 - **At `COMPOSITION` the contributing practices are not yet known**, so `PRACTICE_AUTHORITY` is
-  `NOT_APPLICABLE`. A document or conversation still has a review subject: repository-less coverage,
-  recipient consent and target eligibility are checked when that subject is resolved. External surfaces
-  also apply Silent Mode and the delivery pause; `IN_APP` does not, because it never leaves Hephaestus.
+  `NOT_APPLICABLE`. A document or conversation still has a review subject:
+  [review coverage](#review-coverage-and-delivery-status), recipient consent and target eligibility are
+  checked when that subject is resolved. External surfaces also apply Silent Mode and the delivery pause;
+  `IN_APP` does not, because it never leaves Hephaestus.
 
 The artifact lane is evaluated again at `AUTOMATIC`, at `APPROVED` when a person released it, and at `EGRESS`
 immediately before the provider call. The `IN_APP` and `CONVERSATION` surfaces are checked at `COMPOSITION`;

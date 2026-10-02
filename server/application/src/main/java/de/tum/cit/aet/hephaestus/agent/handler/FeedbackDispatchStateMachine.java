@@ -65,15 +65,19 @@ class FeedbackDispatchStateMachine {
     }
 
     PracticeFeedbackDispatchService.Result sent(
-            FeedbackDispatch dispatch, String owner, @Nullable String externalRef, List<DeliveredSignal> signals) {
-        return finish(dispatch, owner, FeedbackDispatchState.SENT, externalRef, null, null, null, signals)
-                ? PracticeFeedbackDispatchService.Result.sent(externalRef, signals)
+            FeedbackDispatch dispatch,
+            String owner,
+            @Nullable String externalRef,
+            @Nullable String externalUrl,
+            List<DeliveredSignal> signals) {
+        return finish(dispatch, owner, FeedbackDispatchState.SENT, externalRef, externalUrl, null, null, null, signals)
+                ? PracticeFeedbackDispatchService.Result.sent(externalRef, externalUrl, signals)
                 : PracticeFeedbackDispatchService.Result.inProgress();
     }
 
     PracticeFeedbackDispatchService.Result refuse(
             FeedbackDispatch dispatch, String owner, FeedbackSuppressionReason reason) {
-        return refuse(dispatch, owner, reason, null, deliveredSignals(dispatch));
+        return refuse(dispatch, owner, reason, null, null, deliveredSignals(dispatch));
     }
 
     PracticeFeedbackDispatchService.Result refuse(
@@ -81,14 +85,31 @@ class FeedbackDispatchStateMachine {
             String owner,
             FeedbackSuppressionReason reason,
             @Nullable String externalRef,
+            @Nullable String externalUrl,
             List<DeliveredSignal> signals) {
-        return finish(dispatch, owner, FeedbackDispatchState.SUPPRESSED, externalRef, null, reason, null, signals)
-                ? PracticeFeedbackDispatchService.Result.suppressed(reason, externalRef, signals)
+        return finish(
+                        dispatch,
+                        owner,
+                        FeedbackDispatchState.SUPPRESSED,
+                        externalRef,
+                        externalUrl,
+                        null,
+                        reason,
+                        null,
+                        signals)
+                ? PracticeFeedbackDispatchService.Result.suppressed(reason, externalRef, externalUrl, signals)
                 : PracticeFeedbackDispatchService.Result.inProgress();
     }
 
     PracticeFeedbackDispatchService.Result retry(FeedbackDispatch dispatch, String owner, @Nullable String error) {
-        return retry(dispatch, owner, error, null, dispatch.getWriteStarted(), deliveredSignals(dispatch));
+        return retry(
+                dispatch,
+                owner,
+                error,
+                dispatch.getDeliveredExternalRef(),
+                dispatch.getDeliveredExternalUrl(),
+                dispatch.getWriteStarted(),
+                deliveredSignals(dispatch));
     }
 
     PracticeFeedbackDispatchService.Result retry(
@@ -96,12 +117,13 @@ class FeedbackDispatchStateMachine {
             String owner,
             @Nullable String error,
             @Nullable String externalRef,
+            @Nullable String externalUrl,
             boolean writeMayHaveStarted,
             List<DeliveredSignal> signals) {
         int attempt = dispatch.getAttemptCount() + 1;
         if (attempt >= PracticeFeedbackDispatchService.MAX_ATTEMPTS && !writeMayHaveStarted) {
-            return finish(dispatch, owner, FeedbackDispatchState.FAILED, null, error, null, null, signals)
-                    ? PracticeFeedbackDispatchService.Result.failed(null, signals)
+            return finish(dispatch, owner, FeedbackDispatchState.FAILED, null, null, error, null, null, signals)
+                    ? PracticeFeedbackDispatchService.Result.failed(null, null, signals)
                     : PracticeFeedbackDispatchService.Result.inProgress();
         }
         return finish(
@@ -109,11 +131,12 @@ class FeedbackDispatchStateMachine {
                         owner,
                         FeedbackDispatchState.UNCERTAIN,
                         externalRef,
+                        externalUrl,
                         error,
                         null,
                         Instant.now().plus(backoff(attempt)),
                         signals)
-                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef)
+                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl)
                 : PracticeFeedbackDispatchService.Result.inProgress();
     }
 
@@ -122,14 +145,24 @@ class FeedbackDispatchStateMachine {
             String owner,
             @Nullable String error,
             @Nullable String externalRef,
+            @Nullable String externalUrl,
             List<DeliveredSignal> signals) {
         int attempt = dispatch.getAttemptCount() + 1;
         if (attempt >= PracticeFeedbackDispatchService.MAX_ATTEMPTS) {
-            return finish(dispatch, owner, FeedbackDispatchState.FAILED, externalRef, error, null, null, signals)
-                    ? PracticeFeedbackDispatchService.Result.failed(externalRef, signals)
+            return finish(
+                            dispatch,
+                            owner,
+                            FeedbackDispatchState.FAILED,
+                            externalRef,
+                            externalUrl,
+                            error,
+                            null,
+                            null,
+                            signals)
+                    ? PracticeFeedbackDispatchService.Result.failed(externalRef, externalUrl, signals)
                     : PracticeFeedbackDispatchService.Result.inProgress();
         }
-        return retry(dispatch, owner, error, externalRef, true, signals);
+        return retry(dispatch, owner, error, externalRef, externalUrl, true, signals);
     }
 
     /** Keeps a dispatch whose started write is unconfirmed looking for it, at {@code nextAttemptAt}. */
@@ -138,6 +171,7 @@ class FeedbackDispatchStateMachine {
             String owner,
             String error,
             @Nullable String externalRef,
+            @Nullable String externalUrl,
             List<DeliveredSignal> signals,
             Instant nextAttemptAt) {
         return finish(
@@ -145,17 +179,18 @@ class FeedbackDispatchStateMachine {
                         owner,
                         FeedbackDispatchState.UNCERTAIN,
                         externalRef,
+                        externalUrl,
                         error,
                         null,
                         nextAttemptAt,
                         signals)
-                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef)
+                ? PracticeFeedbackDispatchService.Result.uncertain(externalRef, externalUrl)
                 : PracticeFeedbackDispatchService.Result.inProgress();
     }
 
     PracticeFeedbackDispatchService.Result retryAfterWrite(
             FeedbackDispatch dispatch, String owner, @Nullable String error) {
-        return retry(dispatch, owner, error, null, true, deliveredSignals(dispatch));
+        return retry(dispatch, owner, error, null, null, true, deliveredSignals(dispatch));
     }
 
     /** Records that inline notes are about to be requested; false once the lease is lost, so nothing is sent. */
@@ -175,6 +210,7 @@ class FeedbackDispatchStateMachine {
             String owner,
             FeedbackDispatchState state,
             @Nullable String externalRef,
+            @Nullable String externalUrl,
             @Nullable String error,
             @Nullable FeedbackSuppressionReason suppressionReason,
             @Nullable Instant nextAttemptAt,
@@ -185,6 +221,7 @@ class FeedbackDispatchStateMachine {
                 owner,
                 state.name(),
                 externalRef,
+                externalUrl,
                 bounded(error),
                 suppressionReason == null ? null : suppressionReason.name(),
                 deliveredSignalsJson(deliveredSignals),
@@ -212,6 +249,17 @@ class FeedbackDispatchStateMachine {
             return persisted;
         }
         if (latest.externalRef() == null && persisted.externalRef() != null) return persisted;
+        if (latest.externalUrl() == null
+                && persisted.externalUrl() != null
+                && java.util.Objects.equals(latest.externalRef(), persisted.externalRef())) {
+            return new DeliveredSignal(
+                    latest.deliveryKey(),
+                    latest.anchor(),
+                    latest.disposition(),
+                    latest.externalRef(),
+                    latest.threadExternalRef(),
+                    persisted.externalUrl());
+        }
         return latest;
     }
 
@@ -237,6 +285,7 @@ class FeedbackDispatchStateMachine {
             @Nullable Integer endLine,
             Disposition disposition,
             @Nullable String externalRef,
+            @Nullable String externalUrl,
             @Nullable String threadExternalRef) {
         private static StoredPlacement from(DeliveredSignal signal) {
             FeedbackAnchor.DiffAnchor anchor = (FeedbackAnchor.DiffAnchor) signal.anchor();
@@ -248,6 +297,7 @@ class FeedbackDispatchStateMachine {
                     rangeStart == null ? null : anchor.newLineNumber(),
                     signal.disposition(),
                     signal.externalRef(),
+                    signal.externalUrl(),
                     signal.threadExternalRef());
         }
 
@@ -255,7 +305,7 @@ class FeedbackDispatchStateMachine {
             FeedbackAnchor.DiffAnchor anchor = endLine == null
                     ? FeedbackAnchor.DiffAnchor.singleLine(path, startLine)
                     : FeedbackAnchor.DiffAnchor.range(path, startLine, endLine);
-            return new DeliveredSignal(deliveryKey, anchor, disposition, externalRef, threadExternalRef);
+            return new DeliveredSignal(deliveryKey, anchor, disposition, externalRef, threadExternalRef, externalUrl);
         }
     }
 }

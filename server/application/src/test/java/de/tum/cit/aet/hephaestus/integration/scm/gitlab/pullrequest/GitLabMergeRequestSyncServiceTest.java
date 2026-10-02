@@ -78,7 +78,8 @@ class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
                         Duration.ofSeconds(30),
                         Duration.ofSeconds(60),
                         Duration.ZERO,
-                        Duration.ofMinutes(5)));
+                        Duration.ofMinutes(5)),
+                mock(GitLabApprovalClient.class));
         lenient().when(graphQlClientProvider.forScope(SCOPE_ID)).thenReturn(client);
         lenient().when(graphQlClientProvider.getRateLimitRemaining(SCOPE_ID)).thenReturn(100);
         lenient().when(client.documentName(anyString())).thenReturn(requestSpec);

@@ -7,13 +7,13 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -164,8 +164,28 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
         assertThat(work.path("checkedFields").valueStream().map(JsonNode::asString))
                 .containsExactly("title", "description", "head");
         assertThat(work.path("providerFreshness").asString()).isEqualTo("UNKNOWN");
+        assertThat(work.path("producingReviewStatus").asString()).isEqualTo("COMPLETED");
         assertThat(work.path("capturedAt").asString()).isEqualTo(CAPTURED.toString());
         assertThat(work.toString()).doesNotContain("Closes", "Plans", "dig~", HEAD);
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = AgentJobStatus.class,
+            names = {"RUNNING", "FAILED", "COMPLETED"})
+    void shouldIdentifyTheProducingRunStatusSeparatelyFromItsRecordedResult(AgentJobStatus status) {
+        PullRequest mr = mergeRequest(course, "MR !2", "Closes #12");
+        AgentJob reviewed = review(mr, "MR !2", "Closes #12", HEAD);
+        reviewed.setStatus(status);
+        agentJobRepository.saveAndFlush(reviewed);
+        observe(practice, reviewed, mr.getId(), student, ObservationKind.OMISSION_GAP, Severity.MINOR, NOW);
+
+        JsonNode entry = history().path("recentObservations").get(0);
+        assertThat(entry.path("reviewId").asString()).isEqualTo(reviewed.getId().toString());
+        assertThat(entry.path("outcome").asString()).isEqualTo("NEGATIVE");
+        assertThat(entry.path("reviewedWork").path("coreCoverage").asString()).isEqualTo("MATCHES_STORED_WORK");
+        assertThat(entry.path("reviewedWork").path("producingReviewStatus").asString())
+                .isEqualTo(status.name());
     }
 
     /**
@@ -430,6 +450,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
 
     private AgentJob reviewWith(PullRequest mr, ObjectNode snapshot) {
         AgentJob job = persistPullRequestReview(workspace, mr.getNumber(), mr.getId(), NOW);
+        job.setStatus(AgentJobStatus.COMPLETED);
         job.setEvidenceSnapshot(snapshot);
         return agentJobRepository.save(job);
     }
@@ -459,7 +480,7 @@ class ReviewedWorkCoverageIntegrationTest extends AbstractPracticeReviewIntegrat
                         CAPTURED));
     }
 
-    private ObjectNode snapshot(ArtifactSourceManifest manifest, @Nullable ReviewedWork work) {
+    private ObjectNode snapshot(JobFolderIndex manifest, @Nullable ReviewedWork work) {
         ObjectNode snapshot = objectMapper.createObjectNode();
         snapshot.set("manifest", objectMapper.valueToTree(manifest));
         if (work != null) {

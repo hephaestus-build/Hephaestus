@@ -218,8 +218,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
                             eq(author),
                             eq(new GitLabReviewReconciler.SystemNote(
                                     body, Instant.parse("2026-01-31T18:03:37Z"), "gid://gitlab/Note/4406174", true)),
-                            eq(repository.getProvider()),
-                            any());
+                            eq(repository.getProvider()));
             verify(issueCommentProcessor, never()).processMergeRequestNote(any(), any());
         }
 
@@ -229,7 +228,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
 
             handler.onMessage(mockMessage(event));
 
-            verify(reviewReconciler, never()).recordSystemNote(any(), any(), any(), any(), any());
+            verify(reviewReconciler, never()).recordSystemNote(any(), any(), any(), any());
             verify(issueCommentProcessor, never()).processMergeRequestNote(any(), any());
         }
 

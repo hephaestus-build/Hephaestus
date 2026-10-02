@@ -210,7 +210,7 @@ class PracticeReviewOutputControllerIntegrationTest extends AbstractWorkspaceInt
                 assessment == null ? null : presence,
                 assessment,
                 ("PRESENT".equals(presence) != "GOOD".equals(assessment)) ? severity : null,
-                "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"inputs/context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":50,\"quote\":\"example\",\"quoteRedacted\":false}]}",
+                "{\"citations\":[{\"sourceKind\":\"scm.pull-request.diff\",\"artifactPath\":\"context/diff.patch\",\"path\":\"src/Main.java\",\"side\":\"NEW\",\"startLine\":42,\"endLine\":50,\"quote\":\"example\",\"quoteRedacted\":false}]}",
                 "Reasoning for " + title,
                 "recurrence-" + title,
                 observedAt,

@@ -141,7 +141,7 @@ const INTENTIONALLY_MISSING_PATHS = [
 	},
 	{
 		document: "docs/contributor/agent/workspace-abi.mdx",
-		value: "inputs/context/commits.json",
+		value: "context/commits.json",
 		reason: "the staged commit record, written into the agent workspace",
 	},
 	{
@@ -180,6 +180,26 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "a developer-local secrets file that must stay untracked",
 	},
 	{
+		document: "docs/contributor/browser-extension.mdx",
+		value: "server/.env",
+		reason: "a developer-local secrets file that must stay untracked",
+	},
+	{
+		document: "docs/contributor/browser-extension.mdx",
+		value: "extension/.output/chrome-mv3-dev",
+		reason: "the development build's output directory, which WXT writes and git ignores",
+	},
+	{
+		document: "docs/contributor/browser-extension.mdx",
+		value: "extension/.output/chrome-mv3-e2e",
+		reason: "the e2e build's output directory, which WXT writes and git ignores",
+	},
+	{
+		document: "docs/contributor/browser-extension.mdx",
+		value: ".wxt",
+		reason: "WXT's generated types directory, which git ignores and the gates never read",
+	},
+	{
 		document: "docs/contributor/local-development.mdx",
 		value: "server/postgres-data",
 		reason: "a runtime data directory created by PostgreSQL and deliberately untracked",
@@ -191,7 +211,7 @@ const INTENTIONALLY_MISSING_PATHS = [
 	},
 	{
 		document: "docs/contributor/agent/workspace-abi.mdx",
-		value: "inputs/manifest.json",
+		value: "INDEX.md",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{
@@ -206,12 +226,12 @@ const INTENTIONALLY_MISSING_PATHS = [
 	},
 	{
 		document: "docs/contributor/artifact-source-contract.mdx",
-		value: "inputs/manifest.json",
+		value: "INDEX.md",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{
 		document: "docs/contributor/artifact-source-contract.mdx",
-		value: "inputs/context/change.json",
+		value: "context/change.json",
 		reason: "a path inside the staged agent workspace, not the repository checkout",
 	},
 	{

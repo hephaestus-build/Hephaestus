@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
@@ -26,9 +25,6 @@ class StaleAuthCookieIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private HephaestusJwtIssuer jwtIssuer;
-
-    @Autowired
-    private JwtPrincipalFactory principalFactory;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -64,7 +60,10 @@ class StaleAuthCookieIntegrationTest extends RealAuthIntegrationTest {
     void validCookieIsUntouchedAndStillAuthenticates() {
         Account account = accountRepository.save(new Account("Valid Vera"));
         String token = jwtIssuer
-                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, Instant.now()), null)
+                .issue(
+                        java.util.Objects.requireNonNull(account.getId()),
+                        TokenConstraints.session(null, Instant.now()),
+                        null)
                 .value();
 
         var result = webTestClient

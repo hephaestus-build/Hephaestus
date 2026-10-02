@@ -46,7 +46,7 @@ public class PracticeSignalOptions {
      */
     public List<SignalOption> bindableOptionsFor(ArtifactKind kind) {
         return declaredOptions(kind)
-                .filter(signal -> !signal.requestedByHand())
+                .filter(Signal::bindableForAuthoring)
                 .map(SignalOption::of)
                 .toList();
     }
@@ -73,6 +73,12 @@ public class PracticeSignalOptions {
         return manualRequestSignalFor(signal.artifactKind())
                 .filter(signal::equals)
                 .isPresent();
+    }
+
+    public boolean isInternalRepair(SignalName signal) {
+        return declaredOptions(signal.artifactKind())
+                .filter(declared -> declared.name().equals(signal))
+                .anyMatch(Signal::repairsRecordedWork);
     }
 
     /** The signal's words for an author, as its kind's descriptor declares them. */

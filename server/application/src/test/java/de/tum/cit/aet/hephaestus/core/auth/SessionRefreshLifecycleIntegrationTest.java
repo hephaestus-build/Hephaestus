@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Duration;
@@ -33,9 +32,6 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     @Autowired
     private HephaestusJwtIssuer jwtIssuer;
 
-    @Autowired
-    private JwtPrincipalFactory principalFactory;
-
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
 
@@ -43,7 +39,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     void userExposesAccessTokenExpiry() {
         Account account = accountRepository.save(new Account("Expiry Eddie"));
         String token = jwtIssuer
-                .issue(principalFactory.forAccount(account), TokenConstraints.session(null, null), null)
+                .issue(java.util.Objects.requireNonNull(account.getId()), TokenConstraints.session(null, null), null)
                 .value();
 
         webTestClient
@@ -63,7 +59,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         Account account = accountRepository.save(new Account("Rolling Rosa"));
         String current = jwtIssuer
                 .issue(
-                        principalFactory.forAccount(account),
+                        java.util.Objects.requireNonNull(account.getId()),
                         TokenConstraints.session(Instant.now().plus(Duration.ofHours(12)), null),
                         null)
                 .value();
@@ -90,7 +86,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         long ceiling = Instant.now().getEpochSecond() + 120;
         String token = jwtIssuer
                 .issue(
-                        principalFactory.forAccount(account),
+                        java.util.Objects.requireNonNull(account.getId()),
                         TokenConstraints.session(Instant.ofEpochSecond(ceiling), null),
                         null)
                 .value();

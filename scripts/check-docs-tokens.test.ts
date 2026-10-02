@@ -8,7 +8,7 @@ import { findDrift, readTokens } from "./check-docs-tokens.ts";
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const [docsCss, appCss] = await Promise.all([
 	readFile(path.resolve(repositoryRoot, "docs/src/css/custom.css"), "utf8"),
-	readFile(path.resolve(repositoryRoot, "webapp/src/styles.css"), "utf8"),
+	readFile(path.resolve(repositoryRoot, "webapp/src/styles/theme-tokens.css"), "utf8"),
 ]);
 
 await describe("readTokens", async () => {
@@ -55,7 +55,7 @@ await describe("findDrift", async () => {
 
 	await test("reports a source token renamed out of the web app stylesheet", () => {
 		assert.deepEqual(findDrift(docsCss, appCss.replaceAll("--radius:", "--corner:")), [
-			"webapp/src/styles.css no longer declares --radius for the light theme.",
+			"webapp/src/styles/theme-tokens.css no longer declares --radius for the light theme.",
 		]);
 	});
 });

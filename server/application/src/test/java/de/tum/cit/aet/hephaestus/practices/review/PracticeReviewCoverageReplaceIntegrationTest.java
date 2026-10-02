@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -74,6 +75,56 @@ class PracticeReviewCoverageReplaceIntegrationTest extends AbstractWorkspaceInte
 
         WorkspaceReviewScope reverse = selected(List.of(repository("acme/a", "main")), List.of(owner));
         assertThat(replaceAfterReading(reverse)).isEqualTo(reverse);
+    }
+
+    @Test
+    void shouldKeepRepositorylessPeopleCoverageWhenRepositoryCoverageNarrowsAndRefuseRevokedPeople() {
+        replaceAfterReading(selected(List.of(repository("acme/a", "main")), List.of(first)));
+        transactionTemplate.executeWithoutResult(status -> {
+            Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow();
+            var subject = new ReviewSubject(first, true);
+            assertThat(coverageService.admits(workspace, "acme/a", "main", subject))
+                    .isTrue();
+            assertThat(coverageService.admits(workspace, "acme/b", "main", subject))
+                    .isFalse();
+            assertThat(coverageService.assessRepositoryless(workspace, subject).admitted())
+                    .isTrue();
+            assertThat(coverageService
+                            .assessRepositoryless(workspace, new ReviewSubject(second, true))
+                            .admitted())
+                    .isFalse();
+        });
+
+        replaceAfterReading(selected(List.of(), List.of(first)));
+        transactionTemplate.executeWithoutResult(status -> {
+            Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow();
+            assertThat(coverageService.admits(workspace, "acme/a", "main", new ReviewSubject(first, true)))
+                    .isFalse();
+            var assessment = coverageService.assessRepositoryless(workspace, new ReviewSubject(first, true));
+            assertThat(assessment.admitted()).isTrue();
+            assertThat(assessment.repositoryMatched()).isNull();
+            assertThat(assessment.branchMatched()).isNull();
+        });
+
+        replaceAfterReading(selected(List.of(), List.of()));
+        transactionTemplate.executeWithoutResult(status -> {
+            Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow();
+            assertThat(coverageService
+                            .assessRepositoryless(workspace, new ReviewSubject(first, true))
+                            .admitted())
+                    .isFalse();
+        });
+
+        replaceAfterReading(WorkspaceReviewScope.ALL);
+        transactionTemplate.executeWithoutResult(status -> {
+            Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow();
+            assertThat(coverageService.admits(workspace, "acme/b", "main", new ReviewSubject(first, true)))
+                    .isTrue();
+            assertThat(coverageService
+                            .assessRepositoryless(workspace, new ReviewSubject(first, true))
+                            .admitted())
+                    .isTrue();
+        });
     }
 
     /** Reads the scope, loading every stored target, then replaces it in the same transaction. */

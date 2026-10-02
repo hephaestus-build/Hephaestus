@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MonitorIcon } from "lucide-react";
+import { MonitorIcon, PuzzleIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -84,6 +84,15 @@ function describeUserAgent(ua?: string): string {
 }
 
 /**
+ * The label a person recognises a session by. A browser extension signs in on its own, beside the
+ * browser tab it lives in, so its row says so rather than repeating that browser's label.
+ */
+function describeSession(session: SessionView): string {
+	const device = describeUserAgent(session.userAgent);
+	return session.client === "BROWSER_EXTENSION" ? `Browser extension in ${device}` : device;
+}
+
+/**
  * Settings section listing the account's active sessions (ADR 0017 native auth).
  *
  * The current session is badged and cannot be revoked from here; other sessions
@@ -143,7 +152,8 @@ export function SessionsSection() {
 				{sessions.map((session) => {
 					const signedInAt = formatTimestamp(session.issuedAt);
 					const expiresAt = formatTimestamp(session.expiresAt);
-					const deviceLabel = describeUserAgent(session.userAgent);
+					const deviceLabel = describeSession(session);
+					const SessionIcon = session.client === "BROWSER_EXTENSION" ? PuzzleIcon : MonitorIcon;
 					// Scope the pending state to the row actually being revoked so a single revoke
 					// doesn't disable/spin every other session's button.
 					const isRevokingThis =
@@ -156,7 +166,7 @@ export function SessionsSection() {
 							className="flex items-center justify-between gap-4 rounded-lg border p-4"
 						>
 							<div className="flex min-w-0 items-center gap-3">
-								<MonitorIcon className="size-5 shrink-0" aria-hidden="true" />
+								<SessionIcon className="size-5 shrink-0" aria-hidden="true" />
 								<div className="min-w-0">
 									<div className="flex items-center gap-2">
 										<span

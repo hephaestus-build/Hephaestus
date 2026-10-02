@@ -24,6 +24,8 @@ public record ObservationFeedQuery(
         @Nullable AssessmentStatus assessmentStatus,
         @Nullable Presence presence,
         @Nullable List<ArtifactKind> artifactKinds,
+        @Nullable ArtifactKind artifactKind,
+        @Nullable Long artifactId,
         @Nullable List<Severity> severities,
         boolean displayableOnly,
         ObservationService.ObservationSort sort,

@@ -6,6 +6,7 @@ mutation AddPullRequestComment($subjectId: ID!, $body: String!) {
         commentEdge {
             node {
                 id
+                url
             }
         }
     }

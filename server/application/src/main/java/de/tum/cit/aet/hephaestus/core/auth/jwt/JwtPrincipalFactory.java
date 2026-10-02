@@ -8,11 +8,9 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.util.HashSet;
-import java.util.Objects;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -45,41 +43,38 @@ public class JwtPrincipalFactory {
      */
     private static final Set<String> RESERVED_INSTANCE_AUTHORITIES = Set.of("app_admin", "admin");
 
-    private final AccountRepository accountRepository;
     private final IdentityLinkRepository identityLinkRepository;
     private final AccountFeatureRepository accountFeatureRepository;
 
     public JwtPrincipalFactory(
-            AccountRepository accountRepository,
-            IdentityLinkRepository identityLinkRepository,
-            AccountFeatureRepository accountFeatureRepository) {
-        this.accountRepository = accountRepository;
+            IdentityLinkRepository identityLinkRepository, AccountFeatureRepository accountFeatureRepository) {
         this.identityLinkRepository = identityLinkRepository;
         this.accountFeatureRepository = accountFeatureRepository;
     }
 
-    @Transactional(readOnly = true)
-    public JwtPrincipal forAccountId(Long accountId) {
-        Account account = accountRepository
-                .findById(accountId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "account not found"));
-        return createPrincipal(account);
+    /**
+     * The principal for an account whose row the caller has share-locked, built from the fields that lock
+     * read. {@code HephaestusJwtIssuer} is the only caller: it assembles the principal after taking the
+     * lock, so a demotion or suspension that commits while an issuance waits is what the token carries.
+     * Runs in the caller's transaction.
+     */
+    public JwtPrincipal forAuthority(Long accountId, AccountRepository.IssuanceAuthority authority) {
+        return createPrincipal(
+                accountId,
+                Account.Status.valueOf(authority.getStatus()),
+                Account.AppRole.valueOf(authority.getAppRole()),
+                authority.getDisplayName());
     }
 
-    @Transactional(readOnly = true)
-    public JwtPrincipal forAccount(Account account) {
-        return createPrincipal(account);
-    }
-
-    private JwtPrincipal createPrincipal(Account account) {
-        // Defense-in-depth account-status gate (ADR 0017). Every JWT-issue path funnels through here
-        // (login success handler and token refresh). A SUSPENDED / DELETING / DELETED
-        // account must never be minted a principal — even if a caller forgot the upstream check. The
-        // OAuth success handler rejects earlier with a friendly redirect; this is the last line.
-        if (account.getStatus() != Account.Status.ACTIVE) {
+    private JwtPrincipal createPrincipal(
+            Long accountId, Account.Status status, Account.AppRole appRole, String displayName) {
+        // Defense-in-depth account-status gate (ADR 0017). Every JWT-issue path funnels through here.
+        // A SUSPENDED / DELETING / DELETED account must never be minted a principal — even if a caller
+        // forgot the upstream check. The OAuth success handler rejects earlier with a friendly redirect;
+        // this is the last line.
+        if (status != Account.Status.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "account is not active");
         }
-        Long accountId = Objects.requireNonNull(account.getId(), "Account must be persisted");
         String login = resolveLogin(accountId);
         Set<String> roles = new HashSet<>(accountFeatureRepository.findFlagsByAccountId(accountId));
         // Privilege separation: the instance-admin authority derives ONLY from Account.appRole, never
@@ -87,10 +82,10 @@ public class JwtPrincipalFactory {
         // instance authority so a `/admin/users`-granted flag can't inject super-admin (account_feature
         // .flag is free-text, so this is the enforcement point).
         roles.removeAll(RESERVED_INSTANCE_AUTHORITIES);
-        if (account.getAppRole() == Account.AppRole.APP_ADMIN) {
+        if (appRole == Account.AppRole.APP_ADMIN) {
             roles.add("app_admin");
         }
-        return new JwtPrincipal(accountId, login, account.getDisplayName(), roles);
+        return new JwtPrincipal(accountId, login, displayName, roles);
     }
 
     /**

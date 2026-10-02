@@ -111,6 +111,10 @@ public class DevTriggerController {
             return "Error: workspaceId and one of prId / issueId are required";
         }
 
+        if (ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.value().equals(signal)) {
+            return "Error: linked-issue repair signals require the current linked-issue capture and cannot be triggered manually";
+        }
+
         Prepared prepared = transactionTemplate.execute(status -> issueId != null
                 ? prepareIssue(workspaceId, issueId, signal)
                 : preparePullRequest(workspaceId, Objects.requireNonNull(prId), signal));

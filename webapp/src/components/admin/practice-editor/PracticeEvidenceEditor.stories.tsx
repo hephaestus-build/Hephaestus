@@ -120,13 +120,17 @@ export const TheAbsenceClaimStatesItsBound: Story = {
 		const claim = canvas.getByRole("checkbox", {
 			name: "May claim something is absent from Inline review comments",
 		});
-		await expect(claim).toHaveAccessibleDescription(/Up to the 500 most recent inline comments/u);
+		await expect(claim).toHaveAccessibleDescription(
+			/All permitted inline review comments on workspace pull requests/u,
+		);
 		await expect(claim).not.toHaveAccessibleDescription(/refuses the review/u);
 
 		await userEvent.click(claim);
 
 		await expect(claim).toHaveAccessibleDescription(/A partial capture then refuses the review/u);
-		await expect(claim).toHaveAccessibleDescription(/Up to the 500 most recent inline comments/u);
+		await expect(claim).toHaveAccessibleDescription(
+			/All permitted inline review comments on workspace pull requests/u,
+		);
 	},
 };
 

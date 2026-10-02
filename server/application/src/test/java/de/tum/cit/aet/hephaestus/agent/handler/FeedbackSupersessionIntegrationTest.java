@@ -680,7 +680,8 @@ class FeedbackSupersessionIntegrationTest extends BaseIntegrationTest {
                         inline ? 3 : null,
                         inline ? 3 : null,
                         inline ? "NEW" : null,
-                        "comment-" + feedbackId)));
+                        "comment-" + feedbackId,
+                        null)));
     }
 
     /** One observation behind {@code feedbackId}, as delivery binds what a note was written from. */

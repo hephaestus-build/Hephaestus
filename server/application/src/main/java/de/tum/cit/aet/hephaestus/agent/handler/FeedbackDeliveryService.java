@@ -122,7 +122,7 @@ class FeedbackDeliveryService {
                 artifactKind(job),
                 signals,
                 dispatch.getDeliveredExternalRef(),
-                inlineDelivered);
+                dispatch.getDeliveredExternalUrl());
     }
 
     void projectAutomaticPackage(AgentJob job, FeedbackDispatch dispatch) {
@@ -135,7 +135,12 @@ class FeedbackDeliveryService {
 
             if (dispatch.getState() == FeedbackDispatchState.SENT) {
                 feedbackLedgerRecorder.record(
-                        job, delivery, artifactKind, signals, dispatch.getDeliveredExternalRef(), inlineDelivered);
+                        job,
+                        delivery,
+                        artifactKind,
+                        signals,
+                        dispatch.getDeliveredExternalRef(),
+                        dispatch.getDeliveredExternalUrl());
                 reconcileJob(dispatch, DeliveryStatus.DELIVERED);
                 return;
             }
@@ -148,7 +153,12 @@ class FeedbackDeliveryService {
                     return;
                 }
                 feedbackLedgerRecorder.recordWithoutConversation(
-                        job, delivery, artifactKind, signals, dispatch.getDeliveredExternalRef(), inlineDelivered);
+                        job,
+                        delivery,
+                        artifactKind,
+                        signals,
+                        dispatch.getDeliveredExternalRef(),
+                        dispatch.getDeliveredExternalUrl());
                 feedbackLedgerRecorder.recordSuppressedRemainder(
                         job, delivery, reason, missingInlineKeys(delivery, signals));
                 reconcileJob(dispatch, DeliveryStatus.DELIVERED);
@@ -157,7 +167,12 @@ class FeedbackDeliveryService {
             if (dispatch.getState() == FeedbackDispatchState.FAILED) {
                 if (summaryDelivered || inlineDelivered) {
                     feedbackLedgerRecorder.recordWithoutConversation(
-                            job, delivery, artifactKind, signals, dispatch.getDeliveredExternalRef(), inlineDelivered);
+                            job,
+                            delivery,
+                            artifactKind,
+                            signals,
+                            dispatch.getDeliveredExternalRef(),
+                            dispatch.getDeliveredExternalUrl());
                     feedbackLedgerRecorder.recordUndeliveredRemainder(
                             job, delivery, missingInlineKeys(delivery, signals));
                 } else {

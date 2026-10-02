@@ -218,6 +218,35 @@ export const WithInstanceCatalog: Story = {
 	},
 };
 
+export const NarrowContainer: Story = {
+	args: WithInstanceCatalog.args,
+	decorators: [
+		(Story) => (
+			<div className="w-full max-w-md">
+				<Story />
+			</div>
+		),
+	],
+	parameters: { chromatic: { viewports: [320, 931, 1440] } },
+	play: async ({ canvas }) => {
+		const toolbar = canvas.queryByRole("toolbar", { name: "Filter by kind of work" });
+		const controls = [
+			...(toolbar
+				? within(toolbar).getAllByRole("button")
+				: [canvas.getByRole("combobox", { name: "Filter by kind of work" })]),
+			canvas.getByRole("button", { name: "Show catalog" }),
+			canvas.getByRole("button", { name: "Create group" }),
+			canvas.getByRole("link", { name: "Create practice" }),
+		];
+		for (const control of controls) {
+			const rect = control.getBoundingClientRect();
+			const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+			await expect(hit?.closest("button, a")).toBe(control);
+		}
+		await expectNoPageOverflow();
+	},
+};
+
 /** The library is a section of this page, so its failure must not take the tree down with it. */
 export const InstanceCatalogFailed: Story = {
 	args: {

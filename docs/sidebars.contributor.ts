@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
 			label: "Architecture & Data",
 			items: [
 				"system-design",
+				"browser-extension",
 				"product-feedback",
 				"instance-admin",
 				"sync-lifecycle",

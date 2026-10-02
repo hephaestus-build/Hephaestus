@@ -128,6 +128,9 @@ public class PullRequestSignalResubmitter {
                         pr.getBaseRefName(),
                         pr.getBaseRefOid(),
                         key.signalName());
+                if (ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(key.signalName())) {
+                    request = request.withLinkedIssueRevision(key.revision().value());
+                }
                 if (reviewData != null) request = request.forSubmittedReview(reviewData);
                 agentJobService.submit(
                         detect.workspace().getId(),

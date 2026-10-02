@@ -562,7 +562,7 @@ export function normalizeObservation(
 	if (unknownFields.length > 0) {
 		throw new Error(`unknown observation field(s): ${unknownFields.join(", ")}`);
 	}
-	const practiceSlug = trimmedText(observation.practiceSlug).toLowerCase().replaceAll("_", "-");
+	const practiceSlug = normalizePracticeSlug(observation.practiceSlug);
 	// Named before the cell is parsed: an item with no slug is usually not an observation at all (a
 	// wrapper, a fragment), and "invalid presence" would send the session looking at the wrong field.
 	if (!practiceSlug) {
@@ -626,14 +626,8 @@ export function normalizeObservation(
 	return out;
 }
 
-export function dedupeKeyForObservation(observation: NormalizedObservation): string {
-	const citations = observation.evidence.citations
-		.map(
-			(citation) =>
-				`${citation.revision ?? ""}:${citation.path}:${citation.startLine}-${citation.endLine}`,
-		)
-		.join(",");
-	return `${observation.practiceSlug}|${observation.summary}|${citations}`;
+export function normalizePracticeSlug(value: unknown): string {
+	return trimmedText(value).toLowerCase().replaceAll("_", "-");
 }
 
 /** Requires each citation to name an artifact staged by its declared source. */

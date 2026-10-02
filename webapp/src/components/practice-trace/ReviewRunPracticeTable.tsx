@@ -11,12 +11,14 @@ import { FilterToolbar } from "@/components/common/FilterToolbar";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResultCount } from "@/components/common/ResultCount";
 import { SelectFilter } from "@/components/common/SelectFilter";
+import { StatusBadge } from "@/components/common/StatusBadge";
 import { AutonomyBadge } from "@/components/practice-vocabulary/AutonomyBadge";
 import {
 	getGroupVisual,
 	UNASSIGNED_GROUP_VISUAL,
 } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
+import { MARKED_INCORRECT_DEF } from "@/components/practice-vocabulary/observation-invalidation-defs";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StatusTooltip } from "@/components/practice-vocabulary/StatusTooltip";
 import { TRACE_OUTCOME_DEFS } from "@/components/practice-vocabulary/trace-outcome-defs";
@@ -302,15 +304,32 @@ function WhatItSaw({
 }: WhatItSawProps) {
 	// Narrowed here: the closure below would not keep a narrowing made in the JSX guard.
 	const occasionedById = hasText(entry.occasionedById) ? entry.occasionedById : undefined;
-	const summaries = observations.filter((observation) => hasText(observation.summary));
+	const summaries = observations.filter(
+		(observation) => hasText(observation.summary) || observation.invalidatedAt !== undefined,
+	);
 	return (
 		<span className="flex min-w-0 flex-col items-start gap-2.5">
 			{summaries.length === 0 ? (
 				<span className="text-sm text-muted-foreground">{entry.explanation}</span>
 			) : (
 				summaries.map((observation) => (
-					<span key={observation.id} className="max-w-lg text-sm font-medium text-pretty">
-						{observation.summary.trim()}
+					<span
+						key={observation.id}
+						className="flex max-w-lg flex-col items-start gap-1 text-sm text-pretty"
+					>
+						{hasText(observation.summary) && (
+							<span className="font-medium">{observation.summary.trim()}</span>
+						)}
+						{observation.invalidatedAt !== undefined && (
+							<>
+								<StatusBadge def={MARKED_INCORRECT_DEF} />
+								{hasText(observation.invalidationReason) && (
+									<span className="text-muted-foreground">
+										Reason: {observation.invalidationReason}
+									</span>
+								)}
+							</>
+						)}
 					</span>
 				))
 			)}

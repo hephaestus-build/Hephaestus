@@ -2,10 +2,10 @@ package de.tum.cit.aet.hephaestus.practices.curated;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.context.ContextManifestBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PracticeSubjectEvaluator;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
@@ -44,7 +44,7 @@ class LinkedWorkItemCaptureFailureReadinessTest extends BaseUnitTest {
             mapper,
             new PracticeDefinitionValidator(catalogs, PracticeSignalOptionsFixture.real()),
             new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog()));
-    private final ContextManifestBuilder builder = new ContextManifestBuilder(
+    private final JobFolderIndexBuilder builder = new JobFolderIndexBuilder(
             mapper,
             catalogs,
             new PracticeSubjectEvaluator(mapper),
@@ -53,12 +53,12 @@ class LinkedWorkItemCaptureFailureReadinessTest extends BaseUnitTest {
 
     @Test
     void shouldWithholdExactlyThePracticesThatRequireLinkedWorkItems() {
-        ArtifactSourceManifest manifest = builder.augment(
+        JobFolderIndex manifest = builder.augment(
                 new LinkedHashMap<>(),
                 Map.of(),
                 "job-linked-work-items-failed",
-                new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.PULL_REQUEST),
-                new ContextManifestBuilder.CaptureMetadata(
+                new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST),
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(),
                         Map.of(),
                         Map.of(),

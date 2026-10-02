@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
@@ -54,8 +55,10 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
      * The occasions that revise the work, its code or its description: they settle together here, and a review of
      * one also rechecks the problems the revision may have answered.
      */
-    static final List<SignalName> SIGNALS =
-            List.of(ScmSignals.PULL_REQUEST_SYNCHRONIZED, ScmSignals.PULL_REQUEST_EDITED);
+    static final List<SignalName> SIGNALS = List.of(
+            ScmSignals.PULL_REQUEST_SYNCHRONIZED,
+            ScmSignals.PULL_REQUEST_EDITED,
+            ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED);
 
     private static final Logger log = LoggerFactory.getLogger(PullRequestPushCoalescer.class);
 
@@ -154,29 +157,62 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
             pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.OUT_OF_REVIEW_SCOPE));
             return;
         }
-        if (pr.getState() != Issue.State.OPEN) {
-            // Merging and closing are occasions of their own.
+        boolean mergedRepair = pr.getState() == Issue.State.MERGED;
+        if (pr.getState() != Issue.State.OPEN && !mergedRepair) {
             pending.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.COALESCED));
             return;
+        }
+        if (mergedRepair) {
+            pending.stream()
+                    .filter(signal -> !ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(
+                            signal.key().signalName()))
+                    .forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.COALESCED));
+            pending = pending.stream()
+                    .filter(signal -> ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(
+                            signal.key().signalName()))
+                    .toList();
+            if (pending.isEmpty()) return;
+        } else {
+            pending.stream()
+                    .filter(signal -> ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(
+                            signal.key().signalName()))
+                    .forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.COALESCED));
+            pending = pending.stream()
+                    .filter(signal -> !ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(
+                            signal.key().signalName()))
+                    .toList();
+            if (pending.isEmpty()) return;
         }
         if (SIGNALS.stream()
                 .anyMatch(signal -> IssueUpdateCoalescer.coolingDown(
                         signals, owner, reviewProperties, ScmSignals.PULL_REQUEST, pullRequestId, signal, now))) {
             return;
         }
-        SignalName occasion = pending.stream()
-                        .anyMatch(signal -> ScmSignals.PULL_REQUEST_SYNCHRONIZED.equals(
-                                signal.key().signalName()))
-                ? ScmSignals.PULL_REQUEST_SYNCHRONIZED
-                : ScmSignals.PULL_REQUEST_EDITED;
-        List<SignalKey> currentKeys = SIGNALS.stream()
-                .flatMap(signal -> ScmSignals.pullRequestKey(
-                        workspaceId, pullRequestId, signal, pr.getHeadRefOid(), pr.getTitle(), pr.getBody())
-                        .stream())
-                .toList();
+        final List<ArtifactSignal> settling = pending;
+        SignalName occasion = mergedRepair
+                ? ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED
+                : settling.stream()
+                                .anyMatch(signal -> ScmSignals.PULL_REQUEST_SYNCHRONIZED.equals(
+                                        signal.key().signalName()))
+                        ? ScmSignals.PULL_REQUEST_SYNCHRONIZED
+                        : ScmSignals.PULL_REQUEST_EDITED;
+        var closing = mergedRepair ? pullRequests.findClosingIssuesById(pullRequestId) : List.<Issue>of();
+        if (mergedRepair && closing.stream().anyMatch(issue -> issue.getDeletedAt() != null)) {
+            settling.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.ARTIFACT_NOT_VISIBLE));
+            return;
+        }
+        List<SignalKey> currentKeys = mergedRepair
+                ? LinkedWorkItemContentSource.currentClosingMaterialKey(workspaceId, pr, closing).stream()
+                        .toList()
+                : SIGNALS.stream()
+                        .filter(signal -> !ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED.equals(signal))
+                        .flatMap(signal -> ScmSignals.pullRequestKey(
+                                workspaceId, pullRequestId, signal, pr.getHeadRefOid(), pr.getTitle(), pr.getBody())
+                                .stream())
+                        .toList();
         if (currentKeys.stream()
                 .anyMatch(key ->
-                        pending.stream().noneMatch(signal -> signal.key().equals(key)) && signals.isDeferred(key))) {
+                        settling.stream().noneMatch(signal -> signal.key().equals(key)) && signals.isDeferred(key))) {
             // The work as it stands is queued outside this group; its own deadline decides.
             return;
         }
@@ -184,15 +220,19 @@ public class PullRequestPushCoalescer implements PendingSignalResubmitter {
                 .filter(key -> occasion.equals(key.signalName()))
                 .findFirst()
                 .orElse(null);
+        if (mergedRepair && settling.stream().noneMatch(signal -> signal.key().equals(current))) {
+            settling.forEach(signal -> recorder.markRefused(signal.key(), SignalStateReason.COALESCED));
+            return;
+        }
         // The work is reviewed as it stands whichever row named it: the resubmission reads it afresh.
-        ArtifactSignal reviewed = pending.stream()
+        ArtifactSignal reviewed = settling.stream()
                 .filter(signal -> signal.key().equals(current))
                 .findFirst()
-                .orElseGet(() -> pending.stream()
+                .orElseGet(() -> settling.stream()
                         .filter(signal -> occasion.equals(signal.key().signalName()))
                         .max(Comparator.comparing(ArtifactSignal::getOccurredAt))
                         .orElseThrow());
-        for (ArtifactSignal signal : pending) {
+        for (ArtifactSignal signal : settling) {
             if (signal == reviewed) {
                 submitter.resubmit(signal);
             } else {

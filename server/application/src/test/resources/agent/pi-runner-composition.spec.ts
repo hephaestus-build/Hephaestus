@@ -73,21 +73,63 @@ void test("an envelope missing the fields entirely reports nothing rather than t
 
 void test("one feedback intervention may synthesize related practice observations", () => {
 	const practices = new Map([
-		["primary-1", "review-loop"],
-		["support-1", "handoff"],
+		["primary-1", { practiceSlug: "review-loop", outcome: "NEGATIVE" }],
+		["support-1", { practiceSlug: "handoff", outcome: "POSITIVE" }],
 	]);
 
 	assert.equal(
-		validateFeedbackEvidence("review-loop", ["primary-1", "support-1"], practices),
+		validateFeedbackEvidence(
+			"review-loop",
+			["primary-1", "support-1"],
+			practices,
+			"IN_CHAT",
+			"NEW",
+		),
 		null,
 	);
 	assert.match(
-		validateFeedbackEvidence("review-loop", ["support-1"], practices) ?? "",
+		validateFeedbackEvidence("review-loop", ["support-1"], practices, "IN_CHAT", "NEW") ?? "",
 		/primary practice 'review-loop'/u,
 	);
 	assert.match(
-		validateFeedbackEvidence("review-loop", ["missing"], practices) ?? "",
+		validateFeedbackEvidence("review-loop", ["missing"], practices, "IN_CHAT", "NEW") ?? "",
 		/does not name an admitted observation/u,
+	);
+});
+
+void test("a related negative cannot anchor private feedback on a positive primary practice", () => {
+	const observations = new Map([
+		["confirmed-criteria", { practiceSlug: "acceptance-criteria", outcome: "POSITIVE" }],
+		["unconfirmed-outcome", { practiceSlug: "issue-outcome", outcome: "NEGATIVE" }],
+	]);
+	const basedOn = ["confirmed-criteria", "unconfirmed-outcome"];
+
+	for (const channel of ["IN_CHAT", "IN_APP"] as const) {
+		assert.match(
+			validateFeedbackEvidence("acceptance-criteria", basedOn, observations, channel, "NEW") ?? "",
+			/NEGATIVE for the primary practice 'acceptance-criteria'/u,
+		);
+		assert.equal(
+			validateFeedbackEvidence("issue-outcome", basedOn, observations, channel, "NEW"),
+			null,
+		);
+	}
+});
+
+void test("feedback on the work may reinforce a strength but cannot withhold it", () => {
+	const observations = new Map([
+		["strength", { practiceSlug: "review-loop", outcome: "POSITIVE" }],
+	]);
+	for (const action of ["NEW", "SUPERSEDE"] as const) {
+		assert.equal(
+			validateFeedbackEvidence("review-loop", ["strength"], observations, "IN_CONTEXT", action),
+			null,
+		);
+	}
+	assert.match(
+		validateFeedbackEvidence("review-loop", ["strength"], observations, "IN_CONTEXT", "WITHHOLD") ??
+			"",
+		/NEGATIVE for the primary practice/u,
 	);
 });
 

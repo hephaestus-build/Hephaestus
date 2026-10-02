@@ -35,7 +35,12 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     private final AgentJobRepository jobs = mock(AgentJobRepository.class);
     private final ObjectMapper mapper = new ObjectMapper();
     private final ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
-    private final CapturedReviewedWorkChanges changes = new CapturedReviewedWorkChanges(jobs, mapper, catalogs);
+    private final CapturedReviewedWorkChanges changes = new CapturedReviewedWorkChanges(
+            jobs,
+            mapper,
+            catalogs,
+            mock(de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository.class),
+            mock(de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.class));
 
     @BeforeEach
     void permitCapturedSources() {
@@ -123,7 +128,7 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
         PullRequest current = current();
         var denied = source.equals("text") ? PullRequestContentSource.CORE : PullRequestContentSource.DIFF;
         when(catalogs.isSourceUsePermitted(
-                        new SourceContractVersion("1.2.0"), denied, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                        new SourceContractVersion("1.3.0"), denied, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
                 .thenReturn(false);
         if (source.equals("text")) current.setBody("Repaired description");
         else current.setHeadRefOid("2".repeat(40));
@@ -159,7 +164,7 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     private void stored(@Nullable String json) {
         var row = mock(AgentJobRepository.CapturedReviewedWorkRow.class);
         when(row.getReviewedWork()).thenReturn(json);
-        lenient().when(row.getContractVersion()).thenReturn("1.2.0");
+        lenient().when(row.getContractVersion()).thenReturn("1.3.0");
         org.mockito.Mockito.lenient().when(row.getId()).thenReturn(RUN);
         when(jobs.findCapturedReviewedWork(7, Set.of(RUN))).thenReturn(List.of(row));
     }

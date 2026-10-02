@@ -353,11 +353,13 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         @Test
         void resolvesGithubChannelByJobIntegrationKind() {
             AgentJob job = createTestJob(IntegrationKind.GITHUB);
-            when(githubChannel.postSummary(any(), any())).thenReturn(new SummaryChannel.SummaryHandle("IC_comment456"));
+            var providerHandle = new SummaryChannel.SummaryHandle(
+                    "IC_comment456", "https://github.com/owner/repo/pull/42#issuecomment-987654");
+            when(githubChannel.postSummary(any(), any())).thenReturn(providerHandle);
 
-            String commentId = post(job, "Formatted review");
+            var handle = post(job, "Formatted review");
 
-            assertThat(commentId).isEqualTo("IC_comment456");
+            assertThat(handle).isEqualTo(providerHandle);
             verify(githubChannel).postSummary(any(), any());
         }
 
@@ -367,7 +369,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
             when(gitlabChannel.postSummary(any(), any()))
                     .thenReturn(new SummaryChannel.SummaryHandle("gid://gitlab/Note/123"));
 
-            String noteId = post(job, "Formatted review");
+            String noteId = post(job, "Formatted review").externalId();
 
             assertThat(noteId).isEqualTo("gid://gitlab/Note/123");
             verify(gitlabChannel).postSummary(any(), any());
@@ -424,7 +426,8 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
             when(gitlabChannel.postSummary(any(), any()))
                     .thenReturn(new SummaryChannel.SummaryHandle("gid://gitlab/Note/77"));
 
-            String commentId = poster.post(poster.summaryWrite(job, true, "Formatted issue note", "marker"));
+            String commentId = poster.post(poster.summaryWrite(job, true, "Formatted issue note", "marker"))
+                    .externalId();
 
             assertThat(commentId).isEqualTo("gid://gitlab/Note/77");
             verify(gitlabChannel).formatIssueSubjectId("owner/repo", 7);
@@ -472,7 +475,7 @@ class PullRequestCommentPosterTest extends BaseUnitTest {
         }
     }
 
-    private String post(AgentJob job, String body) {
+    private SummaryChannel.SummaryHandle post(AgentJob job, String body) {
         return poster.post(poster.summaryWrite(job, false, body, PullRequestCommentPoster.summaryMarkerFor(job)));
     }
 

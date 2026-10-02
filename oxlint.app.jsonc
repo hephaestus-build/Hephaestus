@@ -1,0 +1,126 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	// Shared application policy for the React Compiler, Vitest and Storybook. The webapp and
+	// extension extend this; docs use the React layer without the application/test assumptions.
+	"extends": ["./.oxlintrc.json", "./oxlint.react.jsonc"],
+	"plugins": ["vitest"],
+	"rules": {
+		"no-console": "error",
+		// Every override that sets `no-restricted-imports` restates this entry because options replace
+		// rather than merge.
+		"no-restricted-imports": [
+			"error",
+			{
+				"paths": [
+					{
+						"name": "react",
+						"importNames": ["useMemo", "useCallback", "memo", "forwardRef"],
+						"allowTypeImports": true,
+						"message": "React Compiler memoises at build time; `ref` is a plain prop in React 19.",
+					},
+				],
+			},
+		],
+		// The React Compiler memoises a Provider's value object like any other; the `useMemo` the rule
+		// asks for is the one the import ban above removes.
+		"react/jsx-no-constructed-context-values": "off",
+		// -- Tests -----------------------------------------------------------------------------------
+		"vitest/prefer-called-once": "error",
+		"vitest/prefer-called-with": "error",
+		"vitest/prefer-called-exactly-once-with": "error",
+		"vitest/prefer-to-have-been-called-times": "error",
+		"vitest/prefer-expect-resolves": "error",
+		"vitest/prefer-expect-type-of": "error",
+		"vitest/prefer-spy-on": "error",
+		"vitest/prefer-to-be-object": "error",
+		"vitest/no-large-snapshots": "error",
+		// `it` everywhere: two spellings of the same call are two things to grep for.
+		"vitest/consistent-test-it": ["error", { "fn": "it", "withinDescribe": "it" }],
+		// A `describe` names the unit under test as written, so only the `it` titles are sentences.
+		"vitest/prefer-lowercase-title": ["error", { "ignore": ["describe"] }],
+		"vitest/no-identical-title": "error",
+		"vitest/no-duplicate-hooks": "error",
+		"vitest/no-alias-methods": "error",
+		"vitest/no-test-prefixes": "error",
+		"vitest/no-test-return-statement": "error",
+		"vitest/no-import-node-test": "error",
+		"vitest/no-mocks-import": "error",
+		"vitest/no-interpolation-in-snapshots": "error",
+		"vitest/no-unneeded-async-expect-function": "error",
+		"vitest/prefer-each": "error",
+		"vitest/prefer-todo": "error",
+		"vitest/prefer-hooks-on-top": "error",
+		"vitest/prefer-hooks-in-order": "error",
+		"vitest/prefer-comparison-matcher": "error",
+		"vitest/prefer-equality-matcher": "error",
+		"vitest/prefer-to-be": "error",
+		"vitest/prefer-to-contain": "error",
+		"vitest/prefer-to-have-length": "error",
+		"vitest/prefer-mock-promise-shorthand": "error",
+		"vitest/prefer-mock-return-shorthand": "error",
+		"vitest/consistent-vitest-vi": "error",
+		"vitest/prefer-strict-equal": "error",
+		"vitest/prefer-strict-boolean-matchers": "error",
+		// Reaches `&&`, `||`, `??` and `?.` in a test body too: `getAttribute("href") ?? ""` turns a
+		// missing attribute into an empty string the assertion then accepts. Setup that really does
+		// branch belongs in the mock handler, not the test body.
+		"vitest/no-conditional-in-test": "error",
+		// Vitest's `expect(actual, message)` takes a second argument, which the default of 1 rejects. A
+		// literal message is tolerated even at 1, so this is load-bearing only where the label is
+		// computed — which is every assertion inside a loop, the shape that needs a label most.
+		"vitest/valid-expect": ["error", { "maxArgs": 2 }],
+		// A Testing Library query IS the assertion: `getBy*` throws when it finds nothing. Supplying
+		// this option replaces oxlint's defaults rather than extending them, so the first four restate
+		// its list — drop one and a plain `expect()` stops counting.
+		"vitest/expect-expect": [
+			"error",
+			{
+				"assertFunctionNames": [
+					"expect",
+					"expectTypeOf",
+					"assert",
+					"assertType",
+					"getBy*",
+					"**.getBy*",
+					"getAllBy*",
+					"**.getAllBy*",
+					"findBy*",
+					"**.findBy*",
+					"findAllBy*",
+					"**.findAllBy*",
+				],
+			},
+		],
+		// `toHaveBeenCalledWith` is not type-narrowed by this Vitest/TS setup — a wrong argument against
+		// `vi.fn<(open: boolean) => void>()` type-checks clean — so the parameter buys nothing.
+		"vitest/require-mock-type-parameters": "off",
+
+		"hephaestus/no-nondeterministic-render": "error",
+		"hephaestus/no-redundant-in-the-document": "error",
+		"hephaestus/svg-needs-accessible-name": "error",
+	},
+	"overrides": [
+		{
+			// Each reads a Storybook story object, and only a story file holds one. `parameters.a11y`
+			// is also how `.storybook/preview.tsx` sets the project-wide bar none of them may lower; a
+			// `play` property elsewhere belongs to a media element; `canvasElement` exists only inside a
+			// play; and `meta`/`Meta` are recognised by name, which is Storybook's convention and
+			// nobody else's promise.
+			"files": ["**/*.stories.tsx"],
+			"rules": {
+				// `vitest/expect-expect` cannot see these: a play is a property on a story object, not a
+				// body inside `test()`. This rule carries its own list, which is `assertFunctionNames`
+				// above widened to the `expect*` and `assert*` prefixes that reach `src/test/`'s helpers,
+				// so anything counted there is counted here. A literal cannot be shared across JSON and
+				// TypeScript, so it is that relation `play-must-assert.test.ts` pins.
+				"hephaestus/play-must-assert": "error",
+				// The sidebar mirrors the source tree: a title cannot drift from a path it never restates.
+				"hephaestus/prefer-auto-story-title": "error",
+				// One story quietly exempting itself leaves the whole suite green.
+				"hephaestus/no-story-a11y-override": "error",
+				"hephaestus/no-within-canvas-element": "error",
+				"hephaestus/typed-story-meta": "error",
+			},
+		},
+	],
+}

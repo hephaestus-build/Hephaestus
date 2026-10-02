@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 
 class PracticeReviewCoverageServiceTest extends BaseUnitTest {
@@ -123,31 +125,47 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         assertThat(service.admits(workspace, "owner/repo", "main", null)).isFalse();
         assertThat(service.admits(workspace, "owner/repo", "main", bot)).isFalse();
         assertThat(service.admits(workspace, "owner/repo", "main", human)).isFalse();
+        assertThat(service.assessRepositoryless(workspace, null).admitted()).isFalse();
+        assertThat(service.assessRepositoryless(workspace, bot).admitted()).isFalse();
+        assertThat(service.assessRepositoryless(workspace, human).admitted()).isFalse();
     }
 
-    @Test
-    void repositorylessWorkRequiresAllRepositoriesAndASelectedLinkedPerson() {
-        workspace.getReviewSettings().applyRollout(ReviewRepositoryMode.ALL_MONITORED, ReviewPersonMode.SELECTED, null);
+    @ParameterizedTest
+    @EnumSource(ReviewRepositoryMode.class)
+    void shouldCoverRepositorylessWorkOnlyForSelectedLinkedPeople(ReviewRepositoryMode repositoryMode) {
+        workspace.getReviewSettings().applyRollout(repositoryMode, ReviewPersonMode.SELECTED, null);
+        when(membershipService.isPracticeReviewEligible(1L, 8L)).thenReturn(true);
         when(people.findByWorkspaceId(1L)).thenReturn(List.of(new PracticeReviewPersonTarget(1L, 7L)));
         when(membershipService.isPracticeReviewEligible(1L, 7L)).thenReturn(true);
 
         var assessment = service.assessRepositoryless(workspace, new ReviewSubject(7L, true));
 
         assertThat(assessment.admitted()).isTrue();
-        assertThat(assessment.repositoryMatched()).isTrue();
+        assertThat(assessment.repositoryMatched()).isNull();
+        assertThat(assessment.branchMatched()).isNull();
         assertThat(assessment.personMatched()).isTrue();
+        assertThat(service.assessRepositoryless(workspace, new ReviewSubject(8L, true))
+                        .admitted())
+                .isFalse();
+        when(people.findByWorkspaceId(1L)).thenReturn(List.of());
+        assertThat(service.assessRepositoryless(workspace, new ReviewSubject(7L, true))
+                        .admitted())
+                .isFalse();
     }
 
     @Test
-    void selectedRepositoriesFailClosedForRepositorylessWork() {
+    void shouldKeepRepositoryWorkExcludedWhenAnEmptyRepositorySelectionAllowsRepositorylessWork() {
         workspace.getReviewSettings().applyRollout(ReviewRepositoryMode.SELECTED, ReviewPersonMode.ALL_ELIGIBLE, null);
         when(membershipService.isPracticeReviewEligible(1L, 7L)).thenReturn(true);
 
         var assessment = service.assessRepositoryless(workspace, new ReviewSubject(7L, true));
 
-        assertThat(assessment.admitted()).isFalse();
-        assertThat(assessment.repositoryMatched()).isFalse();
+        assertThat(assessment.admitted()).isTrue();
+        assertThat(assessment.repositoryMatched()).isNull();
+        assertThat(assessment.branchMatched()).isNull();
         assertThat(assessment.personMatched()).isTrue();
+        assertThat(service.admits(workspace, "owner/repo", "main", new ReviewSubject(7L, true)))
+                .isFalse();
     }
 
     @Test

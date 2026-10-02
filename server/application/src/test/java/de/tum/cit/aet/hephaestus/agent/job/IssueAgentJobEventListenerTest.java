@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -84,6 +85,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
         listener = new IssueAgentJobEventListener(
                 agentJobService,
                 issueRepository,
+                mock(de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository.class),
                 practiceReviewDetectionGate,
                 workspaceResolver,
                 signalRecorder,

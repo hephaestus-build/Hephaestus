@@ -352,6 +352,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
         var listener = new IssueAgentJobEventListener(
                 jobs,
                 issueRepository,
+                pullRequestRepository,
                 detectionGate,
                 workspaceResolver,
                 signalRecorder,

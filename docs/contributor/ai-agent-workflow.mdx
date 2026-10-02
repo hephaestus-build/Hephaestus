@@ -52,7 +52,7 @@ Parallel work stays parallel only when contributors avoid manufacturing shared d
    `.github/workflows/**` and `.github/actions/**`; `vite.config.ts` with
    `scripts/ci-contract.test.ts`, which the task graph and its contract keep in step; root
    `package.json` with `pnpm-lock.yaml`; `CHANGELOG.md` and `MIGRATION.md` (release automation
-   only); `webapp/src/api/**`; and
+   only); `webapp/src/api/**` with `extension/src/api/**`; and
    `server/application/src/main/resources/db/master.xml`. Migration fragments remove `MIGRATION.md`
    from feature work, but release automation still owns it exclusively. Dependent changes use
    `/gh-stack`; otherwise, do not make one PR wait for another.

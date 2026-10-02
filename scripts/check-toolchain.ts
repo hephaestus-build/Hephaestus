@@ -12,7 +12,7 @@ import packageArgument from "npm-package-arg";
 import { parse } from "yaml";
 
 import { asRecord, isRecord, readJsonFileSync } from "./lib/json.ts";
-import { maskOptionalRuntimePeerMetadata } from "./lib/optional-runtime-peer.ts";
+import { maskDependencyRuntimeMetadata } from "./lib/optional-runtime-peer.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { BUNDLED_PINS, bundledVersions, CATALOG_FILE } from "./lib/toolchain-pins.ts";
@@ -115,6 +115,7 @@ for (const file of [
 	"package.json",
 	"docs/package.json",
 	"webapp/package.json",
+	"extension/package.json",
 	"docker/agents/pi/package.json",
 ]) {
 	const workspaceManifest = asRecord(readJsonFileSync(file), file);
@@ -172,7 +173,7 @@ function expectConfig(name: string, expected: unknown): void {
 		);
 	}
 }
-expectConfig("packages", [".", "webapp", "docs"]);
+expectConfig("packages", [".", "webapp", "docs", "extension"]);
 expectConfig("nodeLinker", "isolated");
 expectConfig("hoist", false);
 expectConfig("publicHoistPattern", [
@@ -546,7 +547,7 @@ for (const file of tracked) {
 	const text = content.toString("utf8");
 	const runtimeText =
 		file === "pnpm-lock.yaml"
-			? maskOptionalRuntimePeerMetadata(text, (name) => forbiddenWord.test(name))
+			? maskDependencyRuntimeMetadata(text, (name) => forbiddenWord.test(name))
 			: text;
 	if (forbiddenWord.test(runtimeText)) {
 		throw new Error(`${file} still references the retired package manager or runtime`);

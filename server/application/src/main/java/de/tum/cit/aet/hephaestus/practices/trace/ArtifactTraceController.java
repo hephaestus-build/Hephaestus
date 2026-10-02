@@ -131,12 +131,47 @@ public class ArtifactTraceController {
             if (reviewId == null) {
                 throw new EntityNotFoundException("Reviewed work", artifactId);
             }
-            String review = reviewId.toString();
-            developerId = reviewRuns
-                    .ownRunDeveloperOn(workspaceContext.id(), reviewId, kind, artifactId)
-                    .orElseThrow(() -> new EntityNotFoundException("Review", review));
+            developerId = ownDeveloper(workspaceContext, kind, artifactId, reviewId);
         }
         return ResponseEntity.ok(queryService.trace(workspaceContext.id(), kind, artifactId, reviewId, developerId));
+    }
+
+    @GetMapping("/{artifactKind}/{artifactId}/own")
+    @PreAuthorize("@workspaceSecure.isMember()")
+    @Operation(
+            summary = "Explain a named review of the calling developer's own work",
+            description = "Counts only observations about the caller and feedback addressed to them, including "
+                    + "when the caller is a workspace admin. The named review must have observed them on this work. "
+                    + "An inaccessible review answers the same 404 as an absent one.",
+            operationId = "getOwnArtifactTrace")
+    @ApiResponse(
+            responseCode = "200",
+            description = "The caller's trace returned",
+            content = @Content(schema = @Schema(implementation = ArtifactTraceDTO.class)))
+    @ApiResponse(
+            responseCode = "404",
+            description = "The caller has no accessible review on this work",
+            content =
+                    @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ProblemDetail.class)))
+    public ResponseEntity<ArtifactTraceDTO> getOwnArtifactTrace(
+            WorkspaceContext workspaceContext,
+            @PathVariable String artifactKind,
+            @PathVariable Long artifactId,
+            @RequestParam UUID reviewId) {
+        ArtifactKind kind = parseKind(artifactKind);
+        if (kind == null) {
+            throw new IllegalArgumentException("Name the kind of work to trace.");
+        }
+        long developerId = ownDeveloper(workspaceContext, kind, artifactId, reviewId);
+        return ResponseEntity.ok(queryService.trace(workspaceContext.id(), kind, artifactId, reviewId, developerId));
+    }
+
+    private long ownDeveloper(WorkspaceContext workspaceContext, ArtifactKind kind, long artifactId, UUID reviewId) {
+        return reviewRuns
+                .ownRunDeveloperOn(workspaceContext.id(), reviewId, kind, artifactId)
+                .orElseThrow(() -> new EntityNotFoundException("Review", reviewId.toString()));
     }
 
     /** A malformed kind is a bad request, not a 500: the grammar is enforced by {@link ArtifactKind}. */

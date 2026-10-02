@@ -43,7 +43,7 @@
 
 /*
  * Every override below re-points an Infima default at a value the web app already uses.
- * `scripts/check-docs-tokens.ts` pins the ones copied from `webapp/src/styles.css`.
+ * `scripts/check-docs-tokens.ts` pins the ones copied from `webapp/src/styles/theme-tokens.css`.
  */
 :root {
 	/* The app's --radius. Buttons, cards, code blocks and pagination all inherit it. */

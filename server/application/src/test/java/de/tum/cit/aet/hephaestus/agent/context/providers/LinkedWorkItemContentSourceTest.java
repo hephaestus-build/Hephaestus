@@ -16,7 +16,14 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidenceCollectionException;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
+import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -29,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -109,6 +117,61 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         issue.setState(Issue.State.OPEN);
         issue.setHtmlUrl("https://example.com/issues/" + number);
         return issue;
+    }
+
+    @Test
+    void tombstonedClosingIssueHasNoCurrentMaterialKey() {
+        var pr = new PullRequest();
+        pr.setId(PR_ID);
+        pr.setHeadRefOid(HEAD);
+        pr.setTitle("Closes #18");
+        Issue linked = issue(18, "Acceptance criteria", "- [x] Confirm repair");
+        assertThat(LinkedWorkItemContentSource.currentClosingMaterialKey(99L, pr, List.of(linked)))
+                .isPresent();
+        linked.setDeletedAt(java.time.Instant.now());
+        assertThat(LinkedWorkItemContentSource.currentClosingMaterialKey(99L, pr, List.of(linked)))
+                .isEmpty();
+    }
+
+    @Test
+    void comparesOnlyTheCapturedProviderClosingIssueFilesAndTreatsMissingEvidenceAsUnknown() {
+        Issue first = issue(18, "Acceptance criteria", "- [x] Confirm repair");
+        Issue second = issue(19, "Release check", "- [x] Verify release");
+        var captured = closingManifest(List.of(first, second));
+
+        assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(captured, List.of(second, first)))
+                .contains(true);
+        second.setBody("- [ ] Verify release");
+        assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(captured, List.of(first, second)))
+                .contains(false);
+        second.setBody("- [x] Verify release");
+        assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(
+                        closingManifest(List.of(first)), List.of(first, second)))
+                .isEmpty();
+        first.setDeletedAt(java.time.Instant.now());
+        assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(captured, List.of(first, second)))
+                .isEmpty();
+    }
+
+    private static JobFolderIndex closingManifest(List<Issue> issues) {
+        var capturedAt = java.time.Instant.parse("2026-09-01T00:00:00Z");
+        var base = ReviewedWorkFixtures.pullRequestManifest(capturedAt, "Closes #18 and #19", HEAD);
+        var sources = new ArrayList<>(base.sources());
+        sources.add(new SourceCapture(
+                KIND,
+                new SourceCaptureState.Available(
+                        SourceContentState.NON_EMPTY,
+                        SourceCompleteness.PARTIAL,
+                        new SourceCaptureFacts(capturedAt, null, null, null)),
+                issues.stream()
+                        .map(issue -> new SourceArtifact(
+                                LinkedWorkItemContentSource.ITEMS_PREFIX + issue.getNumber() + ".md",
+                                "text/markdown",
+                                ProvenanceDigest.sha256Hex(LinkedWorkItemContentSource.asText(issue)),
+                                LinkedWorkItemContentSource.asText(issue).length))
+                        .toList()));
+        return new JobFolderIndex(
+                base.contractVersion(), base.catalogDigest(), base.artifactKind(), base.capturedAt(), sources);
     }
 
     private void pullRequestWithBody(String body) {
@@ -321,6 +384,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 999)).thenReturn(Optional.empty());
 
             linked.setCreatedAt(java.time.Instant.parse("2026-04-01T09:00:00Z"));
+            linked.setClosedAt(java.time.Instant.parse("2026-04-03T12:00:00Z"));
+            linked.setState(Issue.State.CLOSED);
 
             var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
 
@@ -331,8 +396,11 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             assertThat(new String(
                             captured.files().get(LinkedWorkItemContentSource.ITEMS_PREFIX + "42.md"),
                             java.nio.charset.StandardCharsets.UTF_8))
-                    .isEqualTo("# Add token refresh\n\nOpened 2026-04-01T09:00:00Z, state OPEN.\n\n"
-                            + "## Acceptance criteria\n- [ ] refreshes silently\n");
+                    .isEqualTo("# Add token refresh\n\n"
+                            + "Opened 2026-04-01T09:00:00Z, closed 2026-04-03T12:00:00Z, state CLOSED.\n"
+                            + "The body below is the issue's text as mirrored when this was captured; these dates "
+                            + "are the issue's, not when any line of it was written."
+                            + "\n\n## Acceptance criteria\n- [ ] refreshes silently\n");
         }
 
         @Test
@@ -521,52 +589,32 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldFailTheCaptureRatherThanDropAReferenceTheAuthorWrote() {
+        void shouldKeepReferencesBeyondTheFormerCaptureCap() throws Exception {
             StringBuilder body = new StringBuilder();
-            for (int i = 1; i <= LinkedWorkItemContentSource.MAX_ITEMS + 1; i++)
-                body.append('#').append(i).append(' ');
+            for (int i = 1; i <= 10_001; i++) body.append('#').append(i).append(' ');
             pullRequestWithBody(body.toString());
-            when(gitRepositoryManager.isEnabled()).thenReturn(true);
-
-            assertThatExceptionOfType(EvidenceCollectionException.class)
-                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
-            verify(gitRepositoryManager, never()).forEachCommitMessage(any(), any(), any(), any());
-            verify(issueRepository, never()).findByRepositoryIdAndNumber(eq(REPO_ID), anyInt());
+            when(issueRepository.findByRepositoryIdAndNumber(eq(REPO_ID), anyInt()))
+                    .thenAnswer(inv -> Optional.of(issue(inv.getArgument(1), "Issue", "")));
+            JsonNode root = payload(sampleMetadata());
+            assertThat(itemNumbers(root)).hasSize(10_001);
+            assertThat(root.get("truncated").asBoolean()).isFalse();
         }
 
         @Test
-        void shouldFailTheCaptureRatherThanLoadMoreProviderClosingIssuesThanItHolds() {
+        void shouldKeepAllProviderClosingIssues() throws Exception {
             var pr = new PullRequest();
             pr.setId(PR_ID);
             when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-            when(pullRequestRepository.countClosingIssuesById(PR_ID))
-                    .thenReturn((long) LinkedWorkItemContentSource.MAX_ITEMS + 1);
-
-            assertThatExceptionOfType(EvidenceCollectionException.class)
-                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
-            verify(pullRequestRepository, never()).findClosingIssuesById(any());
-        }
-
-        @Test
-        void shouldFailTheCaptureWhenASyncAddsClosingIssuesPastTheBoundAfterTheCount() {
-            int max = LinkedWorkItemContentSource.MAX_ITEMS;
-            var pr = new PullRequest();
-            pr.setId(PR_ID);
-            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-            when(pullRequestRepository.countClosingIssuesById(PR_ID)).thenReturn((long) max);
             when(pullRequestRepository.findClosingIssuesById(PR_ID))
-                    .thenReturn(java.util.stream.IntStream.rangeClosed(1, max + 1)
+                    .thenReturn(java.util.stream.IntStream.rangeClosed(1, 10_001)
                             .mapToObj(number -> issue(number, "Issue", ""))
                             .toList());
-
-            assertThatExceptionOfType(EvidenceCollectionException.class)
-                    .isThrownBy(() -> provider.capture(request(sampleMetadata()), Set.of(KIND)));
-            verify(issueRepository, never()).findByRepositoryIdAndNumber(eq(REPO_ID), anyInt());
+            assertThat(itemNumbers(payload(sampleMetadata()))).hasSize(10_001);
         }
 
         @Test
-        void shouldCutOffOnlyCommitHistoryAtTheMemoryBoundAndSaySo() throws Exception {
-            int max = LinkedWorkItemContentSource.MAX_ITEMS;
+        void shouldKeepCommitReferencesBeyondTheFormerCap() throws Exception {
+            int max = 10_000;
             pullRequestWithBody("Related to #" + (max + 1));
             StringBuilder history = new StringBuilder();
             for (int i = 1; i <= max; i++) history.append('#').append(i).append(' ');
@@ -576,9 +624,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
 
             JsonNode root = payload(sampleMetadata());
 
-            assertThat(root.get("truncated").asBoolean()).isTrue();
-            assertThat(itemNumbers(root)).hasSize(max).first().isEqualTo(max + 1);
-            verify(issueRepository, never()).findByRepositoryIdAndNumber(REPO_ID, max);
+            assertThat(root.get("truncated").asBoolean()).isFalse();
+            assertThat(itemNumbers(root)).hasSize(max + 1).first().isEqualTo(max + 1);
         }
     }
 

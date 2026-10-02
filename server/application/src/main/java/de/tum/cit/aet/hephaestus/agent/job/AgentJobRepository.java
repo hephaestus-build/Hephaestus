@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
@@ -227,6 +228,7 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     @Query(value = """
         SELECT j.id AS "id",
                j.job_type AS "jobType",
+               j.status AS "status",
                COALESCE(j.metadata ->> 'pull_request_id', j.metadata ->> 'issue_id') AS "reviewedArtifactId",
                jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion",
                jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'capturedAt') AS "capturedAt",
@@ -246,26 +248,34 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     /** The staged identity and source contract for material repair admission. */
     @Query(value = """
-        SELECT j.id AS "id", CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork",
-               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion"
+        SELECT j.id AS "id", j.retry_count AS "attempt", CAST(j.evidence_snapshot -> 'reviewedWork' AS text) AS "reviewedWork",
+               jsonb_extract_path_text(j.evidence_snapshot, 'manifest', 'contractVersion') AS "contractVersion",
+               CAST(j.evidence_snapshot -> 'manifest' AS text) AS "manifest"
         FROM agent_job j
         WHERE j.id IN :ids AND j.workspace_id = :workspaceId
         """, nativeQuery = true)
     List<CapturedReviewedWorkRow> findCapturedReviewedWork(
             @Param("workspaceId") long workspaceId, @Param("ids") Collection<UUID> ids);
 
-    interface CapturedReviewedWorkRow {
+    public interface CapturedReviewedWorkRow {
         UUID getId();
+
+        int getAttempt();
 
         @Nullable
         String getContractVersion();
 
         @Nullable
         String getReviewedWork();
+
+        @Nullable
+        String getManifest();
     }
 
     interface ReviewedWorkRow {
         UUID getId();
+
+        AgentJobStatus getStatus();
 
         @Nullable
         String getJobType();
@@ -383,6 +393,24 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT j FROM AgentJob j LEFT JOIN FETCH j.workspace WHERE j.id = :id")
     Optional<AgentJob> findByIdWithWorkspaceForUpdate(@Param("id") UUID id);
+
+    /** Keeps source-use and readiness verdicts, not the uncited workspace inventory, after its lifetime. */
+    @org.springframework.transaction.annotation.Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            UPDATE agent_job j SET evidence_snapshot = jsonb_set(
+              jsonb_set(jsonb_set(j.evidence_snapshot, '{manifest,artifacts}', '[]'::jsonb), '{manifest,refusals}', '[]'::jsonb),
+              '{manifest,sources}', (SELECT COALESCE(jsonb_agg(jsonb_set(source, '{artifacts}', '[]'::jsonb)), '[]'::jsonb)
+                FROM jsonb_array_elements(j.evidence_snapshot #> '{manifest,sources}') source))
+            WHERE j.id = :jobId AND j.workspace_id = :workspaceId
+              AND j.retry_count = :attempt AND j.worker_id = :workerId
+              AND jsonb_typeof(j.evidence_snapshot #> '{manifest,sources}') = 'array'
+              AND (j.status <> 'RUNNING' OR COALESCE(j.metadata ->> '""" + ObservationAdmissionService.DIGEST_METADATA_KEY + "', '') <> '')", nativeQuery = true)
+    int discardRetiredArtifactInventory(
+            @Param("jobId") UUID jobId,
+            @Param("workspaceId") Long workspaceId,
+            @Param("attempt") int attempt,
+            @Param("workerId") String workerId);
 
     /** @return rows updated (0 or 1); 0 means a concurrent transition won. */
     @WorkspaceAgnostic("ID-based status transition; job ID from workspace-scoped context")

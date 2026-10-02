@@ -330,7 +330,7 @@ if (import.meta.filename === process.argv[1]) {
 	if (Reflect.get(envelope, "schemaVersion") !== SUPPORTED_SCHEMA_VERSION) {
 		throw new Error("task.json: unsupported schemaVersion");
 	}
-	const paths = resolveTaskPaths(root, Reflect.get(envelope, "paths"));
+	const paths = resolveTaskPaths(root, envelope);
 	const change = readChange(paths.contextRoot);
 	if (change !== null) {
 		writeChangeView(root, paths.repositoryRoot, change, readDescription(paths.contextRoot));

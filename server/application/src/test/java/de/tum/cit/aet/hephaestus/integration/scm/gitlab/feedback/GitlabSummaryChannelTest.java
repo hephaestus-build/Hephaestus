@@ -89,6 +89,7 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
 
         assertThat(handle).isNotNull();
         assertThat(handle.externalId()).isEqualTo("gid://gitlab/Note/789");
+        assertThat(handle.url()).isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         verify(spec).variable("body", "hello\n\nmarker");
     }
 
@@ -154,6 +155,11 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
         ClientResponseField idField = mock(ClientResponseField.class);
         when(response.field("updateNote.note.id")).thenReturn(idField);
+        ClientResponseField urlField = mock(ClientResponseField.class);
+        lenient().when(response.field("updateNote.note.url")).thenReturn(urlField);
+        lenient()
+                .when(urlField.getValue())
+                .thenReturn("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         when(idField.getValue()).thenReturn("gid://gitlab/Note/1");
         ClientResponseField errorsField = mock(ClientResponseField.class);
         lenient().when(response.field("updateNote.errors")).thenReturn(errorsField);
@@ -269,6 +275,7 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         SummaryHandle handle = channel.postSummary(issueTarget, new FeedbackContent("hi", "marker"));
 
         assertThat(handle.externalId()).isEqualTo("gid://gitlab/Note/555");
+        assertThat(handle.url()).isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         verify(mrResolver).resolveIssueGid(1L, "group/project", 7);
         verify(spec).variable(eq("noteableId"), eq("gid://gitlab/Issue/7"));
     }
@@ -287,6 +294,11 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
         ClientResponseField idField = mock(ClientResponseField.class);
         when(response.field("updateNote.note.id")).thenReturn(idField);
+        ClientResponseField urlField = mock(ClientResponseField.class);
+        lenient().when(response.field("updateNote.note.url")).thenReturn(urlField);
+        lenient()
+                .when(urlField.getValue())
+                .thenReturn("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         when(idField.getValue()).thenReturn("gid://gitlab/Note/789");
         ClientResponseField errorsField = mock(ClientResponseField.class);
         lenient().when(response.field("updateNote.errors")).thenReturn(errorsField);
@@ -300,6 +312,8 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         assertThat(outcome.kind()).isEqualTo(SummaryChannel.UpdateOutcome.Kind.EDITED);
         assertNotNull(outcome.handle());
         assertThat(outcome.handle().externalId()).isEqualTo("gid://gitlab/Note/789");
+        assertThat(outcome.handle().url())
+                .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         verify(spec).variable(eq("id"), eq("gid://gitlab/Note/789"));
         verify(spec).variable(eq("body"), eq("updated body\n\nmarker"));
     }
@@ -430,7 +444,13 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
     private static final String ISSUE_NOTES_PATH = "project.issue.notes";
 
     private static Map<String, Object> note(String id, String body) {
-        return Map.of("id", id, "body", body);
+        return Map.of(
+                "id",
+                id,
+                "body",
+                body,
+                "url",
+                "https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
     }
 
     @Test
@@ -451,6 +471,8 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         // The handle is the note's own global id — exactly what updateSummary passes to UpdateNote as `id`.
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("gid://gitlab/Note/2");
+        assertThat(result.handle().url())
+                .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
     }
 
     /**
@@ -528,6 +550,8 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("gid://gitlab/Note/2");
+        assertThat(result.handle().url())
+                .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         verify(spec).variable(eq("before"), eq("cursor-1"));
     }
 
@@ -568,6 +592,8 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         assertThat(result.kind()).isEqualTo(ExistingSummaryLookup.Kind.FOUND);
         assertNotNull(result.handle());
         assertThat(result.handle().externalId()).isEqualTo("gid://gitlab/Note/7");
+        assertThat(result.handle().url())
+                .isEqualTo("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         verify(client).documentName("GetIssueNotesNewest");
         verify(spec).variable(eq("fullPath"), eq("group/project"));
         verify(spec).variable(eq("iid"), eq("7"));
@@ -645,6 +671,11 @@ class GitlabSummaryChannelTest extends BaseUnitTest {
         lenient().when(response.getErrors()).thenReturn(List.of());
         ClientResponseField idField = mock(ClientResponseField.class);
         when(response.field("createNote.note.id")).thenReturn(idField);
+        ClientResponseField urlField = mock(ClientResponseField.class);
+        lenient().when(response.field("createNote.note.url")).thenReturn(urlField);
+        lenient()
+                .when(urlField.getValue())
+                .thenReturn("https://gitlab.example.com/group/project/-/merge_requests/42#note_987654");
         when(idField.getValue()).thenReturn(noteId);
         ClientResponseField errorsField = mock(ClientResponseField.class);
         lenient().when(response.field("createNote.errors")).thenReturn(errorsField);

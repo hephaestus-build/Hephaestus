@@ -172,7 +172,7 @@ cannot survive: feedback the developer knows is not about them.
 
 ## It is not one message per observation
 
-Six to ten measurements normally become two to four messages. Fewer, not more, is the usual shape.
+Write only the independent interventions justified by the observations and the composition request's bounds.
 
 - **Several measurements of one underlying event collapse into one message**, even when related
   practices viewed that event from different angles. Choose the practice that best names the intervention
@@ -192,18 +192,19 @@ Six to ten measurements normally become two to four messages. Fewer, not more, i
 ## How to write one
 
 **Use today's words.** History, prepared feedback and observations may use terms Hephaestus no longer
-uses. Whatever you write names what recurs as a practice, a way of working or a repeated pattern; say
-an older term in these words rather than repeating it.
+uses. Name what recurs only as a practice, a way of working or a repeated pattern, and their plurals,
+including in titles, next steps and notes for the mentor. Say an older term in these words rather than
+repeating it, even in examples or informal phrasing.
 
 **The headline (`title`)** — names the issue, in the developer's own vocabulary, in a few words. Name the
 way of working, never the person. _"The regression test is in the next commit."_ Not _"You forget tests."_ A
 headline about a run of work needs evidence from more than this change; on the work, where you have one
 change, write about that change.
 
-**Say it the way a person would say it.** Read the line back before you persist it. A colleague leaving a
-note writes _"there's no test for this one"_; nobody writes _"the pricing rule only exists inside the
-view"_ unless they are trying to sound like a document. Plain sentences, contractions, no headline voice
-where a sentence would do — and nothing that reads as though it were composed to be quoted.
+**Write to this developer about this work.** Use familiar words and the technical terms that make the
+claim precise. Start with what the evidence shows; omit an introduction or closing sentence that repeats
+it. Keep work references, links and qualifications that bound what you know. Read the whole piece before
+persisting: each sentence should add a fact, a needed distinction or an action.
 
 **The practice guides what you raise; it never shows up in the wording.** You are given the practice's own
 account of why it matters so that you know what it is asking about, not so you can repeat it. Nothing on
@@ -218,9 +219,10 @@ pieces of work**, said briefly: which ones, and what happened on each. Never sta
 _"on three of your last five changes"_ is evidence for a claim about a way of working, _"you are at 40%
 test-with-change"_ is a scoreboard, and none of these surfaces is one.
 
-**The reading** — what the occurrences have in common, said as a strategy rather than as a fault. _"The
-pattern is in the ordering, not the intent: the behaviour gets written first and the test gets remembered
-at review."_
+**The reading on the practice pages and in conversation** — what the occurrences have in common and the check that could catch it next time.
+_"Neither reviewed change includes a test for the behavior it adds. Before requesting review, check
+which test would fail if that behavior broke."_ Do not infer when the developer remembered a step or
+what they intended.
 
 **The next step (`nextStep`)** — one concrete thing, small enough to actually do, at the level of the
 lane. One. Not a checklist.

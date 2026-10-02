@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { buildBrief } from "../../../main/resources/agent/pi-review-brief.ts";
 
-const paths = { contextRoot: "inputs/context", repositoryRoot: "inputs/sources/scm/repo" };
+const paths = { contextRoot: "context", repositoryRoot: "repos/reviewed" };
 
 function workspace(files: Record<string, string>): string {
 	const root = mkdtempSync(nodePath.join(tmpdir(), "pi-review-brief-"));
@@ -19,8 +19,9 @@ function workspace(files: Record<string, string>): string {
 
 void test("the brief shows each captured file under its workspace path, the change first among the derived files", () => {
 	const root = workspace({
-		"inputs/context/metadata.json": '{"title": "Add login"}',
-		"inputs/context/review_threads.json": '{"threads": []}',
+		"INDEX.md": "# Permitted workspace\n",
+		"context/metadata.json": '{"title": "Add login"}',
+		"context/review_threads.json": '{"threads": []}',
 		"work/change/files.json": '{"files": [{"status": "M", "path": "a.ts"}]}',
 		"work/change/diff.patch": "diff --git a/a.ts b/a.ts\n@@ -1 +1 @@\n[L1] -x\n[L1] +y\n",
 		"work/precompute-out/summary.md": "# hints\n",
@@ -28,9 +29,10 @@ void test("the brief shows each captured file under its workspace path, the chan
 	try {
 		const brief = buildBrief(root, paths);
 		const order = [
-			"### `inputs/context/metadata.json`",
+			"### `INDEX.md`",
+			"### `context/metadata.json`",
 			"### `work/change/files.json`",
-			"### `inputs/context/review_threads.json`",
+			"### `context/review_threads.json`",
 			"### `work/precompute-out/summary.md`",
 			"### `work/change/diff.patch`",
 		].map((heading) => brief.indexOf(heading));
@@ -57,16 +59,16 @@ void test("the brief shows each captured file under its workspace path, the chan
 
 void test("each linked issue's text file follows the linked-items record, in number order", () => {
 	const root = workspace({
-		"inputs/context/linked_work_items.json": '{"workItems": []}',
-		"inputs/context/linked_work_items/12.md": "# Twelve\n\nbody\n",
-		"inputs/context/linked_work_items/7.md": "# Seven\n\n- [x] done\n",
+		"context/linked_work_items.json": '{"workItems": []}',
+		"context/linked_work_items/12.md": "# Twelve\n\nbody\n",
+		"context/linked_work_items/7.md": "# Seven\n\n- [x] done\n",
 	});
 	try {
 		const brief = buildBrief(root, paths);
 		const order = [
-			"### `inputs/context/linked_work_items.json`",
-			"### `inputs/context/linked_work_items/7.md`",
-			"### `inputs/context/linked_work_items/12.md`",
+			"### `context/linked_work_items.json`",
+			"### `context/linked_work_items/7.md`",
+			"### `context/linked_work_items/12.md`",
 		].map((heading) => brief.indexOf(heading));
 		assert.ok(
 			order.every((index) => index >= 0),
@@ -84,8 +86,8 @@ void test("each linked issue's text file follows the linked-items record, in num
 
 void test("a file over its bound is named with its size instead of shown, and an empty one is named as empty", () => {
 	const root = workspace({
-		"inputs/context/metadata.json": '{"title": "t"}',
-		"inputs/context/comments.json": "",
+		"context/metadata.json": '{"title": "t"}',
+		"context/comments.json": "",
 		"work/change/diff.patch": `${"+".repeat(100)}\n`.repeat(600),
 	});
 	try {
@@ -94,13 +96,13 @@ void test("a file over its bound is named with its size instead of shown, and an
 			diffChars: 2000,
 			totalChars: 10_000,
 		});
-		assert.match(brief, /### `inputs\/context\/metadata\.json`/u);
+		assert.match(brief, /### `context\/metadata\.json`/u);
 		// An empty record file is not shown; it is named as empty, with the record files the capture
 		// did not write at all, so the review does not go looking for them.
-		assert.doesNotMatch(brief, /### `inputs\/context\/comments\.json`/u);
+		assert.doesNotMatch(brief, /### `context\/comments\.json`/u);
 		assert.match(
 			brief,
-			/### Not captured — do not look for these\n`inputs\/context\/description\.md`, `inputs\/context\/comments\.json` \(empty\), `inputs\/context\/review_threads\.json`, `inputs\/context\/general_comments\.json`, `inputs\/context\/linked_work_items\.json`, `inputs\/context\/outline\/` \(no wiki documents were captured\)/u,
+			/### Not captured — do not look for these\n`context\/description\.md`, `context\/comments\.json` \(empty\), `context\/review_threads\.json`, `context\/general_comments\.json`, `context\/linked_work_items\.json`/u,
 		);
 		assert.match(brief, /Too large to show here[\s\S]*- `work\/change\/diff\.patch` \(60 KB\)/u);
 		assert.doesNotMatch(brief, /```diff/u);
@@ -111,9 +113,9 @@ void test("a file over its bound is named with its size instead of shown, and an
 
 void test("the brief as a whole stays under its total bound", () => {
 	const root = workspace({
-		"inputs/context/metadata.json": "x".repeat(900),
-		"inputs/context/comments.json": "y".repeat(900),
-		"inputs/context/review_threads.json": "z".repeat(900),
+		"context/metadata.json": "x".repeat(900),
+		"context/comments.json": "y".repeat(900),
+		"context/review_threads.json": "z".repeat(900),
 	});
 	try {
 		const brief = buildBrief(root, paths, {
@@ -131,7 +133,7 @@ void test("the brief as a whole stays under its total bound", () => {
 });
 
 void test("a backtick run inside a file cannot close its fence early", () => {
-	const root = workspace({ "inputs/context/document.md": "text with ``` inside\n" });
+	const root = workspace({ "context/document.md": "text with ``` inside\n" });
 	try {
 		assert.match(buildBrief(root, paths), /````markdown\n\[L1\] text with ``` inside\n````/u);
 	} finally {
@@ -153,7 +155,7 @@ for (const [name, content] of [
 	["fence escaping", "`".repeat(1000)],
 ] as const) {
 	void test(`the file bound includes ${name}`, () => {
-		const root = workspace({ "inputs/context/document.md": content });
+		const root = workspace({ "context/document.md": content });
 		try {
 			const brief = buildBrief(root, paths, {
 				filePerChars: 2000,
@@ -161,8 +163,8 @@ for (const [name, content] of [
 				totalChars: 4000,
 			});
 			assert.ok(brief.length <= 4000);
-			assert.doesNotMatch(brief, /### `inputs\/context\/document\.md`/u);
-			assert.match(brief, /Too large[\s\S]*`inputs\/context\/document\.md` \(1 KB\)/u);
+			assert.doesNotMatch(brief, /### `context\/document\.md`/u);
+			assert.match(brief, /Too large[\s\S]*`context\/document\.md` \(1 KB\)/u);
 		} finally {
 			rmSync(root, { recursive: true, force: true });
 		}
@@ -170,7 +172,7 @@ for (const [name, content] of [
 }
 
 void test("an oversized capture index gives a complete fallback instruction within the bound", () => {
-	const root = workspace({ "inputs/context/document.md": "x".repeat(1000) });
+	const root = workspace({ "context/document.md": "x".repeat(1000) });
 	try {
 		const brief = buildBrief(root, paths, { filePerChars: 100, diffChars: 100, totalChars: 128 });
 		assert.ok(brief.length <= 128);

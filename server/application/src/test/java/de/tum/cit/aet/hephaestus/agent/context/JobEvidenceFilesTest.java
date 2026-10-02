@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobStatus;
@@ -49,6 +48,96 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
+    void refusesAnOversizedDiskFolderBeforeCopyingAndReleasesRenderScratch() throws Exception {
+        Path oversized = root.resolve("oversized");
+        try (var output = java.nio.channels.FileChannel.open(
+                oversized, java.nio.file.StandardOpenOption.CREATE_NEW, java.nio.file.StandardOpenOption.WRITE)) {
+            output.position(de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions.WORKSPACE_BYTE_BUDGET);
+            output.write(java.nio.ByteBuffer.wrap(new byte[] {0}));
+        }
+        var released = new java.util.concurrent.atomic.AtomicBoolean();
+        var inputs = new PreparedEvidence(
+                Map.of(), Map.of("context/large.jsonl", oversized), List.of(() -> released.set(true)), null);
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock);
+        assertThatThrownBy(() -> files.prepare(job(), inputs, null))
+                .isInstanceOf(de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException.class)
+                .hasMessageContaining("WORKSPACE_BUDGET_EXCEEDED");
+        assertThat(released.get()).isTrue();
+        assertThat(root.resolve("jobs")).doesNotExist();
+    }
+
+    @Test
+    void shouldDeleteCommittedAdmissionWhileTheRuntimeIsStillRunning() {
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock);
+        var job = job();
+        job.setStatus(AgentJobStatus.RUNNING);
+        when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
+        byte[] bytes = "verified quote".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var identity = new de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.AdmissionIdentity(
+                job.getId(), 1L, 0, "worker");
+        try (var prepared = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                files,
+                job,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                        Map.of("context/quote", bytes)))) {
+            assertThat(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(prepared))
+                    .containsKey("context/quote");
+            files.discardAdmittedAttempt(identity);
+            assertThat(read(files, job, "context/quote", sha)).contains(bytes);
+            job.setMetadata(new tools.jackson.databind.json.JsonMapper()
+                    .createObjectNode()
+                    .put(
+                            de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.DIGEST_METADATA_KEY,
+                            "verified"));
+            files.discardAdmittedAttempt(
+                    new de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService.AdmissionIdentity(
+                            job.getId(), 1L, 1, "worker"));
+            assertThat(read(files, job, "context/quote", sha)).contains(bytes);
+            files.discardAdmittedAttempt(identity);
+            assertThat(read(files, job, "context/quote", sha)).isEmpty();
+        }
+    }
+
+    @Test
+    void shouldCleanUnknownAndFinishedFoldersImmediatelyAfterRestartButKeepRunningJobs() {
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock);
+        byte[] bytes = "evidence".getBytes(StandardCharsets.UTF_8);
+        String sha = ProvenanceDigest.sha256Hex(bytes);
+        var running = job();
+        running.setStatus(AgentJobStatus.RUNNING);
+        var finished = job();
+        finished.setStatus(AgentJobStatus.FAILED);
+        var unknown = job();
+        when(jobs.findByIdAndWorkspaceId(running.getId(), 1L)).thenReturn(Optional.of(running));
+        when(jobs.findByIdAndWorkspaceId(finished.getId(), 1L)).thenReturn(Optional.of(finished));
+        try (var active = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                        files,
+                        running,
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                                Map.of("context/quote", bytes)));
+                var ended = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                        files,
+                        finished,
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                                Map.of("context/quote", bytes)));
+                var orphan = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                        files,
+                        unknown,
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                                Map.of("context/quote", bytes)))) {
+            files.cleanAfterRestart();
+            assertThat(read(files, running, "context/quote", sha)).contains(bytes);
+            assertThat(read(files, finished, "context/quote", sha)).isEmpty();
+            assertThat(read(files, unknown, "context/quote", sha)).isEmpty();
+            assertThat(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(active))
+                    .containsKey("context/quote");
+            assertThat(ended.filesOnDisk().get("context/quote")).doesNotExist();
+            assertThat(orphan.filesOnDisk().get("context/quote")).doesNotExist();
+        }
+    }
+
+    @Test
     void shouldCopyDirectoryInputsWithoutExpandingTheirFileMap() throws Exception {
         Path checkout = Files.createDirectories(root.resolve("checkout"));
         Path git = Files.createDirectories(checkout.resolve(".git"));
@@ -61,7 +150,7 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                         java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE));
         var files =
                 new JobEvidenceFiles(new FabricLayout(root.resolve("evidence").toString()), jobs, clock);
-        var inputs = new PreparedJobInputs(
+        var inputs = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
                 new PreparedEvidence(
                         Map.of(),
                         Map.of("repo/.git/HEAD", head),
@@ -69,7 +158,8 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                         null,
                         List.of(new EvidenceDirectory("repo/", checkout))),
                 null);
-        try (var captured = files.prepare(job(), inputs)) {
+        try (var captured =
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(files, job(), inputs)) {
             assertThat(captured.filesOnDisk()).hasSize(1);
             assertThat(captured.directories()).hasSize(1);
             Path canonical = captured.directories().getFirst().source();
@@ -89,11 +179,13 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         Files.createSymbolicLink(checkout.resolve("escape"), root.resolve("outside"));
         var files =
                 new JobEvidenceFiles(new FabricLayout(root.resolve("evidence").toString()), jobs, clock);
-        var inputs = new PreparedJobInputs(
+        var inputs = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
                 new PreparedEvidence(
                         Map.of(), Map.of(), List.of(), null, List.of(new EvidenceDirectory("repo/", checkout))),
                 null);
-        assertThatThrownBy(() -> files.prepare(job(), inputs)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() ->
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(files, job(), inputs))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -104,41 +196,49 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         String content = "repeated quote\nwrong line\nrepeated quote\n";
         Files.writeString(source, content);
         String sha = ProvenanceDigest.sha256Hex(content.getBytes(StandardCharsets.UTF_8));
-        var raw = new PreparedJobInputs(
-                new PreparedEvidence(Map.of(), Map.of("inputs/context/source.txt", source), List.of(), null), null);
-        try (var prepared = files.prepare(job, raw)) {
+        var raw = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
+                new PreparedEvidence(Map.of(), Map.of("context/source.txt", source), List.of(), null), null);
+        try (var prepared =
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(files, job, raw)) {
             Files.writeString(source, "upstream changed");
-            assertThat(read(files, job, "inputs/context/source.txt", sha))
-                    .contains(content.getBytes(StandardCharsets.UTF_8));
-            assertThat(files.containsUtf8AtLines(job, "inputs/context/source.txt", sha, "repeated quote", 2, 2))
+            assertThat(read(files, job, "context/source.txt", sha)).contains(content.getBytes(StandardCharsets.UTF_8));
+            assertThat(files.containsUtf8AtLines(job, "context/source.txt", sha, "repeated quote", 2, 2))
                     .contains(false);
-            assertThat(files.containsUtf8AtLines(job, "inputs/context/source.txt", sha, "repeated quote", 3, 3))
+            assertThat(files.containsUtf8AtLines(job, "context/source.txt", sha, "repeated quote", 3, 3))
                     .contains(true);
-            assertThatThrownBy(() -> files.prepare(job, raw)).isInstanceOf(IllegalStateException.class);
+            assertThatThrownBy(() ->
+                            de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(files, job, raw))
+                    .isInstanceOf(IllegalStateException.class);
             job.setRetryCount(1);
-            assertThat(read(files, job, "inputs/context/source.txt", sha)).isEmpty();
+            assertThat(read(files, job, "context/source.txt", sha)).isEmpty();
             job.setRetryCount(0);
-            assertThat(prepared.filesOnDisk().get("inputs/context/source.txt")).hasContent(content);
+            assertThat(prepared.filesOnDisk().get("context/source.txt")).hasContent(content);
         }
-        assertThat(read(files, job, "inputs/context/source.txt", sha)).isPresent();
+        assertThat(read(files, job, "context/source.txt", sha)).isPresent();
         new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.offset(clock, Duration.ofHours(1)))
                 .cleanEndedAttempts();
-        assertThat(read(files, job, "inputs/context/source.txt", sha)).isEmpty();
+        assertThat(read(files, job, "context/source.txt", sha)).isEmpty();
     }
 
     @Test
     void shouldRejectEscapingPathsAndSymbolicLinksDuringPreparation() throws Exception {
         var layout = new FabricLayout(root.toString());
         var files = new JobEvidenceFiles(layout, jobs, clock);
-        assertThatThrownBy(() -> files.prepare(job(), PreparedJobInputs.filesOnly(Map.of("../escape", new byte[0]))))
+        assertThatThrownBy(() -> de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                        files,
+                        job(),
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                                Map.of("../escape", new byte[0]))))
                 .isInstanceOf(IllegalStateException.class);
         Path source = root.resolve("source");
         Files.writeString(source, "private");
         Path link = root.resolve("link");
         Files.createSymbolicLink(link, source);
-        var raw = new PreparedJobInputs(
+        var raw = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
                 new PreparedEvidence(Map.of(), Map.of("inputs/source", link), List.of(), null), null);
-        assertThatThrownBy(() -> files.prepare(job(), raw)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() ->
+                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(files, job(), raw))
+                .isInstanceOf(IllegalStateException.class);
         try (var paths = Files.walk(layout.jobsRoot())) {
             assertThat(paths.filter(path -> path.getFileName().toString().contains(".preparing-")))
                     .as("a failed preparation leaves no staging directory behind")
@@ -153,7 +253,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         String quote = "é😀\n" + "quoted line\n".repeat(1000);
         byte[] bytes = ("x".repeat(8191) + quote).getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        var prepared = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                files,
+                job,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                        Map.of("inputs/source", bytes)));
         try {
             assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, quote, 1, 1001))
                     .contains(true);
@@ -172,7 +276,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "source".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        var prepared = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                files,
+                job,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                        Map.of("inputs/source", bytes)));
         try {
             files.cleanEndedAttempts();
             var later = new JobEvidenceFiles(
@@ -185,6 +293,9 @@ class JobEvidenceFilesTest extends BaseUnitTest {
             new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, Clock.offset(clock, Duration.ofHours(3)))
                     .cleanEndedAttempts();
             assertThat(read(files, job, "inputs/source", sha)).isEmpty();
+            org.mockito.Mockito.verify(jobs)
+                    .discardRetiredArtifactInventory(
+                            job.getId(), 1L, job.getRetryCount(), java.util.Objects.requireNonNull(job.getWorkerId()));
         } finally {
             prepared.close();
         }
@@ -203,10 +314,18 @@ class JobEvidenceFilesTest extends BaseUnitTest {
         when(jobs.findByIdAndWorkspaceId(job.getId(), 1L)).thenReturn(Optional.of(job));
         byte[] bytes = "source".getBytes(StandardCharsets.UTF_8);
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        var first = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        var first = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                files,
+                job,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                        Map.of("inputs/source", bytes)));
         first.close();
         assertThat(read(files, job, "inputs/source", sha)).isEmpty();
-        var replacement = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        var replacement = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                files,
+                job,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                        Map.of("inputs/source", bytes)));
         try {
             first.close();
             assertThat(read(files, job, "inputs/source", sha)).contains(bytes);
@@ -298,7 +417,11 @@ class JobEvidenceFilesTest extends BaseUnitTest {
                 new byte[] {(byte) 0xe9, '\n'},
                 "clean line\n".getBytes(StandardCharsets.UTF_8));
         String sha = ProvenanceDigest.sha256Hex(bytes);
-        var prepared = files.prepare(job, PreparedJobInputs.filesOnly(Map.of("inputs/source", bytes)));
+        var prepared = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.prepare(
+                files,
+                job,
+                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
+                        Map.of("inputs/source", bytes)));
         try {
             assertThat(files.containsUtf8AtLines(job, "inputs/source", sha, "clean line", 2, 2))
                     .contains(true);

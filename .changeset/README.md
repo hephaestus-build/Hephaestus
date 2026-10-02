@@ -3,7 +3,7 @@
 A **changeset** here is a release note: a `.changeset/*.md` file that becomes `CHANGELOG.md` and drives
 the version bump. (Not a Liquibase `<changeSet>` — a schema change needs both.)
 
-Every PR that changes shipped code (anything under `server/`, `webapp/`, or `docker/` except tests and in-tree docs) ships one; CI (`verify-changesets`) enforces it.
+Every PR that changes shipped code (anything under `server/`, `webapp/`, `docker/`, or `extension/` except tests and in-tree docs) ships one; CI (`verify-changesets`) enforces it. The Chrome extension is versioned with the release, like the webapp.
 
 ```bash
 vp exec changeset          # write one (pick the bump, describe the change)

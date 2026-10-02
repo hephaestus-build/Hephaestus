@@ -87,4 +87,7 @@ do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
 | [0046](0046-heph-follows-its-model-not-a-workspace-switch.md) | Heph follows its model, not a workspace switch | Accepted |
 | [0047](0047-the-practice-profile-has-one-reader.md) | The Practice profile has one reader | Accepted |
 
+| [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md) | Installed clients sign in with a PKCE handoff to their own revocable session | Accepted. Amends [0017](0017-replace-keycloak-with-spring-native-auth.md) for clients that cannot hold the cookie. |
+| [0049](0049-browser-extension-report-in-the-page.md) | The browser extension shows its report in the page and confirms changes in its own window | Accepted |
+
 Template: [0000-template.md](0000-template.md).

@@ -6,6 +6,7 @@ mutation UpdateNote($id: NoteID!, $body: String!) {
     updateNote(input: {id: $id, body: $body}) {
         note {
             id
+            url
         }
         errors
     }

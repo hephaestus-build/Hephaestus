@@ -9,8 +9,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
-import de.tum.cit.aet.hephaestus.agent.context.ContextManifestBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeDetectionResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -84,7 +84,7 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
     private PracticeDetectionDeliveryService deliveryService;
 
     @Autowired
-    private ContextManifestBuilder manifests;
+    private JobFolderIndexBuilder manifests;
 
     @Autowired
     private PracticeRepository practiceRepository;
@@ -214,10 +214,11 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         ValidatedObservation cleanClose = claim(Presence.ABSENT, null);
 
         // Named, because an unverifiable quote is withheld through the same refusal.
-        assertThatThrownBy(() -> deliveryService.prepare(job, List.of(lapse, cleanClose)))
-                .isInstanceOf(ObservationsRefusedException.class)
-                .hasMessageContaining("withheld=[" + WITHDRAWN + ": withdrawn from automated review, " + WITHDRAWN
-                        + ": withdrawn from automated review]");
+        for (ValidatedObservation observation : List.of(lapse, cleanClose)) {
+            assertThatThrownBy(() -> deliveryService.prepare(job, List.of(observation)))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .hasMessageContaining("withheld=[" + WITHDRAWN + ": withdrawn from automated review]");
+        }
 
         for (String table : List.of("observation", "feedback", "feedback_dispatch")) {
             assertThat(jdbcTemplate.queryForObject(
@@ -309,16 +310,16 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         return practiceRepository.saveAndFlush(practice);
     }
 
-    private de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest completeIssueCapture(Installed installed) {
+    private de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex completeIssueCapture(Installed installed) {
         Map<String, byte[]> files = new LinkedHashMap<>();
-        files.put("inputs/context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
-        files.put("inputs/context/comments.json", "[]".getBytes(StandardCharsets.UTF_8));
+        files.put("context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
+        files.put("context/comments.json", "[]".getBytes(StandardCharsets.UTF_8));
         return manifests.augment(
                 files,
-                Map.of("inputs/context/metadata.json", CORE, "inputs/context/comments.json", COMMENTS),
+                Map.of("context/metadata.json", CORE, "context/comments.json", COMMENTS),
                 "close-" + installed.issue().getId(),
-                new EvidencePlan(new SourceContractVersion("1.2.0"), ArtifactKinds.ISSUE),
-                new ContextManifestBuilder.CaptureMetadata(
+                new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.ISSUE),
+                new JobFolderIndexBuilder.CaptureMetadata(
                         Map.of(CORE, SourceCompleteness.COMPLETE, COMMENTS, SourceCompleteness.COMPLETE),
                         Map.of(),
                         Map.of(),
@@ -352,12 +353,14 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         job.setMetadata(metadata);
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(OBJECT_MAPPER, ArtifactKinds.ISSUE.value());
         EvidenceSnapshotFixtures.artifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, CORE.value(), null),
-                "inputs/context/description.md",
+                "context/description.md",
                 "0".repeat(64));
         EvidenceSnapshotFixtures.artifact(
+                snapshot,
                 EvidenceSnapshotFixtures.availableSource(snapshot, COMMENTS.value(), null),
-                "inputs/context/comments.json",
+                "context/comments.json",
                 "0".repeat(64));
         EvidenceSnapshotFixtures.admittedPractice(
                 snapshot,
@@ -372,7 +375,7 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         evidence.putArray("citations")
                 .addObject()
                 .put("sourceKind", CORE.value())
-                .put("artifactPath", "inputs/context/description.md")
+                .put("artifactPath", "context/description.md")
                 .put("quote", "- [ ] Export to CSV");
         return new ValidatedObservation(
                 WITHDRAWN,

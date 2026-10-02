@@ -220,7 +220,8 @@ A webhook names one person's act, not the whole decision:
   Its user is whoever pushed, and it does not say whose approvals went, so it leaves the decision unknown and dismisses
   no one; the readiness read reconciles the approvals with GitLab's whole approver list.
 - A push leaves the decision, mergeability and merge status unknown for the new head; the recorded approvals stay, since
-  a project can keep them across a push, each with the commit it was given on.
+  a project can keep them across a push. A GitLab approval's stored commit is its recorded association, not proof of
+  the originally approved commit.
 
 ### A GitLab merge request's readiness is read after its webhook
 
@@ -231,16 +232,28 @@ opened, updated, reopened or approval hook is stored, `GitLabMergeRequestMessage
 delivery may still write to the project as stored now (`GitLabWebhookContextResolver#mayStillWrite`): on a connection
 route the connection is held active and the project admitted again — same GitLab instance, inside the group, still
 monitored — so a project removed from monitoring or moved out while GitLab was read takes nothing from the read; off a
-route it must still pass the scope filter for the same workspace. It records nothing unless GitLab's answer names this project and merge request, both open, at the
-stored head and not an older version; it never moves the head. Reviewers, decision and approvals — and the
+route it must still pass the scope filter for the same workspace. Mutable readiness is recorded only when GitLab names
+this project and merge request, both open or both merged, at the stored head and not an older version; it never moves the head. Reviewers, decision and approvals — and the
 mergeability and merge status GitLab derives from the approvals — follow the dated snapshot, dated by when the read was
 asked for, as they do for a sync page: a read or page begun before a newer one was stored changes none of them. While GitLab reports `checking` or `approvals_syncing`, mergeability and
 approvals are not settled and stay unknown. A read that fails records nothing; the next hook or sync reads again. No
 workspace sync runs for a hook. A merge hook stores the merge commit it names but often no merger and no merge
 time; the same read after it fills them in where GitLab names them (`applyTerminalFacts`), under the same
-identity, head and version fence, and never replaces a recorded merger. The merge occasion is offered only
+identity and head fence, and never replaces a recorded merger. These completed merge facts do not replace mutable
+content and do not require GraphQL's second-precision version to equal the webhook's millisecond version. The merge occasion is offered only
 after that read, in the same short transaction, and is offered even when the read failed. A merge the hook missed and a sync finds
 is recorded as a sync-discovered occasion, which a later delivery of the hook can still claim.
+
+For a merged merge request, the native approvals route can supply each standing row's creation time as `approved_at`
+([GitLab approvals API](https://docs.gitlab.com/api/merge_request_approvals/)). It does not identify the originally
+approved commit or provide an atomic approval history. A whole accepted approval snapshot matches the native row set
+before recording those dates; a failed optional date read preserves an already-standing date, while an accepted absent
+or conflicting date leaves it unknown. Renewal clears a withdrawn row's date.
+
+When GraphQL's version is older, only dates of existing standing approvals can be reconciled: the native response must
+name the same merged request and exact stored version, with matching non-null title and description, and its actor set
+must match both GraphQL's whole current-head approvers and the canonical standing rows. Otherwise the read cannot change those dates. An accepted date-only read advances the existing approval-read clock, including when the date is unchanged;
+it changes no membership, readiness or commit and emits no approval act. This also orders overlapping date-only reads.
 
 GitLab answers a field it could not resolve with `null` and an error at that path. Every GitLab merge request read —
 this one, the sync and the historical backfill — asks Spring for the errors at, above or below the exact field

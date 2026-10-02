@@ -4,7 +4,9 @@ import { HttpResponse, http } from "msw";
 import { assert, describe, expect, it, vi } from "vitest";
 
 import {
+	getPracticeProfileReviewRunQueryKey,
 	getPracticeReviewOverviewQueryKey,
+	listPracticeProfileReviewRunsInfiniteQueryKey,
 	listPracticeStandingsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import { reviewObservationDetail } from "@/components/admin/practice-reviews/fixtures";
@@ -38,6 +40,10 @@ function stub(...handlers: Parameters<typeof server.use>) {
 function countingReads(workspaceSlug: string) {
 	return [
 		listPracticeStandingsQueryKey({ path: { workspaceSlug } }),
+		getPracticeProfileReviewRunQueryKey({
+			path: { workspaceSlug, reviewId: reviewObservationDetail.agentJobId },
+		}),
+		listPracticeProfileReviewRunsInfiniteQueryKey({ path: { workspaceSlug } }),
 		getPracticeReviewOverviewQueryKey({
 			path: { workspaceSlug },
 			query: { from: new Date("2026-01-01T00:00:00Z"), zone: "UTC" },
@@ -46,62 +52,86 @@ function countingReads(workspaceSlug: string) {
 }
 
 describe("observation level", () => {
-	it("marks the observation incorrect and refreshes this workspace's reads of it, and no other's", async () => {
-		let sent: unknown;
-		let current: typeof reviewObservationDetail = reviewObservationDetail;
-		stub(
-			// Re-read after the change like every other read of it, so it answers as the server would.
-			http.get("*/workspaces/:workspaceSlug/practices/reviews/observations/:observationId", () =>
-				HttpResponse.json(current),
-			),
-			http.patch(
-				"*/workspaces/:workspaceSlug/practices/reviews/observations/:observationId/validity",
-				async ({ request }) => {
-					sent = await request.json();
-					current = {
-						...reviewObservationDetail,
-						invalidations: [
-							{
-								id: "inv-1",
-								reason: "The 404 comes from the router.",
-								invalidatedAt: reviewObservationDetail.observedAt,
-								invalidatedBy: "Ada",
-								providerCopy: "PENDING",
-							},
-						],
-					};
-					return HttpResponse.json(current);
-				},
-			),
-		);
-		const queryClient = testQueryClient();
-		const ours = countingReads("acme");
-		const theirs = countingReads("other");
-		for (const key of [...ours, ...theirs]) {
-			queryClient.setQueryData(key, {});
-		}
+	const correction = {
+		id: "inv-1",
+		reason: "The 404 comes from the router.",
+		invalidatedAt: reviewObservationDetail.observedAt,
+		invalidatedBy: "Ada",
+		providerCopy: "UPDATED" as const,
+	};
+	const incorrect = { ...reviewObservationDetail, invalidations: [correction] };
+	const restored = {
+		...reviewObservationDetail,
+		invalidations: [
+			{
+				...correction,
+				restoredAt: reviewObservationDetail.observedAt,
+				restoredBy: "Ada",
+				restorationReason: "The 404 comes from the router.",
+			},
+		],
+	};
+	it.each([
+		{
+			valid: false,
+			initial: reviewObservationDetail,
+			updated: incorrect,
+			trigger: "Mark as incorrect",
+			success: "Observation marked as incorrect",
+		},
+		{
+			valid: true,
+			initial: incorrect,
+			updated: restored,
+			trigger: "Restore observation",
+			success: "Observation restored",
+		},
+	])(
+		"changes validity to $valid and refreshes only this workspace's reads",
+		async ({ valid, initial, updated, trigger, success }) => {
+			let sent: unknown;
+			let current: typeof reviewObservationDetail = initial;
+			stub(
+				// Re-read after the change like every other read of it, so it answers as the server would.
+				http.get("*/workspaces/:workspaceSlug/practices/reviews/observations/:observationId", () =>
+					HttpResponse.json(current),
+				),
+				http.patch(
+					"*/workspaces/:workspaceSlug/practices/reviews/observations/:observationId/validity",
+					async ({ request }) => {
+						sent = await request.json();
+						current = updated;
+						return HttpResponse.json(current);
+					},
+				),
+			);
+			const queryClient = testQueryClient();
+			const ours = countingReads("acme");
+			const theirs = countingReads("other");
+			for (const key of [...ours, ...theirs]) {
+				queryClient.setQueryData(key, {});
+			}
 
-		renderRouteAtWithRouter(OBSERVATION_LEVEL, queryClient);
-		const user = userEvent.setup();
-		await user.click(
-			await screen.findByRole("button", { name: "Mark as incorrect" }, ROUTE_RENDER_WAIT),
-		);
-		await user.type(
-			await screen.findByRole("textbox", { name: "Reason" }),
-			"The 404 comes from the router.",
-		);
-		const submit = screen.getAllByRole("button", { name: "Mark as incorrect" }).at(-1);
-		assert(submit);
-		await user.click(submit);
+			renderRouteAtWithRouter(OBSERVATION_LEVEL, queryClient);
+			const user = userEvent.setup();
+			await user.click(await screen.findByRole("button", { name: trigger }, ROUTE_RENDER_WAIT));
+			await user.type(
+				await screen.findByRole("textbox", { name: "Reason" }),
+				"The 404 comes from the router.",
+			);
+			const submit = screen.getAllByRole("button", { name: trigger }).at(-1);
+			assert(submit);
+			await user.click(submit);
 
-		await screen.findByText("Marked as incorrect");
-		expect(sent).toStrictEqual({ valid: false, reason: "The 404 comes from the router." });
-		await waitFor(() => expect(screen.queryByRole("textbox", { name: "Reason" })).toBeNull());
-		const invalidated = (keys: typeof ours) =>
-			keys.map((key) => queryClient.getQueryState(key)?.isInvalidated);
-		expect(invalidated(ours)).toStrictEqual([true, true]);
-		expect(invalidated(theirs)).toStrictEqual([false, false]);
-	});
+			await screen.findByText(success);
+			expect(sent).toStrictEqual({ valid, reason: "The 404 comes from the router." });
+			await waitFor(() => expect(screen.queryByRole("textbox", { name: "Reason" })).toBeNull());
+			const invalidated = (keys: typeof ours) =>
+				keys.map((key) => queryClient.getQueryState(key)?.isInvalidated);
+			expect(invalidated(ours)).toStrictEqual([true, true, true, true]);
+			expect(invalidated(theirs)).toStrictEqual([false, false, false, false]);
+		},
+	);
 
 	it("keeps the reason and the cached reads when the server refuses the change", async () => {
 		stub(

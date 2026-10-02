@@ -4,7 +4,7 @@ import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
-export type Scope = "agents" | "docs" | "full" | "server" | "webapp";
+export type Scope = "agents" | "docs" | "extension" | "full" | "server" | "webapp";
 export type Command = readonly [string, ...string[]];
 
 export function parseBase(args: string[]): string {
@@ -32,11 +32,27 @@ const fullGateInputs = [
 	/^\.ox(?:fmt|lint)rc\.json$/u,
 	/^server\/openapi\.yaml$/u,
 	/^webapp\/src\/api\//u,
+	/^extension\/src\/api\//u,
 	/^webapp\/src\/routeTree\.gen\.ts$/u,
 	/^webapp\/tools\/oxlint\//u,
 	/^docs\/contributor\/erd\/schema\.mmd$/u,
 	/(?:^|\/)AGENTS\.md$/u,
 	/(?:^|\/)CLAUDE\.md$/u,
+];
+
+// The palette both trees import, and the docs site's copies are pinned to (`gate:docs-tokens`).
+const SHARED_THEME_TOKENS = "webapp/src/styles/theme-tokens.css";
+
+// Webapp files the extension imports by path (`@/…`), the files those import, and the stylesheet
+// the formatter sorts the extension's Tailwind classes by. The webapp lint plugin, which both trees
+// load, is a full-gate input above. Keep in step with the `extension` filter in `cicd.yml`.
+const webappInputsOfTheExtension = [
+	/^webapp\/brand\/hephaestus-mark\.svg$/u,
+	/^webapp\/src\/components\/icons\/brand\.tsx$/u,
+	/^webapp\/src\/components\/practice-vocabulary\//u,
+	/^webapp\/src\/components\/common\/(?:status-def\.ts|FacetMultiSelect\.tsx)$/u,
+	/^webapp\/src\/lib\/(?:artifact-kind-slugs|artifact-kinds|sign-in-providers)\.ts$/u,
+	/^webapp\/src\/styles\.css$/u,
 ];
 
 export function scopesFor(paths: string[]): Scope[] {
@@ -48,8 +64,17 @@ export function scopesFor(paths: string[]): Scope[] {
 		if (path.startsWith("docs/images/readme/")) {
 			scopes.add("docs");
 			scopes.add("webapp");
+		} else if (path === SHARED_THEME_TOKENS) {
+			scopes.add("docs");
+			scopes.add("extension");
+			scopes.add("webapp");
+		} else if (webappInputsOfTheExtension.some((pattern) => pattern.test(path))) {
+			scopes.add("extension");
+			scopes.add("webapp");
 		} else if (path.startsWith("webapp/")) {
 			scopes.add("webapp");
+		} else if (path.startsWith("extension/")) {
+			scopes.add("extension");
 		} else if (path.startsWith("server/")) {
 			if (/\/resources\/(?:agent|practices\/precompute)\//u.test(path)) {
 				scopes.add("agents");
@@ -102,6 +127,7 @@ export function commandsFor(scopes: Scope[]): Command[] {
 	const commands: Record<Exclude<Scope, "full">, Command> = {
 		agents: ["vp", "run", "affected:agents"],
 		docs: ["vp", "run", "affected:docs"],
+		extension: ["vp", "run", "affected:extension"],
 		server: ["vp", "run", "affected:server"],
 		webapp: ["vp", "run", "affected:webapp"],
 	};

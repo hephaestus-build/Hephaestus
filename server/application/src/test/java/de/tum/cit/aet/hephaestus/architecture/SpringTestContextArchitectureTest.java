@@ -26,6 +26,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBeans;
 class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
+            assignment("agent.handler.PracticeDetectionPipelineIntegrationTest", "workspace-folder"),
             assignment(
                     "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment("testconfig.BaseIntegrationTest", "base"),
@@ -41,6 +42,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"),
             assignment("StartupBudgetIntegrationTest", "startup"),
             assignment("core.auth.dev.DevLoginIntegrationTest", "dev-login"),
+            assignment("core.auth.consent.ConsentSignInBootstrapIntegrationTest", "consent-sign-in"),
+            assignment("core.auth.clientsession.ClientSessionIntegrationTest", "dev-login"),
+            assignment("core.auth.clientsession.ClientSessionConcurrencyIntegrationTest", "dev-login"),
             assignment("integration.scm.github.BaseGitHubLiveIntegrationTest", "github-live"),
             assignment("integration.outline.OutlineFrameworkRegistrationIntegrationTest", "outline-enabled"),
             assignment(
@@ -59,6 +63,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"));
 
     private static final Map<String, String> FULL_CONTEXT_JUSTIFICATIONS = Map.ofEntries(
+            Map.entry(
+                    "workspace-folder",
+                    "real Slack and Outline visibility, repeatable-read capture and cross-source admission; projection spy commits a concurrent row to prove isolation"),
             Map.entry(
                     "mentor-worker-split",
                     "server-only role with authenticated worker transport and controlled runner, routing and admission boundaries"),
@@ -81,6 +88,9 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("real-auth", "real OAuth and authentication wiring without test security"),
             Map.entry("startup", "production main-method startup instrumentation"),
             Map.entry("dev-login", "dev-login feature-property behavior"),
+            Map.entry(
+                    "consent-sign-in",
+                    "real cookie and installed-client sign-in with the production consent interceptor enabled"),
             Map.entry("github-live", "explicitly selected live GitHub profile and credentials"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
             Map.entry("slack-ingest", "enabled Slack ingest wiring with its review-submission spy"),
@@ -99,17 +109,20 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "integration.outline.client.OutlineApiFixtureDeserializationTest",
             "integration.outline.client.OutlineDeserializationToleranceTest");
 
-    private static final Set<String> DATA_JPA_TESTS =
-            names("integration.schema.ProductionSchemaContractIntegrationTest");
+    private static final Set<String> DATA_JPA_TESTS = names(
+            "core.auth.clientsession.ClientSessionMigratedSchemaTest",
+            "integration.schema.ProductionSchemaContractIntegrationTest");
 
     private static final Set<String> DYNAMIC_PROPERTY_TESTS = names(
             "StartupBudgetIntegrationTest",
+            "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> PROPERTY_SOURCE_TESTS = names(
+            "agent.handler.PracticeDetectionPipelineIntegrationTest",
             "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
             "notification.AccountDeletionEmailIntegrationTest",
             "notification.AccountSecurityEmailIntegrationTest",
@@ -117,7 +130,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "productfeedback.SurveyEmailInvitationIntegrationTest",
             "notification.email.EmailAdminControllerIntegrationTest",
             "agent.job.IssueUpdateCoalescerIntegrationTest",
+            "core.auth.clientsession.ClientSessionConcurrencyIntegrationTest",
+            "core.auth.clientsession.ClientSessionIntegrationTest",
             "core.auth.dev.DevLoginIntegrationTest",
+            "core.auth.consent.ConsentSignInBootstrapIntegrationTest",
             "integration.outline.OutlineFrameworkRegistrationIntegrationTest",
             "integration.outline.collection.OutlineCollectionAdminControllerIntegrationTest",
             "integration.outline.connect.OutlineConnectionAdminControllerIntegrationTest",
@@ -182,7 +198,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
         Set<String> mergedKeys =
                 fullContextTests.stream().map(this::mergedContextKey).collect(Collectors.toCollection(TreeSet::new));
-        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(17);
+        assertThat(mergedKeys).hasSizeLessThanOrEqualTo(19);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.keySet()).isEqualTo(mergedKeys);
         assertThat(FULL_CONTEXT_JUSTIFICATIONS.values())
                 .allSatisfy(reason -> assertThat(reason).isNotBlank());

@@ -156,6 +156,16 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
             + "WHERE p.id = :id AND i.repository = p.repository ORDER BY i.number")
     List<Issue> findClosingIssuesById(@Param("id") Long id);
 
+    @Query("SELECT DISTINCT i.id FROM PullRequest p JOIN p.closingIssues i "
+            + "WHERE p.id = :id AND i.repository = p.repository ORDER BY i.id")
+    List<Long> findClosingIssueIdsById(@Param("id") Long id);
+
+    @Query("SELECT DISTINCT p.id FROM PullRequest p JOIN p.closingIssues i "
+            + "WHERE i.id = :issueId AND i.repository = p.repository "
+            + "AND p.state = de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue$State.MERGED "
+            + "ORDER BY p.id")
+    List<Long> findMergedClosingPullRequestIdsByIssueId(@Param("issueId") Long issueId);
+
     /** How many rows {@link #findClosingIssuesById} would return, without loading them. */
     @Query("SELECT COUNT(i) FROM PullRequest p JOIN p.closingIssues i WHERE p.id = :id AND i.repository = p.repository")
     long countClosingIssuesById(@Param("id") Long id);

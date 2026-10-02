@@ -1,0 +1,66 @@
+/* The inspect button beside a list row's title: the Hephaestus mark as a small icon button, drawn
+   with the provider's live tokens and published fallbacks, identical on every row. */
+
+:host {
+	all: initial !important;
+	display: inline-flex !important;
+	vertical-align: middle !important;
+	margin-inline-start: 6px !important;
+	/* Above a row's full-size overlay link (GitLab's work items), as the row's own controls are. */
+	position: relative !important;
+	z-index: 2 !important;
+	/* GitLab's title sets its font size to 0 around the link. */
+	font-size: 14px !important;
+}
+
+button {
+	box-sizing: border-box;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: 24px;
+	block-size: 24px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--borderRadius-medium, 6px);
+	background: transparent;
+	cursor: pointer;
+}
+
+:host([data-provider="gitlab"]) button {
+	border-radius: var(--gl-border-radius-default, 0.25rem);
+}
+
+button:hover {
+	background: var(
+		--control-transparent-bgColor-hover,
+		var(--gl-action-neutral-background-color-hover, #818b981a)
+	);
+}
+
+button[aria-expanded="true"] {
+	border-color: var(--borderColor-default, var(--gl-border-color-default, #d1d9e0));
+	background: var(--bgColor-muted, var(--gl-background-color-subtle, #f6f8fa));
+}
+
+button:focus-visible {
+	outline: 2px solid var(--focus-outlineColor, var(--gl-focus-ring-outer-color, #0969da));
+	outline-offset: 1px;
+}
+
+.mark {
+	display: inline-flex;
+	inline-size: 16px;
+	block-size: 16px;
+}
+
+.mark svg {
+	inline-size: 100%;
+	block-size: 100%;
+}
+
+@media (forced-colors: active) {
+	button[aria-expanded="true"] {
+		border-color: Highlight;
+	}
+}

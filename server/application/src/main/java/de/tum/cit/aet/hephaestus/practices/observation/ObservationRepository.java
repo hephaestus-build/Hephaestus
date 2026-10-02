@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.Presence;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
+import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
@@ -54,6 +55,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
           AND superseded_at IS NULL
         """, nativeQuery = true)
     int supersedeIssueObservations(@Param("issueId") long issueId, @Param("at") Instant at);
+
+    @Modifying(flushAutomatically = true)
+    @Transactional
+    @Query(
+            value =
+                    "UPDATE observation SET superseded_at = :at WHERE id = :id AND workspace_id = :workspaceId AND superseded_at IS NULL",
+            nativeQuery = true)
+    int supersedeById(@Param("workspaceId") long workspaceId, @Param("id") UUID id, @Param("at") Instant at);
     /**
      * Excludes observations about artifacts in repositories hidden from contributions in this workspace.
      * Requires the observation alias {@code f}. Native SQL crosses integration and workspace tables
@@ -347,7 +356,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     /**
      * Hard-delete the {@code chat.conversation_thread} observations for a workspace whose {@code artifact_id} (the
      * {@code slack_thread} id) is one of {@code artifactIds} — the derived-content erasure the Slack module invokes
-     * through {@link de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure} when a channel's consent is
+     * through {@link ConversationFeedbackErasure} when a channel's consent is
      * withdrawn. the {@code artifactKind} + {@code artifactId} predicates keep PR/ISSUE observations
      * and other tenants' rows untouched. DB {@code ON DELETE CASCADE} clears any bound {@code feedback_observation} /
      * {@code reaction} children. Callers guard an empty {@code artifactIds}.
@@ -475,6 +484,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
+        AND (:artifactKind IS NULL OR f.artifactKind = :artifactKind)
+        AND (:artifactId IS NULL OR f.artifactId = :artifactId)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
@@ -489,6 +500,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
+        AND (:artifactKind IS NULL OR f.artifactKind = :artifactKind)
+        AND (:artifactId IS NULL OR f.artifactId = :artifactId)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
@@ -502,6 +515,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("presence") @Nullable Presence presence,
             @Param("hasArtifactKinds") boolean hasArtifactKinds,
             @Param("artifactKinds") Collection<ArtifactKind> artifactKinds,
+            @Param("artifactKind") @Nullable ArtifactKind artifactKind,
+            @Param("artifactId") @Nullable Long artifactId,
             @Param("hasSeverities") boolean hasSeverities,
             @Param("severities") Collection<Severity> severities,
             @Param("displayableOnly") boolean displayableOnly,
@@ -530,6 +545,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
+        AND (:artifactKind IS NULL OR f.artifactKind = :artifactKind)
+        AND (:artifactId IS NULL OR f.artifactId = :artifactId)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
@@ -551,6 +568,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         AND (:assessmentStatus IS NULL OR f.assessmentStatus = :assessmentStatus)
         AND (:presence IS NULL OR f.presence = :presence)
         AND (:hasArtifactKinds = FALSE OR f.artifactKind IN :artifactKinds)
+        AND (:artifactKind IS NULL OR f.artifactKind = :artifactKind)
+        AND (:artifactId IS NULL OR f.artifactId = :artifactId)
         AND (:hasSeverities = FALSE OR f.severity IS NULL OR f.severity IN :severities)
         AND (:displayableOnly = FALSE OR f.assessmentStatus <> de.tum.cit.aet.hephaestus.practices.model.AssessmentStatus.NOT_APPLICABLE)
         AND NOT EXISTS (SELECT 1 FROM ObservationInvalidation oi WHERE oi.observationId = f.id AND oi.restoredAt IS NULL)
@@ -564,6 +583,8 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("presence") @Nullable Presence presence,
             @Param("hasArtifactKinds") boolean hasArtifactKinds,
             @Param("artifactKinds") Collection<ArtifactKind> artifactKinds,
+            @Param("artifactKind") @Nullable ArtifactKind artifactKind,
+            @Param("artifactId") @Nullable Long artifactId,
             @Param("hasSeverities") boolean hasSeverities,
             @Param("severities") Collection<Severity> severities,
             @Param("displayableOnly") boolean displayableOnly,
@@ -779,6 +800,17 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
             @Param("workspaceId") Long workspaceId,
             @Param("since") Instant since,
             Pageable pageable);
+
+    /** Full person history for a job folder, with the existing repository and claim visibility guards. */
+    @Query(value = """
+            SELECT f.* FROM observation f
+            WHERE f.about_user_id = :aboutUserId AND f.workspace_id = :workspaceId
+            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
+              AND f.superseded_at IS NULL AND f.assessment_status = 'ASSESSED'
+            ORDER BY f.observed_at DESC, f.id DESC
+            """, nativeQuery = true)
+    List<Observation> findForPersonHistory(
+            @Param("aboutUserId") Long aboutUserId, @Param("workspaceId") Long workspaceId);
 
     /**
      * Every observation about a developer inside a span, newest first, every run's rows and every presence:

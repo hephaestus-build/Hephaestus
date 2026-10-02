@@ -23,6 +23,9 @@
 	"ignorePatterns": [
 		"webapp/src/api/**",
 		"webapp/src/routeTree.gen.ts",
-		"webapp/public/mockServiceWorker.js"
+		"webapp/public/mockServiceWorker.js",
+		"extension/src/api/**",
+		"extension/.output/**",
+		"extension/.wxt/**"
 	]
 }

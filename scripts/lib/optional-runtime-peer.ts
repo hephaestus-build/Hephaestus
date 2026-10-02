@@ -66,9 +66,43 @@ function transitivePeerRanges(snapshots: YAMLMap, optionalPeers: Set<string>): R
 	return ranges;
 }
 
-// An unused optional type peer is not a runtime installation (ADR 0037). Keep the raw
-// lockfile scan, including comments, and mask only explicitly optional peer-name scalars.
-export function maskOptionalRuntimePeerMetadata(
+/**
+ * The ranges of every `engines` key in a package map naming a retired runtime. A dependency's
+ * `engines` lists the runtimes its author supports; it installs nothing and pnpm does not enforce
+ * another runtime's entry, so it is metadata about the package rather than a use of the runtime.
+ * Only the key is masked: the entry's other engines, and every other field, stay scanned.
+ */
+function dependencyEngineRanges(
+	packages: YAMLMap,
+	isRetiredReference: (name: string) => boolean,
+): Range[] {
+	const ranges: Range[] = [];
+	for (const entry of packages.items) {
+		if (!isMap(entry.value)) {
+			continue;
+		}
+		const engines = entry.value.get("engines");
+		if (!isMap(engines)) {
+			continue;
+		}
+		for (const { key } of engines.items) {
+			if (
+				isScalar(key) &&
+				typeof key.value === "string" &&
+				isRetiredReference(key.value) &&
+				key.range
+			) {
+				ranges.push([key.range[0], key.range[1]]);
+			}
+		}
+	}
+	return ranges;
+}
+
+// An unused optional type peer, or another runtime a dependency says it supports, is not a runtime
+// installation (ADR 0037). Keep the raw lockfile scan, including comments and the importers our own
+// manifests produce, and mask only those scalars in the `packages` and `snapshots` maps.
+export function maskDependencyRuntimeMetadata(
 	text: string,
 	isRetiredReference: (name: string) => boolean,
 ): string {
@@ -82,6 +116,7 @@ export function maskOptionalRuntimePeerMetadata(
 		if (!isMap(packages)) {
 			continue;
 		}
+		ranges.push(...dependencyEngineRanges(packages, isRetiredReference));
 		const optional = optionalPeerRanges(packages, isRetiredReference);
 		if (optional.peers.size === 0) {
 			continue;

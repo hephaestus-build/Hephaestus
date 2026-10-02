@@ -110,6 +110,23 @@ class PracticeSignalOptionsTest extends BaseUnitTest {
     }
 
     @Test
+    void keepsTheLinkedIssueRepairOccasionInternalWhileDeclaringItsProviderProvenance() {
+        assertThat(options.isInternalRepair(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED))
+                .isTrue();
+        assertThat(options.isInternalRepair(ScmSignals.PULL_REQUEST_MERGED)).isFalse();
+        assertThat(options.isInternalRepair(ScmSignals.PULL_REQUEST_MANUAL_REVIEW))
+                .isFalse();
+        assertThat(options.isInternalRepair(ChatSignals.CONVERSATION_THREAD_SETTLED))
+                .isFalse();
+        assertThat(options.isInternalRepair(SignalName.of("scm.pull_request.undeclared")))
+                .isFalse();
+        assertThat(options.producedByIngestion(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED))
+                .isTrue();
+        assertThat(options.eligibleFor(ArtifactKinds.PULL_REQUEST))
+                .doesNotContain(ScmSignals.PULL_REQUEST_LINKED_ISSUE_UPDATED);
+    }
+
+    @Test
     @DisplayName("only reviewable kinds are authorable")
     void offersOnlyReviewableKinds() {
         assertThat(options.authorableKinds())

@@ -393,7 +393,10 @@ public class ActivityEventListener {
                     reviewData.repositoryId());
             return;
         }
-        Instant occurredAt = reviewData.submittedAt() != null ? reviewData.submittedAt() : Instant.now();
+        Instant occurredAt = reviewData.submittedAt();
+        if (occurredAt == null) {
+            return;
+        }
         safeRecord(
                 "review",
                 reviewData.id(),
@@ -469,7 +472,10 @@ public class ActivityEventListener {
                     reviewData.repositoryId());
             return;
         }
-        Instant occurredAt = reviewData.submittedAt() != null ? reviewData.submittedAt() : Instant.now();
+        Instant occurredAt = reviewData.submittedAt();
+        if (occurredAt == null) {
+            return;
+        }
         safeRecord(
                 "review edited",
                 reviewData.id(),

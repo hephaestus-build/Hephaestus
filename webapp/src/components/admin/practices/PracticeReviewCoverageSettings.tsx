@@ -193,8 +193,9 @@ export function PracticeReviewCoverageSettings({
 					What gets reviewed
 				</h2>
 				<p className="text-sm text-muted-foreground">
-					A review starts only when both the repository and linked person it evaluates are covered.
-					That person is usually the author; reviewer practices use the reviewer. About{" "}
+					Repository work is reviewed when both its repository and linked person are covered. Slack
+					conversations and Outline documents follow the people selection and their own collection
+					permissions. That person is usually the author; reviewer practices use the reviewer. About{" "}
 					{settings.coverageSummary.recentReviewVolume} review jobs entered the queue in this
 					workspace during the last {settings.coverageSummary.estimateWindowDays} days.
 				</p>
@@ -505,15 +506,16 @@ function CoverageImpact({ preview }: { preview: PracticeReviewCoveragePreview })
 	);
 }
 
-function EmptySelection({ noun, allLabel }: { noun: string; allLabel: string }) {
+function EmptySelection({ noun, allLabel }: { noun: "repositories" | "people"; allLabel: string }) {
 	return (
 		<Alert variant="warning" role="status">
 			<AlertCircle />
 			<AlertTitle>No {noun} are selected</AlertTitle>
 			<AlertDescription>
-				An empty selected list covers nobody. Choose{" "}
-				{noun === "people" ? "a person" : "a repository"}
-				or cover {allLabel}.
+				{noun === "people"
+					? "An empty people selection covers nobody."
+					: "An empty repository selection covers no repository work."}{" "}
+				Choose {noun === "people" ? "a person" : "a repository"} or cover {allLabel}.
 			</AlertDescription>
 		</Alert>
 	);

@@ -252,6 +252,18 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
     @Nested
     class ReviewSubmittedTests {
+        @Test
+        void shouldNotRecordAnUndatedApprovalOrItsEditAsActivityToday() {
+            PullRequestReview review = createReview(18L, createPullRequest(19L));
+            review.setState(PullRequestReview.State.APPROVED);
+            review.setSubmittedAt(null);
+
+            listener.onReviewSubmitted(new ScmDomainEvent.ReviewSubmitted(createReviewData(review), createContext()));
+            listener.onReviewEdited(new ScmDomainEvent.ReviewEdited(
+                    createReviewData(review), java.util.Set.of("body"), createContext()));
+
+            verifyNoInteractions(activityEventService);
+        }
 
         @Test
         @DisplayName("maps APPROVED review state to REVIEW_APPROVED event type using event data")

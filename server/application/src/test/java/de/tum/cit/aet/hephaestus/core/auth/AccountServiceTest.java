@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -20,7 +19,6 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.event.AccountDeletionScheduledEvent;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -48,7 +46,7 @@ class AccountServiceTest extends BaseUnitTest {
 
     private final AccountRepository accountRepository = mock(AccountRepository.class);
     private final IdentityLinkRepository identityLinkRepository = mock(IdentityLinkRepository.class);
-    private final IssuedJwtRepository issuedJwtRepository = mock(IssuedJwtRepository.class);
+    private final SessionRevocation sessionRevocation = mock(SessionRevocation.class);
     private final AuthEventWriter auditWriter = mock(AuthEventWriter.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC);
@@ -60,7 +58,7 @@ class AccountServiceTest extends BaseUnitTest {
         service = new AccountService(
                 accountRepository,
                 identityLinkRepository,
-                issuedJwtRepository,
+                sessionRevocation,
                 new AuthEventLogger(auditWriter),
                 AuthPropertiesFixture.defaults(),
                 eventPublisher,
@@ -164,7 +162,7 @@ class AccountServiceTest extends BaseUnitTest {
         verify(accountRepository, never()).findByAppRoleAndStatusForUpdate(any(), any());
         // Promotion does NOT revoke sessions — the new role is picked up on the next silent refresh,
         // so the user is not forced to re-login.
-        verify(issuedJwtRepository, never()).revokeAllForAccount(anyLong(), any(), any());
+        verify(sessionRevocation, never()).revokeAccount(anyLong(), any(), any(), any());
     }
 
     @Test
@@ -180,7 +178,7 @@ class AccountServiceTest extends BaseUnitTest {
         verify(auditWriter).write(any());
         // Demotion revokes the stripped admin's live sessions so app_admin authority can't outlive the
         // role change for the token's TTL.
-        verify(issuedJwtRepository).revokeAllForAccount(eq(2L), any(), eq(IssuedJwt.RevokedReason.ADMIN_REVOKE));
+        verify(sessionRevocation).revokeAccount(2L, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null);
     }
 
     @Test
@@ -241,7 +239,7 @@ class AccountServiceTest extends BaseUnitTest {
         assertThat(account.getStatus()).isEqualTo(Account.Status.DELETING);
         assertThat(account.getDeletedAt()).isEqualTo(clock.instant());
         verify(accountRepository).save(account);
-        verify(issuedJwtRepository).revokeAllForAccount(eq(2L), any(), eq(IssuedJwt.RevokedReason.ACCOUNT_DELETED));
+        verify(sessionRevocation).revokeAccount(2L, IssuedJwt.RevokedReason.ACCOUNT_DELETED, null, null);
         ArgumentCaptor<AuthEventData> event = ArgumentCaptor.forClass(AuthEventData.class);
         verify(auditWriter).write(event.capture());
         assertThat(event.getValue().type()).isEqualTo(AuthEvent.EventType.ACCOUNT_DELETED);
@@ -265,14 +263,14 @@ class AccountServiceTest extends BaseUnitTest {
 
         assertThat(account.getDeletedAt()).isEqualTo(cooldownStart);
         verify(accountRepository, never()).save(any());
-        verify(issuedJwtRepository, never()).revokeAllForAccount(anyLong(), any(), any());
+        verify(sessionRevocation, never()).revokeAccount(anyLong(), any(), any(), any());
         verifyNoInteractions(auditWriter, eventPublisher);
     }
 
     @Test
     void adminRevokeAllSessionsRevokesAndAuditsJwtRevokedWithAttribution() {
         accountWithRole(2L, Account.AppRole.USER); // requireById target exists
-        when(issuedJwtRepository.revokeAllForAccount(eq(2L), any(), eq(IssuedJwt.RevokedReason.ADMIN_REVOKE)))
+        when(sessionRevocation.revokeAccount(2L, IssuedJwt.RevokedReason.ADMIN_REVOKE, null, null))
                 .thenReturn(3);
 
         int revoked = service.adminRevokeAllSessions(2L, 1L);

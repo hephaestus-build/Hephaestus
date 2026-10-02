@@ -9,7 +9,7 @@ import { isSet } from "./lib/env.ts";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "..");
 const DOCS_CSS = "docs/src/css/custom.css";
-const APP_CSS = "webapp/src/styles.css";
+const APP_CSS = "webapp/src/styles/theme-tokens.css";
 
 type Theme = "light" | "dark";
 

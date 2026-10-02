@@ -40,6 +40,11 @@ final class ScmEventSources {
         return new Signal(name, displayName, producedBy, ScmSignals.revisionScheme(name), true);
     }
 
+    /** A real signal whose provider provenance is declared, but which only Hephaestus may use as a repair occasion. */
+    static Signal declareInternal(SignalName name, String displayName, Set<EventTypeKey> producedBy) {
+        return new Signal(name, displayName, producedBy, ScmSignals.revisionScheme(name), false, false, false);
+    }
+
     /**
      * As {@link #declare}, for the signal a person raises by asking for a review now. No {@code producedBy}
      * — a request is raised inside Hephaestus, and the empty provenance stops a vendor from claiming it can

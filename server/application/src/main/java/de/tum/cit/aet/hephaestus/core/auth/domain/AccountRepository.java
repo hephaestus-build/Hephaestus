@@ -70,6 +70,43 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<Account> findByIdForUpdate(@Param("id") Long id);
 
     /**
+     * The account's status, with the row share-locked for the rest of the transaction. Every token
+     * issuance takes this lock, and account-wide revocation takes the conflicting
+     * {@link #lockStatusForUpdate}, so a revocation that commits is never outlived by a token minted
+     * concurrently. Scalar and native, so it never hands back a stale managed entity.
+     */
+    @Query(value = "SELECT status FROM account WHERE id = :id FOR SHARE", nativeQuery = true)
+    Optional<String> lockStatusForShare(@Param("id") Long id);
+
+    /** The account's status, with the row write-locked; the first step of account-wide revocation. */
+    @Query(value = "SELECT status FROM account WHERE id = :id FOR UPDATE", nativeQuery = true)
+    Optional<String> lockStatusForUpdate(@Param("id") Long id);
+
+    /**
+     * What a token is minted from, read from the row as it stands once share-locked: status, instance
+     * role and display name. Native and projected, so a managed {@link Account} loaded earlier in the
+     * transaction can never supply a stale role or status.
+     */
+    interface IssuanceAuthority {
+        String getStatus();
+
+        String getAppRole();
+
+        String getDisplayName();
+    }
+
+    @Query(
+            value = "SELECT status AS \"status\", app_role AS \"appRole\", display_name AS \"displayName\""
+                    + " FROM account WHERE id = :id FOR SHARE",
+            nativeQuery = true)
+    Optional<IssuanceAuthority> lockAuthorityForShare(@Param("id") Long id);
+
+    /** Share-locks the account for a token issuance; whether it may be issued one. */
+    default boolean lockForIssuance(Long id) {
+        return lockStatusForShare(id).map(Account.Status.ACTIVE.name()::equals).orElse(false);
+    }
+
+    /**
      * Usable (ACTIVE) accounts in the given role, write-locked for the surrounding transaction. Backs
      * the last-admin guard. Selects the entity (not a scalar) so Hibernate emits {@code FOR UPDATE} —
      * as {@code findActiveByAccountIdForUpdate} does — letting concurrent demotions serialize rather

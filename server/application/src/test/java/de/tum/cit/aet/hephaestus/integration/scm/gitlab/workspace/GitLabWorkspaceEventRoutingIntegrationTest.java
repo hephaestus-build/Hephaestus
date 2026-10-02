@@ -1217,7 +1217,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                             GitLabHeadPipeline.NO_PIPELINE,
                             null,
                             null,
-                            GitLabMergeRequestReadinessReader.Merge.UNKNOWN);
+                            GitLabMergeRequestReadinessReader.Merge.UNKNOWN,
+                            null);
                 });
         when(closingIssueClient.closesIssues(eq(connected.getId()), anyLong(), eq(MERGE_REQUEST_IID)))
                 .thenReturn(List.of(CLOSED_ISSUE_IID));
@@ -1318,7 +1319,8 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                                             null,
                                             null),
                                     MERGED_AT,
-                                    HOOK_MERGE_COMMIT));
+                                    HOOK_MERGE_COMMIT),
+                            null);
                 });
 
         deliver(connected, fixture("gitlab/merge_request.merge.json"), "merge-request-merged");

@@ -171,7 +171,7 @@ class PullRequestCommentPoster {
         }
     }
 
-    String post(SummaryWrite write) {
+    SummaryHandle post(SummaryWrite write) {
         try {
             SummaryHandle handle = write.channel().postSummary(write.target(), write.content());
             log.info(
@@ -180,7 +180,7 @@ class PullRequestCommentPoster {
                     write.channel().kind(),
                     write.target().subjectExternalId(),
                     handle.externalId());
-            return handle.externalId();
+            return handle;
         } catch (OutboundEgressSuppressedException e) {
             throw new JobDeliverySuppressedException(e.toString(), e);
         } catch (FeedbackNotSentException e) {
@@ -269,7 +269,8 @@ class PullRequestCommentPoster {
         return switch (lookup.kind()) {
             case FOUND ->
                 ExistingDeliveryLookup.found(
-                        Objects.requireNonNull(lookup.handle()).externalId());
+                        Objects.requireNonNull(lookup.handle()).externalId(),
+                        lookup.handle().url());
             case ABSENT -> ExistingDeliveryLookup.absent();
             case UNKNOWN -> ExistingDeliveryLookup.unknown();
         };

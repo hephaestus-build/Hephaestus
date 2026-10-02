@@ -9,7 +9,7 @@ Most scripts require `vp install` at the repository root; Jean setup performs it
 
 ### Repository orchestration
 
-Infrastructure tests use `node:test`; Vitest is reserved for the Vite-managed webapp and docs trees.
+Infrastructure tests use `node:test`; Vitest is reserved for the Vite-managed webapp, docs and extension trees.
 Anything here that runs `git` takes its environment from `lib/git-environment.ts`, because the
 pre-push hook hands whatever it starts the repository being pushed.
 

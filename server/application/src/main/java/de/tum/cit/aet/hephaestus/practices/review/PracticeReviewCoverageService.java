@@ -212,18 +212,11 @@ public class PracticeReviewCoverageService {
     public CoverageAssessment assessRepositoryless(Workspace workspace, @Nullable ReviewSubject subject) {
         WorkspaceReviewScope scope = readScope(workspace);
         ReviewSubjectStatus subjectStatus = subjectStatus(workspace, subject);
-        boolean repositoryMatched = scope.repositoryMode() == ReviewRepositoryMode.ALL_MONITORED;
         boolean personMatched = subjectStatus == ReviewSubjectStatus.RESOLVED_LINKED_HUMAN
                 && subject != null
                 && scope.admitsPerson(subject.actorId());
         return new CoverageAssessment(
-                scope.repositoryMode(),
-                scope.personMode(),
-                subjectStatus,
-                repositoryMatched,
-                repositoryMatched,
-                personMatched,
-                repositoryMatched && personMatched);
+                scope.repositoryMode(), scope.personMode(), subjectStatus, null, null, personMatched, personMatched);
     }
 
     private CoverageAssessment readAssessment(
@@ -274,8 +267,8 @@ public class PracticeReviewCoverageService {
             ReviewRepositoryMode repositoryMode,
             ReviewPersonMode personMode,
             ReviewSubjectStatus subjectStatus,
-            boolean repositoryMatched,
-            boolean branchMatched,
+            @Nullable Boolean repositoryMatched,
+            @Nullable Boolean branchMatched,
             boolean personMatched,
             boolean admitted) {}
 

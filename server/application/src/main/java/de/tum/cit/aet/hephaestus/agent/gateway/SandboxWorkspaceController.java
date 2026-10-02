@@ -35,7 +35,7 @@ public class SandboxWorkspaceController {
     public Capabilities capabilities(@PathVariable UUID id, @RequestHeader("Authorization") String authorization) {
         var session = sessions.require(id, authorization);
         return new Capabilities(
-                3, session.inputBytes(), SandboxOutputArchive.MAX_OUTPUT_BYTES, session.frameByteBudget());
+                3, sessions.workspaceByteBudget(), SandboxOutputArchive.MAX_OUTPUT_BYTES, session.frameByteBudget());
     }
 
     public record Capabilities(
@@ -53,7 +53,16 @@ public class SandboxWorkspaceController {
             throws IOException {
         var session = sessions.require(id, authorization);
         if (request.getQueryString() != null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            var parameters = request.getParameterMap();
+            if (parameters.size() != 1) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            var selection = parameters.entrySet().iterator().next();
+            if (selection.getValue().length != 1) throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+            try (var download = session.download(selection.getKey(), selection.getValue()[0])) {
+                response.setContentType("application/x-tar");
+                response.setContentLengthLong(download.bytes());
+                download.input().transferTo(response.getOutputStream());
+            }
+            return;
         }
         try (var input = session.download()) {
             response.setContentType("application/x-tar");

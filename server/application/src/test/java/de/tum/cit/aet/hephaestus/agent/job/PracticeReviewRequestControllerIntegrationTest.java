@@ -1,5 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
+import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignalRepository;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
@@ -9,7 +16,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
 import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
 import de.tum.cit.aet.hephaestus.testconfig.WithUser;
@@ -60,6 +71,18 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
+
+    @Autowired
+    private PracticeRepository practiceRepository;
+
+    @Autowired
+    private WorkspaceLlmConnectionRepository llmConnectionRepository;
+
+    @Autowired
+    private WorkspaceLlmModelRepository llmModelRepository;
+
+    @Autowired
+    private WorkspaceAgentBindingRepository agentBindingRepository;
 
     private Workspace workspace;
     private User author;
@@ -300,7 +323,122 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
         }
     }
 
+    /**
+     * The workspace that asks is the one whose settings decide. Two workspaces monitor the same repository
+     * here, and the repository's name alone resolves to the first of them, so each case sets the two
+     * workspaces up oppositely: a request must follow the asking workspace's "Start requested reviews"
+     * whichever way the other one is set.
+     */
+    @Nested
+    @DisplayName("Which workspace decides")
+    class WhichWorkspaceDecides {
+
+        private Workspace asking;
+
+        @BeforeEach
+        void monitorTheRepositoryFromASecondWorkspace() {
+            User owner = persistUser("second-owner");
+            asking = createWorkspace("second-ws", "Second WS", "second-org", AccountType.ORG, owner);
+            ensureWorkspaceMembership(asking, author, WorkspaceRole.MEMBER);
+            RepositoryToMonitor monitor = new RepositoryToMonitor();
+            monitor.setWorkspace(asking);
+            monitor.setNameWithOwner("request-org/request-repo");
+            repositoryToMonitorRepository.save(monitor);
+            org.assertj.core.api.Assertions.assertThat(workspace.getId()).isLessThan(asking.getId());
+        }
+
+        @Test
+        @WithUser
+        void startsAReviewTheAskingWorkspaceTakesWhenTheFirstMonitoringWorkspaceDoesNot() {
+            makeReviewable(workspace, false);
+            makeReviewable(asking, true);
+
+            postTo(asking)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.status")
+                    .isEqualTo("SUBMITTED")
+                    .jsonPath("$.jobId")
+                    .isNotEmpty();
+        }
+
+        @Test
+        @WithUser
+        void refusesAReviewTheAskingWorkspaceDoesNotTakeWhenTheFirstMonitoringWorkspaceDoes() {
+            makeReviewable(workspace, true);
+            makeReviewable(asking, false);
+
+            postTo(asking)
+                    .expectStatus()
+                    .isOk()
+                    .expectBody()
+                    .jsonPath("$.status")
+                    .isEqualTo("REFUSED")
+                    .jsonPath("$.reason")
+                    .isEqualTo("GATE_SKIPPED")
+                    .jsonPath("$.jobId")
+                    .doesNotExist();
+        }
+
+        private WebTestClient.ResponseSpec postTo(Workspace target) {
+            return webTestClient
+                    .post()
+                    .uri(REQUESTS, target.getWorkspaceSlug())
+                    .headers(TestAuthUtils.withCurrentUser())
+                    .bodyValue(body(ArtifactKinds.PULL_REQUEST.value(), pullRequestId))
+                    .exchange();
+        }
+    }
+
     // Fixtures
+
+    /**
+     * Everything a workspace needs to start a requested review — practices on, a practice bound to the
+     * kind, a practice-review agent on a model — with only "Start requested reviews" left to the caller.
+     */
+    private void makeReviewable(Workspace target, boolean takesRequests) {
+        Workspace stored = workspaceRepository.findById(target.getId()).orElseThrow();
+        stored.getFeatures().setPracticesEnabled(true);
+        stored.getFeatures().setPracticeReviewManualTriggerEnabled(takesRequests);
+        workspaceRepository.save(stored);
+
+        Practice practice = new Practice();
+        practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
+        practice.setWorkspace(stored);
+        practice.setSlug("describes-the-change");
+        practice.setName("Describes the change");
+        practice.setCriteria("The description says what changed and why.");
+        practice.setBindings(PracticeTestEvidence.bindings(ScmSignals.PULL_REQUEST_OPENED));
+        practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
+        practiceRepository.save(practice);
+
+        WorkspaceLlmConnection connection = new WorkspaceLlmConnection();
+        connection.setWorkspace(stored);
+        connection.setSlug("review-connection");
+        connection.setDisplayName("Review connection");
+        connection.setBaseUrl("https://api.openai.com");
+        connection.setApiProtocol("openai-completions");
+        connection.setEnabled(true);
+        connection = llmConnectionRepository.save(connection);
+
+        WorkspaceLlmModel model = new WorkspaceLlmModel();
+        model.setWorkspace(stored);
+        model.setConnection(connection);
+        model.setSlug("review-model");
+        model.setDisplayName("Review model");
+        model.setUpstreamModelId("gpt-5");
+        model.setEnabled(true);
+        model = llmModelRepository.save(model);
+
+        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+        binding.setWorkspace(stored);
+        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        binding.setEnabled(true);
+        binding.setWorkspaceModel(model);
+        binding.setTimeoutSeconds(300);
+        agentBindingRepository.save(binding);
+    }
 
     /**
      * The test profile sets the fleet cooldown to 0, which switches the per-artifact limit off. An

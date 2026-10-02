@@ -3,6 +3,8 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewChange;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
@@ -11,7 +13,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
-import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceManifest;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -38,16 +39,19 @@ final class PracticeReviewPreparation {
     private final PracticeCatalogInjector practiceCatalogInjector;
     private final TaskEnvelopeWriter taskEnvelopeWriter;
     private final GitRepositoryManager gitRepositoryManager;
+    private final JobEvidenceFiles evidenceFiles;
 
     PracticeReviewPreparation(
             WorkspaceContextBuilder workspaceContextBuilder,
             PracticeCatalogInjector practiceCatalogInjector,
             TaskEnvelopeWriter taskEnvelopeWriter,
-            GitRepositoryManager gitRepositoryManager) {
+            GitRepositoryManager gitRepositoryManager,
+            JobEvidenceFiles evidenceFiles) {
         this.workspaceContextBuilder = workspaceContextBuilder;
         this.practiceCatalogInjector = practiceCatalogInjector;
         this.taskEnvelopeWriter = taskEnvelopeWriter;
         this.gitRepositoryManager = gitRepositoryManager;
+        this.evidenceFiles = evidenceFiles;
     }
 
     /**
@@ -66,7 +70,7 @@ final class PracticeReviewPreparation {
         List<Practice> eligible = practiceCatalogInjector.resolveEligiblePractices(job, artifactKind);
         PreparedEvidence prepared = workspaceContextBuilder.prepare(request, EvidencePlan.compile(eligible));
         try {
-            ArtifactSourceManifest manifest = Objects.requireNonNull(prepared.manifest(), "manifest");
+            JobFolderIndex manifest = Objects.requireNonNull(prepared.manifest(), "manifest");
             var change = ReviewChange.of(gitRepositoryManager, request);
             var readiness = workspaceContextBuilder.prepareAutomatedReviewReadiness(
                     manifest,
@@ -90,7 +94,7 @@ final class PracticeReviewPreparation {
             if (ready.isEmpty()) {
                 throw new InsufficientEvidenceException(
                         "No practice has sufficient evidence: jobId=" + job.getId(),
-                        new PreparedJobInputs(prepared, readiness.report()));
+                        evidenceFiles.prepare(job, prepared, readiness.report()));
             }
             Map<String, byte[]> files = new LinkedHashMap<>(prepared.files());
             if (artifactKind.equals(ArtifactKinds.PULL_REQUEST) && change != null) {
@@ -105,7 +109,7 @@ final class PracticeReviewPreparation {
             files.put(SandboxLayout.TASK_ENVELOPE_FILENAME, taskEnvelopeWriter.write(envelope.get()));
             practiceCatalogInjector.inject(files, job, artifactKind, ready);
             staging.accept(files);
-            return new PreparedJobInputs(prepared.withFiles(files), readiness.report());
+            return evidenceFiles.prepare(job, prepared.withFiles(files), readiness.report());
         } catch (InsufficientEvidenceException refused) {
             throw refused;
         } catch (RuntimeException exception) {

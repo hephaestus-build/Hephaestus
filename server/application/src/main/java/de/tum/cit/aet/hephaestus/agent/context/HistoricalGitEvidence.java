@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryDiff;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -38,7 +39,15 @@ public class HistoricalGitEvidence {
 
     /** The attempt's checkout, digest-checked and pinned to {@code pinnedHead}. */
     private Repository open(AgentJob job, String headDigest, String refsDigest, String pinnedHead) throws IOException {
-        Path checkout = files.repositoryForVerification(job, headDigest, refsDigest);
+        return openCheckout(files.repositoryForVerification(job, headDigest, refsDigest), pinnedHead);
+    }
+
+    private Repository openAt(AgentJob job, String root, String headDigest, String refsDigest, String pinnedHead)
+            throws IOException {
+        return openCheckout(files.repositoryForVerification(job, root, headDigest, refsDigest), pinnedHead);
+    }
+
+    private static Repository openCheckout(Path checkout, String pinnedHead) throws IOException {
         Repository repository = new FileRepositoryBuilder()
                 .setGitDir(checkout.resolve(Constants.DOT_GIT).toFile())
                 .setMustExist(true)
@@ -66,9 +75,21 @@ public class HistoricalGitEvidence {
 
     public Map<Citation, JobEvidenceFiles.QuoteMatch> verifyAll(
             AgentJob job, String headDigest, String refsDigest, String pinnedHead, List<Citation> submitted) {
+        return verifyAllAt(job, SandboxLayout.REPO_MOUNT_RELATIVE, headDigest, refsDigest, pinnedHead, submitted);
+    }
+
+    public Map<Citation, JobEvidenceFiles.QuoteMatch> verifyAllAt(
+            AgentJob job,
+            String root,
+            String headDigest,
+            String refsDigest,
+            String pinnedHead,
+            List<Citation> submitted) {
         if (submitted.isEmpty()) return Map.of();
         Map<Citation, JobEvidenceFiles.QuoteMatch> verified = new LinkedHashMap<>();
-        try (Repository repository = open(job, headDigest, refsDigest, pinnedHead);
+        try (Repository repository = root.equals(SandboxLayout.REPO_MOUNT_RELATIVE)
+                        ? open(job, headDigest, refsDigest, pinnedHead)
+                        : openAt(job, root, headDigest, refsDigest, pinnedHead);
                 RevWalk walk = new RevWalk(repository)) {
             Path blob = Files.createTempFile("hephaestus-cited-blob-", "");
             try {

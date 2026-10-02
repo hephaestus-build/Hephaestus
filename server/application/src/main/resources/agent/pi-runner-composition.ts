@@ -82,14 +82,16 @@ export function notReachedNote(notReached: readonly string[]): string {
 export function validateFeedbackEvidence(
 	primaryPractice: string,
 	basedOn: readonly string[],
-	observationPractices: ReadonlyMap<string, string>,
+	observations: ReadonlyMap<string, { practiceSlug: string; outcome: unknown }>,
+	channel: Channel,
+	action: FeedbackAction,
 ): string | null {
-	const unknown = basedOn.find((id) => !observationPractices.has(id));
+	const unknown = basedOn.find((id) => !observations.has(id));
 	if (unknown !== undefined) {
 		// The ids of this practice's own observations are named, so the correction is one edit away:
 		// a session that wrote a digest or a citation here is looking at the wrong field.
-		const own = [...observationPractices]
-			.filter(([, practice]) => practice === primaryPractice)
+		const own = [...observations]
+			.filter(([, observation]) => observation.practiceSlug === primaryPractice)
 			.map(([id]) => id);
 		const hint =
 			own.length > 0
@@ -97,8 +99,18 @@ export function validateFeedbackEvidence(
 				: `no admitted observation belongs to ${primaryPractice}`;
 		return `Evidence '${unknown}' does not name an admitted observation from this run (basedOn takes the \`id\` field of work/composition/observations.json; ${hint}); skipped.`;
 	}
-	if (!basedOn.some((id) => observationPractices.get(id) === primaryPractice)) {
-		return `At least one basedOn observation must belong to the primary practice '${primaryPractice}'; skipped.`;
+	const requiresNegative = channel !== "IN_CONTEXT" || action === "WITHHOLD";
+	if (
+		!basedOn.some((id) => {
+			const observation = observations.get(id);
+			return (
+				observation?.practiceSlug === primaryPractice &&
+				(observation.outcome === "NEGATIVE" ||
+					(!requiresNegative && observation.outcome === "POSITIVE"))
+			);
+		})
+	) {
+		return `At least one basedOn observation must ${requiresNegative ? "be NEGATIVE" : "have a POSITIVE or NEGATIVE outcome"} for the primary practice '${primaryPractice}'; skipped.`;
 	}
 	return null;
 }

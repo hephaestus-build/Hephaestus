@@ -651,7 +651,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         // Production takes the kind from the workspace connection to the provider that hosts the repository.
         job.setIntegrationKind(hosted.getProvider().getType().kind());
         job.setCompletedAt(now);
-        job.setEvidenceSnapshot(objectMapper.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.2.0"))));
+        job.setEvidenceSnapshot(objectMapper.valueToTree(Map.of("manifest", Map.of("contractVersion", "1.3.0"))));
         job.setConfigSnapshot(AdmittedReviewJobFixtures.snapshot(
                 workspace,
                 llmConnectionRepository,

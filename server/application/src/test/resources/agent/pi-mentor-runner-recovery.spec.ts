@@ -270,7 +270,12 @@ const linkReply = (observationId: string): Reply => ({
 	promptTokens: 3000,
 });
 
-async function openAndPrompt(runner: Runner, text: string, session = ""): Promise<void> {
+async function openAndPrompt(
+	runner: Runner,
+	text: string,
+	session = "",
+	currentEvidence?: string,
+): Promise<void> {
 	runner.send({
 		jsonrpc: "2.0",
 		id: "open",
@@ -282,7 +287,7 @@ async function openAndPrompt(runner: Runner, text: string, session = ""): Promis
 		jsonrpc: "2.0",
 		id: "prompt",
 		method: "prompt",
-		params: { threadId: THREAD, text },
+		params: { threadId: THREAD, text, currentEvidence },
 	});
 	await runner.next(isResult("prompt"));
 }
@@ -418,6 +423,43 @@ const bigToolCall: Reply = { toolCall: HISTORY, promptTokens: 105_000 };
 const piError = (runner: Runner) =>
 	String(runner.events.find((e) => e.type === "pi_error")?.event.error);
 
+void test("a native retry exposes its earlier calls but settles only its final continuation", async (t) => {
+	const model = await fakeModel(t, (_kind, index) => {
+		if (index === 0) {
+			return { toolCall: HISTORY, promptTokens: 1000 };
+		}
+		if (index === 1) {
+			return { status: 502 };
+		}
+		return { text: "recovered answer", promptTokens: 200 };
+	});
+	const runner = spawnRealRunner(t, runnerRoot(), model);
+	await openAndPrompt(runner, "what happened in the review?");
+	await answerFetch(runner, 100);
+	await runner.next(isEvent("agent_end"));
+	assert.deepEqual(model.calls, ["turn", "turn", "turn"]);
+	const types = typesOf(runner);
+	assert.ok(types.includes("auto_retry_start"), types.join(", "));
+	assert.ok(!types.includes("compaction_start"), types.join(", "));
+	const reported = runner.events
+		.filter((event) => event.type === "message_end")
+		.map((event) => event.event.message);
+	assert.ok(
+		reported.some(
+			(message) => isRecord(message) && isRecord(message.usage) && message.usage.input === 1000,
+		),
+	);
+	const final = runner.events.filter((event) => event.type === "agent_end");
+	assert.equal(final.length, 1);
+	const messages = final[0]?.event.messages;
+	assert.ok(Array.isArray(messages));
+	assert.equal(messages.length, 1);
+	const answer: unknown = messages[0];
+	assert.ok(isRecord(answer) && isRecord(answer.usage));
+	assert.equal(answer.stopReason, "stop");
+	assert.equal(answer.usage.input, 200);
+});
+
 void test("a completed compaction is checkpointed before the watchdog fails the turn, and restores", async (t) => {
 	const root = runnerRoot();
 	const model = await fakeModel(t, (kind, index) => {
@@ -537,6 +579,63 @@ void test("a compaction the watchdog interrupts is not checkpointed and the turn
 	assert.equal(runner.events.length, types.length);
 });
 
+void test("each native request receives this turn's evidence without persisting or reusing the prior receipt", async (t) => {
+	const oldReceipt = JSON.stringify({
+		marker: "OLD-RECEIPT",
+		observations: [{ outcome: "POSITIVE" }],
+	});
+	const newReceipt = JSON.stringify({
+		marker: "CURRENT-RECEIPT",
+		observations: [
+			{
+				reviewId: "recorded-review",
+				outcome: "NEGATIVE",
+				presence: "ABSENT",
+				reviewedWork: {
+					producingReviewStatus: "RUNNING",
+					titleAndDescriptionCoverage: "DIFFERS_FROM_STORED_WORK",
+					headCoverage: "MATCHES_STORED_WORK",
+					providerFreshness: "UNKNOWN",
+				},
+			},
+		],
+	});
+	const model = await fakeModel(t, () => ({ text: "RECORDED-OLDER-ANSWER", promptTokens: 3000 }));
+	const runner = spawnRealRunner(t, runnerRoot(), model);
+	await openAndPrompt(runner, "hello", "", oldReceipt);
+	await runner.next(isEvent("agent_end"));
+	runner.send({
+		jsonrpc: "2.0",
+		id: "follow-up",
+		method: "prompt",
+		params: { threadId: THREAD, text: "and now?", currentEvidence: newReceipt },
+	});
+	await runner.next(isResult("follow-up"));
+	await runner.next(isEvent("agent_end"));
+	assert.deepEqual(model.calls, ["turn", "turn"]);
+	assert.ok((model.bodies[0] ?? "").includes("OLD-RECEIPT"));
+	const followup = model.bodies[1] ?? "";
+	assert.ok(followup.includes("CURRENT-RECEIPT") && followup.includes("NEGATIVE"));
+	assert.ok(followup.includes("RUNNING"));
+	assert.ok(
+		followup.includes("DIFFERS_FROM_STORED_WORK") && followup.includes("MATCHES_STORED_WORK"),
+	);
+	assert.ok(followup.includes("RECORDED-OLDER-ANSWER"), "conversation history remains intact");
+	assert.ok(!followup.includes("OLD-RECEIPT"));
+	const saved = jsonlOf(runner.events.findLast((event) => event.type === "session_persisted"));
+	assert.ok(saved.includes("RECORDED-OLDER-ANSWER"));
+	assert.ok(!saved.includes("CURRENT-RECEIPT") && !saved.includes("OLD-RECEIPT"));
+	assert.ok(!runner.events.some((event) => event.type === "tool_execution_start"));
+
+	const restoredModel = await fakeModel(t, () => ({ text: "answer", promptTokens: 3000 }));
+	const restored = spawnRealRunner(t, runnerRoot(), restoredModel);
+	await openAndPrompt(restored, "continue", saved);
+	await restored.next(isEvent("agent_end"));
+	const request = restoredModel.bodies[0] ?? "";
+	assert.ok(request.includes("UNAVAILABLE") && request.includes("UNKNOWN"));
+	assert.ok(!request.includes("CURRENT-RECEIPT") && !request.includes("OLD-RECEIPT"));
+});
+
 void test("the measured restored session is compacted before its first ordinary request", async (t) => {
 	const root = runnerRoot();
 	const model = await fakeModel(t, (kind) =>
@@ -545,7 +644,12 @@ void test("the measured restored session is compacted before its first ordinary 
 			: { text: "answer", promptTokens: 12_000 },
 	);
 	const runner = spawnRealRunner(t, root, model);
-	await openAndPrompt(runner, "and the tests?", incident(root));
+	await openAndPrompt(
+		runner,
+		"and the tests?",
+		incident(root),
+		'{"marker":"AFTER-RESTORE-CURRENT"}',
+	);
 	await runner.next(isEvent("agent_end"));
 
 	const types = typesOf(runner);
@@ -562,6 +666,7 @@ void test("the measured restored session is compacted before its first ordinary 
 	const turn = model.bodies.at(-1) ?? "";
 	assert.equal(turn.split("and the tests?").length - 1, 1);
 	assert.ok(turn.includes("SUMMARY-CHECKPOINT"));
+	assert.ok(turn.includes("AFTER-RESTORE-CURRENT"));
 	assert.ok(!turn.includes(OLDEST) && !turn.includes("x".repeat(1000)));
 	assert.ok(turn.length < 20_000, `the ordinary request is ${turn.length} characters`);
 });
@@ -783,7 +888,12 @@ void test("a compaction during a turn keeps its question and the comments it fet
 		text: `${i} ${"e".repeat(16_000)}`,
 		inputTokens: 2000,
 	}));
-	await openAndPrompt(runner, question, savedSession(root, earlier));
+	await openAndPrompt(
+		runner,
+		question,
+		savedSession(root, earlier),
+		'{"marker":"CURRENT-THROUGH-COMPACTION"}',
+	);
 	const answer = async (content: Json) => {
 		const callback = await runner.next((frame) => frame.method === "fetch_context");
 		runner.send({ jsonrpc: "2.0", id: callback.id, result: { content } });
@@ -803,6 +913,7 @@ void test("a compaction during a turn keeps its question and the comments it fet
 
 	const turns = model.bodies.filter((_, i) => model.calls[i] === "turn");
 	assert.equal(turns.length, 4, model.calls.join(", "));
+	assert.ok(turns.every((body) => body.includes("CURRENT-THROUGH-COMPACTION")));
 	assert.ok(
 		model.calls.indexOf("summary") === 2 && model.calls.lastIndexOf("summary") < 4,
 		model.calls.join(", "),

@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorLlmConfig;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.MentorRetryRejectedException;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.TurnAlreadyInFlightException;
+import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.PiEventToUiChunkTranslator;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.TranslatorState;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
@@ -984,6 +985,119 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         assertThat(event.getCostUsd()).isEqualByComparingTo(BigDecimal.valueOf(costUsd));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldAccountForEarlierCallsWhenTheNativeRetrySettles(boolean recovered) {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID assistantId = UUID.randomUUID();
+        LlmPriceSnapshot price = new LlmPriceSnapshot(
+                FundingSource.INSTANCE,
+                PricingState.PRICED,
+                12L,
+                null,
+                new BigDecimal("10"),
+                new BigDecimal("20"),
+                new BigDecimal("2"),
+                new BigDecimal("3"));
+        var cookie = persistence.persistInFlight(thread, "hello", assistantId, null, pricedMentorConfig(price));
+        TranslatorState state = new TranslatorState(assistantId);
+        state.bindAdmission("test-model", price);
+        state.markLlmCallStarted();
+        state.completeUsage(NODES.objectNode().put("input", 1_000).put("output", 40));
+        state.completeUsage(NODES.objectNode().put("input", 50).put("output", 2));
+        var translator = new PiEventToUiChunkTranslator();
+        translator.translate(NODES.objectNode().put("type", "auto_retry_start"), state);
+        int finalInput = recovered ? 200 : 300;
+        int finalOutput = recovered ? 20 : 30;
+        ObjectNode end = NODES.objectNode().put("type", "agent_end");
+        ObjectNode assistant = end.putArray("messages").addObject();
+        assistant.put("role", "assistant").put("stopReason", recovered ? "stop" : "error");
+        assistant.putArray("content");
+        assistant.putObject("usage").put("input", finalInput).put("output", finalOutput);
+        var chunks = translator.translate(end, state);
+        accumulateProxyCall(assistantId, 1_000, 40, 0, 0, 0);
+        accumulateProxyCall(assistantId, 50, 2, 0, 0, 0);
+        accumulateProxyCall(assistantId, finalInput, finalOutput, 0, 0, 0);
+
+        if (recovered) {
+            var sent = persistence
+                    .complete(cookie, state, (UIMessageChunk.Finish) chunks.get(0))
+                    .orElseThrow();
+            var metadata = java.util.Objects.requireNonNull(sent.messageMetadata());
+            var usage = java.util.Objects.requireNonNull(metadata.usage());
+            assertThat(usage.input()).isEqualTo(1_050 + finalInput);
+            assertThat(usage.output()).isEqualTo(42 + finalOutput);
+            JsonNode row =
+                    chatMessageRepository.findById(assistantId).orElseThrow().getMetadata();
+            assertThat(row.path("usage").path("input").asInt()).isEqualTo(usage.input());
+            assertThat(row.path("costUsd").asDouble()).isEqualTo(java.util.Objects.requireNonNull(metadata.costUsd()));
+        } else {
+            persistence.interrupt(cookie, state, new IllegalStateException("The final retry failed."));
+            assertThat(chatMessageRepository.findById(assistantId).orElseThrow().getStatus())
+                    .isEqualTo(ChatMessage.Status.interrupted);
+        }
+        var event = usageEventRepository.findAll().stream()
+                .filter(row -> row.getSourceId().equals(assistantId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(event.getInputTokens()).isEqualTo(1_050 + finalInput);
+        assertThat(event.getOutputTokens()).isEqualTo(42 + finalOutput);
+        assertThat(event.getTotalCalls()).isEqualTo(3);
+        assertThat(event.getUsageProvenance()).isEqualTo(UsageProvenance.PROXY);
+        assertThat(event.getCostUsd()).isNotNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldLeaveRetryUsageUnverifiableWhenItsProxyAccountIsMissing(boolean recovered) {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID assistantId = UUID.randomUUID();
+        LlmPriceSnapshot price = new LlmPriceSnapshot(
+                FundingSource.INSTANCE,
+                PricingState.PRICED,
+                12L,
+                null,
+                new BigDecimal("10"),
+                new BigDecimal("20"),
+                new BigDecimal("2"),
+                new BigDecimal("3"));
+        var cookie = persistence.persistInFlight(thread, "hello", assistantId, null, pricedMentorConfig(price));
+        TranslatorState state = new TranslatorState(assistantId);
+        state.bindAdmission("test-model", price);
+        state.markLlmCallStarted();
+        state.completeUsage(NODES.objectNode().put("input", 1_000).put("output", 40));
+        new PiEventToUiChunkTranslator().translate(NODES.objectNode().put("type", "auto_retry_start"), state);
+        state.replaceCompletedUsage(List.of(NODES.objectNode().put("input", 200).put("output", 20)));
+
+        if (recovered) {
+            var streamed = new UIMessageChunk.Finish(
+                    UIMessageChunk.FinishReason.STOP,
+                    new UIMessageChunk.MessageMetadata(
+                            "test-model", new UIMessageChunk.MessageMetadata.Usage(200, 20, 0, 0, 220), null));
+            var sent = persistence.complete(cookie, state, streamed).orElseThrow();
+            var metadata = java.util.Objects.requireNonNull(sent.messageMetadata());
+            assertThat(metadata.usage()).isNull();
+            assertThat(metadata.costUsd()).isNull();
+            assertThat(chatMessageRepository
+                            .findById(assistantId)
+                            .orElseThrow()
+                            .getMetadata()
+                            .has("usage"))
+                    .isFalse();
+        } else {
+            persistence.interrupt(cookie, state, new IllegalStateException("The final retry failed."));
+        }
+        var event = usageEventRepository.findAll().stream()
+                .filter(row -> row.getSourceId().equals(assistantId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(event.getUsageProvenance()).isEqualTo(UsageProvenance.NONE);
+        assertThat(event.getPricingState()).isEqualTo(PricingState.UNPRICED);
+        assertThat(event.getCostUsd()).isNull();
+    }
+
     private static MentorLlmConfig pricedMentorConfig(LlmPriceSnapshot price) {
         return new MentorLlmConfig(
                 "openai-responses",
@@ -1023,6 +1137,40 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         assertThat(event.getTotalCalls()).isEqualTo(1);
         assertThat(event.getInputTokens()).isEqualTo(1_000);
         assertThat(event.getUsageProvenance()).isEqualTo(UsageProvenance.RUNNER);
+    }
+
+    @Test
+    void shouldBillEarlierUsageWhenTheFinalRetryReportsNoTokens() {
+        ChatThread thread =
+                persistence.ensureThread(workspace.getId(), UUID.randomUUID(), user, Set.of(user.getId()), "hello");
+        UUID assistantId = UUID.randomUUID();
+        MentorTurnPersistence.TurnPersistenceCookie cookie =
+                persistence.persistInFlight(thread, "hello", assistantId, null, admittedMentorConfig());
+        TranslatorState state = new TranslatorState(assistantId);
+        state.markLlmCallStarted();
+        state.completeUsage(NODES.objectNode().put("input", 1_000).put("output", 40));
+        accumulateProxyCall(assistantId, 1_000, 40, 0, 0, 0);
+        ObjectNode end = NODES.objectNode().put("type", "agent_end");
+        ObjectNode failed = end.putArray("messages").addObject();
+        failed.put("role", "assistant").put("stopReason", "error");
+        failed.putArray("content");
+        failed.putObject("usage").put("input", 0).put("output", 0);
+
+        var chunks = new PiEventToUiChunkTranslator().translate(end, state);
+        assertThat(chunks).singleElement().isInstanceOf(UIMessageChunk.Error.class);
+        persistence.interrupt(
+                cookie, state, new IllegalStateException(((UIMessageChunk.Error) chunks.get(0)).errorText()));
+
+        ChatMessage assistant = chatMessageRepository.findById(assistantId).orElseThrow();
+        assertThat(assistant.getStatus()).isEqualTo(ChatMessage.Status.interrupted);
+        var event = usageEventRepository.findAll().stream()
+                .filter(row -> row.getSourceId().equals(assistantId))
+                .findFirst()
+                .orElseThrow();
+        assertThat(event.getInputTokens()).isEqualTo(1_000);
+        assertThat(event.getOutputTokens()).isEqualTo(40);
+        assertThat(event.getTotalCalls()).isEqualTo(1);
+        assertThat(event.getUsageProvenance()).isEqualTo(UsageProvenance.PROXY);
     }
 
     @Test
