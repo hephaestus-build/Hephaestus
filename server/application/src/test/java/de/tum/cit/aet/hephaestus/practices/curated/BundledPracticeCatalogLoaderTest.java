@@ -193,6 +193,20 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 .singleElement()
                 .satisfies(practice ->
                         assertThat(practice.definition().precomputeScript()).isNotBlank());
+        // A handoff practice reads the description as written; only code practices are framed by the diff.
+        assertThat(preambleOf(catalog, "honours-linked-issue-acceptance-criteria"))
+                .isEqualTo(preambleOf(catalog, "describe-what-and-why"))
+                .isNotEqualTo(preambleOf(catalog, "ships-tests-with-the-change"));
+    }
+
+    private static String preambleOf(BundledPracticeCatalog catalog, String slug) {
+        String criteria = catalog.practices().stream()
+                .filter(practice -> practice.slug().equals(slug))
+                .findFirst()
+                .orElseThrow()
+                .definition()
+                .criteria();
+        return criteria.substring(0, criteria.indexOf("\n\n---\n\n"));
     }
 
     /** Gates prevent model reviews when complete evidence proves that the subject is absent. */
