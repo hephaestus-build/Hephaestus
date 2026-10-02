@@ -33,12 +33,12 @@ import { isLoopbackHost, positivePort, readEnvFile } from "./lib/env.ts";
  *
  * Each practice group gets its own split of the 40 developers over Needs attention, Mixed feedback,
  * Going well and no standing, chosen so the page shows every shape the privacy rule allows: most
- * groups and practices split, two groups collapse to has a standing against none yet, and two are
- * withheld. A part shows with six developers in it, the reader counted. In a group with several
- * practices, about six of its developers each leave one practice unreviewed, so the group less any
- * practice, and the practices less the group, count at least five whatever real reviews add. The
+ * groups and practices split, and a few are held back because one part holds too few. A part shows
+ * with four developers in it, the reader counted. In a group with several practices, about six of
+ * its developers each leave one practice unreviewed, so the group less any practice, and the
+ * practices less the group, count at least three whatever real reviews add. The
  * developers' runs reach back up to about 75 days, so the 30 day window reads fewer of them than the
- * term does.
+ * all time does.
  */
 
 const { values: flags, positionals } = parseArgs({
@@ -89,15 +89,14 @@ type Bucket = "needs" | "mixed" | "well" | "none";
 const SPLITS: Record<string, [number, number, number, number]> = {
 	"acting-on-review-feedback": [9, 9, 9, 13],
 	"delivery-and-version-control-discipline": [9, 10, 9, 12],
-	// Three at Needs attention: the split collapses to has a standing against none yet.
-	"robust-error-handling": [3, 12, 12, 13],
+	"robust-error-handling": [6, 10, 10, 14],
 	"secure-by-default-changes": [10, 9, 9, 12],
 	"review-ready-work": [9, 9, 10, 12],
 	"decisions-and-documentation": [9, 9, 9, 13],
 	"constructive-code-review": [10, 10, 9, 11],
-	// Two at Needs attention: collapses too.
+	// Two at Needs attention, the reader aside: the split is held back.
 	"testing-discipline": [2, 12, 13, 13],
-	// Three with a standing: not even the collapsed split holds.
+	// Three with a standing: held back.
 	"issue-traceability-and-lifecycle": [1, 1, 1, 37],
 	"actionable-issue-authoring": [9, 9, 10, 12],
 	"code-craftsmanship": [10, 9, 9, 12],
