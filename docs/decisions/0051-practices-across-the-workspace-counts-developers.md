@@ -43,26 +43,25 @@ attention, Mixed feedback and Going well, counted in developers.
   standing and group standing rules the Practice profile uses. Hidden members are left out, as they are
   of every workspace total.
 - `CohortPrivacyPolicy` is the only place that decides what may be shown, and every reader of a
-  workspace sees the same shape: a part of a split appears only when it holds at least six
-  developers, counted over every observed developer, so whoever reads it, it stands for at least
-  five others. *Has a standing* against *none yet* is checked first and for every split, since the
-  page states how many developers were observed and a split therefore states *none yet* as the rest;
-  a full split shows it as a fourth part. When it fails, the group shows no split. When it holds, a
-  three way split with a part under six collapses to those two. Collapse before omit, omit rather
-  than show a small number. Each window (the last 30 days, the last 90 days, all time) is checked on
-  its own. *All time* reads every observation, with no lower bound. The page opens on the last 30
-  days.
-- The observed total shows only while it holds five others, and the eligible total beside it only
-  while the others it adds are none or five, since their difference is a count of its own.
+  workspace sees the same shape. K, the fewest other developers a shown count may stand for, is
+  three. A split shows Needs attention, Mixed feedback, Going well and *none yet* only when each of
+  the four holds at least four developers, counted over every observed developer, so whoever reads
+  it each part stands for at least three others; otherwise the whole split is held back, never a
+  part of it, since the page states how many developers were observed and a missing part would be
+  that total less the rest. Omit rather than show a small number. Each window (the last 30 days, the
+  last 90 days, all time) is checked on its own. *All time* reads every observation, with no lower
+  bound. The page opens on the last 30 days.
+- The observed total shows only while it holds three others, and the eligible total beside it only
+  while the others it adds are none or three, since their difference is a count of its own.
 - A group's practices are split by the same rule over the same observed developers. Because a
-  group's *has a standing* is everyone with a standing in any of its practices, the cells a reader
-  can work out by subtraction must each hold none or five: a practice whose *has a standing* falls
-  short of its group's by one to four is withheld, and every practice of a group is withheld when
-  the practices shown add up to one to four more developers with a standing than the group has. A
-  practice therefore is withheld more often than its group.
+  group's developers with a standing are everyone with a standing in any of its practices, the cells
+  a reader can work out by subtraction must each hold none or at least three: a practice whose
+  developers with a standing fall short of its group's by one or two is withheld, and every practice
+  of a group is withheld when the practices shown add up to one or two more developers with a
+  standing than the group has. A practice therefore is withheld more often than its group.
 - The tiles show the reader's own figure and the middle half of the observed developers, the 25th
   to the 75th percentile interpolated and rounded, never a minimum, maximum, average or count at one
-  value, and only from ten others. The open feedback tile counts per developer what their Practice
+  value, and only from six others, twice K. The open feedback tile counts per developer what their Practice
   profile shows open now, by the profile's own rule, for the reader and for every eligible developer
   alike whatever the window, so it never sets one moment beside a span; read in one pass.
 - The page asks for no estimate first. Every group shows at once. A group opens over the page with
@@ -77,10 +76,25 @@ attention, Mixed feedback and Going well, counted in developers.
   inside a count.
 - The counts are guarded within one read, not between reads. See *Known limitation* below.
 - Synthetic members seeded locally show the page; in a real workspace it stays empty until enough
-  developers are reviewed for a part of six.
+  developers are reviewed for a part of four.
 - The page always shows the workspace. An earlier version let the reader switch the comparison off
   and remembered the choice in the browser; the maintainer dropped that switch, since opening the
   page is already the reader's choice and the switch added a state to every surface of it.
+
+## Lowering K and dropping the collapse
+
+K was five, and a split that could not show all three standings collapsed to *has a standing*
+against *none yet*. The maintainer lowered K to three and dropped the collapsed shape.
+
+- **Why.** At five, a part needed six developers, so a course of thirty to forty rarely showed a
+  full split for a practice and readers met mostly collapsed or held back bars. The collapsed bar was
+  also not understood: its merged part could not say a standing.
+- **What it costs.** Each shown part now stands for three others rather than five, so a reader who
+  knows two of them learns less about the rest, but one more piece of outside knowledge narrows a
+  part down sooner. Three is still at least K for every count shown and every count a reader can
+  subtract, and the guards above are unchanged in kind.
+- **What changes.** A split shows all four parts or nothing, so there is one fewer shape to explain
+  and nothing for the guards to treat as a second kind of part.
 
 ## Known limitation
 
@@ -96,7 +110,7 @@ the driver that nothing another reader sees can be traced back to one developer.
 
 Mitigations considered and not yet taken, since each changes the page: offering one window only,
 holding a split back when the developers between two windows are one to four, freezing the figures
-at the start of a day or week, and rounding counts to multiples of five.
+at the start of a day or week, and rounding counts to multiples of K.
 
 ## Open decisions
 
@@ -105,8 +119,8 @@ at the start of a day or week, and rounding counts to multiples of five.
   and each observation leaves only inside a count. Whether an aggregate shown to another developer
   needs a purpose and source use decisions of its own is for the maintainer and the controller to
   decide in `docs/admin/dsms/artifact-source-governance.md`.
-- **Zero counts.** A bucket holding no other developer is treated as too small, which collapses more
-  splits than strictly needed.
+- **Zero counts.** A bucket holding no other developer is treated as too small, which holds back
+  more splits than strictly needed.
 - **Whether to ask first.** A version that asked for the reader's estimate before showing each split
   was built and set aside; whether reflecting first helps is left for a user test.
 
