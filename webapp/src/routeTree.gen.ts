@@ -45,6 +45,7 @@ import { Route as AuthenticatedWWorkspaceSlugAdminRouteRouteImport } from './rou
 import { Route as AuthenticatedWWorkspaceSlugMentorRouteImport } from './routes/_authenticated/w/$workspaceSlug/mentor'
 import { Route as AuthenticatedWWorkspaceSlugOnboardingRouteImport } from './routes/_authenticated/w/$workspaceSlug/onboarding'
 import { Route as AuthenticatedWWorkspaceSlugPracticeProfileRouteImport } from './routes/_authenticated/w/$workspaceSlug/practice-profile'
+import { Route as AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRouteImport } from './routes/_authenticated/w/$workspaceSlug/practices-across-the-workspace'
 import { Route as AuthenticatedWWorkspaceSlugWorkspaceActivityRouteImport } from './routes/_authenticated/w/$workspaceSlug/workspace-activity'
 import { Route as AuthenticatedWorkspacesNewIndexRouteImport } from './routes/_authenticated/workspaces/new/index'
 import { Route as AuthenticatedWorkspacesNewGithubRouteImport } from './routes/_authenticated/workspaces/new/github'
@@ -273,6 +274,12 @@ const AuthenticatedWWorkspaceSlugPracticeProfileRoute =
   AuthenticatedWWorkspaceSlugPracticeProfileRouteImport.update({
     id: '/practice-profile',
     path: '/practice-profile',
+    getParentRoute: () => AuthenticatedWWorkspaceSlugRouteRoute,
+  } as any)
+const AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute =
+  AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRouteImport.update({
+    id: '/practices-across-the-workspace',
+    path: '/practices-across-the-workspace',
     getParentRoute: () => AuthenticatedWWorkspaceSlugRouteRoute,
   } as any)
 const AuthenticatedWWorkspaceSlugWorkspaceActivityRoute =
@@ -513,6 +520,7 @@ export interface FileRoutesByFullPath {
   '/w/$workspaceSlug/mentor': typeof AuthenticatedWWorkspaceSlugMentorRouteWithChildren
   '/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
   '/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
+  '/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
   '/w/$workspaceSlug/workspace-activity': typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRoute
   '/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
@@ -579,6 +587,7 @@ export interface FileRoutesByTo {
   '/w/$workspaceSlug/activity': typeof AuthenticatedWWorkspaceSlugActivityRoute
   '/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
   '/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
+  '/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
   '/w/$workspaceSlug/workspace-activity': typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRoute
   '/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
@@ -648,6 +657,7 @@ export interface FileRoutesById {
   '/_authenticated/w/$workspaceSlug/mentor': typeof AuthenticatedWWorkspaceSlugMentorRouteWithChildren
   '/_authenticated/w/$workspaceSlug/onboarding': typeof AuthenticatedWWorkspaceSlugOnboardingRoute
   '/_authenticated/w/$workspaceSlug/practice-profile': typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
+  '/_authenticated/w/$workspaceSlug/practices-across-the-workspace': typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
   '/_authenticated/w/$workspaceSlug/workspace-activity': typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRoute
   '/_authenticated/workspaces/new/github': typeof AuthenticatedWorkspacesNewGithubRoute
   '/_authenticated/workspaces/new/gitlab': typeof AuthenticatedWorkspacesNewGitlabRoute
@@ -720,6 +730,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/mentor'
     | '/w/$workspaceSlug/onboarding'
     | '/w/$workspaceSlug/practice-profile'
+    | '/w/$workspaceSlug/practices-across-the-workspace'
     | '/w/$workspaceSlug/workspace-activity'
     | '/workspaces/new/github'
     | '/workspaces/new/gitlab'
@@ -786,6 +797,7 @@ export interface FileRouteTypes {
     | '/w/$workspaceSlug/activity'
     | '/w/$workspaceSlug/onboarding'
     | '/w/$workspaceSlug/practice-profile'
+    | '/w/$workspaceSlug/practices-across-the-workspace'
     | '/w/$workspaceSlug/workspace-activity'
     | '/workspaces/new/github'
     | '/workspaces/new/gitlab'
@@ -854,6 +866,7 @@ export interface FileRouteTypes {
     | '/_authenticated/w/$workspaceSlug/mentor'
     | '/_authenticated/w/$workspaceSlug/onboarding'
     | '/_authenticated/w/$workspaceSlug/practice-profile'
+    | '/_authenticated/w/$workspaceSlug/practices-across-the-workspace'
     | '/_authenticated/w/$workspaceSlug/workspace-activity'
     | '/_authenticated/workspaces/new/github'
     | '/_authenticated/workspaces/new/gitlab'
@@ -1159,6 +1172,13 @@ declare module '@tanstack/react-router' {
       path: '/practice-profile'
       fullPath: '/w/$workspaceSlug/practice-profile'
       preLoaderRoute: typeof AuthenticatedWWorkspaceSlugPracticeProfileRouteImport
+      parentRoute: typeof AuthenticatedWWorkspaceSlugRouteRoute
+    }
+    '/_authenticated/w/$workspaceSlug/practices-across-the-workspace': {
+      id: '/_authenticated/w/$workspaceSlug/practices-across-the-workspace'
+      path: '/practices-across-the-workspace'
+      fullPath: '/w/$workspaceSlug/practices-across-the-workspace'
+      preLoaderRoute: typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRouteImport
       parentRoute: typeof AuthenticatedWWorkspaceSlugRouteRoute
     }
     '/_authenticated/w/$workspaceSlug/workspace-activity': {
@@ -1583,6 +1603,7 @@ interface AuthenticatedWWorkspaceSlugRouteRouteChildren {
   AuthenticatedWWorkspaceSlugMentorRoute: typeof AuthenticatedWWorkspaceSlugMentorRouteWithChildren
   AuthenticatedWWorkspaceSlugOnboardingRoute: typeof AuthenticatedWWorkspaceSlugOnboardingRoute
   AuthenticatedWWorkspaceSlugPracticeProfileRoute: typeof AuthenticatedWWorkspaceSlugPracticeProfileRoute
+  AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute: typeof AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute
   AuthenticatedWWorkspaceSlugWorkspaceActivityRoute: typeof AuthenticatedWWorkspaceSlugWorkspaceActivityRoute
   AuthenticatedWWorkspaceSlugIndexRoute: typeof AuthenticatedWWorkspaceSlugIndexRoute
   AuthenticatedWWorkspaceSlugTeamsIndexRoute: typeof AuthenticatedWWorkspaceSlugTeamsIndexRoute
@@ -1603,6 +1624,8 @@ const AuthenticatedWWorkspaceSlugRouteRouteChildren: AuthenticatedWWorkspaceSlug
       AuthenticatedWWorkspaceSlugOnboardingRoute,
     AuthenticatedWWorkspaceSlugPracticeProfileRoute:
       AuthenticatedWWorkspaceSlugPracticeProfileRoute,
+    AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute:
+      AuthenticatedWWorkspaceSlugPracticesAcrossTheWorkspaceRoute,
     AuthenticatedWWorkspaceSlugWorkspaceActivityRoute:
       AuthenticatedWWorkspaceSlugWorkspaceActivityRoute,
     AuthenticatedWWorkspaceSlugIndexRoute:
