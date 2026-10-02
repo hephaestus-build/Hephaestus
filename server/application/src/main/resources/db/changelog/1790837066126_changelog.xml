@@ -202,4 +202,12 @@ CREATE OR REPLACE FUNCTION public.config_audit_event_block_mutation() RETURNS tr
             referencedColumnNames="id" onDelete="SET NULL"/>
         <rollback><dropColumn tableName="oauth_state_nonce" columnName="actor_account_id"/></rollback>
     </changeSet>
+    <changeSet id="1790837066126-18" author="hephaestus">
+        <preConditions onFail="HALT"><columnExists tableName="chat_thread" columnName="session_jsonl"/></preConditions>
+        <comment>Clear legacy hidden conversation memory without exact-person provenance. Preserve every visible message, thread and timestamp. New runtime copies must record exact native identities.</comment>
+        <sql>UPDATE chat_thread SET session_jsonl=NULL WHERE session_jsonl IS NOT NULL;</sql>
+        <rollback>
+            <sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Legacy hidden conversation memory cannot be restored. Restore a verified pre-upgrade backup instead.'; END $$;</sql>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>

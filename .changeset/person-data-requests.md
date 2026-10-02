@@ -18,3 +18,12 @@ are about a different participant. Shared Slack conversations retain the other p
 Person exports include authored milestones and commit file-change copies. Applying another
 developer's commit removes only the person's committer attribution, not that developer's work.
 Heph exports structured conversation messages, not internal runtime journals containing tool context.
+
+
+**Operators:** On upgrade, Heph's hidden conversation memory resets once. The migration clears old
+runtime journals because they have no complete exact-person provenance. Every visible conversation
+message, title and time stays. Take and verify a backup before the upgrade if your retention policy
+requires those old journals; the cleared hidden memory cannot be restored from the upgraded database.
+
+Your past conversations stay visible. Heph starts with fresh hidden memory after this upgrade, so you
+may need to repeat context from an earlier conversation.

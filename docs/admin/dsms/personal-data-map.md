@@ -114,3 +114,7 @@ loses their committer attribution; the other developer's file-change rows remain
 Heph exports the structured conversation messages and their parts. It does not export the internal
 runtime session journal, which can contain tool context rather than only the person's conversation.
 The journal is removed with an erased person's thread.
+
+The upgrade clears legacy Heph runtime journals once because they have no complete exact-person
+provenance. Visible conversation messages, titles and times stay. This is a reset of hidden
+conversation memory, not deletion of the conversation a person can read.

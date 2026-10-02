@@ -54,6 +54,16 @@ class StableOperatorAttributionMigrationTest {
                            (995003,995001,'SUSPEND','ACTIVE','SUSPENDED','SYSTEM','provider-event','{"reason":"provider fact"}','2026-09-01T14:00:00Z');
                     INSERT INTO identity_provider(id,type,server_url) VALUES (995001,'GITLAB','https://migration-gitlab.example.org');
                     INSERT INTO "user"(id,provider_id,native_id,login) VALUES (995100,995001,987,'42');
+                    INSERT INTO chat_thread(id,created_at,title,user_id,workspace_id,surface,session_jsonl)
+                    VALUES ('00000000-0000-0000-0000-000000995101','2026-09-01T16:00:00Z','Visible title',995100,995001,'WEB',
+                        convert_to('Legacy hidden context without exact provenance','UTF8'));
+                    INSERT INTO chat_message(id,created_at,thread_id,role,parts,metadata,status,version)
+                    VALUES ('00000000-0000-0000-0000-000000995102','2026-09-01T16:01:00Z',
+                        '00000000-0000-0000-0000-000000995101','USER',
+                        '[{"type":"text","text":"Visible question"}]'::jsonb,'{}'::jsonb,'completed',0),
+                        ('00000000-0000-0000-0000-000000995103','2026-09-01T16:02:00Z',
+                        '00000000-0000-0000-0000-000000995101','ASSISTANT',
+                        '[{"type":"text","text":"Visible reply"}]'::jsonb,'{}'::jsonb,'completed',0);
                     INSERT INTO config_audit_event(id,occurred_at,workspace_id,actor_kind,actor_account_id,
                         entity_type,entity_id,action,changed_keys,old_value,new_value)
                     SELECT id,'2026-09-01T15:00:00Z'::timestamptz,995001,'USER',995001,
@@ -140,6 +150,36 @@ class StableOperatorAttributionMigrationTest {
                 assertThat(rows.getLong(5)).isEqualTo(995001L);
             }
             assertThat(rows.next()).isFalse();
+        }
+    }
+
+    @Test
+    void shouldResetOnlyHiddenConversationMemoryAndKeepEveryVisibleMessageAndTime() throws SQLException {
+        try (var connection = connect();
+                var statement = connection.createStatement()) {
+            try (var rows = statement.executeQuery("""
+                    SELECT title,created_at,session_jsonl FROM chat_thread
+                    WHERE id='00000000-0000-0000-0000-000000995101'
+                    """)) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("Visible title");
+                assertThat(rows.getTimestamp(2).toInstant().toString()).isEqualTo("2026-09-01T16:00:00Z");
+                assertThat(rows.getBytes(3)).isNull();
+            }
+            try (var rows = statement.executeQuery("""
+                    SELECT role,parts->0->>'text',created_at FROM chat_message
+                    WHERE thread_id='00000000-0000-0000-0000-000000995101' ORDER BY created_at
+                    """)) {
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("USER");
+                assertThat(rows.getString(2)).isEqualTo("Visible question");
+                assertThat(rows.getTimestamp(3).toInstant().toString()).isEqualTo("2026-09-01T16:01:00Z");
+                assertThat(rows.next()).isTrue();
+                assertThat(rows.getString(1)).isEqualTo("ASSISTANT");
+                assertThat(rows.getString(2)).isEqualTo("Visible reply");
+                assertThat(rows.getTimestamp(3).toInstant().toString()).isEqualTo("2026-09-01T16:02:00Z");
+                assertThat(rows.next()).isFalse();
+            }
         }
     }
 
