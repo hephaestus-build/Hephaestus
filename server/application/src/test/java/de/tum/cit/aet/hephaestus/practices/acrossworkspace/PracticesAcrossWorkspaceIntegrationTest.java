@@ -46,6 +46,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
     private JdbcTemplate jdbc;
 
     private Workspace workspace;
+    private User reader;
     private Practice packaging;
     private Practice testing;
     private Practice issues;
@@ -60,7 +61,7 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
         testing = persistPractice(workspace, group(workspace, "testing-discipline", "Testing"), "tests", "Tests", null);
         issues = persistPractice(workspace, group(workspace, "actionable-issues", "Issues"), "issue", "Issue", null);
 
-        User reader = member("testuser"); // matches @WithUser
+        reader = member("testuser"); // matches @WithUser
         strength(packaging, reader, NEWEST);
         for (int index = 0; index < 15; index++) {
             User developer = member("across-dev-" + index);
@@ -208,6 +209,16 @@ class PracticesAcrossWorkspaceIntegrationTest extends AbstractPracticeReviewInte
                 // every observed developer at a standing not even the collapsed split holds five on each side.
                 .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].shape")
                 .isEqualTo("WITHHELD");
+    }
+
+    @Test
+    @DisplayName("an instance administrator viewing as the developer reads the developer's own page")
+    void shouldReadTheViewedDevelopersPageWhenAnAdministratorViewsIt() {
+        readAsUserView(URI, workspace, reader)
+                .jsonPath("$.readerCounted")
+                .isEqualTo(true)
+                .jsonPath("$.groups[?(@.groupSlug == 'review-ready-work')].yourStanding")
+                .isEqualTo("STRENGTH");
     }
 
     @Test
