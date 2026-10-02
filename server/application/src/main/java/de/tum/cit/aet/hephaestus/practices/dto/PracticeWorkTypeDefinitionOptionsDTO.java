@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -38,4 +39,7 @@ public record PracticeWorkTypeDefinitionOptionsDTO(
 
         @NonNull List<PracticeAutomatedReviewMode> supportedAutomatedReviewModes,
         @NonNull List<PracticeEvidenceSourceOptionDTO> allowedSources,
-        @NonNull List<ActorRole> subjectRoles) {}
+        @NonNull List<ActorRole> subjectRoles,
+        @NonNull List<PracticeReviewStateDimensionDTO> reviewWhenDimensions,
+        @NonNull Set<String> preconditionSupportedAspects,
+        @NonNull Set<String> preconditionEvidenceCollections) {}

@@ -243,7 +243,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 definition.name(),
                 definition.signals(),
                 definition.evidenceRequirements(),
-                definition.onDrafts(),
+                definition.reviewWhen(),
                 definition.subject(),
                 definition.precondition(),
                 criteria,
@@ -316,10 +316,10 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
             Long practiceId = jdbcTemplate.queryForObject(
                     """
                 INSERT INTO practice (
-                    workspace_id, practice_group_id, slug, name, applies_to, display_order, signals, evidence_requirements, on_drafts, subject, precondition,
+                    workspace_id, practice_group_id, slug, name, applies_to, display_order, signals, evidence_requirements, review_when, subject, precondition,
                     criteria, automated_review_policy, delivery_behavior, why_it_matters, source_curated_slug,
                     source_curated_fingerprint, autonomy, created_at
-                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?::jsonb, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
+                ) VALUES (?, ?, ?, ?, ?, 0, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, 'AUTOMATIC', now())
                 RETURNING id
                 """,
                     Long.class,
@@ -330,7 +330,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     shipped.artifactKind().value(),
                     objectMapper.valueToTree(shipped.signals()).toString(),
                     objectMapper.valueToTree(shipped.evidenceRequirements()).toString(),
-                    shipped.onDrafts(),
+                    objectMapper.valueToTree(shipped.reviewWhen()).toString(),
                     shipped.subject().name(),
                     shipped.precondition() == null
                             ? null
@@ -342,9 +342,9 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
             Long revisionId = jdbcTemplate.queryForObject(
                     """
                 INSERT INTO practice_revision (
-                    practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, on_drafts, subject, precondition, criteria,
+                    practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, review_when, subject, precondition, criteria,
                     automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, now())
+                ) VALUES (?, 1, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, ?, now())
                 RETURNING id
                 """,
                     Long.class,
@@ -354,7 +354,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                     shipped.artifactKind().value(),
                     objectMapper.valueToTree(shipped.signals()).toString(),
                     objectMapper.valueToTree(shipped.evidenceRequirements()).toString(),
-                    shipped.onDrafts(),
+                    objectMapper.valueToTree(shipped.reviewWhen()).toString(),
                     shipped.subject().name(),
                     shipped.precondition() == null
                             ? null
@@ -367,9 +367,9 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                 revisionId = jdbcTemplate.queryForObject(
                         """
                     INSERT INTO practice_revision (
-                        practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, on_drafts, subject, precondition, criteria,
+                        practice_id, revision_number, slug, name, applies_to, signals, evidence_requirements, review_when, subject, precondition, criteria,
                         automated_review_policy, delivery_behavior, why_it_matters, group_slug, review_rule_fingerprint, created_at
-                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now())
+                    ) VALUES (?, 2, ?, ?, ?, ?::jsonb, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?, ?::jsonb, '{"summaryOnly":true}'::jsonb, 'Reviewers need context', ?, NULL, now())
                     RETURNING id
                     """,
                         Long.class,
@@ -379,7 +379,7 @@ class CatalogProvenanceBackfillIntegrationTest extends AbstractWorkspaceIntegrat
                         shipped.artifactKind().value(),
                         objectMapper.valueToTree(shipped.signals()).toString(),
                         objectMapper.valueToTree(shipped.evidenceRequirements()).toString(),
-                        shipped.onDrafts(),
+                        objectMapper.valueToTree(shipped.reviewWhen()).toString(),
                         shipped.subject().name(),
                         shipped.precondition() == null
                                 ? null

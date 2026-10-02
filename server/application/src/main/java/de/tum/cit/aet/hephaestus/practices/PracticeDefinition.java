@@ -8,11 +8,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /** The authored standard and the occasion on which it is reviewed. */
+@Schema(additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record PracticeDefinition(
         @NonNull String name,
 
@@ -22,7 +25,8 @@ public record PracticeDefinition(
         @NonNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
         List<PracticeEvidenceRequirement> evidenceRequirements,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean onDrafts,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = ReviewWhen.DESCRIPTION)
+        Map<String, Set<String>> reviewWhen,
 
         @NonNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
         ActorRole subject,
@@ -35,12 +39,13 @@ public record PracticeDefinition(
         @Nullable String whatGoodLooksLike,
         @Nullable String groupSlug,
         @NonNull PracticeDeliveryBehavior deliveryBehavior)
-        implements CatalogDefinition {
+        implements CatalogDefinition, ClosedPracticeInput {
     public static final int MAX_PRECOMPUTE_SCRIPT_LENGTH = 100_000;
 
     public PracticeDefinition {
         Objects.requireNonNull(name, "name");
         signals = canonicalSignals(signals);
+        reviewWhen = ReviewWhen.canonical(Objects.requireNonNull(reviewWhen, "reviewWhen"));
         evidenceRequirements = List.copyOf(Objects.requireNonNull(evidenceRequirements, "evidenceRequirements").stream()
                 .sorted(Comparator.comparing(
                         requirement -> requirement.sourceKind().value()))
@@ -72,7 +77,7 @@ public record PracticeDefinition(
             String name,
             List<SignalName> signals,
             List<PracticeEvidenceRequirement> evidenceRequirements,
-            boolean onDrafts,
+            Map<String, Set<String>> reviewWhen,
             ActorRole subject,
             @Nullable PracticePrecondition precondition,
             String criteria,
@@ -85,7 +90,7 @@ public record PracticeDefinition(
                 name,
                 signals,
                 evidenceRequirements,
-                onDrafts,
+                reviewWhen,
                 subject,
                 precondition,
                 criteria,
@@ -102,7 +107,7 @@ public record PracticeDefinition(
                 practice.getName(),
                 practice.getSignals(),
                 practice.getEvidenceRequirements(),
-                practice.isOnDrafts(),
+                practice.getReviewWhen(),
                 practice.getSubject(),
                 practice.getPrecondition(),
                 practice.getCriteria(),
@@ -129,7 +134,7 @@ public record PracticeDefinition(
                 shipped.automatedReviewPolicy().automatedReview().mode() == PracticeAutomatedReviewMode.NONE
                         ? List.of()
                         : evidenceRequirements,
-                onDrafts,
+                reviewWhen,
                 subject,
                 null,
                 criteria,
@@ -150,9 +155,8 @@ public record PracticeDefinition(
         return ReviewRuleFingerprint.of(
                 slug,
                 name,
-                signals,
+                artifactKind(),
                 evidenceRequirements,
-                onDrafts,
                 subject,
                 precondition,
                 criteria,

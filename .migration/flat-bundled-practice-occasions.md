@@ -5,8 +5,13 @@ observation assessment axes are removed. Do not run old workers or API clients a
 
 1. Stop review scheduling and let reviews finish, or cancel them. Stop every runtime role.
 2. Create a database backup and verify that you can restore it into a separate database.
-3. Convert custom catalogue files and API payloads to the flat fields `signals`, `evidenceRequirements`, `onDrafts`,
+3. Convert custom catalogue files and API payloads to the flat fields `signals`, `evidenceRequirements`, `reviewWhen`,
    `subject`, and optional `precondition`. The precondition's explanation is `skipReason`.
+   `reviewWhen` is an object of descriptor-owned state selections, not a shared draft flag.
+   For non-draft pull or merge requests use `{"draftStatus":["NOT_DRAFT"]}`; use `{}` for no state
+   restriction. Issues have no draft state, documents expose active or archived, and conversations
+   expose no lifecycle selection. The migration preserves the previous pull-request draft restriction
+   without adding it to other work types.
    Describe the positive standard in `criteria`; remove matrix-based instructions.
 4. Update integrations to submit `outcome`: `MET`, `NOT_MET`, `NOT_APPLICABLE`, or `UNDETERMINED`.
    Supply severity exactly for `NOT_MET`. Retain the appropriate evidence warrants.

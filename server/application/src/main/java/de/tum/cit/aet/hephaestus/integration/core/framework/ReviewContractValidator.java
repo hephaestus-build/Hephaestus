@@ -122,7 +122,7 @@ public class ReviewContractValidator {
                 if (descriptor.lanes().isEmpty()) {
                     violations.add(kind + " is declared reviewable but declares no lane to deliver feedback on");
                 }
-                if (descriptor.reviewLimitations().isEmpty()) {
+                if (descriptor.reviewCapabilities().reviewLimitations().isEmpty()) {
                     violations.add(kind + " is declared reviewable but names nothing its evidence cannot settle — "
                             + "a kind whose evidence answers every question is not a claim anyone can make");
                 }

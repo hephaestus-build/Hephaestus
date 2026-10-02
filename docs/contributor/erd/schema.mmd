@@ -345,7 +345,7 @@ erDiagram
         JSONB delivery_behavior
         JSONB signals
         JSONB evidence_requirements
-        BOOLEAN on_drafts
+        JSONB review_when
         VARCHAR(16) subject
         JSONB precondition
     }
@@ -1031,7 +1031,7 @@ erDiagram
         JSONB delivery_behavior "NOT NULL"
         JSONB signals "NOT NULL"
         JSONB evidence_requirements "NOT NULL"
-        BOOLEAN on_drafts "NOT NULL"
+        JSONB review_when "NOT NULL"
         VARCHAR(16) subject "NOT NULL"
         JSONB precondition
     }
@@ -1092,7 +1092,7 @@ erDiagram
         JSONB delivery_behavior "NOT NULL"
         JSONB signals
         JSONB evidence_requirements
-        BOOLEAN on_drafts
+        JSONB review_when
         VARCHAR(16) subject
         JSONB precondition
     }

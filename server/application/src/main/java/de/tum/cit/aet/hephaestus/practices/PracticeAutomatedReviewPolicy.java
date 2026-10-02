@@ -20,7 +20,9 @@ import org.jspecify.annotations.Nullable;
  * actually reads is <em>not</em> here — that depends on what occasioned the review, so it lives on
  * {@link PracticeDefinition#evidenceRequirements()}.
  */
-@Schema(description = "Author-defined automated review settings for one practice revision")
+@Schema(
+        description = "Author-defined automated review settings for one practice revision",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record PracticeAutomatedReviewPolicy(
         @NonNull
         @NotNull
@@ -46,7 +48,8 @@ public record PracticeAutomatedReviewPolicy(
         @Schema(
                 description = "Why this practice needs a human rather than automated review; present only when "
                         + "evidenceSufficiency is DECLARED_EVIDENCE_INSUFFICIENT")
-        PracticeEvidenceLimitation insufficiencyReason) {
+        PracticeEvidenceLimitation insufficiencyReason)
+        implements ClosedPracticeInput {
     public PracticeAutomatedReviewPolicy {
         Objects.requireNonNull(sourceContractVersion, "sourceContractVersion");
         Objects.requireNonNull(automatedReview, "automatedReview");

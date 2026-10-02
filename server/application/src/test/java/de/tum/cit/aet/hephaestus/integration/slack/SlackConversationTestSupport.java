@@ -134,7 +134,7 @@ public final class SlackConversationTestSupport {
         Practice practice = new Practice();
         practice.setSignals(PracticeTestEvidence.signals(ArtifactKinds.CONVERSATION_THREAD));
         practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.CONVERSATION_THREAD));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
@@ -144,7 +144,7 @@ public final class SlackConversationTestSupport {
         practice.setCriteria("Test description");
         practice.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
         practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         return practiceRepository.save(practice);

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class PracticeAutomatedReviewValidationTest extends BaseUnitTest {
@@ -37,7 +38,7 @@ class PracticeAutomatedReviewValidationTest extends BaseUnitTest {
                 original.name(),
                 original.signals(),
                 original.evidenceRequirements(),
-                original.onDrafts(),
+                original.reviewWhen(),
                 original.subject(),
                 original.precondition(),
                 original.criteria(),
@@ -76,7 +77,7 @@ class PracticeAutomatedReviewValidationTest extends BaseUnitTest {
                 "Focused review",
                 PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                 PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 "Assess whether the change stays focused.",

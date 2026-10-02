@@ -5,7 +5,11 @@
 	"description": "Repository-managed practice definitions installed into the curated instance catalog.",
 	"type": "object",
 	"additionalProperties": false,
-	"required": ["$schema", "criteriaPreambles", "groups"],
+	"required": [
+		"$schema",
+		"criteriaPreambles",
+		"groups"
+	],
 	"properties": {
 		"$schema": {
 			"description": "Schema used by editors and CI to validate this catalog.",
@@ -34,7 +38,11 @@
 			"description": "A named group of related practices.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["slug", "name", "practices"],
+			"required": [
+				"slug",
+				"name",
+				"practices"
+			],
 			"properties": {
 				"slug": {
 					"description": "Stable group identifier used for provenance and URLs.",
@@ -75,12 +83,19 @@
 			"description": "One bundled engineering-practice definition.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["slug", "name", "signals", "criteria"],
+			"required": [
+				"slug",
+				"name",
+				"signals",
+				"criteria"
+			],
 			"if": {
 				"properties": {
 					"insufficiencyReason": true
 				},
-				"required": ["insufficiencyReason"]
+				"required": [
+					"insufficiencyReason"
+				]
 			},
 			"then": {
 				"properties": {
@@ -91,7 +106,9 @@
 				"properties": {
 					"holdsAs": true
 				},
-				"required": ["holdsAs"]
+				"required": [
+					"holdsAs"
+				]
 			},
 			"properties": {
 				"slug": {
@@ -118,7 +135,10 @@
 					"items": {
 						"type": "object",
 						"additionalProperties": false,
-						"required": ["sourceKind", "stance"],
+						"required": [
+							"sourceKind",
+							"stance"
+						],
 						"properties": {
 							"sourceKind": {
 								"description": "Stable source identifier from the shipped source contract.",
@@ -127,18 +147,23 @@
 							},
 							"stance": {
 								"description": "REQUIRED: the claim reads it. EXHAUSTIVE: the claim asserts something is absent from it, so a partial capture cannot satisfy it. CONTEXTUAL: used if present, never fatal.",
-								"enum": ["REQUIRED", "EXHAUSTIVE", "CONTEXTUAL"]
+								"enum": [
+									"REQUIRED",
+									"EXHAUSTIVE",
+									"CONTEXTUAL"
+								]
 							}
 						}
 					}
 				},
-				"onDrafts": {
-					"description": "Whether an artifact still marked draft occasions this review. Defaults to false.",
-					"type": "boolean"
-				},
 				"subject": {
 					"description": "Whose conduct a review occasioned this way judges, and therefore which person its observations are filed against. Defaults to AUTHOR. A practice about reviewing somebody else's work names REVIEWER; one about the act of merging names MERGER, reviewed only when the merger is the author the run is about.",
-					"enum": ["AUTHOR", "ASSIGNEE", "REVIEWER", "MERGER"]
+					"enum": [
+						"AUTHOR",
+						"ASSIGNEE",
+						"REVIEWER",
+						"MERGER"
+					]
 				},
 				"precondition": {
 					"description": "What must be in the work for this practice to have anything to judge. Decided from staged evidence before the practice is put to a model, so a practice whose prerequisite is provably absent is not asked. Omit to apply to every artifact of this kind.",
@@ -187,7 +212,10 @@
 					"description": "Present only when the evidence Hephaestus collects cannot support this practice's question: the practice ships as needing human review, Hephaestus never reviews it, and this says why. Such a practice carries no holdsAs: nothing it recorded can support one.",
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["code", "description"],
+					"required": [
+						"code",
+						"description"
+					],
 					"properties": {
 						"code": {
 							"type": "string",
@@ -199,13 +227,27 @@
 							"maxLength": 500
 						}
 					}
+				},
+				"reviewWhen": {
+					"description": "Allowed categorical review states from the artifact descriptor. Values within a dimension are alternatives; every selected dimension must match. Omitted dimensions are unrestricted. Empty selections and unsupported dimensions or values are rejected.",
+					"type": "object",
+					"additionalProperties": {
+						"type": "array",
+						"minItems": 1,
+						"uniqueItems": true,
+						"items": {
+							"type": "string"
+						}
+					}
 				}
 			}
 		},
 		"deliveryBehavior": {
 			"description": "Declared feedback placement and co-occurrence choices for a practice.",
 			"type": "object",
-			"required": ["summaryOnly"],
+			"required": [
+				"summaryOnly"
+			],
 			"additionalProperties": false,
 			"properties": {
 				"summaryOnly": {
@@ -246,7 +288,10 @@
 			"description": "A mechanical review precondition: what has to be in a piece of work for a practice to have anything to judge about it, and the sentence to show a reader when it is not.",
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["skipReason", "anyOf"],
+			"required": [
+				"skipReason",
+				"anyOf"
+			],
 			"properties": {
 				"skipReason": {
 					"description": "Sentence shown wherever the resulting silence is explained, in the practice author's voice and phrased as a fact about the work, e.g. 'the change touches no dependency manifest or lockfile'.",

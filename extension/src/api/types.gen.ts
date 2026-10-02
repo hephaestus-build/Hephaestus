@@ -1174,12 +1174,17 @@ export type CreatePracticeRequest = {
    * Human-readable name
    */
   name: string;
-  onDrafts?: boolean;
   /**
    * TypeScript/Node static analysis run before automated review
    */
   precomputeScript?: string;
   precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen?: {
+    [key: string]: Array<string>;
+  };
   signals: Array<string>;
   /**
    * URL-safe identifier unique within the workspace
@@ -1472,9 +1477,14 @@ export type CuratedPracticeDefinition = {
   evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
   name: string;
-  onDrafts: boolean;
   precomputeScript?: string;
   precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen: {
+    [key: string]: Array<string>;
+  };
   signals: Array<string>;
   subject: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   whatGoodLooksLike?: string;
@@ -1498,9 +1508,14 @@ export type CuratedPracticeRequest = {
   evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
   name: string;
-  onDrafts?: boolean;
   precomputeScript?: string;
   precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen?: {
+    [key: string]: Array<string>;
+  };
   signals: Array<string>;
   subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   whatGoodLooksLike?: string;
@@ -3270,12 +3285,17 @@ export type Practice = {
    * Human-readable name
    */
   name: string;
-  onDrafts: boolean;
   /**
    * TypeScript/Node precompute script for static analysis before AI review
    */
   precomputeScript?: string;
   precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen: {
+    [key: string]: Array<string>;
+  };
   /**
    * Signals that start a practice review
    */
@@ -3371,9 +3391,14 @@ export type PracticeDefinition = {
   evidenceRequirements: Array<PracticeEvidenceRequirement>;
   groupSlug?: string;
   name: string;
-  onDrafts: boolean;
   precomputeScript?: string;
   precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen: {
+    [key: string]: Array<string>;
+  };
   signals: Array<string>;
   subject: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   whatGoodLooksLike?: string;
@@ -3684,7 +3709,7 @@ export type PracticeProfileOverview = {
 
 export type PracticeReleaseField = {
   conflict: boolean;
-  field: 'NAME' | 'SIGNALS' | 'EVIDENCE_REQUIREMENTS' | 'ON_DRAFTS' | 'SUBJECT' | 'PRECONDITION' | 'CRITERIA' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
+  field: 'NAME' | 'SIGNALS' | 'EVIDENCE_REQUIREMENTS' | 'REVIEW_WHEN' | 'SUBJECT' | 'PRECONDITION' | 'CRITERIA' | 'PRECOMPUTE_SCRIPT' | 'AUTOMATED_REVIEW_POLICY' | 'WHY_IT_MATTERS' | 'WHAT_GOOD_LOOKS_LIKE' | 'GROUP_SLUG' | 'DELIVERY_BEHAVIOR';
   offeredChanged: boolean;
 };
 
@@ -3886,6 +3911,18 @@ export type PracticeReviewSettings = {
   revision: number;
 };
 
+export type PracticeReviewStateDimension = {
+  displayName: string;
+  key: string;
+  recommendedValues: Array<string>;
+  values: Array<PracticeReviewStateValue>;
+};
+
+export type PracticeReviewStateValue = {
+  displayName: string;
+  value: string;
+};
+
 /**
  * A signal and the words a reader sees for it
  */
@@ -4078,11 +4115,14 @@ export type PracticeWorkTypeDefinitionOptions = {
    * How a person asks for a review of this work type by hand, or absent where the work type admits no such request. Not an occasion to bind to: such a request reviews every practice on the work type whatever state the work is in.
    */
   manualReviewSignal?: PracticeSignal;
+  preconditionEvidenceCollections: Array<string>;
+  preconditionSupportedAspects: Array<string>;
   /**
    * Evidence a new binding on this work type starts with when the author says nothing
    */
   recommendedEvidenceRequirements: Array<PracticeEvidenceRequirement>;
   recommendedPolicy: PracticeAutomatedReviewPolicy;
+  reviewWhenDimensions: Array<PracticeReviewStateDimension>;
   /**
    * The occasions a practice on this work type can be bound to. A review somebody asks for by hand is not among them — see manualReviewSignal.
    */
@@ -6055,12 +6095,17 @@ export type UpdatePracticeRequest = {
    * Human-readable name
    */
   name?: string;
-  onDrafts?: boolean;
   /**
    * TypeScript/Node static analysis run before automated review
    */
   precomputeScript?: string;
   precondition?: PracticePrecondition;
+  /**
+   * Automatic review state selections. An empty object imposes no state restrictions. Each selected dimension requires a nonempty set of non-null values offered by the work type descriptor. Values within a dimension are alternatives; all selected dimensions must match.
+   */
+  reviewWhen?: {
+    [key: string]: Array<string>;
+  };
   signals?: Array<string>;
   subject?: 'AUTHOR' | 'ASSIGNEE' | 'REVIEWER' | 'MERGER';
   /**

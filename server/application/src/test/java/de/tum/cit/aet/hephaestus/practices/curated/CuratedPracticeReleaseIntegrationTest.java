@@ -146,7 +146,7 @@ class CuratedPracticeReleaseIntegrationTest extends BaseIntegrationTest {
                 source.name(),
                 source.signals(),
                 source.evidenceRequirements(),
-                source.onDrafts(),
+                source.reviewWhen(),
                 source.subject(),
                 source.precondition(),
                 criteria,

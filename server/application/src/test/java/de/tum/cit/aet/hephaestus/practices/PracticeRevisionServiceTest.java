@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,7 +125,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         practice.setEvidenceRequirements(List.of(
                 new PracticeEvidenceRequirement(new SourceKind("scm.pull-request.core"), EvidenceStance.REQUIRED),
                 new PracticeEvidenceRequirement(new SourceKind("scm.review-threads"), EvidenceStance.CONTEXTUAL)));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
 

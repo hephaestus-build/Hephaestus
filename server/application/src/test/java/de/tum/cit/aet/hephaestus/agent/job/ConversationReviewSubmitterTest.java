@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -81,7 +82,8 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
         workspace.setId(WORKSPACE_ID);
         lenient().when(workspaceRepository.findById(WORKSPACE_ID)).thenReturn(Optional.of(workspace));
         lenient()
-                .when(reviewGate.evaluateSignal(eq(workspace), any(), eq(TriggerMode.AUTO), any(ReviewSubject.class)))
+                .when(reviewGate.evaluateSignal(
+                        eq(workspace), any(), eq(TriggerMode.AUTO), any(ReviewSubject.class), anyMap()))
                 .thenReturn(new GateDecision.Detect(workspace, java.util.List.of(), 0, TriggerMode.AUTO));
     }
 
@@ -136,7 +138,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
 
     @Test
     void aParticipantOutsideReviewCoverageDoesNotStartCompute() {
-        when(reviewGate.evaluateSignal(any(), any(), any(), any()))
+        when(reviewGate.evaluateSignal(any(), any(), any(), any(), anyMap()))
                 .thenReturn(new GateDecision.Skip("outside review coverage", SignalStateReason.OUT_OF_REVIEW_SCOPE));
 
         assertThat(submitter.submitAndSettle(candidate(11L), key())).isZero();

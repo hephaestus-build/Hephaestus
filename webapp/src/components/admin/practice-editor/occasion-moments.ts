@@ -40,7 +40,7 @@ export interface MomentDef {
 	icon: LucideIcon;
 	phase: MomentPhase;
 	/**
-	 * True where the moment happens repeatedly in one piece of work, which makes reviewFields it a
+	 * True where the moment happens repeatedly in one piece of work, which makes it a
 	 * decision about volume the strip has to state up front.
 	 */
 	repeats: boolean;

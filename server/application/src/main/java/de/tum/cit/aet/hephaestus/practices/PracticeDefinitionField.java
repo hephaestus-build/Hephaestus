@@ -5,7 +5,7 @@ public enum PracticeDefinitionField {
     NAME,
     SIGNALS,
     EVIDENCE_REQUIREMENTS,
-    ON_DRAFTS,
+    REVIEW_WHEN,
     SUBJECT,
     PRECONDITION,
     CRITERIA,

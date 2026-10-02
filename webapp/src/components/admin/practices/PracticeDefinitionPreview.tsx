@@ -58,6 +58,7 @@ export function PracticeDefinitionPreview({ definition, options }: PracticeDefin
 							validation={definition.automatedReviewValidation}
 							sources={workType?.allowedSources ?? []}
 							signalOptions={workType?.signals ?? []}
+							reviewWhenDimensions={workType?.reviewWhenDimensions ?? []}
 							workTypeLabel={artifactKindLabel(definition.artifactKind)}
 							showValidation
 						/>

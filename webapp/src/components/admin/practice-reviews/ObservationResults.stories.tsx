@@ -17,7 +17,7 @@ const longContent = {
 	...firstObservation,
 	id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
 	summary:
-		"The review keeps every boundary visible even when the observation evidenceRequirements enough words to wrap across a narrow screen twice over",
+		"The review keeps every boundary visible even when the observation needs enough words to wrap across a narrow screen twice over",
 	subject: {
 		id: 10,
 		login: "alexandria-occasional-contributor",

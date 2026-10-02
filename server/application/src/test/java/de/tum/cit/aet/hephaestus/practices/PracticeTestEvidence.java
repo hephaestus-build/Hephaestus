@@ -48,6 +48,7 @@ public final class PracticeTestEvidence {
     public static void configure(Practice practice, SignalName... signals) {
         practice.setSignals(List.of(signals));
         practice.setEvidenceRequirements(needsFor(signals[0].artifactKind()));
+        practice.setReviewWhen(PracticeSignalOptionsFixture.real().defaultReviewWhenFor(signals[0].artifactKind()));
     }
 
     public static SignalName defaultSignal(ArtifactKind artifactKind) {

@@ -299,7 +299,7 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         practice.setEvidenceRequirements(List.of(
                 new PracticeEvidenceRequirement(CORE, EvidenceStance.REQUIRED),
                 new PracticeEvidenceRequirement(COMMENTS, EvidenceStance.EXHAUSTIVE)));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         practice.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
@@ -22,6 +23,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -78,7 +80,7 @@ public class ReviewGate {
             @NonNull SignalName signal,
             @NonNull TriggerMode triggerMode,
             @NonNull ReviewSubject subject) {
-        return evaluateReviewable(pullRequest, pullRequest.isDraft(), signal, triggerMode, false, subject);
+        return evaluateReviewable(pullRequest, pullRequest.reviewState(), signal, triggerMode, false, subject);
     }
 
     /**
@@ -101,7 +103,7 @@ public class ReviewGate {
                 .<GateDecision>map(workspace -> evaluateReviewableInWorkspace(
                         pullRequest,
                         workspace,
-                        pullRequest.isDraft(),
+                        pullRequest.reviewState(),
                         signal,
                         TriggerMode.AUTO,
                         false,
@@ -113,7 +115,7 @@ public class ReviewGate {
 
     public GateDecision evaluateAdministrative(PullRequest pullRequest, SignalName signal) {
         return evaluateReviewable(
-                pullRequest, pullRequest.isDraft(), signal, TriggerMode.MANUAL, true, pullRequest.reviewSubject());
+                pullRequest, pullRequest.reviewState(), signal, TriggerMode.MANUAL, true, pullRequest.reviewSubject());
     }
 
     /**
@@ -129,7 +131,7 @@ public class ReviewGate {
         return evaluateReviewableInWorkspace(
                 pullRequest,
                 workspace,
-                pullRequest.isDraft(),
+                pullRequest.reviewState(),
                 signal,
                 triggerMode,
                 false,
@@ -142,7 +144,7 @@ public class ReviewGate {
         return evaluateReviewableInWorkspace(
                 pullRequest,
                 workspace,
-                pullRequest.isDraft(),
+                pullRequest.reviewState(),
                 signal,
                 TriggerMode.MANUAL,
                 true,
@@ -156,7 +158,7 @@ public class ReviewGate {
             @NonNull SignalName signal,
             @NonNull TriggerMode triggerMode) {
         return evaluateReviewableInWorkspace(
-                issue, workspace, false, signal, triggerMode, false, issue.reviewSubject(), false);
+                issue, workspace, issue.reviewState(), signal, triggerMode, false, issue.reviewSubject(), false);
     }
 
     public GateDecision evaluateIssue(
@@ -173,14 +175,15 @@ public class ReviewGate {
 
     public GateDecision evaluateIssueAdministrative(Issue issue, Workspace workspace, SignalName signal) {
         return evaluateReviewableInWorkspace(
-                issue, workspace, false, signal, TriggerMode.MANUAL, true, issue.reviewSubject(), false);
+                issue, workspace, issue.reviewState(), signal, TriggerMode.MANUAL, true, issue.reviewSubject(), false);
     }
 
     public GateDecision evaluateSignal(
             @NonNull Workspace workspace,
             @NonNull SignalName signal,
             @NonNull TriggerMode triggerMode,
-            @NonNull ReviewSubject subject) {
+            @NonNull ReviewSubject subject,
+            @NonNull Map<String, String> reviewState) {
         if (subject.actorId() != null && !subject.human()) {
             return botRefusal(subject);
         }
@@ -193,12 +196,12 @@ public class ReviewGate {
                                 ? SignalStateReason.OUT_OF_REVIEW_SCOPE
                                 : SignalStateReason.SUBJECT_UNLINKED);
         return evaluateWorkspaceAndSignal(
-                workspace, signal, false, triggerMode, "workspace:" + workspace.getId(), scopeSkip, Set.of());
+                workspace, signal, reviewState, triggerMode, "workspace:" + workspace.getId(), scopeSkip, Set.of());
     }
 
     private GateDecision evaluateReviewable(
             @NonNull Issue reviewable,
-            boolean draft,
+            Map<String, String> reviewState,
             @NonNull SignalName signal,
             @NonNull TriggerMode triggerMode,
             boolean allowOutsideCoverage,
@@ -216,13 +219,13 @@ public class ReviewGate {
         }
 
         return evaluateReviewableInWorkspace(
-                reviewable, workspace, draft, signal, triggerMode, allowOutsideCoverage, subject, false);
+                reviewable, workspace, reviewState, signal, triggerMode, allowOutsideCoverage, subject, false);
     }
 
     private GateDecision evaluateReviewableInWorkspace(
             Issue reviewable,
             Workspace workspace,
-            boolean draft,
+            Map<String, String> reviewState,
             SignalName signal,
             TriggerMode triggerMode,
             boolean allowOutsideCoverage,
@@ -255,12 +258,12 @@ public class ReviewGate {
         return evaluateWorkspaceAndSignal(
                 workspace,
                 signal,
-                draft,
+                reviewState,
                 triggerMode,
                 String.valueOf(reviewable.getId()),
                 scopeSkip,
                 recheck && scopeSkip == null
-                        ? practicesToRecheck(reviewable, workspace, draft, signal, triggerMode, subject)
+                        ? practicesToRecheck(reviewable, workspace, signal, triggerMode, subject)
                         : Set.of());
     }
 
@@ -272,16 +275,11 @@ public class ReviewGate {
      * known difference from that negative run's staged work; a deferred event alone proves no change.
      */
     private Set<Long> practicesToRecheck(
-            Issue reviewable,
-            Workspace workspace,
-            boolean draft,
-            SignalName signal,
-            TriggerMode triggerMode,
-            ReviewSubject subject) {
+            Issue reviewable, Workspace workspace, SignalName signal, TriggerMode triggerMode, ReviewSubject subject) {
         Long authorId = subject.actorId();
         if (!(reviewable instanceof PullRequest pullRequest)
                 || (signalOptions.isInternalRepair(signal) ? !pullRequest.isMerged() : !reviewable.isOpen())
-                || draft
+                || pullRequest.isDraft()
                 || triggerMode != TriggerMode.AUTO
                 || authorId == null) {
             return Set.of();
@@ -358,7 +356,7 @@ public class ReviewGate {
     private GateDecision evaluateWorkspaceAndSignal(
             Workspace workspace,
             SignalName signal,
-            boolean draft,
+            Map<String, String> reviewState,
             TriggerMode triggerMode,
             String subject,
             GateDecision.@Nullable Skip scopeSkip,
@@ -400,7 +398,7 @@ public class ReviewGate {
             return new GateDecision.Skip("no runnable practice-review agent");
         }
 
-        SignalMatch match = findMatchingPractices(workspace, signal, draft, rechecks);
+        SignalMatch match = findMatchingPractices(workspace, signal, reviewState, triggerMode, rechecks);
         if (match.admitted().isEmpty()) {
             if (match.hasDisabledPractice()) {
                 log.debug(
@@ -412,14 +410,13 @@ public class ReviewGate {
                         "every practice bound to this signal is off", SignalStateReason.PRACTICE_AUTONOMY_OFF);
             }
             log.debug(
-                    "Practice review gate: SKIP, reason=noMatchingPractices, subject={}, signal={}, draft={}, "
+                    "Practice review gate: SKIP, reason=noMatchingPractices, subject={}, signal={}, reviewState={}, "
                             + "workspaceId={}",
                     subject,
                     signal,
-                    draft,
+                    reviewState,
                     workspace.getId());
-            return new GateDecision.Skip(
-                    draft ? "no practices bound to this signal on drafts" : "no matching practices");
+            return new GateDecision.Skip("no practices match this signal and recorded review state");
         }
         return new GateDecision.Detect(
                 workspace,
@@ -428,9 +425,10 @@ public class ReviewGate {
                 triggerMode,
                 match.admitted().stream()
                         .filter(p -> isCandidate(p, rechecks)
-                                && (signalOptions.isInternalRepair(signal) || !occasionedBy(p, signal, draft)))
+                                && (signalOptions.isInternalRepair(signal) || !occasionedBy(p, signal, reviewState)))
                         .map(Practice::getSlug)
-                        .collect(Collectors.toSet()));
+                        .collect(Collectors.toSet()),
+                reviewState);
     }
 
     private record SignalMatch(List<Practice> admitted, boolean hasDisabledPractice) {}
@@ -447,19 +445,23 @@ public class ReviewGate {
         return id != null && rechecks.contains(id);
     }
 
-    private static boolean occasionedBy(Practice practice, SignalName signal, boolean draft) {
-        return practice.getSignals().contains(signal) && (!draft || practice.isOnDrafts());
+    private static boolean occasionedBy(Practice practice, SignalName signal, Map<String, String> reviewState) {
+        return practice.getSignals().contains(signal) && ReviewWhen.matches(practice.getReviewWhen(), reviewState);
     }
 
     private SignalMatch findMatchingPractices(
-            Workspace workspace, SignalName signal, boolean draft, Set<Long> rechecks) {
-        boolean requestedByHand = signalOptions.isManualRequest(signal);
+            Workspace workspace,
+            SignalName signal,
+            Map<String, String> reviewState,
+            TriggerMode triggerMode,
+            Set<Long> rechecks) {
+        boolean requestedByHand = triggerMode == TriggerMode.MANUAL || signalOptions.isManualRequest(signal);
         List<Practice> bound = practiceRepository.findByWorkspaceId(workspace.getId()).stream()
                 .filter(p -> signalOptions.isInternalRepair(signal)
                         ? rechecked(p, signal, rechecks)
                         : requestedByHand
                                 ? p.getArtifactKind().equals(signal.artifactKind())
-                                : occasionedBy(p, signal, draft) || rechecked(p, signal, rechecks))
+                                : occasionedBy(p, signal, reviewState) || rechecked(p, signal, rechecks))
                 // Withdrawn from automated review whatever its stored policy says: bound, but no occasion.
                 .filter(p -> fence.withdrawal(p).isEmpty())
                 .toList();

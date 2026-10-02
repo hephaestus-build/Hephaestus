@@ -76,7 +76,7 @@ class LinkedWorkItemCaptureFailureReadinessTest extends BaseUnitTest {
                     practice.setSlug(entry.slug());
                     practice.setSignals(entry.definition().signals());
                     practice.setEvidenceRequirements(entry.definition().evidenceRequirements());
-                    practice.setOnDrafts(entry.definition().onDrafts());
+                    practice.setReviewWhen(entry.definition().reviewWhen());
                     practice.setSubject(entry.definition().subject());
                     practice.setPrecondition(entry.definition().precondition());
                     practice.setAutomatedReviewPolicy(entry.definition().automatedReviewPolicy());

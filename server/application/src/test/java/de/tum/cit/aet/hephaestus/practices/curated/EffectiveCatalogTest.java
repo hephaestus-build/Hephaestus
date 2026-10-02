@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class EffectiveCatalogTest extends BaseUnitTest {
@@ -21,7 +22,7 @@ class EffectiveCatalogTest extends BaseUnitTest {
                 "Small PRs",
                 PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                 PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 "Criteria",

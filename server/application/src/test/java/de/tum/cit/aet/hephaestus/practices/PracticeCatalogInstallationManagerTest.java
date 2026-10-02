@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.events.WorkspaceCreatedEvent;
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -130,7 +131,7 @@ class PracticeCatalogInstallationManagerTest extends BaseUnitTest {
                 "Small PRs",
                 PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                 PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 "Seed criteria",

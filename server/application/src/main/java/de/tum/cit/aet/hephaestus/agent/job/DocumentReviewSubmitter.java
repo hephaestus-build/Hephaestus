@@ -95,7 +95,11 @@ public class DocumentReviewSubmitter implements DocumentReviewTrigger, PendingSi
         }
 
         switch (reviewGate.evaluateSignal(
-                workspace, key.signalName(), TriggerMode.AUTO, new ReviewSubject(aboutUserId, true))) {
+                workspace,
+                key.signalName(),
+                TriggerMode.AUTO,
+                new ReviewSubject(aboutUserId, true),
+                java.util.Map.of("state", document.archived() ? "ARCHIVED" : "ACTIVE"))) {
             case GateDecision.Skip skip -> {
                 log.debug(
                         "Document signal skipped by practice gate: documentId={}, reason={}",

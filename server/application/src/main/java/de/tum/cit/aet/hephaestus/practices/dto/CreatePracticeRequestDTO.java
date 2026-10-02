@@ -2,11 +2,13 @@ package de.tum.cit.aet.hephaestus.practices.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.ClosedPracticeInput;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -14,9 +16,13 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "Request to create a new practice definition")
+@Schema(
+        description = "Request to create a new practice definition",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record CreatePracticeRequestDTO(
         @NotBlank(message = "Slug is required")
         @Size(min = 3, max = 64, message = "Slug must be between 3 and 64 characters")
@@ -42,7 +48,9 @@ public record CreatePracticeRequestDTO(
         @NotNull(message = "Evidence requirements are required") @Nullable
         List<@Valid PracticeEvidenceRequirement> evidenceRequirements,
 
-        @Nullable Boolean onDrafts,
+        @Schema(description = ReviewWhen.DESCRIPTION) @Nullable
+        Map<String, Set<String>> reviewWhen,
+
         @Nullable ActorRole subject,
         @Valid @Nullable PracticePrecondition precondition,
 
@@ -82,13 +90,14 @@ public record CreatePracticeRequestDTO(
         @Nullable
         String groupSlug,
 
-        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior)
+        implements ClosedPracticeInput {
     public CreatePracticeRequestDTO(
             @Nullable String slug,
             @Nullable String name,
             @Nullable List<SignalName> signals,
             @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
-            @Nullable Boolean onDrafts,
+            @Nullable Map<String, Set<String>> reviewWhen,
             @Nullable ActorRole subject,
             @Nullable PracticePrecondition precondition,
             @Nullable String criteria,
@@ -102,7 +111,7 @@ public record CreatePracticeRequestDTO(
                 name,
                 signals,
                 evidenceRequirements,
-                onDrafts,
+                reviewWhen,
                 subject,
                 precondition,
                 criteria,

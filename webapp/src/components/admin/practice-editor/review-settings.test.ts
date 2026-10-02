@@ -24,7 +24,7 @@ const guidanceOnly: PracticeAutomatedReviewPolicy = {
 function reviewFields(overrides: Partial<PracticeReviewFields> = {}): PracticeReviewFields {
 	return {
 		signals: ["scm.pull_request.opened"],
-		onDrafts: false,
+		reviewWhen: {},
 		subject: "AUTHOR",
 		evidenceRequirements: [{ sourceKind: "scm.pull-request.core", stance: "REQUIRED" }],
 		...overrides,
@@ -76,9 +76,12 @@ describe("normalizeReviewSettings", () => {
 		});
 	});
 
-	it("keeps an explicit draft flag", () => {
-		expect(normalizeReviewSettings(reviewFields({ onDrafts: false })).onDrafts).toBe(false);
-		expect(normalizeReviewSettings(reviewFields({ onDrafts: true })).onDrafts).toBe(true);
+	it("keeps unrestricted and explicit finite review conditions", () => {
+		expect(normalizeReviewSettings(reviewFields({ reviewWhen: {} })).reviewWhen).toStrictEqual({});
+		expect(
+			normalizeReviewSettings(reviewFields({ reviewWhen: { draftStatus: ["NOT_DRAFT"] } }))
+				.reviewWhen,
+		).toStrictEqual({ draftStatus: ["NOT_DRAFT"] });
 	});
 });
 
@@ -279,4 +282,21 @@ describe("reviewSettingsProblem", () => {
 			),
 		).toBeUndefined();
 	});
+});
+
+describe("descriptor-supported review conditions", () => {
+	it("uses descriptor recommendations and omits unrestricted dimensions", () => {
+		expect(recommendedReviewSettings(mockPullRequestWorkType).reviewWhen).toStrictEqual({
+			draftStatus: ["NOT_DRAFT"],
+		});
+	});
+	it.each<Record<string, string[]>>([{ state: [] }, { unknown: ["OPEN"] }, { state: ["INVALID"] }])(
+		"refuses unsupported or empty selection %j",
+		(reviewWhen) => {
+			expect(
+				reviewSettingsProblem(reviewFields({ reviewWhen }), aiSupported, mockPullRequestWorkType)
+					?.message,
+			).toBe("Choose review conditions supported by this kind of work.");
+		},
+	);
 });

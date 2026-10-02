@@ -106,7 +106,12 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
     void submitsADocumentReview() {
         givenWorkspace();
         givenDocument(document(42L));
-        when(gate.evaluateSignal(workspace, PUBLISHED, TriggerMode.AUTO, new ReviewSubject(42L, true)))
+        when(gate.evaluateSignal(
+                        workspace,
+                        PUBLISHED,
+                        TriggerMode.AUTO,
+                        new ReviewSubject(42L, true),
+                        java.util.Map.of("state", "ACTIVE")))
                 .thenReturn(automaticDetection(workspace, List.of()));
 
         submitter.onDocumentSignal(KEY, DiscoveredVia.EVENT);
@@ -134,7 +139,12 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
     void resubmitCarriesTheLedgersDiscoveryMode() {
         givenWorkspace();
         givenDocument(document(42L));
-        when(gate.evaluateSignal(workspace, PUBLISHED, TriggerMode.AUTO, new ReviewSubject(42L, true)))
+        when(gate.evaluateSignal(
+                        workspace,
+                        PUBLISHED,
+                        TriggerMode.AUTO,
+                        new ReviewSubject(42L, true),
+                        java.util.Map.of("state", "ACTIVE")))
                 .thenReturn(automaticDetection(workspace, List.of()));
         ArtifactSignal signal = new ArtifactSignal();
         signal.setWorkspace(workspace);
@@ -198,7 +208,12 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
     void recordsTheGatesReason() {
         givenWorkspace();
         givenDocument(document(42L));
-        when(gate.evaluateSignal(workspace, PUBLISHED, TriggerMode.AUTO, new ReviewSubject(42L, true)))
+        when(gate.evaluateSignal(
+                        workspace,
+                        PUBLISHED,
+                        TriggerMode.AUTO,
+                        new ReviewSubject(42L, true),
+                        java.util.Map.of("state", "ACTIVE")))
                 .thenReturn(new GateDecision.Skip(
                         "every practice bound to this signal is off", SignalStateReason.PRACTICE_AUTONOMY_OFF));
 

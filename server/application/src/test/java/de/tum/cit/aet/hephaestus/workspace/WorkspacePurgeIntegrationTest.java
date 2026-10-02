@@ -856,7 +856,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             Practice practice = new Practice();
             practice.setSignals(PracticeTestEvidence.signals(ArtifactKinds.CONVERSATION_THREAD));
             practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.CONVERSATION_THREAD));
-            practice.setOnDrafts(false);
+            practice.setReviewWhen(Map.of());
             practice.setSubject(ActorRole.AUTHOR);
             practice.setPrecondition(null);
             practice.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());

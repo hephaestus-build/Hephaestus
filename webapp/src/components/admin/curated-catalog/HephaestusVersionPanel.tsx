@@ -71,7 +71,7 @@ const PRACTICE_FIELDS = {
 		| "automatedReviewValidation"
 		| "signals"
 		| "evidenceRequirements"
-		| "onDrafts"
+		| "reviewWhen"
 		| "subject"
 		| "precondition"
 	>,
@@ -179,6 +179,7 @@ export function HephaestusVersionPanel(props: HephaestusVersionPanelProps) {
 													validation={shippedPractice.automatedReviewValidation}
 													sources={shippedDefinitionOptions.allowedSources}
 													signalOptions={shippedDefinitionOptions.signals}
+													reviewWhenDimensions={shippedDefinitionOptions.reviewWhenDimensions}
 													workTypeLabel={artifactKindLabel(shippedPractice.artifactKind)}
 												/>
 											) : (

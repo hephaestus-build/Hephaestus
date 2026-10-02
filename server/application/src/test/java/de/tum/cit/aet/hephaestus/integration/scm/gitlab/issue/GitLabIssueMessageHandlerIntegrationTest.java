@@ -525,7 +525,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             practice.setCriteria("Break the work into trackable subtasks");
             practice.setSignals(PracticeTestEvidence.signals(ScmSignals.ISSUE_UPDATED));
             practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.ISSUE_UPDATED.artifactKind()));
-            practice.setOnDrafts(false);
+            practice.setReviewWhen(Map.of());
             practice.setSubject(ActorRole.AUTHOR);
             practice.setPrecondition(null);
             practice = practiceRepository.save(practice);

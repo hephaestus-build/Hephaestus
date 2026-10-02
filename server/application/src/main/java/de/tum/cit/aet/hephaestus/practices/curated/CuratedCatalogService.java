@@ -363,7 +363,7 @@ public class CuratedCatalogService {
                 definition.name(),
                 definition.signals(),
                 definition.evidenceRequirements(),
-                definition.onDrafts(),
+                definition.reviewWhen(),
                 definition.subject(),
                 definition.precondition(),
                 definition.criteria(),

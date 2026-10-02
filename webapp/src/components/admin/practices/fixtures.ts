@@ -158,7 +158,7 @@ export const mockUnassignedPractice: Practice = {
 	name: "Error State Handling",
 	...mockPullRequestReviewFields,
 	signals: ["scm.pull_request.opened"],
-	onDrafts: true,
+	reviewWhen: {},
 	criteria:
 		"## Error State Handling\n\nEvaluates whether the code properly handles and surfaces errors to the user instead of silently swallowing them.",
 	artifactKind: "scm.pull_request",

@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class PracticeDefinitionTest extends BaseUnitTest {
@@ -108,7 +109,9 @@ class PracticeDefinitionTest extends BaseUnitTest {
         var withRemovedField = mapper.readTree(json).deepCopy();
         ((tools.jackson.databind.node.ObjectNode) withRemovedField).putArray("bindings");
         assertThatThrownBy(() -> mapper.treeToValue(withRemovedField, PracticeDefinition.class))
-                .isInstanceOf(tools.jackson.databind.exc.UnrecognizedPropertyException.class);
+                .isInstanceOf(tools.jackson.databind.DatabindException.class)
+                .hasRootCauseInstanceOf(IllegalArgumentException.class)
+                .hasRootCauseMessage("Unknown practice definition field: bindings");
     }
 
     private static PracticeDefinition definition(
@@ -119,7 +122,7 @@ class PracticeDefinitionTest extends BaseUnitTest {
                 "Describe the change",
                 signals,
                 evidenceRequirements,
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 "Criteria.",

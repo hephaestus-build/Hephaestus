@@ -331,7 +331,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         linked.setSignals(List.of(ScmSignals.PULL_REQUEST_MERGED));
         linked.setEvidenceRequirements(List.of(
                 new PracticeEvidenceRequirement(new SourceKind("scm.linked-work-items"), EvidenceStance.REQUIRED)));
-        linked.setOnDrafts(false);
+        linked.setReviewWhen(Map.of());
         linked.setSubject(ActorRole.AUTHOR);
         linked.setPrecondition(null);
         linked.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(linked, 2)));

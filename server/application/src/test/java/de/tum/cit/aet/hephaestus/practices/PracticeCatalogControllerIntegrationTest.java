@@ -33,6 +33,8 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -49,12 +51,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -119,7 +123,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
     }
 
     private PracticeDTO practiceAt(String slug) {
-        return java.util.Objects.requireNonNull(webTestClient
+        return Objects.requireNonNull(webTestClient
                 .get()
                 .uri(BASE_URI + "/{slug}", workspace.getWorkspaceSlug(), slug)
                 .headers(TestAuthUtils.withCurrentUser())
@@ -137,7 +141,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 shown.name(),
                 shown.signals(),
                 shown.evidenceRequirements(),
-                shown.onDrafts(),
+                shown.reviewWhen(),
                 shown.subject(),
                 shown.precondition(),
                 criteria,
@@ -183,7 +187,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 "Practice " + slug,
                 PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_REVIEWED),
                 PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 "Detect if the PR follows best practices",
@@ -200,7 +204,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 request.name(),
                 PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                 PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 request.criteria(),
@@ -219,7 +223,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 request.name(),
                 request.signals(),
                 automatedReview ? request.evidenceRequirements() : List.of(),
-                request.onDrafts(),
+                request.reviewWhen(),
                 request.subject(),
                 request.precondition(),
                 request.criteria(),
@@ -307,7 +311,159 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 .value((java.util.List<String> value) ->
                         org.hamcrest.MatcherAssert.assertThat(value, contains("Pull request details")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].allowedSources[0].description")
-                .exists();
+                .exists()
+                .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].reviewWhenDimensions[0].key")
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("draftStatus")))
+                .jsonPath(
+                        "$.workTypes[?(@.artifactKind == 'scm.pull_request')].reviewWhenDimensions[0].values[1].value")
+                .value((java.util.List<String> value) ->
+                        org.hamcrest.MatcherAssert.assertThat(value, contains("NOT_DRAFT")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"bindings", "subjectRole", "clause", "automatedReview"})
+    @WithAdminUser
+    void shouldRejectUnknownAuthoredFieldsWithoutCreatingOrUpdatingAPractice(String branch) {
+        ensureAdminMembership(workspace);
+        var known = (ObjectNode) OBJECT_MAPPER.valueToTree(validCreateRequest("known-contract"));
+        if (branch.equals("clause")) {
+            known.putObject("precondition")
+                    .put("skipReason", "No test file changed")
+                    .putArray("anyOf")
+                    .addObject()
+                    .putArray("changedPathMatches")
+                    .add("**/*Test.java");
+        }
+        webTestClient
+                .post()
+                .uri(BASE_URI, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(known)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(Void.class);
+        var payload = known.deepCopy();
+        payload.put("slug", "closed-contract");
+        addUnknownAuthoredField(payload, branch);
+        webTestClient
+                .post()
+                .uri(BASE_URI, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        assertThat(practiceRepository.findByWorkspaceIdAndSlug(workspace.getId(), "closed-contract"))
+                .isEmpty();
+
+        known.remove("slug");
+        known.remove("groupSlug");
+        known.put("criteria", "The change explains its purpose.");
+        known.putArray("definitionChanges").add("PRECONDITION");
+        webTestClient
+                .patch()
+                .uri(BASE_URI + "/known-contract", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(known)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        var stored = practiceAt("known-contract");
+        addUnknownAuthoredField(known, branch);
+        known.put("criteria", "The rejected change must not be stored.");
+        webTestClient
+                .patch()
+                .uri(BASE_URI + "/known-contract", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(known)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        assertThat(practiceAt("known-contract").criteria()).isEqualTo(stored.criteria());
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "{\"draftStatus\":null}",
+                "{\"draftStatus\":[null]}",
+                "{\"draftStatus\":[]}",
+                "{\"draftStatus\":[\"UNKNOWN\"]}",
+                "{\"unknown\":[\"OPEN\"]}"
+            })
+    @WithAdminUser
+    void shouldRejectInvalidReviewStateSelectionsWithoutWriting(String selection) throws Exception {
+        ensureAdminMembership(workspace);
+        var payload = (ObjectNode) OBJECT_MAPPER.valueToTree(validCreateRequest("known-timing"));
+        webTestClient
+                .post()
+                .uri(BASE_URI, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody(Void.class);
+        var stored = practiceAt("known-timing");
+        payload.put("slug", "rejected-timing");
+        payload.set("reviewWhen", OBJECT_MAPPER.readTree(selection));
+        webTestClient
+                .post()
+                .uri(BASE_URI, workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        assertThat(practiceRepository.findByWorkspaceIdAndSlug(workspace.getId(), "rejected-timing"))
+                .isEmpty();
+        payload.remove("slug");
+        payload.remove("groupSlug");
+        payload.set("reviewWhen", OBJECT_MAPPER.valueToTree(stored.reviewWhen()));
+        webTestClient
+                .patch()
+                .uri(BASE_URI + "/known-timing", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+        payload.set("reviewWhen", OBJECT_MAPPER.readTree(selection));
+        webTestClient
+                .patch()
+                .uri(BASE_URI + "/known-timing", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(payload)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        assertThat(practiceAt("known-timing").reviewWhen()).isEqualTo(stored.reviewWhen());
+    }
+
+    private static void addUnknownAuthoredField(ObjectNode payload, String branch) {
+        if (branch.equals("clause")) {
+            ((ObjectNode) payload.path("precondition").path("anyOf").get(0)).putNull("changedPathsMatches");
+        } else if (branch.equals("automatedReview")) {
+            ((ObjectNode) payload.path("automatedReviewPolicy").path("automatedReview")).putNull("evidenceSufficency");
+        } else {
+            payload.putNull(branch);
+        }
     }
 
     @Nested
@@ -569,7 +725,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Minimal Practice",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "Minimal criteria",
@@ -760,7 +916,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Name",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     null,
@@ -810,7 +966,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Name",
                     List.of(SignalName.of("scm.pull_request.no_such_signal")),
                     PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     // The rest of the request is valid, so this exercises the signal check.
@@ -851,7 +1007,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Name",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_OPENED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "Reviewable criteria",
@@ -885,7 +1041,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "",
                     PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                     PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     null,
@@ -926,7 +1082,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "AB",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     null,
@@ -958,7 +1114,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Name",
                     PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                     PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     null,
@@ -1029,7 +1185,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     List.of(PracticePreconditionClause.changedPathMatches(List.of("**/*.swift"))));
             practice.setSignals(practice.getSignals());
             practice.setEvidenceRequirements(practice.getEvidenceRequirements());
-            practice.setOnDrafts(practice.isOnDrafts());
+            practice.setReviewWhen(practice.getReviewWhen());
             practice.setSubject(ActorRole.REVIEWER);
             practice.setPrecondition(gate);
             practiceRepository.save(practice);
@@ -1081,7 +1237,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     PracticeTestEvidence.signals(ScmSignals.ISSUE_OPENED),
                     PracticeTestEvidence.needsFor(ScmSignals.ISSUE_OPENED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     null,
@@ -1159,7 +1315,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "New Name",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_REVIEWED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_REVIEWED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "New prompt",
@@ -1443,7 +1599,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     List.of(SignalName.of("scm.pull_request.no_such_signal")),
                     PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     null,
@@ -2441,7 +2597,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Kind From Signal",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_REVIEWED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_REVIEWED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "Review something",
@@ -2482,7 +2638,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Two Minds",
                     List.of(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.ISSUE_OPENED),
                     PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "Review something",
@@ -2516,7 +2672,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Conversation Practice",
                     PracticeTestEvidence.signals(ArtifactKinds.CONVERSATION_THREAD),
                     PracticeTestEvidence.needsFor(ArtifactKinds.CONVERSATION_THREAD),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "Detect constructive conversations",
@@ -2562,7 +2718,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Developer Practice",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "INTERNAL detection rubric — must never reach a developer",
@@ -2614,7 +2770,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Guard Practice",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "Detect prompt",
@@ -2680,7 +2836,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     "Guard Practice",
                     PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED),
                     PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                    false,
+                    Map.of(),
                     ActorRole.AUTHOR,
                     null,
                     "Detect prompt",

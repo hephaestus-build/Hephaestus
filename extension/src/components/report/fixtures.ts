@@ -191,7 +191,7 @@ export const HISTORICAL_ROW: ObservationRow = {
 	practiceName: "Commit messages explain why",
 	severity: "MINOR",
 	summary: "Two commits are titled only “fix”.",
-	claimCurrentness: "STALE",
+	claimCurrentness: "UNVERIFIABLE",
 };
 
 export const OWN_PAGE: ObservationPage = {

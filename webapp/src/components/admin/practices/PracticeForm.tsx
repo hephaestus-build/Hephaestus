@@ -105,7 +105,7 @@ export function PracticeForm(props: PracticeFormProps) {
 				criteria: definition.criteria,
 				signals: definition.signals,
 				evidenceRequirements: definition.evidenceRequirements,
-				onDrafts: definition.onDrafts,
+				reviewWhen: definition.reviewWhen,
 				subject: definition.subject,
 				precondition: definition.precondition,
 				definitionChanges:

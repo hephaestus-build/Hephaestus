@@ -153,7 +153,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         practice.setCriteria("Criteria for " + ws.getWorkspaceSlug());
         practice.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
         practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
@@ -432,7 +432,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
         practice.setCriteria("Criteria for " + ws.getWorkspaceSlug());
         practice.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
         practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);

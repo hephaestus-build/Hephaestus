@@ -30,7 +30,7 @@ const FIELDS = {
 	NAME: { label: "Name", key: "name" },
 	SIGNALS: { label: "When to review", key: "signals" },
 	EVIDENCE_REQUIREMENTS: { label: "Evidence to read", key: "evidenceRequirements" },
-	ON_DRAFTS: { label: "Review drafts", key: "onDrafts" },
+	REVIEW_WHEN: { label: "Review conditions", key: "reviewWhen" },
 	SUBJECT: { label: "Person judged", key: "subject" },
 	PRECONDITION: { label: "Only review when", key: "precondition" },
 	CRITERIA: { label: "Review criteria", key: "criteria" },

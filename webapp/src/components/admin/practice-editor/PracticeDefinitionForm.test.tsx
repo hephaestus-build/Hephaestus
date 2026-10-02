@@ -62,6 +62,50 @@ describe("the gate field", () => {
 	});
 });
 
+it("restores a work-type draft without a gate instead of submitting another draft’s gate", async () => {
+	const onSubmit = vi.fn();
+	await renderCreateForm(onSubmit);
+	fillValidDraft();
+	fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+	fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
+		target: {
+			value: '{"skipReason":"No matching paths","anyOf":[{"changedPathMatches":["**/*.ts"]}]}',
+		},
+	});
+	fireEvent.click(screen.getByRole("radio", { name: /^Pull or merge request/u }));
+	expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", "");
+	fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
+	await waitFor(() =>
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "Explain what changed and why" }),
+		),
+	);
+	expect(onSubmit.mock.calls[0]?.[0]).not.toHaveProperty("precondition");
+});
+
+it("restores each gate draft and refuses an invalid restored draft", async () => {
+	const onSubmit = vi.fn();
+	await renderCreateForm(onSubmit);
+	fillValidDraft();
+	const gate = '{"skipReason":"No matching paths","anyOf":[{"changedPathMatches":["**/*.ts"]}]}';
+	fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+	fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
+		target: { value: gate },
+	});
+	fireEvent.click(screen.getByRole("radio", { name: /^Pull or merge request/u }));
+	fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+	expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", gate);
+	fireEvent.change(screen.getByRole("textbox", { name: "Only review when" }), {
+		target: { value: "{" },
+	});
+	fireEvent.click(screen.getByRole("radio", { name: /^Pull or merge request/u }));
+	fireEvent.click(screen.getByRole("radio", { name: /^Issue/u }));
+	expect(screen.getByRole("textbox", { name: "Only review when" })).toHaveProperty("value", "{");
+	fireEvent.click(screen.getByRole("button", { name: "Create practice" }));
+	expect(onSubmit).not.toHaveBeenCalled();
+	expect(screen.getAllByText("Enter valid JSON for the gate.").length).toBeGreaterThan(0);
+});
+
 describe("the identifier of an existing practice", () => {
 	it("does not change when the practice is renamed", async () => {
 		const onSubmit = vi.fn();

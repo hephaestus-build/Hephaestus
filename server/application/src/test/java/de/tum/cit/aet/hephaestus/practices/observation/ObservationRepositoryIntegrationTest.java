@@ -32,9 +32,6 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
-import de.tum.cit.aet.hephaestus.practices.model.Severity;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.OutcomeCount;
-import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.SeverityCount;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -47,15 +44,19 @@ import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -152,6 +153,58 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         PracticeRevision revision = practiceRevisionRepository.save(new PracticeRevision(practice, 1));
         practice.setCurrentRevision(revision);
         return practiceRepository.save(practice);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"v4,true", "null,true", "stale,true", "v4,false", "null,false", "stale,false"})
+    void summaryUsesCurrentLatestClaimsWithoutRestoringOlderClaims(String scheme, boolean latestIsHistorical) {
+        PracticeRevision current = Objects.requireNonNull(practice.getCurrentRevision());
+        PracticeRevision historical = new PracticeRevision(practice, 2);
+        ReflectionTestUtils.setField(
+                historical,
+                "reviewRuleFingerprint",
+                scheme.equals("null") ? null : (scheme.equals("v4") ? "v4:" : "v5:") + "b".repeat(64));
+        historical = practiceRevisionRepository.save(historical);
+        Instant first = Instant.parse("2026-03-18T10:00:00Z");
+        insertSummaryObservation(agentJob, latestIsHistorical ? current : historical, first);
+        AgentJob later = new AgentJob();
+        later.setWorkspace(workspace);
+        later.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        later.setConfigSnapshot(OBJECT_MAPPER.createObjectNode());
+        later = agentJobRepository.save(later);
+        UUID latest = insertSummaryObservation(later, latestIsHistorical ? historical : current, first.plusSeconds(1));
+
+        var summary = observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId());
+        assertThat(summary).hasSize(latestIsHistorical ? 0 : 1);
+        if (!latestIsHistorical) assertThat(summary.getFirst().getMet()).isEqualTo(1L);
+        invalidationRepository.save(new ObservationInvalidation(
+                observationRepository.findById(latest).orElseThrow(), 1L, "Wrong claim", first.plusSeconds(2)));
+        var restored = observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId());
+        assertThat(restored).hasSize(latestIsHistorical ? 1 : 0);
+        if (latestIsHistorical) assertThat(restored.getFirst().getMet()).isEqualTo(1L);
+    }
+
+    private UUID insertSummaryObservation(AgentJob job, PracticeRevision revision, Instant at) {
+        UUID id = UUID.randomUUID();
+        observationRepository.insertIfAbsent(
+                id,
+                "summary-" + id,
+                job.getId(),
+                workspace.getId(),
+                practice.getId(),
+                revision.getId(),
+                "scm.pull_request",
+                42L,
+                aboutUser.getId(),
+                "The criteria are met",
+                "MET",
+                null,
+                null,
+                null,
+                null,
+                at,
+                "LIVE");
+        return id;
     }
 
     @Test
@@ -261,6 +314,12 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
         assertThat(recent).extracting(Observation::getId).containsExactly(standing);
         assertThat(window).extracting(Observation::getId).containsExactly(standing);
+        assertThat(observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId()))
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.getMet()).isEqualTo(1L);
+                    assertThat(row.getLastObservedAt()).isEqualTo(newerAt.minusSeconds(3600));
+                });
         assertThat(observationRepository.findEarlierRunsByDeveloperAndWorkspace(
                         aboutUser.getId(), workspace.getId(), Instant.EPOCH, PageRequest.of(0, 10)))
                 .isEmpty();
@@ -320,7 +379,11 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                         jobId,
                         workspaceId,
                         practiceId,
-                        null,
+                        practiceRepository
+                                .findById(practiceId)
+                                .map(Practice::getCurrentRevision)
+                                .map(PracticeRevision::getId)
+                                .orElse(null),
                         "scm.issue",
                         issueId,
                         aboutUser.getId(),
@@ -408,7 +471,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null, // practiceRevisionId
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(), // practiceRevisionId
                     "scm.pull_request",
                     42L,
                     aboutUser.getId(),
@@ -444,7 +507,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null, // practiceRevisionId
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(), // practiceRevisionId
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
@@ -463,7 +526,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null, // practiceRevisionId
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(), // practiceRevisionId
                     "scm.pull_request",
                     2L,
                     aboutUser.getId(),
@@ -492,7 +555,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null, // practiceRevisionId
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(), // practiceRevisionId
                     "scm.pull_request",
                     99L,
                     aboutUser.getId(),
@@ -528,7 +591,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null, // practiceRevisionId
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(), // practiceRevisionId
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
@@ -576,7 +639,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null, // practiceRevisionId
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(), // practiceRevisionId
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
@@ -638,7 +701,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null, // practiceRevisionId
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(), // practiceRevisionId
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
@@ -702,7 +765,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     jobId,
                     workspace.getId(),
                     practice.getId(),
-                    null,
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                     "scm.pull_request",
                     artifactId,
                     aboutUser.getId(),
@@ -803,7 +866,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     jobId,
                     workspace.getId(),
                     practice.getId(),
-                    null,
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                     "scm.pull_request",
                     42L,
                     aboutUser.getId(),
@@ -934,7 +997,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null, // practiceRevisionId
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(), // practiceRevisionId
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
@@ -975,7 +1038,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     jobId,
                     targetPractice.getWorkspace().getId(),
                     targetPractice.getId(),
-                    null,
+                    Objects.requireNonNull(targetPractice.getCurrentRevision()).getId(),
                     "scm.pull_request",
                     artifactId,
                     aboutUser.getId(),
@@ -1029,16 +1092,6 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                             PageRequest.of(0, 10)))
                     .extracting(Observation::getOutcome)
                     .containsExactly(Outcome.NOT_MET);
-
-            List<SeverityCount> severities = observationRepository.countBySeverityForDeveloper(
-                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"));
-            assertThat(severities).isEmpty();
-
-            List<OutcomeCount> outcomes = observationRepository.countByOutcomeForDeveloper(
-                    aboutUser.getId(), workspace.getId(), Instant.parse("2026-01-01T00:00:00Z"));
-            assertThat(outcomes).hasSize(1);
-            assertThat(outcomes.get(0).getOutcome()).isEqualTo(Outcome.MET);
-            assertThat(outcomes.get(0).getCount()).isEqualTo(1L);
         }
 
         @Test
@@ -1099,8 +1152,6 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             insertBad("visible-repo-bad", visiblePr.getId(), Instant.parse("2026-03-20T10:00:00Z"));
             insertBad("hidden-repo-bad", hiddenPr.getId(), Instant.parse("2026-03-20T11:00:00Z"));
 
-            Instant since = Instant.parse("2026-01-01T00:00:00Z");
-
             List<DeveloperPracticeSummaryProjection> summary =
                     observationRepository.findSummaryByDeveloperAndWorkspace(aboutUser.getId(), workspace.getId());
             assertThat(summary).hasSize(1);
@@ -1108,19 +1159,12 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(summary.get(0).getLastObservedAt()).isEqualTo(Instant.parse("2026-03-20T10:00:00Z"));
 
             List<Observation> recent = observationRepository.findRecentByDeveloperAndWorkspace(
-                    aboutUser.getId(), workspace.getId(), since, VERDICTS, PageRequest.of(0, 50));
+                    aboutUser.getId(),
+                    workspace.getId(),
+                    Instant.parse("2026-01-01T00:00:00Z"),
+                    VERDICTS,
+                    PageRequest.of(0, 50));
             assertThat(recent).extracting(Observation::getArtifactId).containsExactly(visiblePr.getId());
-
-            List<SeverityCount> severities =
-                    observationRepository.countBySeverityForDeveloper(aboutUser.getId(), workspace.getId(), since);
-            assertThat(severities).hasSize(1);
-            assertThat(severities.get(0).getSeverity()).isEqualTo(Severity.MAJOR);
-            assertThat(severities.get(0).getCount()).isEqualTo(1L);
-
-            List<OutcomeCount> outcomes =
-                    observationRepository.countByOutcomeForDeveloper(aboutUser.getId(), workspace.getId(), since);
-            assertThat(outcomes).hasSize(1);
-            assertThat(outcomes.get(0).getCount()).isEqualTo(1L);
         }
 
         @Test
@@ -1213,7 +1257,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     jobId,
                     workspace.getId(),
                     practice.getId(),
-                    null,
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                     "scm.pull_request",
                     artifactId,
                     aboutUser.getId(),
@@ -1234,7 +1278,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     agentJob.getId(),
                     agentJob.getWorkspace().getId(),
                     practice.getId(),
-                    null,
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                     "scm.pull_request",
                     artifactId,
                     aboutUser.getId(),
@@ -1310,7 +1354,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     jobId,
                     workspace.getId(),
                     practice.getId(),
-                    null,
+                    Objects.requireNonNull(practice.getCurrentRevision()).getId(),
                     "scm.pull_request",
                     artifactId,
                     aboutUser.getId(),

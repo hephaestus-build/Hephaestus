@@ -48,7 +48,7 @@ class CatalogInstallationConcurrencyIntegrationTest extends AbstractWorkspaceInt
                 definition.name(),
                 definition.signals(),
                 definition.evidenceRequirements(),
-                definition.onDrafts(),
+                definition.reviewWhen(),
                 definition.subject(),
                 definition.precondition(),
                 "Committed catalog criteria",

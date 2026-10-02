@@ -290,6 +290,19 @@ practice subjects and verify citations. The [workspace ABI](./agent/workspace-ab
 Readiness is stored in `agent_job.review_readiness`, separately from `evidence_snapshot`, so status reads
 need not load the full artifact manifest.
 
+## Scheduling and assessment identity
+
+Automatic admission matches the signal and the practice's descriptor-owned `reviewWhen` selections.
+Admission records the available categorical state in job metadata as `review_state`; preparation uses
+that snapshot rather than the artifact's later state. Unknown required facts do not match. Manual
+requests bypass scheduling explicitly by trigger mode. Repair rechecks keep their separate eligibility
+rules; neither bypass removes consent, evidence, attribution or withdrawal checks.
+
+The immutable definition digest includes scheduling and assessment fields. The review-rule fingerprint
+excludes only `signals` and `reviewWhen`, because moving a review to a different moment does not change
+what the same evidence establishes. Artifact kind, criteria, evidence requirements, subject, precondition, precompute
+script, assessment policy, name and group remain part of the assessment basis.
+
 ## Observation
 
 An observation is one practice's answer about one piece of work, written once and immutable. Its
@@ -305,6 +318,10 @@ Earlier behavior-level observations remain authorized history, but their fingerp
 not establish conformance under the current whole-practice standard. They are `UNVERIFIABLE`, not
 current evidence. A new review appends a current-standard practice revision without rewriting the
 revision cited by historical observations.
+
+Current summaries first select each claim's latest valid run, then check its review basis.
+An outdated or unknown basis does not restore an older current claim. Standing snapshots
+apply the same order before visibility filtering at each time boundary.
 
 Admission validates the outcome and its evidence warrants against the practice's criteria.
 `MET` and `NOT_MET` are decided results. `NOT_APPLICABLE` requires an evidence-backed

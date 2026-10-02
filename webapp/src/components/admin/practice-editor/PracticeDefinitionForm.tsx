@@ -18,7 +18,10 @@ import {
 	workArtifactHint,
 } from "@/components/admin/practice-editor/constants";
 import { canAttemptAutomatedReview } from "@/components/admin/practice-editor/evidence-presentation";
-import { parseGate } from "@/components/admin/practice-editor/practice-precondition";
+import {
+	gatePresentation,
+	parseGate,
+} from "@/components/admin/practice-editor/practice-precondition";
 import {
 	PracticeMentoringSupportEditor,
 	practicePolicyError,
@@ -96,7 +99,7 @@ export interface PracticeDefinitionValue {
 	 */
 	signals: string[];
 	evidenceRequirements: PracticeEvidenceRequirement[];
-	onDrafts: boolean;
+	reviewWhen: Record<string, string[]>;
 	subject: ActorRole;
 	precondition?: PracticePrecondition;
 	definitionChanges?: DefinitionChange[];
@@ -153,7 +156,7 @@ interface FormState {
 	artifactKind: string;
 	signals: string[];
 	evidenceRequirements: PracticeEvidenceRequirement[];
-	onDrafts: boolean;
+	reviewWhen: Record<string, string[]>;
 	subject: ActorRole;
 	precondition?: PracticePrecondition;
 	definitionChanges: DefinitionChange[];
@@ -170,7 +173,7 @@ interface FormState {
 interface WorkTypeDraft {
 	signals: string[];
 	evidenceRequirements: PracticeEvidenceRequirement[];
-	onDrafts: boolean;
+	reviewWhen: Record<string, string[]>;
 	subject: ActorRole;
 	precondition?: PracticePrecondition;
 	gateText: string;
@@ -279,7 +282,7 @@ function formErrors(
 	const slugInvalid = mode === "create" && !isValidSlug(form.slug);
 	const policy = practicePolicyError(form.automatedReviewPolicy);
 	const reviewSettings = reviewSettingsProblem(form, form.automatedReviewPolicy, selectedWorkType);
-	const gateError = parseGate(form.gateText).error;
+	const gateError = parseGate(form.gateText, selectedWorkType).error;
 	const subjectError =
 		selectedWorkType && !selectedWorkType.subjectRoles.includes(form.subject)
 			? "Choose a person this kind of work can identify."
@@ -426,6 +429,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 		supportedAutomatedReviewModes,
 	);
 	const occasionMode = occasionModeOf(form.automatedReviewPolicy, canRunMentoring);
+	const gateHelp = gatePresentation(selectedWorkType);
 	const subjectRole = form.subject;
 	const subjectRoles =
 		selectedWorkType?.subjectRoles.includes(subjectRole) === true
@@ -485,6 +489,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 				...(automatedReviewPolicy.automatedReview.mode === "NONE"
 					? withoutEvidence(reviewFields)
 					: reviewFields),
+				precondition: reviewFields.precondition,
 				precomputeScript: draft?.precomputeScript ?? "",
 			};
 		});
@@ -836,10 +841,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 									</FieldGroup>
 									<Field>
 										<FieldLabel htmlFor="practice-gate">Only review when</FieldLabel>
-										<FieldDescription>
-											Leave empty to review all work. To change or clear a gate, edit this JSON
-											field.
-										</FieldDescription>
+										<FieldDescription>{gateHelp.description}</FieldDescription>
 										<Textarea
 											id="practice-gate"
 											aria-invalid={hasText(errors.gate)}
@@ -860,9 +862,7 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 												}));
 											}}
 											rows={7}
-											placeholder={
-												'{"skipReason":"the change adds no Swift code","anyOf":[{"changedPathMatches":["**/*.swift"]}]}'
-											}
+											placeholder={gateHelp.example}
 										/>
 										{hasText(errors.gate) && (
 											<FieldError id="practice-gate-error">{errors.gate}</FieldError>

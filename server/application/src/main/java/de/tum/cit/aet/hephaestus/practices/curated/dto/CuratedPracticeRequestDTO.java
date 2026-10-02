@@ -2,23 +2,28 @@ package de.tum.cit.aet.hephaestus.practices.curated.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.ClosedPracticeInput;
 import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "A complete curated practice definition")
+@Schema(
+        description = "A complete curated practice definition",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record CuratedPracticeRequestDTO(
         @NotBlank(message = "Name is required")
         @Size(min = 3, max = 128, message = "Name must be between 3 and 128 characters")
@@ -33,7 +38,9 @@ public record CuratedPracticeRequestDTO(
         @NotNull(message = "Evidence requirements are required") @NonNull
         List<@Valid PracticeEvidenceRequirement> evidenceRequirements,
 
-        @Nullable Boolean onDrafts,
+        @Schema(description = ReviewWhen.DESCRIPTION) @Nullable
+        Map<String, Set<String>> reviewWhen,
+
         @Nullable ActorRole subject,
         @Valid @Nullable PracticePrecondition precondition,
 
@@ -67,12 +74,13 @@ public record CuratedPracticeRequestDTO(
         @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
         Set<DefinitionChange> definitionChanges,
 
-        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior)
+        implements ClosedPracticeInput {
     public CuratedPracticeRequestDTO(
             String name,
             List<SignalName> signals,
             List<PracticeEvidenceRequirement> evidenceRequirements,
-            @Nullable Boolean onDrafts,
+            @Nullable Map<String, Set<String>> reviewWhen,
             @Nullable ActorRole subject,
             @Nullable PracticePrecondition precondition,
             String criteria,
@@ -86,7 +94,7 @@ public record CuratedPracticeRequestDTO(
                 name,
                 signals,
                 evidenceRequirements,
-                Boolean.TRUE.equals(onDrafts),
+                reviewWhen,
                 subject == null ? ActorRole.AUTHOR : subject,
                 precondition,
                 criteria,
@@ -99,12 +107,13 @@ public record CuratedPracticeRequestDTO(
                 null);
     }
 
-    public PracticeDefinition definition(PracticeAutomatedReviewPolicy resolvedEvidence) {
+    public PracticeDefinition definition(
+            PracticeAutomatedReviewPolicy resolvedEvidence, Map<String, Set<String>> defaultReviewWhen) {
         return new PracticeDefinition(
                 name,
                 signals,
                 evidenceRequirements,
-                Boolean.TRUE.equals(onDrafts),
+                defaultReviewWhen,
                 subject == null ? ActorRole.AUTHOR : subject,
                 precondition,
                 criteria,

@@ -1040,7 +1040,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         practice.setSignals(List.of(PracticeTestEvidence.defaultSignal(
                 conversation ? ArtifactKinds.CONVERSATION_THREAD : ArtifactKinds.PULL_REQUEST)));
         practice.setEvidenceRequirements(List.of(new PracticeEvidenceRequirement(sourceKind, stance)));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         practice.setAutomatedReviewPolicy(new PracticeAutomatedReviewPolicy(

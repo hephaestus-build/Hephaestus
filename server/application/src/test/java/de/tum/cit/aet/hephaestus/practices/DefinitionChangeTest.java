@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -23,7 +24,7 @@ class DefinitionChangeTest extends BaseUnitTest {
                 "Review work",
                 List.of(ScmSignals.PULL_REQUEST_OPENED),
                 PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()),
-                false,
+                Map.of(),
                 subject,
                 precondition,
                 "Assess the review",

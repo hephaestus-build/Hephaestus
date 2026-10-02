@@ -90,7 +90,11 @@ public class ConversationReviewSubmitter implements PendingSignalResubmitter {
             }
             try {
                 GateDecision decision = reviewGate.evaluateSignal(
-                        workspace, key.signalName(), TriggerMode.AUTO, new ReviewSubject(participant, true));
+                        workspace,
+                        key.signalName(),
+                        TriggerMode.AUTO,
+                        new ReviewSubject(participant, true),
+                        java.util.Map.of());
                 if (decision instanceof GateDecision.Skip skip) {
                     if (firstRefusal == null) firstRefusal = skip.resolvedSignalReason();
                     continue;

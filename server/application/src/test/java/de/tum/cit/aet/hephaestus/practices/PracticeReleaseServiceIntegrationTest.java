@@ -152,7 +152,7 @@ class PracticeReleaseServiceIntegrationTest extends AbstractWorkspaceIntegration
                 source.name(),
                 source.signals(),
                 source.evidenceRequirements(),
-                source.onDrafts(),
+                source.reviewWhen(),
                 source.subject(),
                 source.precondition(),
                 criteria,

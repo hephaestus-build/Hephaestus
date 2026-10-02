@@ -29,6 +29,8 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -47,7 +49,7 @@ import org.jspecify.annotations.Nullable;
  * UPDATE names.
  *
  * <p>{@code practice_requires_current_revision_projection} is declared {@code AFTER UPDATE OF slug, name,
- * applies_to, signals, evidence_requirements, on_drafts, subject, precondition, criteria, …} — and Postgres fires an {@code UPDATE OF} trigger when a column
+ * applies_to, signals, evidence_requirements, review_when, subject, precondition, criteria, …} — and Postgres fires an {@code UPDATE OF} trigger when a column
  * appears in the SET list, whether or not its value changed. Hibernate's default whole-row update names
  * every column on every save, so changing something as unrelated as {@code autonomy} re-asserted the
  * whole projection and had the deferred trigger re-check it at commit. Setting a practice's review autonomy
@@ -171,9 +173,9 @@ public class Practice {
     @ToString.Exclude
     private List<PracticeEvidenceRequirement> evidenceRequirements = List.of();
 
-    @Column(name = "on_drafts", nullable = false)
-    @ColumnDefault("false")
-    private boolean onDrafts;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "review_when", columnDefinition = "jsonb", nullable = false)
+    private Map<String, Set<String>> reviewWhen = Map.of();
 
     @Enumerated(EnumType.STRING)
     @Column(name = "subject", nullable = false, length = 16)

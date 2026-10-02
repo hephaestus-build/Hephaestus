@@ -84,24 +84,30 @@ export function selectPracticePatch(
 		// therefore swap in a different work type's recommended review settings.
 		...("signals" in request ||
 		"evidenceRequirements" in request ||
-		"onDrafts" in request ||
+		"reviewWhen" in request ||
 		"subject" in request ||
 		"precondition" in request ||
 		clear.has("PRECONDITION")
 			? {
 					signals: practice.signals,
 					evidenceRequirements: practice.evidenceRequirements,
-					onDrafts: practice.onDrafts,
+					reviewWhen: practice.reviewWhen,
 					subject: practice.subject,
 					precondition: practice.precondition,
 					artifactKind: practice.artifactKind,
 				}
 			: {}),
+		...("signals" in request || "reviewWhen" in request
+			? { automatedReviewPolicy: practice.automatedReviewPolicy }
+			: {}),
 		...("criteria" in request ? { criteria: practice.criteria } : {}),
-		...("automatedReviewPolicy" in request ||
-		"signals" in request ||
+		// A signal edit can change the kind of assessed work; use the server's resulting validation basis.
+		...("signals" in request ||
+		"criteria" in request ||
+		"precomputeScript" in request ||
+		clear.has("PRECOMPUTE_SCRIPT") ||
+		"automatedReviewPolicy" in request ||
 		"evidenceRequirements" in request ||
-		"onDrafts" in request ||
 		"subject" in request ||
 		"precondition" in request ||
 		clear.has("PRECONDITION")
@@ -109,6 +115,9 @@ export function selectPracticePatch(
 					automatedReviewPolicy: practice.automatedReviewPolicy,
 					automatedReviewValidation: practice.automatedReviewValidation,
 				}
+			: {}),
+		...("name" in request || "group" in request
+			? { automatedReviewValidation: practice.automatedReviewValidation }
 			: {}),
 		...("name" in request ? { name: practice.name } : {}),
 		...("precomputeScript" in request || clear.has("PRECOMPUTE_SCRIPT")

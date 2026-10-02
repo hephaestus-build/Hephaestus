@@ -5,12 +5,12 @@ import type {
 	PracticeEvidenceRequirement,
 	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
-import { ARTIFACT_KIND, ARTIFACT_KIND_VALUES } from "@/lib/artifact-kinds";
+import { ARTIFACT_KIND_VALUES } from "@/lib/artifact-kinds";
 import { hasText } from "@/lib/text";
 
 export type PracticeReviewFields = Pick<
 	PracticeDefinition,
-	"signals" | "evidenceRequirements" | "onDrafts" | "subject" | "precondition"
+	"signals" | "evidenceRequirements" | "reviewWhen" | "subject" | "precondition"
 >;
 
 export type EvidenceStance = PracticeEvidenceRequirement["stance"];
@@ -29,9 +29,17 @@ export function artifactKindOfSignals(signals: readonly string[]): string | unde
 export const EMPTY_REVIEW_SETTINGS: PracticeReviewFields = {
 	signals: [],
 	evidenceRequirements: [],
-	onDrafts: false,
+	reviewWhen: {},
 	subject: "AUTHOR",
 };
+
+export function normalizeReviewWhen(reviewWhen: Record<string, string[]>) {
+	return Object.fromEntries(
+		Object.entries(reviewWhen)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([key, values]) => [key, [...new Set(values)].sort()]),
+	);
+}
 
 export function normalizeReviewSettings(reviewFields: PracticeReviewFields) {
 	return {
@@ -39,7 +47,7 @@ export function normalizeReviewSettings(reviewFields: PracticeReviewFields) {
 		evidenceRequirements: [...reviewFields.evidenceRequirements].sort((left, right) =>
 			left.sourceKind.localeCompare(right.sourceKind),
 		),
-		onDrafts: reviewFields.onDrafts,
+		reviewWhen: normalizeReviewWhen(reviewFields.reviewWhen),
 		subject: reviewFields.subject,
 		...(reviewFields.precondition ? { precondition: reviewFields.precondition } : {}),
 	};
@@ -75,6 +83,15 @@ export function recommendedReviewSettings(
 		...EMPTY_REVIEW_SETTINGS,
 		signals,
 		evidenceRequirements: options.recommendedEvidenceRequirements,
+		reviewWhen: Object.fromEntries(
+			options.reviewWhenDimensions
+				.filter(
+					(dimension) =>
+						dimension.recommendedValues.length > 0 &&
+						dimension.recommendedValues.length < dimension.values.length,
+				)
+				.map((dimension) => [dimension.key, dimension.recommendedValues]),
+		),
 	});
 }
 
@@ -94,10 +111,6 @@ export function orderedWorkTypes(
 			(rank.get(left.artifactKind) ?? ARTIFACT_KIND_VALUES.length) -
 			(rank.get(right.artifactKind) ?? ARTIFACT_KIND_VALUES.length),
 	);
-}
-
-export function hasDrafts(artifactKind: string | undefined): boolean {
-	return artifactKind === ARTIFACT_KIND.pullRequest;
 }
 
 export const OCCASION_ID_PREFIX = "practice-occasion";
@@ -129,6 +142,22 @@ export function reviewSettingsProblem(
 			return {
 				message: "One of the chosen moments does not apply to this kind of work.",
 				focusId: occasionFieldId("signals"),
+			};
+		}
+	}
+	for (const [key, values] of Object.entries(reviewFields.reviewWhen)) {
+		const dimension = options?.reviewWhenDimensions.find((item) => item.key === key);
+		if (
+			!dimension ||
+			values.length === 0 ||
+			values.some((value) => !dimension.values.some((option) => option.value === value))
+		) {
+			return {
+				message: "Choose review conditions supported by this kind of work.",
+				focusId:
+					(options?.reviewWhenDimensions.length ?? 0) > 0
+						? occasionFieldId("reviewWhen")
+						: occasionFieldId("signals"),
 			};
 		}
 	}

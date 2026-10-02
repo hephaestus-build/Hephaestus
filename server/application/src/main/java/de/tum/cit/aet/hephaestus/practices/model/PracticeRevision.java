@@ -25,7 +25,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -100,8 +102,9 @@ public class PracticeRevision {
     @ToString.Exclude
     private @Nullable List<PracticeEvidenceRequirement> evidenceRequirements;
 
-    @Column(name = "on_drafts")
-    private @Nullable Boolean onDrafts;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "review_when", columnDefinition = "jsonb")
+    private @Nullable Map<String, Set<String>> reviewWhen;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "subject", length = 16)
@@ -169,7 +172,7 @@ public class PracticeRevision {
         this.artifactKind = Objects.requireNonNull(practice.getArtifactKind(), "practice.artifactKind");
         this.signals = List.copyOf(practice.getSignals());
         this.evidenceRequirements = List.copyOf(practice.getEvidenceRequirements());
-        this.onDrafts = practice.isOnDrafts();
+        this.reviewWhen = practice.getReviewWhen();
         this.subject = practice.getSubject();
         this.precondition = practice.getPrecondition();
         this.criteria = Objects.requireNonNull(practice.getCriteria(), "practice.criteria");
@@ -195,15 +198,14 @@ public class PracticeRevision {
     }
 
     private String calculateReviewRuleFingerprint() {
-        if (signals == null || evidenceRequirements == null || onDrafts == null || subject == null) {
+        if (signals == null || evidenceRequirements == null || reviewWhen == null || subject == null) {
             throw new IllegalStateException("A historical revision without an occasion cannot be fingerprinted");
         }
         return ReviewRuleFingerprint.of(
                 slug,
                 name,
-                signals,
+                artifactKind,
                 evidenceRequirements,
-                onDrafts,
                 subject,
                 precondition,
                 criteria,

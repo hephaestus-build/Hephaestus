@@ -223,7 +223,7 @@ describe("CuratedPracticeForm", () => {
 	it("does not call a freshly loaded practice edited", async () => {
 		await renderForm();
 
-		// The server sorts a binding's signals and evidenceRequirements on the way in. Loading one and touching
+		// The server sorts a practice's signals and evidence requirements on the way in. Loading one and touching
 		// nothing must not look like an edit, or every visit would offer to discard a draft.
 		fireEvent.click(screen.getByRole("link", { name: "Cancel" }));
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
@@ -524,11 +524,11 @@ describe("CuratedPracticeForm", () => {
 		const user = userEvent.setup();
 		await renderForm();
 
-		screen.getByRole("switch", { name: /^Include drafts/u });
+		screen.getByRole("checkbox", { name: "Draft" });
 
 		await user.click(screen.getByRole("radio", { name: /^Issue/u }));
 
 		// An issue can never be a draft, so the control for that state is gone rather than inert.
-		expect(screen.queryByRole("switch", { name: /^Include drafts/u })).toBeNull();
+		expect(screen.queryByRole("checkbox", { name: "Draft" })).toBeNull();
 	});
 });

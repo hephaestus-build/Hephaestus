@@ -77,7 +77,7 @@ const mockDocumentPolicy = {
 } satisfies PracticeAutomatedReviewPolicy;
 
 export const mockPullRequestReviewFields = {
-	onDrafts: false,
+	reviewWhen: { draftStatus: ["NOT_DRAFT"] },
 	subject: "AUTHOR",
 	signals: ["scm.pull_request.opened", "scm.pull_request.ready", "scm.pull_request.synchronized"],
 	evidenceRequirements: [
@@ -88,7 +88,7 @@ export const mockPullRequestReviewFields = {
 } satisfies PracticeReviewFields;
 
 export const mockMergeReviewFields = {
-	onDrafts: false,
+	reviewWhen: {},
 	subject: "AUTHOR",
 	signals: ["scm.pull_request.merged"],
 	evidenceRequirements: [
@@ -99,7 +99,7 @@ export const mockMergeReviewFields = {
 } satisfies PracticeReviewFields;
 
 export const mockIssueReviewFields = {
-	onDrafts: false,
+	reviewWhen: {},
 	subject: "AUTHOR",
 	signals: ["scm.issue.opened", "scm.issue.updated"],
 	evidenceRequirements: [
@@ -109,14 +109,14 @@ export const mockIssueReviewFields = {
 } satisfies PracticeReviewFields;
 
 export const mockConversationReviewFields = {
-	onDrafts: false,
+	reviewWhen: {},
 	subject: "AUTHOR",
 	signals: ["chat.conversation_thread.settled"],
 	evidenceRequirements: [{ sourceKind: "slack.conversation.thread", stance: "REQUIRED" }],
 } satisfies PracticeReviewFields;
 
 export const mockDocumentReviewFields = {
-	onDrafts: false,
+	reviewWhen: {},
 	subject: "AUTHOR",
 	signals: ["docs.document.published", "docs.document.updated"],
 	evidenceRequirements: [{ sourceKind: "docs.document.core", stance: "REQUIRED" }],
@@ -175,6 +175,33 @@ export const mockPracticeDefinitionOptions = {
 	workTypes: [
 		{
 			artifactKind: "scm.pull_request",
+			reviewWhenDimensions: [
+				{
+					key: "draftStatus",
+					displayName: "Draft status",
+					values: [
+						{ value: "DRAFT", displayName: "Draft" },
+						{ value: "NOT_DRAFT", displayName: "Ready for review" },
+					],
+					recommendedValues: ["NOT_DRAFT"],
+				},
+				{
+					key: "state",
+					displayName: "State",
+					values: [
+						{ value: "OPEN", displayName: "Open" },
+						{ value: "CLOSED", displayName: "Closed" },
+						{ value: "MERGED", displayName: "Merged" },
+					],
+					recommendedValues: [],
+				},
+			],
+			preconditionSupportedAspects: ["CHANGED_PATH", "DIFF_TEXT", "EVIDENCE_ITEMS"],
+			preconditionEvidenceCollections: [
+				"scm.review-threads",
+				"scm.inline-review-comments",
+				"scm.general-review-comments",
+			],
 			signals: [
 				{ signal: "scm.pull_request.opened", displayName: "Opened", recommended: true },
 				{
@@ -291,6 +318,19 @@ export const mockPracticeDefinitionOptions = {
 		},
 		{
 			artifactKind: "scm.issue",
+			reviewWhenDimensions: [
+				{
+					key: "state",
+					displayName: "State",
+					values: [
+						{ value: "OPEN", displayName: "Open" },
+						{ value: "CLOSED", displayName: "Closed" },
+					],
+					recommendedValues: [],
+				},
+			],
+			preconditionSupportedAspects: [],
+			preconditionEvidenceCollections: [],
 			signals: [
 				{ signal: "scm.issue.opened", displayName: "Opened", recommended: true },
 				{ signal: "scm.issue.updated", displayName: "Details changed", recommended: true },
@@ -334,6 +374,9 @@ export const mockPracticeDefinitionOptions = {
 		},
 		{
 			artifactKind: "chat.conversation_thread",
+			reviewWhenDimensions: [],
+			preconditionSupportedAspects: [],
+			preconditionEvidenceCollections: [],
 			signals: [
 				{
 					signal: "chat.conversation_thread.settled",
@@ -364,6 +407,19 @@ export const mockPracticeDefinitionOptions = {
 		},
 		{
 			artifactKind: "docs.document",
+			reviewWhenDimensions: [
+				{
+					key: "state",
+					displayName: "State",
+					values: [
+						{ value: "ACTIVE", displayName: "Active" },
+						{ value: "ARCHIVED", displayName: "Archived" },
+					],
+					recommendedValues: [],
+				},
+			],
+			preconditionSupportedAspects: [],
+			preconditionEvidenceCollections: [],
 			signals: [
 				{ signal: "docs.document.published", displayName: "Published", recommended: true },
 				{ signal: "docs.document.updated", displayName: "Content changed", recommended: true },

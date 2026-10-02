@@ -161,7 +161,7 @@ class ReviewGateTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSignals(List.of(signals));
         practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
-        practice.setOnDrafts(true);
+        practice.setReviewWhen(java.util.Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
@@ -174,6 +174,36 @@ class ReviewGateTest extends BaseUnitTest {
         when(practiceDetectionReadiness.hasRunnableAgent(WORKSPACE_ID)).thenReturn(true);
         when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(practices));
         return workspace;
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"OPEN,true", "CLOSED,false", "MERGED,false", "MISSING,false"})
+    void automaticReviewUsesRecordedLifecycleState(String state, boolean admitted) {
+        var work = createPullRequest();
+        if (!state.equals("MISSING")) work.setState(Issue.State.valueOf(state));
+        var practice = createPractice(SIGNAL);
+        practice.setReviewWhen(java.util.Map.of("state", java.util.Set.of("OPEN")));
+        setupThroughPracticeMatching(work, practice);
+        var decision = gate.evaluate(work, SIGNAL, TriggerMode.AUTO);
+        if (admitted) {
+            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
+            assertThat(((GateDecision.Detect) decision).reviewState())
+                    .containsEntry("state", "OPEN")
+                    .containsEntry("draftStatus", "NOT_DRAFT");
+        } else assertThat(decision).isInstanceOf(GateDecision.Skip.class);
+    }
+
+    @Test
+    void manualReviewBypassesAutomaticStateRestrictions() {
+        var work = createPullRequest();
+        work.setState(Issue.State.CLOSED);
+        var practice = createPractice(SIGNAL);
+        practice.setReviewWhen(java.util.Map.of("state", java.util.Set.of("OPEN")));
+        var workspace = createWorkspace();
+        when(practiceDetectionReadiness.hasRunnableAgent(WORKSPACE_ID)).thenReturn(true);
+        when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(practice));
+        assertThat(gate.evaluatePullRequest(work, workspace, SIGNAL, TriggerMode.MANUAL))
+                .isInstanceOf(GateDecision.Detect.class);
     }
 
     @Test
@@ -278,7 +308,7 @@ class ReviewGateTest extends BaseUnitTest {
     }
 
     /**
-     * Whether a draft occasions a review is a per-binding fact, not a workspace-wide one: a fleet-wide veto
+     * Whether a draft occasions a review is a per-practice timing condition, not a workspace-wide one: a fleet-wide veto
      * would put the draft-specific criteria of a practice like {@code ready-and-traceable-handoff} out of
      * reach of the only artifact they apply to.
      */
@@ -344,42 +374,42 @@ class ReviewGateTest extends BaseUnitTest {
 
             assertThat(decision).isInstanceOf(GateDecision.Skip.class);
             assertThat(((GateDecision.Skip) decision).reason())
-                    .isEqualTo("no practices bound to this signal on drafts");
+                    .isEqualTo("no practices match this signal and recorded review state");
         }
 
         @Test
-        @DisplayName("a binding that asks for drafts reaches its draft-specific criteria")
+        @DisplayName("a timing condition that allows drafts reaches its draft-specific criteria")
         void detectDraftForAPracticeThatAsksForThem() {
             PullRequest pr = createPullRequest();
             pr.setDraft(true);
-            Practice onDrafts = createDraftPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, onDrafts);
+            Practice reviewsDrafts = createDraftPractice(SIGNAL);
+            Workspace workspace = setupThroughPracticeMatching(pr, reviewsDrafts);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
             assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            assertThat(((GateDecision.Detect) decision).matchedPractices()).containsExactly(onDrafts);
+            assertThat(((GateDecision.Detect) decision).matchedPractices()).containsExactly(reviewsDrafts);
         }
 
         @Test
         @DisplayName("a draft admits only the practices that asked for it, not the whole set")
-        void draftAdmitsOnlyTheBindingsThatAskedForIt() {
+        void draftAdmitsOnlyThePracticesThatAllowIt() {
             PullRequest pr = createPullRequest();
             pr.setDraft(true);
-            Practice onDrafts = createDraftPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, createPractice(SIGNAL), onDrafts);
+            Practice reviewsDrafts = createDraftPractice(SIGNAL);
+            Workspace workspace = setupThroughPracticeMatching(pr, createPractice(SIGNAL), reviewsDrafts);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
-            assertThat(((GateDecision.Detect) decision).matchedPractices()).containsExactly(onDrafts);
+            assertThat(((GateDecision.Detect) decision).matchedPractices()).containsExactly(reviewsDrafts);
         }
 
         @Test
         @DisplayName("a practice that asks for drafts still reviews work that is not a draft")
-        void draftBindingAlsoCoversNonDrafts() {
+        void unrestrictedTimingAlsoCoversNonDrafts() {
             PullRequest pr = createPullRequest();
-            Practice onDrafts = createDraftPractice(SIGNAL);
-            Workspace workspace = setupThroughPracticeMatching(pr, onDrafts);
+            Practice reviewsDrafts = createDraftPractice(SIGNAL);
+            Workspace workspace = setupThroughPracticeMatching(pr, reviewsDrafts);
 
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
@@ -558,7 +588,8 @@ class ReviewGateTest extends BaseUnitTest {
             GateDecision decision = gate.evaluate(pr, SIGNAL, TriggerMode.AUTO);
 
             assertThat(decision).isInstanceOf(GateDecision.Skip.class);
-            assertThat(((GateDecision.Skip) decision).reason()).isEqualTo("no matching practices");
+            assertThat(((GateDecision.Skip) decision).reason())
+                    .isEqualTo("no practices match this signal and recorded review state");
         }
 
         @Test
@@ -669,7 +700,7 @@ class ReviewGateTest extends BaseUnitTest {
 
             assertThat(decision).isInstanceOf(GateDecision.Skip.class);
             GateDecision.Skip skip = (GateDecision.Skip) decision;
-            assertThat(skip.reason()).isEqualTo("no matching practices");
+            assertThat(skip.reason()).isEqualTo("no practices match this signal and recorded review state");
             assertThat(skip.resolvedSignalReason()).isEqualTo(SignalStateReason.GATE_SKIPPED);
         }
 
@@ -915,8 +946,8 @@ class ReviewGateTest extends BaseUnitTest {
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
                     .thenReturn(List.of(createPractice(DOCUMENT_PUBLISHED)));
 
-            GateDecision decision =
-                    gate.evaluateSignal(workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true));
+            GateDecision decision = gate.evaluateSignal(
+                    workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true), java.util.Map.of());
 
             assertThat(decision).isInstanceOf(GateDecision.Detect.class);
             assertThat(((GateDecision.Detect) decision).matchedPractices()).hasSize(1);
@@ -931,16 +962,16 @@ class ReviewGateTest extends BaseUnitTest {
             silenced.setAutonomy(PracticeAutonomy.OFF);
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(silenced));
 
-            GateDecision silencedDecision =
-                    gate.evaluateSignal(workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true));
+            GateDecision silencedDecision = gate.evaluateSignal(
+                    workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true), java.util.Map.of());
 
             assertThat(silencedDecision).isInstanceOf(GateDecision.Skip.class);
             assertThat(((GateDecision.Skip) silencedDecision).resolvedSignalReason())
                     .isEqualTo(SignalStateReason.PRACTICE_AUTONOMY_OFF);
 
             when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of());
-            GateDecision absentDecision =
-                    gate.evaluateSignal(workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true));
+            GateDecision absentDecision = gate.evaluateSignal(
+                    workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true), java.util.Map.of());
 
             assertThat(((GateDecision.Skip) absentDecision).resolvedSignalReason())
                     .isEqualTo(SignalStateReason.GATE_SKIPPED);
@@ -951,8 +982,8 @@ class ReviewGateTest extends BaseUnitTest {
             Workspace workspace = createWorkspace();
             workspace.getFeatures().setPracticesEnabled(false);
 
-            GateDecision decision =
-                    gate.evaluateSignal(workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true));
+            GateDecision decision = gate.evaluateSignal(
+                    workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true), java.util.Map.of());
 
             assertThat(decision).isInstanceOf(GateDecision.Skip.class);
             verifyNoInteractions(practiceRepository);
@@ -964,7 +995,11 @@ class ReviewGateTest extends BaseUnitTest {
             workspace.getFeatures().setPracticeReviewAutoTriggerEnabled(false);
 
             assertThat(gate.evaluateSignal(
-                            workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true)))
+                            workspace,
+                            DOCUMENT_PUBLISHED,
+                            TriggerMode.AUTO,
+                            new ReviewSubject(7L, true),
+                            java.util.Map.of()))
                     .isInstanceOf(GateDecision.Skip.class);
         }
 
@@ -981,8 +1016,8 @@ class ReviewGateTest extends BaseUnitTest {
                             true,
                             false));
 
-            GateDecision decision =
-                    gate.evaluateSignal(workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true));
+            GateDecision decision = gate.evaluateSignal(
+                    workspace, DOCUMENT_PUBLISHED, TriggerMode.AUTO, new ReviewSubject(7L, true), java.util.Map.of());
 
             assertThat(((GateDecision.Skip) decision).resolvedSignalReason())
                     .isEqualTo(SignalStateReason.OUT_OF_REVIEW_SCOPE);
@@ -1008,7 +1043,7 @@ class ReviewGateTest extends BaseUnitTest {
                                     "Withdrawn",
                                     PracticeTestEvidence.signals(SIGNAL),
                                     PracticeTestEvidence.needsFor(SIGNAL.artifactKind()),
-                                    false,
+                                    java.util.Map.of(),
                                     ActorRole.AUTHOR,
                                     null,
                                     "Criteria",

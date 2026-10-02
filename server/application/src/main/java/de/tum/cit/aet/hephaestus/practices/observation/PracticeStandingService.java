@@ -118,9 +118,12 @@ public class PracticeStandingService {
 
         return edges.stream()
                 .map(edge -> snapshot(
-                        observations.stream()
-                                .filter(observation ->
-                                        !observation.getObservedAt().isAfter(edge))
+                        LatestRun.perClaim(window.stream()
+                                        .filter(observation ->
+                                                !observation.getObservedAt().isAfter(edge))
+                                        .toList())
+                                .stream()
+                                .filter(observation -> visible.contains(observation.getId()))
                                 .toList(),
                         eligiblePractices,
                         eligiblePracticesByGroup,
@@ -143,7 +146,7 @@ public class PracticeStandingService {
             Map<String, List<String>> eligiblePracticesByGroup,
             Map<UUID, String> deliveredGuidance) {
         Map<String, List<Observation>> byPractice = new LinkedHashMap<>();
-        for (Observation observation : LatestRun.perClaim(observations)) {
+        for (Observation observation : observations) {
             byPractice
                     .computeIfAbsent(observation.getPractice().getSlug(), ignored -> new ArrayList<>())
                     .add(observation);

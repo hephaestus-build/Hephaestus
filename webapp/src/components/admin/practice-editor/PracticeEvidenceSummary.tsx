@@ -7,6 +7,7 @@ import type {
 	PracticeAutomatedReviewValidation,
 	PracticeEvidenceSourceOption,
 	PracticeSignalOption,
+	PracticeWorkTypeDefinitionOptions,
 } from "@/api/types.gen";
 import {
 	momentDef,
@@ -40,12 +41,13 @@ function signalLabel(signal: string, signals: readonly PracticeSignalOption[]) {
 }
 
 interface OccasionSummaryProps {
+	dimensions: PracticeWorkTypeDefinitionOptions["reviewWhenDimensions"];
 	reviewFields: PracticeReviewFields;
 	sources: readonly PracticeEvidenceSourceOption[];
 	signals: readonly PracticeSignalOption[];
 }
 
-function OccasionSummary({ reviewFields, sources, signals }: OccasionSummaryProps) {
+function OccasionSummary({ reviewFields, sources, signals, dimensions }: OccasionSummaryProps) {
 	const required = reviewFields.evidenceRequirements.filter((need) => need.stance !== "CONTEXTUAL");
 	const contextual = reviewFields.evidenceRequirements.filter(
 		(need) => need.stance === "CONTEXTUAL",
@@ -62,7 +64,19 @@ function OccasionSummary({ reviewFields, sources, signals }: OccasionSummaryProp
 						</Badge>
 					);
 				})}
-				{reviewFields.onDrafts && <Badge variant="outline">Drafts included</Badge>}
+				{Object.entries(reviewFields.reviewWhen).map(([dimension, values]) => (
+					<Badge key={dimension} variant="outline">
+						{dimensions.find((item) => item.key === dimension)?.displayName ?? dimension}:{" "}
+						{values
+							.map(
+								(value) =>
+									dimensions
+										.find((item) => item.key === dimension)
+										?.values.find((option) => option.value === value)?.displayName ?? value,
+							)
+							.join(", ")}
+					</Badge>
+				))}
 			</div>
 			<dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[6.5rem_1fr]">
 				<dt className="text-muted-foreground">Person judged</dt>
@@ -131,6 +145,7 @@ export interface PracticeEvidenceSummaryProps extends PracticeReviewFields {
 	validation: PracticeAutomatedReviewValidation;
 	sources: readonly PracticeEvidenceSourceOption[];
 	signalOptions?: readonly PracticeSignalOption[];
+	reviewWhenDimensions?: PracticeWorkTypeDefinitionOptions["reviewWhenDimensions"];
 	workTypeLabel: string;
 	className?: string;
 	showValidation?: boolean;
@@ -166,17 +181,19 @@ export function PracticeAutomatedReviewValidationSummary({
 }
 
 const NO_SIGNALS: readonly PracticeSignalOption[] = [];
+const NO_DIMENSIONS: PracticeWorkTypeDefinitionOptions["reviewWhenDimensions"] = [];
 
 export function PracticeEvidenceSummary({
 	policy,
 	signals,
 	evidenceRequirements,
-	onDrafts,
+	reviewWhen,
 	subject,
 	precondition,
 	validation,
 	sources,
 	signalOptions = NO_SIGNALS,
+	reviewWhenDimensions = NO_DIMENSIONS,
 	workTypeLabel,
 	className,
 	showValidation = true,
@@ -211,9 +228,10 @@ export function PracticeEvidenceSummary({
 				<dd className="mt-1 space-y-2">
 					{signals.length > 0 ? (
 						<OccasionSummary
-							reviewFields={{ signals, evidenceRequirements, onDrafts, subject, precondition }}
+							reviewFields={{ signals, evidenceRequirements, reviewWhen, subject, precondition }}
 							sources={sources}
 							signals={signalOptions}
+							dimensions={reviewWhenDimensions}
 						/>
 					) : (
 						<span className="text-muted-foreground">No occasion starts a review</span>

@@ -16,7 +16,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -51,8 +53,9 @@ public class CuratedPracticeOverride {
     @Column(name = "evidence_requirements", columnDefinition = "jsonb")
     private @Nullable List<PracticeEvidenceRequirement> evidenceRequirements;
 
-    @Column(name = "on_drafts")
-    private boolean onDrafts;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "review_when", columnDefinition = "jsonb")
+    private Map<String, Set<String>> reviewWhen = Map.of();
 
     @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
     @Column(name = "subject", length = 16)
@@ -132,7 +135,7 @@ public class CuratedPracticeOverride {
                 name,
                 signals,
                 evidenceRequirements,
-                onDrafts,
+                reviewWhen,
                 subject,
                 precondition,
                 criteria,
@@ -149,7 +152,7 @@ public class CuratedPracticeOverride {
         this.artifactKind = definition.artifactKind();
         this.signals = definition.signals();
         this.evidenceRequirements = definition.evidenceRequirements();
-        this.onDrafts = definition.onDrafts();
+        this.reviewWhen = definition.reviewWhen();
         this.subject = definition.subject();
         this.precondition = definition.precondition();
         this.criteria = definition.criteria();
@@ -177,7 +180,7 @@ public class CuratedPracticeOverride {
         this.artifactKind = null;
         this.signals = null;
         this.evidenceRequirements = null;
-        this.onDrafts = false;
+        this.reviewWhen = Map.of();
         this.subject = ActorRole.AUTHOR;
         this.precondition = null;
         this.criteria = null;

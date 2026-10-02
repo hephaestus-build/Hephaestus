@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { mockIssueWorkType, mockPullRequestWorkType } from "@/mocks/fixtures/practice";
+
 import { parseGate } from "./practice-precondition";
 
 describe("parseGate", () => {
@@ -30,4 +32,15 @@ describe("parseGate", () => {
 	it("treats an empty field as an explicit clear", () => {
 		expect(parseGate("")).toStrictEqual({});
 	});
+});
+
+it("permits a path gate only when the descriptor supports it", () => {
+	const text = JSON.stringify({
+		skipReason: "No matching changes",
+		anyOf: [{ changedPathMatches: ["**/*.ts"] }],
+	});
+	expect(parseGate(text, mockPullRequestWorkType).error).toBeUndefined();
+	expect(parseGate(text, mockIssueWorkType).error).toBe(
+		"This gate is not supported for this kind of work.",
+	);
 });

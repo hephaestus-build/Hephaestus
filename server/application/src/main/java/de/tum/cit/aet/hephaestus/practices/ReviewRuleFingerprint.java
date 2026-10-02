@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices;
 
-import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
+import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
  */
 public final class ReviewRuleFingerprint {
 
-    private static final String SCHEME = "v5:";
+    public static final String SCHEME = "v5:";
 
     private ReviewRuleFingerprint() {}
 
@@ -25,17 +25,16 @@ public final class ReviewRuleFingerprint {
     public static String of(
             String slug,
             String name,
-            List<SignalName> signals,
+            ArtifactKind artifactKind,
             List<PracticeEvidenceRequirement> evidenceRequirements,
-            boolean onDrafts,
             ActorRole subject,
             @Nullable PracticePrecondition precondition,
             String criteria,
             @Nullable String precomputeScript,
             PracticeAutomatedReviewPolicy automatedReviewPolicy,
             @Nullable String groupSlug) {
-        CanonicalDigest digest = new CanonicalDigest().add(slug).add(name);
-        addOccasion(digest, signals, evidenceRequirements, onDrafts, subject, precondition);
+        CanonicalDigest digest = new CanonicalDigest().add(slug).add(name).add(artifactKind.value());
+        addAssessment(digest, evidenceRequirements, subject, precondition);
         return (SCHEME
                 + digest.add(criteria)
                         .addNullable(precomputeScript)
@@ -44,16 +43,12 @@ public final class ReviewRuleFingerprint {
                         .hex());
     }
 
-    static void addOccasion(
+    static void addAssessment(
             CanonicalDigest digest,
-            List<SignalName> signals,
             List<PracticeEvidenceRequirement> evidenceRequirements,
-            boolean onDrafts,
             ActorRole subject,
             @Nullable PracticePrecondition precondition) {
-        digest.addInt(signals.size());
-        signals.forEach(signal -> digest.add(signal.value()));
-        digest.add(String.valueOf(onDrafts)).add(subject.name());
+        digest.add(subject.name());
         digest.addInt(evidenceRequirements.size());
         evidenceRequirements.forEach(
                 requirement -> digest.add(requirement.sourceKind().value())

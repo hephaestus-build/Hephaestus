@@ -1,7 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { assert, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { mockAuthorDeclaredEvidenceValidation } from "@/mocks/fixtures/practice";
 
 import {
 	deleteGroupMutation,
@@ -15,7 +17,7 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type * as ReactQueryGen from "@/api/@tanstack/react-query.gen";
 import type { Practice } from "@/api/types.gen";
-import { mockGroups, mockPractice, mockPractices } from "@/components/admin/practices/fixtures";
+import { mockGroups, mockPractice } from "@/components/admin/practices/fixtures";
 import { deferred } from "@/test/async";
 
 import { usePracticeCatalogMutations } from "./use-practice-catalog-mutations";
@@ -74,7 +76,10 @@ describe("usePracticeCatalogMutations", () => {
 	it("optimistically places a practice in another bucket and updates its detail cache", async () => {
 		const client = queryClient();
 		const first = practice("first", "quality", 0);
-		const moving = practice("moving", "quality", 1);
+		const moving = {
+			...practice("moving", "quality", 1),
+			automatedReviewValidation: mockAuthorDeclaredEvidenceValidation,
+		};
 		const last = practice("last", "quality", 2);
 		const destination = practice("destination", "delivery", 0);
 		client.setQueryData(queryKey, [first, moving, last, destination]);
@@ -118,13 +123,31 @@ describe("usePracticeCatalogMutations", () => {
 				.map(({ displayOrder }) => displayOrder),
 		).toStrictEqual([0, 1]);
 
+		const refreshedValidation = {
+			...mockAuthorDeclaredEvidenceValidation,
+			reviewRuleFingerprint: `v5:${"1".repeat(64)}`,
+		};
 		request.resolve([
 			first,
 			{ ...last, displayOrder: 1 },
-			{ ...moving, groupSlug: "delivery", displayOrder: 0 },
+			{
+				...moving,
+				groupSlug: "delivery",
+				displayOrder: 0,
+				automatedReviewValidation: refreshedValidation,
+			},
 			{ ...destination, displayOrder: 1 },
 		]);
 		await waitFor(() => expect(result.current.placePractice.isSuccess).toBe(true));
+		expect(
+			client.getQueryData<Practice[]>(queryKey)?.find(({ slug }) => slug === "moving")
+				?.automatedReviewValidation,
+		).toStrictEqual(refreshedValidation);
+		expect(
+			client.getQueryData<Practice>(
+				getPracticeQueryKey({ path: { workspaceSlug: WORKSPACE, practiceSlug: "moving" } }),
+			)?.automatedReviewValidation,
+		).toStrictEqual(refreshedValidation);
 	});
 
 	it("rolls back placement fields without overwriting another optimistic field", async () => {
@@ -229,7 +252,12 @@ describe("usePracticeCatalogMutations", () => {
 	it("removes a deleting group from move destinations", async () => {
 		const client = queryClient();
 		client.setQueryData(groupsQueryKey, mockGroups);
-		client.setQueryData(queryKey, mockPractices);
+		const affected = practice("ungrouped-by-delete", "quality", 0);
+		client.setQueryData(queryKey, [affected]);
+		const affectedDetailKey = getPracticeQueryKey({
+			path: { workspaceSlug: WORKSPACE, practiceSlug: affected.slug },
+		});
+		client.setQueryData(affectedDetailKey, affected);
 		const groupPreviewKey = previewGroupAdoptionQueryKey({
 			path: { workspaceSlug: WORKSPACE, slug: "quality" },
 		});
@@ -255,6 +283,56 @@ describe("usePracticeCatalogMutations", () => {
 		deletion.resolve();
 		await waitFor(() => expect(result.current.deleteGroup.isSuccess).toBe(true));
 		expect(client.getQueryState(groupPreviewKey)?.isInvalidated).toBe(true);
+		expect(client.getQueryState(affectedDetailKey)?.isInvalidated).toBe(true);
+	});
+
+	it("replaces an in-flight first detail read after its group is deleted", async () => {
+		const client = queryClient();
+		const before = practice("moving", "quality", 0);
+		const after = {
+			...before,
+			groupSlug: undefined,
+			automatedReviewValidation: {
+				...mockAuthorDeclaredEvidenceValidation,
+				reviewRuleFingerprint: `v5:${"2".repeat(64)}`,
+			},
+		};
+		client.setQueryData(queryKey, [before]);
+		const firstRead = deferred<Practice>();
+		const read = vi
+			.fn()
+			.mockImplementationOnce(async () => firstRead.promise)
+			.mockResolvedValue(after);
+		const detailKey = getPracticeQueryKey({
+			path: { workspaceSlug: WORKSPACE, practiceSlug: before.slug },
+		});
+		vi.mocked(deleteGroupMutation).mockReturnValue({
+			mutationFn: vi.fn().mockResolvedValue(undefined),
+		});
+		const { result, unmount } = renderHook(
+			() => {
+				const detail = useQuery({ queryKey: detailKey, queryFn: read });
+				const mutations = usePracticeCatalogMutations(WORKSPACE);
+				return { detail, mutations };
+			},
+			{ wrapper: wrapper(client) },
+		);
+		await waitFor(() => expect(read).toHaveBeenCalledOnce());
+		expect(result.current.detail.data).toBeUndefined();
+		act(() =>
+			result.current.mutations.deleteGroup.mutate({
+				path: { workspaceSlug: WORKSPACE, groupSlug: "quality" },
+			}),
+		);
+		await waitFor(() => expect(result.current.detail.data).toStrictEqual(after));
+		await waitFor(() => expect(result.current.mutations.deleteGroup.isSuccess).toBe(true));
+		firstRead.resolve(before);
+		await act(async () => {
+			await firstRead.promise;
+		});
+		expect(client.getQueryData(detailKey)).toStrictEqual(after);
+		unmount();
+		client.clear();
 	});
 
 	it("removes a group's practices and refreshes the library when deletion includes practices", async () => {

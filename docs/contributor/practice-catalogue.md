@@ -26,11 +26,11 @@ flowchart LR
     Instance -->|adoption,<br/>by an administrator| Workspace[Workspace practice<br/>independent copy]
 ```
 
-| Scope | Owner | Stored as | Decides |
-|---|---|---|---|
-| Hephaestus defaults | repository maintainers | `default-catalog.json` + precompute scripts | the bundled definition and order |
-| Instance catalog | instance administrators | sparse override rows | what workspaces may adopt |
-| Workspace practices | workspace administrators | full database copies | reviews in one workspace |
+| Scope               | Owner                    | Stored as                                   | Decides                          |
+| ------------------- | ------------------------ | ------------------------------------------- | -------------------------------- |
+| Hephaestus defaults | repository maintainers   | `default-catalog.json` + precompute scripts | the bundled definition and order |
+| Instance catalog    | instance administrators  | sparse override rows                        | what workspaces may adopt        |
+| Workspace practices | workspace administrators | full database copies                        | reviews in one workspace         |
 
 All three scopes use the same definition fields. What differs is who owns the value:
 
@@ -47,15 +47,18 @@ Neither step silently rewrites a customized instance definition or an existing w
 The badge tables an administrator reads for both scopes live in the
 [Practice Catalog admin guide](/admin/practice-catalog).
 
-| Stakeholder                | Primary task                                                                                                               | Deliberately not their task                      |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| Practice author            | Define the practice, guidance, and responsible mentoring support                                                           | Authorize collection or certify review accuracy  |
-| Instance administrator     | Curate the library workspaces may adopt from                                                                               | Rewrite existing workspace practices             |
+| Stakeholder                | Primary task                                                                                                                | Deliberately not their task                      |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Practice author            | Define the practice, guidance, and responsible mentoring support                                                            | Authorize collection or certify review accuracy  |
+| Instance administrator     | Curate the library workspaces may adopt from                                                                                | Rewrite existing workspace practices             |
 | Workspace administrator    | Adapt practices, set the workspace default autonomy and override it per group or practice, and scope which work is reviewed | Authorize a new data source for the instance     |
-| Instance operator          | Approve source purposes, privacy, retention, and erasure coverage                                                          | Decide that connected evidence proves a practice |
-| Developer, peer, or mentor | Use observations and available human context in a review                                                                   | Supply hidden context to Hephaestus implicitly   |
+| Instance operator          | Approve source purposes, privacy, retention, and erasure coverage                                                           | Decide that connected evidence proves a practice |
+| Developer, peer, or mentor | Use observations and available human context in a review                                                                    | Supply hidden context to Hephaestus implicitly   |
 
 ## Authoring experience
+
+Authored definition objects and their nested policy, evidence and precondition objects reject
+unrecognized fields. Send authored request fields, not response-only validation metadata.
 
 The practice editor follows the decisions an author can make confidently:
 
@@ -110,7 +113,7 @@ workspace integrations remain separate gates.
 | What to look for         | Look for a description that explains the behavior change and why. Stay silent for automated dependency updates. |
 | Why it matters           | Reviewers can judge a change faster when they understand its purpose.                                           |
 | What good looks like     | “This changes retry behavior so temporary network failures no longer end the sync.”                             |
-| Hephaestus support       | AI-supported mentoring with the recommended review configuration and evidence                                               |
+| Hephaestus support       | AI-supported mentoring with the recommended review configuration and evidence                                   |
 
 The author does not choose source-contract identifiers or runtime states in this common path. If the
 required pull-request details or diff are missing, or captured less completely than their contract
@@ -291,9 +294,9 @@ standard as an experiment or a convention as a proven outcome.
    [artifact-source governance gate](../admin/dsms/artifact-source-governance).
 5. Update `server/application/src/main/resources/practices/default-catalog.json`; its adjacent JSON Schema provides
    editor completion and CI validation, and Git history is the bundled version history. Declare the one
-   occasion directly as `signals`, with optional `onDrafts` and `subject`. Declare sources as
-   `evidenceRequirements`; omitting that field uses the artifact kind's default evidence. An explicit
-   empty list is invalid. Declare a mechanical gate as `precondition`. There is no occasion array or
+   occasion directly as `signals`, with `reviewWhen` and `subject`. Declare sources as
+   `evidenceRequirements` explicitly. A review needs at least one required or exhaustive source;
+   a guidance-only practice uses an empty list. Declare a mechanical gate as `precondition`. `reviewWhen` is a map of descriptor-supported state dimensions to nonempty value sets. An empty map is unrestricted; omitting a dimension permits all its values. There is no occasion array or
    string-or-object shorthand. Reference any precompute script explicitly; a script must be named
    after the practice slug, and an unreferenced one fails validation. What a script is and what the
    library owns is in [Precompute scripts](#precompute-scripts) below. Give the practice a `holdsAs`

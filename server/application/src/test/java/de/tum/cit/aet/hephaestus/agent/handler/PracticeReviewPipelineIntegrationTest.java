@@ -473,7 +473,7 @@ class PracticeReviewPipelineIntegrationTest extends BaseIntegrationTest {
                                 new de.tum.cit.aet.hephaestus.evidence.SourceKind(kind),
                                 de.tum.cit.aet.hephaestus.practices.EvidenceStance.REQUIRED))
                         .toList());
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         practice.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(practice, 2)));

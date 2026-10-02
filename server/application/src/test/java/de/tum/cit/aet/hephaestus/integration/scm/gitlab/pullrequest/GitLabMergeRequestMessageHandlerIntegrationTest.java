@@ -2763,7 +2763,7 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             Practice practice = new Practice();
             practice.setSignals(List.of(ScmSignals.PULL_REQUEST_MERGED));
             practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
-            practice.setOnDrafts(false);
+            practice.setReviewWhen(Map.of());
             practice.setSubject(ActorRole.MERGER);
             practice.setPrecondition(null);
             return practice;

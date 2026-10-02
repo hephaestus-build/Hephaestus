@@ -80,7 +80,7 @@ export const IssueLifecycle: Story = {
 		const strip = within(canvas.getByRole("group", { name: "Reviews when" }));
 		await expect(strip.getByRole("checkbox", { name: "Details changed every time" })).toBeChecked();
 		// An issue is never a draft, so the question is not asked.
-		await expect(canvas.queryByRole("switch", { name: /^Include drafts/u })).toBeNull();
+		await expect(canvas.queryByRole("checkbox", { name: "Draft" })).toBeNull();
 	},
 };
 
@@ -147,9 +147,9 @@ export const GuidanceOnlyPromisesNoHandAskedReview: Story = {
 };
 
 export const IncludingDrafts: Story = {
-	args: { reviewFields: { ...mockPullRequestReviewFields, onDrafts: true } },
+	args: { reviewFields: { ...mockPullRequestReviewFields, reviewWhen: {} } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("switch", { name: "Include drafts" })).toBeChecked();
+		await expect(canvas.getByRole("checkbox", { name: "Draft" })).toBeChecked();
 	},
 };
 
@@ -189,7 +189,7 @@ export const WithRecentOutcomes: Story = {
  */
 export const Invalid: Story = {
 	args: {
-		reviewFields: { signals: [], evidenceRequirements: [], onDrafts: false, subject: "AUTHOR" },
+		reviewFields: { signals: [], evidenceRequirements: [], reviewWhen: {}, subject: "AUTHOR" },
 		error: "Choose when this practice is reviewed.",
 		errorFocusId: "practice-occasion-signals",
 	},
@@ -201,6 +201,22 @@ export const Invalid: Story = {
 		await expect(
 			canvas.getByRole("group", { name: "What this review reads" }),
 		).not.toHaveAccessibleDescription("Choose when this practice is reviewed.");
+	},
+};
+
+export const InvalidReviewConditions: Story = {
+	args: {
+		reviewFields: { ...mockPullRequestReviewFields, reviewWhen: { draftStatus: [] } },
+		error: "Choose review conditions supported by this kind of work.",
+		errorFocusId: "practice-occasion-reviewWhen",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("group", { name: "Draft status" })).toHaveAccessibleDescription(
+			"Choose review conditions supported by this kind of work.",
+		);
+		await expect(
+			canvas.getByRole("group", { name: "Reviews when" }),
+		).not.toHaveAccessibleDescription("Choose review conditions supported by this kind of work.");
 	},
 };
 

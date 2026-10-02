@@ -50,19 +50,19 @@ DROP TRIGGER practice_revision_immutable_update ON practice_revision;
 ALTER TABLE practice
     ADD COLUMN signals jsonb,
     ADD COLUMN evidence_requirements jsonb,
-    ADD COLUMN on_drafts boolean DEFAULT false NOT NULL,
+    ADD COLUMN review_when jsonb,
     ADD COLUMN subject varchar(16) DEFAULT 'AUTHOR' NOT NULL,
     ADD COLUMN precondition jsonb;
 ALTER TABLE practice_revision
     ADD COLUMN signals jsonb,
     ADD COLUMN evidence_requirements jsonb,
-    ADD COLUMN on_drafts boolean,
+    ADD COLUMN review_when jsonb,
     ADD COLUMN subject varchar(16),
     ADD COLUMN precondition jsonb;
 ALTER TABLE curated_practice_override
     ADD COLUMN signals jsonb,
     ADD COLUMN evidence_requirements jsonb,
-    ADD COLUMN on_drafts boolean,
+    ADD COLUMN review_when jsonb,
     ADD COLUMN subject varchar(16),
     ADD COLUMN precondition jsonb;
 
@@ -70,11 +70,18 @@ CREATE FUNCTION pg_temp.flat_practice_precondition(value jsonb) RETURNS jsonb LA
     SELECT CASE WHEN value IS NULL OR value = 'null'::jsonb THEN NULL
         ELSE (value - 'absentSays') || jsonb_build_object('skipReason', value->'absentSays') END;
 $$;
+CREATE FUNCTION pg_temp.practice_review_when(bindings jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
+    SELECT CASE WHEN bindings IS NULL THEN NULL
+        WHEN COALESCE((bindings->0->>'onDrafts')::boolean, false)
+            OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(bindings->0->'signals') signal
+                           WHERE signal LIKE 'scm.pull_request.%') THEN '{}'::jsonb
+        ELSE '{"draftStatus":["NOT_DRAFT"]}'::jsonb END;
+$$;
 CREATE FUNCTION pg_temp.flat_practice_definition(value jsonb) RETURNS jsonb LANGUAGE sql IMMUTABLE AS $$
     SELECT (value - 'bindings') || jsonb_build_object(
         'signals', value->'bindings'->0->'signals',
         'evidenceRequirements', value->'bindings'->0->'needs',
-        'onDrafts', COALESCE(value->'bindings'->0->'onDrafts', 'false'::jsonb),
+        'reviewWhen', pg_temp.practice_review_when(value->'bindings'),
         'subject', COALESCE(value->'bindings'->0->'subject', '"AUTHOR"'::jsonb),
         'precondition', pg_temp.flat_practice_precondition(value->'bindings'->0->'appliesWhen'));
 $$;
@@ -82,31 +89,34 @@ $$;
 UPDATE practice SET
     signals = bindings->0->'signals',
     evidence_requirements = bindings->0->'needs',
-    on_drafts = COALESCE((bindings->0->>'onDrafts')::boolean, false),
+    review_when = pg_temp.practice_review_when(bindings),
     subject = COALESCE(bindings->0->>'subject', 'AUTHOR'),
     precondition = pg_temp.flat_practice_precondition(bindings->0->'appliesWhen'),
     adopted_base = CASE WHEN adopted_base IS NULL THEN NULL ELSE pg_temp.flat_practice_definition(adopted_base) END;
 UPDATE practice_revision SET
     signals = bindings->0->'signals',
     evidence_requirements = bindings->0->'needs',
-    on_drafts = CASE WHEN bindings IS NULL THEN NULL ELSE COALESCE((bindings->0->>'onDrafts')::boolean, false) END,
+    review_when = pg_temp.practice_review_when(bindings),
     subject = CASE WHEN bindings IS NULL THEN NULL ELSE COALESCE(bindings->0->>'subject', 'AUTHOR') END,
     precondition = pg_temp.flat_practice_precondition(bindings->0->'appliesWhen');
 UPDATE curated_practice_override SET
     signals = bindings->0->'signals',
     evidence_requirements = bindings->0->'needs',
-    on_drafts = COALESCE((bindings->0->>'onDrafts')::boolean, false),
+    review_when = pg_temp.practice_review_when(bindings),
     subject = COALESCE(bindings->0->>'subject', 'AUTHOR'),
     precondition = pg_temp.flat_practice_precondition(bindings->0->'appliesWhen'),
     adopted_base = CASE WHEN adopted_base IS NULL THEN NULL ELSE pg_temp.flat_practice_definition(adopted_base) END;
 
 DROP FUNCTION pg_temp.flat_practice_definition(jsonb);
 DROP FUNCTION pg_temp.flat_practice_precondition(jsonb);
+DROP FUNCTION pg_temp.practice_review_when(jsonb);
 
 ALTER TABLE practice
     DROP COLUMN bindings,
     ALTER COLUMN signals SET NOT NULL,
     ALTER COLUMN evidence_requirements SET NOT NULL,
+    ALTER COLUMN review_when SET NOT NULL,
+    ADD CONSTRAINT ck_practice_review_when CHECK (jsonb_typeof(review_when) = 'object'),
     ADD CONSTRAINT ck_practice_signals CHECK (jsonb_typeof(signals) = 'array' AND jsonb_array_length(signals) > 0),
     ADD CONSTRAINT ck_practice_evidence_requirements CHECK (jsonb_typeof(evidence_requirements) = 'array'),
     ADD CONSTRAINT ck_practice_subject CHECK (subject IN ('AUTHOR', 'ASSIGNEE', 'REVIEWER', 'MERGER'));
@@ -114,23 +124,25 @@ ALTER TABLE practice_revision
     DROP COLUMN bindings,
     ADD CONSTRAINT ck_practice_revision_signals CHECK (signals IS NULL OR (jsonb_typeof(signals) = 'array' AND jsonb_array_length(signals) > 0)),
     ADD CONSTRAINT ck_practice_revision_evidence_requirements CHECK (evidence_requirements IS NULL OR jsonb_typeof(evidence_requirements) = 'array'),
+    ADD CONSTRAINT ck_practice_revision_review_when CHECK (review_when IS NULL OR jsonb_typeof(review_when) = 'object'),
     ADD CONSTRAINT ck_practice_revision_subject CHECK (subject IS NULL OR subject IN ('AUTHOR', 'ASSIGNEE', 'REVIEWER', 'MERGER')),
     ADD CONSTRAINT ck_practice_revision_definition_shape CHECK (
         (slug IS NULL AND name IS NULL AND applies_to IS NULL AND signals IS NULL AND evidence_requirements IS NULL
-            AND on_drafts IS NULL AND subject IS NULL AND precondition IS NULL AND review_rule_fingerprint IS NULL)
+            AND review_when IS NULL AND subject IS NULL AND precondition IS NULL AND review_rule_fingerprint IS NULL)
         OR (slug IS NOT NULL AND name IS NOT NULL AND applies_to IS NOT NULL AND signals IS NOT NULL
-            AND evidence_requirements IS NOT NULL AND on_drafts IS NOT NULL AND subject IS NOT NULL));
+            AND evidence_requirements IS NOT NULL AND review_when IS NOT NULL AND subject IS NOT NULL));
 ALTER TABLE curated_practice_override
     DROP COLUMN bindings,
     ADD CONSTRAINT ck_curated_practice_override_signals CHECK (signals IS NULL OR (jsonb_typeof(signals) = 'array' AND jsonb_array_length(signals) > 0)),
     ADD CONSTRAINT ck_curated_practice_override_evidence_requirements CHECK (evidence_requirements IS NULL OR jsonb_typeof(evidence_requirements) = 'array'),
+    ADD CONSTRAINT ck_curated_practice_override_review_when CHECK (review_when IS NULL OR jsonb_typeof(review_when) = 'object'),
     ADD CONSTRAINT ck_curated_practice_override_subject CHECK (subject IS NULL OR subject IN ('AUTHOR', 'ASSIGNEE', 'REVIEWER', 'MERGER')),
     ADD CONSTRAINT ck_curated_practice_override_shape CHECK (
         (name IS NULL AND applies_to IS NULL AND signals IS NULL AND evidence_requirements IS NULL AND precondition IS NULL
             AND criteria IS NULL AND precompute_script IS NULL AND why_it_matters IS NULL AND what_good_looks_like IS NULL
             AND group_slug IS NULL AND based_on_digest IS NULL)
         OR (name IS NOT NULL AND applies_to IS NOT NULL AND signals IS NOT NULL AND evidence_requirements IS NOT NULL
-            AND on_drafts IS NOT NULL AND subject IS NOT NULL AND criteria IS NOT NULL));
+            AND review_when IS NOT NULL AND subject IS NOT NULL AND criteria IS NOT NULL));
 
 ALTER TABLE observation ADD COLUMN outcome varchar(16);
 UPDATE observation SET outcome = CASE
@@ -163,7 +175,7 @@ CREATE OR REPLACE FUNCTION public.enforce_practice_current_revision_projection()
                   AND revision.applies_to = practice.applies_to
                   AND revision.signals = practice.signals
                   AND revision.evidence_requirements = practice.evidence_requirements
-                  AND revision.on_drafts = practice.on_drafts
+                  AND revision.review_when = practice.review_when
                   AND revision.subject = practice.subject
                   AND revision.precondition IS NOT DISTINCT FROM practice.precondition
                   AND revision.criteria = practice.criteria
@@ -194,7 +206,7 @@ CREATE OR REPLACE FUNCTION public.enforce_practice_revision_immutability() RETUR
             $$;
 
 CREATE CONSTRAINT TRIGGER practice_requires_current_revision_projection
-    AFTER INSERT OR UPDATE OF current_revision_id, slug, name, applies_to, signals, evidence_requirements, on_drafts,
+    AFTER INSERT OR UPDATE OF current_revision_id, slug, name, applies_to, signals, evidence_requirements, review_when,
         subject, precondition, criteria, precompute_script, automated_review_policy, delivery_behavior, why_it_matters,
         what_good_looks_like, practice_group_id ON practice
     DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.enforce_practice_current_revision_projection();

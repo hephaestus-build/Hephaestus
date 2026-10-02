@@ -10,12 +10,15 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -36,7 +39,8 @@ public record PracticeDTO(
         @NonNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
         List<PracticeEvidenceRequirement> evidenceRequirements,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean onDrafts,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = ReviewWhen.DESCRIPTION)
+        Map<String, Set<String>> reviewWhen,
 
         @NonNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
         ActorRole subject,
@@ -105,7 +109,7 @@ public record PracticeDTO(
                 practice.getName(),
                 practice.getSignals(),
                 practice.getEvidenceRequirements(),
-                practice.isOnDrafts(),
+                practice.getReviewWhen(),
                 practice.getSubject(),
                 practice.getPrecondition(),
                 practice.getCriteria(),

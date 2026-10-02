@@ -60,19 +60,19 @@ delivery. Stop at the first missing stage rather than changing downstream settin
 
 ### Use the right screen
 
-| Question                                                          | Open                                                          |
-| ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| Did this piece of work enter the system, and why was it quiet?    | **Practices → Practice reviews → Work**, then open the work   |
-| What needs me, and are the reviews working?                       | **Practices → Practice reviews** (the overview)               |
-| Did a job run, fail, or produce observations and feedback?        | **Practices → Practice reviews → Reviews**, then open a row   |
-| Is in-context feedback waiting for approval?                      | **Practices → Practice reviews**, under **Needs you**         |
-| How does one practice behave: its outcomes and incorrect marks?   | **Practices → Practice reviews**, then open the practice      |
-| Which work may start reviews, and may feedback be sent?           | **Practices → Review settings → When and where**              |
-| How far do reviews go without a person?                           | **Practices → Review settings → How much**                    |
-| What does one practice review and which evidence does it require? | **Practices → Practice setup**                                |
-| Who counts as a covered person?                                   | **Members**                                                   |
-| Is the review model ready?                                        | **AI models**                                                 |
-| Did a budget stop new work?                                       | **AI usage**                                                  |
+| Question                                                          | Open                                                        |
+| ----------------------------------------------------------------- | ----------------------------------------------------------- |
+| Did this piece of work enter the system, and why was it quiet?    | **Practices → Practice reviews → Work**, then open the work |
+| What needs me, and are the reviews working?                       | **Practices → Practice reviews** (the overview)             |
+| Did a job run, fail, or produce observations and feedback?        | **Practices → Practice reviews → Reviews**, then open a row |
+| Is in-context feedback waiting for approval?                      | **Practices → Practice reviews**, under **Needs you**       |
+| How does one practice behave: its outcomes and incorrect marks?   | **Practices → Practice reviews**, then open the practice    |
+| Which work may start reviews, and may feedback be sent?           | **Practices → Review settings → When and where**            |
+| How far do reviews go without a person?                           | **Practices → Review settings → How much**                  |
+| What does one practice review and which evidence does it require? | **Practices → Practice setup**                              |
+| Who counts as a covered person?                                   | **Members**                                                 |
+| Is the review model ready?                                        | **AI models**                                               |
+| Did a budget stop new work?                                       | **AI usage**                                                |
 
 ### Read the Practice reviews overview
 
@@ -131,13 +131,13 @@ moment, you are asked to try again and nothing changes.
 Comments already on the pull request or merge request are not changed at once. The page shows what became of
 them, and each state is recorded:
 
-| State | Meaning |
-| --- | --- |
-| Pending | A delivery citing it is still being settled, a comment Hephaestus tried to post in the last day has not been confirmed either way yet, or an edit will be retried. Silent Mode keeps it here. |
-| Nothing posted | No comment about it was found on the work. |
-| Updated | Each summary comment opens with a correction notice naming the practice, not your reason. |
-| Inline comments remain | Summaries are updated, but inline comments cannot be edited; remove or answer them yourself. |
-| Unresolved | A summary could not be edited, the provider accepted a comment without saying which one it is, or a comment Hephaestus tried to post more than a day ago is still unconfirmed. Check the work and correct it on the provider; Hephaestus keeps checking every few hours and updates the state if it finds the comment. |
+| State                  | Meaning                                                                                                                                                                                                                                                                                                                |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pending                | A delivery citing it is still being settled, a comment Hephaestus tried to post in the last day has not been confirmed either way yet, or an edit will be retried. Silent Mode keeps it here.                                                                                                                          |
+| Nothing posted         | No comment about it was found on the work.                                                                                                                                                                                                                                                                             |
+| Updated                | Each summary comment opens with a correction notice naming the practice, not your reason.                                                                                                                                                                                                                              |
+| Inline comments remain | Summaries are updated, but inline comments cannot be edited; remove or answer them yourself.                                                                                                                                                                                                                           |
+| Unresolved             | A summary could not be edited, the provider accepted a comment without saying which one it is, or a comment Hephaestus tried to post more than a day ago is still unconfirmed. Check the work and correct it on the provider; Hephaestus keeps checking every few hours and updates the state if it finds the comment. |
 
 **Restore observation** reverses the correction with a second reason, removes any notice it added and
 re-sends nothing. Every correction stays listed on the page.
@@ -216,13 +216,13 @@ The labels on the right are the ones **What we noticed** prints when you open a 
 
 All five spend from the workspace's AI budget.
 
-| Door                                                       | Who may use it                                                                            | Rate limit                                                      |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Live event                                                 | Nobody — it is automatic, per the practices' occasions                                    | The per-workspace cooldown between reviews of the same work     |
-| `/hephaestus review` in a **GitLab merge request** comment | The work's author or assignees, or a workspace admin                                      | Per-person hourly allowance, **and** the same per-work cooldown |
+| Door                                                       | Who may use it                                                                               | Rate limit                                                      |
+| ---------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Live event                                                 | Nobody — it is automatic, per the practices' occasions                                       | The per-workspace cooldown between reviews of the same work     |
+| `/hephaestus review` in a **GitLab merge request** comment | The work's author or assignees, or a workspace admin                                         | Per-person hourly allowance, **and** the same per-work cooldown |
 | **Review this now** in the app                             | The same people. It is offered only where the reader may ask; the server refuses anyone else | Per-person hourly allowance, **and** the same per-work cooldown |
-| **Past work** campaign                                     | A workspace admin, and only after confirming a priced estimate                            | Bounded by the campaign's own scope                             |
-| **Keep checking new work** schedule                        | A workspace admin                                                                         | One campaign at a time per workspace                            |
+| **Past work** campaign                                     | A workspace admin, and only after confirming a priced estimate                               | Bounded by the campaign's own scope                             |
+| **Keep checking new work** schedule                        | A workspace admin                                                                            | One campaign at a time per workspace                            |
 
 Two switches sit in front of the whole table. **Start from work activity** governs the first row;
 **Start requested reviews** governs the other four together, so turning it off stops the button,
@@ -246,8 +246,9 @@ is the separate emergency brake for external delivery. Variables, Compose forwar
 requirements, queue metrics, retention, and fixed limits are in
 [Practice review operations](./practice-review-operations.mdx).
 
-Draft eligibility is the one thing you will look for on the workspace screens and not find: it belongs to
-each practice, because it changes when that practice has a meaningful occasion.
+Review conditions belong to each practice, not workspace coverage. Choose permitted states in the
+practice editor, such as draft status for pull or merge requests or archive status for documents.
+Selecting every value leaves that condition unrestricted.
 
 ## Autonomy, coverage, and delivery
 
@@ -459,9 +460,9 @@ run themselves once a sync finds the work again, and are dropped if it does not 
 9. **Are jobs being claimed at all?** Watch `agent.queue.oldest_age_seconds`. It should rise and fall.
    Climbing monotonically means the server is submitting and no worker is claiming.
 10. **Is instance-wide silent mode engaged?** Instance admin → **Instance settings**. While it is on, no
-   workspace's feedback leaves the instance — no comments on the work, no feedback in conversations and
-   no email — while reviews still run and in-app feedback still reaches each developer's Practice
-   profile. A banner says so on every instance-admin page.
+    workspace's feedback leaves the instance — no comments on the work, no feedback in conversations and
+    no email — while reviews still run and in-app feedback still reaches each developer's Practice
+    profile. A banner says so on every instance-admin page.
 
 The per-workspace review list, the **Reviews** tab under Administration → **Practices → Practice
 reviews**, shows each review's status; open a review to see the model it ran on and its error message —

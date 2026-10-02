@@ -130,8 +130,6 @@ public class PullRequestReviewHandler implements JobTypeHandler {
             metadata.put(
                     PracticeCatalogInjector.SIGNAL_METADATA_KEY,
                     submissionRequest.triggerSignal().value());
-            // Use the signal-time draft state for both gate and catalog selection.
-            metadata.put(PracticeCatalogInjector.DRAFT_METADATA_KEY, pullRequestData.isDraft());
         }
         if (submissionRequest.linkedIssueRevision() != null) {
             metadata.put("linked_issue_revision", submissionRequest.linkedIssueRevision());

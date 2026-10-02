@@ -6,7 +6,6 @@ import { PracticeEvidenceEditor } from "@/components/admin/practice-editor/Pract
 import { PracticeEvidenceOutcomeSummary } from "@/components/admin/practice-editor/PracticeEvidenceOutcomeSummary";
 import {
 	type PracticeReviewFields,
-	hasDrafts,
 	normalizeReviewSettings,
 	OCCASION_ID_PREFIX,
 	occasionFieldId,
@@ -55,6 +54,7 @@ export function PracticeReviewSettingsEditor({
 }: PracticeReviewSettingsEditorProps) {
 	const WorkIcon = artifactKindIcon(options.artifactKind);
 	const signalsInvalid = errorFocusId === occasionFieldId("signals");
+	const reviewWhenInvalid = errorFocusId === occasionFieldId("reviewWhen");
 	const evidenceInvalid = errorFocusId === occasionFieldId("evidence");
 	// A review asked for by hand runs a practice the workspace lets run: guidance-only and
 	// human-review-needed practices sit at OFF, so promising one here would be a promise nothing keeps.
@@ -93,11 +93,14 @@ export function PracticeReviewSettingsEditor({
 				workType={options}
 				selected={reviewFields.signals}
 				onToggle={toggleSignal}
-				includeDrafts={reviewFields.onDrafts}
-				onIncludeDraftsChange={(includeDrafts) =>
-					onChange(normalizeReviewSettings({ ...reviewFields, onDrafts: includeDrafts }))
+				reviewWhen={reviewFields.reviewWhen}
+				onReviewWhenChange={(reviewWhen) =>
+					onChange(normalizeReviewSettings({ ...reviewFields, reviewWhen }))
 				}
 				errorId={signalsInvalid && hasText(error) ? REVIEW_SETTINGS_ERROR_ID : undefined}
+				reviewWhenErrorId={
+					reviewWhenInvalid && hasText(error) ? REVIEW_SETTINGS_ERROR_ID : undefined
+				}
 				disabled={disabled}
 			/>
 
@@ -124,8 +127,7 @@ export function PracticeReviewSettingsEditor({
 					<HandIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
 					<span>
 						Anyone can also ask for this review by hand, with “Review this now” on the work itself.
-						It reads the same evidence and runs whatever state the work is in
-						{hasDrafts(options.artifactKind) && ", drafts included"}.
+						It reads the same evidence and runs whatever state the work is in .
 					</span>
 				</p>
 			)}

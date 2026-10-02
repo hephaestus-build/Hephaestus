@@ -202,7 +202,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         // artifact is staged for citation regardless.
         lenient().when(revision.getSignals()).thenReturn(testPractice.getSignals());
         lenient().when(revision.getEvidenceRequirements()).thenReturn(testPractice.getEvidenceRequirements());
-        lenient().when(revision.getOnDrafts()).thenReturn(testPractice.isOnDrafts());
+        lenient().when(revision.getReviewWhen()).thenReturn(testPractice.getReviewWhen());
         lenient().when(revision.getSubject()).thenReturn(testPractice.getSubject());
         lenient().when(revision.getPrecondition()).thenReturn(testPractice.getPrecondition());
         lenient()
@@ -444,7 +444,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         lenient().when(revision.getAutomatedReviewPolicy()).thenReturn(practice.getAutomatedReviewPolicy());
         lenient().when(revision.getSignals()).thenReturn(practice.getSignals());
         lenient().when(revision.getEvidenceRequirements()).thenReturn(practice.getEvidenceRequirements());
-        lenient().when(revision.getOnDrafts()).thenReturn(practice.isOnDrafts());
+        lenient().when(revision.getReviewWhen()).thenReturn(practice.getReviewWhen());
         lenient().when(revision.getSubject()).thenReturn(practice.getSubject());
         lenient().when(revision.getPrecondition()).thenReturn(practice.getPrecondition());
         lenient()
@@ -1310,7 +1310,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             reviewing.setSlug("reviews-with-care");
             reviewing.setSignals(List.of(PracticeTestEvidence.defaultSignal(ArtifactKinds.PULL_REQUEST)));
             reviewing.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
-            reviewing.setOnDrafts(false);
+            reviewing.setReviewWhen(Map.of());
             reviewing.setSubject(de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.REVIEWER);
             reviewing.setPrecondition(null);
             reviewing.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));

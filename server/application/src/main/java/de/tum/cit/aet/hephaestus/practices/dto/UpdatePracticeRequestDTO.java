@@ -2,21 +2,26 @@ package de.tum.cit.aet.hephaestus.practices.dto;
 
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.practices.ClosedPracticeInput;
 import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
 import de.tum.cit.aet.hephaestus.practices.PracticeAutomatedReviewPolicy;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "Request to update a practice; omitted fields remain unchanged")
+@Schema(
+        description = "Request to update a practice; omitted fields remain unchanged",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record UpdatePracticeRequestDTO(
         @Size(min = 3, max = 128, message = "Name must be between 3 and 128 characters")
         @Pattern(regexp = ".*\\S.*", message = "Name must not be blank")
@@ -28,7 +33,10 @@ public record UpdatePracticeRequestDTO(
         List<SignalName> signals,
 
         @Nullable List<@Valid PracticeEvidenceRequirement> evidenceRequirements,
-        @Nullable Boolean onDrafts,
+
+        @Schema(description = ReviewWhen.DESCRIPTION) @Nullable
+        Map<String, Set<String>> reviewWhen,
+
         @Nullable ActorRole subject,
         @Valid @Nullable PracticePrecondition precondition,
 
@@ -75,12 +83,13 @@ public record UpdatePracticeRequestDTO(
         @Schema(description = "Explicit intent to change the gate or the person judged") @Nullable
         Set<DefinitionChange> definitionChanges,
 
-        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior) {
+        @Valid @Nullable PracticeDeliveryBehavior deliveryBehavior)
+        implements ClosedPracticeInput {
     public UpdatePracticeRequestDTO(
             @Nullable String name,
             @Nullable List<SignalName> signals,
             @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
-            @Nullable Boolean onDrafts,
+            @Nullable Map<String, Set<String>> reviewWhen,
             @Nullable ActorRole subject,
             @Nullable PracticePrecondition precondition,
             @Nullable String criteria,
@@ -95,7 +104,7 @@ public record UpdatePracticeRequestDTO(
                 name,
                 signals,
                 evidenceRequirements,
-                onDrafts,
+                reviewWhen,
                 subject,
                 precondition,
                 criteria,

@@ -6,8 +6,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Per-practice aggregation of observations for a developer (ADR 0022). Used by dashboard practice cards
- * to display strength/problem counts and last activity.
+ * Per-practice aggregation of current observations for a developer (ADR 0022).
  */
 @Schema(description = "Per-practice observation summary for a developer")
 public record DeveloperPracticeSummaryDTO(

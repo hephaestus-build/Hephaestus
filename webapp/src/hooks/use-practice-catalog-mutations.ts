@@ -22,6 +22,7 @@ import {
 	applyPracticePlacements,
 	byDisplayOrder,
 	patchGroup,
+	patchPractice,
 	placePractice,
 	practiceCatalogStructureScope,
 	practicePlacementSnapshot,
@@ -145,7 +146,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 				queryClient.cancelQueries({ queryKey: practicesQueryKey }),
 			]);
 		},
-		onSuccess: (_data, variables) => {
+		onSuccess: async (_data, variables) => {
 			const slug = variables.path.groupSlug;
 			queryClient.setQueryData<PracticeGroup[]>(groupsQueryKey, (groups = []) =>
 				removeGroup(groups, slug),
@@ -167,6 +168,7 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 				}
 				void queryClient.invalidateQueries({ queryKey: adoptionCatalogQueryKey });
 			} else {
+				const affected = practices.filter((practice) => practice.groupSlug === slug);
 				const updated = unassignPractices(practices, slug);
 				applyPlacementCaches(
 					updated.map(({ groupSlug, displayOrder, slug: practiceSlug }) => ({
@@ -174,6 +176,19 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 						displayOrder,
 						slug: practiceSlug,
 					})),
+				);
+				await Promise.all(
+					affected.map(async (practice) => {
+						const filters = {
+							queryKey: getPracticeQueryKey({
+								path: { workspaceSlug, practiceSlug: practice.slug },
+							}),
+							exact: true,
+						};
+						// Invalidation can reuse an in-flight first fetch; cancel it before reading the new basis.
+						await queryClient.cancelQueries(filters);
+						await queryClient.invalidateQueries(filters);
+					}),
 				);
 			}
 			void queryClient.invalidateQueries({
@@ -255,10 +270,21 @@ export function usePracticeCatalogMutations(workspaceSlug: string) {
 			}
 			toast.error("Couldn't move the practice");
 		},
-		onSuccess: (updated) => {
+		onSuccess: (updated, variables) => {
 			applyPlacementCaches(
 				updated.map(({ slug, groupSlug, displayOrder }) => ({ slug, groupSlug, displayOrder })),
 			);
+			const moved = updated.find(({ slug }) => slug === variables.path.practiceSlug);
+			if (moved) {
+				const patch = { automatedReviewValidation: moved.automatedReviewValidation };
+				queryClient.setQueryData<Practice[]>(practicesQueryKey, (practices = []) =>
+					patchPractice(practices, moved.slug, patch),
+				);
+				queryClient.setQueryData<Practice>(
+					getPracticeQueryKey({ path: { workspaceSlug, practiceSlug: moved.slug } }),
+					(practice) => (practice ? { ...practice, ...patch } : practice),
+				);
+			}
 		},
 		onSettled: invalidatePracticesAfterLastWrite,
 	});

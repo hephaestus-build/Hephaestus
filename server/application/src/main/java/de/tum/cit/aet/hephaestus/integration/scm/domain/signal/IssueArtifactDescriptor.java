@@ -10,7 +10,9 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ArtifactDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackLane;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewStateDimension;
 import de.tum.cit.aet.hephaestus.integration.core.spi.Signal;
 import java.util.List;
 import java.util.Set;
@@ -32,6 +34,23 @@ public class IssueArtifactDescriptor implements ArtifactDescriptor {
             declareRecommended(ScmSignals.ISSUE_UPDATED, "Details changed", Set.of(GITHUB_ISSUES, GITLAB_ISSUE)),
             declare(ScmSignals.ISSUE_CLOSED, "Closed", Set.of(GITHUB_ISSUES, GITLAB_ISSUE)),
             declareManualRequest(ScmSignals.ISSUE_MANUAL_REVIEW, "Review requested by hand"));
+
+    @Override
+    public ReviewCapabilities reviewCapabilities() {
+        return new ReviewCapabilities(
+                List.of(new ReviewLimitation(
+                        "IMPLEMENTATION_NOT_OBSERVED",
+                        "Issue evidence does not establish whether the described work was implemented correctly.")),
+                List.of(new ReviewStateDimension(
+                        "state",
+                        "State",
+                        List.of(
+                                new ReviewStateDimension.Value("OPEN", "Open"),
+                                new ReviewStateDimension.Value("CLOSED", "Closed")),
+                        Set.of("OPEN", "CLOSED"))),
+                Set.of(),
+                Set.of());
+    }
 
     @Override
     public ArtifactKind kind() {
@@ -56,13 +75,6 @@ public class IssueArtifactDescriptor implements ArtifactDescriptor {
     @Override
     public Set<FeedbackLane> lanes() {
         return Set.of(FeedbackLane.IN_CONTEXT_SUMMARY);
-    }
-
-    @Override
-    public List<ReviewLimitation> reviewLimitations() {
-        return List.of(new ReviewLimitation(
-                "IMPLEMENTATION_NOT_OBSERVED",
-                "Issue evidence does not establish whether the described work was implemented correctly."));
     }
 
     @Override

@@ -29,7 +29,9 @@ import org.jspecify.annotations.Nullable;
  * @param evidenceHasItems   a named collection; the clause holds when it has at least one entry
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@Schema(description = "One shape the subject a practice judges can take in a piece of work")
+@Schema(
+        description = "One shape the subject a practice judges can take in a piece of work",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record PracticePreconditionClause(
         @Schema(description = "Globs; holds when the change touches a matching path") @Nullable
         List<String> changedPathMatches,
@@ -38,7 +40,8 @@ public record PracticePreconditionClause(
         List<String> diffContains,
 
         @Schema(description = "Named evidence collection; holds when it has at least one entry") @Nullable
-        SubjectEvidenceCollection evidenceHasItems) {
+        SubjectEvidenceCollection evidenceHasItems)
+        implements ClosedPracticeInput {
     public static final SourceKind DIFF_SOURCE = new SourceKind("scm.pull-request.diff");
 
     static final int MAX_TERM_LENGTH = 200;

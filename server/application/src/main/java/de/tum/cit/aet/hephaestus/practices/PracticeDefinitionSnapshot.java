@@ -6,6 +6,8 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 record PracticeDefinitionSnapshot(
@@ -14,7 +16,7 @@ record PracticeDefinitionSnapshot(
         ArtifactKind artifactKind,
         List<SignalName> signals,
         List<PracticeEvidenceRequirement> evidenceRequirements,
-        boolean onDrafts,
+        Map<String, Set<String>> reviewWhen,
         ActorRole subject,
         @Nullable PracticePrecondition precondition,
         @Nullable Integer criteriaRevision,
@@ -37,7 +39,7 @@ record PracticeDefinitionSnapshot(
                 practice.getArtifactKind(),
                 practice.getSignals(),
                 practice.getEvidenceRequirements(),
-                practice.isOnDrafts(),
+                practice.getReviewWhen(),
                 practice.getSubject(),
                 practice.getPrecondition(),
                 criteriaRevision,

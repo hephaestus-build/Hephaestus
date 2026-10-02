@@ -45,8 +45,8 @@ public final class PracticeDefinitionMerge {
                         .signals(),
                 source(PracticeDefinitionField.EVIDENCE_REQUIREMENTS, current, offered, choices)
                         .evidenceRequirements(),
-                source(PracticeDefinitionField.ON_DRAFTS, current, offered, choices)
-                        .onDrafts(),
+                source(PracticeDefinitionField.REVIEW_WHEN, current, offered, choices)
+                        .reviewWhen(),
                 source(PracticeDefinitionField.SUBJECT, current, offered, choices)
                         .subject(),
                 source(PracticeDefinitionField.PRECONDITION, current, offered, choices)
@@ -80,7 +80,7 @@ public final class PracticeDefinitionMerge {
             case NAME -> definition.name();
             case SIGNALS -> definition.signals();
             case EVIDENCE_REQUIREMENTS -> definition.evidenceRequirements();
-            case ON_DRAFTS -> definition.onDrafts();
+            case REVIEW_WHEN -> definition.reviewWhen();
             case SUBJECT -> definition.subject();
             case PRECONDITION -> definition.precondition();
             case CRITERIA -> definition.criteria();

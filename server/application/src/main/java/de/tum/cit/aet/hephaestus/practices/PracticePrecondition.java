@@ -18,7 +18,9 @@ import java.util.Objects;
  * @param skipReason a factual explanation shown when every clause is disproved
  * @param anyOf      alternative conditions; at least one
  */
-@Schema(description = "What must be in a piece of work for this practice to have anything to judge")
+@Schema(
+        description = "What must be in a piece of work for this practice to have anything to judge",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record PracticePrecondition(
         @NotBlank
         @Size(max = MAX_SENTENCE_LENGTH)
@@ -27,7 +29,8 @@ public record PracticePrecondition(
 
         @Size(min = 1, max = MAX_CLAUSES)
         @Schema(description = "Alternative conditions; the practice applies when any condition holds")
-        List<PracticePreconditionClause> anyOf) {
+        List<PracticePreconditionClause> anyOf)
+        implements ClosedPracticeInput {
     static final int MAX_SENTENCE_LENGTH = 300;
     static final int MAX_CLAUSES = 10;
 

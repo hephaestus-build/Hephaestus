@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class MergeActorAdmissionTest extends BaseUnitTest {
@@ -78,7 +79,7 @@ class MergeActorAdmissionTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSignals(List.of(ScmSignals.PULL_REQUEST_MERGED));
         practice.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.MERGER);
         practice.setPrecondition(null);
         return practice;

@@ -11,6 +11,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 record CuratedPracticeSnapshot(
@@ -22,7 +24,7 @@ record CuratedPracticeSnapshot(
         ArtifactKind artifactKind,
         List<SignalName> signals,
         List<PracticeEvidenceRequirement> evidenceRequirements,
-        boolean onDrafts,
+        Map<String, Set<String>> reviewWhen,
         ActorRole subject,
         @Nullable PracticePrecondition precondition,
         String criteriaSha256,
@@ -45,7 +47,7 @@ record CuratedPracticeSnapshot(
                 definition.artifactKind(),
                 definition.signals(),
                 definition.evidenceRequirements(),
-                definition.onDrafts(),
+                definition.reviewWhen(),
                 definition.subject(),
                 definition.precondition(),
                 CanonicalDigest.sha256Hex(definition.criteria()),

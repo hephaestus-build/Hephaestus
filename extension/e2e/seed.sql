@@ -183,16 +183,16 @@ BEGIN
     (923102, 'e2e-keep-changes-focused', 'Keep changes focused'),
     (923103, 'e2e-unposted-proposal', 'E2E_UNPOSTED_PROPOSAL_PRACTICE')
   ) AS definitions(id, slug, name) LOOP
-    INSERT INTO practice(id, workspace_id, slug, name, signals, evidence_requirements, on_drafts, subject, criteria, created_at, updated_at,
+    INSERT INTO practice(id, workspace_id, slug, name, signals, evidence_requirements, review_when, subject, criteria, created_at, updated_at,
       applies_to, automated_review_policy, delivery_behavior, autonomy)
     VALUES (definition.id, 20, definition.slug, definition.name,
-      '["scm.pull_request.extension_fixture"]'::jsonb, '[]'::jsonb, false, 'AUTHOR',
+      '["scm.pull_request.extension_fixture"]'::jsonb, '[]'::jsonb, '{}'::jsonb, 'AUTHOR',
       'Synthetic extension fixture only. This practice never schedules a review.', fixture_time, fixture_time,
       'scm.pull_request', policy, '{"summaryOnly":false}'::jsonb, 'OFF')
     ON CONFLICT (id) DO NOTHING;
     INSERT INTO practice_revision(id, practice_id, revision_number, criteria, created_at, slug, name,
-      applies_to, signals, evidence_requirements, on_drafts, subject, automated_review_policy, delivery_behavior)
-    SELECT id, id, 1, criteria, fixture_time, slug, name, applies_to, signals, evidence_requirements, on_drafts, subject,
+      applies_to, signals, evidence_requirements, review_when, subject, automated_review_policy, delivery_behavior)
+    SELECT id, id, 1, criteria, fixture_time, slug, name, applies_to, signals, evidence_requirements, review_when, subject,
       automated_review_policy, delivery_behavior FROM practice WHERE id = definition.id
     ON CONFLICT (id) DO NOTHING;
     UPDATE practice SET current_revision_id = definition.id

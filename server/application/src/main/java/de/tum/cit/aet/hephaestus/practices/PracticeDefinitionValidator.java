@@ -32,12 +32,32 @@ public final class PracticeDefinitionValidator {
         boolean canRunAutomatedReview =
                 definition.automatedReviewPolicy().automatedReview().canAttemptAutomatedReview();
         validateSignals(definition);
+        validateReviewWhenAndPrecondition(definition);
         if (!canRunAutomatedReview && definition.precomputeScript() != null) {
             throw new IllegalArgumentException("A practice Hephaestus cannot review cannot define a precompute script");
         }
         rejectDetectorVocabulary("Why it matters", definition.whyItMatters());
         rejectDetectorVocabulary("What good looks like", definition.whatGoodLooksLike());
         validateEvidence(definition.artifactKind(), definition);
+    }
+
+    private void validateReviewWhenAndPrecondition(PracticeDefinition definition) {
+        ReviewWhen.normalize(definition.reviewWhen(), signalOptions.reviewWhenDimensionsFor(definition.artifactKind()));
+        if (definition.precondition() == null) {
+            return;
+        }
+        var aspects = signalOptions.preconditionSupportedAspectsFor(definition.artifactKind());
+        var collections = signalOptions.preconditionEvidenceCollectionsFor(definition.artifactKind());
+        for (var clause : definition.precondition().anyOf()) {
+            if (!aspects.contains(clause.aspect().name())) {
+                throw new IllegalArgumentException("Unsupported precondition for this work type: " + clause.aspect());
+            }
+            var collection = clause.evidenceHasItems();
+            if (collection != null && !collections.contains(collection.id())) {
+                throw new IllegalArgumentException(
+                        "Unsupported evidence collection for this work type: " + collection.id());
+            }
+        }
     }
 
     private void validateSignals(PracticeDefinition definition) {

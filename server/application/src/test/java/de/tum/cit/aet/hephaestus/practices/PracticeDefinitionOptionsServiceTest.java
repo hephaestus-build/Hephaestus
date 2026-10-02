@@ -8,6 +8,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeDefinitionOptionsDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeEvidenceSourceOptionDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeReviewStateDimensionDTO;
+import de.tum.cit.aet.hephaestus.practices.dto.PracticeReviewStateValueDTO;
 import de.tum.cit.aet.hephaestus.practices.dto.PracticeWorkTypeDefinitionOptionsDTO;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import java.time.Clock;
@@ -53,6 +55,15 @@ class PracticeDefinitionOptionsServiceTest {
                     assertThat(option.displayName()).isEqualTo("Closed without merging");
                     assertThat(option.recommended()).isFalse();
                 });
+        assertThat(pullRequests.reviewWhenDimensions())
+                .extracting(PracticeReviewStateDimensionDTO::key)
+                .containsExactly("draftStatus", "state");
+        assertThat(pullRequests.reviewWhenDimensions().getFirst()).satisfies(dimension -> {
+            assertThat(dimension.recommendedValues()).containsExactly("NOT_DRAFT");
+            assertThat(dimension.values())
+                    .extracting(PracticeReviewStateValueDTO::value)
+                    .containsExactly("DRAFT", "NOT_DRAFT");
+        });
         assertThat(pullRequests.subjectRoles())
                 .containsExactly(ActorRole.AUTHOR, ActorRole.ASSIGNEE, ActorRole.REVIEWER, ActorRole.MERGER);
         assertThat(workType(result, ArtifactKinds.ISSUE).subjectRoles())

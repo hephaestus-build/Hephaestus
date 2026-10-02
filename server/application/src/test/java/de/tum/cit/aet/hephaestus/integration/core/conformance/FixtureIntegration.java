@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewCapabilities;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewContextBuilder;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewExecutionCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewLimitation;
@@ -125,10 +126,13 @@ final class FixtureIntegration {
             }
 
             @Override
-            public List<ReviewLimitation> reviewLimitations() {
-                // A reviewable kind must name what its evidence cannot settle.
-                return List.of(new ReviewLimitation(
-                        "FIXTURE_OBSERVES_NOTHING", "A fixture widget has no real work behind it."));
+            public ReviewCapabilities reviewCapabilities() {
+                return new ReviewCapabilities(
+                        List.of(new ReviewLimitation(
+                                "FIXTURE_OBSERVES_NOTHING", "A fixture widget has no real work behind it.")),
+                        List.of(),
+                        Set.of(),
+                        Set.of());
             }
         };
     }

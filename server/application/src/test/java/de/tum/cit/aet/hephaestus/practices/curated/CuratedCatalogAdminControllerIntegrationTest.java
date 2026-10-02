@@ -32,6 +32,8 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -45,6 +47,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @Tag("integration")
 class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -76,6 +80,34 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     void setUp() {
         User owner = persistUser("catalog-owner");
         workspace = createWorkspace("catalog", "Catalog", "catalog", AccountType.ORG, owner);
+    }
+
+    @Test
+    void shouldRejectUnknownCuratedDefinitionFieldsWithoutWritingAnOverride() {
+        CuratedPracticeDTO before = getPractice();
+        var mapper = new ObjectMapper();
+        var body = (ObjectNode) mapper.valueToTree(before.definition());
+        body.remove("automatedReviewValidation");
+        body.remove("artifactKind");
+        body.put("criteria", "The requested change must not be stored.");
+        body.putNull("bindings");
+        webTestClient
+                .put()
+                .uri(CATALOG + "/practices/" + PRACTICE)
+                .headers(headers -> {
+                    headers.setBearerAuth(ADMIN_TOKEN);
+                    headers.set(HttpHeaders.IF_MATCH, etagOf(before));
+                })
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+
+        assertThat(overrideRows()).isZero();
+        assertThat(getPractice().definition().criteria())
+                .isEqualTo(before.definition().criteria());
     }
 
     @Test
@@ -127,7 +159,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 before.definition().name(),
                 before.definition().signals(),
                 before.definition().evidenceRequirements(),
-                before.definition().onDrafts(),
+                before.definition().reviewWhen(),
                 before.definition().subject(),
                 before.definition().precondition(),
                 before.definition().criteria(),
@@ -144,7 +176,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 base.name(),
                 base.signals(),
                 base.evidenceRequirements(),
-                base.onDrafts(),
+                base.reviewWhen(),
                 ActorRole.REVIEWER,
                 gate,
                 base.criteria(),
@@ -237,7 +269,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 // an equivalent-looking set would make this a change to what Hephaestus reviews.
                 before.definition().signals(),
                 before.definition().evidenceRequirements(),
-                before.definition().onDrafts(),
+                before.definition().reviewWhen(),
                 before.definition().subject(),
                 before.definition().precondition(),
                 before.definition().criteria(),
@@ -294,7 +326,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         CuratedPracticeDTO original = getPractice();
         putPractice(etagOf(original), "Our own criteria").expectStatus().isOk().expectBody(Void.class);
         CuratedPracticeDTO edited = getPractice();
-        assertThat(edited.shipped()).isNotNull();
+        var shipped = Objects.requireNonNull(edited.shipped());
 
         CuratedPracticeDTO restored = webTestClient
                 .put()
@@ -304,7 +336,21 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                     headers.set(HttpHeaders.IF_MATCH, etagOf(edited));
                 })
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(edited.shipped())
+                .bodyValue(new CuratedPracticeRequestDTO(
+                        shipped.name(),
+                        shipped.signals(),
+                        shipped.evidenceRequirements(),
+                        shipped.reviewWhen(),
+                        shipped.subject(),
+                        shipped.precondition(),
+                        shipped.criteria(),
+                        shipped.precomputeScript(),
+                        shipped.automatedReviewPolicy(),
+                        shipped.whyItMatters(),
+                        shipped.whatGoodLooksLike(),
+                        shipped.groupSlug(),
+                        Set.of(DefinitionChange.PRECONDITION, DefinitionChange.SUBJECT),
+                        shipped.deliveryBehavior()))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -542,7 +588,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         CuratedCatalogDTO before = getCatalog();
         String sourceGroup = before.practices().getFirst().groupSlug();
         List<String> bucket = before.practices().stream()
-                .filter(practice -> java.util.Objects.equals(practice.groupSlug(), sourceGroup))
+                .filter(practice -> Objects.equals(practice.groupSlug(), sourceGroup))
                 .map(practice -> practice.slug())
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
         assertThat(bucket).hasSizeGreaterThan(1);
@@ -565,7 +611,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .getResponseBody();
         assertThat(reordered).isNotNull();
         assertThat(reordered.practices())
-                .filteredOn(practice -> java.util.Objects.equals(practice.groupSlug(), sourceGroup))
+                .filteredOn(practice -> Objects.equals(practice.groupSlug(), sourceGroup))
                 .extracting(practice -> practice.slug())
                 .containsExactlyElementsOf(bucket);
 
@@ -750,7 +796,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 source.name(),
                 PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                 PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 source.criteria(),
@@ -905,7 +951,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
 
         CuratedPracticeDTO template = getPractice();
         List<String> beforePractices = afterGroup.practices().stream()
-                .filter(practice -> java.util.Objects.equals(
+                .filter(practice -> Objects.equals(
                         practice.groupSlug(), template.definition().groupSlug()))
                 .map(practice -> practice.slug())
                 .toList();
@@ -922,7 +968,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .expectBody(Void.class);
 
         List<CuratedPracticeSummaryDTO> afterPractices = getCatalog().practices().stream()
-                .filter(practice -> java.util.Objects.equals(
+                .filter(practice -> Objects.equals(
                         practice.groupSlug(), template.definition().groupSlug()))
                 .toList();
         assertThat(afterPractices)
@@ -1015,7 +1061,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 edited.definition().name(),
                 PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                 PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 edited.definition().criteria(),
@@ -1068,7 +1114,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 name,
                 definition.signals(),
                 definition.evidenceRequirements(),
-                definition.onDrafts(),
+                definition.reviewWhen(),
                 definition.subject(),
                 definition.precondition(),
                 practice.definition().criteria(),
@@ -1098,7 +1144,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 practice.definition().name(),
                 PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                 PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 criteria,

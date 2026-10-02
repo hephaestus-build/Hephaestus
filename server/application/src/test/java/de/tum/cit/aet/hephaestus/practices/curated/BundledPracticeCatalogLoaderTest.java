@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptionsFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -164,15 +166,16 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
         assertThat(loader.catalog().practices())
                 .filteredOn(practice -> practice.slug().equals("ready-and-traceable-handoff"))
                 .singleElement()
-                .satisfies(
-                        practice -> assertThat(practice.definition().onDrafts()).isTrue());
+                .satisfies(practice ->
+                        assertThat(practice.definition().reviewWhen()).isEmpty());
         assertThat(loader.catalog().practices())
                 .filteredOn(practice -> practice.slug().equals("merges-only-after-approval"))
                 .singleElement()
                 .satisfies(practice -> {
                     var occasion = practice.definition();
                     assertThat(occasion.subject()).isEqualTo(ActorRole.MERGER);
-                    assertThat(occasion.onDrafts()).isFalse();
+                    assertThat(occasion.reviewWhen())
+                            .containsExactlyEntriesOf(Map.of("draftStatus", Set.of("NOT_DRAFT")));
                 });
     }
 
@@ -182,7 +185,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 {
                   "signals": ["scm.pull_request.merged"],
                   "subject": "MERGER",
-                  "onDrafts": true,
+                  "reviewWhen": {},
                   "precondition": {
                     "skipReason": "the change has no Swift code",
                     "anyOf": [{"changedPathMatches": ["**/*.swift"]}]
@@ -192,7 +195,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
 
         assertThat(occasion.evidenceRequirements()).isNull();
         assertThat(occasion.subject()).isEqualTo(ActorRole.MERGER);
-        assertThat(occasion.onDrafts()).isTrue();
+        assertThat(occasion.reviewWhen()).isEmpty();
         assertThat(occasion.precondition()).isNotNull().satisfies(precondition -> {
             assertThat(precondition.skipReason()).isEqualTo("the change has no Swift code");
             assertThat(precondition.anyOf())

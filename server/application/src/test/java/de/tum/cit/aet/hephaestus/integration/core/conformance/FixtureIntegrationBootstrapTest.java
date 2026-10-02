@@ -194,7 +194,7 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
         practice.setSlug("assemble-widgets-carefully");
         practice.setSignals(List.of(signals));
         practice.setEvidenceRequirements(List.of(FixtureIntegration.need()));
-        practice.setOnDrafts(false);
+        practice.setReviewWhen(Map.of());
         practice.setSubject(ActorRole.AUTHOR);
         practice.setPrecondition(null);
         return practice;

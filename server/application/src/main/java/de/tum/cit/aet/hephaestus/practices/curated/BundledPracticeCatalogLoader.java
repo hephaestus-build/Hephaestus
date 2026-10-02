@@ -167,7 +167,9 @@ public class BundledPracticeCatalogLoader {
                 occasion.evidenceRequirements() == null
                         ? evidenceDefaults.needsFor(artifactKind)
                         : occasion.evidenceRequirements(),
-                Boolean.TRUE.equals(occasion.onDrafts()),
+                occasion.reviewWhen() == null
+                        ? evidenceDefaults.reviewWhenFor(artifactKind)
+                        : evidenceDefaults.normalizeReviewWhen(artifactKind, occasion.reviewWhen()),
                 occasion.subject() == null ? ActorRole.AUTHOR : occasion.subject(),
                 occasion.precondition(),
                 criteria,
@@ -227,7 +229,7 @@ public class BundledPracticeCatalogLoader {
     record CatalogOccasion(
             List<SignalName> signals,
             @Nullable List<PracticeEvidenceRequirement> evidenceRequirements,
-            @Nullable Boolean onDrafts,
+            @Nullable Map<String, Set<String>> reviewWhen,
             @Nullable ActorRole subject,
             @Nullable PracticePrecondition precondition) {
         CatalogOccasion {

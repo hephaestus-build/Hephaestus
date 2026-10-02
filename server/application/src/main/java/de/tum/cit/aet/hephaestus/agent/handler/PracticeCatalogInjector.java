@@ -10,12 +10,14 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
+import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -51,8 +53,8 @@ class PracticeCatalogInjector {
     /** Job-metadata key naming the signal that occasioned the review. */
     static final String SIGNAL_METADATA_KEY = "signal";
 
-    /** Job-metadata key: whether the work was a draft when the signal occasioned the review. */
-    static final String DRAFT_METADATA_KEY = "draft";
+    /** State facts recorded when the review was admitted, not inferred from later work. */
+    static final String REVIEW_STATE_METADATA_KEY = "review_state";
 
     /** The author of the reviewed pull request, so a MERGER practice can tell whether the author merged. */
     static final String AUTHOR_ID_METADATA_KEY = "author_id";
@@ -185,13 +187,13 @@ class PracticeCatalogInjector {
                 .sorted(Comparator.comparing(Practice::getSlug))
                 .toList();
         SignalName signal = signalOf(job);
-        if (signal != null) {
-            boolean draft = job.getMetadata() != null
-                    && job.getMetadata().path(DRAFT_METADATA_KEY).asBoolean(false);
+        if (job.getPracticeTriggerMode() != TriggerMode.MANUAL) {
+            if (signal == null) throw new JobPreparationException("Automatic review requires a recorded signal");
+            Map<String, String> reviewState = reviewStateOf(job);
             Set<String> rechecked = recheckedOf(job);
             practices = practices.stream()
                     .filter(p -> rechecked.contains(p.getSlug())
-                            || p.getSignals().contains(signal) && (!draft || p.isOnDrafts()))
+                            || p.getSignals().contains(signal) && ReviewWhen.matches(p.getReviewWhen(), reviewState))
                     .toList();
         }
         practices = practices.stream().filter(p -> attributable(p, job)).toList();
@@ -210,6 +212,21 @@ class PracticeCatalogInjector {
             }
         }
         return practices;
+    }
+
+    private static Map<String, String> reviewStateOf(AgentJob job) {
+        JsonNode metadata = job.getMetadata();
+        JsonNode state = metadata == null ? null : metadata.get(REVIEW_STATE_METADATA_KEY);
+        if (state == null) return Map.of();
+        if (!state.isObject()) throw new JobPreparationException("Recorded review state must be an object");
+        var facts = new LinkedHashMap<String, String>();
+        state.properties().forEach(entry -> {
+            if (!entry.getValue().isString()) {
+                throw new JobPreparationException("Recorded review state values must be strings");
+            }
+            facts.put(entry.getKey(), entry.getValue().asString());
+        });
+        return Map.copyOf(facts);
     }
 
     private boolean attributable(Practice practice, AgentJob job) {
@@ -360,9 +377,7 @@ class PracticeCatalogInjector {
     /**
      * The signal that occasioned this job, or {@code null} when nobody named one.
      *
-     * <p>Null is the gate-bypass path — a review somebody asked for by hand — and it means every active
-     * practice of the kind runs with its declared evidence requirements. Narrowing that to one
-     * binding would answer a narrower question than the one asked.
+     * Manual requests bypass scheduling explicitly through their trigger mode, never through a missing signal.
      */
     @Nullable
     static SignalName signalOf(AgentJob job) {

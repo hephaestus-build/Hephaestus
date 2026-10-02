@@ -9,8 +9,11 @@ import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDeliveryBehavior;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
+import de.tum.cit.aet.hephaestus.practices.ReviewWhen;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -25,7 +28,8 @@ public record CuratedPracticeDefinitionDTO(
         @NonNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
         List<PracticeEvidenceRequirement> evidenceRequirements,
 
-        @Schema(requiredMode = Schema.RequiredMode.REQUIRED) boolean onDrafts,
+        @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = ReviewWhen.DESCRIPTION)
+        Map<String, Set<String>> reviewWhen,
 
         @NonNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED)
         ActorRole subject,
@@ -45,7 +49,7 @@ public record CuratedPracticeDefinitionDTO(
                 definition.artifactKind(),
                 definition.signals(),
                 definition.evidenceRequirements(),
-                definition.onDrafts(),
+                definition.reviewWhen(),
                 definition.subject(),
                 definition.precondition(),
                 definition.criteria(),

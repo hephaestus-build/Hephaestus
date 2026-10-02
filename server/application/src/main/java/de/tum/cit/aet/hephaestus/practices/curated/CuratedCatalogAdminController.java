@@ -420,12 +420,19 @@ public class CuratedCatalogAdminController {
     }
 
     private PracticeDefinition definition(CuratedPracticeRequestDTO request) {
+        var artifactKind = PracticeDefinition.canonicalSignals(request.signals())
+                .getFirst()
+                .artifactKind();
         var evidence = request.automatedReviewPolicy() == null
                 ? evidenceDefaults.policyFor(PracticeDefinition.canonicalSignals(request.signals())
                         .getFirst()
                         .artifactKind())
                 : request.automatedReviewPolicy();
-        return request.definition(evidence);
+        return request.definition(
+                evidence,
+                request.reviewWhen() == null
+                        ? evidenceDefaults.reviewWhenFor(artifactKind)
+                        : evidenceDefaults.normalizeReviewWhen(artifactKind, request.reviewWhen()));
     }
 
     private static ResponseEntity<CuratedCatalogDTO> catalogResponse(EffectiveCatalog catalog) {

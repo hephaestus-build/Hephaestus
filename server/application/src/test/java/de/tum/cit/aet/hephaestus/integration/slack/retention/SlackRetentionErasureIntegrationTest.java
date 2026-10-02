@@ -285,7 +285,7 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
         Practice p = new Practice();
         p.setSignals(PracticeTestEvidence.signals(ArtifactKinds.CONVERSATION_THREAD));
         p.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.CONVERSATION_THREAD));
-        p.setOnDrafts(false);
+        p.setReviewWhen(Map.of());
         p.setSubject(ActorRole.AUTHOR);
         p.setPrecondition(null);
         p.setAutomatedReviewPolicy(PracticeTestEvidence.conversationThread());
@@ -295,7 +295,7 @@ class SlackRetentionErasureIntegrationTest extends BaseIntegrationTest {
         p.setCriteria("Test description");
         p.setSignals(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
         p.setEvidenceRequirements(PracticeTestEvidence.needsFor(ScmSignals.PULL_REQUEST_OPENED.artifactKind()));
-        p.setOnDrafts(false);
+        p.setReviewWhen(Map.of());
         p.setSubject(ActorRole.AUTHOR);
         p.setPrecondition(null);
         return practiceRepository.save(p);

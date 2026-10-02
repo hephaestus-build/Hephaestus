@@ -9982,6 +9982,7 @@ components:
       - state
     BindPracticeGroupRequest:
       type: object
+      additionalProperties: false
       description: Request to move a practice to a group or Unassigned
       properties:
         groupSlug:
@@ -10780,6 +10781,7 @@ components:
       - slug
     CreateCuratedPracticeRequest:
       type: object
+      additionalProperties: false
       description: Request to add a practice to the instance catalog
       properties:
         definition:
@@ -11014,6 +11016,7 @@ components:
       - slug
     CreatePracticeRequest:
       type: object
+      additionalProperties: false
       description: Request to create a new practice definition
       properties:
         automatedReviewPolicy:
@@ -11043,8 +11046,6 @@ components:
           example: PR Description Quality
           maxLength: 128
           minLength: 3
-        onDrafts:
-          type: boolean
         precomputeScript:
           type: string
           description: TypeScript/Node static analysis run before automated review
@@ -11052,6 +11053,17 @@ components:
           minLength: 0
         precondition:
           $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
         signals:
           type: array
           items:
@@ -11580,12 +11592,21 @@ components:
           type: string
         name:
           type: string
-        onDrafts:
-          type: boolean
         precomputeScript:
           type: string
         precondition:
           $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
         signals:
           type: array
           items:
@@ -11609,11 +11630,12 @@ components:
       - deliveryBehavior
       - evidenceRequirements
       - name
-      - onDrafts
+      - reviewWhen
       - signals
       - subject
     CuratedPracticeRequest:
       type: object
+      additionalProperties: false
       description: A complete curated practice definition
       properties:
         automatedReviewPolicy:
@@ -11647,14 +11669,23 @@ components:
           type: string
           maxLength: 128
           minLength: 3
-        onDrafts:
-          type: boolean
         precomputeScript:
           type: string
           maxLength: 100000
           minLength: 0
         precondition:
           $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
         signals:
           type: array
           items:
@@ -14341,14 +14372,23 @@ components:
         name:
           type: string
           description: Human-readable name
-        onDrafts:
-          type: boolean
         precomputeScript:
           type: string
           description: TypeScript/Node precompute script for static analysis before
             AI review
         precondition:
           $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
         signals:
           type: array
           description: Signals that start a practice review
@@ -14386,13 +14426,14 @@ components:
       - evidenceRequirements
       - id
       - name
-      - onDrafts
+      - reviewWhen
       - signals
       - slug
       - subject
       - updatedAt
     PracticeAutomatedReview:
       type: object
+      additionalProperties: false
       description: Author-declared automated review and evidence sufficiency for one
         practice
       properties:
@@ -14415,6 +14456,7 @@ components:
       - mode
     PracticeAutomatedReviewPolicy:
       type: object
+      additionalProperties: false
       description: Author-defined automated review settings for one practice revision
       properties:
         automatedReview:
@@ -14473,6 +14515,7 @@ components:
       - status
     PracticeDefinition:
       type: object
+      additionalProperties: false
       description: The authored standard and the occasion on which it is reviewed.
       properties:
         automatedReviewPolicy:
@@ -14489,12 +14532,21 @@ components:
           type: string
         name:
           type: string
-        onDrafts:
-          type: boolean
         precomputeScript:
           type: string
         precondition:
           $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
         signals:
           type: array
           items:
@@ -14516,7 +14568,7 @@ components:
       - deliveryBehavior
       - evidenceRequirements
       - name
-      - onDrafts
+      - reviewWhen
       - signals
       - subject
     PracticeDefinitionOptions:
@@ -14536,6 +14588,7 @@ components:
       - workTypes
     PracticeDeliveryBehavior:
       type: object
+      additionalProperties: false
       description: "Delivery choices declared by the practice author, not inferred\
         \ from its slug."
       properties:
@@ -14575,6 +14628,7 @@ components:
       - reviewsAffected
     PracticeEvidenceLimitation:
       type: object
+      additionalProperties: false
       description: Known claim that the selected evidence cannot support even when
         every requirement passes
       properties:
@@ -14619,6 +14673,7 @@ components:
       - reviewedCount
     PracticeEvidenceRequirement:
       type: object
+      additionalProperties: false
       description: A source a practice reads and the stance it takes towards it
       properties:
         sourceKind:
@@ -14863,6 +14918,7 @@ components:
       - practices
     PracticePrecondition:
       type: object
+      additionalProperties: false
       description: What must be in a piece of work for this practice to have anything
         to judge
       properties:
@@ -14883,6 +14939,7 @@ components:
       - skipReason
     PracticePreconditionClause:
       type: object
+      additionalProperties: false
       description: One shape the subject a practice judges can take in a piece of
         work
       properties:
@@ -14949,7 +15006,7 @@ components:
           - NAME
           - SIGNALS
           - EVIDENCE_REQUIREMENTS
-          - ON_DRAFTS
+          - REVIEW_WHEN
           - SUBJECT
           - PRECONDITION
           - CRITERIA
@@ -15247,6 +15304,37 @@ components:
       - generatedPaths
       - reviewScope
       - revision
+    PracticeReviewStateDimension:
+      type: object
+      properties:
+        displayName:
+          type: string
+        key:
+          type: string
+        recommendedValues:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        values:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeReviewStateValue"
+      required:
+      - displayName
+      - key
+      - recommendedValues
+      - values
+    PracticeReviewStateValue:
+      type: object
+      properties:
+        displayName:
+          type: string
+        value:
+          type: string
+      required:
+      - displayName
+      - value
     PracticeSignal:
       type: object
       description: A signal and the words a reader sees for it
@@ -15557,6 +15645,16 @@ components:
             \ or absent where the work type admits no such request. Not an occasion\
             \ to bind to: such a request reviews every practice on the work type whatever\
             \ state the work is in."
+        preconditionEvidenceCollections:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        preconditionSupportedAspects:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
         recommendedEvidenceRequirements:
           type: array
           description: Evidence a new binding on this work type starts with when the
@@ -15565,6 +15663,10 @@ components:
             $ref: "#/components/schemas/PracticeEvidenceRequirement"
         recommendedPolicy:
           $ref: "#/components/schemas/PracticeAutomatedReviewPolicy"
+        reviewWhenDimensions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PracticeReviewStateDimension"
         signals:
           type: array
           description: The occasions a practice on this work type can be bound to.
@@ -15592,8 +15694,11 @@ components:
       required:
       - allowedSources
       - artifactKind
+      - preconditionEvidenceCollections
+      - preconditionSupportedAspects
       - recommendedEvidenceRequirements
       - recommendedPolicy
+      - reviewWhenDimensions
       - signals
       - subjectRoles
       - supportedAutomatedReviewModes
@@ -18659,6 +18764,7 @@ components:
           description: Whether this group is shown in practice dashboards
     UpdatePracticeRequest:
       type: object
+      additionalProperties: false
       description: Request to update a practice; omitted fields remain unchanged
       properties:
         automatedReviewPolicy:
@@ -18709,8 +18815,6 @@ components:
           maxLength: 128
           minLength: 3
           pattern: .*\S.*
-        onDrafts:
-          type: boolean
         precomputeScript:
           type: string
           description: TypeScript/Node static analysis run before automated review
@@ -18718,6 +18822,17 @@ components:
           minLength: 0
         precondition:
           $ref: "#/components/schemas/PracticePrecondition"
+        reviewWhen:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+          description: Automatic review state selections. An empty object imposes
+            no state restrictions. Each selected dimension requires a nonempty set
+            of non-null values offered by the work type descriptor. Values within
+            a dimension are alternatives; all selected dimensions must match.
         signals:
           type: array
           items:

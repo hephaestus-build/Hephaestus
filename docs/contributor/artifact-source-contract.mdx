@@ -250,7 +250,7 @@ quiet `NOT_APPLICABLE`.
     { "sourceKind": "scm.pull-request.diff", "stance": "REQUIRED" },
     { "sourceKind": "scm.repository.tree", "stance": "CONTEXTUAL" }
   ],
-  "onDrafts": false,
+  "reviewWhen": { "draftStatus": ["NOT_DRAFT"] },
   "subject": "AUTHOR",
   "automatedReviewPolicy": {
     "sourceContractVersion": "1.3.0",
@@ -269,8 +269,17 @@ quiet `NOT_APPLICABLE`.
 }
 ```
 
-Set `onDrafts: true` when the practice can be reviewed before work is handed over. It defaults to
-false. Signals and evidence requirements are explicit arrays; no shorthand supplies hidden defaults.
+`reviewWhen` selects finite state values supplied by the work type's descriptor. Values within one
+dimension are alternatives; every selected dimension must match. An omitted dimension is unrestricted,
+and `{}` imposes no state restriction. A missing required state fact does not match. Pull and merge
+requests recommend `draftStatus: ["NOT_DRAFT"]`; issues, documents and conversations recommend `{}`.
+Manual requests bypass scheduling, not consent, source requirements or the automated-review policy.
+
+The descriptor owns supported dimensions, their values, and precondition capabilities. Pull and merge
+requests expose draft status and lifecycle; issues expose open or closed; documents expose active or
+archived from the stored source state. Conversations expose no invented lifecycle. Unsupported keys,
+values, precondition aspects and evidence collections are rejected. Signals and evidence requirements
+are explicit arrays; no shorthand supplies hidden defaults.
 
 Validation rejects unknown source-contract versions or source kinds, unregistered signals, manual
 request signals, empty or duplicate signals, mixed artifact kinds, unsupported subjects, duplicate

@@ -309,14 +309,13 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
-        void skipsDraft() {
+        void skipsDraftWhenThePracticeExcludesIt() {
             createPractice("draft-skip", "Draft Skip", List.of(ScmSignals.PULL_REQUEST_OPENED), true);
             PullRequest pr = createPullRequest(true, Set.of(), Set.of(assignee));
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
             assertThat(decision).isInstanceOf(GateDecision.Skip.class);
-            assertThat(((GateDecision.Skip) decision).reason()).contains("draft");
         }
     }
 

@@ -45,6 +45,19 @@ class PracticeOutcomeCutoverMigrationTest {
                 .isEqualTo("1");
         execute("UPDATE curated_practice_override SET bindings='" + BINDINGS + "' WHERE slug='cutover'");
         migrate();
+        assertThat(
+                        scalar(
+                                "SELECT (review_when = '{\"draftStatus\":[\"NOT_DRAFT\"]}'::jsonb)::text FROM curated_practice_override WHERE slug='non-draft-cutover'"))
+                .isEqualTo("true");
+        assertThat(scalar("SELECT review_when::text FROM curated_practice_override WHERE slug='issue-cutover'"))
+                .isEqualTo("{}");
+        assertThat(
+                        scalar(
+                                "SELECT (adopted_base->'reviewWhen' = '{\"draftStatus\":[\"NOT_DRAFT\"]}'::jsonb)::text FROM curated_practice_override WHERE slug='non-draft-cutover'"))
+                .isEqualTo("true");
+        assertThatThrownBy(() ->
+                        execute("UPDATE practice SET review_when='{\"draftStatus\":[\"NOT_DRAFT\"]}' WHERE id=991201"))
+                .isInstanceOf(SQLException.class);
         assertThat(scalar(
                         "SELECT string_agg(outcome, ',' ORDER BY summary) FROM observation WHERE workspace_id=991101"))
                 .isEqualTo("MET,NOT_MET,NOT_MET,MET,NOT_APPLICABLE,UNDETERMINED");
@@ -54,6 +67,10 @@ class PracticeOutcomeCutoverMigrationTest {
                 .isEqualTo("0");
         assertThat(scalar("SELECT review_rule_fingerprint FROM practice_revision WHERE id=991301"))
                 .isEqualTo("v4:" + "a".repeat(64));
+        assertThat(
+                        scalar(
+                                "SELECT (signals IS NULL AND evidence_requirements IS NULL AND review_when IS NULL AND subject IS NULL AND review_rule_fingerprint IS NULL)::text FROM practice_revision WHERE id=991304"))
+                .isEqualTo("true");
         execute("UPDATE practice_revision SET review_rule_fingerprint=NULL WHERE id=991302");
         for (String mutation : java.util.List.of("review_rule_fingerprint='v5:' || repeat('b',64)", "id=991303")) {
             assertThatThrownBy(() -> execute("UPDATE practice_revision SET " + mutation + " WHERE id=991302"))
@@ -63,19 +80,20 @@ class PracticeOutcomeCutoverMigrationTest {
         }
         assertThat(
                         scalar(
-                                "SELECT (review_rule_fingerprint IS NULL)::text || ':' || criteria || ':' || subject || ':' || on_drafts::text FROM practice_revision WHERE id=991302"))
-                .isEqualTo("true:The change explains its purpose.:AUTHOR:true");
+                                "SELECT (review_rule_fingerprint IS NULL)::text || ':' || criteria || ':' || subject || ':' || review_when::text FROM practice_revision WHERE id=991302"))
+                .isEqualTo("true:The change explains its purpose.:AUTHOR:{}");
         assertThat(scalar("SELECT signals::text FROM practice WHERE id=991201"))
                 .isEqualTo("[\"scm.pull_request.created\"]");
-        assertThat(scalar("SELECT subject || ':' || on_drafts::text FROM practice WHERE id=991201"))
-                .isEqualTo("AUTHOR:true");
+        assertThat(scalar("SELECT subject || ':' || review_when::text FROM practice WHERE id=991201"))
+                .isEqualTo("AUTHOR:{}");
         assertThat(
                         scalar(
                                 "SELECT (adopted_base ? 'bindings')::text || ':' || (adopted_base ? 'evidenceRequirements')::text FROM practice WHERE id=991201"))
                 .isEqualTo("false:true");
-        assertThat(scalar(
-                        "SELECT subject || ':' || on_drafts::text FROM curated_practice_override WHERE slug='cutover'"))
-                .isEqualTo("AUTHOR:true");
+        assertThat(
+                        scalar(
+                                "SELECT subject || ':' || review_when::text FROM curated_practice_override WHERE slug='cutover'"))
+                .isEqualTo("AUTHOR:{}");
         assertThat(
                         scalar(
                                 "SELECT (adopted_base ? 'bindings')::text || ':' || (adopted_base ? 'signals')::text FROM curated_practice_override WHERE slug='cutover'"))
@@ -118,6 +136,10 @@ class PracticeOutcomeCutoverMigrationTest {
                 "INSERT INTO practice_revision(id,practice_id,revision_number,slug,name,applies_to,bindings,criteria,created_at,automated_review_policy,delivery_behavior) "
                         + "VALUES(991302,991201,2,'cutover','Cutover','scm.pull_request','" + BINDINGS
                         + "','The change explains its purpose.',now(),'{}','{\"summaryOnly\":false}')",
+                """
+            INSERT INTO practice_revision(id,practice_id,revision_number,criteria,created_at,automated_review_policy,delivery_behavior)
+            VALUES(991304,991201,3,'Historical criteria without a recorded definition.',now(),'{}','{"summaryOnly":false}')
+            """,
                 "UPDATE practice SET current_revision_id=991301, adopted_base=jsonb_build_object('bindings','"
                         + BINDINGS
                         + "'::jsonb,'criteria','The change explains its purpose.'), adopted_base_source='BUNDLED' WHERE id=991201",
@@ -126,6 +148,17 @@ class PracticeOutcomeCutoverMigrationTest {
                         + "','The change explains its purpose.',now(),now(),0,"
                         + "jsonb_build_object('bindings','" + BINDINGS
                         + "'::jsonb,'criteria','The change explains its purpose.'),'BUNDLED')",
+                """
+            INSERT INTO curated_practice_override(slug,name,applies_to,bindings,criteria,created_at,updated_at,version,adopted_base,adopted_base_source)
+            SELECT 'non-draft-cutover',name,applies_to, replace(bindings::text, 'true', 'false')::jsonb, criteria,created_at,updated_at,version,
+                   replace(adopted_base::text, 'true', 'false')::jsonb,adopted_base_source
+            FROM curated_practice_override WHERE slug='cutover'
+            """,
+                """
+            INSERT INTO curated_practice_override(slug,name,applies_to,bindings,criteria,created_at,updated_at,version)
+            SELECT 'issue-cutover',name,'scm.issue',replace(bindings::text,'scm.pull_request.created','scm.issue.created')::jsonb,criteria,created_at,updated_at,version
+            FROM curated_practice_override WHERE slug='non-draft-cutover'
+            """,
                 """
             INSERT INTO observation(id,occurrence_key,agent_job_id,workspace_id,practice_id,practice_revision_id,artifact_kind,artifact_id,about_user_id,summary,assessment_status,presence,assessment,severity,observed_at)
             SELECT md5(i::text)::uuid, 'cutover:'||i,'00000000-0000-0000-0000-000000991104',991101,991201,991301,'scm.pull_request',991401,991103,i::text,status,presence,assessment,severity,now()

@@ -43,12 +43,9 @@ public interface ArtifactDescriptor {
      */
     boolean reviewable();
 
-    /**
-     * What a review of this kind can never settle, whatever its evidence. A reviewable kind must name at
-     * least one; an empty list fails the review contract at startup.
-     */
-    default List<ReviewLimitation> reviewLimitations() {
-        return List.of();
+    /** A reviewable kind must name at least one limitation; startup validates the contract. */
+    default ReviewCapabilities reviewCapabilities() {
+        return ReviewCapabilities.NONE;
     }
 
     default Optional<Signal> signal(SignalName name) {

@@ -1,5 +1,6 @@
 import { useId } from "react";
 
+import { claimCurrentnessNote } from "@/components/practice-vocabulary/claim-currentness";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 
@@ -35,6 +36,7 @@ function verdict(row: ObservationRow) {
 function Observation({ row }: { row: ObservationRow }) {
 	const { def, tone, severity } = verdict(row);
 	const Icon = def.icon;
+	const currentnessNote = claimCurrentnessNote(row.claimCurrentness);
 	return (
 		<li className={cn(INDENT, "flex min-w-0 items-start gap-2 py-1.5 text-sm")}>
 			<Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", tone)} />
@@ -44,7 +46,7 @@ function Observation({ row }: { row: ObservationRow }) {
 					<span className="text-xs text-muted-foreground">
 						{def.label}
 						{severity === undefined ? null : ` · ${severity}`}
-						{row.claimCurrentness === "CURRENT" ? null : " · no longer current"}
+						{currentnessNote === undefined ? null : ` · ${currentnessNote}`}
 					</span>
 				</span>
 				<span className="break-words text-muted-foreground">{row.summary}</span>

@@ -10,7 +10,7 @@ import { SectionLabel } from "@/components/common/SectionLabel";
 import { statusToneClass, statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
-import { claimCurrentnessNote } from "@/components/practice-vocabulary/ClaimCurrentness";
+import { claimCurrentnessNote } from "@/components/practice-vocabulary/claim-currentness";
 import {
 	FEEDBACK_RESOLUTION_DEFS,
 	type FeedbackResolution,

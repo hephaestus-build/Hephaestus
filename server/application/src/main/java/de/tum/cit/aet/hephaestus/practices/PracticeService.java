@@ -311,7 +311,9 @@ public class PracticeService {
                 request.name() == null ? beforeDefinition.name() : request.name(),
                 signals,
                 evidenceRequirements,
-                request.onDrafts() == null ? beforeDefinition.onDrafts() : request.onDrafts(),
+                evidenceDefaults.normalizeReviewWhen(
+                        signals.getFirst().artifactKind(),
+                        request.reviewWhen() == null ? beforeDefinition.reviewWhen() : request.reviewWhen()),
                 request.subject() == null ? beforeDefinition.subject() : request.subject(),
                 request.precondition() != null
                         ? request.precondition()
@@ -462,7 +464,9 @@ public class PracticeService {
                 required(request.name(), "name"),
                 signals,
                 required(request.evidenceRequirements(), "evidenceRequirements"),
-                Boolean.TRUE.equals(request.onDrafts()),
+                request.reviewWhen() == null
+                        ? evidenceDefaults.reviewWhenFor(artifactKind)
+                        : evidenceDefaults.normalizeReviewWhen(artifactKind, request.reviewWhen()),
                 request.subject() == null ? ActorRole.AUTHOR : request.subject(),
                 request.precondition(),
                 required(request.criteria(), "criteria"),
@@ -487,7 +491,7 @@ public class PracticeService {
         practice.setName(definition.name());
         practice.setSignals(definition.signals());
         practice.setEvidenceRequirements(definition.evidenceRequirements());
-        practice.setOnDrafts(definition.onDrafts());
+        practice.setReviewWhen(definition.reviewWhen());
         practice.setSubject(definition.subject());
         practice.setPrecondition(definition.precondition());
         practice.setCriteria(definition.criteria());

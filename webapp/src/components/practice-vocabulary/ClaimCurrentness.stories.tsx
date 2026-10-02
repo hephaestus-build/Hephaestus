@@ -28,13 +28,13 @@ export const Unverifiable: Story = {
 	args: { currentness: "UNVERIFIABLE" },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("We can't tell which version of the practice this was judged against"),
+			canvas.getByText("This observation’s review basis cannot be verified"),
 		).toBeVisible();
 	},
 };
 
 /**
- * A result on the current rules is the norm, and a banner saying so on every observation is a line
+ * A result on the current practice standard is the norm, and a banner saying so on every observation is a line
  * every reader learns to skip — which is what would make the exceptions above invisible.
  */
 export const Current: Story = {

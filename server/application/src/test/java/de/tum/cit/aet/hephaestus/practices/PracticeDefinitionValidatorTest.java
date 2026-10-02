@@ -13,6 +13,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -66,7 +68,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         "Focused review",
                         List.of(ScmSignals.ISSUE_OPENED),
                         List.of(need(new SourceKind("scm.issue.core"))),
-                        false,
+                        Map.of(),
                         de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.MERGER,
                         null,
                         "Assess the review",
@@ -98,7 +100,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 "Focused review",
                 List.of(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_MERGED),
                 List.of(need(DIFF)),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 "Assess the review",
@@ -185,7 +187,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 "Focused review",
                 List.of(ScmSignals.PULL_REQUEST_OPENED),
                 List.of(need(DIFF)),
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 "Assess the review",
@@ -227,12 +229,12 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     }
 
     @Test
-    void rejectsASubjectReadFromASourceThisWorkTypeDoesNotHave() {
+    void rejectsDiffPreconditionsForIssues() {
         assertThatThrownBy(() -> validator.validate(new PracticeDefinition(
                         "Focused review",
                         List.of(ScmSignals.ISSUE_OPENED),
                         List.of(need(new SourceKind("scm.issue.core"))),
-                        false,
+                        Map.of(),
                         de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
                         new PracticePrecondition(
                                 "the change touches no dependency manifest",
@@ -244,9 +246,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                         null,
                         null)))
                 .isInstanceOf(IllegalArgumentException.class)
-                // The gate is typed as JSON, so the source is named by its label and the id together.
-                .hasMessageStartingWith("This kind of work has no “Code changes” (scm.pull-request.diff), so a "
-                        + "condition that reads it could never be decided.");
+                .hasMessage("Unsupported precondition for this work type: CHANGED_PATH");
     }
 
     @Test
@@ -265,7 +265,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 "Focused review",
                 List.of(ScmSignals.PULL_REQUEST_OPENED),
                 List.of(need(reads)),
-                false,
+                Map.of(),
                 de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
                 subject,
                 "Assess the review",
@@ -274,6 +274,29 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 null,
                 null,
                 null);
+    }
+
+    @Test
+    void rejectsUnsupportedStateDimensionsAndValuesBeforeAReviewCanBeScheduled() {
+        var original = definition(ScmSignals.PULL_REQUEST_OPENED, null, List.of(need(DIFF)), languageModel());
+        for (var policy : List.of(Map.of("draft", Set.of("NOT_DRAFT")), Map.of("state", Set.of("PUBLISHED")))) {
+            var authored = new PracticeDefinition(
+                    original.name(),
+                    original.signals(),
+                    original.evidenceRequirements(),
+                    policy,
+                    original.subject(),
+                    original.precondition(),
+                    original.criteria(),
+                    original.precomputeScript(),
+                    original.automatedReviewPolicy(),
+                    original.whyItMatters(),
+                    original.whatGoodLooksLike(),
+                    original.groupSlug());
+            assertThatThrownBy(() -> validator.validate(authored))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Unsupported review state");
+        }
     }
 
     private static PracticeDefinition definition(
@@ -285,7 +308,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
                 "Focused review",
                 List.of(signal),
                 needs,
-                false,
+                Map.of(),
                 ActorRole.AUTHOR,
                 null,
                 "Assess the review",

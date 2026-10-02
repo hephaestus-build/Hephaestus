@@ -505,10 +505,10 @@ resolution rule. Its rules, in one place:
 | ---------------------------- | ---------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
 | Practice-review AI purpose   | `PRACTICE_REVIEW`                  | `AgentPurpose.PRACTICE_REVIEW`             | `PRACTICE_REVIEW`                                                             |
 | Automated-review policy      | `automatedReviewPolicy`            | `PracticeAutomatedReviewPolicy`            | `automated_review_policy`                                                     |
-| Review occasion              | `signals`, `evidenceRequirements`, `onDrafts`, `subject`, `precondition` | `PracticeDefinition` | flat columns on practice and revision                                                                    |
+| Review occasion              | `signals`, `reviewWhen`, `evidenceRequirements`, `subject`, `precondition` | `PracticeDefinition` | flat columns on practice and revision                                                                    |
 | Model binding                | `AgentBinding`                     | `WorkspaceAgentBinding`                    | `workspace_agent_binding`                                                     |
 | Signal                       | `signals[]`                        | `SignalName`                               | `signals`                                                             |
-| Draft occasion               | `onDrafts`                         | `PracticeDefinition.onDrafts`                 | `on_drafts`                                                             |
+| Review conditions            | `reviewWhen`                       | `PracticeDefinition.reviewWhen`               | `review_when`                                                           |
 | Evidence requirement         | `evidenceRequirements[]`                          | `PracticeEvidenceRequirement`              | `evidence_requirements`                                                             |
 | Evidence stance              | `stance`                           | `EvidenceStance`                           | inside `evidence_requirements`                                                             |
 | Person judged | `subject` | `ActorRole` | `subject` |
@@ -603,7 +603,7 @@ evidence, and neither contributes to the decided-result denominator.
 8. Source readiness checks decide whether every required source meets its requirements.
 9. Hephaestus reviews the work or records that the practice was skipped.
 10. Observations retain the exact practice revision, source contract, and evidence provenance.
-11. Practice or source-contract changes move the review-rule fingerprint, so earlier claims derive as stale. Nothing marks a claim stale by hand.
+11. Changes to the assessment standard or source contract move the review-rule fingerprint. Scheduling-only changes (`signals`, `reviewWhen`) do not. Earlier claims derive as stale from their recorded basis; nothing marks a claim stale by hand.
 12. Automated review validation — always `AUTHOR_DECLARED` — is separate from source authorization, practice autonomy, and per-run readiness.
 
 ## Writing rules

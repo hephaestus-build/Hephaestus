@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.observation;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
+import de.tum.cit.aet.hephaestus.practices.ReviewRuleFingerprint;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
@@ -652,10 +653,11 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
     }
 
     /**
-     * Per-practice aggregation for the developer dashboard: present/good and bad counts, and last observation date.
+     * Current outcome counts and latest observation time per practice for the developer dashboard.
      *
-     * <p>Aggregates represent each target's current state: within the workspace, only the run with the newest
-     * {@code (observed_at, agent_job_id)} tuple contributes.
+     * <p>Within the workspace, select the newest non-invalidated, non-superseded run by
+     * {@code (observed_at, agent_job_id)}. It contributes only when its review rules are current;
+     * a stale or unverifiable latest run does not restore an older claim.
      *
      * <p>Aggregate views have no team context, so a repository hidden by any workspace team is excluded. Raw
      * per-artifact fetches remain unfiltered.
@@ -677,9 +679,14 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                            MAX(f.observed_at) AS "lastObservedAt"
                     FROM observation f
                     JOIN practice p ON p.id = f.practice_id
+                    JOIN practice_revision evaluated_revision ON evaluated_revision.id = f.practice_revision_id
+                    JOIN practice_revision current_revision ON current_revision.id = p.current_revision_id
                     WHERE f.about_user_id = :aboutUserId
                       AND f.workspace_id = :workspaceId
             """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
+              AND evaluated_revision.review_rule_fingerprint = current_revision.review_rule_fingerprint
+              AND evaluated_revision.review_rule_fingerprint LIKE '""" + ReviewRuleFingerprint.SCHEME + "%'\n"
+                    + """
               AND f.superseded_at IS NULL
               AND f.origin <> 'BACKFILL'
               AND f.agent_job_id = (
@@ -691,6 +698,7 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
                     AND f2.artifact_kind = f.artifact_kind
                     AND f2.artifact_id = f.artifact_id
                     AND f2.origin <> 'BACKFILL'
+                    AND f2.superseded_at IS NULL
             """ + VALID_LATEST_RUN_GUARD + """
                   ORDER BY f2.observed_at DESC, f2.agent_job_id DESC
                   LIMIT 1
@@ -926,94 +934,6 @@ public interface ObservationRepository extends JpaRepository<Observation, UUID> 
         String getPracticeSlug();
 
         Instant getFirstObservedAt();
-    }
-
-    /**
-     * Severity histogram for a developer's observations within a workspace.
-     * Returns {@code [severityName, count]} rows — caller maps to a name→count map.
-     *
-     * <p>Re-review deduped to each target's latest run (see {@link #findRecentByDeveloperAndWorkspace}) so
-     * the mentor's "how am I doing" histogram reflects current state, not the re-push multiplier. Only
-     * Negative outcomes carry a non-null severity, so the histogram is over problems.
-     */
-    @Query(
-            value = """
-                    SELECT f.severity AS severity, COUNT(f.id) AS count
-                    FROM observation f
-                    JOIN practice p ON p.id = f.practice_id
-                    WHERE f.about_user_id = :aboutUserId
-                      AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
-              AND f.superseded_at IS NULL
-              AND f.observed_at >= :since
-              AND f.severity IS NOT NULL
-              AND f.origin <> 'BACKFILL'
-              AND f.agent_job_id = (
-                  SELECT f2.agent_job_id FROM observation f2
-                  JOIN practice p2 ON p2.id = f2.practice_id
-                  WHERE f2.workspace_id = f.workspace_id
-                    AND f2.practice_id = f.practice_id
-                    AND f2.about_user_id = f.about_user_id
-                    AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
-                    AND f2.origin <> 'BACKFILL'
-            """ + VALID_LATEST_RUN_GUARD + """
-                  ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1
-              )
-            GROUP BY f.severity
-            """,
-            nativeQuery = true)
-    List<SeverityCount> countBySeverityForDeveloper(
-            @Param("aboutUserId") Long aboutUserId,
-            @Param("workspaceId") Long workspaceId,
-            @Param("since") Instant since);
-
-    /**
-     * Outcome histogram for a developer's observations within a workspace.
-     *
-     * <p>Aggregate policy matches {@link #findSummaryByDeveloperAndWorkspace}.
-     */
-    @Query(
-            value = """
-                    SELECT f.outcome AS outcome, COUNT(f.id) AS count
-                    FROM observation f
-                    JOIN practice p ON p.id = f.practice_id
-                    WHERE f.about_user_id = :aboutUserId
-                      AND f.workspace_id = :workspaceId
-            """ + HIDDEN_REPOSITORY_GUARD + VALID_CLAIM_GUARD + """
-              AND f.superseded_at IS NULL
-              AND f.observed_at >= :since
-              AND f.origin <> 'BACKFILL'
-              AND f.agent_job_id = (
-                  SELECT f2.agent_job_id FROM observation f2
-                  JOIN practice p2 ON p2.id = f2.practice_id
-                  WHERE f2.workspace_id = f.workspace_id
-                    AND f2.practice_id = f.practice_id
-                    AND f2.about_user_id = f.about_user_id
-                    AND f2.artifact_kind = f.artifact_kind AND f2.artifact_id = f.artifact_id
-                    AND f2.origin <> 'BACKFILL'
-            """ + VALID_LATEST_RUN_GUARD + """
-                  ORDER BY f2.observed_at DESC, f2.agent_job_id DESC LIMIT 1
-              )
-            GROUP BY f.outcome
-            """,
-            nativeQuery = true)
-    List<OutcomeCount> countByOutcomeForDeveloper(
-            @Param("aboutUserId") Long aboutUserId,
-            @Param("workspaceId") Long workspaceId,
-            @Param("since") Instant since);
-
-    /** Projection: severity → count. */
-    interface SeverityCount {
-        Severity getSeverity();
-
-        Long getCount();
-    }
-
-    /** Projection: outcome → count. */
-    interface OutcomeCount {
-        Outcome getOutcome();
-
-        Long getCount();
     }
 
     /** Keeps the selected review outcomes. */

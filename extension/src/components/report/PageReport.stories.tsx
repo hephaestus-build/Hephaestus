@@ -162,7 +162,9 @@ export const Opened: Story = {
 		await expect(within(observations).getByText("Met", { exact: true })).toBeVisible();
 		await expect(within(observations).getByText("Not applicable", { exact: true })).toBeVisible();
 		await expect(within(observations).getByText("Undetermined", { exact: true })).toBeVisible();
-		await expect(within(observations).getByText(/no longer current/u)).toBeVisible();
+		await expect(
+			within(observations).getByText(/review basis for this observation cannot be verified/u),
+		).toBeVisible();
 		// When, precisely, and at which commit; the rest is in Hephaestus.
 		await expect(canvas.getByText(/^Reviewed .+ at 4f2a9c1\.$/u)).toBeVisible();
 		await expect(canvas.getByRole("link", { name: /Open in Hephaestus/u })).toHaveAttribute(

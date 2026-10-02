@@ -7,7 +7,9 @@ import jakarta.validation.constraints.Size;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-@Schema(description = "Known claim that the selected evidence cannot support even when every requirement passes")
+@Schema(
+        description = "Known claim that the selected evidence cannot support even when every requirement passes",
+        additionalProperties = Schema.AdditionalPropertiesValue.FALSE)
 public record PracticeEvidenceLimitation(
         @NonNull
         @Pattern(regexp = "[A-Z][A-Z0-9_]{2,63}", message = "Code must use uppercase snake case")
@@ -18,7 +20,8 @@ public record PracticeEvidenceLimitation(
         @NotBlank
         @Size(min = 1, max = 500)
         @Schema(description = "Plain-language explanation of the claim the evidence cannot support")
-        String description) {
+        String description)
+        implements ClosedPracticeInput {
     public PracticeEvidenceLimitation {
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(description, "description");
