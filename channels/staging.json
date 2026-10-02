@@ -1,14 +1,14 @@
 {
-	"commit": "074023421e95aaea01ff09b67d0d2322b2d831a8",
+	"commit": "8dc8bd76732a4d744ef74bd51600f585337eb7c4",
 	"images": {
 		"HEPHAESTUS_IMAGE_ALPINE": "docker.io/library/alpine@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b",
 		"HEPHAESTUS_IMAGE_NATS": "docker.io/library/nats@sha256:ad7a43eb7e3337c3c38ce5d784d1461791f95f730f252d2b25eee699752a0ca3",
 		"HEPHAESTUS_IMAGE_NGINX": "docker.io/library/nginx@sha256:d10753d9289b8e3f884386351f73554ce72b631378949deddd75e83ee296c427",
 		"HEPHAESTUS_IMAGE_TRAEFIK": "docker.io/library/traefik@sha256:f86a2cab1b5c649070c49f883c743dd32d8485a56e3368c5f93b9e91f1e91259",
-		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:29d48a700ed7946847f72b67d39427ec5b57f1b673ef78bc2eb82b74b7616eec",
-		"HEPHAESTUS_IMAGE_APPLICATION_SERVER": "ghcr.io/hephaestus-build/application-server@sha256:7f92c1306a64ffddfdac8b53e98769c7d8307fc4154a8daa0416e5e84efdb192",
-		"HEPHAESTUS_IMAGE_AGENT_PI": "ghcr.io/hephaestus-build/agent-pi@sha256:1430798ffa2e3f3d5c3a55a8bc15042facc834e4d8f6e65762099b1c61c7317f",
-		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:b27cb15ad4d36d45b77414fdb21a5d2ad8965608d591a596ea6606509edab559"
+		"HEPHAESTUS_IMAGE_WEBAPP": "ghcr.io/hephaestus-build/webapp@sha256:07a27ab0919402ca1f584cf8cab9d24138ebdbfb2f7e235d7cc02035a2ce3204",
+		"HEPHAESTUS_IMAGE_APPLICATION_SERVER": "ghcr.io/hephaestus-build/application-server@sha256:c5569ec14db0076c21ec7b92733d2c13a16df343fb431ed7fc5b4bceddec033c",
+		"HEPHAESTUS_IMAGE_AGENT_PI": "ghcr.io/hephaestus-build/agent-pi@sha256:10cb833e6988667752508d1571f0b6da9456d713aec168c37678e7d69b9ecdd7",
+		"HEPHAESTUS_IMAGE_POSTGRES": "ghcr.io/hephaestus-build/postgres@sha256:a5c71d0303dbc2ed387f9a8d30357cd3ce0afca66f0c1492952b822cf5d09eb6"
 	},
 	"allowRollback": false,
 	"freeze": false,
