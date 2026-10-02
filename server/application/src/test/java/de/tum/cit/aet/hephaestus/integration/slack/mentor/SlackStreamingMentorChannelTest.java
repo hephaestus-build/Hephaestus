@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.ObjectMapper;
 
@@ -148,47 +149,46 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
                 .isEmpty();
     }
 
-    @Test
-    @DisplayName("collapses repeated model answer candidates before they reach Slack")
-    void repeatedModelAnswerCandidatesAreCollapsed() {
+    @ParameterizedTest
+    @ValueSource(ints = {1, 23, 1000})
+    void shouldPreserveDistinctMergeRequestLinksAcrossDeltaBoundaries(int chunkSize) {
         SlackMessageService slack = slackThatStreamsOk();
         var channel = new SlackStreamingMentorChannel(slack, WS, CH, THREAD);
+        String text = "For the open MRs, [!4](https://gitlab.example.org/course/demo/-/merge_requests/4), "
+                + "[!5](https://gitlab.example.org/course/demo/-/merge_requests/5) and "
+                + "[!6](https://gitlab.example.org/course/demo/-/merge_requests/6) all have failing checks "
+                + "on their heads and no review yet. Which of those three would you rather unblock first?";
 
-        channel.send(
-                delta("Hey! Which of the recent items - PR #12, PR #9, or issue #15 - do you want to look at next?"));
-        channel.send(delta("Hey there! Which of the recent items - PR #12, PR #9, or issue #15 - should we focus on?"));
+        for (int start = 0; start < text.length(); start += chunkSize) {
+            channel.send(delta(text.substring(start, Math.min(start + chunkSize, text.length()))));
+        }
 
-        channel.completeWithDone();
-        waitUntil(() -> stops.get() >= 1, 4000);
-
-        assertThat(starts.get()).isEqualTo(1);
-        assertThat(stops.get()).isEqualTo(1);
-        assertThat(String.join("", delivered))
-                .isEqualTo(
-                        "Hey! Which of the recent items - PR #12, PR #9, or issue #15 - do you want to look at next?");
+        assertThat(channel.completeWithDone()).isEqualTo(MentorChannel.DeliveryOutcome.DELIVERED);
+        assertThat(String.join("", delivered)).isEqualTo(text);
     }
 
     @Test
-    @DisplayName("normalizes non-ASCII punctuation before text reaches Slack")
-    void normalizesNonAsciiPunctuation() {
-        assertThat(SlackMentorTextFilter.normalize("Slack\u2011mentor — “review”…"))
-                .isEqualTo("Slack-mentor - \"review\"...");
+    void shouldPreserveUnicodeAndRepeatedVisibleSentences() {
+        SlackMessageService slack = slackThatStreamsOk();
+        var channel = new SlackStreamingMentorChannel(slack, WS, CH, THREAD);
+        String text = "Heph — “Review !4.” Heph — “Review !5.”";
+
+        channel.send(delta(text));
+        channel.completeWithDone();
+
+        assertThat(String.join("", delivered)).isEqualTo(text);
     }
 
     @Test
-    @DisplayName("drops leaked internal analysis before streaming mentor text to Slack")
-    void leakedInternalAnalysisIsNotStreamed() {
+    void shouldKeepVisibleTextThatResemblesInternalAnalysis() {
         SlackMessageService slack = slackThatStreamsOk();
         var channel = new SlackStreamingMentorChannel(slack, WS, CH, THREAD);
+        String text = "I need to investigate this further. Let me check the details.";
 
-        channel.send(delta("User wants to see Slack messages in context. "
-                + "We need to fetch inputs/context/slack_conversations.json. "
-                + "I can use your recent Slack threads as context. Which thread should we look at?"));
+        channel.send(delta(text));
         channel.completeWithDone();
-        waitUntil(() -> stops.get() >= 1, 4000);
 
-        assertThat(String.join("", delivered))
-                .isEqualTo("I can use your recent Slack threads as context. Which thread should we look at?");
+        assertThat(String.join("", delivered)).isEqualTo(text);
     }
 
     @Test
