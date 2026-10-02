@@ -156,14 +156,18 @@ The runs are complete, and the seed writes only in-app feedback.
 
 ### Seeding Practices across the workspace
 
-Practices across the workspace counts developers, and shows a split only where each part holds six
-developers, the reader counted. `vp run dev:practices-across-the-workspace:seed` adds 40 synthetic members
-to a workspace, logins `synthetic-developer-01` to `synthetic-developer-40`, each with completed
-practice reviews of pull requests and issues already synced into it, dated relative to the moment it
-runs and reaching back about 75 days. Each practice group gets its own split, so the page shows a
-full split, a collapsed one and a withheld one. The reader, an existing member, gets synthetic
-reviews under the same practice revisions, so the You marker and the tiles show their own values;
-their observations say they are synthetic and leave with the seed.
+Practices across the workspace counts developers.
+It shows a split only where each part holds four developers, with the reader included.
+
+`vp run dev:practices-across-the-workspace:seed` adds 40 synthetic members to a workspace.
+Their logins are `synthetic-developer-01` to `synthetic-developer-40`.
+Each member gets completed practice reviews of pull requests and issues that the workspace already synced.
+The seed dates the reviews relative to its execution time, back to about 75 days.
+Each practice group gets its own split, so the page shows a full split and a held back one.
+
+The reader is an existing member.
+The reader gets synthetic reviews under the same practice revisions, so the You marker and the tiles show their own values.
+These observations say that they are synthetic, and they leave with the seed.
 
 | Flag                        | Environment                    | Default                              |
 | --------------------------- | ------------------------------ | ------------------------------------ |
@@ -172,21 +176,28 @@ their observations say they are synthetic and leave with the seed.
 | `--issue-repository`        | `SEED_ISSUE_REPOSITORY`        | `HephaestusTest/MaxTestRepo`         |
 | `--reader`                  | `SEED_READER_LOGIN`            | `ValentinGruener`                    |
 
-It connects and refuses non-loopback hosts as the profile seed does, writes no feedback, and
-`vp run dev:practices-across-the-workspace:remove` removes its rows, its memberships and its users,
-and the reader's synthetic reviews with them.
-The organisation sync, which runs when the server starts and every night, removes members the
-GitHub organisation does not list, so run the seed once the server is up.
+The seed connects and refuses non-loopback hosts, as the profile seed does.
+It writes no feedback.
+`vp run dev:practices-across-the-workspace:remove` removes its rows, memberships, and users.
+It also removes the reader's synthetic reviews.
 
-An observation counts only when its practice revision carries the current review rule fingerprint,
-and only the server computes one. Before it writes anything, the seed signs in through dev sign-in
-as an existing dev administrator, or as `seed-admin` when there is none, and checks that the account
-it signed in is in the database it is about to write, so it never writes to a database no dev
-server reads. It then asks the server for the revision a review would pin, which needs
-`HEPHAESTUS_DEV_SEED_ENABLED=true` in `server/.env`. A practice whose current revision predates the
-fingerprint scheme gets a new revision with the same definition, as it would on its next review,
-and the seed keeps the ids of the revisions appended for it. Removing the seed rewinds only those,
-once no observation pins them, and refuses while a review in the workspace is running or queued.
+The organization sync runs when the server starts and every night.
+It removes members that the GitHub organization does not list.
+Thus, run the seed after the server starts.
+
+An observation counts only when its practice revision carries the current review rule fingerprint.
+Only the server computes a fingerprint.
+Before the seed writes anything, it signs in through dev sign-in as an existing dev administrator.
+If there is none, it signs in as `seed-admin`.
+It then checks that the signed-in account is in the database that it is about to write.
+Thus, it never writes to a database that no dev server reads.
+
+The seed then asks the server for the revision that a review would pin.
+This request needs `HEPHAESTUS_DEV_SEED_ENABLED=true` in `server/.env`.
+A practice whose current revision predates the fingerprint scheme gets a new revision with the same definition, as it would on its next review.
+The seed keeps the IDs of the revisions that it appended.
+Removal rewinds only those revisions, and only when no observation pins them.
+Removal refuses while a review in the workspace is running or queued.
 
 ### Port overrides
 
