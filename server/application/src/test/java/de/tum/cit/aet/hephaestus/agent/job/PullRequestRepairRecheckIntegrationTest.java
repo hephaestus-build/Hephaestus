@@ -358,7 +358,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
             managed.replaceClosingIssues(Set.of(issueRepository.getReferenceById(linkedIssueId)));
             pullRequestRepository.saveAndFlush(managed);
         });
-        AgentJob merged = admittedLinkedReview(pr, linked, ObservationKind.OMISSION_GAP);
+        AgentJob merged = admittedLinkedReview(pr, linked);
         UUID olderNegative = observationRepository
                 .findByAgentJobId(merged.getId(), workspace.getId())
                 .getFirst()
@@ -369,22 +369,28 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         Feedback deliveredCard =
                 persistInAppFeedback(merged, developer, 1, FeedbackDeliveryState.DELIVERED, "Recorded history", NOW);
         bind(deliveredCard, olderNegative);
-        AgentJob laterNegativeRun =
-                admittedLinkedReview(pr, linked, ObservationKind.OMISSION_GAP, ObservationKind.COMMISSION_PROBLEM);
+        AgentJob laterNegativeRun = admittedLinkedReview(pr, linked);
+        Observation admittedNegative = observationRepository
+                .findByAgentJobId(laterNegativeRun.getId(), workspace.getId())
+                .getFirst();
+        UUID currentNegative = admittedNegative.getId();
+        // Historical reviews could record multiple results for a practice; repairs must retire all of them.
+        UUID secondCurrentNegative = observe(
+                linked,
+                laterNegativeRun,
+                ArtifactKinds.PULL_REQUEST.value(),
+                pr.getId(),
+                developer,
+                "Historical linked-issue confirmation problem",
+                ObservationKind.COMMISSION_PROBLEM,
+                Severity.MINOR,
+                admittedNegative.getObservedAt(),
+                Objects.requireNonNull(admittedNegative.getEvidence()).toString(),
+                admittedNegative.getRecurrenceKey());
         laterNegativeRun.setRetryCount(1);
         laterNegativeRun = agentJobRepository.saveAndFlush(laterNegativeRun);
         List<Observation> admitted =
                 observationRepository.findByAgentJobId(laterNegativeRun.getId(), workspace.getId());
-        UUID currentNegative = admitted.stream()
-                .filter(row -> ObservationKind.of(row) == ObservationKind.OMISSION_GAP)
-                .findFirst()
-                .orElseThrow()
-                .getId();
-        UUID secondCurrentNegative = admitted.stream()
-                .filter(row -> ObservationKind.of(row) == ObservationKind.COMMISSION_PROBLEM)
-                .findFirst()
-                .orElseThrow()
-                .getId();
         for (AgentJob baseline : List.of(merged, laterNegativeRun)) {
             JsonNode manifest = agentJobRepository
                     .findById(baseline.getId())
@@ -756,25 +762,21 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         return agentJobRepository.saveAndFlush(job);
     }
 
-    private AgentJob admittedLinkedReview(PullRequest pr, Practice linked, ObservationKind... kinds) throws Exception {
+    private AgentJob admittedLinkedReview(PullRequest pr, Practice linked) throws Exception {
         try (LinkedAttempt capture = captureLinkedAttempt(linkedReviewJob(pr), linked, "- [ ] Confirm repair")) {
             var observations = MAPPER.createArrayNode();
-            for (ObservationKind kind : kinds) {
-                var result = (tools.jackson.databind.node.ObjectNode)
-                        capture.observations().get(0).deepCopy();
-                result.put("summary", "Linked criteria need confirmation")
-                        .put("presence", kind == ObservationKind.OMISSION_GAP ? "ABSENT" : "PRESENT")
-                        .put("assessment", kind == ObservationKind.OMISSION_GAP ? "GOOD" : "BAD")
-                        .put("severity", "MINOR")
-                        .put("evidenceRationale", "The captured criterion remains unchecked.");
-                if (kind == ObservationKind.OMISSION_GAP) {
-                    var search = ((tools.jackson.databind.node.ObjectNode) result.path("evidence")).putObject("search");
-                    search.putArray("consulted").add("scm.linked-work-items");
-                    search.put("lookedFor", "confirmation of the acceptance criterion");
-                    search.put("boundary", "the captured closing issue #18");
-                }
-                observations.add(result);
-            }
+            var result = (tools.jackson.databind.node.ObjectNode)
+                    capture.observations().get(0).deepCopy();
+            result.put("summary", "Linked criteria need confirmation")
+                    .put("presence", "ABSENT")
+                    .put("assessment", "GOOD")
+                    .put("severity", "MINOR")
+                    .put("evidenceRationale", "The captured criterion remains unchecked.");
+            var search = ((tools.jackson.databind.node.ObjectNode) result.path("evidence")).putObject("search");
+            search.putArray("consulted").add("scm.linked-work-items");
+            search.put("lookedFor", "confirmation of the acceptance criterion");
+            search.put("boundary", "the captured closing issue #18");
+            observations.add(result);
             admissionService.admit(capture.identity(), observations);
             AgentJob completed =
                     agentJobRepository.findById(capture.job().getId()).orElseThrow();

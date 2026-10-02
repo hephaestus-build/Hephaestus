@@ -54,6 +54,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -1437,36 +1438,23 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
     }
 
     @Nested
-    class MultipleNegatives {
+    class OneResultPerPractice {
 
-        @Test
-        void persistsAllNegativesForPractice() {
-            var observations = new java.util.ArrayList<ValidatedObservation>();
-            for (int i = 0; i < 7; i++) {
-                observations.add(validObservation("pr-description-quality", Presence.ABSENT));
-            }
+        @ParameterizedTest
+        @EnumSource(Presence.class)
+        void shouldRefuseRepeatedPracticeBeforePersistingAnyObservation(Presence presence) {
+            var observations = List.of(
+                    validObservation("pr-description-quality", Presence.PRESENT),
+                    validObservation("PR_DESCRIPTION_QUALITY", presence));
 
-            var result = publishVerified(testJob, observations);
-
-            assertThat(result.inserted()).isEqualTo(7);
-            assertThat(result.discardedDuplicate()).isZero();
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
+                    .isInstanceOf(ObservationsRefusedException.class)
+                    .hasMessageContaining("one final observation per practice");
+            verifyNoInteractions(observationRepository);
         }
 
         @Test
-        void persistsManyPositiveObservations() {
-            var observations = new java.util.ArrayList<ValidatedObservation>();
-            for (int i = 0; i < 10; i++) {
-                observations.add(validObservation("pr-description-quality", Presence.PRESENT));
-            }
-
-            var result = publishVerified(testJob, observations);
-
-            assertThat(result.inserted()).isEqualTo(10);
-            assertThat(result.discardedDuplicate()).isZero();
-        }
-
-        @Test
-        void persistsNegativesIndependentlyPerPractice() {
+        void shouldPersistResultsForDifferentPractices() {
             Practice otherPractice = new Practice();
             ReflectionTestUtils.setField(otherPractice, "id", 20L);
             otherPractice.setSlug("error-handling");
@@ -1474,15 +1462,13 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
             otherPractice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
             admit(otherPractice, 22L);
 
-            var observations = new java.util.ArrayList<ValidatedObservation>();
-            for (int i = 0; i < 5; i++) {
-                observations.add(validObservation("pr-description-quality", Presence.ABSENT));
-                observations.add(validObservation("error-handling", Presence.ABSENT));
-            }
+            var result = publishVerified(
+                    testJob,
+                    List.of(
+                            validObservation("pr-description-quality", Presence.ABSENT),
+                            validObservation("error-handling", Presence.ABSENT)));
 
-            var result = publishVerified(testJob, observations);
-
-            assertThat(result.inserted()).isEqualTo(10);
+            assertThat(result.inserted()).isEqualTo(2);
         }
     }
 
@@ -1501,15 +1487,13 @@ class PracticeDetectionDeliveryServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void persistsManyNotApplicableObservations() {
-            var observations = new java.util.ArrayList<ValidatedObservation>();
-            for (int i = 0; i < 10; i++) {
-                observations.add(validObservation("pr-description-quality", null));
-            }
+        void shouldRefuseRepeatedAbstentionsBeforePersistingAnyObservation() {
+            var observations = List.of(
+                    validObservation("pr-description-quality", null), validObservation("pr-description-quality", null));
 
-            var result = publishVerified(testJob, observations);
-
-            assertThat(result.inserted()).isEqualTo(10);
+            assertThatThrownBy(() -> publishVerified(testJob, observations))
+                    .isInstanceOf(ObservationsRefusedException.class);
+            verifyNoInteractions(observationRepository);
         }
     }
 

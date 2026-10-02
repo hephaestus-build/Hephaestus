@@ -277,7 +277,7 @@ it at all.
   progress.
 - `outcome` is the authoritative result of that one observation, about the behavior it names and the evidence it
   cites: `POSITIVE` or `NEGATIVE` for that behavior, read as given. It says nothing about the rest of the practice or
-  the work — a practice can have several observations about different behaviors, and one positive result does not make
+  the work — a practice can have observations from different reviews, and one positive result does not make
   the work correct — and it is never a grade of the developer.
 - Interpret a recorded judgment against the `criteria` in its detail, pinned by `practiceRevisionId` to the
   practice it reviewed. Its rationale can be wrong; compare it with those criteria and the quoted work. The current

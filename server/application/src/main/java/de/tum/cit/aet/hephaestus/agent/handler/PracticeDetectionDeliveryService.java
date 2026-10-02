@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -129,6 +130,17 @@ public class PracticeDetectionDeliveryService {
     }
 
     public PreparedObservations prepare(AgentJob job, List<ValidatedObservation> validObservations) {
+        Set<String> practices = new HashSet<>();
+        for (ValidatedObservation observation : validObservations) {
+            String slug =
+                    observation.practiceSlug().trim().toLowerCase(Locale.ROOT).replace('_', '-');
+            if (!practices.add(slug)) {
+                throw new ObservationsRefusedException(
+                        "ambiguous_practice_observations",
+                        "A review must submit one final observation per practice; repeated practice: " + slug,
+                        objectMapper.createArrayNode());
+            }
+        }
         JsonNode metadata = job.getMetadata();
         if (metadata == null) {
             throw new JobDeliveryException("Missing job metadata: jobId=" + job.getId());
