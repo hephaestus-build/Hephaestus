@@ -64,7 +64,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     void setUp() {
         lenient().when(writeFence.holdForWrite(any())).thenReturn(true);
         accountRepository = mock(AccountRepository.class);
-        lenient().when(accountRepository.lockStatusForShare(anyLong())).thenReturn(Optional.of("ACTIVE"));
+        lenient().when(accountRepository.lockStatusForUpdate(anyLong())).thenReturn(Optional.of("ACTIVE"));
         identityLinkRepository = mock(IdentityLinkRepository.class);
         gitProviderRegistry = mock(GitProviderRegistry.class);
         verifiedEmailResolver = mock(VerifiedEmailResolver.class);
@@ -99,7 +99,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
 
     @Test
     void linkingNewNativeIdentityToDeletingAccountIsRejectedBeforeWriting() {
-        when(accountRepository.lockStatusForShare(42L)).thenReturn(Optional.of("DELETING"));
+        when(accountRepository.lockStatusForUpdate(42L)).thenReturn(Optional.of("DELETING"));
 
         assertThatThrownBy(() -> service.resolveOrProvision(
                         "github", "new-native-subject", principal(), AuthIntentCookie.Intent.link(42L, null)))
@@ -336,7 +336,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     @Test
     void returningLoginDoesNotUpdateADeletingAccount() {
         existingLink(null);
-        when(accountRepository.lockStatusForShare(9L)).thenReturn(Optional.of("DELETING"));
+        when(accountRepository.lockStatusForUpdate(9L)).thenReturn(Optional.of("DELETING"));
 
         assertThatThrownBy(() -> service.resolveOrProvision(
                         "github", "777", principal(), AuthIntentCookie.Intent.login(null, null)))

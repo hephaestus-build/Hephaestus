@@ -121,7 +121,7 @@ conversation memory, not deletion of the conversation a person can read.
 
 Content admission and erasure use transaction-scoped native-identity locks through
 `server/application/src/main/java/de/tum/cit/aet/hephaestus/core/privacy/NativePersonDataWriteFence.java`.
-The erasure side obtains its locks before the final preview check. Writers hold a shared lock until
+The erasure side obtains its locks before the final preview check. Writers use READ_COMMITTED, hold a shared lock until
 their content transaction commits and check the permanent control after acquiring it. A lock can
 serialize team variants or hash collisions, but it never makes them the same person.
 

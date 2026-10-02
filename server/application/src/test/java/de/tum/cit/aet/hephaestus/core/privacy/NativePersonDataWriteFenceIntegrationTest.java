@@ -40,6 +40,20 @@ class NativePersonDataWriteFenceIntegrationTest extends BaseIntegrationTest {
     private PlatformTransactionManager transactions;
 
     @Test
+    void shouldRejectAnOldSnapshotForAdmissionAndFinalErasureValidation() {
+        var tx = new TransactionTemplate(transactions);
+        tx.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        var identities = List.of(new PersonIdentity(1L, "native-subject", null));
+        assertThatThrownBy(() -> tx.executeWithoutResult(status -> fence.holdForErasure(identities)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("READ_COMMITTED");
+        assertThatThrownBy(() -> tx.executeWithoutResult(
+                        status -> assertThat(fence.holdForWrite(identities)).isTrue()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("READ_COMMITTED");
+    }
+
+    @Test
     void shouldFinishAnAdmittedWriteBeforeErasureChecksItsRows() throws Exception {
         databaseTestUtils.cleanDatabase();
         var provider =

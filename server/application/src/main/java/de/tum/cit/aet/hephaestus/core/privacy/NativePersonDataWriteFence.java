@@ -25,6 +25,7 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public boolean holdForWrite(List<PersonIdentity> identities) {
+        requireFreshControlReads();
         lock(identities, true);
         for (var identity : identities) {
             if (suppression.isSuppressed(identity.providerId(), identity.subject(), identity.teamId())) {
@@ -47,7 +48,16 @@ public class NativePersonDataWriteFence implements PersonDataWriteFence {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void holdForErasure(List<PersonIdentity> identities) {
+        requireFreshControlReads();
         lock(identities, false);
+    }
+
+    private void requireFreshControlReads() {
+        // A repeatable-read snapshot can predate a control committed while this transaction waits
+        // for the native lock. Never admit a writer from that old snapshot.
+        if (!"read committed".equals(jdbc.queryForObject("SHOW transaction_isolation", String.class))) {
+            throw new IllegalStateException("Person data admission requires a READ_COMMITTED transaction");
+        }
     }
 
     private void lock(List<PersonIdentity> identities, boolean shared) {

@@ -229,9 +229,10 @@ public class AccountProvisioningService {
 
     private void requireActiveAccountForWrite(long accountId) {
         // Native identity locks precede account locks, as they do in person erasure. The scalar
-        // locked status cannot be replaced by a potentially stale managed Account entity.
+        // locked status cannot be replaced by a potentially stale managed Account entity. A write
+        // lock also prevents concurrent bootstrap promotions from upgrading two shared locks.
         if (!accountRepository
-                .lockStatusForShare(accountId)
+                .lockStatusForUpdate(accountId)
                 .map(Account.Status.ACTIVE.name()::equals)
                 .orElse(false)) {
             throw new org.springframework.security.oauth2.core.OAuth2AuthenticationException(
