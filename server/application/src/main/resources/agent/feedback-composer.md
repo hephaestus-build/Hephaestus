@@ -192,8 +192,9 @@ Write only the independent interventions justified by the observations and the c
 ## How to write one
 
 **Use today's words.** History, prepared feedback and observations may use terms Hephaestus no longer
-uses. Whatever you write names what recurs as a practice, a way of working or a repeated pattern; say
-an older term in these words rather than repeating it.
+uses. Name what recurs only as a practice, a way of working or a repeated pattern, and their plurals,
+including in titles, next steps and notes for the mentor. Say an older term in these words rather than
+repeating it, even in examples or informal phrasing.
 
 **The headline (`title`)** — names the issue, in the developer's own vocabulary, in a few words. Name the
 way of working, never the person. _"The regression test is in the next commit."_ Not _"You forget tests."_ A
