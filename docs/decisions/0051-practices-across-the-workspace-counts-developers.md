@@ -66,8 +66,8 @@ attention, Mixed feedback and Going well, counted in developers.
   profile shows open now, by the profile's own rule, for the reader and for every eligible developer
   alike whatever the window, so it never sets one moment beside a span; read in one pass.
 - The page asks for no estimate first. Every group shows at once. A group opens over the page with
-  its practices, a practice opens over its group with the reader's own observations and feedback,
-  and *Open the group* leads on to the reader's own Practice profile.
+  its practices; the reader's own group and a practice open over it as the profile's own levels, so
+  nothing on the page leaves for the Practice profile.
 - Workspace admins read nothing new. Instance administrators read the page through **View as user**,
   as they read every other practice page.
 

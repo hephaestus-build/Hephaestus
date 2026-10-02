@@ -3,16 +3,20 @@ import type { ComponentType } from "react";
 
 import { cn } from "cn";
 import type { WorkspaceSplit } from "@/api/types.gen";
+import { FOCUS_RING } from "@/components/common/focus";
 import { statusToneClass } from "@/components/common/status-def";
 import {
 	PRACTICE_GROUP_STANDING_DEFS,
 	type PracticeGroupStandingValue,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import {
 	developerCount,
 	HELD_BACK,
 	isSplitStanding,
+	MERGED_STANDINGS,
+	MERGED_STANDINGS_NOTE,
 	SPLIT_STANDINGS,
 	type SplitContext,
 	type SplitStanding,
@@ -77,7 +81,7 @@ function partsOf(
 			{
 				key: "has",
 				count: split.hasStanding ?? 0,
-				label: "Have a standing",
+				label: MERGED_STANDINGS,
 				icon: HasStandingIcon,
 				tone: GREY,
 				className: HAS_STANDING,
@@ -155,39 +159,44 @@ export function WorkspaceSplitBar({
 	const total = parts.reduce((sum, part) => sum + part.count, 0);
 	return (
 		<div className="flex min-w-0 flex-col gap-1">
-			<div role="img" aria-label={description} className="flex w-full min-w-0 gap-0.5">
-				{parts.map((part, index) => {
-					const Icon = part.icon;
-					const last = index === parts.length - 1;
-					return (
-						<div
-							key={part.key}
-							aria-hidden
-							title={`${part.label}: ${part.count}`}
-							className={cn(
-								"flex grow-(--count) basis-0 flex-col items-center gap-0.5",
-								last ? "min-w-28" : "min-w-9",
-							)}
-							style={{ "--count": part.count }}
-						>
-							<span className="flex h-5 flex-col items-center justify-end text-mentor">
-								{part.isYours && (
-									<>
-										<span className="text-xs leading-3 font-semibold">You</span>
-										<TriangleIcon className="size-2.5 rotate-180 fill-current" />
-									</>
-								)}
-							</span>
-							<span className={cn("h-2 w-full rounded-sm", part.className)} />
-							<span className="flex w-full items-center justify-center gap-1 text-xs text-muted-foreground tabular-nums">
-								<Icon className={cn("size-3 shrink-0", part.tone)} />
-								{part.count}
-								{/* The whole the parts add up to, at the end of the counts line. */}
-								{last && <span className="ml-auto whitespace-nowrap">{developerCount(total)}</span>}
-							</span>
-						</div>
-					);
-				})}
+			<div className="flex w-full min-w-0 items-end gap-2">
+				<div role="img" aria-label={description} className="flex min-w-0 flex-1 gap-0.5">
+					{parts.map((part) => {
+						const Icon = part.icon;
+						return (
+							<div
+								key={part.key}
+								aria-hidden
+								title={`${part.label}: ${part.count}`}
+								// Each count sits in its own part's column, centred under the part's piece of the bar,
+								// and every column keeps room for its label, so no count shifts or meets another.
+								className="flex min-w-10 grow-(--count) basis-0 flex-col items-center gap-0.5"
+								style={{ "--count": part.count }}
+							>
+								<span className="flex h-5 flex-col items-center justify-end text-mentor">
+									{part.isYours && (
+										<>
+											<span className="text-xs leading-3 font-semibold">You</span>
+											<TriangleIcon className="size-2.5 rotate-180 fill-current" />
+										</>
+									)}
+								</span>
+								<span className={cn("h-2 w-full rounded-sm", part.className)} />
+								<span className="flex w-full items-center justify-center gap-1 text-xs text-muted-foreground tabular-nums">
+									<Icon className={cn("size-3 shrink-0", part.tone)} />
+									{part.count}
+								</span>
+							</div>
+						);
+					})}
+				</div>
+				{/* The whole the parts add up to, in its own slot past the bar's end, on the counts line. */}
+				<span
+					aria-hidden
+					className="shrink-0 text-xs whitespace-nowrap text-muted-foreground tabular-nums"
+				>
+					{developerCount(total)}
+				</span>
 			</div>
 			{/* The pointer on a merged part cannot say the standing, so the word does; a level that shows the
 			    reader's badge beside the bar leaves it out. */}
@@ -240,7 +249,8 @@ export function SplitLegend() {
 		{ key: "none", label: "None yet", icon: NONE_YET_DEF.icon, tone: GREY, swatch: NONE_YET },
 		{
 			key: "has",
-			label: "Has a standing",
+			label: MERGED_STANDINGS,
+			note: MERGED_STANDINGS_NOTE,
 			icon: HasStandingIcon,
 			tone: GREY,
 			swatch: HAS_STANDING,
@@ -253,11 +263,28 @@ export function SplitLegend() {
 		>
 			{items.map((item) => {
 				const Icon = item.icon;
-				return (
-					<li key={item.key} className="inline-flex items-center gap-1.5">
+				const mark = (
+					<>
 						<span aria-hidden className={cn("h-2 w-4 rounded-sm", item.swatch)} />
 						<Icon aria-hidden className={cn("size-3 shrink-0", item.tone)} />
 						{item.label}
+					</>
+				);
+				return (
+					<li key={item.key} className="inline-flex items-center gap-1.5">
+						{"note" in item && item.note !== undefined ? (
+							<Tooltip>
+								<TooltipTrigger
+									render={<button type="button" aria-label={`${item.label}: ${item.note}`} />}
+									className={cn(FOCUS_RING, "inline-flex cursor-help items-center gap-1.5")}
+								>
+									{mark}
+								</TooltipTrigger>
+								<TooltipContent className="max-w-xs">{item.note}</TooltipContent>
+							</Tooltip>
+						) : (
+							mark
+						)}
 					</li>
 				);
 			})}

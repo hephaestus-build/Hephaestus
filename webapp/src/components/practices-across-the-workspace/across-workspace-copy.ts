@@ -64,6 +64,13 @@ export function groupsHint(minimumOthers: number): string {
 	return `Each bar counts developers by their standing in the group, and You marks yours. A part shows only when it holds at least ${minimumOthers} other developers; otherwise it is merged or held back, so no one can be singled out.`;
 }
 
+/** A collapsed split's merged part: Needs attention, Mixed feedback and Going well counted as one. */
+export const MERGED_STANDINGS = "Merged standings";
+
+/** What the merged part is, where the reader asks. */
+export const MERGED_STANDINGS_NOTE =
+	"Needs attention, mixed feedback and going well counted together, because one of them was too small to show on its own.";
+
 export const standingLabel = (standing: PracticeGroupStandingValue): string =>
 	PRACTICE_GROUP_STANDING_DEFS[standing].label;
 
@@ -121,7 +128,7 @@ export function splitDescription(
 		return `${HELD_BACK}. ${you}.`;
 	}
 	if (split.shape === "COLLAPSED") {
-		return `${reference}: ${split.hasStanding ?? 0} have a standing, ${split.noneYet ?? 0} none yet. The split is held back while one standing would cover ${context.minimumOthers} developers or fewer. ${you}.`;
+		return `${reference}: ${split.hasStanding ?? 0} ${MERGED_STANDINGS.toLowerCase()}, ${split.noneYet ?? 0} none yet. The split is held back while one standing would cover ${context.minimumOthers} developers or fewer. ${you}.`;
 	}
 	const needs = split.needsAttention ?? 0;
 	const mixed = split.mixedFeedback ?? 0;

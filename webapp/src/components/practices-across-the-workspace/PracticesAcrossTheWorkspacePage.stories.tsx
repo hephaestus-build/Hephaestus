@@ -48,6 +48,12 @@ export const Default: Story = {
 		await expect(
 			canvas.getByRole("heading", { level: 2, name: "All practice groups" }),
 		).toBeVisible();
+		// The merged part says what it merges where the reader asks.
+		await expect(
+			canvas.getByRole("button", {
+				name: "Merged standings: Needs attention, mixed feedback and going well counted together, because one of them was too small to show on its own.",
+			}),
+		).toBeVisible();
 		// The two rules, each where it applies, with the numbers the response carries.
 		await expect(
 			canvas.getByText(
@@ -88,7 +94,7 @@ export const GroupOpen: Story = {
 export const Collapsed: Story = {
 	args: { state: { status: "ready", overview: COLLAPSED_WORKSPACE } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("img", { name: /21 have a standing/u })).toHaveLength(8);
+		await expect(canvas.getAllByRole("img", { name: /21 merged standings/u })).toHaveLength(8);
 	},
 };
 

@@ -27,9 +27,9 @@ const meta = {
 	decorators: [withPageBehind],
 	args: {
 		path: { behind: [{ label: "Practices across the workspace", depth: 0 }], onClose: fn() },
-		workspaceSlug: "aet",
 		state: { status: "ready", group: PACKAGING_GROUP, context: CONTEXT },
 		onViewPractice: fn(),
+		onOpenOwnGroup: fn(),
 	},
 	argTypes: { path: { control: false } },
 	render: (args) => (
@@ -71,11 +71,10 @@ export const Default: Story = {
 		await expectSettledVisible(level.getByRole("heading", { name: "Packaging work for review" }));
 		await expect(level.getByRole("button", { name: "Needs attention" })).toBeVisible();
 		await expect(level.getByRole("button", { name: "More positive recently" })).toBeVisible();
-		await expect(
-			level.getByRole("link", {
-				name: "Open the group Packaging work for review on your Practice profile",
-			}),
-		).toHaveAttribute("href", expect.stringContaining("practice-group%3Areview-ready-work"));
+		await userEvent.click(
+			level.getByRole("button", { name: "Open your group Packaging work for review" }),
+		);
+		await expect(args.onOpenOwnGroup).toHaveBeenCalledOnce();
 		const table = within(
 			level.getByRole("table", { name: "Practices of Packaging work for review" }),
 		);
@@ -87,7 +86,9 @@ export const Default: Story = {
 			"review-ready-work",
 			"scope-to-one-concern",
 		);
-		await expect(table.getByRole("img", { name: /20 have a standing, 8 none yet/u })).toBeVisible();
+		await expect(
+			table.getByRole("img", { name: /20 merged standings, 8 none yet/u }),
+		).toBeVisible();
 		await expect(table.getByText("Held back: too few developers to compare yet.")).toBeVisible();
 		await expect(level.queryByText(/See practices/u)).toBeNull();
 	},

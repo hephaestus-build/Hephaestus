@@ -7,6 +7,11 @@ import type { PracticeStanding, PracticesAcrossWorkspace } from "@/api/types.gen
 import type { Wire } from "@/lib/dates";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import {
+	groupStandings,
+	OVERVIEW_FIXTURE,
+	packagingGroup,
+} from "@/stories/practice-profile-story-mock-data";
 import { ACROSS_WORKSPACE } from "@/stories/practices-across-the-workspace-story-data";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 
@@ -63,8 +68,15 @@ beforeEach(() => {
 			HttpResponse.json({ role: "MEMBER", userId: 1, userLogin: "ada", userName: "Ada" }),
 		),
 		// What the practice level reads of the reader's own profile.
-		http.get("*/workspaces/:workspaceSlug/practice-groups", () => HttpResponse.json([])),
-		http.get("*/workspaces/:workspaceSlug/practice-groups/standings", () => HttpResponse.json([])),
+		http.get("*/workspaces/:workspaceSlug/practice-groups", () =>
+			HttpResponse.json([packagingGroup]),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-groups/standings", () =>
+			HttpResponse.json([groupStandings["review-ready-work"]]),
+		),
+		http.get("*/workspaces/:workspaceSlug/practice-profile/overview", () =>
+			HttpResponse.json(OVERVIEW_FIXTURE),
+		),
 		http.get("*/workspaces/:workspaceSlug/practices/standings", () =>
 			HttpResponse.json([SCOPE_STANDING]),
 		),
@@ -139,13 +151,6 @@ describe("Practices across the workspace", () => {
 		);
 		// The reader's trend in the group, read off the support the wire sent with its dates.
 		screen.getByRole("button", { name: "More positive recently" });
-		expect(
-			screen
-				.getByRole("link", {
-					name: "Open the group Packaging work for review on your Practice profile",
-				})
-				.getAttribute("href"),
-		).toContain("/w/acme/practice-profile");
 		// The level asks for nothing of its own: the page's one read carries every practice's split.
 		expect(overviewReads()).toHaveLength(1);
 		await userEvent.click(
@@ -171,6 +176,34 @@ describe("Practices across the workspace", () => {
 		);
 
 		// Back closes the practice and leaves its group open.
+		router.history.back();
+		await waitFor(() => {
+			expect(router.state.location.search).toMatchObject({
+				detail: ["practice-group:review-ready-work"],
+			});
+		});
+	});
+
+	it("opens the reader's own group over the group without leaving the page, and Back closes it", async () => {
+		const { router } = renderRouteAtWithRouter(
+			`${PAGE}?detail=%5B%22practice-group%3Areview-ready-work%22%5D`,
+		);
+		await userEvent.click(
+			await screen.findByRole(
+				"button",
+				{ name: "Open your group Packaging work for review" },
+				ROUTE_RENDER_WAIT,
+			),
+		);
+		await waitFor(() => {
+			expect(router.state.location.search).toMatchObject({
+				detail: ["practice-group:review-ready-work", "own-group:review-ready-work"],
+			});
+		});
+		expect(router.state.location.pathname).toBe(PAGE);
+		// The profile's own group level, with its tabs, over the group across the workspace.
+		await screen.findByRole("tab", { name: /About this group/u }, ROUTE_RENDER_WAIT);
+
 		router.history.back();
 		await waitFor(() => {
 			expect(router.state.location.search).toMatchObject({
