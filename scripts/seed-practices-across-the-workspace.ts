@@ -194,7 +194,7 @@ async function insertDevelopers(client: Client, workspaceId: number): Promise<nu
 		throw new Error("No GitHub identity provider in this database");
 	}
 	const ids: number[] = [];
-	for (let index = 0; index < DEVELOPERS; index++) {
+	for (let index = 0; index < DEVELOPERS; index += 1) {
 		const ordinal = String(index + 1).padStart(2, "0");
 		const login = `${LOGIN_PREFIX}${ordinal}`;
 		const user = await client.query<{ id: number }>(
@@ -259,13 +259,24 @@ async function seed(
 	const issues = await artifactsOf(client, ISSUE_REPOSITORY, "scm.issue");
 	const developers = await insertDevelopers(client, workspaceId);
 
+	/** The bucket developer `index` falls in for one practice's group. */
+	const bucketFor = (practice: SeedPractice, index: number): Bucket => {
+		const split = SPLITS[practice.groupSlug];
+		const group = groupIndex.get(practice.groupSlug);
+		return split === undefined || group === undefined ? "none" : bucketOf(split, group, index);
+	};
+
 	let jobs = 0;
 	let observations = 0;
 	for (const [index, developerId] of developers.entries()) {
 		for (const kind of ["scm.pull_request", "scm.issue"] as const) {
 			const pool = kind === "scm.pull_request" ? pullRequests : issues;
 			const runCount = kind === "scm.pull_request" ? 3 + (index % 5) : 3 + (index % 2);
-			for (let newest = 0; newest < runCount; newest++) {
+			const observed = practices
+				.filter((practice) => practice.kind === kind)
+				.map((practice) => ({ practice, bucket: bucketFor(practice, index) }))
+				.filter(({ bucket }) => bucket !== "none");
+			for (let newest = 0; newest < runCount; newest += 1) {
 				const artifact = pool[(index * 5 + newest * 3) % pool.length];
 				if (artifact === undefined) {
 					continue;
@@ -277,19 +288,7 @@ async function seed(
 				jobs += 1;
 				const jobId = seedId(TABLE.job, jobs);
 				await insertJob(client, workspaceId, jobId, artifact, at);
-				for (const practice of practices) {
-					if (practice.kind !== kind) {
-						continue;
-					}
-					const split = SPLITS[practice.groupSlug];
-					const group = groupIndex.get(practice.groupSlug);
-					if (split === undefined || group === undefined) {
-						continue;
-					}
-					const bucket = bucketOf(split, group, index);
-					if (bucket === "none") {
-						continue;
-					}
+				for (const { practice, bucket } of observed) {
 					observations += 1;
 					await insertObservation(client, {
 						id: seedId(TABLE.observation, observations),
