@@ -111,7 +111,7 @@ public class PracticesAcrossWorkspaceService {
                                     practiceBucket(snapshots.getOrDefault(developer, NOTHING_READ), practice.slug()))
                             .toList());
             GroupRelease release =
-                    CohortPrivacyPolicy.group(observed.stream().map(rowOf).toList());
+                    CohortPrivacyPolicy.group(observed.stream().map(rowOf).toList(), practices.size());
             List<WorkspacePracticeSplitDTO> practiceSplits = new ArrayList<>();
             for (int index = 0; index < practices.size(); index++) {
                 PracticeStandingDTO practice = practices.get(index);

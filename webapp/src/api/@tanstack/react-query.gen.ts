@@ -4958,7 +4958,7 @@ export const getPracticesAcrossWorkspaceQueryKey = (options: Options<GetPractice
 /**
  * The reader's practice group and practice standings beside how the workspace's developers split
  *
- * Counts developers, never names them: a count is shown only when it holds at least 5 developers other than the reader, a group's or a practice's split collapses to has a standing against none yet before it is withheld, and each window is checked on its own.
+ * Counts developers, never names them: a count is shown only when it holds at least 3 developers other than the reader, a group's or a practice's split shows all four parts or is withheld, and each window is checked on its own.
  */
 export const getPracticesAcrossWorkspaceOptions = (options: Options<GetPracticesAcrossWorkspaceData>) => queryOptions<GetPracticesAcrossWorkspaceResponse, DefaultError, GetPracticesAcrossWorkspaceResponse, ReturnType<typeof getPracticesAcrossWorkspaceQueryKey>>({
   queryFn: async ({ queryKey, signal }) => {

@@ -22,19 +22,11 @@ public record WorkspaceSplitDTO(
         @Nullable @Schema(description = "Developers at Going well; set only for SPLIT")
         Integer goingWell,
 
-        @Nullable @Schema(description = "Developers with a standing; set only for COLLAPSED")
-        Integer hasStanding,
-
-        @Nullable @Schema(description = "Observed developers without one; set for SPLIT and COLLAPSED")
+        @Nullable @Schema(description = "Observed developers without a standing here; set only for SPLIT")
         Integer noneYet) {
 
     public static WorkspaceSplitDTO from(Split split) {
         return new WorkspaceSplitDTO(
-                split.shape(),
-                split.needsAttention(),
-                split.mixedFeedback(),
-                split.goingWell(),
-                split.hasStanding(),
-                split.noneYet());
+                split.shape(), split.needsAttention(), split.mixedFeedback(), split.goingWell(), split.noneYet());
     }
 }

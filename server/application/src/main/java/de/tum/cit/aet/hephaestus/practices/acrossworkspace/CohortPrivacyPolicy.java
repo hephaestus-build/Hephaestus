@@ -18,11 +18,10 @@ import org.jspecify.annotations.Nullable;
  * <p>The observed total shows only while it holds {@link #MINIMUM_OTHERS} others, and the eligible total beside it
  * only while the others without a standing are none or {@link #MINIMUM_OTHERS}. A practice group and a practice are
  * split by the same rule, over the same observed developers: each developer falls in one {@link Bucket}, read off
- * their group standing or their practice standing. A split is checked on "has a standing" against "none yet" first,
- * and both parts must hold enough before any split shows. When that holds, the split shows Needs attention, Mixed
- * feedback and Going well, or collapses to the two parts when one of the three holds too few. When it fails, the
- * split is withheld. Collapse before omit, and omit rather than show a zero. The reader's own standing is shown in
- * every case, since it is theirs.
+ * their group standing or their practice standing. A split shows Needs attention, Mixed feedback, Going well and
+ * none yet only when every one of the four holds enough; otherwise the whole split is withheld, never a part of it,
+ * since the page states how many developers were observed and a missing part would be that total less the rest.
+ * Omit rather than show a zero. The reader's own standing is shown in every case, since it is theirs.
  *
  * <p>A group's standing is read off its practices, so its has a standing is everyone with a standing in any of
  * them, and its split and its practices' splits can be subtracted from each other: two practices of sixteen and a
@@ -36,7 +35,7 @@ import org.jspecify.annotations.Nullable;
 public final class CohortPrivacyPolicy {
 
     /** K: the fewest developers other than the reader a shown count may stand for. */
-    public static final int MINIMUM_OTHERS = 5;
+    public static final int MINIMUM_OTHERS = 3;
 
     private CohortPrivacyPolicy() {}
 
@@ -66,13 +65,11 @@ public final class CohortPrivacyPolicy {
         }
     }
 
-    /** How one split is shown, finest first. */
+    /** How one split is shown. */
     public enum Shape {
         /** Needs attention, Mixed feedback, Going well and none yet, each counted. */
         SPLIT,
-        /** Only "has a standing" against "none yet": one of the three would cover too few. */
-        COLLAPSED,
-        /** No split: "has a standing" or "none yet" would cover too few. */
+        /** No split: one of the four would cover too few. */
         WITHHELD,
     }
 
@@ -85,10 +82,9 @@ public final class CohortPrivacyPolicy {
             @Nullable Integer needsAttention,
             @Nullable Integer mixedFeedback,
             @Nullable Integer goingWell,
-            @Nullable Integer hasStanding,
             @Nullable Integer noneYet) {
 
-        static final Split WITHHELD = new Split(Shape.WITHHELD, null, null, null, null, null);
+        static final Split WITHHELD = new Split(Shape.WITHHELD, null, null, null, null);
     }
 
     /** The page's two totals, the reader included where the reader belongs; each null while held back. */
@@ -130,19 +126,16 @@ public final class CohortPrivacyPolicy {
      * one of them. The group's own split stands, since on its own every part it shows already holds enough.
      *
      * @param observed every observed developer's buckets, the reader's included when the reader is observed
+     * @param practiceCount how many practices each row carries, which no row says when nobody is observed
      */
-    public static GroupRelease group(List<Row> observed) {
+    public static GroupRelease group(List<Row> observed, int practiceCount) {
         List<Bucket> groupBuckets = observed.stream().map(Row::group).toList();
-        Split group = split(groupBuckets, Shape.SPLIT);
-        int practiceCount =
-                observed.isEmpty() ? 0 : observed.getFirst().practices().size();
+        Split group = split(groupBuckets);
         List<Split> practices = IntStream.range(0, practiceCount)
                 .mapToObj(index -> {
-                    Split practice = split(
-                            observed.stream()
-                                    .map(row -> row.practices().get(index))
-                                    .toList(),
-                            Shape.SPLIT);
+                    Split practice = split(observed.stream()
+                            .map(row -> row.practices().get(index))
+                            .toList());
                     return safeCell(hasStanding(group) - hasStanding(practice), group, practice)
                             ? practice
                             : Split.WITHHELD;
@@ -179,29 +172,23 @@ public final class CohortPrivacyPolicy {
                 Objects.requireNonNull(split.needsAttention())
                         + Objects.requireNonNull(split.mixedFeedback())
                         + Objects.requireNonNull(split.goingWell());
-            case COLLAPSED -> Objects.requireNonNull(split.hasStanding());
             case WITHHELD -> 0;
         };
     }
 
     /**
-     * One split, no finer than {@code finest}, counted over every observed developer, the reader included when
-     * observed; a part shows only when it holds more than K of them.
+     * One split counted over every observed developer, the reader included when observed: all four parts, each
+     * holding more than K of them, or nothing.
      */
-    static Split split(Collection<Bucket> observed, Shape finest) {
+    static Split split(Collection<Bucket> observed) {
         int needs = count(observed, Bucket.NEEDS_ATTENTION);
         int mixed = count(observed, Bucket.MIXED_FEEDBACK);
         int well = count(observed, Bucket.GOING_WELL);
-        int has = needs + mixed + well;
-        int none = observed.size() - has;
-        if (!shows(has) || !shows(none) || finest == Shape.WITHHELD) {
-            return Split.WITHHELD;
+        int none = observed.size() - needs - mixed - well;
+        if (shows(needs) && shows(mixed) && shows(well) && shows(none)) {
+            return new Split(Shape.SPLIT, needs, mixed, well, none);
         }
-        if (finest == Shape.SPLIT && shows(needs) && shows(mixed) && shows(well)) {
-            // None yet already holds enough to pass the check above, so it is a fourth part, not a rest.
-            return new Split(Shape.SPLIT, needs, mixed, well, null, none);
-        }
-        return new Split(Shape.COLLAPSED, null, null, null, has, none);
+        return Split.WITHHELD;
     }
 
     /** The middle half of a figure across the workspace, as the two values that bound it. */

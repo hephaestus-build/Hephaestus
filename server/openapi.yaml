@@ -7858,9 +7858,9 @@ paths:
   /workspaces/{workspaceSlug}/practices/workspace-overview:
     get:
       description: "Counts developers, never names them: a count is shown only when\
-        \ it holds at least 5 developers other than the reader, a group's or a practice's\
-        \ split collapses to has a standing against none yet before it is withheld,\
-        \ and each window is checked on its own."
+        \ it holds at least 3 developers other than the reader, a group's or a practice's\
+        \ split shows all four parts or is withheld, and each window is checked on\
+        \ its own."
       operationId: getPracticesAcrossWorkspace
       parameters:
       - description: Workspace slug
@@ -7875,7 +7875,7 @@ paths:
         required: false
         schema:
           type: string
-          default: ALL_TIME
+          default: DAYS_30
           enum:
           - ALL_TIME
           - DAYS_30
@@ -15773,7 +15773,8 @@ components:
         openFeedback:
           $ref: "#/components/schemas/WorkspaceTile"
           description: "The reader's open feedback, counted by the rule the practice\
-            \ profile shows it open by; the feedback open now, whatever the window"
+            \ profile shows it open by, beside the middle half of every eligible developer's:\
+            \ both open now, whatever the window"
         practicesGoingWell:
           $ref: "#/components/schemas/WorkspaceTile"
           description: The reader's practices going well
@@ -20317,10 +20318,6 @@ components:
           type: integer
           format: int32
           description: Developers at Going well; set only for SPLIT
-        hasStanding:
-          type: integer
-          format: int32
-          description: Developers with a standing; set only for COLLAPSED
         mixedFeedback:
           type: integer
           format: int32
@@ -20332,13 +20329,12 @@ components:
         noneYet:
           type: integer
           format: int32
-          description: Observed developers without one; set only for COLLAPSED
+          description: Observed developers without a standing here; set only for SPLIT
         shape:
           type: string
           description: How the split may be shown
           enum:
           - SPLIT
-          - COLLAPSED
           - WITHHELD
       required:
       - shape
