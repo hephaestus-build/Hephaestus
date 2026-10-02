@@ -349,12 +349,13 @@ if (scenario !== undefined && scenario !== "") {
 							if (text.includes("## Undecided")) {
 								// The composer's finishing prompt: the runner asks once more for the practices
 								// with a NOT_MET observation, and a WITHHOLD is a recorded decision.
-								// Sent without basedOn: a WITHHOLD rests on its practice's NOT_MET observations.
+								// Sent without basedOn: a WITHHOLD rests on its practice's NOT_MET observations,
+								// found under the slug as any unit's slug is read.
 								const withheld = await tool("report_feedback").execute("f-9", {
 									units: [
 										{
 											channel: "IN_APP",
-											practiceSlug: "test-practice",
+											practiceSlug: " Test_Practice ",
 											action: "WITHHOLD",
 											withholdReason: "below_bar",
 										},

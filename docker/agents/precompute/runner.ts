@@ -281,10 +281,15 @@ function renderSection(result: PracticeResult): string {
 	for (const [recordRows, inDiffRows] of SECTION_LADDER) {
 		section = renderPractice(result, recordRows, inDiffRows).join("\n").trim();
 		if (section.length <= SECTION_CHARS) {
-			break;
+			return `${section}\n`;
 		}
 	}
-	return `${section}\n`;
+	// Directions and rows are not bounded per line, so the smallest step can still overrun: cut at a
+	// line break, or mid-line when one line alone overruns, and point at the full result.
+	const pointer = `- ... the rest is in \`${outputDir}/${result.practice}.json\``;
+	const kept = section.slice(0, SECTION_CHARS - pointer.length - 2);
+	const lineEnd = kept.lastIndexOf("\n");
+	return `${lineEnd > 0 ? kept.slice(0, lineEnd) : kept}\n${pointer}\n`;
 }
 
 for (const result of practiceResults) {

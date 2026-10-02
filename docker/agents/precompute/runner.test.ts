@@ -134,3 +134,24 @@ void test("each practice's section stays under its own budget, keeping a sample 
 	assert.equal(one.match(/reviewer comment:/gu)?.length, 20);
 	assert.match(one, /- \.\.\. and 2 more in/u);
 });
+
+void test("a section whose directions alone overrun the budget is cut and points at the full result", async () => {
+	const { section } = await run({
+		lines: script({
+			hints: [],
+			metrics: {},
+			directions: Array.from({ length: 10 }, (_, i) => `${i} ${"d".repeat(400)}`),
+		}),
+		one: script({ hints: [], metrics: {}, directions: ["e".repeat(5000)] }),
+	});
+	for (const slug of ["lines", "one"]) {
+		const text = await section(slug);
+		assert.ok(text.length <= 3000, `${slug} is ${text.length} chars`);
+		assert.match(
+			text,
+			new RegExp(`\\n- \\.\\.\\. the rest is in \`[^\`]*/${slug}\\.json\`\\n$`, "u"),
+		);
+	}
+	assert.match(await section("lines"), /^- 0 d+\n/u);
+	assert.match(await section("one"), /^- e{100}/u);
+});

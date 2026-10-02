@@ -2345,8 +2345,7 @@ function withholdBasis(
 	) {
 		return value;
 	}
-	const slug =
-		typeof value.practiceSlug === "string" ? value.practiceSlug.trim().toLowerCase() : "";
+	const slug = normalizePracticeSlug(value.practiceSlug);
 	const ids = observations
 		.filter((observation) => observation.practiceSlug === slug && observation.outcome === "NOT_MET")
 		.map((observation) => observation.id);
