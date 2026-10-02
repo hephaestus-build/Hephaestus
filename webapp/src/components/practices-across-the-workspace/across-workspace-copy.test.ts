@@ -1,85 +1,57 @@
 import { describe, expect, it } from "vitest";
 
-import type { WorkspaceGroupSplit } from "@/api/types.gen";
+import { heldBackSentence, type SplitContext, splitDescription } from "./across-workspace-copy";
 
-import {
-	estimateSentence,
-	orderGroups,
-	reachSentence,
-	withheldSentence,
-} from "./across-workspace-copy";
+const context: SplitContext = {
+	window: "TERM",
+	readerCounted: true,
+	observedDevelopers: 24,
+	minimumOthers: 5,
+};
 
-const group = (overrides: Partial<WorkspaceGroupSplit>): WorkspaceGroupSplit => ({
-	groupSlug: "g",
-	groupName: "G",
-	yourStanding: "MIXED",
-	shape: "SPLIT",
-	needsAttention: 5,
-	mixedFeedback: 6,
-	goingWell: 7,
-	...overrides,
-});
-
-describe("reachSentence", () => {
-	it("names the reference group and calls the group within reach where most are going well", () => {
-		expect(reachSentence(group({}), "TERM", 23)).toBe(
-			"7 of the 23 developers observed here this term are Going well, so it is within reach.",
-		);
-	});
-
-	it("says the group is hard where most get mixed feedback", () => {
-		expect(reachSentence(group({ mixedFeedback: 9 }), "DAYS_30", 26)).toBe(
-			"9 of the 26 developers observed here in the last 30 days get Mixed feedback; many find this group hard.",
-		);
-	});
-
-	it("says the split is held back when it collapsed, and nothing when it was withheld", () => {
+describe("splitDescription", () => {
+	it("names the reference group, every count and the rest without a standing", () => {
 		expect(
-			reachSentence(group({ shape: "COLLAPSED", hasStanding: 12, noneYet: 6 }), "TERM", 18),
+			splitDescription(
+				{ shape: "SPLIT", needsAttention: 5, mixedFeedback: 7, goingWell: 7 },
+				"MIXED",
+				context,
+			),
 		).toBe(
-			"12 of the 18 developers observed here this term have a standing; the split is held back.",
-		);
-		expect(reachSentence(group({ shape: "WITHHELD" }), "TERM", 18)).toBeUndefined();
-	});
-});
-
-describe("withheldSentence", () => {
-	it("gives only the observed total where the split is withheld", () => {
-		expect(withheldSentence(24, "TERM")).toBe(
-			"24 developers observed here this term; the split is held back.",
-		);
-		expect(withheldSentence(1, "DAYS_30")).toBe(
-			"1 developer observed here in the last 30 days; the split is held back.",
+			"24 developers observed in this workspace this term: 5 Needs attention, 7 Mixed feedback, 7 Going well, 5 none yet. You: Mixed feedback.",
 		);
 	});
-});
 
-describe("estimateSentence", () => {
-	it("sets the estimate beside the standing without judging either", () => {
-		expect(estimateSentence("STRENGTH", "DEVELOPING")).toBe(
-			"You expected Going well; your latest reviewed work reads Needs attention.",
-		);
-		expect(estimateSentence("MIXED", "MIXED")).toBe(
-			"You expected Mixed feedback; your latest reviewed work reads Mixed feedback too.",
-		);
-		expect(estimateSentence("SKIPPED", "STRENGTH")).toBe(
-			"You skipped the estimate; your latest reviewed work reads Going well.",
+	it("says the reader is not counted when their standing is no part of the split", () => {
+		expect(
+			splitDescription(
+				{ shape: "SPLIT", needsAttention: 5, mixedFeedback: 7, goingWell: 7 },
+				"NOT_OBSERVED",
+				{ ...context, window: "DAYS_30" },
+			),
+		).toMatch(/in the last 30 days: .* You: Not observed yet, not counted in the split\.$/u);
+	});
+
+	it("gives the two parts of a collapsed split and why it collapsed", () => {
+		expect(
+			splitDescription({ shape: "COLLAPSED", hasStanding: 19, noneYet: 5 }, "STRENGTH", context),
+		).toBe(
+			"24 developers observed in this workspace this term: 19 have a standing, 5 none yet. The split is held back while one standing would cover fewer than 5 developers other than you. You: Going well.",
 		);
 	});
 });
 
-describe("orderGroups", () => {
-	const groups = [
-		group({ groupSlug: "b", groupName: "Beta", yourStanding: "STRENGTH" }),
-		group({ groupSlug: "a", groupName: "Alpha", yourStanding: "NOT_OBSERVED" }),
-		group({ groupSlug: "c", groupName: "Gamma", yourStanding: "DEVELOPING" }),
-	];
-
-	it("keeps catalogue order while any row still asks", () => {
-		expect(orderGroups(groups, false).map((each) => each.groupSlug)).toStrictEqual(["a", "b", "c"]);
+describe("heldBackSentence", () => {
+	it("keeps the observed total while it holds enough others", () => {
+		expect(heldBackSentence(context)).toBe("Split held back: 24 developers observed this term.");
 	});
 
-	it("sorts as the practice profile does once nothing asks", () => {
-		expect(orderGroups(groups, true).map((each) => each.groupSlug)).toStrictEqual(["c", "b", "a"]);
+	it("drops the total when the others in it are fewer than K", () => {
+		expect(heldBackSentence({ ...context, observedDevelopers: 5 })).toBe(
+			"Too few developers observed to compare yet.",
+		);
+		expect(heldBackSentence({ ...context, observedDevelopers: 5, readerCounted: false })).toBe(
+			"Split held back: 5 developers observed this term.",
+		);
 	});
 });

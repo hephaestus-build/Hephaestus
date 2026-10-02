@@ -8,7 +8,11 @@ import { InlineLink } from "@/components/common/InlineLink";
 import { useNow } from "@/components/common/use-now";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { count, spell } from "@/components/practice-vocabulary/feedback-text";
-import { OPEN_ROW_BAR, PracticeTableRow } from "@/components/practice-vocabulary/PracticeTable";
+import {
+	OPEN_ROW_BAR,
+	PracticeTableRow,
+	ROW_ACTION_PRESSED,
+} from "@/components/practice-vocabulary/PracticeTable";
 import { REVIEW_RUN_STATE_DEFS } from "@/components/practice-vocabulary/review-run-state-defs";
 import { StatusIcon } from "@/components/practice-vocabulary/StatusTooltip";
 import { Button } from "@/components/ui/button";
@@ -300,13 +304,6 @@ function ReviewRunRow({
 		</PracticeTableRow>
 	);
 }
-
-/**
- * The row's own control under the pointer or focus, in the primary ground: a press anywhere else on
- * the row opens the review, and the accent is spent on one control per surface, never on a row.
- */
-const ROW_ACTION_PRESSED =
-	"hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground";
 
 /**
  * The feedback this review left on the work, linked where it was left. A comment the provider cannot
