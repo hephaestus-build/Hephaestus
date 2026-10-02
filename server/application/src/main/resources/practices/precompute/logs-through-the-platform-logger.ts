@@ -1,9 +1,9 @@
 // Precompute HINTS for logs-through-the-platform-logger: the print-style and logger calls ADDED in
-// application code, per language, and whether the checkout already defines a logger. The closed list
-// of print shapes and logger shapes per language mirrors the criteria; whether a print is the program's
-// output (a CLI, a script) or a shipped debugging line is the review's to decide from the file.
+// application code, per language, and whether a bounded search of the checkout matches a logger. The
+// closed list of print shapes and logger shapes per language mirrors the criteria; whether a print is the
+// program's output (a CLI, a script) or a shipped debugging line is the review's to decide from the file.
 import { grep } from "../lib/grep.ts";
-import { scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
+import { countLabel, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, Hint, PullRequestMetadata } from "../lib/types.ts";
 
 interface Shapes {
@@ -28,7 +28,7 @@ const DIAGNOSTICS: Record<string, Shapes> = {
 		logger: [
 			[
 				"Logger",
-				/\bLogger\s*\(|\blogger\.(?:trace|debug|info|notice|warning|error|critical|fault|log)\s*\(/u,
+				/\bLogger\s*\(|\b(?:logger|Logger\.shared)\.(?:trace|debug|info|notice|warning|error|critical|fault|log)\s*\(/u,
 			],
 			["os_log", /\bos_log\s*\(/u],
 		],
@@ -84,7 +84,6 @@ export default async function logsThroughThePlatformLogger(
 	const hints: Hint[] = [];
 	let prints = 0;
 	let loggers = 0;
-	let printsInToolPaths = 0;
 	let filesScanned = 0;
 	let linesAdded = 0;
 	for (const [language, shapes] of Object.entries(DIAGNOSTICS)) {
@@ -95,34 +94,40 @@ export default async function logsThroughThePlatformLogger(
 		});
 		filesScanned += scan.filesScanned;
 		linesAdded += scan.linesAdded;
+		prints += shapes.print.reduce((sum, [label]) => sum + countLabel(scan, label), 0);
+		loggers += shapes.logger.reduce((sum, [label]) => sum + countLabel(scan, label), 0);
 		for (const hint of scan.hints) {
 			const isPrint = shapes.print.some(([label]) => label === hint.pattern);
-			const tool = TOOL_PATH.test(hint.file);
 			hints.push({
 				...hint,
 				pattern: `${language}:${hint.pattern}`,
-				flags: { ...hint.flags, kind: isPrint ? "print" : "logger", toolPath: tool },
+				flags: {
+					...hint.flags,
+					kind: isPrint ? "print" : "logger",
+					toolPath: TOOL_PATH.test(hint.file),
+				},
 			});
-			if (isPrint) {
-				prints += 1;
-				if (tool) {
-					printsInToolPaths += 1;
-				}
-			} else {
-				loggers += 1;
-			}
 		}
 	}
-	// Whether the project already logs through a logger: a definition or import in the checkout.
+	const listed = hints.slice(0, 40);
+	const printsInToolPaths = listed.filter(
+		(h) => h.flags.kind === "print" && h.flags.toolPath === true,
+	).length;
+	// Whether a bounded lexical search of the checkout matches a logger definition or import.
 	const existing = await grep(
 		String.raw`\bLogger\s*\(|\bos_log\b|\bTimber\b|LoggerFactory|import logging|from 'pino'|from "pino"|winston`,
 		repoPath,
 		{ maxResults: 5 },
 	);
-	const directions: string[] = [];
+	const directions: string[] =
+		prints + loggers > listed.length
+			? [
+					`${String(prints + loggers)} diagnostic line(s) added; ${String(listed.length)} are listed. The counts by kind cover every line; the tool-path count covers only the listed rows.`,
+				]
+			: [];
 	if (prints > 0) {
 		directions.push(
-			`${prints} print-style call(s) added (${printsInToolPaths} under a tool or script path) against ${loggers} logger call(s); the checkout ${existing.length > 0 ? `already defines a logger (${existing[0]?.file ?? ""})` : "defines no logger"}. Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic.`,
+			`${prints} print-style call(s) added (${printsInToolPaths} listed under a tool or script path) against ${loggers} logger call(s); ${existing.length > 0 ? `the checkout matches a logger (${existing[0]?.file ?? ""})` : "a bounded search of the checkout matched no logger definition, which does not show there is none"}. Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic.`,
 		);
 	} else if (loggers > 0) {
 		directions.push(
@@ -130,7 +135,7 @@ export default async function logsThroughThePlatformLogger(
 		);
 	}
 	return {
-		hints: hints.slice(0, 40),
+		hints: listed,
 		metrics: {
 			printsAdded: prints,
 			loggerCallsAdded: loggers,

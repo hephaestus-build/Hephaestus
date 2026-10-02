@@ -35,8 +35,8 @@ and the boundary). A MET claim based on absence requires exhaustive evidence cov
 find a problem is not proof that the standard is met. UNDETERMINED requires
 `evidence.undecidability` (the open question and what would settle it). A failed, missing, truncated,
 or blocked required source is a capture/readiness failure: record no observation, never UNDETERMINED.
-An undecided observation on a pull request must show it read the change: cite the diff or name
-`scm.pull-request.diff` among consulted sources. Severity follows the practice's own impact criteria.
+An undecided observation for a practice whose `readsSources` include `scm.pull-request.diff` must
+show it read the change: cite the diff or name it among consulted sources. Severity follows the practice's own impact criteria.
 Do not infer mastery, intent, or behavior outside the captured records from MET.
 
 `evidenceRationale` is read verbatim by the developer: plain prose about what you looked for, where,

@@ -2,9 +2,11 @@
 // closed list in the criteria asks about — icon-only controls, images, fixed-size fonts, height caps,
 // colour-only state — and the accessibility modifiers added alongside them. The review reads the view
 // chain; the script counts what there is to read and how many labels arrived with it.
-import { countLabel, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
+import { countLabel, sampleNote, scanAddedLines, type SourcePattern } from "../lib/source-scan.ts";
 import type { DiffFile, PullRequestMetadata } from "../lib/types.ts";
 
+// Font.custom(_:size:) scales with the body style, custom(_:size:relativeTo:) with the style it names;
+// only custom(_:fixedSize:) does not scale. Font.system(size:) is fixed at the size it is given.
 const INTERFACE_LINES: readonly SourcePattern[] = [
 	[
 		"accessibility modifier",
@@ -13,10 +15,9 @@ const INTERFACE_LINES: readonly SourcePattern[] = [
 	["Label with text", /\bLabel\s*\(\s*"/u],
 	["Image(systemName:)", /\bImage\s*\(\s*systemName:/u],
 	["Image(asset)", /\bImage\s*\(\s*(?:"|decorative:|[a-z]\w*\.)/u],
-	[
-		"fixed-size font",
-		/\.font\s*\(\s*\.system\s*\(\s*size:|\.font\s*\(\s*\.custom\s*\([^)]*size:\s*\d/u,
-	],
+	["fixed-size custom font", /\.custom\s*\([^)]*\bfixedSize:/u],
+	["system font with a point size", /\.system\s*\(\s*size:/u],
+	["scaled custom font", /\.custom\s*\([^)]*\bsize:/u],
 	[
 		"semantic font",
 		/\.font\s*\(\s*\.(?:largeTitle|title[23]?|headline|subheadline|body|callout|footnote|caption2?)\b/u,
@@ -43,11 +44,13 @@ export default async function makesUiAccessibleByDefault(
 	});
 	const count = (label: string) => countLabel(scan, label);
 	const metrics = {
-		interfaceLinesAdded: scan.hints.length,
+		interfaceLinesAdded: scan.matched,
 		symbolImages: count("Image(systemName:)"),
 		assetImages: count("Image(asset)"),
 		accessibilityModifiers: count("accessibility modifier"),
-		fixedSizeFonts: count("fixed-size font"),
+		fixedSizeCustomFonts: count("fixed-size custom font"),
+		systemFontsWithPointSize: count("system font with a point size"),
+		scaledCustomFonts: count("scaled custom font"),
 		semanticFonts: count("semantic font"),
 		heightCaps: count("height cap"),
 		colourByState: count("colour by state"),
@@ -55,15 +58,20 @@ export default async function makesUiAccessibleByDefault(
 		filesScanned: scan.filesScanned,
 		linesAdded: scan.linesAdded,
 	};
-	const directions: string[] = [];
+	const directions: string[] = [...sampleNote(scan)];
 	if (metrics.symbolImages + metrics.assetImages > 0) {
 		directions.push(
 			`${metrics.symbolImages + metrics.assetImages} image(s) added against ${metrics.accessibilityModifiers} accessibility modifier(s) — for each image inside a Button, Toggle or tap gesture, read the whole view chain for a label or a Label title.`,
 		);
 	}
-	if (metrics.fixedSizeFonts > 0) {
+	if (metrics.fixedSizeCustomFonts > 0) {
 		directions.push(
-			`${metrics.fixedSizeFonts} fixed-size font(s) added — a .custom font is scaled only with relativeTo:.`,
+			`${metrics.fixedSizeCustomFonts} custom font(s) with fixedSize: added — these do not scale with the user's text size.`,
+		);
+	}
+	if (metrics.systemFontsWithPointSize > 0) {
+		directions.push(
+			`${metrics.systemFontsWithPointSize} system font(s) with a point size added — fixed unless the size itself scales (a @ScaledMetric value); read where each size comes from. A custom font given size: scales with the body style and is not fixed.`,
 		);
 	}
 	if (metrics.heightCaps > 0) {
