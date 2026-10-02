@@ -886,7 +886,14 @@ class MentorChatServiceTest extends BaseUnitTest {
         runTurnSync();
 
         String wire = String.join("", emitter.rawData);
-        assertThat(wire).contains("[DONE]").doesNotContain("502", "private upstream");
+        // The status code is checked only where an error is shown: random message ids can contain "502".
+        assertThat(wire).contains("[DONE]").doesNotContain("private upstream");
+        List<String> errorTexts = emitter.rawData.stream()
+                .filter(raw -> raw.startsWith("{"))
+                .map(mapper::readTree)
+                .filter(frame -> frame.path("type").asString().equals("error"))
+                .map(frame -> frame.path("errorText").asString())
+                .toList();
         if (recovered) {
             assertThat(emitter.recordedTypes()).contains("finish").doesNotContain("error");
             verify(persistence).complete(any(), any(), any());
@@ -894,7 +901,7 @@ class MentorChatServiceTest extends BaseUnitTest {
             assertOutcomeRecorded(MentorChatMetrics.Outcome.SUCCESS);
         } else {
             assertThat(emitter.recordedTypes()).contains("error").doesNotContain("finish");
-            assertThat(wire).contains("Heph couldn't finish this reply. Please try again.");
+            assertThat(errorTexts).containsExactly("Heph couldn't finish this reply. Please try again.");
             verify(persistence).interrupt(any(), any(), any());
             verify(persistence, never()).complete(any(), any(), any());
             verify(persistence, never()).recordDelivery(any(), any());
