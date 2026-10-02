@@ -77,12 +77,13 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         when(practiceRepository.findByWorkspaceIdAndSlugIn(7L, List.of("clear-feedback")))
                 .thenReturn(List.of(practice));
 
-        List<PracticeRevision> pinned = service.forReview(7L, List.of("clear-feedback"));
+        List<PracticeRevisionService.ReviewRevision> pinned = service.forReview(7L, List.of("clear-feedback"));
 
-        assertThat(pinned).singleElement().satisfies(revision -> {
-            assertThat(revision.getRevisionNumber()).isEqualTo(5);
-            assertThat(revision.getReviewRuleFingerprint()).startsWith("v5:");
-            assertThat(revision.getCriteria()).isEqualTo("Give specific feedback");
+        assertThat(pinned).singleElement().satisfies(pin -> {
+            assertThat(pin.appended()).isTrue();
+            assertThat(pin.revision().getRevisionNumber()).isEqualTo(5);
+            assertThat(pin.revision().getReviewRuleFingerprint()).startsWith("v5:");
+            assertThat(pin.revision().getCriteria()).isEqualTo("Give specific feedback");
         });
     }
 

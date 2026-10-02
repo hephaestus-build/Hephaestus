@@ -146,6 +146,8 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
                     .haveSimpleName("PracticeProfileReviewRunController")
                     .orShould()
                     .haveSimpleName("PracticesAcrossWorkspaceController")
+                    .orShould()
+                    .haveSimpleName("DevPracticeRevisionController")
                     .because(
                             "Only PracticeCatalogController, PracticeReleaseController, PracticeGroupController, ObservationController, "
                                     + "FeedbackResponseController, PracticeReviewSettingsController, PracticeReviewOutputController, "
@@ -154,7 +156,8 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
                                     + "PracticeGroupStandingController, PracticeStandingController and "
                                     + "PracticeProfileOverviewController, PracticeProfileReviewRunController and "
                                     + "PracticesAcrossWorkspaceController are "
-                                    + "allowed REST entry points");
+                                    + "allowed REST entry points, with DevPracticeRevisionController while dev "
+                                    + "seeding is enabled");
             rule.check(classes);
         }
     }
