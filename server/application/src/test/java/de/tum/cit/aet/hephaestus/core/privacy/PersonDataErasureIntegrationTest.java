@@ -121,6 +121,181 @@ class PersonDataErasureIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldIncludeLegacyProviderCommentReferencesAndRejectTheirChangedInspection() {
+        var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
+        jdbc.update("UPDATE agent_job SET delivery_comment_id='legacy-11' WHERE id=?", fixture.jobId());
+        var preview = personData.preview(
+                fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null)));
+        assertThat(preview.externalDeliveries())
+                .containsExactly(new PersonDataContributor.ExternalDelivery(
+                        fixture.workspaceId(), "https://privacy-gitlab.example.com/team/repo/-/merge_requests/19"));
+        assertThat(personData
+                        .export(preview.request().getId())
+                        .path("stores")
+                        .path("agent_job")
+                        .get(0)
+                        .path("delivery_comment_id")
+                        .asString())
+                .isEqualTo("legacy-11");
+        assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), false))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("un-deliver runbook");
+        jdbc.update("UPDATE agent_job SET delivery_comment_id='legacy-12' WHERE id=?", fixture.jobId());
+        assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), true))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("preview scope changed");
+    }
+
+    @Test
+    void shouldKeepLegacyProviderFeedbackWhenItsExactInspectionLocatorIsMissing() {
+        var fixture = externalInspectionFixture(null);
+        jdbc.update("UPDATE agent_job SET delivery_comment_id='legacy-11' WHERE id=?", fixture.jobId());
+        assertThatThrownBy(() -> personData.preview(
+                        fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null))))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining(fixture.jobId().toString())
+                .hasMessageContaining("no exact reviewed-work inspection locator");
+        assertThat(jdbc.queryForObject(
+                        "SELECT delivery_comment_id FROM agent_job WHERE id=?", String.class, fixture.jobId()))
+                .isEqualTo("legacy-11");
+    }
+
+    @Test
+    void shouldSuppressEverySelectedReviewDuringAdmissionAndRevokeItsHashOnCompletion() {
+        var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
+        var preview = personData.preview(
+                fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null)));
+        personData.requestErasure(preview.request().getId(), fixture.administratorId(), true);
+        assertThat(suppression.isReviewJobSuppressed(fixture.jobId())).isTrue();
+        assertThat(suppression.isReviewJobSuppressed(UUID.randomUUID())).isFalse();
+        personData.run(preview.request().getId());
+        assertThat(personData.get(preview.request().getId()).request().getState())
+                .isEqualTo(PersonDataRequest.State.COMPLETE);
+        assertThat(suppression.isReviewJobSuppressed(fixture.jobId())).isFalse();
+        assertThat(jdbc.queryForObject(
+                        "SELECT job_token_hash FROM agent_job WHERE id=?", String.class, fixture.jobId()))
+                .isNull();
+    }
+
+    @Test
+    void shouldShowTheExactReviewedWorkLocatorWhenProviderWritesAreUnconfirmed() {
+        var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
+        jdbc.update("""
+                UPDATE feedback_dispatch SET state='UNCERTAIN',write_started=TRUE,
+                    inline_write_started=TRUE,write_started_at=CURRENT_TIMESTAMP WHERE id=?
+                """, fixture.dispatchId());
+        var preview = personData.preview(
+                fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null)));
+        assertThat(preview.externalDeliveries())
+                .containsExactly(new PersonDataContributor.ExternalDelivery(
+                        fixture.workspaceId(), "https://privacy-gitlab.example.com/team/repo/-/merge_requests/19"));
+        var exported =
+                personData.export(preview.request().getId()).path("stores").path("feedback_dispatch");
+        assertThat(exported.get(0).path("state").asString()).isEqualTo("UNCERTAIN");
+        assertThat(exported.get(0).path("write_started").asBoolean()).isTrue();
+        assertThat(exported.get(0).path("inline_write_started").asBoolean()).isTrue();
+        assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), false))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("un-deliver runbook");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM feedback_dispatch WHERE id=?", Long.class, fixture.dispatchId()))
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldRejectThePreviewWhenAProviderWriteChangesOnTheSamePrimaryKey() {
+        var fixture = externalInspectionFixture("https://privacy-gitlab.example.com/team/repo/-/merge_requests/19");
+        var preview = personData.preview(
+                fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null)));
+        jdbc.update("""
+                UPDATE feedback_dispatch SET state='SENT',write_started=TRUE,
+                    write_started_at=CURRENT_TIMESTAMP,delivered_external_ref='comment-99',
+                    delivered_external_url='https://privacy-gitlab.example.com/team/repo/-/merge_requests/19#note_99'
+                WHERE id=?
+                """, fixture.dispatchId());
+        assertThatThrownBy(() -> personData.export(preview.request().getId()))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("preview scope changed");
+        assertThatThrownBy(() -> personData.requestErasure(preview.request().getId(), fixture.administratorId(), true))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining("preview scope changed");
+        assertThat(personData.get(preview.request().getId()).request().getState())
+                .isEqualTo(PersonDataRequest.State.PREVIEW);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM person_suppression", Long.class))
+                .isZero();
+        var refreshed = personData.preview(
+                fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null)));
+        assertThat(refreshed.externalDeliveries())
+                .contains(new PersonDataContributor.ExternalDelivery(
+                        fixture.workspaceId(),
+                        "https://privacy-gitlab.example.com/team/repo/-/merge_requests/19#note_99"));
+        assertThat(personData
+                        .export(refreshed.request().getId())
+                        .path("stores")
+                        .path("feedback_dispatch")
+                        .get(0)
+                        .path("delivered_external_url")
+                        .asString())
+                .endsWith("#note_99");
+    }
+
+    @Test
+    void shouldKeepTheProviderWriteWhenItsExactInspectionLocatorIsMissing() {
+        var fixture = externalInspectionFixture(null);
+        jdbc.update(
+                "UPDATE feedback_dispatch SET state='UNCERTAIN',inline_write_started=NULL,package_content='{}'::jsonb WHERE id=?",
+                fixture.dispatchId());
+        assertThatThrownBy(() -> personData.preview(
+                        fixture.administratorId(), null, List.of(new PersonIdentity(fixture.providerId(), "42", null))))
+                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+                .hasMessageContaining(fixture.dispatchId().toString())
+                .hasMessageContaining("no exact reviewed-work locator");
+        assertThat(jdbc.queryForObject(
+                        "SELECT count(*) FROM feedback_dispatch WHERE id=?", Long.class, fixture.dispatchId()))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM person_data_request", Long.class))
+                .isZero();
+    }
+
+    private ExternalInspectionFixture externalInspectionFixture(
+            @org.jspecify.annotations.Nullable String reviewedWorkUrl) {
+        var provider = providers.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.GITLAB, "https://privacy-gitlab.example.com"));
+        var target = users.saveAndFlush(TestUserFactory.createUser(42L, "display-only", provider));
+        var administrator = new Account("Administrator");
+        administrator.setAppRole(Account.AppRole.APP_ADMIN);
+        administrator = accounts.saveAndFlush(administrator);
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("external-inspection"));
+        var job = new AgentJob();
+        job.setWorkspace(workspace);
+        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        job.setArtifactKind(ArtifactKinds.PULL_REQUEST);
+        job.setStatus(AgentJobStatus.COMPLETED);
+        job.setConfigSnapshot(mapper.createObjectNode());
+        var metadata = mapper.createObjectNode().put("author_id", target.getId());
+        if (reviewedWorkUrl != null) metadata.put("pr_url", reviewedWorkUrl);
+        job.setMetadata(metadata);
+        job = agentJobRepository.saveAndFlush(job);
+        UUID dispatchId = UUID.randomUUID();
+        jdbc.update("""
+                INSERT INTO feedback_dispatch(id,destination_key,workspace_id,agent_job_id,destination,state,body,
+                    practice_slugs,package_content,delivered_placements,write_started,inline_write_started,
+                    next_attempt_at,attempt_count,created_at,updated_at)
+                VALUES (?,?,?,?,'AUTOMATIC_REVIEW_PACKAGE','PENDING','Prepared feedback','[]'::jsonb,
+                    '{"diffNotes":[]}'::jsonb,'[]'::jsonb,FALSE,FALSE,CURRENT_TIMESTAMP,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+                """, dispatchId, "review:" + job.getId(), workspace.getId(), job.getId());
+        return new ExternalInspectionFixture(
+                Objects.requireNonNull(administrator.getId()),
+                Objects.requireNonNull(provider.getId()),
+                Objects.requireNonNull(workspace.getId()),
+                job.getId(),
+                dispatchId);
+    }
+
+    private record ExternalInspectionFixture(
+            long administratorId, long providerId, long workspaceId, UUID jobId, UUID dispatchId) {}
+
+    @Test
     void erasesTargetAcrossTwoWorkspacesAndEveryRegisteredStoreWithoutTouchingAnotherPerson() {
         IdentityProvider scm = providers.saveAndFlush(
                 new IdentityProvider(IdentityProviderType.GITLAB, "https://privacy-gitlab.example.com"));

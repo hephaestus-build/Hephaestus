@@ -8,6 +8,9 @@ public interface PersonProcessingSuppression {
 
     boolean isUserSuppressed(long userId);
 
+    /** Frozen review jobs are unavailable from erasure admission through every resumable step. */
+    boolean isReviewJobSuppressed(java.util.UUID jobId);
+
     /** Current source attribution, including resynced provider records, scoped to the requesting workspace. */
     boolean isArtifactSuppressed(long workspaceId, String artifactKind, long artifactId);
 }

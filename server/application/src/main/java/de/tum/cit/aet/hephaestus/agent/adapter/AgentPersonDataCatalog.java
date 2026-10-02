@@ -39,6 +39,43 @@ public class AgentPersonDataCatalog implements PersonDataCatalog {
                         "metadata='{}'::jsonb,output=NULL,evidence_snapshot=NULL,container_logs=NULL,config_snapshot='{}'::jsonb,job_token=gen_random_uuid()::text,job_token_hash=NULL,error_message=NULL,delivery_comment_id=NULL,review_readiness=NULL",
                         -80) {
                     @Override
+                    public PersonDataSelection select(PersonScope scope) {
+                        var selected = super.select(scope);
+                        return selected.withExternalDeliveryFacts(legacyProviderWrites(selected));
+                    }
+
+                    private List<tools.jackson.databind.JsonNode> legacyProviderWrites(PersonDataSelection selection) {
+                        return querySelected("""
+                                jsonb_build_object('id',t.id,'workspaceId',t.workspace_id,
+                                  'commentRef',t.delivery_comment_id,'state',t.delivery_status,
+                                  'locator',COALESCE(NULLIF(t.metadata->>'pr_url',''),
+                                    NULLIF(t.metadata->>'issue_url','')))::text
+                                """, "agent_job t", selection).stream()
+                                .filter(row -> row.path("commentRef").isString()
+                                        && !row.path("commentRef").asString().isBlank())
+                                .toList();
+                    }
+
+                    @Override
+                    public List<ExternalDelivery> externalDeliveries(PersonDataSelection selection) {
+                        return legacyProviderWrites(selection).stream()
+                                .map(row -> {
+                                    var locator = row.path("locator");
+                                    if (!locator.isString()
+                                            || locator.asString().isBlank())
+                                        throw new org.springframework.web.server.ResponseStatusException(
+                                                org.springframework.http.HttpStatus.CONFLICT,
+                                                "Legacy provider feedback job "
+                                                        + row.path("id").asString()
+                                                        + " has no exact reviewed-work inspection locator");
+                                    return new ExternalDelivery(
+                                            row.path("workspaceId").asLong(), locator.asString());
+                                })
+                                .distinct()
+                                .toList();
+                    }
+
+                    @Override
                     public void prepareErasure(PersonDataSelection selection) {
                         for (var row : export(selection)) {
                             if (java.util.Set.of("QUEUED", "RUNNING")

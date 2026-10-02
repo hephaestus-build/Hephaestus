@@ -142,6 +142,19 @@ public class PersonSuppressionService implements PersonProcessingSuppression {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(
+            propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
+            readOnly = true)
+    public boolean isReviewJobSuppressed(UUID jobId) {
+        return Boolean.TRUE.equals(
+                jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM person_data_request
+                  WHERE state IN ('ERASING','FAILED') AND selections_json IS NOT NULL
+                    AND (selections_json::jsonb)->'agent_job'->'rows' @> CAST(? AS jsonb))
+                """, Boolean.class, "[{\"columns\":{\"id\":\"" + jobId + "\"}}]"));
+    }
+
+    @Override
     public boolean isUserSuppressed(long userId) {
         return jdbc
                 .query(

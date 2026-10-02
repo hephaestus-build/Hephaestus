@@ -261,7 +261,9 @@ privacy contact in the instance notice; this page is not a data-subject request 
    session capabilities. Handle the file as personal data; the completed erasure receipt is not an
    export archive.
 4. For erasure, follow [Un-deliver external feedback, then purge](#un-deliver-external-feedback-then-purge)
-   for each provider locator in the preview. Confirm that those external copies have been removed.
+   for each provider locator in the preview. An unconfirmed write can have no comment ID: inspect
+   the linked reviewed work for both summary and inline feedback, including preserved discussions.
+   Confirm that the external copies have been removed.
    The application does not automatically delete comments already posted on a provider.
 5. Type **ERASE** and start erasure. Keep the opaque request URL to check progress after a reload.
    The job records progress one store at a time. If it stops, correct the operational failure and
@@ -272,6 +274,15 @@ privacy contact in the instance notice; this page is not a data-subject request 
    acting administrator, operational state, times and counts, not the erased content or selected
    subject keys. Working request keys are cleared on completion; abandoned previews are cleared on
    expiry. Failed jobs retain the working keys required to resume.
+
+Review-package provider requests hold capture admission until their outcomes have been recorded. Erasure cannot
+pass an in-flight provider request. A queued call cannot recreate feedback after its review has
+entered erasure or its job capability has been revoked.
+
+Delivery facts are frozen with the preview, not only row IDs. If a provider write starts or its
+result changes after inspection, export and erasure reject the stale preview. Create a new preview
+and inspect the current locators before confirming removal again. An unconfirmed write or legacy comment with no
+exact inspection locator stops the request and names its dispatch or review; it is not treated as never delivered.
 
 The preview also includes reviews whose captured evidence contains the person's exact native identity,
 not only reviews addressed to that person. Their derived observations and feedback are included in

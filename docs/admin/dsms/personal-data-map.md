@@ -207,3 +207,23 @@ freezes the exact job IDs from native-identity capture receipts. Observation, fe
 contributors use those same IDs for export and erasure. A receipt's native provenance stays after
 folder deletion is acknowledged until the person-erasure step clears it. Unrelated review jobs and
 other people's profiles and replies are not selected through repository history alone.
+
+Provider-feedback inspection also covers unconfirmed summary and inline writes.
+`ExternalFeedbackPersonDataStore` includes the exact reviewed-work locator when the provider has
+not returned a comment handle and freezes a SHA-256 fingerprint of operational delivery facts in
+`PersonDataSelection.externalDeliveryRevision`. A changed write on the same selected row invalidates
+the preview. No feedback body, profile, credential or subject is placed in this fingerprint. An
+unconfirmed write with no exact inspection locator fails closed; erasure cannot silently discard
+its delivery record. The JSON export includes `feedback_dispatch.delivered_external_url`.
+
+`PracticeFeedbackPersonDataAdmission.deliver` retains the shared copy-admission lease
+from dispatch intent creation through provider requests and their persisted outcomes.
+`PersonSuppressionService.isReviewJobSuppressed` reads the exact frozen job keys in a fresh
+transaction while an erasure is active or resumable. A leased-session check of the job capability
+hash rejects stale queued callers after completion; erasure revokes that hash without retaining
+a second subject identity. This applies to automatic packages, approved packages and recovery.
+
+`AgentPersonDataCatalog` also includes legacy provider comment references retained on jobs,
+even when no dispatch or feedback placement was projected. It lists the exact reviewed-work
+locator and freezes those inspection facts with the same fingerprint rule. A changed legacy
+comment reference requires a new preview; a missing exact locator fails closed before deletion.

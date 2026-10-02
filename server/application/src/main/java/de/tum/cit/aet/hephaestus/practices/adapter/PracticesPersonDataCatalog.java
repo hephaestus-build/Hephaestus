@@ -99,7 +99,7 @@ public class PracticesPersonDataCatalog implements PersonDataCatalog, PersonConv
                         "feedback_dispatch",
                         "feedback_dispatch",
                         "t.feedback_id IN (" + FEEDBACK_IDS + ")" + " OR t.agent_job_id IN (" + JOB_IDS + ")",
-                        "id,destination_key,workspace_id,agent_job_id,feedback_id,destination,state,body,practice_slugs,package_content,delivered_placements,write_started,delivered_external_ref,lease_owner,lease_expires_at,next_attempt_at,attempt_count,suppression_reason,last_error,projected_at,projection_owner,projection_expires_at,created_at,updated_at,write_started_at,inline_write_started",
+                        "id,destination_key,workspace_id,agent_job_id,feedback_id,destination,state,body,practice_slugs,package_content,delivered_placements,write_started,delivered_external_ref,delivered_external_url,lease_owner,lease_expires_at,next_attempt_at,attempt_count,suppression_reason,last_error,projected_at,projection_owner,projection_expires_at,created_at,updated_at,write_started_at,inline_write_started",
                         "id",
                         "",
                         -220),

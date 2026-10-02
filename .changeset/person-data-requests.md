@@ -76,3 +76,12 @@ Slack and Outline connections register their provider instance without requiring
 Connecting another workspace to the same exact instance carries existing processing controls forward,
 including ranked document search. Changing a connected source to a different instance requires a new
 connection; a URL spelling change does not change the instance.
+
+The preview includes unconfirmed provider writes and legacy review comment references as well
+as confirmed comments. Inspect both
+summary and inline feedback at each listed reviewed-work locator before erasure. If the delivery
+state changes after inspection, make a new preview and check the provider again; the application
+will not accept the old confirmation. An unconfirmed write with no exact locator stops the request.
+
+Review-package delivery waits for erasure admission and rejects revoked review jobs. Erasure
+waits for an already active provider request to record its outcome before it removes local data.
