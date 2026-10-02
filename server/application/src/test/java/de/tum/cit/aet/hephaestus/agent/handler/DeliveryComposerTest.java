@@ -336,6 +336,33 @@ class DeliveryComposerTest extends BaseUnitTest {
                 .contains("- The description says what changed but not why.");
         assertThat(note).containsOnlyOnce("The description says what changed but not why.");
         assertThat(note.indexOf("Still open")).isGreaterThan(note.indexOf("The new parser"));
+        assertThat(note).doesNotContain("practice page");
+    }
+
+    @Test
+    void shouldNameOnlyRecurringLapsesWithoutPromisingPrivateFeedback() {
+        ValidatedObservation recurring = negativeObservation(
+                        "describe-what-and-why",
+                        "The description says what changed but not why.",
+                        Severity.MINOR,
+                        null,
+                        null,
+                        "Only the what.")
+                .withKeys(new ObservationKeys("occ-r", "rk-r"));
+        DeliveryContent result = content(DeliveryComposer.composeAdmitted(
+                List.of(recurring),
+                ArtifactKinds.PULL_REQUEST,
+                Map.of(),
+                List.of(),
+                null,
+                Set.of("describe-what-and-why")));
+
+        assertThat(result.mrNote())
+                .contains("**Still open from your earlier changes**")
+                .contains("- The description says what changed but not why.")
+                .doesNotContain("practice page");
+        assertThat(result.withheld()).isEmpty();
+        assertThat(result.summaryContributors()).containsExactly("occ-r");
     }
 
     @Test
