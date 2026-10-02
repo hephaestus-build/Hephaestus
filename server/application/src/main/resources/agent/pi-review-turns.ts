@@ -1,6 +1,8 @@
-// How one review session spends its practices and its time: practices go to the model in turns, a
-// turn per catalog group (chunked when a group is large), and each turn gets a fair share of what is
-// left. Pure rules, so a test can call them; pi-runner.ts reads the workspace at module scope.
+// How one review session spends its practices and its work: practices go to the model in turns, a
+// turn per catalog group (chunked when a group is large), and each turn may spend model calls and output
+// tokens in proportion to the practices it carries — its own budget, whatever the other turns spent.
+// Time bounds nothing here but a run that stops responding. Pure rules, so a test can call them;
+// pi-runner.ts reads the workspace at module scope.
 
 export interface TurnPractice {
 	slug: string;
@@ -46,35 +48,67 @@ export function planTurns(practices: readonly TurnPractice[], maxPerTurn = 6): R
 }
 
 export interface ReviewWindows {
-	/** What the measuring turns may spend in total. */
+	/** When measuring must hand in, so admission and composition still land before the run is stopped. */
 	measureMs: number;
-	/** Reserved for the composition turn; zero when no composition was requested. */
+	/** Kept for composition when it was requested; zero otherwise. */
 	compositionMs: number;
 }
 
-/** Composition gets a fixed reserve of the budget when it was requested; measuring gets the rest. */
+/** The part of the safety ceiling kept for composition. */
+const COMPOSITION_SHARE = 0.15;
+
+/**
+ * How the run's safety ceiling — the time after which a stuck run is stopped — is split, so measuring
+ * hands in early enough for admission and composition. Not a budget: work is bounded by {@link turnBudget}.
+ */
 export function deriveWindows(budgetMs: number, compositionRequested: boolean): ReviewWindows {
 	if (!Number.isFinite(budgetMs) || budgetMs <= 0) {
 		throw new Error(`budgetMs must be a positive number, got: ${budgetMs}`);
 	}
-	const compositionMs = compositionRequested ? Math.floor(budgetMs * 0.15) : 0;
+	const compositionMs = compositionRequested ? Math.floor(budgetMs * COMPOSITION_SHARE) : 0;
 	return { measureMs: budgetMs - compositionMs, compositionMs };
 }
 
-export interface TurnShare {
-	/** When the turn is aborted. */
-	hardMs: number;
-	/** When the turn is asked to record what it has and stop exploring. */
-	softMs: number;
+/** Model calls and output tokens: what a turn may spend, or what it has spent. */
+export interface Work {
+	modelCalls: number;
+	outputTokens: number;
 }
 
-/** A turn's fair share of what is left: the remainder divided by the turns still to run. */
-export function turnShare(remainingMs: number, remainingTurns: number): TurnShare {
-	if (!Number.isInteger(remainingTurns) || remainingTurns < 1) {
-		throw new Error(`remainingTurns must be a positive integer, got: ${remainingTurns}`);
+/**
+ * A turn's budget: one unit per practice it carries, and never less than three units, since a turn
+ * of one practice still reads before it records.
+ */
+export function turnBudget(practices: number, perPractice: Work): Work {
+	if (!Number.isInteger(practices) || practices < 1) {
+		throw new Error(`practices must be a positive integer, got: ${practices}`);
 	}
-	const hardMs = Math.max(0, Math.floor(remainingMs / remainingTurns));
-	return { hardMs, softMs: Math.floor(hardMs * 0.7) };
+	const units = Math.max(3, practices);
+	return {
+		modelCalls: perPractice.modelCalls * units,
+		outputTokens: perPractice.outputTokens * units,
+	};
+}
+
+/**
+ * Whether the turn should record now: two model calls left, or no more output tokens left than writing
+ * what it still owes takes at the pace the session has shown.
+ */
+export function shouldRecordNow(
+	used: Work,
+	budget: Work,
+	unrecorded: number,
+	tokensPerObservation: number,
+): boolean {
+	return (
+		budget.modelCalls - used.modelCalls <= 2 ||
+		budget.outputTokens - used.outputTokens <= Math.max(0, unrecorded) * tokensPerObservation
+	);
+}
+
+/** Whether the turn has spent its budget: it ends after the model call in flight, never within it. */
+export function spent(work: Work, budget: Work): boolean {
+	return work.modelCalls >= budget.modelCalls || work.outputTokens >= budget.outputTokens;
 }
 
 /** The practices with no recorded observation, in the order the review asked about them. */

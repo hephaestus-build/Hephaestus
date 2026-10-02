@@ -143,8 +143,9 @@ task-level note wearing a costume — rewrite it or drop it.
 - `<compositionRequest>` — the bounds for this turn: which lanes are open, how many units
   each may carry, and how many separate pieces of work a pattern needs.
 
-The admitted observations are in this turn already, and the evidence you read while measuring is
-still in your context; read the history files with `read`. This turn writes nothing but feedback.
+The admitted observations are in this turn already, and the brief and the evidence you read while
+measuring are above it; read the history files, and anything a unit must place precisely, with `read`.
+This turn writes nothing but feedback.
 Compose only from the admitted observations.
 
 ---

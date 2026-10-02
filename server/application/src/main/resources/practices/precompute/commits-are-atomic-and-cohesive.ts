@@ -23,7 +23,7 @@ export default async function commitsAreAtomicAndCohesive(
 				]
 			: [
 					describeCommitCount(facts),
-					"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma or a semicolon, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds.",
+					"`joinedClauses` marks a subject that joins clauses with 'and', '&', '+', a comma, a semicolon or a sentence break, or a body with two or more bullets; `moved` counts files renamed with no line changed. Both describe the record, not how many changes a commit holds.",
 				];
 	return {
 		hints: commitRows(facts, contextReference),

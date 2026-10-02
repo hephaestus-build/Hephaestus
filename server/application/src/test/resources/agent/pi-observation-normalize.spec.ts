@@ -109,11 +109,20 @@ void test("an item with no practiceSlug is refused as not an observation, before
 void test("an observation carries no confidence, and one offered is rejected", () => {
 	const out = normalizeObservation(baseObservation());
 	assert.equal("confidence" in out, false);
-	for (const confidence of [-1, 4200, "very", null]) {
+	for (const confidence of [-1, 4200, "very"]) {
 		assert.throws(
 			() => normalizeObservation(baseObservation({ confidence })),
-			/unknown observation field.*confidence/u,
+			/unknown observation field\(s\): confidence; an observation has only practiceSlug, summary, outcome, severity, evidence, evidenceRationale$/u,
 		);
+	}
+	// A stray key with no value carries nothing: dropped, and said so.
+	for (const confidence of [null, ""]) {
+		const notes: string[] = [];
+		assert.equal(
+			"confidence" in normalizeObservation(baseObservation({ confidence }), notes),
+			false,
+		);
+		assert.deepEqual(notes, ["empty field(s) confidence dropped"]);
 	}
 });
 
@@ -479,6 +488,81 @@ void test("a refused citation says which of the coordinate, the side and the tex
 	);
 });
 
+void test("a citation of the diff view itself is placed at the changed line its quote names, when that is one line", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n@@ -10 +10,2 @@\n" +
+		"[L10] -    secure();\n[L10] +    insecure();\n[L11] +    audit();\n" +
+		"diff --git a/src/Log.java b/src/Log.java\n+++ b/src/Log.java\n@@ -3 +3 @@\n[L3] +    audit();\n";
+	// Line 92 of the view, not a coordinate of the change: the quote names src/Auth.java [L10] on NEW.
+	const ofView = { ...citation, path: "work/change/diff.patch", startLine: 92, endLine: 92 };
+	assert.deepEqual(resolveQuote({ ...ofView, quote: "insecure();" }, diff), {
+		quote: "    insecure();",
+		startLine: 10,
+		endLine: 10,
+		path: "src/Auth.java",
+		side: "NEW",
+	});
+	assert.deepEqual(resolveQuote({ ...ofView, quote: "secure();" }, diff), {
+		quote: "    secure();",
+		startLine: 10,
+		endLine: 10,
+		path: "src/Auth.java",
+		side: "OLD",
+	});
+	// A quote on two changed lines, or on none, is refused with what a citation of the change names.
+	assert.match(
+		describeCitationMismatch({ ...ofView, quote: "audit();" }, diff) ?? "",
+		/work\/change\/diff\.patch is the view of the change, not a file in it: cite the changed file's path[\s\S]*occurs 2 times/u,
+	);
+	assert.match(
+		describeCitationMismatch({ ...ofView, quote: "absent();" }, diff) ?? "",
+		/is not a line of the change/u,
+	);
+});
+
+void test("a coordinate copied from a numbered view of diff.patch is read as the line it names", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	// The text occurs twice in the file; the session cites line 7 of diff.patch, as sed -n prints it.
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n" +
+		"@@ -10,0 +10,1 @@\n[L10] + insecure();\n@@ -20,0 +21,1 @@\n[L21] + insecure();\n";
+	assert.deepEqual(
+		resolveQuote({ ...citation, startLine: 7, endLine: 7, quote: "insecure();" }, diff),
+		{ quote: " insecure();", startLine: 21, endLine: 21 },
+	);
+	// A view line that is not a line of the cited file still names nothing: the choice is the session's.
+	assert.match(
+		describeCitationMismatch(
+			{ ...citation, startLine: 4, endLine: 4, quote: "insecure();" },
+			diff,
+		) ?? "",
+		/occurs at \[L10\], \[L21\] — cite the one you mean/u,
+	);
+});
+
+void test("a file the diff shows without numbered lines is refused with what to cite instead", () => {
+	const citation = onlyCitation(normalizeObservation(baseObservation()).evidence.citations);
+	const diff =
+		"diff --git a/src/Auth.java b/src/Auth.java\n--- a/src/Auth.java\n+++ b/src/Auth.java\n" +
+		"@@ -10 +10 @@\n[L10] + insecure();\n" +
+		"diff --git a/logo.png b/logo.png\nnew file mode 100644\nBinary files /dev/null and b/logo.png differ\n" +
+		"diff --git a/old.txt b/new.txt\nsimilarity index 100%\nrename from old.txt\nrename to new.txt\n" +
+		"diff --git a/gone.txt b/gone.txt\ndeleted file mode 100644\n--- a/gone.txt\n+++ /dev/null\n" +
+		"@@ -1 +0,0 @@\n[L1] -bye\n";
+	const at = (path: string, side: "OLD" | "NEW" = "NEW") =>
+		describeCitationMismatch({ ...citation, path, side, startLine: 361, endLine: 361 }, diff) ?? "";
+
+	// A binary file and a rename without edits have a header only: the commit that touches them is citable.
+	assert.match(at("logo.png"), /no numbered lines in the diff[\s\S]*commits\.json/u);
+	assert.match(at("new.txt"), /no numbered lines in the diff/u);
+	assert.match(at("old.txt", "OLD"), /no numbered lines in the diff/u);
+	// A deleted file's lines are on the old side.
+	assert.match(at("gone.txt"), /no lines on the NEW side[\s\S]*on the OLD side/u);
+	// A path the change never names is not a file of the change at all.
+	assert.match(at("elsewhere.txt"), /the change does not touch elsewhere\.txt/u);
+});
+
 void test("removed-line citations use old-side coordinates", () => {
 	const citation: NormalizedCitation = {
 		...onlyCitation(normalizeObservation(baseObservation()).evidence.citations),
@@ -630,10 +714,85 @@ void test("historical citations preserve a full revision for trusted admission",
 		() => normalizeEvidence({ citations: [{ ...citation, revision: "HEAD~1" }] }, "NOT_MET"),
 		/full commit SHA/u,
 	);
+	// Whether a revision applies is decided once the manifest has settled the source, so it is kept
+	// here; the runner drops it from any citation that is not of the repository, with a note.
+	assert.equal(
+		normalizeEvidence({ citations: [{ ...citation, sourceKind: "scm.issue.core" }] }, "NOT_MET")
+			.citations[0]?.revision,
+		citation.revision,
+	);
+});
+
+void test("a citation is completed from the manifest and its line numbers read as written", () => {
+	const notes: string[] = [];
+	const staged = new Map([
+		["inputs/context/metadata.json", "scm.pull-request.core"],
+		["inputs/context/change.json", "scm.pull-request.diff"],
+	]);
+	const [record, change] = normalizeEvidence(
+		{
+			citations: [
+				{ path: "inputs/context/metadata.json", startLine: "[L3]", quote: "x" },
+				{
+					artifactPath: "inputs/context/change.json",
+					path: "src/Auth.java",
+					side: "NEW",
+					startLine: "L10",
+					endLine: "12",
+					quote: "y",
+				},
+			],
+		},
+		"NOT_MET",
+		{ sourceOf: (artifact) => staged.get(artifact), notes },
+	).citations;
+	assert.deepEqual(
+		[record?.artifactPath, record?.sourceKind, record?.startLine],
+		["inputs/context/metadata.json", "scm.pull-request.core", 3],
+	);
+	assert.deepEqual(
+		[change?.sourceKind, change?.startLine, change?.endLine],
+		["scm.pull-request.diff", 10, 12],
+	);
+	assert.deepEqual(notes, [
+		"citation 1: artifactPath filled in as inputs/context/metadata.json, the staged record the path names",
+		"citation 1: sourceKind filled in as scm.pull-request.core, the source that staged inputs/context/metadata.json",
+		'citation 1: startLine "[L3]" read as 3',
+		"citation 2: sourceKind filled in as scm.pull-request.diff, the source that staged inputs/context/change.json",
+		'citation 2: startLine "L10" read as 10',
+		'citation 2: endLine "12" read as 12',
+	]);
+	// A single citation's notes need no number; the observation passes the manifest through.
+	const single: string[] = [];
+	const observation = normalizeObservation(
+		baseObservation({
+			evidence: {
+				citations: [{ path: "inputs/context/metadata.json", startLine: "[L3]", quote: "x" }],
+			},
+		}),
+		single,
+		(artifact) => staged.get(artifact),
+	);
+	assert.equal(onlyCitation(observation.evidence.citations).sourceKind, "scm.pull-request.core");
+	assert.deepEqual(single, [
+		"artifactPath filled in as inputs/context/metadata.json, the staged record the path names",
+		"sourceKind filled in as scm.pull-request.core, the source that staged inputs/context/metadata.json",
+		'startLine "[L3]" read as 3',
+	]);
+	// What the manifest does not know is still asked for, naming the citation it is missing from.
 	assert.throws(
 		() =>
-			normalizeEvidence({ citations: [{ ...citation, sourceKind: "scm.issue.core" }] }, "NOT_MET"),
-		/scm.repository.tree/u,
+			normalizeEvidence(
+				{
+					citations: [
+						{ path: "a.ts", startLine: 1 },
+						{ path: "b.ts", startLine: 1 },
+					],
+				},
+				"NOT_MET",
+				{ sourceOf: () => undefined },
+			),
+		/^Error: citation 1: evidence citation sourceKind is required$/u,
 	);
 });
 
@@ -808,6 +967,58 @@ void test("incompatible evidence warrants are rejected, not discarded", () => {
 	);
 });
 
+void test("a field sent where it does not belong is read from there and named", () => {
+	const { evidence, ...rest } = baseObservation();
+	const notes: string[] = [];
+	// citations beside the observation, and the rationale under evidence: each moved to its home.
+	const { evidenceRationale, ...withoutRationale } = rest;
+	const rehomed = normalizeObservation(
+		{ ...withoutRationale, citations: evidence.citations, evidence: { evidenceRationale } },
+		notes,
+	);
+	assert.equal(rehomed.evidenceRationale, evidenceRationale);
+	assert.equal(rehomed.evidence.citations.length, 1);
+	assert.deepEqual(notes, [
+		"evidenceRationale read from under evidence and recorded beside it, where it belongs; nothing to resend",
+		"citations read from where they were sent and recorded under evidence, where they belong; nothing to resend",
+	]);
+	// The search fields beside a MET observation, with no search wrapper at all.
+	const met = normalizeObservation(
+		{ ...rest, outcome: "MET", severity: null, evidence, ...goodSearch },
+		notes,
+	);
+	assert.deepEqual(met.evidence.search, goodSearch);
+	assert.equal(
+		notes.at(-1),
+		"search{lookedFor, boundary, consulted} read from where they were sent and recorded under evidence, where they belong; nothing to resend",
+	);
+	// The fields of an inapplicability, sent straight under evidence: its own fields name the branch.
+	const inapplicable = normalizeObservation(
+		{
+			...rest,
+			outcome: "NOT_APPLICABLE",
+			severity: null,
+			evidence: { citations: evidence.citations, ...goodInapplicability },
+		},
+		notes,
+	);
+	assert.deepEqual(inapplicable.evidence.inapplicability, goodInapplicability);
+	assert.equal(
+		notes.at(-1),
+		"inapplicability{subject, ruledOutBy, consulted} read from where they were sent and recorded under evidence, where they belong; nothing to resend",
+	);
+	// A rehomed branch is still held to its outcome: an inapplicability beside NOT_MET is refused.
+	assert.throws(
+		() => normalizeObservation({ ...rest, evidence, ...goodInapplicability }),
+		/evidence\.inapplicability is permitted only for NOT_APPLICABLE/u,
+	);
+	// A field present in both places is not guessed at: the unknown-field check names it.
+	assert.throws(
+		() => normalizeObservation({ ...rest, evidence, citations: [] }),
+		/unknown observation field\(s\): citations/u,
+	);
+});
+
 void test("the wire contract rejects outcome aliases and text coerced from numbers", () => {
 	for (const outcome of ["met", "NOT-MET", "not met", " MET "]) {
 		assert.throws(() => normalizeObservation(baseObservation({ outcome })), /invalid outcome/u);
@@ -882,11 +1093,69 @@ void test("an absence-based MET claim needs exhaustive captured evidence", () =>
 	);
 	assert.throws(
 		() => validateSearchScope(observation, new Set(), new Set(goodSearch.consulted)),
-		/declares no source/u,
+		/^Error: MET for 'writes-focused-pull-requests' rests on an absence claim, and the practice declares no source it searches exhaustively, so no search can bound that claim\. Record what the evidence does show: MET from cited evidence, NOT_APPLICABLE when the work gives the practice no occasion, or UNDETERMINED with what would settle it$/u,
 	);
 	assert.throws(
 		() => validateSearchScope(observation, new Set(["unread"]), new Set(goodSearch.consulted)),
-		/without searching/u,
+		/^Error: an absence claim for 'writes-focused-pull-requests' rests on searching unread as well: add it to evidence\.search\.consulted once you have searched it$/u,
 	);
 	validateSearchScope(observation, new Set(goodSearch.consulted), new Set(goodSearch.consulted));
+});
+
+void test("a NOT_MET search names every exhaustive source it left out", () => {
+	const observation = normalizeObservation(baseObservation({ evidence: { search: goodSearch } }));
+	const available = new Set(["scm.review-threads", "scm.linked-work-items", "scm.issue.core"]);
+	// NOT_MET from a bounded search is not an absence-only MET: no exhaustive source is required.
+	assert.doesNotThrow(() => validateSearchScope(observation, new Set(), available));
+	assert.throws(
+		() =>
+			validateSearchScope(
+				observation,
+				new Set(["scm.review-threads", "scm.linked-work-items", "scm.issue.core"]),
+				available,
+			),
+		/rests on searching scm\.issue\.core, scm\.linked-work-items as well: add them to evidence\.search\.consulted once you have searched them$/u,
+	);
+});
+
+void test("a NOT_MET observation without a severity is refused with the scale to choose from", () => {
+	for (const severity of [null, undefined]) {
+		assert.throws(
+			() => normalizeObservation(baseObservation({ severity })),
+			/^Error: invalid severity '(?:null|undefined)' \(missing\): one of CRITICAL, MAJOR, MINOR, INFO$/u,
+		);
+	}
+	// A word of the scale in another spelling is not that word.
+	assert.throws(
+		() => normalizeObservation(baseObservation({ severity: "major" })),
+		/^Error: invalid severity 'major': one of CRITICAL, MAJOR, MINOR, INFO$/u,
+	);
+});
+
+void test("every problem of an observation is named in one refusal", () => {
+	const refusal = (raw: unknown) => {
+		try {
+			normalizeObservation(raw);
+		} catch (error) {
+			return error instanceof Error ? error.message : String(error);
+		}
+		return assert.fail("expected the observation to be refused");
+	};
+	const longSummary = "word ".repeat(40).trim();
+	assert.ok(longSummary.length > MAX_SUMMARY_CHARS);
+	const unrated = refusal(
+		baseObservation({ severity: null, summary: longSummary, evidenceRationale: "" }),
+	);
+	assert.match(unrated, /^invalid severity 'null' \(missing\)/u);
+	assert.match(unrated, /; also: summary must be at most/u);
+	assert.match(unrated, /; also: evidenceRationale is required$/u);
+	assert.match(
+		refusal(baseObservation({ outcome: "PASSED", summary: "Test", evidenceRationale: " " })),
+		/^invalid outcome 'PASSED': one of MET, NOT_MET, NOT_APPLICABLE, UNDETERMINED; also: summary must say what was observed as a short phrase[^;]*; also: evidenceRationale is required$/u,
+	);
+	// A problem of the evidence joins those of the observation.
+	assert.match(
+		refusal(baseObservation({ outcome: "NOT_APPLICABLE", severity: null, summary: "Test" })),
+		/^summary must say what was observed[^;]*; also: a NOT_APPLICABLE observation must say why the practice does not apply/u,
+	);
 });

@@ -39,7 +39,7 @@ class IssueUpdateCoalescerTest extends BaseUnitTest {
             recorder,
             submitter,
             workspaceResolver,
-            new PracticeReviewProperties(false, 15, 5, null),
+            new PracticeReviewProperties(false, 15, 5, null, 12, 16000),
             mock(TransactionTemplate.class));
 
     @Test

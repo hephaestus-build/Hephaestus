@@ -359,6 +359,10 @@ not a substitute for this outer deadline. Ordinary child processes are killed wh
 including after success. Failed precompute remains best-effort: the practice review continues without
 its hints.
 
+Each practice's result reaches the model as a section under that practice's criteria in the turn that
+evaluates it, not in the opening brief: a busy script bounds its own section, never another practice's.
+The [practice catalogue](../practice-catalogue.md) owns what a section holds and its bound.
+
 The bootstrap clears the inherited environment, runs Node under filesystem permission grants scoped to
 the workspace, the precompute library and its own stage and output directories, and
 applies a **10 MiB per-file limit** in its subshell, including the diagnostic log. On failure, at most
@@ -371,9 +375,15 @@ outer boundary.
 ## Practice review tools
 
 One review is one session, and its tool set is fixed when the runner creates it, in `pi-runner.ts`:
-the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit` and `bash`, plus `report_observation`
-for the measuring turns and, when composition was requested, `report_feedback` and `report_summary` for
-the composition turn. The two feedback tools store nothing until the server has admitted the recorded
+the native Pi tools `read`, `grep`, `find`, `ls`, `write`, `edit` and `bash`, Pi's `codemode`, plus
+`report_observation` for the measuring turns and, when composition was requested, `report_feedback` and
+`report_summary` for the composition turn. `codemode` runs one JavaScript script in a QuickJS sandbox
+that calls the native tools, so a chain of searches and reads costs one model call; only what the script
+prints returns to the model. The recording tools are declared `model-only`, so a script cannot call them:
+what a turn records is always a call the model made. A script's own tool calls appear in the per-turn
+trace as `codemode.<tool>` and do not count toward the repetition limits, which watch the model's calls.
+A measuring turn ends with the `report_observation` call that leaves each of its practices with a
+recorded result, rather than on a further model call. The two feedback tools store nothing until the server has admitted the recorded
 observations. `report_observation` and `report_feedback` take a list — several observations or units in
 one call, each stored or refused on its own with the reason — and accept that list as a JSON string as
 well as an array, because a smaller model sends the string form often and, offered the array alone,
@@ -384,8 +394,11 @@ without recording anything is ended. A citation's quote is optional: by
 coordinates alone, the runner records the cited lines and echoes them back. A quote given with a diff
 marker, a `[L<n>]` prefix, a non-breaking space read as a space, or a JSON string's text read without
 its escapes is recorded as the artifact's own bytes, because admission verifies those bytes; a quote
-whose lines were miscounted is recorded at the lines where the text is, when it occurs once; a refused
-citation is answered with what the cited lines really hold. The
+whose lines were miscounted is recorded at the lines where the text is, when it occurs once; a citation
+that names `work/change/diff.patch` itself, by the view's own line numbers, is recorded at the changed
+file, side and `[L<n>]` its quote occurs at, when that is one place; a side or revision on a citation that
+settles on another source than the change or the checkout is dropped, since admission refuses either
+there; a refused citation is answered with what the cited lines really hold. The
 mentor runner exposes no native tool at all: its context arrives through `fetch_context`, and it gives
 feedback about an observation with `link_observation`, whose `text` the reply shows the developer once
 the server admits that observation for them; a refused link fails the call and shows nothing.

@@ -13,7 +13,7 @@ export interface SubjectFacts {
 	/** The same subject, ignoring case and trailing punctuation, appears on an earlier commit. */
 	repeat: boolean;
 	/**
-	 * The subject joins clauses with "and", "&", "+", a comma or a semicolon, or the body lists two or more
+	 * The subject joins clauses with "and", "&", "+", a comma, a semicolon or a sentence break, or the body lists two or more
 	 * bullets. Punctuation, not a count of changes: "parse the header and validate it" is one step.
 	 */
 	joinedClauses: boolean;
@@ -27,7 +27,7 @@ export interface SubjectFacts {
 
 const FILLER =
 	/^(?:wip|fix(?:es|ed)?|update[sd]?|change[sd]?|stuff|misc|minor(?: changes?)?|lint(?:ing)?|cleanup|clean up|refactor(?:ing)?|tweak[s]?|test(?:s|ing)?|done|final|changes?)[.!]?$/iu;
-const CONJUNCTION = /\s(?:and|&|\+)\s|,\s*\w|;\s*\w/u;
+const CONJUNCTION = /\s(?:and|&|\+)\s|,\s*\w|;\s*\w|\.\s+\p{Lu}/u;
 const DANGLING = /\b(?:a|an|the|and|or|to|for|of|in|on|with|by)$|["'(]$/iu;
 
 export function subjectFacts(commits: readonly ChangeCommit[]): SubjectFacts[] {

@@ -27,6 +27,11 @@ public class PracticePiAdapter {
     /** The runner reads it and registers it as the model's sampling temperature. */
     static final String SAMPLING_TEMPERATURE_ENV = "LLM_SAMPLING_TEMPERATURE";
 
+    /** The runner bounds each turn by these, per practice it carries: pi-runner.ts PER_PRACTICE_WORK. */
+    static final String PRACTICE_MODEL_CALLS_ENV = "PI_PRACTICE_MODEL_CALLS";
+
+    static final String PRACTICE_OUTPUT_TOKENS_ENV = "PI_PRACTICE_OUTPUT_TOKENS";
+
     public PracticeSandboxSpec buildSandboxSpec(PracticeAgentRequest request) {
         PiRuntimeFactory.PiPlan plan = runtimeFactory.build(new PiPlanSpec(
                 request.apiProtocol(),
@@ -42,6 +47,8 @@ public class PracticePiAdapter {
                 Map.of(),
                 buildPrecomputeStep(request.timeoutSeconds())));
         Map<String, String> environment = new LinkedHashMap<>(plan.environment());
+        environment.put(PRACTICE_MODEL_CALLS_ENV, Integer.toString(reviewProperties.practiceModelCalls()));
+        environment.put(PRACTICE_OUTPUT_TOKENS_ENV, Integer.toString(reviewProperties.practiceOutputTokens()));
         Double temperature = reviewProperties.samplingTemperature();
         if (temperature != null) {
             environment.put(SAMPLING_TEMPERATURE_ENV, temperature.toString());

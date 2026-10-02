@@ -93,10 +93,6 @@ if (existsSync(practicesDir)) {
 if (practiceModules.length === 0) {
 	console.error("No practice scripts found. Exiting.");
 	await mkdir(outputDir, { recursive: true });
-	await writeFile(
-		`${outputDir}/summary.md`,
-		"# Precomputed Analysis\n\n> No practice scripts available.\n",
-	);
 	process.exit(0);
 }
 
@@ -191,10 +187,10 @@ const RECORD_ROWS = 20;
 const IN_DIFF_ROWS = 10;
 const IN_DIFF_SAMPLE = 5;
 /**
- * The summary is inlined in the brief whole or withheld whole, so it stays under the brief's per-file
- * cap with room for the fence and heading: rows are trimmed before the file is.
+ * A practice's section is inlined beside its criteria in the turn that evaluates it, so each section is
+ * bounded on its own: one busy script cannot crowd another practice's leads out of the prompt.
  */
-const SUMMARY_CHARS = 20_000;
+const SECTION_CHARS = 3000;
 
 /** A changed-line row, cited the way the diff view prints the line: `path` [L<n>]. */
 function inDiffRow(h: Hint, contextChars: number, withFlags: boolean): string {
@@ -219,11 +215,10 @@ function recordRow(h: Hint): string {
 
 function renderPractice(result: PracticeResult, recordRows: number, inDiffRows: number): string[] {
 	const json = `\`${outputDir}/${result.practice}.json\``;
-	const lines = [`## ${result.practice}`];
+	const lines: string[] = [];
 	if (result.status === "error") {
-		lines.push("", `> **Script failed.** Agent must analyze this practice manually.`);
+		lines.push(`> **Script failed.** Agent must analyze this practice manually.`, "");
 	}
-	lines.push("");
 	if (result.directions.length > 0) {
 		lines.push(...result.directions.map((d) => `- ${d}`), "");
 	}
@@ -271,52 +266,34 @@ function renderPractice(result: PracticeResult, recordRows: number, inDiffRows: 
 	return lines;
 }
 
-const errors = practiceResults.filter((r) => r.status === "error");
-
-function renderSummary(recordRows: number, inDiffRows: number): string {
-	const lines: string[] = [
-		"# Precomputed Analysis Hints",
-		"",
-		"> These are **pattern matches and directions to investigate** from static analysis — starting points, not verdicts.",
-		"> Use them as starting points — investigate further for things the scripts may have missed.",
-		"> Every line of `work/change/diff.patch` carries a `[L<n>] ` prefix before its diff marker, so an added line matches `^\\[L[0-9]+\\] \\+`, never `^\\+`; a row below cites a changed line as `path` [L<n>].",
-		"",
-	];
-	if (errors.length > 0) {
-		lines.push(
-			`> **${errors.length} script(s) failed** — perform full manual analysis for: ${errors.map((e) => e.practice).join(", ")}`,
-			"",
-		);
-	}
-	for (const result of practiceResults) {
-		lines.push(...renderPractice(result, recordRows, inDiffRows));
-	}
-	return lines.join("\n");
-}
-
-/** Trim code leads before record facts; retain each practice's pointer to its complete JSON output. */
+/** Changed-line rows drop to a sample first, then record rows: a section keeps some of both, and its pointer. */
 const MIN_RECORD_ROWS = 3;
-const BUDGET_LADDER: [recordRows: number, inDiffRows: number][] = [
+const SECTION_LADDER: [recordRows: number, inDiffRows: number][] = [
 	[RECORD_ROWS, IN_DIFF_ROWS],
 	[RECORD_ROWS, IN_DIFF_SAMPLE],
 	[10, IN_DIFF_SAMPLE],
 	[5, IN_DIFF_SAMPLE],
-	[5, 0],
-	[MIN_RECORD_ROWS, 0],
+	[MIN_RECORD_ROWS, IN_DIFF_SAMPLE],
 ];
-let summary = renderSummary(RECORD_ROWS, IN_DIFF_ROWS);
-for (const [recordRows, inDiffRows] of BUDGET_LADDER) {
-	if (summary.length <= SUMMARY_CHARS) {
-		break;
+
+function renderSection(result: PracticeResult): string {
+	let section = "";
+	for (const [recordRows, inDiffRows] of SECTION_LADDER) {
+		section = renderPractice(result, recordRows, inDiffRows).join("\n").trim();
+		if (section.length <= SECTION_CHARS) {
+			break;
+		}
 	}
-	summary = renderSummary(recordRows, inDiffRows);
+	return `${section}\n`;
 }
 
-await writeFile(`${tmpDir}/summary.md`, summary);
+for (const result of practiceResults) {
+	await writeFile(`${tmpDir}/${result.practice}.md`, renderSection(result));
+}
 
 const totalHints = practiceResults.reduce((s, r) => s + r.hints.length, 0);
 const inDiffHints = practiceResults.reduce((s, r) => s + r.hints.filter((h) => h.inDiff).length, 0);
-const errorCount = errors.length;
+const errorCount = practiceResults.filter((r) => r.status === "error").length;
 await writeFile(
 	`${tmpDir}/.timing.json`,
 	JSON.stringify({

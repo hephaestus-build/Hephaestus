@@ -1,7 +1,17 @@
 # pnpm resolves against the nearest `pnpm-workspace.yaml` at or above the install directory. This
 # file puts that here rather than at the repository root, so no root setting reaches this image.
 minimumReleaseAge: 4320
+# Explicitly requested adoption of Pi 1.0; keep the age policy for every other version.
+minimumReleaseAgeExclude:
+  - "@earendil-works/chord@1.0.0"
+  - "@earendil-works/pi-agent-core@1.0.0"
+  - "@earendil-works/pi-ai@1.0.0"
+  - "@earendil-works/pi-codemode@1.0.0"
+  - "@earendil-works/pi-coding-agent@1.0.0"
+  - "@earendil-works/pi-mcp@1.0.0"
+  - "@earendil-works/pi-telemetry@1.0.0"
+  - "@earendil-works/pi-tui@1.0.0"
 
 # @earendil-works/pi-coding-agent pins undici exactly; take the TLS and WebSocket fixes without a new agent.
 overrides:
-  "undici@>=8.0.0 <8.10.2": 8.11.2
+  "undici@>=8.0.0 <8.11.2": 8.11.2

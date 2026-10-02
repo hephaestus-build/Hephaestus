@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiPlanSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmCredentials;
 import de.tum.cit.aet.hephaestus.testconfig.LiveLlmTest;
+import de.tum.cit.aet.hephaestus.testconfig.PiSdkInstallation;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -54,8 +55,6 @@ import tools.jackson.databind.node.ObjectNode;
 class MentorSandboxStressTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String PI_SDK_VERSION = "0.84.4";
-    private static final Path SDK_DIR = Path.of("target", "pi-sdk").toAbsolutePath();
     private static final Path RUNNER =
             Path.of("src", "main", "resources", "agent", "pi-mentor-runner.ts").toAbsolutePath();
     /** Per-session deadline: cold-start + handshake + prompt + settlement against live LLM. */
@@ -109,7 +108,7 @@ class MentorSandboxStressTest {
         int n = Integer.parseInt(System.getenv().getOrDefault("N", "3"));
         int k = Integer.parseInt(System.getenv().getOrDefault("K", "5"));
         LiveLlmCredentials creds = LiveLlmCredentials.fromEnv();
-        ensurePiSdkInstalled();
+        PiSdkInstallation.ensureInstalled();
 
         ScheduledExecutorService sampler = Executors.newScheduledThreadPool(2);
         try {
@@ -184,7 +183,7 @@ class MentorSandboxStressTest {
     void stressNConcurrentRunners() throws Exception {
         int n = Integer.parseInt(System.getenv().getOrDefault("N", "5"));
         LiveLlmCredentials creds = LiveLlmCredentials.fromEnv();
-        ensurePiSdkInstalled();
+        PiSdkInstallation.ensureInstalled();
 
         ScheduledExecutorService sampler = Executors.newScheduledThreadPool(2);
         try {
@@ -643,17 +642,10 @@ class MentorSandboxStressTest {
         return new long[] {System.currentTimeMillis(), rssKb, threads};
     }
 
-    private static void ensurePiSdkInstalled() throws Exception {
-        Path marker = SDK_DIR.resolve(".installed-" + PI_SDK_VERSION);
-        if (Files.exists(marker)) return;
-        throw new IllegalStateException(
-                "Pi SDK not installed at " + SDK_DIR + " — run MentorLiveLlmTest first to install it");
-    }
-
     private Path stageWorkspace(LiveLlmCredentials creds, int idx) throws IOException {
         Path tmp = Files.createTempDirectory("hephaestus-mentor-stress-" + idx + "-");
         Files.createDirectories(tmp.resolve(".sessions"));
-        Files.createSymbolicLink(tmp.resolve("node_modules"), SDK_DIR.resolve("node_modules"));
+        Files.createSymbolicLink(tmp.resolve("node_modules"), PiSdkInstallation.SDK_DIR.resolve("node_modules"));
         Files.copy(RUNNER, tmp.resolve("pi-mentor-runner.ts"));
 
         Path systemPromptDir = tmp.resolve("agent").resolve("mentor");

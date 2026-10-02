@@ -553,7 +553,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
     @Test
     void piSessionLevelEvents_explicitlyDropped() throws Exception {
-        // Unknown types fail the turn, so every housekeeping event Pi 0.84.4 emits must stay a no-op.
+        // Unknown types fail the turn, so every housekeeping event Pi 0.99.1 emits must stay a no-op.
         String[] sessionEvents = {
             "agent_start",
             "turn_start",

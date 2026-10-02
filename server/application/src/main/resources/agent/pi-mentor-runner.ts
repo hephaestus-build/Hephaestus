@@ -239,7 +239,8 @@ function sendEvent(threadId: string | null, event: MentorWireEvent) {
 interface MentorAgentSession {
 	subscribe: (listener: (event: AgentSessionEvent) => void) => () => void;
 	prompt: (text: string) => Promise<void>;
-	steer: (text: string) => Promise<void>;
+	/** Pi reports how it queued the steer; the mentor does not depend on it. */
+	steer: (text: string) => Promise<unknown>;
 	abort: () => Promise<void>;
 	compact: () => Promise<CompactionResult>;
 	/** A compaction is a model call of its own that `abort()` leaves running. */

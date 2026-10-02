@@ -223,14 +223,6 @@ void test("every custom manager reads every file it claims to read", async () =>
 		["Track the OpenAPI Generator CLI distribution", ["openapitools.json"]],
 		["Track the Node.js pin in devEngines", ["package.json"]],
 		["Track the pnpm pin in devEngines", ["package.json"]],
-		[
-			"Track the Pi SDK pin in the live agent tests",
-			[
-				"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/mentor/live/MentorLiveLlmTest.java",
-				"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/mentor/live/MentorSandboxStressTest.java",
-				"server/application/src/test/java/de/tum/cit/aet/hephaestus/agent/practice/live/PracticeRunnerLiveLlmTest.java",
-			],
-		],
 		["Track release image tags and digests", ["security/release-images.json"]],
 		["Track the isolated Semgrep scanner image", [".github/workflows/semgrep.yml"]],
 		["Track the TruffleHog scanner image", [".github/workflows/ci-security-scan.yml"]],
