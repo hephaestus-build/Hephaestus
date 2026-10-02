@@ -65,7 +65,7 @@ export const Default: Story = {
 		).toBeVisible();
 		await expect(canvas.getAllByRole("img")).toHaveLength(3);
 		await expect(
-			canvas.getByRole("img", { name: /22 have a standing, 6 none yet/u }),
+			canvas.getByRole("img", { name: /22 merged standings, 6 none yet/u }),
 		).toBeVisible();
 		await expect(canvas.getByText("Held back: too few developers to compare yet.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Open group Handling failure well" }));
@@ -83,7 +83,7 @@ export const Collapsed: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getAllByRole("img", { name: /21 have a standing, 7 none yet/u }),
+			canvas.getAllByRole("img", { name: /21 merged standings, 7 none yet/u }),
 		).toHaveLength(4);
 	},
 };

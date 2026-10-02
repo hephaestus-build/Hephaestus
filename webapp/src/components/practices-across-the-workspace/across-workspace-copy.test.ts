@@ -43,7 +43,7 @@ describe("splitDescription", () => {
 		expect(
 			splitDescription({ shape: "COLLAPSED", hasStanding: 22, noneYet: 6 }, "STRENGTH", context),
 		).toBe(
-			"28 developers observed in this workspace so far: 22 have a standing, 6 none yet. The split is held back while one standing would cover 5 developers or fewer. You: Going well.",
+			"28 developers observed in this workspace so far: 22 merged standings, 6 none yet. The split is held back while one standing would cover 5 developers or fewer. You: Going well.",
 		);
 	});
 });

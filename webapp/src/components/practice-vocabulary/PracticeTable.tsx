@@ -197,9 +197,8 @@ export function PracticeTable<TRow>({
 }
 
 /**
- * A row's own control under the pointer or focus, in the primary ground, as the reviews list draws
- * its row actions: the accent is spent on one control per surface, never on a row, so a row's
- * control answers in the primary ground instead.
+ * A row's own control under the pointer or focus, in the primary ground: a press anywhere else on
+ * the row opens it, and the accent is spent on one control per surface, never on a row.
  */
 export const ROW_ACTION_PRESSED =
 	"hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground";
@@ -335,8 +334,7 @@ export function SubjectCell({ badge, sentence, children, className }: SubjectCel
 
 /**
  * The row's own link at its end: an `InlineLink` drawn as a button carrying `data-row-link` and no
- * handler of its own, so the press bubbles to the row, which owns the opening. It wears the accent at
- * rest, in both themes, because it is the one place each row says where a press goes. The link rule is
+ * handler of its own, so the press bubbles to the row, which owns the opening. The link rule is
  * `InlineLink`'s, and the row's own hover is added since the whole row is the pointer path. The
  * accessible name is built from the visible words, so it always starts with what is on screen and
  * a reader who speaks them reaches the link (WCAG 2.2 SC 2.5.3). An `aria-label` rather than
@@ -349,7 +347,7 @@ function RowLinkCell({ link }: { link: PracticeTableRowLink | undefined }) {
 			{link && (
 				<InlineLink
 					render={<button type="button" data-row-link aria-label={`${link.text} ${link.name}`} />}
-					className="inline-flex items-center gap-1 font-medium whitespace-nowrap text-mentor group-hover/row:underline"
+					className="inline-flex items-center gap-1 font-medium whitespace-nowrap group-hover/row:text-mentor group-hover/row:underline"
 				>
 					{link.text}
 					<ArrowRightIcon

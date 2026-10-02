@@ -330,7 +330,7 @@ export const NotObserved: Story = {
 export const BesideTheWorkspace: Story = {
 	args: {
 		aside: (
-			<div className="w-full sm:w-72">
+			<div className="w-full sm:w-88">
 				<WorkspaceSplitBar
 					split={threeWay([7, 6, 8])}
 					yourStanding="STRENGTH"

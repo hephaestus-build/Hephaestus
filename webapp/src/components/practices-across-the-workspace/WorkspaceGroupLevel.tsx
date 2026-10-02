@@ -1,15 +1,17 @@
+import { ArrowRightIcon } from "lucide-react";
+
 import type { WorkspaceGroupSplit } from "@/api/types.gen";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
+import { Button } from "@/components/ui/button";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { useRevealedRows } from "@/hooks/use-revealed-rows";
 
 import type { SplitContext } from "./across-workspace-copy";
-import { ProfileLevelLink } from "./ProfileLevelLink";
 import { type ComparisonRow, WorkspaceComparisonTable } from "./WorkspaceComparisonTable";
 import { WorkspaceSplitBar } from "./WorkspaceSplitBar";
 
@@ -25,24 +27,24 @@ export type WorkspaceGroupLevelState =
 export interface WorkspaceGroupLevelProps {
 	nested?: boolean;
 	path: LevelPath;
-	workspaceSlug: string;
 	state: WorkspaceGroupLevelState;
-	/** Opens a practice of the group on the reader's own Practice profile, over its group. */
+	/** Opens a practice of the group as the next level, the reader's own practice. */
 	onViewPractice: (groupSlug: string, practiceSlug: string) => void;
+	/** Opens the reader's own group as the next level: their standing, trend and practices in it. */
+	onOpenOwnGroup: () => void;
 }
 
 /**
  * One practice group over Practices across the workspace: the reader's own standing and trend in
- * it, the way to their own group on the Practice profile with the group's split under it, and each
- * practice of the group beside how the workspace splits across that practice. Every way out goes
- * to the reader's own profile; nothing here opens another level.
+ * it, the way to their own group with the group's split under it, and each practice of the group
+ * beside how the workspace splits across that practice. Both open the next level over this one.
  */
 export function WorkspaceGroupLevel({
 	nested,
 	path,
-	workspaceSlug,
 	state,
 	onViewPractice,
+	onOpenOwnGroup,
 }: WorkspaceGroupLevelProps) {
 	const group = state.status === "ready" ? state.group : undefined;
 	return (
@@ -78,15 +80,15 @@ export function WorkspaceGroupLevel({
 				}
 				aside={
 					state.status === "ready" ? (
-						<div className="flex w-full flex-col items-stretch gap-3 sm:w-72 sm:items-end">
-							<ProfileLevelLink
-								workspaceSlug={workspaceSlug}
-								groupSlug={state.group.groupSlug}
-								placement="level"
-								aria-label={`Open the group ${state.group.groupName} on your Practice profile`}
+						<div className="flex w-full flex-col items-stretch gap-3 sm:w-88 sm:items-end">
+							<Button
+								variant="outline"
+								onClick={onOpenOwnGroup}
+								aria-label={`Open your group ${state.group.groupName}`}
 							>
-								Open the group
-							</ProfileLevelLink>
+								Open your group
+								<ArrowRightIcon aria-hidden data-icon="inline-end" />
+							</Button>
 							<div className="w-full">
 								<WorkspaceSplitBar
 									split={state.group.split}
