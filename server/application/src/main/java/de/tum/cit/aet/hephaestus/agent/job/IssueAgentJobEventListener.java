@@ -99,8 +99,8 @@ public class IssueAgentJobEventListener {
                 || Collections.disjoint(event.changedFields(), ScmSignals.REVIEWABLE_ISSUE_FIELDS)) {
             return;
         }
-        if (event.issue().state() == Issue.State.CLOSED) {
-            if (Collections.disjoint(event.changedFields(), java.util.Set.of("title", "body"))) return;
+        if (event.issue().state() == Issue.State.CLOSED
+                && !Collections.disjoint(event.changedFields(), java.util.Set.of("title", "body"))) {
             for (Long pullRequestId : pullRequestRepository.findMergedClosingPullRequestIdsByIssueId(
                     event.issue().id())) {
                 var pullRequest = pullRequestRepository
@@ -123,7 +123,6 @@ public class IssueAgentJobEventListener {
                             });
                 }
             }
-            return;
         }
         for (Workspace workspace : workspaceResolver.resolveAllForRepository(
                 event.issue().repository().nameWithOwner())) {

@@ -105,10 +105,12 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
      * @param dto           the issue DTO
      * @param context       the processing context
      * @param publishEvents whether to publish domain events (false for stubs)
+     * @param emitDerivedEvents whether to derive update and close events from the mirror; an explicit
+     *                          close publishes its own lifecycle event
      * @return the created or updated Issue entity
      */
     private @Nullable Issue processInternal(
-            GitHubIssueDTO dto, ProcessingContext context, boolean publishEvents, boolean emitLifecycleOnCreate) {
+            GitHubIssueDTO dto, ProcessingContext context, boolean publishEvents, boolean emitDerivedEvents) {
         // Use getDatabaseId() which falls back to id for webhook payloads
         Long dbId = dto.getDatabaseId();
         if (dbId == null) {
@@ -183,13 +185,13 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
 
                 // Emit lifecycle events for issues that arrived already closed during sync.
                 // Skipped when called from processClosed() which emits its own IssueClosed event.
-                if (emitLifecycleOnCreate && issue.getState() == Issue.State.CLOSED) {
+                if (emitDerivedEvents && issue.getState() == Issue.State.CLOSED) {
                     String stateReason = dto.stateReason() != null ? dto.stateReason() : "completed";
                     eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
                             ScmEventPayload.IssueData.from(issue), stateReason, EventContext.from(context)));
                     log.debug("Emitted IssueClosed for already-closed issue: issueId={}", dbId);
                 }
-            } else {
+            } else if (emitDerivedEvents) {
                 Set<String> changedFields = computeChangedFields(existingOpt.get(), issue);
                 if (!changedFields.isEmpty() || relationshipsChanged) {
                     if (relationshipsChanged) {

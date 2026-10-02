@@ -34,11 +34,15 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
@@ -616,8 +620,11 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
     @Nested
     class ProcessMethodUpdate {
 
-        @Test
-        void shouldUpdateExistingIssueAndPublishEvent() {
+        @ParameterizedTest
+        @EnumSource(
+                value = Issue.State.class,
+                names = {"OPEN", "CLOSED"})
+        void shouldUpdateExistingIssueAndPublishEvent(Issue.State state) {
             // Given - create existing issue
             Long issueId = FIXTURE_ISSUE_ID;
             Issue existing = new Issue();
@@ -625,7 +632,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             existing.setNumber(20);
             existing.setTitle("Old Title");
             existing.setBody("Old body");
-            existing.setState(Issue.State.OPEN);
+            existing.setState(state);
             existing.setHtmlUrl("https://github.com/" + FIXTURE_REPO_FULL_NAME + "/issues/20");
             existing.setRepository(testRepository);
             existing.setProvider(githubProvider);
@@ -640,7 +647,7 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     20,
                     "New Title",
                     "New body",
-                    "open",
+                    state.name().toLowerCase(Locale.ROOT),
                     null,
                     "https://github.com/" + FIXTURE_REPO_FULL_NAME + "/issues/20",
                     0,
@@ -982,9 +989,22 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
     @Nested
     class StateTransitions {
 
-        @Test
-        void processClosedShouldPublishClosedEvent() {
+        @ParameterizedTest
+        @CsvSource({"true, 0", "false, 1"})
+        void shouldPublishOnlyTheExplicitCloseForKnownAndUnknownIssues(boolean known, int createdEvents) {
             Long issueId = FIXTURE_ISSUE_ID;
+            if (known) {
+                Issue existing = new Issue();
+                existing.setNativeId(issueId);
+                existing.setProvider(githubProvider);
+                existing.setNumber(20);
+                existing.setTitle("Title");
+                existing.setBody("Old body");
+                existing.setState(Issue.State.OPEN);
+                existing.setRepository(testRepository);
+                issueRepository.save(existing);
+            }
+            eventListener.clear();
             GitHubIssueDTO dto = new GitHubIssueDTO(
                     issueId,
                     null,
@@ -1016,6 +1036,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             assertThat(result.getState()).isEqualTo(Issue.State.CLOSED);
             assertThat(result.getStateReason()).isEqualTo(Issue.StateReason.COMPLETED);
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).hasSize(createdEvents);
 
             // Verify Closed event
             assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class))

@@ -147,6 +147,12 @@ The snapshot is the title, body, native type, labels, assignees, milestone, stat
 fields the issue evidence a bundled practice reads is built from. Labels and assignees are sorted while the
 digest is built, so provider ordering does not change the revision.
 
+Updates review the current snapshot of both open and closed issues. A later outcome confirmation or repair
+in a closed issue's body can therefore occasion another update review, through the same coalescing and
+current-snapshot fences. It does not repeat the close occasion or establish what the body said at the close;
+only practices bound to updates are selected. A closed issue's title or body change also retains the separate
+repair occasion for assessments of merged pull or merge requests that close it.
+
 Only `scm.issue.updated` keys on the whole snapshot. The other two deliberately do not, because a past-work
 campaign or a recurring sweep re-derives their keys from the artifact as it stands: an opening keys on the prose and a
 close on the moment it closed, so triage between two sweeps moves neither and buys no second review.
@@ -194,7 +200,7 @@ fields occasions nothing: GitHub compares the mirrored row against the incoming 
 due-date, weight or time-tracking edit.
 
 Synchronization updates the issue projection without starting a live review. When GitLab sync finds
-changed review evidence on an existing open issue, it advances the snapshot and records the update
+changed review evidence on an existing issue, it advances the snapshot and records the update
 occasion as sync-discovered. This retires stale observations without coaching on historical work.
 GitLab synchronization includes native type, but its webhook contract does not provide a reliable
 type transition; the GitLab adapter therefore does not advertise live type-change reviews.
