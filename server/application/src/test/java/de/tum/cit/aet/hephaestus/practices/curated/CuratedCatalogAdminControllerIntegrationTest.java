@@ -943,7 +943,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .jsonPath("$.status.state")
                 .isEqualTo("EDITED_HERE");
         assertThat(storedGroupDigest()).isEqualTo(offered);
-        assertThat(auditValues("CURATED_PRACTICE_GROUP", GROUP).getFirst()).contains(offered, "EDITED_HERE");
+        assertThat(auditValues("CURATED_PRACTICE_GROUP", GROUP).getFirst())
+                .contains(shipped.digest(GROUP), "EDITED_HERE");
 
         jdbcTemplate.update(
                 "UPDATE curated_group_override SET based_on_digest = ? WHERE slug = ?",
@@ -966,7 +967,8 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .jsonPath("$.status.state")
                 .isEqualTo("EDITED_HERE");
         assertThat(storedGroupDigest()).isEqualTo(offered);
-        assertThat(auditValues("CURATED_PRACTICE_GROUP", GROUP).getFirst()).contains(offered, "EDITED_HERE");
+        assertThat(auditValues("CURATED_PRACTICE_GROUP", GROUP).getFirst())
+                .contains(shipped.digest(GROUP), "EDITED_HERE");
     }
 
     @Test
