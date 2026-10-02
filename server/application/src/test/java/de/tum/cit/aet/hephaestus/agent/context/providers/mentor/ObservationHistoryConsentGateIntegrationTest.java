@@ -293,8 +293,7 @@ class ObservationHistoryConsentGateIntegrationTest extends AbstractSlackConsentG
         assertThat(current.get("list").asString()).isEqualTo("recentObservations");
         assertThat(current.get("observation").get("practiceRevisionId").asLong())
                 .isEqualTo(practice.getCurrentRevision().getId());
-        assertThat(current.get("observation").get("criteria").asString())
-                .isEqualTo(practice.getCurrentRevision().getCriteria());
+        assertThat(current.get("observation").get("criteria").asString()).isEqualTo(practice.getCriteria());
         assertThat(current.get("observation").get("evidence").get("citations")).hasSize(1);
         assertThat(contentSource
                         .inspect(workspace.getId(), recipient.getId(), earlier)
