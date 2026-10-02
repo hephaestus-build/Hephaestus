@@ -1,19 +1,10 @@
 /**
- * Scans the upstream images `security/release-images.json` pins by digest.
+ * Scans the upstream images pinned in security/release-images.json on both released platforms.
+ * These images are shipped directly, not built here, so their committed digests are the subjects
+ * of this gate and the release evidence gate. A digest update is scanned on its own pull request.
  *
- * These four — alpine, nats, nginx, traefik — are shipped by `docker/compose.*.yaml` and covered by
- * the release evidence gate, but nothing built them, so neither the build-time gate in
- * `reusable-docker-build.yml` nor `scan-main-images.ts` had a subject for them. The gap was found by
- * a release: v0.75.0 failed at the evidence gate on a finding in the pinned alpine digest that had
- * been there for days (issue #1741).
- *
- * They need no build — a digest in a committed file is the whole subject — so this is cheap and
- * deterministic, it covers both released platforms, and it blocks by default. A Renovate digest
- * bump edits this very file, so the pull request proposing the bump is the one that scans it.
- *
- * `--report-only` is the weekly rescan, where a finding is routed to a tracking issue rather than a
- * red status: a CVE published after the digest was pinned belongs to no commit, and a pinned
- * upstream image cannot be patched by rebuilding anything here.
+ * --report-only routes weekly findings to tracking issues instead of failing a past commit's
+ * status. The vulnerability policy and recorded scan evidence are unchanged.
  */
 import { writeFile } from "node:fs/promises";
 import path from "node:path";

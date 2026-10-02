@@ -241,3 +241,30 @@ await test("application metrics stay on the private network in both Compose depl
 		assert.doesNotMatch(file, /traefik\.[^\n]*(?:prometheus|9090)/u);
 	}
 });
+
+await test("maintenance uses the verified webapp image without its application startup or files", () => {
+	const document = parseDocument(
+		readFileSync(new URL("../docker/compose.proxy.yaml", import.meta.url), "utf8"),
+	);
+	assert.equal(
+		document.getIn(["services", "maintenance", "image"]),
+		`\${HEPHAESTUS_IMAGE_WEBAPP:?verified release lock required}`,
+	);
+	const entrypoint = document.getIn(["services", "maintenance", "entrypoint"]);
+	assert.ok(isSeq(entrypoint));
+	assert.deepEqual(entrypoint.toJSON(), ["nginx", "-g", "daemon off;"]);
+	const configuration = document.getIn(["configs", "nginx-default-config", "content"]);
+	assert.equal(typeof configuration, "string");
+	assert.match(String(configuration), /root \/usr\/share\/nginx\/maintenance;/u);
+	assert.doesNotMatch(String(configuration), /\/usr\/share\/nginx\/html/u);
+	const mounts = document.getIn(["services", "maintenance", "configs"]);
+	assert.ok(isSeq(mounts));
+	assert.ok(
+		mounts.items.some(
+			(mount) =>
+				isMap(mount) &&
+				mount.get("source") === "maintenance-page" &&
+				mount.get("target") === "/usr/share/nginx/maintenance/index.html",
+		),
+	);
+});

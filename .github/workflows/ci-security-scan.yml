@@ -24,7 +24,7 @@ jobs:
   upstream-images:
     name: "Pinned upstream images"
     runs-on: ubuntu-latest
-    # The four upstream images are shipped by digest and never built here, so no build gate has a
+    # The pinned upstream images are shipped by digest and never built here, so no build gate has a
     # subject for them and the release evidence gate was the first thing that scanned them — which
     # is how v0.75.0 discovered a days-old finding at the worst possible moment (#1741). A digest
     # needs no build, so the pull request that changes one scans it.
