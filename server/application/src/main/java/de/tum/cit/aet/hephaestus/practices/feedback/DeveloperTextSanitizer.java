@@ -37,7 +37,6 @@ public final class DeveloperTextSanitizer {
             + "\\bnoiseFraction\\b|"
             + "\\bcross-practice\\b|"
             + "\\bsole\\s+owner\\b|"
-            + "\\bdeferr(?:ing|ed|s)\\b|"
             + "\\bemit(?:ted|s|ting)?\\s+NOT[_ ]APPLICABLE\\b|"
             + "\\bsuppress(?:ed|es|ing)\\s+its\\b|"
             + "\\b(?:team-wide\\s+)?standing\\s+nudge\\b|"
