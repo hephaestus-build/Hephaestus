@@ -283,8 +283,10 @@ public class PracticeStandingService {
      * <p>One rule over the newest {@link #STANDING_WINDOW} opportunities, weighted by recency: the unit is a
      * piece of reviewed work, and the denominator is the opportunities it had.
      *
-     * <p>The fallback is unreachable while the look-back and the trend horizon are both
-     * {@link #LOOKBACK_DAYS} days, since a standing exists only where some observation produced a verdict.
+     * <p>The fallback is reached only when every verdict of the practice is older than the trend horizon. The
+     * profile never reaches it while its look-back of {@link #LOOKBACK_DAYS} days is the horizon. Across the
+     * workspace, All time reads evidence older than that, and a practice whose verdicts all lie before the horizon
+     * falls back to this binary share.
      */
     private static double standingShare(PracticeEvidence evidence, PracticeTrend trend) {
         return trend.recentMetShare(STANDING_WINDOW, STANDING_DECAY)
