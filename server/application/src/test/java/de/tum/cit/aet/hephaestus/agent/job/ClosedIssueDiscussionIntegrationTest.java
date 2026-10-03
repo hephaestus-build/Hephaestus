@@ -6,6 +6,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.context.ContextRequest;
+import de.tum.cit.aet.hephaestus.agent.context.providers.IssueContentSource;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -19,6 +22,8 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
@@ -38,6 +43,15 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabIssue
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabNoteSyncService;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchCompletion;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchInsert;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackPlacementRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSource;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -45,10 +59,14 @@ import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
+import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -62,6 +80,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
@@ -103,6 +123,24 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ArtifactSignalRepository signals;
+
+    @Autowired
+    private FeedbackDispatchRepository dispatches;
+
+    @Autowired
+    private FeedbackRepository feedback;
+
+    @Autowired
+    private FeedbackPlacementRepository placements;
+
+    @Autowired
+    private IssueContentSource contentSource;
+
+    @Autowired
+    private RepositoryToMonitorRepository monitors;
+
+    @Autowired
+    private WorkspaceScmProjection folders;
 
     @Autowired
     private WorkspaceRepository workspaces;
@@ -221,24 +259,146 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
                 .doesNotHaveDuplicates();
     }
 
-    @Test
-    void shouldIgnoreItsOwnFeedbackButCountAHumanCommentThatTurnsIntoIt() {
+    @ParameterizedTest
+    @EnumSource(
+            value = IdentityProviderType.class,
+            names = {"GITHUB", "GITLAB"})
+    void shouldKeepHumanMarkerQuotesAndExcludeRecordedDeliveries(IdentityProviderType type) {
+        if (type == IdentityProviderType.GITLAB) {
+            provider = providers.save(new IdentityProvider(type, "https://gitlab.example.com"));
+            repository.setProvider(provider);
+            repository.setHtmlUrl("https://gitlab.example.com/org/project");
+            repository = repositories.save(repository);
+            transactions.executeWithoutResult(status -> {
+                Issue issue = issues.findById(issueId).orElseThrow();
+                issue.setProvider(provider);
+                issue.setHtmlUrl(repository.getHtmlUrl() + "/-/issues/7");
+            });
+        }
+        RepositoryToMonitor monitor = new RepositoryToMonitor();
+        monitor.setWorkspace(workspace);
+        monitor.setNameWithOwner(repository.getNameWithOwner());
+        monitors.save(monitor);
+        UUID beforeDelivery = storedSnapshot();
         String closedRecord = storedDigest();
-        UUID closedSnapshot = storedSnapshot();
         int occasions = updates().size();
+        String ownUrl = commentUrl(600L);
+        String ownRef = type == IdentityProviderType.GITHUB ? "IC_opaqueNodeId" : "gid://gitlab/Note/600";
+        UUID deliveredJob = recordDelivery(ownRef, ownUrl, issueId);
 
-        comment(600L, OWN_FEEDBACK, webhook());
+        long own = comment(600L, "Record the export.", webhook());
 
-        assertThat(storedSnapshot()).isEqualTo(closedSnapshot);
+        assertThat(storedSnapshot()).isEqualTo(beforeDelivery);
         assertThat(updates()).hasSize(occasions);
+        assertThat(reviewedBodies()).isEmpty();
+        transactions.executeWithoutResult(status -> {
+            Feedback previous = feedback.save(Feedback.builder()
+                    .agentJobId(deliveredJob)
+                    .workspaceId(workspace.getId())
+                    .artifactKind(ArtifactKinds.ISSUE)
+                    .artifactId(issueId)
+                    .recipientUserId(commenter.getId())
+                    .aboutUserId(commenter.getId())
+                    .channel(FeedbackChannel.IN_CONTEXT)
+                    .position(0)
+                    .deliveryState(FeedbackDeliveryState.SUPERSEDED)
+                    .source(FeedbackSource.AGENT)
+                    .build());
+            String ref = type == IdentityProviderType.GITHUB ? "IC_oldNodeId" : "gid://gitlab/Note/602";
+            assertThat(placements.insertProviderPlacementIfAbsent(new FeedbackPlacementRepository.ProviderPlacement(
+                            UUID.randomUUID(),
+                            previous.getId(),
+                            "SUMMARY",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            ref,
+                            commentUrl(602L))))
+                    .isOne();
+        });
+        comment(602L, "Older delivered feedback, still on the provider.", webhook());
+        assertThat(storedSnapshot()).isEqualTo(beforeDelivery);
+        edit(own, "Edited delivered feedback, without a marker.");
+        assertThat(storedSnapshot()).isEqualTo(beforeDelivery);
 
-        long human = comment(601L, "Both exports are done.", webhook());
-        assertThat(storedSnapshot()).isNotEqualTo(closedSnapshot);
+        // An id recorded for different reviewed work must not exclude this issue's human comment.
+        recordDelivery(
+                type == IdentityProviderType.GITHUB ? "601" : "gid://gitlab/Note/601", commentUrl(601L), issueId + 1);
+        long human = comment(601L, "Both exports are done. Quoted marker: " + OWN_FEEDBACK, webhook());
 
+        assertThat(reviewedBodies()).containsExactly("Both exports are done. Quoted marker: " + OWN_FEEDBACK);
+        assertThat(storedSnapshot()).isNotEqualTo(beforeDelivery);
+        assertThat(storedDigest()).isNotEqualTo(closedRecord).isEqualTo(currentRevision());
         edit(human, OWN_FEEDBACK);
+        assertThat(reviewedBodies()).containsExactly(OWN_FEEDBACK);
+        AgentJob capture = new AgentJob();
+        capture.setId(UUID.randomUUID());
+        capture.setMetadata(new ObjectMapper().valueToTree(Map.of("issue_id", issueId)));
+        var captured = contentSource.capture(
+                new ContextRequest.IssueReviewRequest(capture), Set.of(new SourceKind("scm.issue.comments")));
+        assertThat(new String(
+                        Objects.requireNonNull(captured.files().get("context/comments.json")), StandardCharsets.UTF_8))
+                .contains("hephaestus:practice-review:00000000")
+                .doesNotContain("Older delivered feedback", "Edited delivered feedback");
+        List<WorkspaceScmProjection.ProjectedRecord> folder = new ArrayList<>();
+        folders.forEachRecord(
+                workspace.getId(), repository.getId(), Set.of(new SourceKind("scm.issue.comments")), folder::add);
+        assertThat(folder)
+                .singleElement()
+                .satisfies(record ->
+                        assertThat(record.value().path("body").asString()).isEqualTo(OWN_FEEDBACK));
+        assertThat(storedDigest()).isNotEqualTo(closedRecord);
+        assertThat(deferredUpdateRevisions()).contains(currentRevision());
+    }
 
-        assertThat(storedDigest()).isEqualTo(closedRecord);
-        assertThat(deferredUpdateRevisions()).contains(closedRecord);
+    private List<String> reviewedBodies() {
+        return revisions.reviewedComments(issueId).stream()
+                .map(IssueCommentRepository.StoredComment::getBody)
+                .toList();
+    }
+
+    private UUID recordDelivery(String ref, String url, long artifactId) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            AgentJob job = new AgentJob();
+            job.setWorkspace(workspace);
+            job.setJobType(AgentJobType.ISSUE_REVIEW);
+            job.setArtifactKind(ArtifactKinds.ISSUE);
+            job.setIntegrationKind(
+                    provider.getType() == IdentityProviderType.GITHUB
+                            ? IntegrationKind.GITHUB
+                            : IntegrationKind.GITLAB);
+            job.setStatus(AgentJobStatus.COMPLETED);
+            job.setMetadata(new ObjectMapper().valueToTree(Map.of("issue_id", artifactId)));
+            job.setConfigSnapshot(new ObjectMapper().valueToTree(Map.of("model", "test")));
+            job = jobs.save(job);
+            UUID dispatchId = UUID.randomUUID();
+            assertThat(dispatches.insertIfAbsent(new FeedbackDispatchInsert(
+                            dispatchId,
+                            "delivery-" + dispatchId,
+                            workspace.getId(),
+                            job.getId(),
+                            null,
+                            "AUTOMATIC_REVIEW_PACKAGE",
+                            "Record the export.",
+                            "[]",
+                            "{}")))
+                    .isOne();
+            assertThat(dispatches.claim(
+                            dispatchId, workspace.getId(), "test", Instant.now().plusSeconds(60), 8, 0))
+                    .isOne();
+            assertThat(dispatches.finish(new FeedbackDispatchCompletion(
+                            dispatchId, workspace.getId(), "test", "SENT", ref, url, null, null, "[]", Instant.now())))
+                    .isOne();
+            return job.getId();
+        }));
+    }
+
+    private String commentUrl(long nativeId) {
+        return repository.getHtmlUrl()
+                + (provider.getType() == IdentityProviderType.GITHUB ? "/issues/7#issuecomment-" : "/-/issues/7#note_")
+                + nativeId;
     }
 
     @Test
@@ -462,7 +622,7 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
         comment.setNativeId(nativeId);
         comment.setProvider(provider);
         comment.setBody(body);
-        comment.setHtmlUrl(repository.getHtmlUrl() + "/issues/7#issuecomment-" + nativeId);
+        comment.setHtmlUrl(commentUrl(nativeId));
         comment.setAuthorAssociation(AuthorAssociation.CONTRIBUTOR);
         comment.setAuthor(commenter);
         comment.setIssue(issues.findById(issueId).orElseThrow());

@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -101,7 +102,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
                 reviewGate,
                 workspaceResolver,
                 signalRecorder,
-                new IssueEvidenceRevision(issueCommentRepository),
+                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> List.of())),
                 transactionManager);
         lenient()
                 .when(transactionManager.getTransaction(any()))

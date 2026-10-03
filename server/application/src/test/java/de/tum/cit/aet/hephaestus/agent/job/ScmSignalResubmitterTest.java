@@ -23,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -84,7 +85,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
                 issueRepository,
                 gate,
                 signalRecorder,
-                new IssueEvidenceRevision(issueCommentRepository));
+                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> List.of())));
     }
 
     private Workspace workspace;

@@ -3,13 +3,14 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.signal;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
-import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.StoredComment;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -19,21 +20,26 @@ import org.springframework.stereotype.Component;
  *
  * <p>An open issue is identified by its own fields, as before. A closed issue's discussion is part of its identity
  * too: a comment can record what was done and what moved elsewhere, so a comment written, edited or removed after
- * the close is new evidence. Comments carrying Hephaestus's own marker are never evidence, so a posted piece of
+ * the close is new evidence. Comments identified by recorded delivery provenance are never evidence, so a posted piece of
  * feedback does not occasion a review of itself.
  */
 @Component
 public class IssueEvidenceRevision {
 
     private final IssueCommentRepository comments;
+    private final IssueCommentProvenance deliveredComments;
 
-    public IssueEvidenceRevision(IssueCommentRepository comments) {
+    public IssueEvidenceRevision(IssueCommentRepository comments, IssueCommentProvenance deliveredComments) {
         this.comments = comments;
+        this.deliveredComments = deliveredComments;
     }
 
     /** The comments an issue review reads, as stored: non-empty, not Hephaestus's own, oldest first. */
     public List<StoredComment> reviewedComments(long issueId) {
-        return comments.findStoredHumanByIssueId(issueId, WorkspaceScmProjection.HEPHAESTUS_MARKER);
+        Set<Long> deliveredIds = deliveredComments.deliveredIds(issueId);
+        return comments.findStoredByIssueId(issueId).stream()
+                .filter(comment -> !deliveredIds.contains(comment.getNativeId()))
+                .toList();
     }
 
     public SignalRevision of(ScmEventPayload.IssueData issue) {

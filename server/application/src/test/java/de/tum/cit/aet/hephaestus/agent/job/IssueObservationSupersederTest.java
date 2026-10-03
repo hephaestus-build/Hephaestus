@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
@@ -34,7 +35,11 @@ class IssueObservationSupersederTest extends BaseUnitTest {
     private final ObservationRepository observations = mock(ObservationRepository.class);
     private final LockedIssueRow lockedRow = mock(LockedIssueRow.class);
     private final IssueObservationSuperseder superseder = new IssueObservationSuperseder(
-            issues, observations, new IssueEvidenceRevision(mock(IssueCommentRepository.class)), lockedRow);
+            issues,
+            observations,
+            new IssueEvidenceRevision(
+                    mock(IssueCommentRepository.class), new IssueCommentProvenance(issueId -> List.of())),
+            lockedRow);
 
     @Test
     void shouldRetireEarlierClaimsOnEachTransitionIncludingReturnToTheSameContent() {

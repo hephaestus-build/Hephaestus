@@ -146,8 +146,9 @@ Issue practices bind to three lifecycle occasions:
 The snapshot is the title, body, native type, labels, assignees, milestone, state, and state reason — the
 fields the issue evidence a bundled practice reads is built from. Labels and assignees are sorted while the
 digest is built, so provider ordering does not change the revision. A closed issue's snapshot also covers its
-mirrored discussion: each comment's id, author, body and edit time, leaving out empty comments and those carrying
-the Hephaestus marker. Live comment changes update the closed issue's snapshot in the comment
+mirrored discussion: each comment's id, author, body and edit time. Empty comments and comments identified
+by Hephaestus's recorded provider delivery identities are left out. A human comment that quotes a
+Hephaestus marker remains evidence. Live comment changes update the closed issue's snapshot in the comment
 transaction. Sync batches collect changed issue ids and read each discussion once before commit, then use that revision for
 snapshot advancement and signal recording. GitHub and GitLab persist comment pages as batches.
 Each snapshot change locks the issue row

@@ -2,8 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.context.providers;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -19,6 +17,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository.StoredComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueType;
@@ -75,11 +74,9 @@ class IssueContentSourceTest extends BaseUnitTest {
                 objectMapper,
                 issueRepository,
                 issueCommentRepository,
-                new IssueEvidenceRevision(issueCommentRepository));
+                new IssueEvidenceRevision(issueCommentRepository, new IssueCommentProvenance(issueId -> List.of())));
         lenient().when(issueCommentRepository.countByIssueId(ISSUE_ID)).thenReturn(0L);
-        lenient()
-                .when(issueCommentRepository.findStoredHumanByIssueId(eq(ISSUE_ID), any()))
-                .thenReturn(List.of());
+        lenient().when(issueCommentRepository.findStoredByIssueId(ISSUE_ID)).thenReturn(List.of());
     }
 
     @Test
@@ -243,8 +240,7 @@ class IssueContentSourceTest extends BaseUnitTest {
     /** The stored comments as the projection returns them, oldest first, and that many mirrored in all. */
     private void stubComments(List<StoredComment> chronological) {
         when(issueCommentRepository.countByIssueId(ISSUE_ID)).thenReturn((long) chronological.size());
-        when(issueCommentRepository.findStoredHumanByIssueId(eq(ISSUE_ID), any()))
-                .thenReturn(chronological);
+        when(issueCommentRepository.findStoredByIssueId(ISSUE_ID)).thenReturn(chronological);
     }
 
     private Issue richIssue() {
@@ -455,7 +451,7 @@ class IssueContentSourceTest extends BaseUnitTest {
 
             verify(issueRepository).findByIdWithRepository(ISSUE_ID);
             verify(issueCommentRepository).countByIssueId(ISSUE_ID);
-            verify(issueCommentRepository).findStoredHumanByIssueId(eq(ISSUE_ID), any());
+            verify(issueCommentRepository).findStoredByIssueId(ISSUE_ID);
         }
     }
 
