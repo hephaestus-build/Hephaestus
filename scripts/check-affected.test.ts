@@ -180,6 +180,38 @@ await test("the CI extension filters select every webapp input the extension imp
 	}
 });
 
+/** Server files the webapp's tests read, with a template variable standing for any file name. */
+const serverInputsOfTheWebapp = readdirSync(path.join(repository, "webapp/src"), {
+	recursive: true,
+	encoding: "utf8",
+})
+	.filter((file) => /\.test\.tsx?$/u.test(file))
+	.flatMap((file) =>
+		[
+			...readFileSync(path.join(repository, "webapp/src", file), "utf8").matchAll(
+				/["`]\.\.\/(?<target>server\/[^"`]+)["`]/gu,
+			),
+		].map(({ groups }) => (groups?.target ?? "").replaceAll(/\$\{[^}]+\}/gu, "1.0.0")),
+	);
+
+await test("selects the webapp for the server resources its tests read", async () => {
+	assert.ok(serverInputsOfTheWebapp.length > 0, "the webapp's tests read server resources");
+	const workflow = await readFile(".github/workflows/cicd.yml", "utf8");
+	const filter = /^ {12}webapp:\n(?<entries>(?: {14}(?:- '[^']+'|#[^\n]*)\n)+)/mu.exec(workflow)
+		?.groups?.entries;
+	assert.ok(filter !== undefined, "cicd.yml has a webapp filter");
+	const globs = [...filter.matchAll(/- '(?<glob>[^']+)'/gu)].map(
+		({ groups }) => groups?.glob ?? "",
+	);
+	for (const file of serverInputsOfTheWebapp) {
+		assert.deepEqual(scopesFor([file]), ["server", "webapp"], file);
+		assert.ok(
+			globs.some((glob) => asPattern(glob).test(file)),
+			`the webapp filter must select ${file}`,
+		);
+	}
+});
+
 await test("combines independent workspaces", () => {
 	assert.deepEqual(scopesFor(["webapp/src/a.tsx", "server/application/src/main/java/A.java"]), [
 		"server",

@@ -169,6 +169,9 @@ jobs:
               - 'scripts/check-story-prose.ts'
               - 'scripts/check-story-sort.ts'
               - 'scripts/install-browser-deps.ts'
+              # The fixture tests compare the webapp's catalog fixtures with these server resources.
+              - 'server/application/src/main/resources/practices/default-catalog.json'
+              - 'server/application/src/main/resources/contracts/source-use/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'

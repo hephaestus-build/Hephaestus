@@ -58,6 +58,13 @@ const webappInputsOfTheExtension = [
 	/^webapp\/src\/styles\.css$/u,
 ];
 
+// Server resources the webapp's fixture tests read, so the fixtures cannot drift from them unseen. Keep in
+// step with the `webapp` filter in `cicd.yml`.
+const serverInputsOfTheWebapp = [
+	/^server\/application\/src\/main\/resources\/practices\/default-catalog\.json$/u,
+	/^server\/application\/src\/main\/resources\/contracts\/source-use\//u,
+];
+
 export function scopesFor(paths: string[]): Scope[] {
 	if (paths.some((path) => fullGateInputs.some((pattern) => pattern.test(path)))) {
 		return ["full"];
@@ -79,7 +86,10 @@ export function scopesFor(paths: string[]): Scope[] {
 		} else if (path.startsWith("extension/")) {
 			scopes.add("extension");
 		} else if (path.startsWith("server/")) {
-			if (/\/resources\/(?:agent|practices\/precompute)\//u.test(path)) {
+			if (serverInputsOfTheWebapp.some((pattern) => pattern.test(path))) {
+				scopes.add("server");
+				scopes.add("webapp");
+			} else if (/\/resources\/(?:agent|practices\/precompute)\//u.test(path)) {
 				scopes.add("agents");
 			} else {
 				scopes.add("server");
