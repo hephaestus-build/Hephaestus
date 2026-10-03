@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.context;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -22,11 +23,17 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
     private final ScmJobFolderRepository rows;
     private final JsonMapper mapper;
     private final PersonDataCopyRecorder personCopies;
+    private final IssueCommentProvenance provenance;
 
-    public ScmJobFolderProjector(ScmJobFolderRepository rows, JsonMapper mapper, PersonDataCopyRecorder personCopies) {
+    public ScmJobFolderProjector(
+            ScmJobFolderRepository rows,
+            JsonMapper mapper,
+            PersonDataCopyRecorder personCopies,
+            IssueCommentProvenance provenance) {
         this.rows = rows;
         this.mapper = mapper;
         this.personCopies = personCopies;
+        this.provenance = provenance;
     }
 
     @Override
@@ -44,11 +51,21 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
             long issue = record.path("id").asLong();
             SourceKind generalComments = new SourceKind(pull ? "scm.general-review-comments" : "scm.issue.comments");
             if (allowed.contains(generalComments)) {
-                comments(
-                        rows.streamIssueComments(workspace, issue),
-                        prefix + "comments.jsonl",
-                        generalComments,
-                        consumer);
+                if (pull) {
+                    comments(
+                            rows.streamIssueComments(workspace, issue),
+                            prefix + "comments.jsonl",
+                            generalComments,
+                            consumer);
+                } else {
+                    Set<Long> deliveredIds = provenance.deliveredIds(issue);
+                    each(rows.streamIssueComments(workspace, issue), comment -> {
+                        if (!deliveredIds.contains(comment.path("native_id").asLong())) {
+                            consumer.accept(new ProjectedRecord(
+                                    prefix + "comments.jsonl", generalComments, Format.JSONL, comment));
+                        }
+                    });
+                }
             }
             if (!pull) {
                 return;

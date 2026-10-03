@@ -71,6 +71,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
@@ -177,6 +178,9 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
 
     @Autowired
     private IssueRepository issueRepository;
+
+    @Autowired
+    private IssueEvidenceRevision issueEvidenceRevision;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -484,6 +488,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 gate,
                 workspaceResolver,
                 recorder,
+                issueEvidenceRevision,
                 transactionManager);
         for (String body : List.of("- [x] Confirm repair", "- [x] Confirm repair", "- [x] Confirm repair and test")) {
             transactions.executeWithoutResult(status -> {

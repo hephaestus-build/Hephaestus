@@ -77,10 +77,7 @@ const viteConfig = {
 		},
 	},
 	resolve: {
-		alias: {
-			"@/brand": path.resolve(import.meta.dirname, "brand"),
-			"@": path.resolve(import.meta.dirname, "./src"),
-		},
+		tsconfigPaths: true,
 	},
 	server: {
 		port: Number.parseInt(process.env.WEBAPP_PORT ?? "", 10) || 4200,
