@@ -37,16 +37,22 @@ const FeatureList: FeatureItem[] = [
 		cta: { label: "How to chat with Heph", to: "/user/ai-mentor" },
 	},
 	{
-		title: "Workspace controls",
-		kicker: "Your repositories, practices, and settings",
-		description:
-			"Workspace admins choose the source repositories, project context, practice catalog, and AI model.",
+		title: "Practice profile",
+		kicker: "Your workspace home when it reviews practices",
+		description: "See how your own work stands and read your private feedback.",
 		bullets: [
-			"Connect GitHub or GitLab",
-			"Add selected Slack channels and Outline documents as context",
-			"Manage members and teams",
+			"Open the evidence behind a practice",
+			"Respond to feedback",
+			"Read reviews of your work",
 		],
-		cta: { label: "Understand workspaces", to: "/user/workspace" },
+		cta: { label: "Read your Practice profile", to: "/user/practice-profile" },
+	},
+	{
+		title: "Activity",
+		kicker: "What needs you and what you worked on",
+		description: "Activity counts and lists work. It never scores work or ranks members.",
+		bullets: ["Find review requests", "See your work over a time range", "Read workspace activity"],
+		cta: { label: "Use Activity", to: "/user/activity" },
 	},
 ];
 

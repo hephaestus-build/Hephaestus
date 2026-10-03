@@ -13,11 +13,12 @@ const sidebars: SidebarsConfig = {
 			label: "Using Hephaestus",
 			collapsed: false,
 			items: [
+				"practice-profile",
 				"activity",
 				"ai-code-review",
-				"practice-profile",
 				"ai-mentor",
 				"workspace",
+				"user-settings",
 				"browser-extension",
 				"browser-extension-privacy",
 				"product-feedback",

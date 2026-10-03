@@ -84,6 +84,11 @@ broker. See [Consumers that outlive their deployment](#consumers-that-outlive-th
 
 ## How long a delivery is actually kept
 
+The self-host `.env.example` overrides the application defaults below with `512MB` per stream and
+`6GB` for GitHub. Its broker defaults are `NATS_JS_MAX_MEM=1G` and
+`NATS_JS_MAX_FILE_BYTES=10737418240` (10 GiB). The four configured stream bounds must fit within
+the broker's file-storage cap. Do not size that cap above the volume's available space.
+
 Each stream carries two bounds, and **which one binds depends on your traffic**:
 
 - `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE` (default `180d`) is the **ceiling** — the longest a delivery is
@@ -107,7 +112,7 @@ stream, so those are transport buffers and nothing more.
 
 ## The storage budget, and why it is not just a number
 
-`NATS_JS_MAX_FILE_BYTES` (default 16 GiB) sets two things from one value: the broker's own JetStream
+`NATS_JS_MAX_FILE_BYTES` (10 GiB in the self-host `.env.example`; 16 GiB without an override) sets two things from one value: the broker's own JetStream
 budget, and the total the receiver checks its per-stream bounds against. **The receiver refuses to
 start if the four bounds sum above it:**
 
@@ -223,7 +228,7 @@ Docker does not act on a failing healthcheck, so it will sit there indefinitely.
 
 6. **Account for what was lost.** Deliveries that arrived while the broker could not write were
    dropped at the edge; the provider saw a 503. Anything GitHub or GitLab retries comes back on its
-   own schedule — push events do not. Run a reconciliation sync from the instance admin console to
+   own schedule — push events do not. Select **Sync now** on the workspace connection under **Administration → Integrations → GitHub/GitLab** to
    re-fetch what falls inside `MONITORING_TIMEFRAME`; anything older than that window is gone.
 
 ## Payload size
@@ -268,6 +273,15 @@ at messages the stream no longer holds, and those are not delivered.
 Compose `configs:` block whose content renders to a bind-mounted file. Changing the content does not
 change the container's spec, so after a configuration change recreate the broker yourself, from the
 directory the reference stack is deployed from:
+
+For the self-host stack, run from `docker/self-host`:
+
+```bash
+docker compose up -d --force-recreate nats-server
+docker compose exec nats-server cat /etc/nats/nats-server.conf
+```
+
+For the reference stack:
 
 ```bash
 dc() { docker compose --env-file .env --env-file release-lock.env -p hephaestus-core -f compose.core.yaml "$@"; }

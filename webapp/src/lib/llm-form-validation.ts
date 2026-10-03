@@ -189,7 +189,8 @@ const llmModelFormSchema = z
 				ctx.addIssue({
 					code: "custom",
 					path: ["per1mInputUsd"],
-					message: "At least one rate must be above zero. For a free model, pick the free option.",
+					message:
+						"At least one rate must be above zero. For a model without usage charges, choose No metered API cost.",
 				});
 			}
 		}

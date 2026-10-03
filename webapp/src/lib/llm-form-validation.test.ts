@@ -95,6 +95,7 @@ describe("validateLlmModelForm", () => {
 			per1mOutputUsd: 0,
 		});
 		expect(errors.per1mInputUsd).toMatch(/above zero/u);
+		expect(errors.per1mInputUsd).toContain("choose No metered API cost");
 	});
 
 	it("accepts a price where only one rate is above zero", () => {

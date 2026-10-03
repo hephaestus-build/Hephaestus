@@ -383,6 +383,10 @@ Authentication is Hephaestus-native (no Keycloak — see [ADR 0017](https://gith
    the generated-clients module and starts the application module. Open the webapp and click
    **Sign in with GitHub**.
 
+GitLab workspaces are created only on `GITLAB_DEFAULT_SERVER_URL`, falling back to
+`GITLAB_OAUTH_BASE_URL`. Set it consistently on the server and workers. Additional GitLab login
+providers permit sign-in and identity linking; they do not permit syncing another GitLab instance.
+
 #### Super admin
 
 App-level admin is the `APP_ADMIN` role on the `account` table (authority `app_admin` in the JWT — `admin` is the per-workspace role name and is stripped from instance tokens), managed from the `/admin/users` UI by an existing admin. The first admin is seeded by listing them in `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` (e.g. `github:@you`) before first boot: the promotion runs on their first login, and is idempotent and promote-only. Hand-editing the DB is a last-resort fallback.

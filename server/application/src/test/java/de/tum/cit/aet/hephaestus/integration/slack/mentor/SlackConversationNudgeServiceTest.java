@@ -104,7 +104,7 @@ class SlackConversationNudgeServiceTest extends BaseUnitTest {
         ArgumentCaptor<String> fallback = ArgumentCaptor.forClass(String.class);
         verify(slackMessageService).sendForWorkspace(eq(WS), eq(SLACK_USER), anyList(), fallback.capture());
         assertThat(fallback.getValue())
-                .isEqualTo("You have 2 new practice observations to explore — reply here to go through them.");
+                .isEqualTo("You have 2 pieces of feedback to explore. Reply here to go through them.");
     }
 
     @Test
@@ -118,7 +118,7 @@ class SlackConversationNudgeServiceTest extends BaseUnitTest {
                         eq(WS),
                         eq(SLACK_USER),
                         anyList(),
-                        eq("You have 1 new practice observation to explore — reply here to go through it."));
+                        eq("You have 1 piece of feedback to explore. Reply here to go through it."));
     }
 
     @Test

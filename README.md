@@ -54,15 +54,19 @@ relationships stay with people.
   and communicating in the open. A workspace adopts the groups it cares about and can rewrite any
   practice inside them.
 - **Gets the feedback to the developer.** It can land on the work itself, on the developer's own
-  practice pages, or in their next conversation with Hephaestus. Every piece names the practice it
+  [Practice profile](https://docs.hephaestus.build/user/practice-profile), or in their next conversation with Heph. Feedback on the work waits for a workspace admin's approval by default. Every piece names the practice it
   came from and points at the evidence behind it.
 - **Answers follow-up questions.** Developers can ask why a suggestion matters or supply the context
   it did not have. In chat Hephaestus goes by Heph, in the web app and, when Slack is connected, in a
   direct message.
 - **Explains itself where the work is.** A Chrome extension shows, on the pull request, merge request
   or issue you are viewing, what Hephaestus recorded about it and why.
-- **Uses only the project context you connect.** GitHub and GitLab repositories, plus optional
-  selected Slack channels and Outline collections.
+- **Uses the project context you connect.** GitHub repositories and projects from one configured
+  GitLab instance, plus selected Outline collections and Slack channel messages members allow it to use.
+- **Respects your AI choice.** Each member chooses **In-house**, **Cloud**, or **No AI** across their
+  workspaces. That choice limits practice reviews and Heph; it does not stop source sync.
+- **Opens on your Practice profile.** This private page is the workspace home when it reviews
+  practices. Other workspaces open on Activity.
 - **Puts admins in control.** They configure repositories, practices, members, integrations, the AI
   model through any OpenAI-compatible endpoint, and a monthly spending cap.
 - **Shows what happened, without ranking anyone.** Activity shows what needs you, such as review
@@ -76,8 +80,8 @@ relationships stay with people.
 2. Hephaestus gathers a contribution together with the work around it: the issue, the change, the
    review thread, the conversation.
 3. It records what it observed against those practices, and writes feedback from those observations.
-4. The feedback goes where the developer will actually see it — on the work, on their own practice
-   pages, or in conversation.
+4. Feedback on the work waits for a workspace admin's approval by default. Private feedback can
+   appear on the developer's Practice profile or in conversation with Heph, under separate delivery checks.
 5. They act on it, push back with a reason, or let it pass. Their next contribution is read the same
    way.
 
@@ -87,7 +91,7 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 
 - **Try the hosted app:** open the [TUM deployment](https://hephaestus.build).
 - **Learn how it works:** read the [user guide](https://docs.hephaestus.build/user/overview).
-- **Run your own deployment.** One 64-bit Linux host, 4 vCPUs / 8 GB RAM / 40 GB SSD recommended:
+- **Run your own deployment.** One 64-bit Linux host, 4 vCPUs / 16 GB RAM / 40 GB SSD as a starting budget:
 
   ```bash
   VERSION=0.80.0   # the release you are installing, without the leading "v"

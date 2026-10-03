@@ -69,3 +69,14 @@ types define delivery outcomes and suppression reasons.
 - Persisted observations exclude candidates rejected before persistence. Invalid-output and failure-rate
   analysis requires a durable attempt and transition record rather than logs or observation rows alone.
 - Delivery and placement evidence does not establish that feedback was read or changed behaviour.
+
+## Approval and shown conversation feedback
+
+`feedback_approval` records the actor and decision on the exact proposed feedback package. Rejection
+records a reason; it does not invalidate observations. `observation_invalidation` records correction
+and restoration separately. Neither an approval nor a valid citation proves the underlying judgment
+is correct.
+
+Conversation feedback linked by a completed Heph turn counts as delivered only after the presentation
+record confirms it was shown. Without that confirmation it is `UNCONFIRMED`: neither delivered nor
+withheld, and never prepared again. Do not infer human exposure from a tool call alone.

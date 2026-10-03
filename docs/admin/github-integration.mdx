@@ -12,7 +12,7 @@ Hephaestus uses three GitHub mechanisms:
 | **PAT** *or* **GitHub App** | Repository data access and feedback delivery (per workspace) | One of the two |
 | **Webhook** | Live event ingestion (PRs, reviews, pushes, …) | Strongly recommended — without it updates wait for scheduled sync (hourly by default in production) |
 
-Configure login using the [OAuth App setup](./install#3-create-the-github-oauth-app-login--mandatory).
+Configure login using the [OAuth App setup](./install#3-configure-a-login-provider).
 
 ## Choosing PAT vs GitHub App
 
@@ -201,7 +201,7 @@ permissions and availability for each webhook type.
 queue before anything decides whether a consumer exists, and that queue is bounded and sheds the
 oldest delivery first. Subscribing to a high-volume family — `workflow_job` alone can outnumber
 `pull_request` a hundredfold — evicts the pull-request and review deliveries the queue is sized to
-hold until nightly reconciliation can re-fetch them; see
+hold until hourly production reconciliation can re-fetch them; see
 [webhook ingestion operations](./webhook-ingestion-operations). So provision the *permission* now,
 because the permission increase is what costs an approval round, and add the subscription in the
 release that ships the feature reading it.
@@ -237,7 +237,7 @@ to the manifest's `default_events`. The server also handles account renames thro
 `installation_target` when delivered.
 
 **Projects v2:** GitHub's event reference lists organization-webhook availability for the three
-project events. Verify App delivery with a real project change; if unavailable, add an
+project events. Discussions and Projects sync are off by default (`HEPHAESTUS_SYNC_DISCUSSIONS_ENABLED=false` and `HEPHAESTUS_SYNC_PROJECTS_ENABLED=false`). Verify App delivery with a pull request update; if unavailable, add an
 organization webhook subscribed **only to those three events**. Projects read is still required
 for API synchronization.
 
@@ -299,7 +299,7 @@ you have tooling for GitHub's manifest registration flow; Hephaestus does not im
 
 The GitHub App reads repositories with installation tokens; its callback URL and client credentials
 serve only to [confirm who installed it](#connecting-an-installation-to-a-workspace).
-Login uses a [separate OAuth App](./install#3-create-the-github-oauth-app-login--mandatory);
+Login uses a [separate OAuth App](./install#3-configure-a-login-provider);
 only that app's credentials belong in `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`, and only the
 GitHub App's in `GH_APP_CLIENT_ID` / `GH_APP_CLIENT_SECRET`.
 
@@ -405,7 +405,7 @@ polling to recover event-only history such as CI state at merge or security-resp
 | `401` on a real event | Check that the app/manual webhook secret matches `WEBHOOK_SECRET`; proxies must preserve the body and signature header. |
 | Timeout, TLS error, or `404` | Check public DNS, certificate chain, reverse-proxy routing, and webhook-role health. |
 | `5xx` | Inspect webhook-role and NATS health ([webhook ingestion operations](./webhook-ingestion-operations)); repair the failure before redelivery. |
-| `2xx`, but no application update | Check server consumption and workspace repository selection; an event no feature reads yet is acknowledged and dropped without updating anything. |
+| `2xx`, but no application update | Check server consumption, workspace repository selection, and the repository's sync error under **Administration → Integrations → GitHub → Manage repositories**; an event no feature reads yet is acknowledged and dropped without updating anything. |
 
 Follow GitHub's [delivery troubleshooting guide](https://docs.github.com/en/webhooks/testing-and-troubleshooting-webhooks/troubleshooting-webhooks).
 
