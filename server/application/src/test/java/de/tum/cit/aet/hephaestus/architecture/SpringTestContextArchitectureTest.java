@@ -39,6 +39,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("notification.email.EmailAdminControllerIntegrationTest", "email-capture"),
             assignment("agent.handler.ObservationAdmissionConcurrencyIntegrationTest", "admission-race"),
             assignment("agent.job.DeferredIssueEventIntegrationTest", "issue-event-transaction"),
+            assignment("agent.job.ClosedIssueDiscussionIntegrationTest", "issue-event-transaction"),
             assignment("agent.job.IssueUpdateCoalescerIntegrationTest", "issue-coalescer-transaction"),
             assignment("testconfig.RealAuthIntegrationTest", "real-auth"),
             assignment("StartupBudgetIntegrationTest", "startup"),
@@ -82,7 +83,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "real proxied observation admission with a held verification and bounded database lock waits"),
             Map.entry(
                     "issue-event-transaction",
-                    "real transactional event listener with controlled workspace resolution"),
+                    "real transactional event listeners, issue snapshots and comments with controlled workspace resolution"),
             Map.entry(
                     "issue-coalescer-transaction",
                     "real proxied job submission with controlled issue admission and bounded database lock waits"),

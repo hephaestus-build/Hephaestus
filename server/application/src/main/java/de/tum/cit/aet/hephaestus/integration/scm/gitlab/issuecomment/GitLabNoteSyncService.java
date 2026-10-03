@@ -20,6 +20,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** Syncs GitLab notes (comments) via GraphQL API. */
 @Service
@@ -36,16 +37,19 @@ public class GitLabNoteSyncService {
     private final GitLabGraphQlResponseHandler responseHandler;
     private final GitLabIssueCommentProcessor issueCommentProcessor;
     private final GitLabProperties gitLabProperties;
+    private final TransactionTemplate transactions;
 
     public GitLabNoteSyncService(
             GitLabGraphQlClientProvider graphQlClientProvider,
             GitLabGraphQlResponseHandler responseHandler,
             GitLabIssueCommentProcessor issueCommentProcessor,
-            GitLabProperties gitLabProperties) {
+            GitLabProperties gitLabProperties,
+            TransactionTemplate transactions) {
         this.graphQlClientProvider = graphQlClientProvider;
         this.responseHandler = responseHandler;
         this.issueCommentProcessor = issueCommentProcessor;
         this.gitLabProperties = gitLabProperties;
+        this.transactions = transactions;
     }
 
     public int syncNotesForIssue(Long scopeId, Repository repository, int issueIid, Issue parent) {
@@ -152,18 +156,17 @@ public class GitLabNoteSyncService {
                     break;
                 }
 
-                for (Map<String, Object> noteNode : nodes) {
-                    try {
+                int synced = Objects.requireNonNull(transactions.execute(status -> {
+                    int count = 0;
+                    for (Map<String, Object> noteNode : nodes) {
                         if (processNoteNode(noteNode, parent, providerId, scopeId)) {
-                            totalSynced++;
-                        } else {
-                            totalSkipped++;
+                            count++;
                         }
-                    } catch (Exception e) {
-                        log.warn("Error processing note: context={}, noteId={}", safeContext, noteNode.get("id"), e);
-                        totalSkipped++;
                     }
-                }
+                    return count;
+                }));
+                totalSynced += synced;
+                totalSkipped += nodes.size() - synced;
 
                 // Pagination
                 GitLabPageInfo pageInfo = Objects.requireNonNull(response)

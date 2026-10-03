@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -68,6 +69,9 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private IssueEvidenceRevision revisions;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -145,6 +149,7 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
                 mock(ReviewGate.class),
                 fixture.resolver(),
                 recorder,
+                revisions,
                 transactionManager);
         var updated = event();
 
@@ -222,7 +227,11 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
         return new ScmDomainEvent.IssueUpdated(issue, Set.of("title"), context);
     }
 
-    record Fixture(WorkspaceResolver resolver, IssueRepository issueRepository, PullRequestRepository pullRequests) {}
+    record Fixture(
+            WorkspaceResolver resolver,
+            IssueRepository issueRepository,
+            PullRequestRepository pullRequests,
+            ReviewGate gate) {}
 
     @TestConfiguration
     static class Configuration {
@@ -241,19 +250,27 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
         @Bean
         Fixture deferredIssueFixture() {
             return new Fixture(
-                    mock(WorkspaceResolver.class), mock(IssueRepository.class), mock(PullRequestRepository.class));
+                    mock(WorkspaceResolver.class),
+                    mock(IssueRepository.class),
+                    mock(PullRequestRepository.class),
+                    mock(ReviewGate.class));
         }
 
         @Bean
         IssueAgentJobEventListener deferredIssueListener(
-                Fixture fixture, SignalRecorder recorder, PlatformTransactionManager transactionManager) {
+                Fixture fixture,
+                IssueRepository issues,
+                SignalRecorder recorder,
+                IssueEvidenceRevision revisions,
+                PlatformTransactionManager transactionManager) {
             return new IssueAgentJobEventListener(
                     mock(AgentJobService.class),
-                    fixture.issueRepository(),
+                    issues,
                     fixture.pullRequests(),
-                    mock(ReviewGate.class),
+                    fixture.gate(),
                     fixture.resolver(),
                     recorder,
+                    revisions,
                     transactionManager);
         }
     }

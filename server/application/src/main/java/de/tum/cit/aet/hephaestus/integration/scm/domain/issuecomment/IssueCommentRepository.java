@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NoteIdProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.RepositoryItemCountProjection;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -68,4 +70,37 @@ public interface IssueCommentRepository extends JpaRepository<IssueComment, Long
             + "ORDER BY ic.createdAt DESC, ic.id DESC")
     List<IssueComment> findRecentHumanByIssueIdWithAuthor(
             @Param("issueId") Long issueId, @Param("excludedMarker") String excludedMarker, Pageable pageable);
+
+    /**
+     * The non-empty comments, oldest first, as stored. Delivery provenance is applied by the caller. A projection rather than
+     * entities: in the transaction that wrote a comment, an entity is the managed instance with the values Java
+     * set, while the column holds them as PostgreSQL rounded them, so a digest of entities would differ from the
+     * same digest taken after commit.
+     */
+    @Query("SELECT ic.id AS id, ic.nativeId AS nativeId, a.login AS authorLogin, ic.createdAt AS createdAt, "
+            + "ic.updatedAt AS updatedAt, ic.body AS body "
+            + "FROM IssueComment ic LEFT JOIN ic.author a "
+            + "WHERE ic.issue.id = :issueId AND ic.body IS NOT NULL AND TRIM(ic.body) <> '' "
+            + "ORDER BY ic.createdAt ASC NULLS LAST, ic.id ASC")
+    List<StoredComment> findStoredByIssueId(@Param("issueId") long issueId);
+
+    @Query("SELECT COUNT(ic) FROM IssueComment ic WHERE ic.issue.id = :issueId")
+    long countByIssueId(@Param("issueId") long issueId);
+
+    interface StoredComment {
+        Long getId();
+
+        Long getNativeId();
+
+        @Nullable
+        String getAuthorLogin();
+
+        @Nullable
+        Instant getCreatedAt();
+
+        @Nullable
+        Instant getUpdatedAt();
+
+        String getBody();
+    }
 }
