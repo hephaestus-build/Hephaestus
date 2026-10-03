@@ -53,9 +53,9 @@ The source code of Hephaestus is available under the MIT License at [github.com/
 
 ## Liability Disclaimer
 
-Information on this platform has been collected and verified to the best of our knowledge and belief. No warranty is given that the information is up to date, correct, or complete. No contractual relationship with users of this platform is established through its use.
+Information on this platform has been collected and verified to the best of our knowledge and belief. No warranty is given that the information is up to date, correct, or complete. Before publication, the legal owner must confirm `[applicable terms of use and contractual relationship]`, consistent with the legal bases recorded in [Privacy](/privacy).
 
-We accept no liability for any loss or damage caused by using this platform. The exclusion of liability does not apply where the provisions of § 839 BGB (German Civil Code — liability in case of breach of official duty) apply.
+This disclaimer does not limit statutory data-subject rights or liability under applicable law, including Art. 82 GDPR and § 839 BGB (liability in case of breach of official duty). The legal owner must confirm `[any permissible limitation of liability]` before publication.
 
 ## Data Protection
 
