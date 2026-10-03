@@ -9,11 +9,11 @@ Filled from the [record template](./accessibility-audit-record-template.md), fol
 [audit plan](./accessibility-audit-plan.md).
 
 Outcome: partial. Every route was scanned with axe in both colour schemes and walked with Tab in
-Chromium and Firefox, and three complete processes were run by keyboard alone. Nobody has run NVDA or
+Chromium, Firefox and WebKit, and three complete processes were run by keyboard alone. Nobody has run NVDA or
 VoiceOver, so every screen-reader cell below is `Not tested` and this record supports no WCAG 2.2 AA
 conformance claim. The [accessibility statement](/user/accessibility) says so.
 
-The evaluation found 15 barriers (F1 to F15) and one gap in the test coverage (F16). Each is fixed in
+The evaluation found 16 barriers (F1 to F16) and one gap in the test coverage (F17). Each is fixed in
 the same change, and each has a story, a test or a check in the accessibility spec that fails without
 the fix. Findings are tracked in
 [#1601](https://github.com/hephaestus-build/Hephaestus/issues/1601).
@@ -23,12 +23,12 @@ the fix. Findings are tracked in
 | Field | Value |
 | --- | --- |
 | Dates | 2026-10-03 |
-| Revision and release | `main` at `20dd2fca7`, which includes the instance overview readiness card ([#2416](https://github.com/hephaestus-build/Hephaestus/pull/2416)), plus this change; the code evaluated is commit `b9b3eb64f`. No release: the version string is `0.0.0-development`. |
+| Revision and release | `main` at `20dd2fca7`, which includes the instance overview readiness card ([#2416](https://github.com/hephaestus-build/Hephaestus/pull/2416)), plus this change; the code evaluated is commit `83a841624`. No release: the version string is `0.0.0-development`. |
 | Scope and sample rationale | Every route in the generated route tree that renders a page of its own, 51 in all. Redirect-only routes (`/landing`, `/w/:slug`, `/w/:slug/user/*`, `/w/:slug/admin/onboarding`) and the transient `/auth/callback` have no page to evaluate. The structured sample is therefore the whole route tree and no random sample was drawn. States that need data the evaluation deployment did not hold are listed as `Not tested` below. |
 | Deployment and test data | The production build of the SPA (`vp build`, served by `vp preview`) against the server run with the `e2e` profile and an empty PostgreSQL database seeded by `webapp/e2e/seed.sql`: one workspace, the shipped practice catalog, no synced work, no review runs and no configured language-model provider. Accounts: `e2e` (instance administrator and workspace administrator) and `e2e-plain` (workspace member). |
 | Evaluator | Scripted checks only: `webapp/e2e/accessibility.spec.ts`, the Storybook suite and a one-off member-role scan. No person used an assistive technology. |
 | WCAG-EM report | Not produced. The report needs screen-reader results for its sample, and there are none. |
-| Storybook report, revision and browser | `vp run --filter webapp test:storybook` at `b9b3eb64f`, Chromium 153.0.8010.12 with reduced motion: 313 files and 2,154 tests pass. axe-core 4.13.0 at `error` for every story. |
+| Storybook report, revision and browser | `vp run --filter webapp test:storybook` at `83a841624`, Chromium 153.0.8010.12 with reduced motion: 313 files and 2,155 tests pass. axe-core 4.13.0 at `error` for every story. |
 | Finding query | [Issues and pull requests that mention #1601](https://github.com/hephaestus-build/Hephaestus/issues?q=%231601). |
 
 ## Environments
@@ -37,10 +37,9 @@ the fix. Findings are tracked in
 | --- | --- | --- | --- | --- | --- |
 | E1 | Ubuntu 24.04, Linux 6.8 | Chromium 153.0.8010.12 (Playwright 1.63.0), 1280×720 | None | axe-core 4.13.0 through `@axe-core/playwright` 4.13.0, tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22aa`, `best-practice`; light then dark scheme; the Storybook suite runs with `prefers-reduced-motion: reduce` | Automated, keyboard |
 | E2 | Ubuntu 24.04, Linux 6.8 | Firefox 155.0 (Playwright 1.63.0), 1280×720 | None | The same spec and the same axe configuration | Automated, keyboard |
-| E3 | Windows | Firefox | NVDA | Not set up | Not tested: no Windows machine or NVDA tester was available |
-| E4 | macOS | Safari | VoiceOver | Not set up | Not tested: no macOS machine or VoiceOver tester was available |
-
-WebKit was not run, so Safari's layout and focus behaviour is also untested.
+| E3 | Ubuntu 24.04, Linux 6.8 | WebKit 26.6 (Playwright 1.63.0), 1280×720 | None | The same spec and the same axe configuration. This is the WebKit engine, not Safari on macOS. | Automated, keyboard |
+| E4 | Windows | Firefox | NVDA | Not set up | Not tested: no Windows machine or NVDA tester was available |
+| E5 | macOS | Safari | VoiceOver | Not set up | Not tested: no macOS machine or VoiceOver tester was available |
 
 ## Findings
 
@@ -64,8 +63,9 @@ component, listed where the component is shared.
 | F12 | Every signed-in page, review observations | 1.4.10 Reflow (AA) | In Firefox the header ran 3px past a 320px window, and the filter toolbar's actions ran 7px past it. Chromium fitted both exactly. | `Header.tsx` narrows its gaps at small widths; `FilterToolbar.tsx` lets its actions wrap. The toolbar has eight callers. | Stories `Mobile` of `Header` (room to spare) and `ActionsAtReflowWidth`; the Firefox run of the spec |
 | F13 | Sidebar workspace switcher | 1.4.12 Text Spacing (AA) | At the spacing the criterion sets, a workspace name ended in an ellipsis in the only place it is shown. | `WorkspaceSwitcher.tsx` lets the name wrap | Story `LongWorkspaceName` |
 | F14 | Review settings, landing page, dark theme | 1.4.3 Contrast (AA) | The chosen autonomy rung's description was 4.19:1 on its tint, and the landing page's "Merged" pill was 3.88:1. | `AutonomyLadder.tsx` and `LandingVisuals.tsx` | Stories `FullInDarkMode` and `WorkStatesInDarkMode`; the Review settings surface test in dark |
-| F15 | Every page change | 4.1.3 Status Messages (AA), not confirmed | The page changes without a load, so a screen reader said nothing when a link was followed. This is a barrier by design review: no screen reader has confirmed it. | `RouteAnnouncer.tsx` speaks the new page's title through a polite live region and keeps focus where it is. It stays silent for the first page and for a change of search. | Unit test `RouteAnnouncer.test.tsx`; the announcer test in the spec. A tester must confirm what NVDA and VoiceOver say. |
-| F16 | Dark theme, whole Storybook suite | 1.4.3 (AA) | Stories run in the light theme only, so a dark-theme defect passes unless a story asks for it. A run of every story in the dark theme found the contrast defects of F14 and nothing else of that kind. | Stories above ask for the dark theme. The full dark run was a one-off through a temporary global; its other failures came from stories that assume the light theme or remount when the theme changes, and were not triaged one by one. | The two dark stories above |
+| F15 | Every pressed outline button in the dark theme | 1.4.1 Use of Color (A), 1.4.11 Non-text Contrast (AA) | `dark:bg-input/30` outranked `aria-pressed:bg-muted`, so a pressed button looked like an unpressed one. | `ui/button.tsx` | Story `PressedTogglesLookSelectedInDarkMode` |
+| F16 | Every page change | 4.1.3 Status Messages (AA), not confirmed | The page changes without a load, so a screen reader said nothing when a link was followed. This is a barrier by design review: no screen reader has confirmed it. | `RouteAnnouncer.tsx` speaks the new page's title through a polite live region and keeps focus where it is. It stays silent for the first page and for a change of search. | Unit test `RouteAnnouncer.test.tsx`; the announcer test in the spec. A tester must confirm what NVDA and VoiceOver say. |
+| F17 | Dark theme, whole Storybook suite | 1.4.3 (AA) | Stories run in the light theme only, so a dark-theme defect passes unless a story asks for it. | The dark stories of F14 and F15. Every story was also run in the dark theme once, with `globals: { theme: "dark" }` added to each file's meta by a temporary edit that was not kept: 313 files and 2,155 tests pass. A first attempt through `initialGlobals` failed 79 stories; the 54 that were not contrast or F15 failed because the theme provider remounts a story when the global changes, and each passes with per-story globals. | The dark stories above |
 
 One more result is a tool's, not the application's. axe 4.13.0 reports `scrollable-region-focusable`
 for an ARIA menu taller than the window, because its items are `tabindex="-1"` and reached by arrow
@@ -77,7 +77,7 @@ when the axe pin moves.
 
 `Automated` is the axe run in the light and dark scheme, plus the page title, reflow at 320 and 640
 CSS pixels, and looping motion. `Keyboard` is a Tab walk of the surface: order, focus indicator, focus
-not entirely hidden, and no trap. `Pass` means it passed in E1 and E2, the environments that ran it.
+not entirely hidden, and no trap. `Pass` means it passed in E1, E2 and E3, the environments that ran it.
 The generated rows ran as the instance administrator, who is also a workspace administrator, on a
 database with no synced work, so a page that lists work shows its empty state. The evidence for each row is its test
 in `webapp/e2e/accessibility.spec.ts`.
@@ -149,21 +149,24 @@ they make on the way. These ran by keyboard alone.
 | --- | --- | --- | --- | --- | --- |
 | A new person signs in and accepts the terms | Signed out, then a new account | E1 | Pass | Not applicable: the dev sign-in accepts any name, and the checkbox keeps Continue disabled until it is ticked, so no step reports an error | Spec test "a new person signs in and accepts the terms". Sign-in through GitHub or GitLab leaves the application; that handoff and return are not tested. |
 | A new person signs in and accepts the terms | Signed out, then a new account | E2 | Pass | Not applicable, as above | The same test |
+| A new person signs in and accepts the terms | Signed out, then a new account | E3 | Pass | Not applicable, as above | The same test |
 | Create and delete a practice group | Workspace administrator | E1 | Pass | Not applicable: Create stays disabled until the name is typed and deletion asks first. A failed request was not induced. | Spec test "a practice group is created, shown and deleted" |
 | Create and delete a practice group | Workspace administrator | E2 | Pass | Not applicable, as above | The same test |
+| Create and delete a practice group | Workspace administrator | E3 | Pass | Not applicable, as above | The same test |
 | Share an idea with the instance administrators | Workspace administrator | E1 | Pass | Not applicable: Send stays disabled until there is a message. A failed request was not induced. | Spec test "an idea is sent to the instance administrators" |
 | Share an idea with the instance administrators | Workspace administrator | E2 | Pass | Not applicable, as above | The same test |
-| Create a workspace from a provider | Signed in | E1, E2 | Not tested: the evaluation deployment has no GitHub App or GitLab login | Not tested | Only the pages before the provider are in the surface table |
-| Respond to feedback on work | Signed in, with feedback | E1, E2 | Not tested: no feedback exists in the deployment | Not tested | |
-| Talk with Heph | Workspace member | E1, E2 | Not tested: no language-model provider | Not tested | |
-| Change settings and delete an account | Signed in | E1, E2 | Not tested | Not tested | The settings page passes axe and the Tab walk; the destructive steps were not run |
-| Every process above | Any role | E3, E4 | Not tested | Not tested | No screen reader has run any process |
+| Share an idea with the instance administrators | Workspace administrator | E3 | Pass | Not applicable, as above | The same test |
+| Create a workspace from a provider | Signed in | E1, E2, E3 | Not tested: the evaluation deployment has no GitHub App or GitLab login | Not tested | Only the pages before the provider are in the surface table |
+| Respond to feedback on work | Signed in, with feedback | E1, E2, E3 | Not tested: no feedback exists in the deployment | Not tested | |
+| Talk with Heph | Workspace member | E1, E2, E3 | Not tested: no language-model provider | Not tested | |
+| Change settings and delete an account | Signed in | E1, E2, E3 | Not tested | Not tested | The settings page passes axe and the Tab walk; the destructive steps were not run |
+| Every process above | Any role | E4, E5 | Not tested | Not tested | No screen reader has run any process |
 
 ## Remaining work
 
 An AA conformance claim stays out of reach until every item here is closed.
 
-NVDA with Firefox on Windows (E3) and VoiceOver with Safari on macOS (E4). On both, for the
+NVDA with Firefox on Windows (E4) and VoiceOver with Safari on macOS (E5). On both, for the
 surfaces in the table above and every process in the second table:
 
 1. Open the landmark list and the heading list on each page. Expect one navigation named "Primary", a
@@ -186,8 +189,6 @@ the reviewed-work feedback page, and the connected integration screens.
 
 Roles. Run the keyboard walk as a workspace member, and complete the keyboard processes in each
 role the application supports.
-
-Browsers. Run the spec in WebKit; Safari's focus and layout behaviour is untested.
 
 The record itself. Choose a random sample once the above exist and produce the WCAG-EM report.
 
@@ -212,5 +213,5 @@ vp run --filter webapp test:e2e accessibility.spec.ts    # axe, keyboard and pro
 vp run --filter webapp test:storybook                    # axe on every story
 ```
 
-The spec runs in the existing end-to-end job in CI, on Chromium. The Firefox run used a throwaway
-Playwright configuration with a `firefox` project and the same file.
+The spec runs in the existing end-to-end job in CI, on Chromium. The Firefox and WebKit runs used a
+throwaway Playwright configuration with a `firefox` or `webkit` project and the same file.

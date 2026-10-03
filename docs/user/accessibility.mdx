@@ -27,8 +27,8 @@ content. Linked external sites and identity-provider pages are outside its scope
 
 On 3 October 2026 we evaluated all 51 pages of the application:
 
-- Automated checks with axe-core 4.13.0 in the light and dark colour schemes, in Chromium 153
-  and Firefox 155, on Linux. Every page passes.
+- Automated checks with axe-core 4.13.0 in the light and dark colour schemes, in Chromium 153,
+  Firefox 155 and WebKit 26.6, on Linux. Every page passes.
 - Keyboard checks. For each page we walked the Tab order and checked that every control shows
   where focus is, that nothing hides it, and that focus can always move on. Every page passes. We
   also finished three processes without a pointer: signing in and accepting the terms, creating and
@@ -37,7 +37,7 @@ On 3 October 2026 we evaluated all 51 pages of the application:
   1280-pixel window, for sideways scrolling; at the text spacing WCAG 2.2 sets, by eye on a sample of
   pages; and for motion that never stops.
 
-The evaluation found fifteen barriers and fixed all of them. They included pages without their own
+The evaluation found sixteen barriers and fixed all of them. They included pages without their own
 title, a skip link hidden behind the sidebar, menu items that screen readers would not have read as
 menu items, and animation that never stopped. The
 [audit record](/contributor/accessibility-audit-record-2026-10-03) lists each one with its fix.
@@ -48,8 +48,8 @@ menu items, and animation that never stopped. The
   on any page or process, so barriers that only a screen reader reveals may remain. The application
   now announces the new page's title when you follow a link; we have not confirmed how screen readers
   voice it.
-- Safari is not tested with any assistive technology, and its layout and focus behaviour is
-  unchecked.
+- Safari on macOS is not tested with any assistive technology. The WebKit engine passes the same
+  checks on Linux, which is not the same as Safari.
 - Pages with real data are only partly evaluated. The evaluated installation held no synced
   work, review runs or language-model provider. The pages that show feedback, review results,
   activity, usage charts and audit entries were checked with sample data in component tests, but not
