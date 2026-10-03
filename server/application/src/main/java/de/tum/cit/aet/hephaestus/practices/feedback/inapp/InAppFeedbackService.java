@@ -106,11 +106,11 @@ public class InAppFeedbackService {
         Map<UUID, WorkResolution> resolutions = feedbackEvidence.workResolutions(
                 workspaceId,
                 recipientUserId,
-                awaitingTheWork(readable, reads, now),
+                awaitingTheWork(reads, now),
                 reads.evidence(),
                 reads.practiceChangedAt(),
                 now);
-        List<Slot> page = page(readable, reads, resolutions, now);
+        List<Slot> page = page(reads.rows(), reads, resolutions, now);
         List<UUID> toMarkDelivered = page.stream()
                 .map(Slot::feedback)
                 .filter(feedback -> delivering && feedback.getDeliveryState() == FeedbackDeliveryState.PREPARED)
@@ -136,9 +136,9 @@ public class InAppFeedbackService {
         List<Feedback> readable = feedbackRepository.findReadableInAppForRecipients(workspaceId, recipientUserIds);
         Reads reads = reads(workspaceId, readable);
         Map<UUID, WorkResolution> resolutions = feedbackEvidence.workResolutionsOfRecipients(
-                workspaceId, awaitingTheWork(readable, reads, now), reads.evidence(), reads.practiceChangedAt(), now);
+                workspaceId, awaitingTheWork(reads, now), reads.evidence(), reads.practiceChangedAt(), now);
         Map<Long, List<Feedback>> byRecipient =
-                readable.stream().collect(Collectors.groupingBy(Feedback::getRecipientUserId));
+                reads.rows().stream().collect(Collectors.groupingBy(Feedback::getRecipientUserId));
         Map<Long, Integer> open = new LinkedHashMap<>();
         for (Long recipientUserId : recipientUserIds) {
             open.put(recipientUserId, (int)
@@ -150,14 +150,16 @@ public class InAppFeedbackService {
     }
 
     /**
-     * What the card rule reads besides the rows and the work, keyed by feedback id.
+     * What the card rule reads besides the work, keyed by feedback id.
      *
+     * @param rows the readable rows that can be cards, in their newest-first order
      * @param withdrawnAt when each row with an open withdrawal was withdrawn
      * @param evidence the evidence each row may still show; a row absent here is no card
      * @param practiceChangedAt when the practice behind a row's evidence changed its review rules
      * @param responses the recipient's answer that stands on a row
      */
     private record Reads(
+            List<Feedback> rows,
             Map<UUID, Instant> withdrawnAt,
             Map<UUID, List<Observation>> evidence,
             Map<UUID, Instant> practiceChangedAt,
@@ -166,19 +168,25 @@ public class InAppFeedbackService {
     private Reads reads(Long workspaceId, List<Feedback> readable) {
         Map<UUID, Instant> withdrawnAt = withdrawnAt(workspaceId, readable);
         // A withdrawn card nobody was shown is not on the page at all; one already shown says it was withdrawn.
-        List<UUID> rows = readable.stream()
+        List<Feedback> shown = readable.stream()
                 .filter(feedback -> !withdrawnAt.containsKey(feedback.getId())
                         || feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
-                .map(Feedback::getId)
                 .toList();
-        Map<UUID, List<Observation>> evidence = feedbackEvidence.visibleEvidence(workspaceId, rows);
+        Map<UUID, List<Observation>> evidence = feedbackEvidence.visibleEvidence(
+                workspaceId, shown.stream().map(Feedback::getId).toList());
+        // Hidden, not deleted. Feedback whose evidence source's authorization was withdrawn must stop being shown,
+        // but the ledger still records that we said it, which is the whole point of a ledger. Feedback whose
+        // practice changed its review rules stays, closed, and the card says so.
+        List<Feedback> rows = shown.stream()
+                .filter(feedback -> evidence.containsKey(feedback.getId()))
+                .toList();
         Map<UUID, FeedbackResponseDTO> responses = evidence.isEmpty()
                 ? Map.of()
                 : reactionRepository.findCurrentResponses(workspaceId, evidence.keySet()).stream()
                         .collect(Collectors.toMap(
                                 CurrentResponseRow::getFeedbackId,
                                 row -> FeedbackResponseDTO.from(row.getFeedbackId(), row)));
-        return new Reads(withdrawnAt, evidence, feedbackEvidence.practiceChangedAt(evidence), responses);
+        return new Reads(rows, withdrawnAt, evidence, feedbackEvidence.practiceChangedAt(evidence), responses);
     }
 
     /**
@@ -186,9 +194,8 @@ public class InAppFeedbackService {
      * page whatever the work says, since the work can only close it earlier; leaving it out keeps the work read to
      * the cards that remain.
      */
-    private static List<Feedback> awaitingTheWork(List<Feedback> readable, Reads reads, Instant now) {
-        return readable.stream()
-                .filter(feedback -> reads.evidence().containsKey(feedback.getId()))
+    private static List<Feedback> awaitingTheWork(Reads reads, Instant now) {
+        return reads.rows().stream()
                 .filter(feedback -> !reads.withdrawnAt().containsKey(feedback.getId()))
                 .filter(feedback -> {
                     FeedbackClosure closedWithoutTheWork = FeedbackClosure.of(
@@ -234,21 +241,15 @@ public class InAppFeedbackService {
     }
 
     /**
-     * The cards one recipient's page shows, newest first: every readable row with evidence left to
-     * show, open or closed for less than {@link #CLOSED_CARD_STAYS}, at most {@link #MAX_CARDS}. Pure over what the
-     * caller read, so the page a developer reads and the open count another page shows of it are one rule.
+     * The cards one recipient's page shows, newest first: every row that can be a card, open or closed for less
+     * than {@link #CLOSED_CARD_STAYS}, at most {@link #MAX_CARDS}. Pure over what the caller read, so the page a
+     * developer reads and the open count another page shows of it are one rule.
      *
-     * @param readable the recipient's readable rows, newest first
+     * @param rows the recipient's {@link Reads#rows}
      */
     private static List<Slot> page(
-            List<Feedback> readable, Reads reads, Map<UUID, WorkResolution> resolutions, Instant now) {
-        return readable.stream()
-                .filter(feedback -> !reads.withdrawnAt().containsKey(feedback.getId())
-                        || feedback.getDeliveryState() == FeedbackDeliveryState.DELIVERED)
-                // Hidden, not deleted. Feedback whose evidence source's authorization was withdrawn must stop
-                // being shown, but the ledger still records that we said it, which is the whole point of a
-                // ledger. Feedback whose practice changed its review rules stays, closed, and the card says so.
-                .filter(feedback -> reads.evidence().containsKey(feedback.getId()))
+            List<Feedback> rows, Reads reads, Map<UUID, WorkResolution> resolutions, Instant now) {
+        return rows.stream()
                 .map(feedback -> slot(feedback, reads, resolutions))
                 .filter(slot -> stillOnThePage(slot.closedAt(), now))
                 // Stable, so every other card keeps the rows' newest-first order.
