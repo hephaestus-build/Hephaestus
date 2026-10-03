@@ -15,10 +15,11 @@ We have not established conformance of the Hephaestus web application to [WCAG 2
 We make no conformance claim.
 
 The evaluation is partial.
-Automated checks and keyboard checks are complete for each page.
+Automated checks are complete for each page.
+Keyboard checks are complete for the administrator pages.
 Nobody has run the application with a screen reader yet.
 The results below therefore say nothing about how NVDA or VoiceOver read it.
-AA conformance requires each page and process to pass with a screen reader too.
+AA conformance requires full pages and complete processes to meet the applicable success criteria.
 
 This statement covers the Hephaestus single-page application, including its presentation of imported content.
 It excludes linked external sites and identity-provider pages.
@@ -28,7 +29,7 @@ It excludes linked external sites and identity-provider pages.
 On 3 October 2026, we evaluated all 51 application pages:
 
 - Automated checks used axe-core 4.13.0 in light and dark color schemes on Linux. Browsers were Chromium 153, Firefox 155, and WebKit 26.6. Every page passes.
-- Keyboard checks examined Tab order, visible focus for each control, and unrestricted focus movement on each page. Every page passes. We completed sign-in with terms acceptance without a pointer. We also completed practice group creation and deletion, and idea submission to instance administrators.
+- Keyboard checks examined Tab order, visible focus for each control, and unrestricted focus movement on the administrator pages. Each checked page passes. We completed sign-in with terms acceptance without a pointer. We also completed practice group creation and deletion, and idea submission to instance administrators.
 - Layout checks examined horizontal scroll at 320 and 640 pixels wide. These widths correspond to 400% and 200% zoom on a 1280-pixel window. We visually checked a sample of pages at WCAG 2.2 text spacing. We also checked for continuous motion.
 
 The evaluation found and fixed sixteen barriers.
