@@ -4,51 +4,60 @@ title: Admin overview
 description: What a Hephaestus deployment consists of and the order to set it up in.
 ---
 
-This guide is for the people who run a Hephaestus deployment: installing it, connecting it to GitHub
-or GitLab, choosing an AI provider, and keeping it healthy. Developers who use Hephaestus want the
-[User Guide](/user/overview); people changing the code want the
-[Contributor Guide](/contributor/overview).
+This guide is for people who run a Hephaestus deployment.
+It covers installation, GitHub or GitLab connections, AI provider selection, and operations.
+Developers who use Hephaestus need the [User Guide](/user/overview).
+People who change the code need the [Contributor Guide](/contributor/overview).
 
 ## What a deployment consists of
 
-One Docker Compose stack on a single 64-bit Linux host. One application image boots in three roles —
-`server`, `worker` and `webhook` — alongside PostgreSQL, a NATS event buffer, and Traefik for TLS.
-Sign-in runs through a GitHub or GitLab OAuth app you register during the install; the worker starts a
-sandboxed container for each practice review rather than keeping one running.
-[Runtime roles](./runtime-roles) explains what each role does and why the webhook role gets its own
-container.
+A deployment uses one Docker Compose stack on a single 64-bit Linux host.
+One application image starts in three runtime roles: `server`, `worker`, and `webhook`.
+The stack also has PostgreSQL, a NATS event buffer, and Traefik for TLS.
+
+Sign-in uses a GitHub or GitLab OAuth app that you register during installation.
+The worker starts a sandboxed container for each practice review.
+It does not keep that container active between reviews.
+[Runtime roles](./runtime-roles) explains each role and why the webhook role has its own container.
 
 ## Two kinds of admin
 
-- **Instance admin** — operates the whole deployment: the AI providers available to it, the practice
-  catalog workspaces may adopt from, and instance-wide settings.
-- **Workspace admin** — configures one workspace: its repositories, its practices, its members, its
-  AI model and spending cap.
+- **Instance admin** — operates the whole deployment. This includes AI providers, instance-wide settings, and the practice catalog that workspaces can adopt from.
+- **Workspace admin** — configures one workspace. This includes its repositories, practices, members, AI model, and cap on AI spend.
 
-A person can be both. [Instance admin](./instance-admin) covers the operator console;
+A person can be both.
+[Instance admin](./instance-admin) covers the operator console.
 [Integrations](./integrations) covers workspace connections.
 
 ## Set it up in this order
 
-1. **[Install](./install)** — the supported Compose stack, the required `.env` values, and TLS.
-2. **[Connect a source](./integrations)** — the GitHub App or the GitLab connection that brings
-   repository activity in. [Integrations & reference deployment](./production-setup) covers Slack and
-   Outline.
-3. **[Connect an AI provider](./ai-providers)** — any OpenAI-compatible endpoint, plus the spending
-   cap that bounds it.
-4. **[Choose practices](./practice-catalog)** — what the instance offers and what a workspace adopts.
-   [Practice review](./practice-review) explains how a review actually runs.
-5. **[Publish the legal pages](./legal-pages)** — imprint and privacy information for your
-   deployment. The [data-protection documentation](./dsms) has the GDPR records.
+1. [Install](./install) the supported Compose stack. The guide covers required `.env` values and TLS.
+2. [Connect a source](./integrations): a GitHub App or GitLab connection that supplies repository activity.
+   [Integrations & reference deployment](./production-setup) covers Slack and Outline.
+3. [Connect an AI provider](./ai-providers) with an OpenAI-compatible endpoint.
+4. Set a cap on AI spend.
+5. [Choose practices](./practice-catalog) for the instance to offer and the workspace to adopt.
+   [Practice review](./practice-review) explains how a review runs.
+6. [Publish the legal pages](./legal-pages) with imprint and privacy information for your deployment.
+   The [data-protection documentation](./dsms) has the GDPR records.
 
 ## Keep it running
 
-Start with the [Production operations runbook](./production-operations-runbook) for the silent deployment
-checklist, incident brakes, migration recovery, PostgreSQL × JetStream restore, and external feedback removal.
+The [Production operations runbook](./production-operations-runbook) covers these subjects:
+
+- The silent deployment checklist.
+- Incident brakes.
+- Migration recovery.
+- PostgreSQL × JetStream restore.
+- Removal of external feedback.
 
 [Practice review operations](./practice-review-operations) and
-[webhook ingestion operations](./webhook-ingestion-operations) cover the two pipelines that fail most
-visibly. [Backup & restore](./backup-restore) covers recovery. Before upgrading, read the
-[compatibility policy](./compatibility-policy) and the
-[migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md), then test the
-upgrade in staging — Hephaestus is pre-1.0, so a minor release can still require action.
+[webhook ingestion operations](./webhook-ingestion-operations) cover the two pipelines whose failures are most visible.
+[Backup & restore](./backup-restore) covers recovery.
+
+Hephaestus is pre-1.0.
+A minor release can still require action.
+
+1. Before an upgrade, read the [compatibility policy](./compatibility-policy).
+2. Read the [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md).
+3. Test the upgrade in staging.

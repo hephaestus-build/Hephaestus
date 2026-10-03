@@ -1,1 +1,14 @@
-[".vale/README.md", "docs/contributor/simplified-technical-english.md"]
+[
+	".vale/README.md",
+	"docs/admin/buildpacks-cds-decision.md",
+	"docs/admin/compatibility-policy.mdx",
+	"docs/admin/credential-key-rotation.mdx",
+	"docs/admin/dsms/README.md",
+	"docs/admin/instance-admin.mdx",
+	"docs/admin/integrations.mdx",
+	"docs/admin/legal-pages.mdx",
+	"docs/admin/liquibase-baseline-runbook.md",
+	"docs/admin/overview.mdx",
+	"docs/admin/release-image-lock.md",
+	"docs/contributor/simplified-technical-english.md"
+]

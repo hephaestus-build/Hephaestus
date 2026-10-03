@@ -10,11 +10,12 @@ in [Integrations and reference deployment](./production-setup). Account linking 
 
 ## GitHub
 
-Install the GitHub App for the organisation, or use a personal access token connection.
 [GitHub integration](./github-integration) owns app setup and permissions.
-For an App connection, manage repository access in the GitHub installation. For a token-managed
-connection, open **Administration → Integrations → GitHub → Manage repositories → Add a repository**.
-Removing a monitored repository erases its mirror, not the upstream repository.
+Removal of a monitored repository erases its mirror, not the upstream repository.
+
+1. Install the GitHub App for the organization or use a personal access token connection.
+2. For an App connection, manage repository access in the GitHub installation.
+3. For a token-managed connection, open **Administration → Integrations → GitHub → Manage repositories → Add a repository**.
 
 ## GitLab
 
@@ -22,24 +23,31 @@ A deployment syncs one GitLab instance. **Create workspace** lets an eligible us
 that configured instance, using their linked GitLab account and an access token. A login provider
 for a different instance permits sign-in, but does not permit a workspace there.
 
-Open **Administration → Integrations → GitLab → Manage repositories → Add a repository** to add a
-project by its full namespace path. Group hooks are registered automatically with a signed routing
-token bound to the connection. Do not replace that token with `WEBHOOK_SECRET`.
+Hephaestus automatically registers group hooks with a signed routing token bound to the connection.
+Do not replace that token with `WEBHOOK_SECRET`.
+
+1. Open **Administration → Integrations → GitLab → Manage repositories → Add a repository**.
+2. Add the project by its full namespace path.
 
 The connection shows token expiry. Hephaestus checks the token each day and rotates it before expiry
 when GitLab permits it. If it cannot rotate the token, use **Personal access token → Replace token**.
 This keeps repositories and stored work. Optional connection-alert emails report problems and recovery.
 
-GitLab reconciliation removes deleted issue and merge-request notes, including diff notes, only after
-a complete listing and a direct check establish that each missing note is gone. An incomplete listing
-removes nothing for that parent. Do not expect every deletion to arrive as a webhook.
+GitLab reconciliation removes deleted issue and merge-request notes, including diff notes.
+Removal requires a complete listing and a direct check that each missing note is gone.
+An incomplete listing removes nothing for that parent.
+Do not expect every deletion to arrive as a webhook.
 
 ## Slack
 
-Open **Administration → Integrations → Slack** and connect the Slack workspace through OAuth.
 Members must separately link their Slack accounts to use Heph in direct messages.
-Use the channel picker to add channels for monitoring. Monitoring starts after a visible announcement
-is posted. Channel monitoring and a member's permission to use their messages are separate:
+Monitoring starts after a visible announcement is posted.
+
+1. Open **Administration → Integrations → Slack**.
+2. Connect the Slack workspace through OAuth.
+3. Use the channel picker to add channels for monitoring.
+
+Channel monitoring and a member's permission to use their messages are separate:
 [User settings → Slack](/user/user-settings#slack) lets members control their new channel messages.
 The workspace connection does not override a member's AI choice.
 
@@ -48,45 +56,61 @@ channels, their consent, mirrored messages, or retention settings. Do not use **
 
 ## Outline
 
-Open **Administration → Integrations → Outline**, enter an operator-approved HTTPS origin and an API
-key, then register the collections to mirror. Hephaestus reads those collections; it does not write
-documents to Outline. Members can link their own Outline accounts to attribute authored documents.
-A workspace admin cannot approve a new Outline operator by entering its URL.
+Hephaestus reads the selected collections.
+It does not write documents to Outline.
+Members can link their own Outline accounts to attribute authored documents.
+A workspace admin cannot approve a new Outline operator through its URL.
+
+1. Open **Administration → Integrations → Outline**.
+2. Enter an operator-approved HTTPS origin and an API key.
+3. Register the collections to mirror.
 
 ### Replace an Outline key without erasing the mirror
 
-The current UI has no key-replacement form for an existing connection. **Disconnect** erases the
-mirror. To keep it, create a working API key in Outline, then, as a workspace admin, use the existing
-connection API on the application server:
+The current UI has no key-replacement form for an existing connection.
+**Disconnect** erases the mirror.
 
-```http
-POST /api/workspaces/{workspaceSlug}/connections
-Content-Type: application/json
+1. To keep the mirror, create a valid API key in Outline.
+2. As a workspace admin, use the existing connection API on the application server:
 
-{
-  "kind": "OUTLINE",
-  "userInput": {
-    "server_url": "https://wiki.example.com",
-    "token": "<new API key>"
-  }
-}
-```
+   ```http
+   POST /api/workspaces/{workspaceSlug}/connections
+   Content-Type: application/json
 
-Send this as an authenticated request with the normal CSRF protection. Keep the key out of shell
-history, logs, and support tickets. Use the same origin and a key belonging to the same Outline team.
-The response's connection ID must match the existing connection. The API validates the key and
-updates that connection's credentials without deleting documents or collection registrations.
-It resets connection configuration, including subscription metadata; check webhook registration
-and use **Sync now** to verify that collections refresh before revoking the old key.
-Do not change the origin or team as part of key rotation.
+   {
+     "kind": "OUTLINE",
+     "userInput": {
+       "server_url": "https://wiki.example.com",
+       "token": "<new API key>"
+     }
+   }
+   ```
+
+   Send this as an authenticated request with normal CSRF protection.
+   Keep the key out of shell history, logs, and support tickets.
+   Use the same origin and a key that belongs to the same Outline team.
+   Do not change the origin or team during key rotation.
+
+3. Check that the response's connection ID matches the existing connection.
+4. Check webhook registration.
+5. Use **Sync now** to verify that collections refresh.
+6. Revoke the old key only after that check succeeds.
+
+The API validates the key and updates the connection's credentials without deletion of documents or collection registrations.
+It resets connection configuration, including subscription metadata.
 
 ## Read sync errors
 
-For repositories, open **Administration → Integrations → GitHub/GitLab → Manage repositories**.
-For Slack channels or Outline collections, open that integration's page and its resource sync table.
-Read the affected resource's last error; a healthy connection does not prove every resource synced.
-Correct access or configuration, then select **Sync now** on the connection. An error clears only when
-its affected sync path succeeds. A skipped pass keeps the error.
+A healthy connection does not prove that every resource synced.
+An error clears only when its affected sync path succeeds.
+A skipped pass keeps the error.
+
+1. For repositories, open **Administration → Integrations → GitHub/GitLab → Manage repositories**.
+2. For Slack channels or Outline collections, open that integration's page.
+3. Open its resource sync table.
+4. Read the affected resource's last error.
+5. Correct access or configuration.
+6. Select **Sync now** on the connection.
 
 A repository reported as **Repository not found or not accessible** may have moved or lost access.
 The mirror stays. After two consecutive unavailable responses, automatic rechecks run at most once
@@ -102,7 +126,9 @@ provider cleanup. Reconnecting does not restore that data.
 - Slack: mirrored messages, threads, channel records, and associated consent records.
 - Outline: mirrored documents, collection registrations, and document events.
 
-The upstream repositories, messages, and documents remain. Provider cleanup is best effort; inspect
-provider-side app access, hooks, and keys separately. If local erasure fails, the connection remains
-unchanged. To repair a credential, use the replacement paths above or
-[Credential key rotation](./credential-key-rotation), not Disconnect.
+The upstream repositories, messages, and documents remain.
+Provider cleanup is best effort.
+If local erasure fails, the connection remains unchanged.
+
+1. Inspect provider-side app access, hooks, and keys separately.
+2. To repair a credential, use the replacement paths above or [Credential key rotation](./credential-key-rotation), not Disconnect.
