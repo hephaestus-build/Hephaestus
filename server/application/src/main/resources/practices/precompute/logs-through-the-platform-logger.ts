@@ -130,9 +130,7 @@ export default async function logsThroughThePlatformLogger(
 			`${prints} print-style call(s) added (${printsInToolPaths} listed under a tool or script path) against ${loggers} logger call(s); ${existing.length > 0 ? `the checkout matches a logger (${existing[0]?.file ?? ""})` : "a bounded search of the checkout matched no logger definition, which does not show there is none"}. Read each print's file to decide whether it is the program's output, a DEBUG-only block or a shipped diagnostic.`,
 		);
 	} else if (loggers > 0) {
-		directions.push(
-			`${loggers} logger call(s) added and no print-style call; check the level and category on each.`,
-		);
+		directions.push(`${loggers} logger call(s) added and no print-style call.`);
 	}
 	return {
 		hints: listed,

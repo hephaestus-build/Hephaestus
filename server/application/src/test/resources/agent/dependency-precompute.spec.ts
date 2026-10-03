@@ -49,7 +49,7 @@ function diffFile(file: string, added: string[], removed: string[] = []): DiffFi
 	};
 }
 
-void test("an XcodeGen project.yml is a dependency manifest: a package's url and bound are one fact", async () => {
+void test("an XcodeGen project.yml edit lists its changed package lines without calling the package new", async () => {
 	const { root, script } = await stage();
 	try {
 		const result = await script(
@@ -71,15 +71,142 @@ void test("an XcodeGen project.yml is a dependency manifest: a package's url and
 			]),
 			metadata,
 		);
-		const added = result.hints.filter((h) => h.pattern === "dep:ADDED");
+		// The url may be unchanged and merely re-added beside the new bound: nothing here says the package is new.
 		assert.deepEqual(
-			added.map((h) => [h.flags.dependency, h.context]),
-			[["ConfettiSwiftUI", "+ ConfettiSwiftUI from:2.0.0"]],
+			result.hints.map((h) => [h.pattern, h.context, h.flags.side]),
+			[
+				["candidate:raw manifest line", "- from: 1.3.0", "removed"],
+				[
+					"candidate:raw manifest line",
+					"+ url: https://github.com/simibac/ConfettiSwiftUI",
+					"added",
+				],
+				["candidate:raw manifest line", "+ from: 2.0.0", "added"],
+			],
 		);
 		assert.equal(result.metrics.manifestsChanged, 1);
-		assert.equal(result.metrics.depsAdded, 1);
-		// A bound line with no url line before it in the window names no package and is not a fact.
-		assert.equal(result.metrics.depsRemoved, 0);
+		assert.equal(result.metrics.onlyAdded, 0);
+		assert.equal(result.metrics.unpairedManifestLines, 3);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a pom.xml version moved away from its artifactId is not a dropped pin; a requirement that loses its pin is", async () => {
+	const { root, script } = await stage();
+	try {
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([
+				[
+					"pom.xml",
+					diffFile(
+						"pom.xml",
+						[
+							"      <artifactId>guava</artifactId>",
+							"      <!-- the last release for Java 8 -->",
+							"      <type>jar</type>",
+							"      <version>33.0.0-jre</version>",
+						],
+						["      <artifactId>guava</artifactId>", "      <version>33.0.0-jre</version>"],
+					),
+				],
+				[
+					"requirements.txt",
+					diffFile("requirements.txt", ["requests"], ["requests==2.31.0", "urllib3==2.2.1"]),
+				],
+			]),
+			metadata,
+		);
+		assert.equal(result.metrics.unpairedManifestLines, 4);
+		assert.equal(result.metrics.pinsDropped, 1);
+		assert.deepEqual(
+			result.hints.filter((h) => h.file === "requirements.txt").map((h) => [h.pattern, h.context]),
+			[
+				["candidate:PIN_DROPPED", "requests: ==2.31.0 -> "],
+				["candidate:ONLY_REMOVED", "- urllib3 ==2.2.1"],
+			],
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("raw manifest lines beyond the hint cap are counted but reported as not listed", async () => {
+	const { root, script } = await stage();
+	try {
+		const artifacts = Array.from(
+			{ length: 45 },
+			(_, i) => `      <artifactId>lib-${i}</artifactId>`,
+		);
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([
+				[
+					"package.json",
+					diffFile("package.json", [
+						'    "a": "^1.0.0",',
+						'    "b": "^2.0.0",',
+						'    "c": "^3.0.0",',
+					]),
+				],
+				["pom.xml", diffFile("pom.xml", artifacts)],
+			]),
+			metadata,
+		);
+		const raw = result.hints.filter((h) => h.pattern === "candidate:raw manifest line");
+		assert.equal(result.hints.length, 40);
+		assert.equal(result.metrics.onlyAdded, 3);
+		assert.equal(result.metrics.unpairedManifestLines, 45);
+		assert.equal(result.metrics.rawLinesListed, 37);
+		assert.equal(raw.length, 37);
+		assert.equal(raw.at(-1)?.context, "+ <artifactId>lib-36</artifactId>");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("metadata lines shaped like dependencies stay candidates with their constraint delta", async () => {
+	const { root, script } = await stage();
+	try {
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([
+				["package.json", diffFile("package.json", ['    "node": ">=22"'], ['    "node": ">=20"'])],
+				[
+					"Cargo.toml",
+					diffFile("Cargo.toml", ['rust-version = "1.80"'], ['rust-version = "1.78"']),
+				],
+			]),
+			metadata,
+		);
+		// An engines entry and a toolchain floor: the delta is real, the dependency identity is not established.
+		assert.deepEqual(
+			result.hints.map((h) => [h.file, h.pattern, h.context]),
+			[
+				["package.json", "candidate:BUMPED", "node: >=20 -> >=22"],
+				["Cargo.toml", "candidate:BUMPED", "rust-version: 1.78 -> 1.80"],
+			],
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a lockfile elsewhere in the checkout is reported by its path, not as the changed manifest's", async () => {
+	const { root, script } = await stage();
+	try {
+		mkdirSync(path.join(root, "repo/tools/docs"), { recursive: true });
+		writeFileSync(path.join(root, "repo/tools/docs/package-lock.json"), "{}\n");
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([["app/package.json", diffFile("app/package.json", ['    "left-pad": "^1.3.0",'])]]),
+			metadata,
+		);
+		assert.match(
+			result.directions.join("\n"),
+			/in the checkout: tools\/docs\/package-lock\.json; touched in this diff: none/u,
+		);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

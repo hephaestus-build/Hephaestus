@@ -420,21 +420,49 @@ export function lastDecisionPerReviewer(decisions: readonly ReviewDecision[]): R
 		.map(([, decision]) => decision);
 }
 
+/** Whether a time is one `Date.parse` can read; a missing or unparseable time places nothing. */
+export function dated(time: string | undefined): boolean {
+	return !Number.isNaN(Date.parse(time ?? ""));
+}
+
+/** Whether the record dates a thread's resolution at or before a dated merge. */
+export function resolvedByMerge(thread: ReviewThread, merge: MergeFacts): boolean {
+	return (
+		dated(thread.resolvedAt) && dated(merge.mergedAt) && !later(thread.resolvedAt, merge.mergedAt)
+	);
+}
+
 /**
- * Candidate rows for historical review: currently unresolved threads and resolutions dated after
- * the merge. Opening times still determine whether each thread existed at the merge.
+ * Candidate rows for historical review: currently unresolved threads and, once merged, resolved
+ * threads the record does not date as resolved by the merge — every one of them when the merge
+ * itself is undated. A resolved thread opened after a dated merge was not open at it; opening times
+ * still determine whether every other thread existed at the merge.
  */
 export function unresolvedThreadRows(
 	threads: readonly ReviewThread[],
 	contextReference: string,
-	mergedAt?: string,
+	merge: MergeFacts,
 ): Hint[] {
 	const candidate = (t: ReviewThread) =>
-		t.state !== "RESOLVED" || (mergedAt !== undefined && later(t.resolvedAt, mergedAt));
+		t.state !== "RESOLVED" ||
+		(merge.merged && !resolvedByMerge(t, merge) && !later(t.createdAt, merge.mergedAt));
+	const pattern = (t: ReviewThread) => {
+		if (t.state !== "RESOLVED") {
+			return "unresolved thread";
+		}
+		if (dated(merge.mergedAt)) {
+			return dated(t.resolvedAt)
+				? "thread resolved after the merge"
+				: "resolved thread, resolution time unknown";
+		}
+		return dated(t.resolvedAt)
+			? "resolved thread, merge time unknown"
+			: "resolved thread, resolution and merge times unknown";
+	};
 	return threads.filter(candidate).map((t) => ({
 		file: t.path ?? contextFile(contextReference, "review_threads.json"),
 		line: t.line ?? 0,
-		pattern: t.state === "RESOLVED" ? "thread resolved after the merge" : "unresolved thread",
+		pattern: pattern(t),
 		context: `${t.state}${t.path === undefined ? "" : ` on ${t.path}${t.line === undefined ? "" : `:${t.line}`}`}${t.resolvedAt === undefined ? "" : `, resolved ${t.resolvedAt}`}`,
 		inDiff: false,
 		flags: {

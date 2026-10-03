@@ -103,7 +103,12 @@ const SINKS: PatternTable = {
 			"deserialize",
 			/\b(?:pickle\.loads|yaml\.load\b|Marshal\.load|unserialize|JSON\.parse|deserialize)\s*\(/iu,
 		],
-		["template render", /\b(?:render(?:_template)?|template|Mustache|Handlebars|Jinja|ejs)\b/iu],
+		// A render call, not the word: SwiftUI's `.renderingMode(.template)` is a native image mode, and
+		// `Handlebars.compile(` or `jinja2.Template(` only builds a template that a later call renders.
+		[
+			"template render",
+			/\b(?:render(?:_template(?:_string)?)?|Mustache\.render|ejs\.render)\s*\(/u,
+		],
 		[
 			"path join with input",
 			/\b(?:path\.join|os\.path\.join|filepath\.Join|Paths\.get|File\s*\()/u,
