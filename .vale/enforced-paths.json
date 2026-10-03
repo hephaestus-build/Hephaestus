@@ -1,7 +1,10 @@
 [
 	".vale/README.md",
+	"docs/admin/ai-providers.mdx",
+	"docs/admin/browser-extension.mdx",
 	"docs/admin/buildpacks-cds-decision.md",
 	"docs/admin/compatibility-policy.mdx",
+	"docs/admin/configuration-readiness.mdx",
 	"docs/admin/credential-key-rotation.mdx",
 	"docs/admin/dsms/README.md",
 	"docs/admin/dsms/artifact-source-governance.md",
@@ -9,6 +12,7 @@
 	"docs/admin/dsms/personal-data-map.md",
 	"docs/admin/dsms/processor-checklist.md",
 	"docs/admin/dsms/record-of-processing.md",
+	"docs/admin/github-integration.mdx",
 	"docs/admin/instance-admin.mdx",
 	"docs/admin/integrations.mdx",
 	"docs/admin/legal-pages.mdx",
@@ -18,6 +22,7 @@
 	"docs/admin/practice-review-operations.mdx",
 	"docs/admin/practice-review.mdx",
 	"docs/admin/product-feedback.mdx",
+	"docs/admin/production-setup.mdx",
 	"docs/admin/release-image-lock.md",
 	"docs/admin/writing-practices.mdx",
 	"docs/contributor/simplified-technical-english.md"
