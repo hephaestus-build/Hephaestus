@@ -186,14 +186,19 @@ export function valeAlerts(
 	if (result.error !== undefined || (result.status !== 0 && result.status !== 1)) {
 		throw new Error(`Vale did not finish. ${result.error?.message ?? result.stderr}`);
 	}
-	const parsed = asRecord(parseJson(result.stdout), "Vale result");
+	const alerts = parseValeAlerts(result.stdout);
 	// Vale uses exit 1 for prose errors and for setup errors. Only structured alerts prove a lint run.
-	if (result.status === 1 && Object.keys(parsed).length === 0) {
+	if (result.status === 1 && alerts.size === 0) {
 		throw new Error(`Vale returned no alerts. Fix its configuration. ${result.stderr}`);
 	}
+	return alerts;
+}
+
+export function parseValeAlerts(source: string): Map<string, ValeAlert[]> {
+	const parsed = asRecord(parseJson(source), "Vale result");
 	return new Map(
 		Object.entries(parsed).map(([file, alerts]) => [
-			file,
+			file.replaceAll("\\", "/"),
 			asArray(alerts, file).map((value) => {
 				const alert = asRecord(value, "Vale alert");
 				if (typeof alert.Line !== "number") {

@@ -21,6 +21,7 @@ import {
 	assetFor,
 	executableFromArchive,
 	prepareVale,
+	parseValeAlerts,
 	valeAlerts,
 	verifyArchive,
 } from "./lib/vale.ts";
@@ -80,6 +81,16 @@ await test("Vale pins cover every supported OS and reject changed archives", () 
 		bytes,
 	);
 	assert.throws(() => executableFromArchive(zipSync({ other: bytes }), true), /no vale.exe/u);
+});
+
+await test("Vale output uses repository path separators on every OS", () => {
+	const alert = { Check: "STE.Words", Severity: "error", Message: "Write use.", Line: 1 };
+	for (const filename of [".vale/fixtures/Words-bad.md", String.raw`.vale\fixtures\Words-bad.md`]) {
+		assert.deepEqual(
+			parseValeAlerts(JSON.stringify({ [filename]: [alert] })).get(".vale/fixtures/Words-bad.md"),
+			[alert],
+		);
+	}
 });
 
 await test("the path ratchet compares the actual base and rejects shrinkage, missing files, and a missing base", async () => {
