@@ -16,18 +16,14 @@ export function RouteAnnouncer() {
 	const region = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
-		if (pathname === undefined || pathname === announced.current) {
+		if (pathname === undefined) {
 			return;
 		}
-		const first = announced.current === undefined;
-		announced.current = pathname;
-		if (first) {
-			return;
-		}
-		// Written to the node rather than held in state: the region exists to be spoken, not rendered.
-		if (region.current) {
+		if (announced.current !== undefined && announced.current !== pathname && region.current) {
+			// Written to the node rather than held in state: the region exists to be spoken, not rendered.
 			region.current.textContent = document.title;
 		}
+		announced.current = pathname;
 	}, [pathname]);
 
 	return <div ref={region} data-slot="route-announcer" aria-live="polite" className="sr-only" />;

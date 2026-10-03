@@ -59,7 +59,7 @@ export const WorkStates: Story = {
 	},
 };
 
-/** The provider's purple on its own dark tint is 3.9:1 at this size, so the dark theme uses plain text. */
+/** The provider's purple on its own dark tint misses 4.5:1 at this size, so the dark theme uses plain text. */
 export const WorkStatesInDarkMode: Story = {
 	...WorkStates,
 	globals: { theme: "dark" },

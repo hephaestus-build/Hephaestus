@@ -172,8 +172,8 @@ export const Mobile: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expectNoPageOverflow();
-		// Firefox sets this row about 32px wider than Chromium does, so Chromium has to show at least
-		// that much room between the logo and the controls: fitting exactly there overflows in Firefox.
+		// Firefox lays this row out wider than Chromium does, so Chromium has to show room to spare
+		// between the logo and the controls: a row that fits exactly here overflows there.
 		const logo = canvas.getByRole("link", { name: "Hephaestus home" });
 		const feedback = canvas.getByRole("button", { name: /^Feedback/u });
 		await expect(

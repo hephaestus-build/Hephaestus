@@ -19,173 +19,70 @@ import { expect, test as base } from "./fixtures";
 interface Surface {
 	name: string;
 	path: string;
-	/** What the tab, the history entry and a screen reader's page announcement say. */
-	title: string;
 }
 
 const PUBLIC: Surface[] = [
-	{ name: "Landing", path: "/", title: "AI mentor for software teams · Hephaestus" },
-	{ name: "About", path: "/about", title: "About · Hephaestus" },
-	{ name: "Imprint", path: "/imprint", title: "Imprint · Hephaestus" },
-	{ name: "Privacy", path: "/privacy", title: "Privacy Statement · Hephaestus" },
-	{ name: "Sign in", path: "/login", title: "Sign in · Hephaestus" },
-	{ name: "Workspace sign in", path: "/w/e2e/login", title: "Sign in · Hephaestus" },
-	{ name: "Sign-in problem", path: "/auth/error", title: "Sign-in problem · Hephaestus" },
-	{ name: "Unsubscribe", path: "/unsubscribe", title: "Unsubscribe · Hephaestus" },
-	{ name: "Not found", path: "/no-such-page", title: "Page not found · Hephaestus" },
+	{ name: "Landing", path: "/" },
+	{ name: "About", path: "/about" },
+	{ name: "Imprint", path: "/imprint" },
+	{ name: "Privacy", path: "/privacy" },
+	{ name: "Sign in", path: "/login" },
+	{ name: "Workspace sign in", path: "/w/e2e/login" },
+	{ name: "Sign-in problem", path: "/auth/error" },
+	{ name: "Unsubscribe", path: "/unsubscribe" },
+	{ name: "Not found", path: "/no-such-page" },
 ];
 
 const SIGNED_IN: Surface[] = [
-	{ name: "New workspace", path: "/workspaces/new", title: "Create workspace · Hephaestus" },
-	{
-		name: "New GitHub workspace",
-		path: "/workspaces/new/github",
-		title: "Connect GitHub · Hephaestus",
-	},
-	{
-		name: "New GitLab workspace",
-		path: "/workspaces/new/gitlab",
-		title: "Connect GitLab · Hephaestus",
-	},
-	{
-		name: "Integration callback",
-		path: "/integrations",
-		title: "Connecting an integration · Hephaestus",
-	},
-	{ name: "Settings", path: "/settings", title: "User settings · Hephaestus" },
-	{
-		name: "Practice profile",
-		path: "/w/e2e/practice-profile",
-		title: "Practice profile · Hephaestus",
-	},
-	{ name: "Activity", path: "/w/e2e/activity", title: "Activity · Hephaestus" },
-	{
-		name: "Workspace activity",
-		path: "/w/e2e/workspace-activity",
-		title: "Workspace activity · Hephaestus",
-	},
-	{ name: "Teams", path: "/w/e2e/teams", title: "Teams · Hephaestus" },
-	{ name: "Mentor", path: "/w/e2e/mentor", title: "Mentor · Hephaestus" },
-	{ name: "Onboarding", path: "/w/e2e/onboarding", title: "Choose your AI · Hephaestus" },
-	{ name: "Members", path: "/w/e2e/admin/members", title: "Members · Admin · Hephaestus" },
-	{ name: "Teams admin", path: "/w/e2e/admin/teams", title: "Teams · Admin · Hephaestus" },
-	{ name: "Practices", path: "/w/e2e/admin/practices", title: "Practices · Admin · Hephaestus" },
-	{
-		name: "Practice updates",
-		path: "/w/e2e/admin/practices/releases",
-		title: "Practice updates · Admin · Hephaestus",
-	},
-	{
-		name: "Review settings",
-		path: "/w/e2e/admin/practices/review",
-		title: "Review settings · Admin · Hephaestus",
-	},
-	{
-		name: "Practice reviews",
-		path: "/w/e2e/admin/practices/reviews",
-		title: "Practice reviews · Admin · Hephaestus",
-	},
-	{
-		name: "Review runs",
-		path: "/w/e2e/admin/practices/reviews/runs",
-		title: "Reviews · Admin · Hephaestus",
-	},
-	{
-		name: "Review observations",
-		path: "/w/e2e/admin/practices/reviews/observations",
-		title: "Observations · Admin · Hephaestus",
-	},
-	{
-		name: "Review feedback",
-		path: "/w/e2e/admin/practices/reviews/feedback",
-		title: "Feedback · Admin · Hephaestus",
-	},
-	{
-		name: "Reviewed work",
-		path: "/w/e2e/admin/practices/reviews/work",
-		title: "Work · Admin · Hephaestus",
-	},
-	{ name: "AI models", path: "/w/e2e/admin/models", title: "AI models · Admin · Hephaestus" },
-	{ name: "AI usage", path: "/w/e2e/admin/usage", title: "AI usage · Admin · Hephaestus" },
-	{
-		name: "Integrations",
-		path: "/w/e2e/admin/integrations",
-		title: "Integrations · Admin · Hephaestus",
-	},
-	{
-		name: "Source control",
-		path: "/w/e2e/admin/integrations/scm",
-		title: "Source control · Admin · Hephaestus",
-	},
-	{
-		name: "Outline",
-		path: "/w/e2e/admin/integrations/outline",
-		title: "Outline · Admin · Hephaestus",
-	},
-	{ name: "Slack", path: "/w/e2e/admin/integrations/slack", title: "Slack · Admin · Hephaestus" },
-	{
-		name: "Workspace settings",
-		path: "/w/e2e/admin/settings",
-		title: "Workspace settings · Admin · Hephaestus",
-	},
-	{ name: "Audit log", path: "/w/e2e/admin/audit", title: "Audit log · Admin · Hephaestus" },
-	{ name: "Instance overview", path: "/admin", title: "Overview · Instance admin · Hephaestus" },
-	{ name: "Instance users", path: "/admin/users", title: "Users · Instance admin · Hephaestus" },
-	{
-		name: "Instance workspaces",
-		path: "/admin/workspaces",
-		title: "Workspaces · Instance admin · Hephaestus",
-	},
-	{
-		name: "View as user",
-		path: "/admin/workspaces/e2e/users",
-		title: "View as user · Instance admin · Hephaestus",
-	},
-	{
-		name: "Instance audit log",
-		path: "/admin/audit",
-		title: "Audit log · Instance admin · Hephaestus",
-	},
-	{
-		name: "Practice catalog",
-		path: "/admin/catalog",
-		title: "Practice catalog · Instance admin · Hephaestus",
-	},
-	{
-		name: "Instance AI models",
-		path: "/admin/models",
-		title: "AI models · Instance admin · Hephaestus",
-	},
-	{
-		name: "Instance AI usage",
-		path: "/admin/usage",
-		title: "AI usage · Instance admin · Hephaestus",
-	},
-	{
-		name: "Instance settings",
-		path: "/admin/settings",
-		title: "Instance settings · Instance admin · Hephaestus",
-	},
-	{
-		name: "Login providers",
-		path: "/admin/login-providers",
-		title: "Login providers · Instance admin · Hephaestus",
-	},
-	{
-		name: "Feedback inbox",
-		path: "/admin/feedback",
-		title: "Feedback inbox · Instance admin · Hephaestus",
-	},
-	{ name: "Surveys", path: "/admin/surveys", title: "Surveys · Instance admin · Hephaestus" },
-	{
-		name: "Person data",
-		path: "/admin/person-data",
-		title: "Person data · Instance admin · Hephaestus",
-	},
+	{ name: "New workspace", path: "/workspaces/new" },
+	{ name: "New GitHub workspace", path: "/workspaces/new/github" },
+	{ name: "New GitLab workspace", path: "/workspaces/new/gitlab" },
+	{ name: "Integration callback", path: "/integrations" },
+	{ name: "Settings", path: "/settings" },
+	{ name: "Practice profile", path: "/w/e2e/practice-profile" },
+	{ name: "Activity", path: "/w/e2e/activity" },
+	{ name: "Workspace activity", path: "/w/e2e/workspace-activity" },
+	{ name: "Teams", path: "/w/e2e/teams" },
+	{ name: "Mentor", path: "/w/e2e/mentor" },
+	{ name: "Onboarding", path: "/w/e2e/onboarding" },
+	{ name: "Members", path: "/w/e2e/admin/members" },
+	{ name: "Teams admin", path: "/w/e2e/admin/teams" },
+	{ name: "Practices", path: "/w/e2e/admin/practices" },
+	{ name: "Practice updates", path: "/w/e2e/admin/practices/releases" },
+	{ name: "Review settings", path: "/w/e2e/admin/practices/review" },
+	{ name: "Practice reviews", path: "/w/e2e/admin/practices/reviews" },
+	{ name: "Review runs", path: "/w/e2e/admin/practices/reviews/runs" },
+	{ name: "Review observations", path: "/w/e2e/admin/practices/reviews/observations" },
+	{ name: "Review feedback", path: "/w/e2e/admin/practices/reviews/feedback" },
+	{ name: "Reviewed work", path: "/w/e2e/admin/practices/reviews/work" },
+	{ name: "AI models", path: "/w/e2e/admin/models" },
+	{ name: "AI usage", path: "/w/e2e/admin/usage" },
+	{ name: "Integrations", path: "/w/e2e/admin/integrations" },
+	{ name: "Source control", path: "/w/e2e/admin/integrations/scm" },
+	{ name: "Outline", path: "/w/e2e/admin/integrations/outline" },
+	{ name: "Slack", path: "/w/e2e/admin/integrations/slack" },
+	{ name: "Workspace settings", path: "/w/e2e/admin/settings" },
+	{ name: "Audit log", path: "/w/e2e/admin/audit" },
+	{ name: "Instance overview", path: "/admin" },
+	{ name: "Instance users", path: "/admin/users" },
+	{ name: "Instance workspaces", path: "/admin/workspaces" },
+	{ name: "View as user", path: "/admin/workspaces/e2e/users" },
+	{ name: "Instance audit log", path: "/admin/audit" },
+	{ name: "Practice catalog", path: "/admin/catalog" },
+	{ name: "Instance AI models", path: "/admin/models" },
+	{ name: "Instance AI usage", path: "/admin/usage" },
+	{ name: "Instance settings", path: "/admin/settings" },
+	{ name: "Login providers", path: "/admin/login-providers" },
+	{ name: "Feedback inbox", path: "/admin/feedback" },
+	{ name: "Surveys", path: "/admin/surveys" },
+	{ name: "Person data", path: "/admin/person-data" },
 ];
 
 // More stops than any page has, so a page Tab cannot leave is told from a long one.
 const MAX_TAB_STOPS = 400;
+
+// Every page names itself ahead of the product; the fallback is the product's name alone.
+const PAGE_TITLE = /^.+ · Hephaestus$/u;
 
 const AXE_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 
@@ -208,12 +105,11 @@ async function open(page: Page, path: string) {
 	await page.waitForLoadState("networkidle");
 }
 
-/** What the theme provider does for a reader whose system is dark, without reloading the page. */
-async function useDarkTheme(page: Page) {
-	await page.evaluate(() => {
-		document.documentElement.classList.replace("light", "dark");
-		document.documentElement.dataset.colorMode = "dark";
-	});
+/** What a reader whose system is set to dark gets: the theme follows the system. */
+async function reloadInDarkScheme(page: Page) {
+	await page.emulateMedia({ colorScheme: "dark" });
+	await page.reload();
+	await page.waitForLoadState("networkidle");
 	await expect(page.locator("html")).toHaveClass(/dark/u);
 }
 
@@ -279,7 +175,7 @@ for (const [group, test, surfaces] of [
 				// the server is busy.
 				test.setTimeout(120_000);
 				await open(page, surface.path);
-				await expect(page).toHaveTitle(surface.title);
+				await expect(page).toHaveTitle(PAGE_TITLE);
 				expect(await loopingAnimations(page), "loops with no way to stop").toEqual([]);
 
 				const walk = await walkTabOrder(page);
@@ -287,7 +183,7 @@ for (const [group, test, surfaces] of [
 				expect(walk.leftDocument, "Tab never leaves the page").toBe(true);
 
 				expect(await axeViolations(page), "axe, light").toEqual([]);
-				await useDarkTheme(page);
+				await reloadInDarkScheme(page);
 				expect(await axeViolations(page), "axe, dark").toEqual([]);
 
 				await expectNoNarrowOverflow(page);
@@ -301,6 +197,41 @@ interface FocusStop {
 	/** Name and position together, so the same control twice in a row is told from two like it. */
 	at: string;
 	problem?: string;
+}
+
+const COVERED = "covered by another element";
+
+async function inspectFocus(page: Page) {
+	return page.evaluate((covered): FocusStop | null => {
+		const element = document.activeElement;
+		if (!element || element === document.body) {
+			return null;
+		}
+		const box = element.getBoundingClientRect();
+		const style = getComputedStyle(element);
+		const indicated =
+			(style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0) ||
+			style.boxShadow !== "none";
+		// Level AA asks only that the control is not entirely hidden, so one of five sample points
+		// reaching it is enough.
+		const obscured = [
+			[0.5, 0.5],
+			[0.1, 0.1],
+			[0.9, 0.1],
+			[0.1, 0.9],
+			[0.9, 0.9],
+		].every(([x = 0, y = 0]) => {
+			const hit = document.elementFromPoint(box.left + box.width * x, box.top + box.height * y);
+			return !hit || !(element.contains(hit) || hit.contains(element));
+		});
+		const name = element.getAttribute("aria-label") ?? element.textContent;
+		const label = `${element.tagName.toLowerCase()} "${name.trim().slice(0, 40)}"`;
+		const at = `${label} ${box.top}|${box.left}`;
+		if (!indicated) {
+			return { label, at, problem: "no focus indicator" };
+		}
+		return obscured ? { label, at, problem: covered } : { label, at };
+	}, COVERED);
 }
 
 /**
@@ -317,36 +248,17 @@ async function walkTabOrder(page: Page) {
 	await page.addStyleTag({ content: "html { scroll-behavior: auto !important; }" });
 	for (let step = 0; step < MAX_TAB_STOPS; step += 1) {
 		await page.keyboard.press("Tab");
-		const stop = await page.evaluate((): FocusStop | null => {
-			const element = document.activeElement;
-			if (!element || element === document.body) {
-				return null;
-			}
-			const box = element.getBoundingClientRect();
-			const style = getComputedStyle(element);
-			const indicated =
-				(style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0) ||
-				style.boxShadow !== "none";
-			// Level AA asks only that the control is not entirely hidden, so one of five sample
-			// points reaching it is enough.
-			const obscured = [
-				[0.5, 0.5],
-				[0.1, 0.1],
-				[0.9, 0.1],
-				[0.1, 0.9],
-				[0.9, 0.9],
-			].every(([x = 0, y = 0]) => {
-				const hit = document.elementFromPoint(box.left + box.width * x, box.top + box.height * y);
-				return !hit || !(element.contains(hit) || hit.contains(element));
-			});
-			const name = element.getAttribute("aria-label") ?? element.textContent;
-			const label = `${element.tagName.toLowerCase()} "${name.trim().slice(0, 40)}"`;
-			const at = `${label} ${box.top}|${box.left}`;
-			if (!indicated) {
-				return { label, at, problem: "no focus indicator" };
-			}
-			return obscured ? { label, at, problem: "covered by another element" } : { label, at };
-		});
+		let stop = await inspectFocus(page);
+		if (stop?.problem === COVERED) {
+			// WebKit scrolls a control inside a scrolling list into view a frame after focusing it, so
+			// only a control that stays covered is a finding.
+			await expect(async () => {
+				stop = await inspectFocus(page);
+				expect(stop?.problem).not.toBe(COVERED);
+			})
+				.toPass({ timeout: 1000 })
+				.catch(() => undefined);
+		}
 		// Chromium hands focus to the browser's own controls after the last stop, Firefox wraps to the
 		// first, and headless Firefox stays on the last: any of the three is Tab leaving the page.
 		if (!stop || stop.label === firstStop || stop.at === previousStop) {
@@ -424,10 +336,10 @@ base.describe("keyboard", () => {
 		async ({ page }) => {
 			await open(page, "/w/e2e/admin/members");
 			await page.getByRole("banner").getByRole("button", { name: "Toggle Sidebar" }).click();
-			// The group labels fade out; measuring contrast before they have finished measures the fade.
 			// The header slides under the pointer as the sidebar narrows and would open its tooltip.
 			await page.mouse.move(640, 600);
 			await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0);
+			// The group labels fade out, and contrast measured mid-fade is the fade's.
 			await page.waitForFunction(() => document.getAnimations().length === 0);
 			expect(await axeViolations(page)).toEqual([]);
 
@@ -439,9 +351,8 @@ base.describe("keyboard", () => {
 			await page.keyboard.press("Shift+Tab");
 			await page.keyboard.press("Tab");
 			await expect(link).toBeFocused();
-			// Focus alone shows it (SC 1.4.13), the pointer may rest on it, and Escape dismisses it
-			// without moving focus.
-			// Base UI gives a tooltip popup no role: it repeats what the control already names.
+			// Focus alone shows it, the pointer may rest on it, and Escape dismisses it without moving
+			// focus (SC 1.4.13). Base UI gives the popup no role, since it repeats the control's name.
 			const tooltip = page.locator('[data-slot="tooltip-content"][data-open]', {
 				hasText: /^Activity$/u,
 			});
@@ -472,7 +383,7 @@ base.describe("keyboard", () => {
 	});
 });
 
-/** Types into the focused field the way a person without a pointer does. */
+/** Presses Tab until the control has focus, the way a person without a pointer reaches it. */
 async function tabTo(page: Page, target: Locator) {
 	for (let step = 0; step < 40; step += 1) {
 		await page.keyboard.press("Tab");

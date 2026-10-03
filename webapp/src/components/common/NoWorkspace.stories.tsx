@@ -14,7 +14,6 @@ const meta = {
 		},
 	},
 	tags: ["autodocs"],
-	args: { headingLevel: 1 },
 } satisfies Meta<typeof NoWorkspace>;
 
 export default meta;

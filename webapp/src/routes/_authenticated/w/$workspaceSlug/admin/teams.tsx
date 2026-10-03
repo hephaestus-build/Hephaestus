@@ -168,7 +168,7 @@ function AdminTeamsContainer() {
 	};
 
 	if (!hasWorkspace && !isWorkspaceLoading) {
-		return <NoWorkspace headingLevel={1} />;
+		return <NoWorkspace />;
 	}
 
 	return (

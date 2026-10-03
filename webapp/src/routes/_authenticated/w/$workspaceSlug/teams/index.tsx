@@ -21,7 +21,7 @@ function TeamsContainer() {
 	});
 
 	if (!hasText(workspaceSlug)) {
-		return <NoWorkspace headingLevel={1} />;
+		return <NoWorkspace />;
 	}
 
 	return (

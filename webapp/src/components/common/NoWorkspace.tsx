@@ -10,8 +10,8 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 
-/** `headingLevel` is 1 where this is the whole page, and 2 where it sits under something else, such as the sidebar. */
-export function NoWorkspace({ headingLevel }: { headingLevel: 1 | 2 }) {
+/** Level 1 where this is the whole page; 2 where it sits under something else, such as the sidebar. */
+export function NoWorkspace({ headingLevel = 1 }: { headingLevel?: 1 | 2 }) {
 	return (
 		<Empty>
 			<EmptyHeader>

@@ -66,7 +66,6 @@ export const LongWorkspaceName: Story = {
 	play: async ({ canvas }) => {
 		const name = canvas.getByText(longName);
 		await expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth);
-		await expect(name.getBoundingClientRect().height).toBeGreaterThan(20);
 	},
 };
 

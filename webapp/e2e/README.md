@@ -37,6 +37,11 @@ E2E_LIVE_USERNAME=e2e E2E_GITHUB_WORKSPACE=github-workspace \
 
 Set `E2E_MUTATE_LIVE_INTEGRATIONS=true` as well to run the provider-sync mutation test.
 
+`accessibility.spec.ts` is the integrated half of the accessibility evaluation: axe on every route in both
+colour schemes, a Tab walk, reflow, menus, dialogs and three keyboard-only processes. It needs only the
+`e2e` account and runs on any browser project; `docs/contributor/accessibility-audit-plan.md` says what it
+leaves to a person with a screen reader.
+
 ## Reading the result
 
 The coverage reporter prints actual test outcomes and lists every selected live-provider check and

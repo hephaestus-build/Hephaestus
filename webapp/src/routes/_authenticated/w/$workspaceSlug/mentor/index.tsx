@@ -71,7 +71,7 @@ function MentorContainer() {
 	}, [readOnly, workspaceSlug, slug, queryClient, navigate]);
 
 	if (!hasText(workspaceSlug)) {
-		return <NoWorkspace headingLevel={1} />;
+		return <NoWorkspace />;
 	}
 	if (readOnly) {
 		return (

@@ -39,7 +39,7 @@ function IndexPage() {
 	const { isAuthenticated } = useAuth();
 	return isAuthenticated ? (
 		<StandardPageSurface className="h-full">
-			<NoWorkspace headingLevel={1} />
+			<NoWorkspace />
 		</StandardPageSurface>
 	) : (
 		<LandingContainer />
