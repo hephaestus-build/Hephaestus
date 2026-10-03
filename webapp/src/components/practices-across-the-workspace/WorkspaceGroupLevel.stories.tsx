@@ -28,7 +28,7 @@ const meta = {
 	args: {
 		path: { behind: [{ label: "Practices across the workspace", depth: 0 }], onClose: fn() },
 		state: { status: "ready", group: PACKAGING_GROUP, context: CONTEXT },
-		onViewPractice: fn(),
+		onOpenPractice: fn(),
 		onOpenOwnGroup: fn(),
 	},
 	argTypes: { path: { control: false } },
@@ -82,10 +82,7 @@ export const Default: Story = {
 		await userEvent.click(
 			table.getByRole("button", { name: "View practice Scope the change to one concern" }),
 		);
-		await expect(args.onViewPractice).toHaveBeenCalledWith(
-			"review-ready-work",
-			"scope-to-one-concern",
-		);
+		await expect(args.onOpenPractice).toHaveBeenCalledWith("scope-to-one-concern");
 		await expect(table.getAllByText("Held back: too few developers to compare yet.")).toHaveLength(
 			2,
 		);

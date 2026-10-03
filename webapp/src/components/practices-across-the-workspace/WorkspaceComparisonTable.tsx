@@ -51,8 +51,6 @@ export interface WorkspaceComparisonTableProps {
 	 * anywhere on the row also follows.
 	 */
 	rowLink: (row: ComparisonRow) => Omit<PracticeTableRowLink, "name">;
-	/** A control before the link, as the reviews table's "Review this now"; without it no column. */
-	rowAction?: (row: ComparisonRow) => ReactNode;
 	/** The row whose level is open over the page, which keeps a bar on its leading edge. */
 	openKey?: string;
 	/** What the list is called at its end: "practice groups", "practices". */
@@ -70,13 +68,12 @@ export function WorkspaceComparisonTable({
 	subjectHead,
 	state,
 	rowLink,
-	rowAction,
 	openKey,
 	noun,
 	empty,
 }: WorkspaceComparisonTableProps) {
 	const ready = state.status === "ready" ? state : undefined;
-	const columns = rowAction === undefined ? 3 : 4;
+	const columns = 3;
 	return (
 		<PracticeTableFrame
 			aria-label={label}
@@ -85,11 +82,6 @@ export function WorkspaceComparisonTable({
 				<>
 					<TableHead className="w-96">{subjectHead}</TableHead>
 					<TableHead>Developers in this workspace</TableHead>
-					{rowAction !== undefined && (
-						<TableHead className="w-32">
-							<span className="sr-only">Actions</span>
-						</TableHead>
-					)}
 					<TableHead className="w-28">
 						<span className="sr-only">Open</span>
 					</TableHead>
@@ -109,10 +101,6 @@ export function WorkspaceComparisonTable({
 							/>
 						)}
 					</TableCell>
-					{rowAction !== undefined && (
-						// Right-aligned, so the control and the link after it sit together at the row's end.
-						<TableCell className="text-right align-top">{rowAction(row)}</TableCell>
-					)}
 				</PracticeTableRow>
 			)}
 			empty={{ icon: <ClipboardCheckIcon />, ...empty }}
@@ -125,11 +113,6 @@ export function WorkspaceComparisonTable({
 					<TableCell>
 						<Skeleton className="h-9 w-full" />
 					</TableCell>
-					{rowAction !== undefined && (
-						<TableCell>
-							<Skeleton className="h-6 w-24" />
-						</TableCell>
-					)}
 					<TableCell>
 						<Skeleton className="ml-auto h-5 w-32" />
 					</TableCell>

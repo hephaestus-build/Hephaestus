@@ -123,7 +123,7 @@ export function splitDescription(
 	const needs = split.needsAttention ?? 0;
 	const mixed = split.mixedFeedback ?? 0;
 	const well = split.goingWell ?? 0;
-	const noneYet = split.noneYet === undefined ? "" : `, ${split.noneYet} none yet`;
+	const noneYet = split.noneYet ?? 0;
 	const counted = context.readerCounted;
-	return `${reference}: ${needs} Needs attention, ${mixed} Mixed feedback, ${well} Going well${noneYet}. ${you}${counted ? "" : ", not counted in the split"}.`;
+	return `${reference}: ${needs} Needs attention, ${mixed} Mixed feedback, ${well} Going well, ${noneYet} none yet. ${you}${counted ? "" : ", not counted in the split"}.`;
 }

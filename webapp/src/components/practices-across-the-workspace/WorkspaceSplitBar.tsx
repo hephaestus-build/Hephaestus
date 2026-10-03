@@ -120,9 +120,7 @@ export function WorkspaceSplitBar({
 			</div>
 		);
 	}
-	const parts = partsOf(split, yourStanding, context.readerCounted).filter(
-		(part) => part.count > 0,
-	);
+	const parts = partsOf(split, yourStanding, context.readerCounted);
 	const marked = parts.some((part) => part.isYours);
 	const total = parts.reduce((sum, part) => sum + part.count, 0);
 	return (

@@ -197,13 +197,6 @@ export function PracticeTable<TRow>({
 }
 
 /**
- * A row's own control under the pointer or focus, in the primary ground: a press anywhere else on
- * the row opens it, and the accent is spent on one control per surface, never on a row.
- */
-export const ROW_ACTION_PRESSED =
-	"hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground dark:hover:bg-primary dark:hover:text-primary-foreground";
-
-/**
  * A click that landed on a nested control — a practice link — is that control's, and everything
  * else opens the row. The row's own link carries `data-row-link`, and a button that exists only
  * to put a tooltip within a keyboard's reach — the standing badge, the trend chip — carries

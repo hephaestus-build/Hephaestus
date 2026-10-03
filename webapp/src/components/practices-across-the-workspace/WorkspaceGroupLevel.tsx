@@ -29,7 +29,7 @@ export interface WorkspaceGroupLevelProps {
 	path: LevelPath;
 	state: WorkspaceGroupLevelState;
 	/** Opens a practice of the group as the next level, the reader's own practice. */
-	onViewPractice: (groupSlug: string, practiceSlug: string) => void;
+	onOpenPractice: (practiceSlug: string) => void;
 	/** Opens the reader's own group as the next level: their standing, trend and practices in it. */
 	onOpenOwnGroup: () => void;
 }
@@ -43,7 +43,7 @@ export function WorkspaceGroupLevel({
 	nested,
 	path,
 	state,
-	onViewPractice,
+	onOpenPractice,
 	onOpenOwnGroup,
 }: WorkspaceGroupLevelProps) {
 	const group = state.status === "ready" ? state.group : undefined;
@@ -113,7 +113,7 @@ export function WorkspaceGroupLevel({
 						</EmptyHeader>
 					</Empty>
 				) : (
-					<GroupPractices key={group?.groupSlug} state={state} onViewPractice={onViewPractice} />
+					<GroupPractices key={group?.groupSlug} state={state} onOpenPractice={onOpenPractice} />
 				)}
 			</DrawerBody>
 		</>
@@ -123,10 +123,10 @@ export function WorkspaceGroupLevel({
 /** The group's practices, keyed on the group so a new group starts from its first page. */
 function GroupPractices({
 	state,
-	onViewPractice,
+	onOpenPractice,
 }: {
 	state: Exclude<WorkspaceGroupLevelState, { status: "missing" }>;
-	onViewPractice: (groupSlug: string, practiceSlug: string) => void;
+	onOpenPractice: (practiceSlug: string) => void;
 }) {
 	const group = state.status === "ready" ? state.group : undefined;
 	const rows: ComparisonRow[] = (group?.practices ?? []).map((practice) => ({
@@ -156,11 +156,7 @@ function GroupPractices({
 				}}
 				rowLink={(row) => ({
 					text: "View practice",
-					onOpen: () => {
-						if (group !== undefined) {
-							onViewPractice(group.groupSlug, row.key);
-						}
-					},
+					onOpen: () => onOpenPractice(row.key),
 				})}
 			/>
 		</>

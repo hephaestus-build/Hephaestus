@@ -18,12 +18,12 @@ describe("splitDescription", () => {
 	it("names the reference group and every count the bar shows, and nothing it does not", () => {
 		expect(
 			splitDescription(
-				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7 },
+				{ shape: "SPLIT", needsAttention: 6, mixedFeedback: 7, goingWell: 7, noneYet: 8 },
 				"MIXED",
 				context,
 			),
 		).toBe(
-			"28 developers observed in this workspace so far: 6 Needs attention, 7 Mixed feedback, 7 Going well. You: Mixed feedback.",
+			"28 developers observed in this workspace so far: 6 Needs attention, 7 Mixed feedback, 7 Going well, 8 none yet. You: Mixed feedback.",
 		);
 	});
 

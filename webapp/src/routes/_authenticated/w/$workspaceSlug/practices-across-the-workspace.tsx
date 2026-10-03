@@ -247,7 +247,7 @@ function PracticesAcrossTheWorkspace() {
 							nested={level.nested}
 							path={pathAt(level.depth)}
 							state={levelState(overview, entry.id)}
-							onViewPractice={(_groupSlug, practiceSlug) => openPractice(practiceSlug)}
+							onOpenPractice={openPractice}
 							onOpenOwnGroup={() => stackControls.open({ kind: "own-group", id: entry.id })}
 						/>
 					);
