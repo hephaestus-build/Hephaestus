@@ -4,273 +4,326 @@ title: Your data in Hephaestus
 description: What Hephaestus reads, who can see it, how long it stays, and how to request access or erasure.
 ---
 
-Hephaestus reads connected project work to give you practice feedback and help you talk it through with Heph.
-**Your work can be processed even if you have never signed in.**
+Hephaestus reads connected project work to give you practice feedback and help you discuss it with Heph.
+**Hephaestus can process your work even if you have never signed in.**
 
-Open **Privacy** in the app's footer for your instance's responsible organisation, privacy contact, legal
-bases, providers, and data locations. This guide explains the product; that notice covers your deployment.
-If the notice or contact is missing, ask the organisation running your instance.
+**Privacy** in the app footer gives your instance's responsible organization, privacy contact, legal bases, providers, and data locations.
+This guide explains the product.
+That notice covers your deployment.
+
+1. Open **Privacy** in the app footer.
+2. If the notice or contact is missing, ask the organization that runs your instance.
 
 ## Signing in and choosing research participation
 
-The sign-in screen links to your instance's privacy notice and imprint, so you can read both before
-choosing a provider. Setup is then one page with two separate decisions, both visible before you
-commit to either.
+The sign-in screen links to your instance's privacy notice and imprint.
+You can read both before you choose a provider.
+Setup then shows one page with two separate decisions, both visible before you make either decision.
 
-The first is **Terms and privacy**: three short points — what Hephaestus reads, that its feedback is
-written by an AI model and can be wrong, and where the privacy notice for your instance is — and a box
-to accept the terms. The terms ask two things of you: keep to the work you are entitled to see, and
-treat feedback as guidance for the person it is addressed to rather than an assessment to pass on.
-Accepting them is not consent to research.
+The first, **Terms and privacy**, has three short points:
 
-The second appears only if the organisation running your instance also runs a study, and it names that
-organisation on the screen. It asks: **Yes, take part**, or **No, don't take part** for the same
-service without opting in. Neither answer is selected for you and both cost the same click. Where no
-study is configured the question is not asked and the terms alone complete setup.
+- What Hephaestus reads.
+- That an AI model writes its feedback and can be wrong.
+- Where to find your instance's privacy notice.
 
-**Continue** records your decisions together, against the version of the wording you were shown. You
-can change the research answer later; see
-[Your choices and right to object](#your-choices-and-right-to-object).
+A box lets you accept the terms.
+The terms require you to access only work you have permission to see.
+They also require you to treat feedback as guidance for its recipient, not an assessment to share.
+Acceptance is not research consent.
+
+The second decision appears only if the organization that runs your instance also runs a study.
+The screen names that organization.
+It offers **Yes, take part** or **No**, with the same service if you do not participate.
+Neither answer starts selected.
+Each requires the same click.
+Without a configured study, the terms alone complete setup.
+
+**Continue** records both decisions against the version of the text you saw.
+You can change your research answer later.
+[Your choices and right to object](#your-choices-and-right-to-object) explains how.
 
 ## What Hephaestus reads
 
 Workspace admins choose the connected sources and what runs in the workspace:
 
-- **GitHub and GitLab:** contributor profiles, repository and team membership, issues, pull requests or merge
-  requests, reviews, comments, discussions, and commit metadata. Practice reviews can also read relevant code
-  changes, repository snapshots and reachable Git history.
-- **Slack:** identities, privacy choices, your direct conversations with Heph, and new messages in monitored
-  channels. Channel monitoring requires separate activation, a visible announcement, and participant privacy
-  controls; connecting Slack alone does not activate it.
+- **GitHub and GitLab:** contributor profiles, repository and team membership, and commit metadata. They also supply issues, pull requests or merge requests, reviews, comments, and discussions. Practice reviews can also read relevant code changes, repository snapshots, and reachable Git history.
+- **Slack:** identities, privacy choices, direct conversations with Heph, and new messages in monitored channels. Channel monitoring requires separate activation, a visible announcement, and participant privacy controls. A Slack connection alone does not activate it.
 - **Outline:** selected collections and documents, their content, and author information.
 
-Practice reviews can read all permitted workspace areas and repositories available to the review,
-including Slack threads and person-scoped observation and feedback history. There is no fixed
-record-count or history-window cap for that context. Privacy choices, access boundaries and erasure
-checks still apply. Generated-path settings mark retained evidence; they do not remove it. Refusing
-a bot's work for review does not erase its source records.
+Practice reviews can read all permitted workspace areas and repositories available to the review.
+This includes Slack threads and observation and feedback history scoped to a person.
+There is no fixed limit on the number of records or the history period for that context.
+Privacy choices, access boundaries, and erasure checks still apply.
 
-These sources provide context for practice reviews and mentoring. A connection does not authorise every use
-of its content. Hephaestus records **observations and practice feedback**, including observations that never
-become comments. [Activity](./activity) counts and lists the pull requests, reviews, issues and comments
-you do in the workspace's repositories, and your open work, such as review requests and assigned
-issues. It lists members by name and never ranks them.
+Generated-path settings mark retained evidence but do not remove it.
+Refusal to review a bot's work does not erase its source records.
+A connection does not authorize each use of its content.
+These sources supply context for practice reviews and the mentor.
 
-Your sign-in details, linked accounts, memberships, preferences, chats, and feedback reactions support your
-account and conversations. Product-feedback submissions (with the page path and browser identification you choose to attach, and the
-Hephaestus release that received them), survey invitations, answers, and declines support product improvement.
-A survey labelled **Research** is offered only while you take part in the research programme your instance names;
-its answers are that study's data, collected under your research consent.
-Authentication events (including IP address and browser information), settings-change history, review
-diagnostics, and AI usage accounting support security, troubleshooting, and spending controls.
+Hephaestus records **observations and practice feedback**, including observations that never become comments.
+[Activity](./activity) counts and lists your pull requests, reviews, issues, and comments in workspace repositories.
+It also lists your open work, such as review requests and assigned issues.
+It lists members by name and never ranks them.
 
-The app uses essential cookies and browser storage for sign-in, security, and preferences. Optional browser **Sentry
-error monitoring** sends error reports only if the operator configures it and you opt in. Server error
-monitoring is a separate operator setting; browser consent does not control it. Your instance must
-disclose its diagnostic recipients, basis and retention.
+Your sign-in details, linked accounts, memberships, preferences, chats, and feedback reactions support your account and conversations.
+Product-feedback submissions support product improvement, as do survey invitations, answers, and declines.
+Submissions include the page path and browser identification you choose to attach, plus the Hephaestus release that received them.
+A **Research** survey is available only while you participate in the research program your instance names.
+Its answers are study data collected under your research consent.
 
-When a page displays an avatar from a source platform, your browser requests that image from its
-host. That host receives network metadata such as your IP address and the requested image address,
-including on public pages without sign-in. Its retention is separate from Hephaestus.
+These records support security, troubleshooting, and spending controls:
 
-Do not include secrets or unnecessary personal or sensitive information in chats, source content, or feedback.
+- Authentication events, including IP address and browser information.
+- History of changes to settings.
+- Review diagnostics.
+- AI usage accounting.
+
+The app uses essential cookies and browser storage for sign-in, security, and preferences.
+Optional browser **Sentry error monitoring** sends reports only if the operator configures it and you opt in.
+Server error monitoring is a separate operator setting.
+Browser consent does not control it.
+Your instance must disclose diagnostic recipients, basis, and retention.
+
+When a page shows an avatar from a source platform, your browser requests the image from its host.
+That host receives network metadata, such as your IP address and the image address.
+This also occurs on public pages without sign-in.
+The host's retention is separate from Hephaestus.
+
+1. Do not include secrets or unnecessary personal or sensitive information in chats, source content, or feedback.
 
 ## Your AI choice
 
-[Your AI choice](./workspace#your-ai-choice) sets which models may run practice reviews about you
-and handle your Heph requests. **In-house** allows models your organisation says it operates. **Cloud** also
-allows models operated by providers your organisation approved. A provider may process, keep, or
-review what it receives under its own agreement with your organisation; the choice does not set a
-retention period or a training policy. **No AI** stops new practice reviews about you, new requests to Heph and new feedback delivery. It does not stop source synchronisation, stored work, access by authorised people,
-or requests already sent to a provider. Your work can still be part of shared repository context in
-reviews about other developers; your choice does not remove that content or change their choices or model routes.
-Person-scoped observation and feedback history is checked separately against your AI choice. You answer once, and your answer applies in
-all your workspaces on this deployment. Change it from **Your AI choice** in any workspace's sidebar
-or in **User settings**. Anything stricter than your answer also counts, nothing switches you to
-anything looser, and a workspace adding models never asks you again. This choice is distinct from
-research participation and from linking an account. A workspace owner declares who operates each
-model. Ask them about the actual provider, location, retention, and training terms. Slack Heph uses the same choice. Its App Home explains when Heph is off for you,
-requires a choice, or has no eligible model. Channel-message controls remain available when Heph is
-unavailable. A failed Home refresh can leave an older status visible; a new interaction still checks
-eligibility.
+[Your AI choice](./workspace#your-ai-choice) sets which models may review practices about you and handle your Heph requests.
+**In-house** allows models your organization says it operates.
+**Cloud** also allows models operated by providers your organization approved.
+A provider may process, keep, or review received data under its agreement with your organization.
+Your choice does not set a retention period or training policy.
+
+**No AI** stops new practice reviews about you, new Heph requests, and new feedback delivery.
+It does not stop source sync, stored work, access by authorized people, or requests already sent to a provider.
+Your work can still appear in shared repository context for reviews about other developers.
+Your choice does not remove that content or change their choices or model routes.
+Hephaestus checks observation and feedback history scoped to you separately against your AI choice.
+
+You answer once, across all your workspaces on this deployment.
+Anything stricter than your answer also qualifies.
+Nothing switches you to a less strict answer.
+New workspace models do not require another answer.
+This choice is separate from research participation and account links.
+
+1. To change your answer, open **Your AI choice** in a workspace sidebar or **User settings**.
+2. Ask the workspace owner about the actual provider, location, retention, and training terms.
+
+The owner declares who operates each model.
+Slack Heph uses the same choice.
+Its App Home explains when Heph is off for you, requires a choice, or has no eligible model.
+Channel-message controls stay available when Heph is unavailable.
+A failed Home refresh can leave an older status visible.
+Each new interaction still checks eligibility.
 
 ## AI processing and visibility
 
-Enabled AI features send relevant code, discussion, documents, conversation history, and observation evidence
-to the workspace's configured AI provider. **Self-hosting does not necessarily keep AI requests local.** Ask
-your workspace admin which provider is configured; your instance's Privacy notice covers recipients,
-international transfers, retention, and training terms.
+Active AI features send relevant code, discussion, documents, conversation history, and observation evidence to the workspace's configured AI provider.
+**Self-hosting does not necessarily keep AI requests local.**
+Your instance's Privacy notice covers recipients, international transfers, retention, and training terms.
 
-Practice feedback is advisory; it does not grade you or replace human review.
+1. Ask your workspace admin which provider is configured.
 
-- Members can read [Activity](./activity). It does not check each viewer's permissions on the source
-  platform. Your Practice profile, its feedback and your Heph conversations are private through
-  normal member access. Workspace admins can read observations, delivery metadata and dispute
-  explanations, but not private practice-page or conversation feedback text. Ratings and other
-  private response notes are not shared with them.
-- A publicly viewable workspace shows its members, teams, repositories and practices to anyone, without
-  signing in. Activity, practice pages, feedback and Heph conversations are not public. Your instance's
-  contributor list is also public.
-- Feedback posted on GitHub, GitLab, or Slack is visible to that destination's audience.
-- Instance administrators can use **View as user** to read your activity,
-  practice pages, feedback, and existing Heph conversations, even before your first Hephaestus
-  sign-in. Each read is recorded with a stated reason; it cannot send messages, answer questions,
-  or make choices for you, and it does not count as you having seen your feedback. Workspace
-  administrators do not have this access.
-- The people who run your instance can access stored data for operation and privacy requests.
-  Product-feedback and survey submissions are available to instance administrators.
+Practice feedback is guidance, not a grade or a replacement for human review.
+Access differs by role and destination:
+
+- Members can read [Activity](./activity) without individual source-platform permission checks. Normal member access keeps your Practice profile, its feedback, and Heph conversations private. Workspace admins can read observations, delivery metadata, and dispute explanations. They cannot read private practice-page or conversation feedback text, ratings, or other private response notes.
+- A publicly viewable workspace shows members, teams, repositories, and practices to anyone without sign-in. Activity, practice pages, feedback, and Heph conversations are not public. Your instance's contributor list is also public.
+- Feedback on GitHub, GitLab, or Slack is visible to that destination's audience.
+- Instance administrators can use **View as user** to read activity, practice pages, feedback, and existing Heph conversations. This includes access before your first Hephaestus sign-in. Each read has a recorded reason. This access cannot send messages, answer questions, or make choices for you. It does not count as you seeing feedback. Workspace administrators do not have this access.
+- Instance operators can access stored data for operation and privacy requests. Instance administrators can read product-feedback and survey submissions.
 
 ## Your choices and right to object
 
-- **Comments and Slack reminders:** in **User settings → Practice feedback**, turn this off to stop new
-  comments on your work and related Slack reminders. **Reviews still run and admins can still see
-  observations.** Turning it back on allows new deliveries; neither action removes existing comments.
-- **Slack channel messages:** in the Hephaestus App Home, select **Stop using my messages** to stop collection
-  and erase your collected channel messages and related conversation observations and feedback. **Allow
-  future messages** permits new collection without restoring deleted data. This does not erase mentor DMs,
-  unrelated repository feedback, Slack's copy, or [separately retained copies](#copies-outside-active-records).
-- **Academic research participation:** where offered, use **User settings → Academic research participation →
-  Participate in academic research** to record or withdraw your agreement. If you use Hephaestus in
-  Slack, its App Home links to these account settings.
-  Withdrawal does not stop ordinary practice reviews or erase stored data, and it ends research survey
-  invitations. Contact your instance's privacy contact about data already shared for research, including
-  research survey answers, and withdrawal from a specific study.
-- **Email notifications:** where offered, optional invitations, connection alerts and administrator
-  updates start off. Choose each category in **User settings → Email notifications**, or use the
-  unsubscribe link in an email without signing in. Research invitation email also requires research
-  participation; switching off the emails does not withdraw that participation. The mail relay receives
-  your contact address, notification type and links, not product-feedback text or survey answers.
-  Account-security and deletion notices are separate from these optional subscriptions.
-- **Optional error reports:** open **Cookie preferences** in the app footer, or **User settings → Privacy →
-  Change cookie choices**, to grant or withdraw consent where this option is offered.
+### Comments and Slack reminders
+
+1. Open **User settings → Practice feedback**.
+2. Turn off **Comments and Slack reminders** to stop new comments on your work and related Slack reminders.
+3. To allow new deliveries again, turn it on.
+
+**Reviews still run and admins can still see observations.**
+Neither action removes existing comments.
+
+### Slack channel messages
+
+1. In the Hephaestus App Home, select **Stop using my messages**.
+2. To permit new collection, select **Allow future messages**.
+
+The first action stops collection and erases collected channel messages and related conversation observations and feedback.
+The second does not restore deleted data.
+Neither erases mentor DMs, unrelated repository feedback, Slack's copy, or [separately retained copies](#copies-outside-active-records).
+
+### Academic research participation
+
+1. Where offered, open **User settings → Academic research participation → Participate in academic research**.
+2. Record or withdraw your agreement.
+3. For data already shared for research or withdrawal from a specific study, contact your instance's privacy contact.
+
+Slack App Home links to these account settings.
+Withdrawal ends research survey invitations but does not stop ordinary practice reviews or erase stored data.
+Existing research data includes research survey answers.
+
+### Email notifications
+
+Optional invitations, connection alerts, and administrator updates start off where offered.
+
+1. Choose each category in **User settings → Email notifications**.
+2. To unsubscribe without sign-in, use the unsubscribe link in an email.
+
+Research invitation emails also require research participation.
+Disabling emails does not withdraw participation.
+The mail relay receives your contact address, notification type, and links, not product-feedback text or survey answers.
+Account-security and deletion notices are separate from optional subscriptions.
+
+### Optional error reports
+
+1. Open **Cookie preferences** in the app footer, or **User settings → Privacy → Change cookie choices**.
+2. Where offered, grant or withdraw consent.
 
 ### Object to processing
 
-Contact your instance's privacy contact to object to processing or request access, correction, restriction,
-or erasure as applicable. Turning off comments, leaving a workspace, or never signing in does not stop
-processing. Your instance's notice also explains how to complain to a supervisory authority.
+1. Contact your instance's privacy contact to object or request access, correction, restriction, or erasure, as applicable.
+
+Disabling comments, leaving a workspace, or never signing in does not stop processing.
+Your instance's notice also explains how to complain to a supervisory authority.
 
 ## Correct or dispute feedback
 
-Follow **Answer or dispute it in Hephaestus** on a GitHub or GitLab comment. The page shows your own
-reviews of that work. Choose **Disputed** and give a reason; workspace admins read that explanation.
-A standing dispute holds back the same point in later reviews of the same work, except for a committed
-secret. Withdrawing your dispute allows that point again. Reactions or replies on GitHub or GitLab
-do not enter this dispute process.
+1. Follow **Answer or dispute it in Hephaestus** on a GitHub or GitLab comment.
+2. Select **Disputed**.
+3. Give a reason for workspace admins to read.
 
-On your Practice profile, **Not accurate** also records a dispute. An admin can mark an observation
-incorrect or withdraw practice-page feedback with a reason and later restore it. Unseen withdrawn
-feedback does not appear; feedback you had seen becomes a withdrawal notice. The original and its
-history remain stored, but its text leaves future review and Heph context. Already-sent replies,
-inline provider comments and context already handed to a running review are not recalled.
-Disputing or withdrawing feedback is not erasure. Ask the privacy contact for wider correction,
-restriction or erasure, including if you cannot use the app.
+The page shows your own reviews of that work.
+A standing dispute withholds the same point in later reviews of the same work, except for a committed secret.
+Withdrawal of the dispute allows that point again.
+Reactions or replies on GitHub or GitLab do not enter this process.
+
+On your Practice profile, **Not accurate** also records a dispute.
+An admin can mark an observation incorrect or withdraw practice-page feedback with a reason, then restore it later.
+Unseen withdrawn feedback does not appear.
+Feedback you saw becomes a withdrawal notice.
+The original and its history stay stored, but its text leaves future review and Heph context.
+
+Hephaestus cannot recall replies already sent, inline provider comments, or context already given to a review that still runs.
+A dispute or withdrawal is not erasure.
+
+1. For wider correction, restriction, or erasure, ask the privacy contact, including if you cannot use the app.
 
 ## Get a copy of your data
 
-Open **User settings → Danger Zone → Export my data → Request export**. When ready, select **Download**.
-If generation fails, use **Retry export**; contact the operator for repeated failures or stalls. Downloads
-expire **48 hours** after preparation.
+1. Open **User settings → Danger Zone → Export my data → Request export**.
+2. When the export is ready, select **Download**.
+3. If generation fails, select **Retry export**.
+4. For repeated failures or stalled exports, contact the operator.
+5. Keep the downloaded file private.
 
-The JSON file contains your account, linked sign-in identities, memberships, account features, preferences,
-your AI choice, and authentication history—not credentials or session secrets. Keep it private.
+Downloads expire **48 hours** after preparation.
+The JSON file includes your account, linked sign-in identities, memberships, account features, preferences, AI choice, and authentication history.
+It does not include credentials or session secrets.
 
-**The self-service export is limited.** Request conversations, observations and feedback (including
-never-delivered results), activity records, mirrored source content, product-feedback submissions, survey
-responses, and other retained copies through your instance's privacy contact. An instance administrator
-can resolve your exact provider identities, preview the scope and download one JSON file for the wider
-request. It includes selected locally mirrored source content, but excludes credentials, other
-people's profiles, raw Git objects and hidden runtime journals. Access and portability are different
-rights: statutory portability depends on the applicable consent/contract basis and other conditions.
-You do not need a Hephaestus account for this procedure. Obtain original
-source-platform exports from those platforms separately.
+**The self-service export is limited.**
+The privacy contact handles requests for these additional records:
+
+- Conversations, observations, and feedback, including results never delivered.
+- Activity records and mirrored source content.
+- Product-feedback submissions and survey responses.
+- Other retained copies.
+
+An instance administrator can resolve your exact provider identities, preview the scope, and download one JSON file for the wider request.
+It includes selected source content mirrored locally.
+It excludes credentials, other people's profiles, raw Git objects, and hidden runtime journals.
+Access and portability are different rights.
+Statutory portability depends on the applicable consent or contract basis and other conditions.
+
+1. Request additional records through your instance's privacy contact.
+2. Obtain original source-platform exports from those platforms separately.
+
+You do not need a Hephaestus account for this procedure.
 
 ## Delete your account or request wider erasure
 
-Open **User settings → Danger Zone → Delete account**, select **Delete**, and follow the confirmation prompt.
-You are signed out on all devices immediately. If your instance sends email and your account has a
-verified address, a confirmation naming the cleanup date is sent to that address. After the default **48-hour cooldown**, scheduled cleanup
-removes your sign-in details, linked identities, AI choice, product-feedback submissions, and survey responses, leaving
-an account record with its contact details cleared. There is no self-service undo; contact the operator
-promptly if the request was a mistake.
+1. Open **User settings → Danger Zone → Delete account**.
+2. Select **Delete**.
+3. Follow the confirmation prompt.
+4. If the request was a mistake, contact the operator immediately.
 
-**Account deletion is not complete person erasure.** Contributor profiles, conversations, observations,
-feedback, and other retained copies need a wider request. Disconnecting a source or removing a workspace
-is not a substitute, and deletion in Hephaestus does not delete your original work on connected services.
+Hephaestus immediately signs you out on all devices.
+If your instance sends email and your account has a verified address, it sends confirmation with the cleanup date.
+After the default **48-hour cooldown**, scheduled cleanup removes sign-in details, linked identities, AI choice, product-feedback submissions, and survey responses.
+An account record remains with contact details cleared.
+There is no self-service undo.
 
-Whether or not you have an account, send the instance's privacy contact your workspace, relevant provider
-instance and native user ID (for Slack, also its workspace ID), and links to affected work or feedback.
-If you do not know the native IDs, send source-profile and work links so the operator can resolve
-them from the provider. You do not need to find database IDs or sign in to submit a request.
-The operator must verify which records belong to you. Names, logins and email addresses are not used
-as matching keys. Do not send passwords, tokens, or unnecessary identity documents.
+**Account deletion is not complete person erasure.**
+Contributor profiles, conversations, observations, feedback, and other retained copies require a wider request.
+A source disconnection or workspace removal is not a substitute.
+Deletion in Hephaestus does not delete original work on connected services.
 
-Include already-posted feedback explicitly: correction or removal requires a separate, best-effort operator
-request. The operator previews exact rows and provider locations, then runs an erasure job with a completion
-record. Changed scope requires a new preview. The job stops affected reviews, waits for worker evidence
-removal, and clears affected hidden Heph memory. A failed step or offline worker requires a resume;
-it is not completed erasure. Minimal exact native identity keys remain to prevent renewed product
-processing; source sync may still mirror upstream records. Ask for the request's scope, status, and
-any retention or lawful exceptions. The operator normally answers within one month; a justified
-extension of up to two further months requires notice within the first month.
+With or without an account:
+
+1. Send the instance's privacy contact your workspace, relevant provider instance, native user ID, and links to affected work or feedback.
+2. For Slack, also include its workspace ID.
+3. If native IDs are unknown, send source-profile and work links for the operator to resolve them.
+4. Do not send passwords, tokens, or unnecessary identity documents.
+5. Include already-posted feedback explicitly.
+6. Ask for the request's scope, status, and any retention or lawful exceptions.
+
+You do not need database IDs or sign-in to submit a request.
+The operator must verify which records belong to you.
+Names, logins, and email addresses are not matching keys.
+Correction or removal of posted feedback requires a separate operator request, with no guarantee of success.
+
+The operator previews exact rows and provider locations, then runs an erasure job with a completion record.
+A change of scope requires a new preview.
+The job stops affected reviews, waits for worker evidence removal, and clears affected hidden Heph memory.
+A failed step or offline worker requires a resume.
+It is not completed erasure.
+
+Minimal exact native identity keys stay to prevent renewed product processing.
+Source sync may still mirror upstream records.
+The operator normally answers within one month.
+A justified extension of up to two more months requires notice within the first month.
 
 ## How long data stays
 
-Every category has its own window and an operator can change several of them, so the exact durations are
-stated once, in the [record of processing](/admin/dsms/record-of-processing): it lists each shipped window
-and which of them an operator controls. Your instance's Privacy notice states what your deployment
-applies. Scheduled removal follows eligibility and may require later successful runs to finish. Account
-and export timing is described above.
+Each category has its own retention period.
+An operator can change several periods.
+The [record of processing](/admin/dsms/record-of-processing) lists each period supplied with Hephaestus and identifies those the operator controls.
+Your instance's Privacy notice states which periods your deployment applies.
+
+Scheduled removal starts after records become eligible and may need later successful runs to finish.
+The sections above describe account and export timing.
 
 ### Project content
 
-- **GitHub and GitLab:** active copies stay while a workspace monitors the source. Removing the last relevant
-  connection or repository monitor removes them. Shared sources remain for other monitoring workspaces;
-  contributor profiles can remain independently and need operator-assisted erasure. A repository that
-  is unavailable or loses access keeps its stored work while it is monitored. Removing a note on
-  GitLab changes live context only after successful reconciliation; historical review copies do not
-  change automatically.
-- **Slack channel threads:** kept for a rolling window measured from the thread's latest message, so an
-  active thread can still contain much older messages. This window does not apply to mentor DMs.
-- **Outline:** selected content stays while its collection and connection remain active.
-- **Web chats, Slack mentor DMs, and memberships:** retained with their workspace records;
-  removed through workspace removal or verified person erasure.
-- **League points and XP from the retired leaderboard:** deleted by the upgrade that retired the
-  leaderboard. The operator may have exported a copy before upgrading; that copy is kept outside
-  Hephaestus, for as long as the operator decides.
-- **Product-feedback and survey submissions:** no automatic time-based expiry; removed with account deletion,
-  with their workspace where applicable, or through verified erasure.
+- **GitHub and GitLab:** active copies stay while a workspace monitors the source. Removal of the last relevant connection or repository monitor removes them. Shared sources stay for other workspaces that monitor them. Contributor profiles can stay independently and require operator-assisted erasure.
+
+  An unavailable repository, or one that loses access, keeps stored work while monitored. A removed GitLab note leaves live context only after successful reconciliation. Historical review copies do not change automatically.
+- **Slack channel threads:** retention uses a rolling period measured from the latest message. An active thread can still contain much older messages. This period does not apply to mentor DMs.
+- **Outline:** selected content stays while its collection and connection stay active.
+- **Web chats, Slack mentor DMs, and memberships:** records stay with the workspace. Workspace removal or verified person erasure removes them.
+- **League points and XP from the retired leaderboard:** the upgrade that retired the leaderboard deleted them. The operator may have exported a copy before the upgrade. That copy stays outside Hephaestus for as long as the operator decides.
+- **Product-feedback and survey submissions:** there is no automatic expiry by age. Account deletion, applicable workspace removal, or verified erasure removes them.
 
 ### Security and review history
 
-- **Authentication history:** expires in monthly batches. Account erasure redacts identifying
-  authentication details.
-- **Settings-change history:** expires on its own window. Account erasure detaches actor references, not
-  the change record.
-- **Review diagnostics:** become eligible for removal once the job has been finished for long enough. Job
-  history becomes eligible later, and only when observations and feedback no longer reference it. Pending
-  delivery delays both. The job-retention service must also be enabled; switching off reviews does not
-  automatically delete their old records.
-- **Review working copies:** worker attempt folders are removed after evidence admission; ended attempts
-  have a one-hour cleanup grace, and restart cleanup removes abandoned folders. Failed cleanup needs
-  a later successful run. Raw Git mirrors follow repository monitoring; the repository owner must
-  handle Git authorship at source.
-- **AI usage accounting:** contains token counts, costs, and run identifiers, not message content, and is
-  kept long enough for annual accounting; an operator can extend that for a legal obligation.
-- **Other operational and administration history:** some records of who configured or requested an operation
-  have no automatic expiry and survive account or workspace removal. Include them in a verified erasure request.
+- **Authentication history:** records expire in monthly batches. Account erasure redacts identifying authentication details.
+- **Settings-change history:** records expire after their own retention period. Account erasure detaches actor references, not the change record.
+- **Review diagnostics:** records become eligible for removal when enough time has passed since job completion. Job history becomes eligible later, only without observation or feedback references. Pending delivery delays both. The job-retention service must also be enabled. Disabling reviews does not automatically delete old records.
+- **Review working copies:** worker attempt folders are removed after evidence admission. Ended attempts have a one-hour cleanup grace period. Restart cleanup removes abandoned folders. Failed cleanup needs a later successful run. Raw Git mirrors follow repository monitoring. The repository owner must handle Git authorship at source.
+- **AI usage accounting:** records contain token counts, costs, and run identifiers, not message content. They stay long enough for annual accounting. An operator can extend retention for a legal obligation.
+- **Other operational and administration history:** some records of who configured or requested an operation have no automatic expiry. They survive account or workspace removal. A verified erasure request must include them.
 
 ### Copies outside active records
 
-- **Buffered integration events:** expire within hours for Slack and Outline, and within months for GitHub
-  and GitLab, under the shipped limits. Storage limits can shorten retention; individual erasure cannot
-  selectively remove these copies.
-- **Logs, support bundles, and backups:** container logs rotate by size, not age. The operator controls
-  support-bundle and backup retention. These copies do not support immediate selective erasure; ask about
-  expiry and how erased data is handled after a restore.
-- **AI-provider copies and posted feedback:** governed by the provider's policies. Completed AI requests
-  cannot be retracted; posted feedback follows the separate removal process above.
+- **Buffered integration events:** supplied limits expire Slack and Outline events within hours, and GitHub and GitLab events within months. Storage limits can shorten retention. Individual erasure cannot selectively remove these copies.
+- **Logs, support bundles, and backups:** container logs rotate by size, not age. The operator controls support-bundle and backup retention. These copies do not support immediate selective erasure. The operator can explain expiry and treatment of erased data after a restore.
+- **AI-provider copies and posted feedback:** provider policies apply. Completed AI requests cannot be recalled. Posted feedback follows the separate removal process above.
 
-The person-data upgrade resets hidden Heph runtime memory once because legacy copies cannot be
-attributed safely. Your visible conversations, titles and times remain, but you may need to repeat
-context. This is separate from an erasure request.
+The person-data upgrade resets hidden Heph runtime memory once because old copies cannot be safely attributed.
+Visible conversations, titles, and times stay, but you may need to repeat context.
+This reset is separate from an erasure request.
