@@ -26,8 +26,8 @@ Every result cell holds one of these four words.
 second says there is nothing to gather. A check that could not be run, because the tester, the
 assistive technology or the test data was missing, is `Not tested`.
 
-When a result differs between environments, name the environment in the cell, for example
-`Fail (E2)`.
+When a result differs between environments, or ran in only some of them, name the environment in the
+cell, for example `Fail (E2)` or `Pass (E1)`.
 
 ## Audit
 

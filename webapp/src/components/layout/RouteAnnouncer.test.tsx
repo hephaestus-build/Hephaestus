@@ -23,7 +23,19 @@ describe("RouteAnnouncer", () => {
 		document.title = "Settings · Hephaestus";
 		await act(async () => router.navigate({ to: "/settings" }));
 
-		screen.getByText("Settings · Hephaestus");
+		await screen.findByText("Settings · Hephaestus");
+	});
+
+	it("clears and repeats the title when the next page has the same one", async () => {
+		const { router } = await mount();
+		await act(async () => router.navigate({ to: "/settings" }));
+		await screen.findByText("Landing · Hephaestus");
+
+		await act(async () => router.navigate({ to: "/about" }));
+
+		// A live region only speaks a change, so the text goes away before it comes back.
+		expect(screen.queryByText("Landing · Hephaestus")).toBeNull();
+		await screen.findByText("Landing · Hephaestus");
 	});
 
 	it("stays silent when only the search changes", async () => {

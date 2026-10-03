@@ -52,7 +52,7 @@ component, listed where the component is shared.
 | F1 | 18 routes: landing, about, imprint, privacy, both sign-in pages, sign-in problem, consent, callback, create workspace (3), user settings, integration callback, teams, mentor, choose your AI, not found | 2.4.2 Page Titled (A) | The tab, the history and a screen reader's page announcement all said only "Hephaestus". The unsubscribe page used a different separator from every other title. | `pageHead` in `webapp/src/lib/page-title.ts` on each route; the unmatched-address page is now the `routes/$.tsx` route, because only a route can set a title | Every surface test asserts its exact title |
 | F2 | Every page of the signed-in application | 2.4.7 Focus Visible (AA), 2.4.11 Focus Not Obscured (AA), 2.4.1 Bypass Blocks (A) | The skip link used `sr-only focus:not-sr-only`, which resets `position`, so a focused link fell into the page flow behind the fixed sidebar. A keyboard user pressed Tab and saw nothing. | `SkipToContent.tsx` is parked above the viewport and moves down on focus | Story `ShownAboveTheSidebar`; the skip-link test and the Tab walk on every surface |
 | F3 | Account menu in the header | 4.1.2 Name, Role, Value (A), 1.3.1 Info and Relationships (A) | `Activity` and `Settings` menu items sat inside links, so axe reported `aria-required-parent` and `aria-required-children` and a screen reader met a menu whose items were not its children. | `Header.tsx` renders each menu item as the link (`render=`) instead of wrapping it | Story `AccountMenu`; the menu test |
-| F4 | Practice setup, with 13 groups | 4.1.2 (A), 2.5.8 Target Size (AA) | A tooltip trigger, itself a button, sat inside each accordion trigger. Nested buttons are invalid, the badge was 20px tall, and its explanation was reachable by hover only. | `CatalogOriginBadge.tsx` is plain text; the sentence is written out on the practice in `CatalogOriginNote`. The badge has callers in `PracticeCatalog` and `WorkspacePracticePanel`, both checked. | Stories `WithCatalogProvenance` and `FromTheCatalog`; the Practices surface test |
+| F4 | Practice setup, with 13 groups | 4.1.2 (A), 2.5.8 Target Size (AA) | A tooltip trigger, itself a button, sat inside each accordion trigger. Nested buttons are invalid, the badge was 20px tall, and its explanation was reachable by hover only. | `CatalogOriginBadge.tsx` is plain text; the sentence is written out in `CatalogOriginNote`, on the practice's panel and in the group's edit dialog. The badge has callers in `PracticeCatalog` and `WorkspacePracticePanel`, both checked. | Stories `WithCatalogProvenance`, `FromTheCatalog` and the group dialog's `FromTheCatalog`; the Practices surface test |
 | F5 | Every page with the sidebar (an axe `region` finding on every signed-in route) | 1.3.1 (A), 2.4.1 (A) | The sidebar was a stack of `div`s, so a screen reader's landmark list held no navigation. | `ui/sidebar.tsx` renders the panel as `nav` named "Primary", on desktop and in the mobile sheet. Its one caller is `AppSidebar`. | Story `RegularUser` asserts the landmark; every signed-in surface test runs axe with `region` on |
 | F6 | Practice setup, practice catalog, person data, instance overview (the readiness card from [#2416](https://github.com/hephaestus-build/Hephaestus/pull/2416), merged while this change was open, had the same defect) | 1.3.1 (A) | An accordion trigger is a heading, and Base UI fixes it at level 3, so each sat directly under the page's level-1 heading. The shared empty state fixed its title at level 3 as well. | `AccordionTrigger` takes `headingLevel`; `EmptyState` and `NoWorkspace` take a required `headingLevel`. Callers: `SortableCatalogTree` (practice setup and instance catalog), the readiness card, `InstancePersonDataPage`, the mentor routes and the six no-workspace pages. | Stories `Populated` and `ActionRequired` assert the levels; the surface tests run axe `heading-order` |
 | F7 | No-workspace page, Heph conversation page | 1.3.1 (A), 2.4.6 Headings and Labels (AA) | The page had no heading at all. | `NoWorkspace` is a level-1 heading on a page of its own; the conversation routes carry a visually hidden level-1 heading | Story `Default` of `NoWorkspace`; the mentor thread route tests; the sign-in process test runs axe on the no-workspace page |
@@ -64,7 +64,7 @@ component, listed where the component is shared.
 | F13 | Sidebar workspace switcher | 1.4.12 Text Spacing (AA) | At the spacing the criterion sets, a workspace name ended in an ellipsis in the only place it is shown. | `WorkspaceSwitcher.tsx` lets the name wrap | Story `LongWorkspaceName` |
 | F14 | Review settings, landing page, dark theme | 1.4.3 Contrast (AA) | The chosen autonomy rung's description was 4.19:1 on its tint, and the landing page's "Merged" pill was 3.88:1. | `AutonomyLadder.tsx` and `LandingVisuals.tsx` | Stories `FullInDarkMode` and `WorkStatesInDarkMode`; the Review settings surface test in dark |
 | F15 | Every pressed outline button in the dark theme | 1.4.1 Use of Color (A), 1.4.11 Non-text Contrast (AA) | `dark:bg-input/30` outranked `aria-pressed:bg-muted`, so a pressed button looked like an unpressed one. | `ui/button.tsx` | Story `PressedTogglesLookSelectedInDarkMode` |
-| F16 | Every page change | 4.1.3 Status Messages (AA), not confirmed | The page changes without a load, so a screen reader said nothing when a link was followed. This is a barrier by design review: no screen reader has confirmed it. | `RouteAnnouncer.tsx` speaks the new page's title through a polite live region and keeps focus where it is. It stays silent for the first page and for a change of search. | Unit test `RouteAnnouncer.test.tsx`; the announcer test in the spec. A tester must confirm what NVDA and VoiceOver say. |
+| F16 | Every page change | 4.1.3 Status Messages (AA), not confirmed | The page changes without a load, so a screen reader said nothing when a link was followed. This is a barrier by design review: no screen reader has confirmed it. | `RouteAnnouncer.tsx` speaks the new page's title through a polite live region and keeps focus where it is. It clears the region first, so two pages with one title are both spoken. It stays silent for the first page and for a change of search. | Unit test `RouteAnnouncer.test.tsx`; the announcer test in the spec. A tester must confirm what NVDA and VoiceOver say. |
 | F17 | Dark theme, whole Storybook suite | 1.4.3 (AA) | Stories run in the light theme only, so a dark-theme defect passes unless a story asks for it. | The dark stories of F14 and F15. Every story was also run in the dark theme once, with `globals: { theme: "dark" }` added to each file's meta by a temporary edit that was not kept: 313 files and 2,155 tests pass. A first attempt through `initialGlobals` failed 79 stories; the 54 that were not contrast or F15 failed because the theme provider remounts a story when the global changes, and each passes with per-story globals. | The dark stories above |
 
 One more result is a tool's, not the application's. axe 4.13.0 reports `scrollable-region-focusable`
@@ -78,7 +78,7 @@ when the axe pin moves.
 `Automated` is the axe run in the light and dark scheme, plus the page title, reflow at 320 and 640
 CSS pixels, and looping motion. `Keyboard` is a Tab walk of the surface: order, focus indicator, focus
 not entirely hidden, and no trap. `Pass` means it passed in E1, E2 and E3, the environments that ran it.
-The generated rows ran as the instance administrator, who is also a workspace administrator, on a
+A cell that names an environment, such as `Pass (E1)`, ran in that environment only. The generated rows ran as the instance administrator, who is also a workspace administrator, on a
 database with no synced work, so a page that lists work shows its empty state. The evidence for each row is its test
 in `webapp/e2e/accessibility.spec.ts`.
 
@@ -135,10 +135,10 @@ in `webapp/e2e/accessibility.spec.ts`.
 | Feedback inbox | `/admin/feedback`, instance admin | Pass | Pass | Not tested | Not tested | Surface test `Feedback inbox` |
 | Surveys | `/admin/surveys`, instance admin | Pass | Pass | Not tested | Not tested | Surface test `Surveys` |
 | Person data | `/admin/person-data`, instance admin | Pass | Pass | Not tested | Not tested | Surface test `Person data` |
-| Member role | The workspace member's pages (practice profile, activity, workspace activity, teams, mentor, settings), as `e2e-plain` | Pass | Not tested | Not tested | Not tested | A one-off scan in E1 in both schemes found nothing. The Tab walk was not run as a member. |
-| Permission denied | A member opens an administrator route (`/w/e2e/admin/members`, `/admin`) | Pass | Not tested | Not tested | Not tested | The application redirects to the practice profile, which has a title and passes. It shows no message that access was refused. |
-| Heph conversation | Greeting, transcript, composer, copilot panel | Pass | Not tested | Not tested | Not tested | Component stories only. The evaluation deployment has no language-model provider, so the live page shows "Heph isn't set up in this workspace yet". The conversation rebuilt in [#2389](https://github.com/hephaestus-build/Hephaestus/pull/2389) is not evaluated against a server. |
-| Populated pages | Practice profile with feedback, reviewed-work feedback page, review runs, observations, traces, activity, teams, usage charts, audit entries, connected integrations | Pass | Not tested | Not tested | Not tested | Component stories only. The deployment held no synced work or review runs. |
+| Member role | The workspace member's pages (practice profile, activity, workspace activity, teams, mentor, settings), as `e2e-plain` | Pass (E1) | Not tested | Not tested | Not tested | A one-off scan in E1 in both schemes found nothing. The Tab walk was not run as a member. |
+| Permission denied | A member opens an administrator route (`/w/e2e/admin/members`, `/admin`) | Pass (E1) | Not tested | Not tested | Not tested | The application redirects to the practice profile, which has a title and passes. It shows no message that access was refused. |
+| Heph conversation | Greeting, transcript, composer, copilot panel | Not tested | Not tested | Not tested | Not tested | Component stories only. The evaluation deployment has no language-model provider, so the live page shows "Heph isn't set up in this workspace yet". The conversation rebuilt in [#2389](https://github.com/hephaestus-build/Hephaestus/pull/2389) is not evaluated against a server. |
+| Populated pages | Practice profile with feedback, reviewed-work feedback page, review runs, observations, traces, activity, teams, usage charts, audit entries, connected integrations | Not tested | Not tested | Not tested | Not tested | Component stories only. The deployment held no synced work or review runs. |
 
 ## Complete processes
 
@@ -147,15 +147,15 @@ they make on the way. These ran by keyboard alone.
 
 | Process | Roles and states | Environment | Success path | Error recovery | Evidence or issue |
 | --- | --- | --- | --- | --- | --- |
-| A new person signs in and accepts the terms | Signed out, then a new account | E1 | Pass | Not applicable: the dev sign-in accepts any name, and the checkbox keeps Continue disabled until it is ticked, so no step reports an error | Spec test "a new person signs in and accepts the terms". Sign-in through GitHub or GitLab leaves the application; that handoff and return are not tested. |
-| A new person signs in and accepts the terms | Signed out, then a new account | E2 | Pass | Not applicable, as above | The same test |
-| A new person signs in and accepts the terms | Signed out, then a new account | E3 | Pass | Not applicable, as above | The same test |
-| Create and delete a practice group | Workspace administrator | E1 | Pass | Not applicable: Create stays disabled until the name is typed and deletion asks first. A failed request was not induced. | Spec test "a practice group is created, shown and deleted" |
-| Create and delete a practice group | Workspace administrator | E2 | Pass | Not applicable, as above | The same test |
-| Create and delete a practice group | Workspace administrator | E3 | Pass | Not applicable, as above | The same test |
-| Share an idea with the instance administrators | Workspace administrator | E1 | Pass | Not applicable: Send stays disabled until there is a message. A failed request was not induced. | Spec test "an idea is sent to the instance administrators" |
-| Share an idea with the instance administrators | Workspace administrator | E2 | Pass | Not applicable, as above | The same test |
-| Share an idea with the instance administrators | Workspace administrator | E3 | Pass | Not applicable, as above | The same test |
+| A new person signs in and accepts the terms | Signed out, then a new account | E1 | Pass | Not tested: the dev sign-in and the terms step were not made to fail | Spec test "a new person signs in and accepts the terms". Sign-in through GitHub or GitLab leaves the application; that handoff and return are not tested. |
+| A new person signs in and accepts the terms | Signed out, then a new account | E2 | Pass | Not tested | The same test |
+| A new person signs in and accepts the terms | Signed out, then a new account | E3 | Pass | Not tested | The same test |
+| Create and delete a practice group | Workspace administrator | E1 | Pass | Not tested: a failed request was not induced | Spec test "a practice group is created, shown and deleted" |
+| Create and delete a practice group | Workspace administrator | E2 | Pass | Not tested | The same test |
+| Create and delete a practice group | Workspace administrator | E3 | Pass | Not tested | The same test |
+| Share an idea with the instance administrators | Workspace administrator | E1 | Pass | Not tested: a failed request was not induced | Spec test "an idea is sent to the instance administrators" |
+| Share an idea with the instance administrators | Workspace administrator | E2 | Pass | Not tested | The same test |
+| Share an idea with the instance administrators | Workspace administrator | E3 | Pass | Not tested | The same test |
 | Create a workspace from a provider | Signed in | E1, E2, E3 | Not tested: the evaluation deployment has no GitHub App or GitLab login | Not tested | Only the pages before the provider are in the surface table |
 | Respond to feedback on work | Signed in, with feedback | E1, E2, E3 | Not tested: no feedback exists in the deployment | Not tested | |
 | Talk with Heph | Workspace member | E1, E2, E3 | Not tested: no language-model provider | Not tested | |
@@ -187,8 +187,11 @@ synced work, review runs and a language-model provider: the populated rows of th
 Heph conversation (greeting, streaming reply with its status line, retry after a failure, the composer),
 the reviewed-work feedback page, and the connected integration screens.
 
-Roles. Run the keyboard walk as a workspace member, and complete the keyboard processes in each
-role the application supports.
+Roles. Run the keyboard walk and the axe scan as a workspace member in all three browsers, and
+complete the keyboard processes in each role the application supports.
+
+Error recovery. For each process, make a request fail (a stopped server, a rejected request) and
+check that the person is told, can retry, and keeps what they typed.
 
 The record itself. Choose a random sample once the above exist and produce the WCAG-EM report.
 

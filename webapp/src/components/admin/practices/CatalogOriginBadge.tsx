@@ -10,7 +10,8 @@ export interface CatalogOriginProps {
 /**
  * What the badge says, and the sentence that goes with it. The badge sits inside accordion triggers
  * and list rows, where a focusable control cannot nest, so only the label travels there. The
- * sentence is written out beside the practice itself, where it is read rather than hovered.
+ * sentence is written out where the thing is opened, the practice's panel and the group's edit dialog,
+ * where it is read rather than hovered.
  */
 function describeOrigin({ origin, kind }: CatalogOriginProps) {
 	if (!origin) {

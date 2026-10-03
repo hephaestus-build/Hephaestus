@@ -16,14 +16,26 @@ export function RouteAnnouncer() {
 	const region = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
-		if (pathname === undefined) {
+		const node = region.current;
+		if (pathname === undefined || node === null) {
 			return;
 		}
-		if (announced.current !== undefined && announced.current !== pathname && region.current) {
-			// Written to the node rather than held in state: the region exists to be spoken, not rendered.
-			region.current.textContent = document.title;
+		let frame: number | undefined;
+		if (announced.current !== undefined && announced.current !== pathname) {
+			// Cleared first: two pages can share a title, such as two conversations, and VoiceOver
+			// skips a live region whose text did not change. Written to the node rather than held in
+			// state, since the region exists to be spoken, not rendered.
+			node.textContent = "";
+			frame = requestAnimationFrame(() => {
+				node.textContent = document.title;
+			});
 		}
 		announced.current = pathname;
+		return () => {
+			if (frame !== undefined) {
+				cancelAnimationFrame(frame);
+			}
+		};
 	}, [pathname]);
 
 	return <div ref={region} data-slot="route-announcer" aria-live="polite" className="sr-only" />;

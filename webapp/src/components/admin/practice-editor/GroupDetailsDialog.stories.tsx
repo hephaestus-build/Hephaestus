@@ -50,6 +50,20 @@ export const OpensOnTheName: Story = {
 	},
 };
 
+/** The group row only labels where the group stands against the catalog; the dialog says what that means. */
+export const FromTheCatalog: Story = {
+	args: {
+		group: {
+			...reviewReadyGroup,
+			catalogOrigin: { slug: reviewReadyGroup.slug, link: "UPDATE_AVAILABLE", sourceOffered: true },
+		},
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("Catalog changed, yours did not"));
+		await expect(screen.getByText(/bring anything you want across by editing it/u)).toBeVisible();
+	},
+};
+
 export const Renaming: Story = {
 	args: { group: reviewReadyGroup },
 	play: async ({ args }) => {

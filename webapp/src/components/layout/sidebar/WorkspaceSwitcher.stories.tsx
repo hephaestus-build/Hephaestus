@@ -69,6 +69,23 @@ export const LongWorkspaceName: Story = {
 	},
 };
 
+/** A name with no spaces in it has nowhere to break but between letters. */
+export const LongUnbrokenLogin: Story = {
+	args: {
+		activeWorkspace: {
+			...meta.args.activeWorkspace,
+			accountLogin: "an-organisation-with-a-very-long-account-login-and-no-spaces",
+		},
+	},
+	play: async ({ canvas }) => {
+		const login = canvas.getByText("an-organisation-with-a-very-long-account-login-and-no-spaces");
+		// The button clips what overflows it, so the label has to end inside the button.
+		await expect(login.getBoundingClientRect().right).toBeLessThanOrEqual(
+			canvas.getByRole("button").getBoundingClientRect().right,
+		);
+	},
+};
+
 export const WithoutAddWorkspace: Story = {
 	args: { onAddWorkspace: undefined },
 	play: async ({ canvas }) => {

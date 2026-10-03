@@ -88,7 +88,7 @@ export function WorkspaceSwitcher({
 							<div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
 								<Plus className="size-4" />
 							</div>
-							<div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+							<div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
 								<span className="truncate font-semibold">Create workspace</span>
 							</div>
 						</SidebarMenuButton>
@@ -142,10 +142,10 @@ export function WorkspaceSwitcher({
 							</Avatar>
 						</div>
 						<div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-							<span className="font-semibold break-words">
+							<span className="font-semibold wrap-anywhere">
 								{activeWorkspace?.displayName ?? "No workspace"}
 							</span>
-							<span className="text-xs break-words text-muted-foreground">
+							<span className="text-xs wrap-anywhere text-muted-foreground">
 								{activeWorkspace?.accountLogin ?? "Select a workspace"}
 							</span>
 						</div>
