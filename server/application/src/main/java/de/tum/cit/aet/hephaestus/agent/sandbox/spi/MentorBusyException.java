@@ -1,11 +1,15 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.spi;
 
+import java.io.Serial;
+
 /** Retryable refusal: no worker can admit this session now. */
 public final class MentorBusyException extends InteractiveSandboxException {
-    @java.io.Serial
+    @Serial
     private static final long serialVersionUID = 1L;
 
+    public static final String USER_MESSAGE = "Heph is busy. Please try again.";
+
     public MentorBusyException() {
-        super("Heph is busy. Please try again.");
+        super(USER_MESSAGE);
     }
 }

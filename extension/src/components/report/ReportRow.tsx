@@ -2,7 +2,7 @@ import { ChevronDownIcon, CircleAlertIcon, LoaderIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
-import { HephMark } from "~/components/brand/HephaestusLogo";
+import { HephMark } from "@/components/brand/HephaestusLogo";
 import type { ReportSummary } from "~/components/report/report-summary";
 import { REPORT_ROW_HEIGHT } from "~/shared/frame-messages";
 

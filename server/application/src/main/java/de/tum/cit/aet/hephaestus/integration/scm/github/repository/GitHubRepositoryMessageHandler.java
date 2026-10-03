@@ -32,7 +32,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * every workspace's monitor — by the provider-stable {@code repository.id}, then the NATS
  * consumer filters are rebuilt.
  *
- * <p><b>Subject tier.</b> Registered on the {@code organization.} tier: {@code GithubSubjectKeyDeriver}
+ * <p><b>Subject tier.</b> Registered on the {@code organization.} tier: {@code GitHubSubjectKeyDeriver}
  * emits {@code repository} lifecycle events as {@code github.<owner>.?.repository} because the repo-name
  * token is unstable across rename/transfer (a repo-tier subject built from the NEW name matches no
  * monitored-repo filter and is silently ACK-dropped). Nothing here consumes repository-tier subject
@@ -66,7 +66,7 @@ public class GitHubRepositoryMessageHandler extends AbstractIntegrationMessageHa
         super(
                 IntegrationKind.GITHUB,
                 // Org tier, not repository tier — see the class javadoc. Must stay in lockstep with
-                // GithubSubjectKeyDeriver's org-scoping of the `repository` event: registering this on
+                // GitHubSubjectKeyDeriver's org-scoping of the `repository` event: registering this on
                 // `repository.` again makes every repository lifecycle event resolve no handler and be
                 // ACK-dropped silently (WebhookFixtureHandlerResolutionTest guards exactly that).
                 "organization." + GitHubEventType.REPOSITORY.getValue(),

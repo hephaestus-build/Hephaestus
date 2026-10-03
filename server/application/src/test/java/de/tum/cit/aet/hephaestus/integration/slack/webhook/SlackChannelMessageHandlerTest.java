@@ -29,7 +29,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -422,7 +421,6 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                   "text":"","files":[{"id":"F1"}]}}
                 """));
 
-        verify(messageRepository, never())
-                .insertIfAbsent(ArgumentMatchers.anyLong(), any(), any(), any(), any(), any(), any(), any());
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
     }
 }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
+import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
@@ -20,6 +21,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -69,7 +71,7 @@ class RepositoryTreeStagingLiveTest {
         assumeTrue(
                 DockerClientFactory.lazyClient().listImagesCmd().exec().stream()
                         .anyMatch(image -> image.getRepoTags() != null
-                                && java.util.Arrays.asList(image.getRepoTags()).contains(AGENT_IMAGE)),
+                                && Arrays.asList(image.getRepoTags()).contains(AGENT_IMAGE)),
                 AGENT_IMAGE + " not present locally");
     }
 
@@ -131,7 +133,7 @@ class RepositoryTreeStagingLiveTest {
 
         Path large = staging.resolve("large.bin");
         byte[] chunk = new byte[1024 * 1024];
-        java.util.Arrays.fill(chunk, (byte) 'x');
+        Arrays.fill(chunk, (byte) 'x');
         try (OutputStream out = Files.newOutputStream(large)) {
             for (int i = 0; i < LARGE_FILE_MB; i++) {
                 out.write(chunk);
@@ -164,8 +166,7 @@ class RepositoryTreeStagingLiveTest {
                 new SecurityProfile(null, "private", List.of("ALL"), Map.of()),
                 Map.of(),
                 Map.of(),
-                List.of(new de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory(
-                        SandboxLayout.REPO_MOUNT_RELATIVE, staging)),
+                List.of(new EvidenceDirectory(SandboxLayout.REPO_MOUNT_RELATIVE, staging)),
                 SandboxLayout.OUTPUT_PATH);
 
         SandboxResult result = sandboxAdapter.execute(spec);

@@ -386,7 +386,7 @@ class DeliveryComposerTest extends BaseUnitTest {
 
     @Test
     void shouldNotSpendTheImprovementCapOnRecurringLapses() {
-        List<ValidatedObservation> observations = new java.util.ArrayList<>();
+        List<ValidatedObservation> observations = new ArrayList<>();
         observations.add(negativeObservation(
                 "describe-what-and-why", "No why in the description.", Severity.MINOR, null, null, "r1"));
         for (String slug : List.of(
@@ -1231,8 +1231,8 @@ class DeliveryComposerTest extends BaseUnitTest {
     }
 
     /**
-     * Everything the developer meets, on either surface. A finding with a line lives in its note on the
-     * diff and a finding without one lives in the comment, and which of the two carries it is not what
+     * Everything the developer meets, on either surface. An observation with a line lives in its note on
+     * the diff and one without lives in the comment, and which of the two carries it is not what
      * these tests are about.
      */
     private static String reachedTheDeveloper(DeliveryContent delivery) {

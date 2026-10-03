@@ -12,10 +12,14 @@ import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 
 @WorkspaceScopedController
 @ConditionalOnServerRole
@@ -60,7 +64,7 @@ public class WorkspaceOnboardingController {
     @GetMapping("/settings/links")
     @RequireWorkspaceOwner
     @Operation(summary = "List workspace account links available for onboarding requirements")
-    public java.util.List<WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO> getMemberOnboardingLinkOptions(
+    public List<WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO> getMemberOnboardingLinkOptions(
             WorkspaceContext context) {
         return service.linkOptions(context, CurrentAccount.requireId());
     }

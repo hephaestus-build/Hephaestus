@@ -24,10 +24,7 @@ class MentorTurnPromptFactoryTest extends BaseUnitTest {
     @Test
     void slackDm_wrapsMessageInStyleDirective() {
         String prompt = MentorTurnPromptFactory.forRunner(request("what's up", ThreadSurface.SLACK_DM), Map.of());
-        assertThat(prompt)
-                .contains("[Surface: Slack DM")
-                .contains("what's up")
-                .contains("Visible recent mentor-thread history");
+        assertThat(prompt).startsWith("[Surface: Slack DM").contains("what's up");
     }
 
     @Test

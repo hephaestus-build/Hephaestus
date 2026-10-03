@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvide
 import de.tum.cit.aet.hephaestus.practices.review.autonomy.AutonomyResolver;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -31,7 +32,7 @@ public class FeedbackApprovalEligibility {
                 .findByIdAndWorkspaceId(feedbackId, workspaceId)
                 .orElse(null);
         if (feedback == null || feedback.getProposedPracticeSlugs().isEmpty()) return false;
-        var slugs = java.util.Set.copyOf(feedback.getProposedPracticeSlugs());
+        var slugs = Set.copyOf(feedback.getProposedPracticeSlugs());
         var practices = practiceRepository.findByWorkspaceIdAndSlugIn(workspaceId, slugs);
         if (practices.size() != slugs.size()) return false;
         PracticeAutonomy workspaceDefault =

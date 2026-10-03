@@ -13,35 +13,37 @@ import {
 import type { ChatMessageVote } from "@/api/types.gen";
 import environment from "@/environment";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
-import { isWarmingUp } from "@/lib/chat-validation";
+import { type MentorTurnState, mentorStatus, mentorTurn } from "@/lib/chat-validation";
 import { hasText } from "@/lib/text";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ChatTurn } from "@/lib/types";
 import { csrfHeaders } from "@/runtime/auth/auth-client";
 import { userViewHeaders } from "@/runtime/user-view/session";
 
 interface UseMentorChatOptions {
 	threadId?: string;
 	initialMessages?: ChatMessage[];
-	onFinish?: () => void;
-	onError?: (error: Error) => void;
 }
 
-/** `addToolResult` is dropped because it is the SDK's deprecated alias for the forwarded `addToolOutput`. */
+/**
+ * `addToolResult` is dropped because it is the SDK's deprecated alias for the forwarded
+ * `addToolOutput`, and `status` because `turn` reads it together with the server's own state.
+ */
 interface UseMentorChatReturn extends Omit<
 	UseChatHelpers<ChatMessage>,
-	"sendMessage" | "addToolResult"
+	"sendMessage" | "addToolResult" | "status"
 > {
 	sendMessage: (text: string) => void;
 	/** Starts a separate floating conversation, leaving the previous stored thread available. */
 	startNewChat: () => Promise<void>;
 	/** Answers the latest prompt again, replacing the reply that failed. */
 	retry: () => void;
+	/** Drops the message and everything after it, then sends `text` as a new prompt. */
+	editMessage: (messageId: string, text: string) => void;
 	isLoading: boolean;
 	currentThreadId: string | undefined;
 	voteMessage: (messageId: string, isUpvoted: boolean) => void;
 	votes: ChatMessageVote[];
-	/** The turn in flight is waiting for Heph's sandbox to start, so its first words come late. */
-	warmingUp: boolean;
+	turn: ChatTurn;
 }
 
 /**
@@ -61,8 +63,6 @@ export function mentorThreadOptions(workspaceSlug: string, threadId: string) {
 export function useMentorChat({
 	threadId,
 	initialMessages = [],
-	onFinish,
-	onError,
 }: UseMentorChatOptions): UseMentorChatReturn {
 	const queryClient = useQueryClient();
 	const { workspaceSlug, isLoading: isWorkspaceLoading } = useActiveWorkspaceSlug();
@@ -127,14 +127,11 @@ export function useMentorChat({
 		},
 	});
 
-	// The server says so on a transient `data-mentor-status` part, which `useChat` hands to `onData` and
-	// never stores, so it is held here until the turn ends or the next one starts.
-	const [warmingUp, setWarmingUp] = useState(false);
+	// The server reports a turn's state on a transient `data-mentor-status` part, which `useChat` hands
+	// to `onData` and never stores, so the latest one is held here until the next turn starts.
+	const [serverState, setServerState] = useState<MentorTurnState>();
 
-	// Unmemoised on purpose: `useChat` copies both handlers into a ref every render and calls through
-	// it, so each only has to be the current closure — a stable reference would go stale.
 	const handleFinish = () => {
-		setWarmingUp(false);
 		if (hasWorkspace) {
 			void queryClient.invalidateQueries({
 				queryKey: listThreadsQueryKey({ path: { workspaceSlug: slug } }),
@@ -147,12 +144,6 @@ export function useMentorChat({
 				}),
 			});
 		}
-		onFinish?.();
-	};
-
-	const handleError = (error: Error) => {
-		setWarmingUp(false);
-		onError?.(error);
 	};
 
 	const {
@@ -178,10 +169,10 @@ export function useMentorChat({
 		// markdown renderer is cheap enough to take every delta.
 		transport,
 		onFinish: handleFinish,
-		onError: handleError,
 		onData: (part) => {
-			if (isWarmingUp(part)) {
-				setWarmingUp(true);
+			const state = mentorStatus(part);
+			if (state !== undefined) {
+				setServerState(state);
 			}
 		},
 	});
@@ -193,7 +184,7 @@ export function useMentorChat({
 	const startNewChat = async () => {
 		await stop();
 		retryTarget.current = undefined;
-		setWarmingUp(false);
+		setServerState(undefined);
 		setStableThreadId(uuidv4());
 	};
 
@@ -203,12 +194,23 @@ export function useMentorChat({
 		}
 
 		retryTarget.current = undefined;
-		setWarmingUp(false);
+		setServerState(undefined);
 		void originalSendMessage({ text });
 	};
 
+	// Not `sendMessage({ text, messageId })`, which resends the edited message under its own id: the
+	// server has stored that id already and refuses the turn as a duplicate.
+	const editMessage = (messageId: string, text: string) => {
+		const index = messages.findIndex((message) => message.id === messageId);
+		if (index === -1) {
+			return;
+		}
+		setMessages(messages.slice(0, index));
+		sendMessage(text);
+	};
+
 	const retry = () => {
-		setWarmingUp(false);
+		setServerState(undefined);
 		const last = messages.at(-1);
 		if (last?.role === "assistant") {
 			retryTarget.current = last.id;
@@ -265,7 +267,6 @@ export function useMentorChat({
 
 	const result: UseMentorChatReturn = {
 		messages,
-		status,
 		error,
 		stop,
 		regenerate,
@@ -278,11 +279,12 @@ export function useMentorChat({
 		sendMessage,
 		startNewChat,
 		retry,
+		editMessage,
 		currentThreadId: threadId ?? id,
 		voteMessage,
 		votes,
 		isLoading,
-		warmingUp,
+		turn: mentorTurn(status, serverState),
 	};
 
 	return result;

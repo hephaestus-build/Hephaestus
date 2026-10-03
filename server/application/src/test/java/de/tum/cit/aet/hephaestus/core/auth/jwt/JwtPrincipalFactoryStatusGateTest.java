@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -48,7 +49,6 @@ class JwtPrincipalFactoryStatusGateTest extends BaseUnitTest {
     }
 
     private JwtPrincipal principal(Account account) {
-        return factory.forAuthority(
-                java.util.Objects.requireNonNull(account.getId()), IssuanceAuthorityFixture.of(account));
+        return factory.forAuthority(Objects.requireNonNull(account.getId()), IssuanceAuthorityFixture.of(account));
     }
 }

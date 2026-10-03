@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
@@ -25,10 +26,12 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
@@ -39,6 +42,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.core.Ordered;
+import org.springframework.dao.QueryTimeoutException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -197,7 +201,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
         }
 
         @Test
-        void rejectsDetectorProviderWithoutSourceKinds() {
+        void rejectsReviewSourceWithoutSourceKinds() {
             ContentSource provider = stubProvider(true, "untracked.json", new byte[0], false);
             JobFolderIndexBuilder manifests = mock(JobFolderIndexBuilder.class);
             when(manifests.stagedSources(any())).thenReturn(Set.of(new SourceKind("scm.pull-request.core")));
@@ -214,7 +218,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     new EvidenceCollectionException("provider boom", new RuntimeException("downstream failure")),
                     // The shape a repository actually throws, and the reason the catch cannot be narrowed to
                     // the declared one: letting it escape would abort every source that had already succeeded.
-                    new org.springframework.dao.QueryTimeoutException("statement timed out"));
+                    new QueryTimeoutException("statement timed out"));
         }
 
         /**
@@ -254,9 +258,9 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
             JsonMapper mapper = JsonMapper.builder().build();
             JobFolderIndexBuilder manifestBuilder = new JobFolderIndexBuilder(
                     mapper,
-                    new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC()),
+                    new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                     new PracticePreconditionEvaluator(mapper),
-                    new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
+                    new AutomatedReviewFence(Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(bad), new SimpleMeterRegistry(), manifestBuilder);
             EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
@@ -264,7 +268,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
 
             PreparedEvidence prepared = builder.prepare(request, plan);
 
-            var capture = java.util.Objects.requireNonNull(prepared.manifest()).sources().stream()
+            var capture = Objects.requireNonNull(prepared.manifest()).sources().stream()
                     .filter(source -> source.kind().equals(comments))
                     .findFirst()
                     .orElseThrow();
@@ -281,7 +285,7 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
         void shouldReleaseEarlierCapturesWhenALaterProviderFailsTheBuild() {
             SourceKind diff = new SourceKind("scm.pull-request.diff");
             SourceKind comments = new SourceKind("scm.pull-request.comments");
-            var released = new java.util.concurrent.atomic.AtomicBoolean();
+            var released = new AtomicBoolean();
             EvidenceSource staged = new EvidenceSource() {
                 @Override
                 public Set<SourceKind> sourceKinds() {
@@ -392,19 +396,18 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                     new PracticePreconditionEvaluator(mapper),
-                    new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
+                    new AutomatedReviewFence(Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(provider), new SimpleMeterRegistry(), manifests);
             EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.PULL_REQUEST);
 
-            var capture =
-                    java.util.Objects.requireNonNull(
-                                    builder.prepare(reviewRequest(), plan).manifest())
-                            .sources()
-                            .stream()
-                            .filter(source -> source.kind().equals(diff))
-                            .findFirst()
-                            .orElseThrow();
+            var capture = Objects.requireNonNull(
+                            builder.prepare(reviewRequest(), plan).manifest())
+                    .sources()
+                    .stream()
+                    .filter(source -> source.kind().equals(diff))
+                    .findFirst()
+                    .orElseThrow();
 
             assertThat(capture.kind()).isEqualTo(diff);
             assertThat(capture.state())
@@ -684,12 +687,12 @@ class WorkspaceContextBuilderTest extends BaseUnitTest {
                     mapper,
                     new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                     new PracticePreconditionEvaluator(mapper),
-                    new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(Map.of()),
+                    new AutomatedReviewFence(Map.of()),
                     Clock.systemUTC());
             var builder = new WorkspaceContextBuilder(List.of(folder(), issue), new SimpleMeterRegistry(), manifests);
             EvidencePlan plan = new EvidencePlan(new SourceContractVersion("1.3.0"), ArtifactKinds.ISSUE);
             PreparedEvidence prepared = builder.prepare(new ContextRequest.IssueReviewRequest(anyJob()), plan);
-            return java.util.Objects.requireNonNull(prepared.manifest()).sources().stream()
+            return Objects.requireNonNull(prepared.manifest()).sources().stream()
                     .filter(source -> source.kind().equals(ISSUE_CORE))
                     .findFirst()
                     .orElseThrow();

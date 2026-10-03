@@ -285,8 +285,6 @@ class ConversationFeedbackErasureIntegrationTest extends BaseIntegrationTest {
         assertThat(feedbackObservationRepository.count()).isEqualTo(1);
     }
 
-    // --- fixtures ---
-
     private UUID lastFeedbackId = UUID.randomUUID();
 
     /** Save an observation, a feedback unit anchored to the same (artifactKind, artifactId), and the join between them. */

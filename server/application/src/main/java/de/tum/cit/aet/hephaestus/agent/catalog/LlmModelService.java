@@ -19,6 +19,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * CRUD, pricing, and sharing for instance-owned LLM catalog models.
@@ -93,7 +94,7 @@ public class LlmModelService {
                 .findById(connectionId)
                 .orElseThrow(() -> new EntityNotFoundException("LlmConnection", connectionId));
         String slug = modelSlug(connectionId, request.slug(), request.displayName());
-        if (org.springframework.util.StringUtils.hasText(request.slug())
+        if (StringUtils.hasText(request.slug())
                 && modelRepository.findByConnectionIdAndSlug(connectionId, slug).isPresent()) {
             throw new LlmModelSlugConflictException(connectionId, slug);
         }

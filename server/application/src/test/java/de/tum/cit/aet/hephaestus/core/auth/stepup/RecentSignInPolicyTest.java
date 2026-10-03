@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.core.auth.stepup;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
@@ -16,13 +18,13 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -57,8 +59,7 @@ class RecentSignInPolicyTest extends BaseUnitTest {
     }
 
     private static Authentication signedInAt(@Nullable Instant authTime) {
-        List<GrantedAuthority> authorities =
-                new java.util.ArrayList<>(List.of(new SimpleGrantedAuthority("app_admin")));
+        List<GrantedAuthority> authorities = new ArrayList<>(List.of(new SimpleGrantedAuthority("app_admin")));
         if (authTime != null) {
             authorities.add(FactorGrantedAuthority.withAuthority(FactorGrantedAuthority.AUTHORIZATION_CODE_AUTHORITY)
                     .issuedAt(authTime)
@@ -73,7 +74,7 @@ class RecentSignInPolicyTest extends BaseUnitTest {
     void aSignInInsideTheWindowIsLetThrough() {
         policy.require(signedInAt(NOW.minus(MAX_AGE).plusSeconds(1)), AuthEvent.EventType.APP_ROLE_CHANGED, 42L);
 
-        Mockito.verifyNoInteractions(authEventWriter);
+        verifyNoInteractions(authEventWriter);
     }
 
     @Test
@@ -92,7 +93,7 @@ class RecentSignInPolicyTest extends BaseUnitTest {
     void aSignInStampedAheadOfThisPodsClockIsStillFresh() {
         policy.require(signedInAt(NOW.plusSeconds(30)), AuthEvent.EventType.APP_ROLE_CHANGED, ACTING_ACCOUNT_ID);
 
-        Mockito.verifyNoInteractions(authEventWriter);
+        verifyNoInteractions(authEventWriter);
     }
 
     @Test
@@ -121,7 +122,7 @@ class RecentSignInPolicyTest extends BaseUnitTest {
                                 .containsEntry("maxAgeSeconds", MAX_AGE.toSeconds()));
 
         ArgumentCaptor<AuthEventData> captor = ArgumentCaptor.forClass(AuthEventData.class);
-        Mockito.verify(authEventWriter).write(captor.capture());
+        verify(authEventWriter).write(captor.capture());
         AuthEventData event = captor.getValue();
         assertThat(event.type()).isEqualTo(AuthEvent.EventType.LOGIN_PROVIDER_DELETED);
         assertThat(event.result()).isEqualTo(AuthEvent.Result.FAILURE);

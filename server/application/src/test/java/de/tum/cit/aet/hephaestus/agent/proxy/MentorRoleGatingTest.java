@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxConfiguration;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 
 class MentorRoleGatingTest extends BaseUnitTest {
 
@@ -23,7 +25,8 @@ class MentorRoleGatingTest extends BaseUnitTest {
     }
 
     private void assertWorkerRoleCondition(Class<?> type) {
-        ConditionalOnProperty condition = type.getAnnotation(ConditionalOnProperty.class);
+        ConditionalOnProperty condition =
+                Objects.requireNonNull(AnnotatedElementUtils.findMergedAnnotation(type, ConditionalOnProperty.class));
         assertThat(condition.name()).containsExactly(RuntimeRole.WORKER_PROPERTY);
         assertThat(condition.havingValue()).isEqualTo("true");
         assertThat(condition.matchIfMissing()).isTrue();

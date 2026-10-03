@@ -238,7 +238,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("register → activate → forward-only ingest → detect → person opt-out → revoke, asserted at every hop")
+    @DisplayName("register → activate → forward-only ingest → review → person opt-out → revoke, asserted at every hop")
     void fullConsentLifecycleComposes() {
 
         SlackMonitoredChannelDTO registered =
@@ -288,7 +288,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         UUID u2Fb = u2Conv.feedbackId();
 
         doReturn(2L).when(conversationReviewSubmitter).submitAndSettle(any(), any());
-        scheduler.detectNow();
+        scheduler.sweepNow();
         ArgumentCaptor<ConversationThreadCandidate> captor = ArgumentCaptor.forClass(ConversationThreadCandidate.class);
         verify(conversationReviewSubmitter).submitAndSettle(captor.capture(), any());
         assertThat(captor.getValue().workspaceId()).isEqualTo(workspaceId);

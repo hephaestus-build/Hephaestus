@@ -3,44 +3,59 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.context.HistoricalGitEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
+import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -60,21 +75,14 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 class ReviewOutputServiceTest extends BaseUnitTest {
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void allowMemberAiForUnrelatedScenarios() {
-        org.mockito.Mockito.lenient()
-                .when(memberAiPolicy.permitsReview(
-                        org.mockito.ArgumentMatchers.anyLong(),
-                        org.mockito.ArgumentMatchers.any(),
-                        org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
-        org.mockito.Mockito.lenient()
-                .when(memberAiPolicy.allowsResult(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
+        lenient().when(memberAiPolicy.permitsReview(anyLong(), any(), any())).thenReturn(true);
+        lenient().when(memberAiPolicy.allowsResult(any())).thenReturn(true);
     }
 
-    @org.mockito.Mock
-    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
+    @Mock
+    private ReviewMemberAiPolicy memberAiPolicy;
 
     /** The pinned change: {@code BASE..HEAD}, in a checkout whose HEAD tree is {@code TREE}. */
     private static final String BASE = "a".repeat(40);
@@ -90,7 +98,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
-    private de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository practiceRevisionRepository;
+    private PracticeRevisionRepository practiceRevisionRepository;
 
     @Mock
     private ObservationRepository observationRepository;
@@ -102,19 +110,19 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private ConversationSourceLiveness conversationSourceLiveness;
 
     @Mock
-    private de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection documentProjection;
+    private DocumentProjection documentProjection;
 
     @Mock
     private JobEvidenceFiles cas;
 
     @Mock
-    private de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry sourceCatalogs;
+    private ArtifactSourceCatalogRegistry sourceCatalogs;
 
     @Mock
     private HistoricalGitEvidence historicalGit;
 
     @Mock
-    private de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess citedSourceAccess;
+    private CitedSourceAccess citedSourceAccess;
 
     private ReviewOutputService service;
 
@@ -143,15 +151,13 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 cas,
                 sourceCatalogs,
                 historicalGit,
-                new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
+                new AutomatedReviewFence(Map.of()),
                 new LinkedIssueRepairAdmissionService(
-                        org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class),
+                        mock(ReviewedWorkChanges.class),
                         observationRepository,
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.feedback.FeedbackObservationRepository.class),
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.feedback.FeedbackRepository.class)),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions.class),
+                        mock(FeedbackObservationRepository.class),
+                        mock(FeedbackRepository.class)),
+                mock(PracticeSignalOptions.class),
                 citedSourceAccess);
 
         lenient().when(sourceCatalogs.isSourceUsePermitted(any(), any(), any())).thenReturn(true);
@@ -192,7 +198,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 11L);
         testJob.setEvidenceSnapshot(snapshot);
 
-        PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
+        PracticeRevision revision = mock(PracticeRevision.class);
         lenient().when(revision.getId()).thenReturn(11L);
         lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v5:" + "a".repeat(64));
         lenient().when(revision.getSlug()).thenReturn("pr-description-quality");
@@ -342,7 +348,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
     /** The persisted first citation of the one observation {@code result} recorded. */
     private static JsonNode storedCitation(ReviewOutputService.RecordedObservations result) {
-        return java.util.Objects.requireNonNull(result.recorded().getFirst().evidence())
+        return Objects.requireNonNull(result.recorded().getFirst().evidence())
                 .path("citations")
                 .get(0);
     }
@@ -436,7 +442,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 .addObject()
                 .put("slug", practice.getSlug())
                 .put("revisionId", revisionId);
-        PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
+        PracticeRevision revision = mock(PracticeRevision.class);
         lenient().when(revision.getId()).thenReturn(revisionId);
         lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v5:" + "a".repeat(64));
         lenient().when(revision.getSlug()).thenReturn(practice.getSlug());
@@ -617,8 +623,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             assertThat(result.recorded())
                     .extracting(ValidatedObservation::practiceSlug)
                     .containsExactly("pr-description-quality");
-            JsonNode failures =
-                    java.util.Objects.requireNonNull(testJob.getMetadata()).path("citation_verification_failures");
+            JsonNode failures = Objects.requireNonNull(testJob.getMetadata()).path("citation_verification_failures");
             assertThat(failures).hasSize(1);
             assertThat(failures.get(0).path("observationIndex").asInt()).isEqualTo(1);
             assertThat(failures.get(0).path("reasonCode").asString()).isEqualTo("QUOTE_LOCATION_MISMATCH");
@@ -727,7 +732,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("a change can only be quoted from a checkout the run captured")
         void rejectsAChangeCitationWithoutACapturedCheckout() {
-            ObjectNode snapshot = (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot());
+            ObjectNode snapshot = (ObjectNode) Objects.requireNonNull(testJob.getEvidenceSnapshot());
             EvidenceSnapshotFixtures.unavailable(snapshot, (ObjectNode)
                     snapshot.withObject("manifest").withArray("sources").get(1));
 
@@ -847,11 +852,11 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         @DisplayName("a citation to a staged source the practice's signals did not name is accepted")
         void acceptsAStagedSourceOutsideThePracticeDeclaration() {
             var inventory = EvidenceSnapshotFixtures.availableSource(
-                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    (ObjectNode) Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                     "workspace.project-inventory",
                     null);
             EvidenceSnapshotFixtures.artifact(
-                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    (ObjectNode) Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                     inventory,
                     "context/project_inventory.json",
                     "c".repeat(64));
@@ -918,8 +923,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                     .extracting(ValidatedObservation::practiceSlug)
                     .containsExactly("pr-description-quality");
             assertThat(result.inserted()).isEqualTo(1);
-            JsonNode failures =
-                    java.util.Objects.requireNonNull(testJob.getMetadata()).path("citation_verification_failures");
+            JsonNode failures = Objects.requireNonNull(testJob.getMetadata()).path("citation_verification_failures");
             assertThat(failures).hasSize(1);
             assertThat(failures.get(0).path("observationIndex").asInt()).isEqualTo(1);
             assertThat(failures.get(0).path("citationIndex").asInt()).isEqualTo(0);
@@ -972,7 +976,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         @DisplayName("a change whose capture failed cannot be quoted, however the checkout looks")
         void rejectsACitationToAnUnavailableSource() {
             EvidenceSnapshotFixtures.unavailable(
-                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    (ObjectNode) Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                     (ObjectNode) testJob.getEvidenceSnapshot()
                             .path("manifest")
                             .path("sources")
@@ -1204,9 +1208,9 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
         private void stageHistory(String body) {
             EvidenceSnapshotFixtures.artifact(
-                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    (ObjectNode) Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                     EvidenceSnapshotFixtures.availableSource(
-                            (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                            (ObjectNode) Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                             "hephaestus.observation-history",
                             null),
                     "inputs/history/observations.json",
@@ -1216,8 +1220,8 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                             eq("inputs/history/observations.json"),
                             eq(HISTORY_SHA),
                             anyString(),
-                            org.mockito.ArgumentMatchers.anyInt(),
-                            org.mockito.ArgumentMatchers.anyInt()))
+                            anyInt(),
+                            anyInt()))
                     .thenAnswer(invocation -> Optional.of(body.contains(invocation.getArgument(3, String.class))));
         }
 
@@ -1300,8 +1304,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         @Test
         void shouldResolveReviewerWhenSubmittedReviewMatchesArtifactAndSubject() {
             when(reviewTargets.reviewMatchesTarget(77L, 456L, 999L)).thenReturn(true);
-            ObjectNode metadata =
-                    org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, testJob.getMetadata());
+            ObjectNode metadata = assertInstanceOf(ObjectNode.class, testJob.getMetadata());
             metadata.put("review_id", 77L);
             metadata.put("about_user_id", 999L);
             metadata.put("subject_role", "REVIEWER");
@@ -1311,7 +1314,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             reviewing.setSignals(List.of(PracticeTestEvidence.defaultSignal(ArtifactKinds.PULL_REQUEST)));
             reviewing.setEvidenceRequirements(PracticeTestEvidence.needsFor(ArtifactKinds.PULL_REQUEST));
             reviewing.setReviewWhen(Map.of());
-            reviewing.setSubject(de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.REVIEWER);
+            reviewing.setSubject(ActorRole.REVIEWER);
             reviewing.setPrecondition(null);
             reviewing.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
             admit(reviewing, 31L);
@@ -1341,8 +1344,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
         @Test
         void shouldRejectReviewerWhenSubmittedReviewDoesNotMatchSubject() {
-            ObjectNode metadata =
-                    org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, testJob.getMetadata());
+            ObjectNode metadata = assertInstanceOf(ObjectNode.class, testJob.getMetadata());
             metadata.put("review_id", 77L);
             metadata.put("about_user_id", 999L);
             metadata.put("subject_role", "REVIEWER");
@@ -1378,8 +1380,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
 
         @Test
         void mismatchedArtifactMetadataIsRejectedBeforePersistence() {
-            ObjectNode metadata =
-                    org.junit.jupiter.api.Assertions.assertInstanceOf(ObjectNode.class, testJob.getMetadata());
+            ObjectNode metadata = assertInstanceOf(ObjectNode.class, testJob.getMetadata());
             metadata.put("repository_id", 999L);
             var observations = List.of(validObservation("pr-description-quality", Outcome.MET));
 

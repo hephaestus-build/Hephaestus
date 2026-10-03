@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.spi.ConversationFeedbackErasure;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -23,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 @WorkspaceAgnostic("Feedback is scoped by a raw workspace_id scalar (cross-module FK), not a Workspace association")
 public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
-    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT f FROM Feedback f WHERE f.id = :id AND f.workspaceId = :workspaceId")
     Optional<Feedback> lockByIdAndWorkspaceId(@Param("id") UUID id, @Param("workspaceId") Long workspaceId);
 
@@ -606,8 +607,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
         return deleteFeedbackOfKindAboutUser(workspaceId, ArtifactKinds.CONVERSATION_THREAD, aboutUserId);
     }
 
-    // --- conversational feedback delivery loop ---
-
     /**
      * Flips a PREPARED conversational unit to DELIVERED (compare-and-set): the {@code delivery_state='PREPARED'}
      * predicate lets exactly one of N racing mentor turns win the flip, the rest see rowcount 0.
@@ -885,7 +884,6 @@ public interface FeedbackRepository extends JpaRepository<Feedback, UUID> {
         long getUnits();
     }
 
-    // --- the in-app lane ---
     //
     // Every query below carries `workspace_id` by hand. `feedback` is scoped by a raw scalar with no
     // Hibernate tenancy filter (see the @WorkspaceAgnostic reason on this interface), so on this table

@@ -176,8 +176,6 @@ public class PiEventToUiChunkTranslator {
         return blocks;
     }
 
-    // message_start / Start + StartStep
-
     private List<UIMessageChunk> handleMessageStart(JsonNode event, TranslatorState state) {
         String role = optionalString(event.path("message"), "role");
         if (!"assistant".equals(role)) {
@@ -315,8 +313,6 @@ public class PiEventToUiChunkTranslator {
         return out;
     }
 
-    // tool_execution_start / end
-
     private List<UIMessageChunk> handleToolStart(JsonNode event, TranslatorState state) {
         return closeOpenStreamingBlocks(state);
     }
@@ -324,8 +320,6 @@ public class PiEventToUiChunkTranslator {
     private List<UIMessageChunk> handleToolEnd(JsonNode event, TranslatorState state) {
         return List.of();
     }
-
-    // turn_end
 
     private List<UIMessageChunk> handleTurnEnd(TranslatorState state) {
         List<UIMessageChunk> out = closeOpenStreamingBlocks(state);
@@ -343,8 +337,6 @@ public class PiEventToUiChunkTranslator {
         }
         return out;
     }
-
-    // agent_end → Finish
 
     private List<UIMessageChunk> handleAgentEnd(JsonNode event, TranslatorState state) {
         // Pi shape per pi-coding-agent/dist/core/extensions/types.d.ts AgentEndEvent:
@@ -430,8 +422,6 @@ public class PiEventToUiChunkTranslator {
         };
     }
 
-    // link_observation → DataObservation
-
     private List<UIMessageChunk> handleLinkObservation(JsonNode event, TranslatorState state) {
         // Runner emits camelCase `observationId` and `text` (pi-mentor-runner.ts defineLinkObservationTool).
         // A link that cannot be read is feedback this turn would silently lose or show empty, so it fails the turn.
@@ -456,8 +446,6 @@ public class PiEventToUiChunkTranslator {
         return List.of(observation);
     }
 
-    // pi_error / turn_watchdog_fired → Error
-
     private List<UIMessageChunk> handleError(JsonNode event, TranslatorState state) {
         String errorText = optionalString(event, "message");
         if (errorText == null) {
@@ -472,8 +460,6 @@ public class PiEventToUiChunkTranslator {
         out.add(new UIMessageChunk.Error(errorText));
         return out;
     }
-
-    // helpers
 
     /**
      * Return the {@code field}'s text value, or {@code null} if absent, JSON-null, or a non-text

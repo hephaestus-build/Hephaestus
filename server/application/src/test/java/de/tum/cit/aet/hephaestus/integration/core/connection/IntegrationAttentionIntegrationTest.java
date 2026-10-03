@@ -7,6 +7,8 @@ import de.tum.cit.aet.hephaestus.integration.core.events.IntegrationAttentionCha
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,7 +72,7 @@ class IntegrationAttentionIntegrationTest extends AbstractWorkspaceIntegrationTe
                         IntegrationAttentionChangedEvent.Problem.CREDENTIAL_REVOKED,
                         false,
                         0L,
-                        java.time.Instant.now())))
+                        Instant.now())))
                 .isFalse();
         assertThat(connections
                         .findByIdAndWorkspaceId(id, workspace)
@@ -102,6 +104,6 @@ class IntegrationAttentionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 workspace,
                 IntegrationKind.SLACK,
                 "T" + suffix,
-                new ConnectionConfig.SlackConfig("T" + suffix, "Attention test", null, java.util.Set.of())));
+                new ConnectionConfig.SlackConfig("T" + suffix, "Attention test", null, Set.of())));
     }
 }

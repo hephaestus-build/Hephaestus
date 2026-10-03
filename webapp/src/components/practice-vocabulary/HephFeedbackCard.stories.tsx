@@ -166,10 +166,7 @@ export const HeldWithoutASentence: Story = {
 	},
 };
 
-/**
- * Work at GitLab: the footer counts merge requests, and the glyph beside them is the forge the work
- * lives at, not its kind — the same mark the admin console's review pages put on it.
- */
+/** Work at GitLab: the footer counts merge requests. */
 export const GitLabWork: Story = {
 	args: {
 		reviewedWork: [
@@ -187,9 +184,6 @@ export const GitLabWork: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("merge requests")).toBeVisible();
-		// The glyph is decorative, so the mark is read off the brand icon's own <title>.
-		canvas.getByTitle("GitlabIcon");
-		await expect(canvas.queryByTitle("GithubIcon")).toBeNull();
 	},
 };
 

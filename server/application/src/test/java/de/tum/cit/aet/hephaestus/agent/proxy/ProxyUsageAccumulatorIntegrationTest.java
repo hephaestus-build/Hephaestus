@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -62,7 +63,7 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
         return jobRepository.saveAndFlush(job);
     }
 
-    private void accumulate(@org.jspecify.annotations.Nullable UUID jobId, JsonNode body, boolean responsesProtocol) {
+    private void accumulate(@Nullable UUID jobId, JsonNode body, boolean responsesProtocol) {
         accumulateAs(
                 jobId == null
                         ? null
@@ -72,17 +73,14 @@ class ProxyUsageAccumulatorIntegrationTest extends AbstractWorkspaceIntegrationT
                 responsesProtocol);
     }
 
-    private void accumulateAs(
-            ProxyRouting.@org.jspecify.annotations.Nullable BilledAttempt attempt,
-            JsonNode body,
-            boolean responsesProtocol) {
+    private void accumulateAs(ProxyRouting.@Nullable BilledAttempt attempt, JsonNode body, boolean responsesProtocol) {
         accumulateAs(
                 new ProxyUsageAccumulator(jobRepository, new SimpleMeterRegistry()), attempt, body, responsesProtocol);
     }
 
     private void accumulateAs(
             ProxyUsageAccumulator accumulator,
-            ProxyRouting.@org.jspecify.annotations.Nullable BilledAttempt attempt,
+            ProxyRouting.@Nullable BilledAttempt attempt,
             JsonNode body,
             boolean responsesProtocol) {
         transactionTemplate.executeWithoutResult(

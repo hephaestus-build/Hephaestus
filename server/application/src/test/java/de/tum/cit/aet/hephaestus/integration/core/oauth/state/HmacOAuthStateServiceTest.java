@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateService.
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jspecify.annotations.Nullable;
@@ -272,7 +273,7 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         }
 
         @Override
-        public void issue(@Nullable String nonce, long workspaceId, IntegrationKind kind, java.time.Instant issuedAt) {
+        public void issue(@Nullable String nonce, long workspaceId, IntegrationKind kind, Instant issuedAt) {
             if (nonce == null) return;
             consumed.putIfAbsent(nonce, false);
         }

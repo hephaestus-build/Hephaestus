@@ -14,6 +14,7 @@ import java.io.BufferedReader;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
@@ -75,7 +76,7 @@ public class CitedSourceAccess {
             throw new JobDeliveryException("Cite the canonical source record, not a composed view");
         }
         if (path.equals("context/document.md") || path.equals("context/document.json")) {
-            long id = java.util.Objects.requireNonNull(job.getMetadata())
+            long id = Objects.requireNonNull(job.getMetadata())
                     .path("docs_document_id")
                     .asLong(-1);
             records.addObject().put("type", "document").put("id", id);
@@ -157,7 +158,7 @@ public class CitedSourceAccess {
             String repo =
                     path.startsWith("repos/") ? parts[1] : path.startsWith("context/scm/") ? parts[2] : "reviewed";
             long id = repo.equals("reviewed")
-                    ? java.util.Objects.requireNonNull(job.getMetadata())
+                    ? Objects.requireNonNull(job.getMetadata())
                             .path("repository_id")
                             .asLong(-1)
                     : sourceNumber(repo);

@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -124,7 +125,7 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 metrics,
                 new PracticeReviewRefusalMetrics(metrics),
-                new AgentJobTelemetry(metrics, io.micrometer.tracing.Tracer.NOOP),
+                new AgentJobTelemetry(metrics, Tracer.NOOP),
                 mock(LlmUsageRecorder.class),
                 budgets,
                 admission,

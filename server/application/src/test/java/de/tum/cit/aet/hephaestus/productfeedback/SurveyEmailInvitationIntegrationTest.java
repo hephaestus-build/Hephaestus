@@ -23,7 +23,11 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
+import jakarta.mail.Multipart;
+import java.io.ByteArrayOutputStream;
 import java.net.ConnectException;
+import java.nio.charset.StandardCharsets;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -144,10 +148,9 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         assertThat(participations.findBySurveyIdAndAccountId(survey.getId(), recipient.accountId()))
                 .isEmpty();
         assertThat(mail.sent()).hasSize(1);
-        var bytes = new java.io.ByteArrayOutputStream();
+        var bytes = new ByteArrayOutputStream();
         mail.sent().getFirst().writeTo(bytes);
-        assertThat(bytes.toString(java.nio.charset.StandardCharsets.UTF_8))
-                .doesNotContain("private-survey-description");
+        assertThat(bytes.toString(StandardCharsets.UTF_8)).doesNotContain("private-survey-description");
 
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> events.publishEvent(new SurveyEmailRequested(
@@ -308,7 +311,7 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         invitationService.invite(survey.getId(), recipient.accountId(), false);
         assertThat(jdbc.update(
                         "UPDATE product_survey_email_invitation SET expires_at = ? WHERE survey_id = ?",
-                        java.sql.Timestamp.from(Instant.now().minusSeconds(1)),
+                        Timestamp.from(Instant.now().minusSeconds(1)),
                         survey.getId()))
                 .isEqualTo(1);
         assertThat(invitationService.preview(survey.getId()).remaining()).isEqualTo(1);
@@ -425,12 +428,10 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         invitationService.scheduleReminders();
 
         assertThat(mail.sent()).hasSize(2);
-        var initialBody = (jakarta.mail.Multipart) mail.sent().getFirst().getContent();
-        var reminderBody = (jakarta.mail.Multipart) mail.sent().getLast().getContent();
-        var initialAlternatives =
-                (jakarta.mail.Multipart) initialBody.getBodyPart(0).getContent();
-        var reminderAlternatives =
-                (jakarta.mail.Multipart) reminderBody.getBodyPart(0).getContent();
+        var initialBody = (Multipart) mail.sent().getFirst().getContent();
+        var reminderBody = (Multipart) mail.sent().getLast().getContent();
+        var initialAlternatives = (Multipart) initialBody.getBodyPart(0).getContent();
+        var reminderAlternatives = (Multipart) reminderBody.getBodyPart(0).getContent();
         assertThat(initialAlternatives.getCount()).isEqualTo(2);
         assertThat(reminderAlternatives.getCount()).isEqualTo(2);
         for (int part = 0; part < 2; part++) {
@@ -822,7 +823,7 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
     private void acceptedHoursAgo(UUID surveyId, long hours) {
         assertThat(jdbc.update(
                         "UPDATE product_survey_email_invitation SET accepted_at = ? WHERE survey_id = ?",
-                        java.sql.Timestamp.from(Instant.now().minusSeconds(hours * 3600)),
+                        Timestamp.from(Instant.now().minusSeconds(hours * 3600)),
                         surveyId))
                 .isEqualTo(1);
     }

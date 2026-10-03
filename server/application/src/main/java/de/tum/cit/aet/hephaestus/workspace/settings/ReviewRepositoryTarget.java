@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
 public record ReviewRepositoryTarget(
@@ -21,7 +22,7 @@ public record ReviewRepositoryTarget(
     }
 
     private static List<String> normalize(List<String> values) {
-        return java.util.Objects.requireNonNull(values, "baseBranches").stream()
+        return Objects.requireNonNull(values, "baseBranches").stream()
                 .map(value -> validValue(value, "base branch"))
                 .distinct()
                 .sorted()
@@ -29,7 +30,7 @@ public record ReviewRepositoryTarget(
     }
 
     private static String validValue(String value, String label) {
-        String normalized = java.util.Objects.requireNonNull(value, label).trim();
+        String normalized = Objects.requireNonNull(value, label).trim();
         requireValid(normalized, label);
         return normalized;
     }

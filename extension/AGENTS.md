@@ -84,12 +84,19 @@ the type check on its own. Lint holds tests to the web app's Vitest policy: narr
   goes after the title's heading, stops the row's own click and key handlers, and is reconciled on
   every sync, since providers reuse rows for other work.
 
-## Vocabulary
+## Vocabulary and shared components
 
 Labels, icons and sentences come from the webapp's registries, imported by path through `@/`
-(`webapp/src/components/practice-vocabulary/*-defs.ts`, `webapp/src/lib/artifact-kind-slugs.ts`). `@/api/*`
-type-checks against this tree's own generated client. Do not copy a registry here; a missing one is a
-webapp change. The glossary is `docs/contributor/practice-feedback-language.md`.
+(`webapp/src/components/practice-vocabulary/*-defs.ts`, `webapp/src/lib/artifact-kind-slugs.ts`), and
+so do the brand marks and the `ui/spinner` and `ui/skeleton` primitives. `@/api/*` type-checks
+against this tree's own generated client. Do not copy a registry or component here; a missing one is
+a webapp change. The glossary is `docs/contributor/practice-feedback-language.md`.
+
+Tailwind scans only this tree, so a webapp module whose classes the extension renders needs an
+`@source` in `src/ui/styles.css`. Every webapp file the extension imports, directly or through another
+webapp file, is an extension input in `scripts/check-affected.ts` and in both `extension` filters of
+`.github/workflows/cicd.yml`; `scripts/check-affected.test.ts` derives the list from the imports and
+names a missing file.
 
 ## End-to-end
 

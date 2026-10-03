@@ -518,8 +518,6 @@ public class DockerClientOperations
         }
     }
 
-    // Internal helpers
-
     HostConfig hostConfig(DockerOperations.HostConfigSpec spec) {
         HostConfig hostConfig = HostConfig.newHostConfig()
                 .withMemory(spec.memoryBytes())

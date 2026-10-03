@@ -3,8 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.outline.connect;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -58,7 +60,7 @@ class OutlineConnectionAdminServiceTest extends BaseUnitTest {
     void tokenStatus_rejectedToken_isNotAccepted_ratherThanAnError() {
         OutlineConnectionAdminService service = service();
         storedToken("ol_dead_key");
-        org.mockito.Mockito.doThrow(new OutlineApiException("Outline /api/auth.info failed (HTTP 401)"))
+        doThrow(new OutlineApiException("Outline /api/auth.info failed (HTTP 401)"))
                 .when(apiClient)
                 .validateToken(SERVER_URL, "ol_dead_key");
 
@@ -67,7 +69,7 @@ class OutlineConnectionAdminServiceTest extends BaseUnitTest {
         assertThat(status.accepted()).isFalse();
         assertThat(status.name()).isNull();
         assertThat(status.expiresAt()).isNull();
-        org.mockito.Mockito.verify(apiClient, never()).describeToken(any(), any());
+        verify(apiClient, never()).describeToken(any(), any());
     }
 
     @Test
@@ -126,7 +128,7 @@ class OutlineConnectionAdminServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.empty());
 
         assertThat(service.tokenStatus(WS).accepted()).isFalse();
-        org.mockito.Mockito.verify(apiClient, never()).validateToken(any(), any());
+        verify(apiClient, never()).validateToken(any(), any());
     }
 
     @Test

@@ -3,7 +3,10 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -20,23 +23,27 @@ import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class AgentJobZombieSweeperTest extends BaseUnitTest {
 
@@ -55,13 +62,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
     private AgentJobZombieSweeper sweeper;
 
     private static final AgentProperties AGENT_PROPS = new AgentProperties(
-            true,
-            java.time.Duration.ofSeconds(1),
-            5,
-            5,
-            java.time.Duration.ofSeconds(25),
-            java.time.Duration.ofDays(14),
-            java.time.Duration.ofDays(90));
+            true, Duration.ofSeconds(1), 5, 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90));
 
     @Mock
     private AgentJobLifecycleService lifecycleService;
@@ -81,7 +82,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         lenient()
                 .doAnswer(inv -> {
                     @SuppressWarnings("unchecked")
-                    java.util.function.Consumer<TransactionStatus> consumer = inv.getArgument(0);
+                    Consumer<TransactionStatus> consumer = inv.getArgument(0);
                     consumer.accept(mock(TransactionStatus.class));
                     return null;
                 })
@@ -96,7 +97,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                 lifecycleService,
                 usageRecorder,
                 meterRegistry,
-                new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP));
+                new AgentJobTelemetry(meterRegistry, Tracer.NOOP));
     }
 
     private ConfigSnapshot admittedSnapshot(int timeoutSeconds) {
@@ -147,9 +148,8 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         return workspace;
     }
 
-    private tools.jackson.databind.JsonNode snapshotFromTheFuture() {
-        tools.jackson.databind.node.ObjectNode node =
-                (tools.jackson.databind.node.ObjectNode) admittedSnapshot(600).toJson(objectMapper);
+    private JsonNode snapshotFromTheFuture() {
+        ObjectNode node = (ObjectNode) admittedSnapshot(600).toJson(objectMapper);
         return node.put("schemaVersion", ConfigSnapshot.SCHEMA_VERSION + 1);
     }
 
@@ -207,13 +207,12 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("requeues (RUNNING → QUEUED) and counts it once the CAS wins")
         void requeuesOrphanedJob() {
             UUID jobId = UUID.randomUUID();
-            when(jobRepository.findOrphanedRunningJobs(any(), ArgumentMatchers.anyLong()))
-                    .thenReturn(List.of(orphan(jobId, 7L, 0)));
+            when(jobRepository.findOrphanedRunningJobs(any(), anyLong())).thenReturn(List.of(orphan(jobId, 7L, 0)));
             when(jobRepository.requeueOrphan(
                             eq(jobId), eq(DEAD_WORKER_ID), eq(AGENT_PROPS.maxRetries()), any(), any(), any()))
                     .thenReturn(1);
             AgentJob persistedJob = orphanedJob(jobId, 7L, 0);
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(persistedJob));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(persistedJob));
 
             sweeper.recoverOrphanedJobs();
 
@@ -232,8 +231,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("legacy jobs without an admission snapshot are recovered as explicitly unpriced")
         void recoversLegacyJobWithoutPriceSnapshot() {
             UUID jobId = UUID.randomUUID();
-            when(jobRepository.findOrphanedRunningJobs(any(), ArgumentMatchers.anyLong()))
-                    .thenReturn(List.of(orphan(jobId, 7L, 0)));
+            when(jobRepository.findOrphanedRunningJobs(any(), anyLong())).thenReturn(List.of(orphan(jobId, 7L, 0)));
             when(jobRepository.requeueOrphan(eq(jobId), eq(DEAD_WORKER_ID), anyInt(), any(), any(), any()))
                     .thenReturn(1);
             AgentJob legacyJob = orphanedJob(jobId, 7L, 0);
@@ -257,7 +255,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
                             ,
                             null)
                     .toJson(objectMapper));
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(legacyJob));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(legacyJob));
 
             sweeper.recoverOrphanedJobs();
 
@@ -272,13 +270,12 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("does not count a requeue win if the CAS lost the race to another sweeper")
         void skipsWhenRequeueRaced() {
             UUID jobId = UUID.randomUUID();
-            when(jobRepository.findOrphanedRunningJobs(any(), ArgumentMatchers.anyLong()))
-                    .thenReturn(List.of(orphan(jobId, 7L, 0)));
+            when(jobRepository.findOrphanedRunningJobs(any(), anyLong())).thenReturn(List.of(orphan(jobId, 7L, 0)));
             when(jobRepository.requeueOrphan(
                             eq(jobId), eq(DEAD_WORKER_ID), eq(AGENT_PROPS.maxRetries()), any(), any(), any()))
                     .thenReturn(0); // another replica won
             when(jobRepository.findByIdWithWorkspaceForUpdate(jobId))
-                    .thenReturn(java.util.Optional.of(orphanedJob(jobId, 7L, 0)));
+                    .thenReturn(Optional.of(orphanedJob(jobId, 7L, 0)));
 
             sweeper.recoverOrphanedJobs();
 
@@ -294,10 +291,10 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
         @DisplayName("fails (not requeues) an orphan that hit the retry cap")
         void failsOrphanPastRetryCap() {
             UUID jobId = UUID.randomUUID();
-            when(jobRepository.findOrphanedRunningJobs(any(), ArgumentMatchers.anyLong()))
+            when(jobRepository.findOrphanedRunningJobs(any(), anyLong()))
                     .thenReturn(List.of(orphan(jobId, 7L, 5))); // retryCount == maxRetries
             AgentJob persistedJob = orphanedJob(jobId, 7L, 5);
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(persistedJob));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(persistedJob));
             when(jobRepository.transitionStatus(
                             eq(jobId), eq(AgentJobStatus.FAILED), any(), any(), eq(Set.of(AgentJobStatus.RUNNING))))
                     .thenReturn(1);
@@ -388,7 +385,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
 
             sweeper.recoverStuckDeliveries();
 
-            verify(lifecycleService, never()).recoverStuckDelivery(any(), org.mockito.ArgumentMatchers.anyShort());
+            verify(lifecycleService, never()).recoverStuckDelivery(any(), anyShort());
             assertThat(meterRegistry.counter("agent.job.delivery.recovered").count())
                     .isZero();
         }
@@ -424,8 +421,8 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             // Giving up must not also burn another attempt, or delivery_attempts would climb past the
             // cap forever on a row nobody is retrying any more — and must not re-enter delivery, which
             // is what the row was given up on.
-            verify(jobRepository, never()).claimDeliveryRecoveryAttempt(any(), org.mockito.ArgumentMatchers.anyShort());
-            verify(lifecycleService, never()).recoverStuckDelivery(any(), org.mockito.ArgumentMatchers.anyShort());
+            verify(jobRepository, never()).claimDeliveryRecoveryAttempt(any(), anyShort());
+            verify(lifecycleService, never()).recoverStuckDelivery(any(), anyShort());
             assertThat(meterRegistry.counter("agent.job.delivery.recovered").count())
                     .isZero();
         }
@@ -443,12 +440,12 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             job.setRetryCount(2);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
             when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
                     .thenReturn(1);
             when(jobRepository.findLlmUsageById(jobId))
-                    .thenReturn(java.util.Optional.of(new AgentJobLlmUsage(3, 900, 400, 50, 120, 0)));
-            org.mockito.Mockito.clearInvocations(usageRecorder);
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(3, 900, 400, 50, 120, 0)));
+            clearInvocations(usageRecorder);
 
             sweeper.reapStaleRunningJobs();
 
@@ -476,10 +473,10 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1800), 600);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
             when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
                     .thenReturn(1);
-            org.mockito.Mockito.clearInvocations(usageRecorder);
+            clearInvocations(usageRecorder);
 
             sweeper.reapStaleRunningJobs();
 
@@ -501,7 +498,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             AgentJob job = runningJob(jobId, Instant.now().minusSeconds(300), 600);
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
 
             sweeper.reapStaleRunningJobs();
 
@@ -516,7 +513,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             AgentJob job = runningJob(jobId, Instant.now().minusSeconds(1200), 600);
             job.setExecutionStartedAt(Instant.now().minusSeconds(1190));
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
 
             sweeper.reapStaleRunningJobs();
 
@@ -538,12 +535,12 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             job.setConfigSnapshot(snapshotFromTheFuture());
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
             when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
                     .thenReturn(1);
             when(jobRepository.findLlmUsageById(jobId))
-                    .thenReturn(java.util.Optional.of(new AgentJobLlmUsage(2, 500, 100, 0, 0, 0)));
-            org.mockito.Mockito.clearInvocations(usageRecorder);
+                    .thenReturn(Optional.of(new AgentJobLlmUsage(2, 500, 100, 0, 0, 0)));
+            clearInvocations(usageRecorder);
 
             sweeper.reapStaleRunningJobs();
 
@@ -570,7 +567,7 @@ class AgentJobZombieSweeperTest extends BaseUnitTest {
             job.setConfigSnapshot(snapshotFromTheFuture());
 
             when(jobRepository.findStaleRunningJobs(any())).thenReturn(List.of(job));
-            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(java.util.Optional.of(job));
+            when(jobRepository.findByIdWithWorkspaceForUpdate(jobId)).thenReturn(Optional.of(job));
             when(jobRepository.transitionStatus(any(), any(), any(), any(), any()))
                     .thenReturn(1);
 

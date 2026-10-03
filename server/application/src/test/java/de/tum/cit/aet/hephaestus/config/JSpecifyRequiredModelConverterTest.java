@@ -35,7 +35,7 @@ class JSpecifyRequiredModelConverterTest {
     @Test
     void marksExplicitlyNonNullMembersRequiredIncludingAnnotatedPrimitives() {
         Schema<?> schema = resolve(Sample.class).get("Sample");
-        org.junit.jupiter.api.Assertions.assertNotNull(schema);
+        assertThat(schema).isNotNull();
 
         // Required iff the member is explicitly @NonNull — including an annotated primitive (mirrors
         // the real GitLabPreflightResponseDTO#valid). @Nullable, unannotated, and *bare* primitive
@@ -47,7 +47,7 @@ class JSpecifyRequiredModelConverterTest {
     void resolvesRequiredForNestedRecordReachedAsAJavaType() {
         // Nested types arrive at the converter as a Jackson JavaType, not a Class; this locks that path.
         Schema<?> nested = resolve(Sample.class).get("Nested");
-        org.junit.jupiter.api.Assertions.assertNotNull(nested);
+        assertThat(nested).isNotNull();
 
         assertThat(nested.getRequired()).containsExactly("x");
     }
@@ -55,12 +55,10 @@ class JSpecifyRequiredModelConverterTest {
     @Test
     void walksSuperclassFieldsForPlainClasses() {
         Schema<?> schema = resolve(Child.class).get("Child");
-        org.junit.jupiter.api.Assertions.assertNotNull(schema);
+        assertThat(schema).isNotNull();
 
         assertThat(schema.getRequired()).containsExactlyInAnyOrder("parentNonNull", "childNonNull");
     }
-
-    // --- fixtures -----------------------------------------------------------------------------
 
     record Sample(
             @NonNull String nonNull,

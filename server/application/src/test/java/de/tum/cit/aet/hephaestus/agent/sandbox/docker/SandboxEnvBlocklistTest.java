@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,9 +40,9 @@ class SandboxEnvBlocklistTest extends BaseUnitTest {
     @Test
     @DisplayName("static blocklist sets are unmodifiable")
     void blocklistIsImmutable() {
-        Assertions.assertThatThrownBy(() -> SandboxEnvBlocklist.BLOCKED_NAMES.add("INJECT"))
+        assertThatThrownBy(() -> SandboxEnvBlocklist.BLOCKED_NAMES.add("INJECT"))
                 .isInstanceOf(UnsupportedOperationException.class);
-        Assertions.assertThatThrownBy(() -> SandboxEnvBlocklist.ALLOWED_PREFIX_EXCEPTIONS.add("BYPASS"))
+        assertThatThrownBy(() -> SandboxEnvBlocklist.ALLOWED_PREFIX_EXCEPTIONS.add("BYPASS"))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 

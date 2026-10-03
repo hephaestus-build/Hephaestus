@@ -4,9 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
+import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceContract;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReason;
@@ -41,9 +42,11 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -105,7 +108,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
         assertThat(diffSource.path("state").path("availability").asString()).isEqualTo("AVAILABLE");
         assertThat(diffSource.path("artifacts").get(0).path("path").asString()).isEqualTo(CHANGE_PATH);
         assertThat(diffSource.path("artifacts").get(0).path("sha256").asString())
-                .isEqualTo(de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest.sha256Hex(CHANGE_JSON));
+                .isEqualTo(ProvenanceDigest.sha256Hex(CHANGE_JSON));
     }
 
     @Test
@@ -134,20 +137,20 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
     void shouldRefuseANewCaptureUnderARetiredContract(String version) {
         var retired = new EvidencePlan(new SourceContractVersion(version), ArtifactKinds.PULL_REQUEST);
         assertThatThrownBy(() -> builder.stagedSources(retired))
-                .isInstanceOf(de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException.class)
+                .isInstanceOf(JobPreparationException.class)
                 .hasMessageContaining(version);
     }
 
     @Test
-    void shouldAuthorizeCaptureForTheDetectionAudience() {
+    void shouldAuthorizeCaptureForAutomatedPracticeReview() {
         ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
         JobFolderIndexBuilder target = new JobFolderIndexBuilder(
                 mapper, catalogs, new PracticePreconditionEvaluator(mapper), NO_FENCE, Clock.systemUTC());
         SourceContractVersion version = new SourceContractVersion("1.3.0");
+        when(catalogs.isSourceUsePermitted(version, DIFF, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
+                .thenReturn(true);
 
-        target.isSourceUsePermitted(version, DIFF);
-
-        verify(catalogs).isSourceUsePermitted(version, DIFF, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW);
+        assertThat(target.isSourceUsePermitted(version, DIFF)).isTrue();
     }
 
     @Test
@@ -862,7 +865,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
                 new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                 new PracticePreconditionEvaluator(mapper),
                 NO_FENCE,
-                Clock.fixed(instant, java.time.ZoneOffset.UTC));
+                Clock.fixed(instant, ZoneOffset.UTC));
     }
 
     private JobFolderIndex coreManifest(JobFolderIndexBuilder target, String jobId, Instant observedAt) {
@@ -895,7 +898,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
             var prepared = changeCapture("job-subject-absent");
 
             AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadiness(
-                    java.util.Objects.requireNonNull(prepared.manifest()),
+                    Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
                     prepared.files(),
@@ -917,7 +920,7 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
             var prepared = changeCapture("job-subject-present");
 
             AutomatedReviewReadinessResult result = builder.checkAutomatedReviewReadiness(
-                    java.util.Objects.requireNonNull(prepared.manifest()),
+                    Objects.requireNonNull(prepared.manifest()),
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject())),
                     NOW,
                     prepared.files(),
@@ -938,9 +941,9 @@ class JobFolderIndexBuilderTest extends BaseUnitTest {
                     List.of(withSubject(practiceRequiring(DIFF, "dependencies"), dependencySubject()));
 
             AutomatedReviewReadinessResult asOfNow = builder.checkAutomatedReviewReadinessAsOfNow(
-                    java.util.Objects.requireNonNull(prepared.manifest()), practices);
+                    Objects.requireNonNull(prepared.manifest()), practices);
             AutomatedReviewReadinessResult withoutChange = builder.checkAutomatedReviewReadiness(
-                    java.util.Objects.requireNonNull(prepared.manifest()), practices, NOW, prepared.files(), null);
+                    Objects.requireNonNull(prepared.manifest()), practices, NOW, prepared.files(), null);
 
             assertThat(asOfNow.readyPractices()).hasSize(1);
             assertThat(withoutChange.readyPractices()).hasSize(1);

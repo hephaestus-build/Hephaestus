@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -320,7 +321,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
     }
 
     /** One readiness report as the executor records it, for one practice, ready or skipped. */
-    private tools.jackson.databind.JsonNode readinessSnapshot(boolean ready) {
+    private JsonNode readinessSnapshot(boolean ready) {
         Map<String, Object> check = Map.of(
                 "sourceKind",
                 "scm.pull-request.diff",

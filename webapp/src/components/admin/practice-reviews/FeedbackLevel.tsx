@@ -25,7 +25,7 @@ import { DELIVERY_PLACE_DEFS } from "@/components/practice-vocabulary/delivery-p
 import { DeliveryTrace } from "@/components/practice-vocabulary/DeliveryTrace";
 import { codeCitationLocator } from "@/components/practice-vocabulary/evidence-source-defs";
 import { FEEDBACK_WITHDRAWN_DEF } from "@/components/practice-vocabulary/feedback-withdrawal-defs";
-import { observationResult } from "@/components/practice-vocabulary/observation-result";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { PLACEMENT_DEFS } from "@/components/practice-vocabulary/placement-defs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -437,7 +437,7 @@ function SourceObservations({
 					{feedback.observations.map((observation) => (
 						<ReviewRow
 							key={observation.observationId}
-							status={observationResult(observation)}
+							status={OUTCOME_DEFS[observation.outcome]}
 							title={
 								<ReviewRowLink entry={observationLevel(observation.observationId)}>
 									{observation.summary}

@@ -76,8 +76,8 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * Upsert a repository from a provisioning snapshot (e.g., GitHub App installation webhook).
      * <p>
      * Uses PostgreSQL's {@code ON CONFLICT} on the {@code (provider_id, name_with_owner)} unique
-     * constraint to atomically insert or update, eliminating race conditions between concurrent
-     * NATS event processing and GraphQL sync that previously caused optimistic locking errors.
+     * constraint to atomically insert or update, so concurrent NATS event processing and GraphQL sync
+     * cannot fail with an optimistic locking error.
      * <p>
      * On conflict, only lightweight fields from the snapshot are updated; fields populated by
      * the full GraphQL sync (description, pushed_at, default_branch, etc.) are preserved.
@@ -105,7 +105,7 @@ public interface RepositoryRepository extends JpaRepository<Repository, Long> {
      * ensuring subgroup repos are included (not just top-level group repos).
      *
      * <p>Ordered because callers scan a CAPPED prefix of the result into agent context: an arbitrary plan
-     * order would vary which repositories the detector sees between runs over identical work.
+     * order would vary which repositories the review sees between runs over identical work.
      */
     @Query("""
         SELECT r FROM Repository r LEFT JOIN FETCH r.provider

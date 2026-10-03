@@ -15,8 +15,10 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventWriter;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -39,8 +41,8 @@ class AccountBootstrapServiceTest extends BaseUnitTest {
                 accountRepository,
                 new AuthEventLogger(auditWriter),
                 props,
-                java.time.Clock.systemUTC(),
-                mock(org.springframework.context.ApplicationEventPublisher.class));
+                Clock.systemUTC(),
+                mock(ApplicationEventPublisher.class));
     }
 
     @Test

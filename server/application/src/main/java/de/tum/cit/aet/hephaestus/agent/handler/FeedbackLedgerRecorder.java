@@ -31,6 +31,8 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -712,14 +714,12 @@ public class FeedbackLedgerRecorder {
         if (contributors == null) return observations;
         return observations.stream()
                 .filter(observation -> contributors.contains(observation.getOccurrenceKey()))
-                .sorted(java.util.Comparator.comparingInt(
-                        observation -> contributors.indexOf(observation.getOccurrenceKey())))
+                .sorted(Comparator.comparingInt(observation -> contributors.indexOf(observation.getOccurrenceKey())))
                 .toList();
     }
 
     private List<ProposedPlacement> proposedPlacements(AgentJob job, DeliveryContent delivery, String summary) {
-        var placements =
-                new java.util.ArrayList<ProposedPlacement>(delivery.diffNotes().size() + 1);
+        var placements = new ArrayList<ProposedPlacement>(delivery.diffNotes().size() + 1);
         placements.add(ProposedPlacement.summary(summary));
         for (DiffNote note : delivery.diffNotes()) {
             String body = PullRequestCommentPoster.sanitize(note.body());

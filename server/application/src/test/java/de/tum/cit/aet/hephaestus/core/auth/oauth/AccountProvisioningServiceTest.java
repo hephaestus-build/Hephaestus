@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
+import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
 import de.tum.cit.aet.hephaestus.core.event.AccountSecurityChangedEvent;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
@@ -55,8 +57,7 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     private LoginProviderRepository loginProviderRepository;
     private GitProviderRegistry gitProviderRegistry;
     private AccountProvisioningService service;
-    private final org.springframework.context.ApplicationEventPublisher events =
-            mock(org.springframework.context.ApplicationEventPublisher.class);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
 
     @BeforeEach
     void setUp() {
@@ -212,9 +213,9 @@ class AccountProvisioningServiceTest extends BaseUnitTest {
     }
 
     private void useOutlineProvider() {
-        var outlineProvider = new de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider();
+        var outlineProvider = new LoginProvider();
         outlineProvider.setRegistrationId("outline");
-        outlineProvider.setType(de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider.ProviderType.OUTLINE);
+        outlineProvider.setType(ProviderType.OUTLINE);
         outlineProvider.setBaseUrl("https://wiki.example.com");
         when(loginProviderRepository.findByRegistrationId("outline")).thenReturn(Optional.of(outlineProvider));
     }

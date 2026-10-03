@@ -8,9 +8,12 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -53,8 +56,8 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public void forEachWorkspaceMessage(long workspaceId, java.util.function.Consumer<ObjectNode> consumer) {
+    @Transactional(readOnly = true)
+    public void forEachWorkspaceMessage(long workspaceId, Consumer<ObjectNode> consumer) {
         try (var messages = messageRepository.streamWorkspaceMessages(workspaceId)) {
             messages.forEach(message -> {
                 ObjectNode record = objectMapper.createObjectNode();
@@ -118,9 +121,9 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     }
 
     /**
-     * Build the ordered-turns payload for a SINGLE settled thread (conversation detection). Unlike
+     * Build the ordered-turns payload for a SINGLE settled thread under conversation review. Unlike
      * {@link #buildPayload} this is keyed on the thread itself — there is no participant firewall, because the
-     * detection job judges the thread as a work artifact, not a per-audience mentor view. Reuses the quarantine
+     * review judges the thread as reviewed work, not a per-audience mentor view. Reuses the quarantine
      * envelope and the consent/tombstone/workspace-gated message fetch of {@link #appendThreadMessages}. Pure
      * read; the content source wraps the result under {@code conversation_thread.json}.
      *
@@ -191,14 +194,14 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      * Non-tombstoned messages of one thread (root {@code slack_ts = thread_ts} + replies
      * {@code slack_thread_ts = thread_ts}), oldest first. Workspace-pinned and gated on the channel's consent
      * being {@code ACTIVE}, via {@link de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository#findThreadMessages}. The consent predicate lives on
-     * the message read itself (not only on the thread scan) so the detection path — which enters via
+     * the message read itself (not only on the thread scan) so the review path — which enters via
      * {@link #buildThreadPayload} without a prior consent-filtered thread scan — cannot leak messages from a
      * channel paused or revoked between enqueue and execution: a non-ACTIVE channel yields zero messages,
      * atomically with the read.
      */
     private boolean appendThreadMessages(long workspaceId, ThreadKey key, ArrayNode messages) {
-        List<SlackThreadMessageRow> rows = messageRepository.findThreadMessages(
-                workspaceId, key.channelId(), key.threadTs(), org.springframework.data.domain.Pageable.unpaged());
+        List<SlackThreadMessageRow> rows =
+                messageRepository.findThreadMessages(workspaceId, key.channelId(), key.threadTs(), Pageable.unpaged());
         for (int index = 0; index < rows.size(); index++) {
             SlackThreadMessageRow row = rows.get(index);
             ObjectNode node = messages.addObject();

@@ -41,7 +41,6 @@ const strength = {
 	deliveredFeedback:
 		"Keep doing this where a value is chosen rather than derived — the reasoning is what a reviewer cannot recover on their own.",
 	evidence: {
-		detector: "practice-observer",
 		citations: [
 			{
 				sourceKind: "scm.pull-request.diff",
@@ -156,12 +155,11 @@ export const Default: Story = {
 		const labels = ["Why it was noted", "Evidence", "Next step", "Your response"];
 		const positions = labels.map((label) => canvas.getByText(label).getBoundingClientRect().top);
 		await expect([...positions].sort((a, b) => a - b)).toStrictEqual(positions);
-		// Every quote is shown, with nothing to unfold; the member is never shown which detector ran.
+		// Every quote is shown, with nothing to unfold.
 		await expect(
 			canvas.getByText("private static final Duration TIMEOUT = Duration.ofSeconds(90);"),
 		).toBeVisible();
 		await expect(canvas.getByText("agent.timeout: 90s")).toBeVisible();
-		await expect(canvas.queryByText(/practice-observer/u)).not.toBeInTheDocument();
 		const response = canvas.getByRole("group", { name: "Your response" });
 		await expect(
 			within(response)

@@ -9,6 +9,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.Types;
 import liquibase.Contexts;
 import liquibase.Liquibase;
 import liquibase.database.Database;
@@ -144,7 +145,7 @@ class IdentityLinkUniquenessLiquibaseTest {
             ps.setLong(2, providerId);
             ps.setString(3, subject);
             if (teamId == null) {
-                ps.setNull(4, java.sql.Types.VARCHAR);
+                ps.setNull(4, Types.VARCHAR);
             } else {
                 ps.setString(4, teamId);
             }

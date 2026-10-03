@@ -1,7 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -16,9 +19,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -63,7 +64,7 @@ class SlackChannelJoinNoticeHandlerTest extends BaseUnitTest {
     void setUp() {
         handler = new SlackChannelJoinNoticeHandler(
                 workspaceResolver, consentGate, participantConsentGate, messageService, uiLinks, consentService);
-        Mockito.lenient().when(uiLinks.workspaceHomeUrl(WORKSPACE_ID)).thenReturn("https://heph.example/w/team");
+        lenient().when(uiLinks.workspaceHomeUrl(WORKSPACE_ID)).thenReturn("https://heph.example/w/team");
     }
 
     private JsonNode joinEvent(String userId, String channelId) {
@@ -104,12 +105,7 @@ class SlackChannelJoinNoticeHandlerTest extends BaseUnitTest {
 
         verify(messageService).resolveBotUserId(WORKSPACE_ID);
         verify(messageService, never())
-                .sendEphemeralForWorkspace(
-                        ArgumentMatchers.anyLong(),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyString(),
-                        anyList(),
-                        ArgumentMatchers.anyString());
+                .sendEphemeralForWorkspace(anyLong(), anyString(), anyString(), anyList(), anyString());
     }
 
     @Test
@@ -121,12 +117,7 @@ class SlackChannelJoinNoticeHandlerTest extends BaseUnitTest {
 
         verify(messageService).resolveBotUserId(WORKSPACE_ID);
         verify(messageService, never())
-                .sendEphemeralForWorkspace(
-                        ArgumentMatchers.anyLong(),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyString(),
-                        anyList(),
-                        ArgumentMatchers.anyString());
+                .sendEphemeralForWorkspace(anyLong(), anyString(), anyString(), anyList(), anyString());
     }
 
     @Test
@@ -139,12 +130,7 @@ class SlackChannelJoinNoticeHandlerTest extends BaseUnitTest {
         verify(consentService).register(WORKSPACE_ID, CHANNEL, null);
         verify(consentGate, never()).ingestAllowed(WORKSPACE_ID, CHANNEL);
         verify(messageService, never())
-                .sendEphemeralForWorkspace(
-                        ArgumentMatchers.anyLong(),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyString(),
-                        anyList(),
-                        ArgumentMatchers.anyString());
+                .sendEphemeralForWorkspace(anyLong(), anyString(), anyString(), anyList(), anyString());
     }
 
     @Test
@@ -154,7 +140,7 @@ class SlackChannelJoinNoticeHandlerTest extends BaseUnitTest {
         handler.onMemberJoined(TEAM, joinEvent(JOINER, CHANNEL), true);
 
         verifyNoInteractions(consentGate);
-        verify(messageService, never()).resolveBotUserId(ArgumentMatchers.anyLong());
+        verify(messageService, never()).resolveBotUserId(anyLong());
     }
 
     @Test

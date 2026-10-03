@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -27,14 +28,20 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
 import io.nats.client.impl.NatsJetStreamMetaData;
 import java.io.IOException;
+import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.springframework.transaction.TransactionStatus;
@@ -109,8 +116,6 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
     void key_returnsMergeRequest() {
         assertThat(handler.key().eventType()).isEqualTo("merge_request");
     }
-
-    // Action Routing
 
     @Nested
     class ActionRouting {
@@ -287,7 +292,7 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                     278964L,
                     1L,
                     "opened",
-                    java.time.Instant.parse("2026-09-30T10:00:00Z"),
+                    Instant.parse("2026-09-30T10:00:00Z"),
                     "abc123",
                     true,
                     "MERGEABLE",
@@ -299,87 +304,44 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
                     null);
         }
 
-        @Test
-        void closeAction_routesToProcessClosed() throws IOException {
-            GitLabMergeRequestEventDTO event = createEvent("close", "closed", false);
-            setupRepository();
-
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
-
-            verify(mergeRequestProcessor).processClosed(eq(event), any(ProcessingContext.class));
-            verify(mergeRequestProcessor, never()).process(any(), any());
+        /**
+         * GitLab sends {@code approval} for an approval that leaves approvals missing and {@code unapproval} for a
+         * withdrawal that leaves the approval rules met: the same acts as {@code approved} and {@code unapproved}.
+         */
+        static Stream<Arguments> lifecycleActions() {
+            BiConsumer<GitLabMergeRequestProcessor, GitLabMergeRequestEventDTO> closed =
+                    (processor, event) -> processor.processClosed(eq(event), any(ProcessingContext.class));
+            BiConsumer<GitLabMergeRequestProcessor, GitLabMergeRequestEventDTO> reopened =
+                    (processor, event) -> processor.processReopened(eq(event), any(ProcessingContext.class));
+            BiConsumer<GitLabMergeRequestProcessor, GitLabMergeRequestEventDTO> merged =
+                    (processor, event) -> processor.processMerged(eq(event), any(ProcessingContext.class));
+            BiConsumer<GitLabMergeRequestProcessor, GitLabMergeRequestEventDTO> approved =
+                    (processor, event) -> processor.processApproved(eq(event), any(ProcessingContext.class));
+            BiConsumer<GitLabMergeRequestProcessor, GitLabMergeRequestEventDTO> unapproved =
+                    (processor, event) -> processor.processUnapproved(eq(event), any(ProcessingContext.class));
+            return Stream.of(
+                    arguments("close", "closed", closed),
+                    arguments("reopen", "opened", reopened),
+                    arguments("merge", "merged", merged),
+                    arguments("approved", "opened", approved),
+                    arguments("approval", "opened", approved),
+                    arguments("unapproved", "opened", unapproved),
+                    arguments("unapproval", "opened", unapproved));
         }
 
-        @Test
-        void reopenAction_routesToProcessReopened() throws IOException {
-            GitLabMergeRequestEventDTO event = createEvent("reopen", "opened", false);
-            setupRepository();
-
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
-
-            verify(mergeRequestProcessor).processReopened(eq(event), any(ProcessingContext.class));
-            verify(mergeRequestProcessor, never()).process(any(), any());
-        }
-
-        @Test
-        void mergeAction_routesToProcessMerged() throws IOException {
-            GitLabMergeRequestEventDTO event = createEvent("merge", "merged", false);
-            setupRepository();
-
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
-
-            verify(mergeRequestProcessor).processMerged(eq(event), any(ProcessingContext.class));
-            verify(mergeRequestProcessor, never()).process(any(), any());
-        }
-
-        @Test
-        void approvedAction_routesToProcessApproved() throws IOException {
-            GitLabMergeRequestEventDTO event = createEvent("approved", "opened", false);
-            setupRepository();
-
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
-
-            verify(mergeRequestProcessor).processApproved(eq(event), any(ProcessingContext.class));
-            verify(mergeRequestProcessor, never()).process(any(), any());
-        }
-
-        @Test
-        void unapprovedAction_routesToProcessUnapproved() throws IOException {
-            GitLabMergeRequestEventDTO event = createEvent("unapproved", "opened", false);
-            setupRepository();
-
-            Message msg = mockMessage(event);
-            handler.onMessage(msg);
-
-            verify(mergeRequestProcessor).processUnapproved(eq(event), any(ProcessingContext.class));
-            verify(mergeRequestProcessor, never()).process(any(), any());
-        }
-
-        /** GitLab sends {@code approval} for an approval that leaves approvals missing: the same act as {@code approved}. */
-        @Test
-        void shouldRecordTheApproverWhenAnApprovalLeavesApprovalsMissing() throws IOException {
-            GitLabMergeRequestEventDTO event = createEvent("approval", "opened", false);
+        @ParameterizedTest(name = "{0}")
+        @MethodSource("lifecycleActions")
+        void shouldHandALifecycleActionToItsOwnStepWhenTheHookArrives(
+                String action,
+                String state,
+                BiConsumer<GitLabMergeRequestProcessor, GitLabMergeRequestEventDTO> expectedStep)
+                throws IOException {
+            GitLabMergeRequestEventDTO event = createEvent(action, state, false);
             setupRepository();
 
             handler.onMessage(mockMessage(event));
 
-            verify(mergeRequestProcessor).processApproved(eq(event), any(ProcessingContext.class));
-            verify(mergeRequestProcessor, never()).process(any(), any());
-        }
-
-        /** GitLab sends {@code unapproval} when the merge request still meets its approval rules afterwards. */
-        @Test
-        void shouldDismissTheApprovalWhenItsWithdrawalLeavesTheRulesMet() throws IOException {
-            GitLabMergeRequestEventDTO event = createEvent("unapproval", "opened", false);
-            setupRepository();
-
-            handler.onMessage(mockMessage(event));
-
-            verify(mergeRequestProcessor).processUnapproved(eq(event), any(ProcessingContext.class));
+            expectedStep.accept(verify(mergeRequestProcessor), event);
             verify(mergeRequestProcessor, never()).process(any(), any());
         }
 
@@ -399,8 +361,6 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             verify(mergeRequestProcessor, never()).processUnapproved(any(), any());
         }
     }
-
-    // Confidential Merge Request Handling
 
     @Nested
     class ConfidentialMergeRequests {
@@ -451,8 +411,6 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             verify(mergeRequestProcessor, never()).processUnapproved(any(), any());
         }
     }
-
-    // Validation
 
     @Nested
     class PayloadValidation {
@@ -514,8 +472,6 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
         }
     }
 
-    // Context Resolution
-
     @Nested
     class ContextResolution {
 
@@ -530,8 +486,6 @@ class GitLabMergeRequestMessageHandlerTest extends BaseUnitTest {
             verify(mergeRequestProcessor, never()).process(any(), any());
         }
     }
-
-    // Helpers
 
     private Repository setupRepository() {
         Repository repo = new Repository();

@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationSuspendedException;
-import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GithubMetrics;
+import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GitHubMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
@@ -28,9 +28,6 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Slf4j
 public class GitHubExceptionClassifier {
 
-    /**
-     * Error categories for GitHub API exceptions.
-     */
     public enum Category {
         /**
          * Transient failures that should be retried with exponential backoff.
@@ -102,32 +99,32 @@ public class GitHubExceptionClassifier {
     private final Counter unknownCounter;
 
     public GitHubExceptionClassifier(MeterRegistry meterRegistry) {
-        this.retryableCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.retryableCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "retryable")
                 .register(meterRegistry);
 
-        this.rateLimitedCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.rateLimitedCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "rate_limited")
                 .register(meterRegistry);
 
-        this.notFoundCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.notFoundCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "not_found")
                 .register(meterRegistry);
 
-        this.authErrorCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.authErrorCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "auth_error")
                 .register(meterRegistry);
 
-        this.clientErrorCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.clientErrorCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "client_error")
                 .register(meterRegistry);
 
-        this.unknownCounter = Counter.builder(GithubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
+        this.unknownCounter = Counter.builder(GitHubMetrics.GITHUB_SYNC_ERRORS_TOTAL)
                 .description("Total GitHub sync errors by category")
                 .tag("category", "unknown")
                 .register(meterRegistry);
@@ -258,9 +255,6 @@ public class GitHubExceptionClassifier {
                 Category.UNKNOWN, "Unclassified GraphQL error: " + errors.get(0).getMessage());
     }
 
-    /**
-     * Internal classification logic without metric updates.
-     */
     private ClassificationResult doClassify(@Nullable Throwable e) {
         if (e == null) {
             return ClassificationResult.of(Category.UNKNOWN, "Null exception");
@@ -320,11 +314,7 @@ public class GitHubExceptionClassifier {
             return ClassificationResult.of(Category.RETRYABLE, "IO error: " + cause.getMessage());
         }
 
-        // Check for suspended in message (legacy IllegalStateException)
         String message = cause.getMessage();
-        if (message != null && message.toLowerCase().contains("suspended")) {
-            return ClassificationResult.of(Category.AUTH_ERROR, "Installation suspended: " + message);
-        }
 
         // Check for FieldAccessException from Spring GraphQL - extract error type from message
         if (cause.getClass().getSimpleName().equals("FieldAccessException") && message != null) {
@@ -396,9 +386,6 @@ public class GitHubExceptionClassifier {
         return ClassificationResult.of(Category.UNKNOWN, message);
     }
 
-    /**
-     * Classifies network-level exceptions.
-     */
     private ClassificationResult classifyNetworkException(Throwable e) {
         String message = "Network error: " + e.getClass().getSimpleName() + " - " + e.getMessage();
         return ClassificationResult.of(Category.RETRYABLE, message);
@@ -447,9 +434,6 @@ public class GitHubExceptionClassifier {
         return false;
     }
 
-    /**
-     * Checks if the exception indicates a timeout.
-     */
     private boolean isTimeoutException(Throwable e) {
         if (e instanceof TimeoutException || e instanceof SocketTimeoutException) {
             return true;
@@ -550,9 +534,6 @@ public class GitHubExceptionClassifier {
         return null;
     }
 
-    /**
-     * Increments the counter for the given category.
-     */
     private void incrementCounter(Category category) {
         switch (category) {
             case RETRYABLE -> retryableCounter.increment();

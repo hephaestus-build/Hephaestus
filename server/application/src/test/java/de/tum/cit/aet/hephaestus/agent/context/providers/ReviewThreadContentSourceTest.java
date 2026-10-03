@@ -145,7 +145,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         ObjectNode metadata = objectMapper.createObjectNode();
         metadata.put("repository_id", 123L);
 
-        // "No unresolved threads" is a finding about the author; a missing key is a broken job.
+        // "No unresolved threads" is an observation about the author; a missing key is a broken job.
         assertThatThrownBy(() -> provider.contribute(request(metadata), new HashMap<>()))
                 .isInstanceOf(EvidenceCollectionException.class)
                 .hasMessage("Review-thread collection has no pull_request_id");
@@ -215,7 +215,7 @@ class ReviewThreadContentSourceTest extends BaseUnitTest {
         // The repository returns decisions newest-first (ORDER BY submittedAt DESC, id DESC). With more
         // than MAX_DECISIONS rows, the consumer's truncation keeps the NEWEST — so a final superseding APPROVE
         // must survive, not be dropped behind older CHANGES_REQUESTED (which would fabricate a false
-        // "merged past unresolved request-changes" finding).
+        // "merged past unresolved request-changes" observation).
         List<PullRequestReview> newestFirst = new ArrayList<>();
         // The latest decision: an APPROVE at the most recent timestamp.
         newestFirst.add(review(PullRequestReview.State.APPROVED, "reviewer-a", Instant.parse("2025-06-30T23:59:00Z")));

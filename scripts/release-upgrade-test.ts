@@ -604,7 +604,7 @@ try {
 	}
 
 	let port = startApplication(application, previousImage);
-	// Released images before the management-port split expose only the legacy application-port probe.
+	// A previous release without the management port answers readiness only on the actuator path.
 	await waitUntilReady(application, port, ["/readyz", "/actuator/health/readiness"]);
 	const previousSession = await login(port, "alice");
 	await completeTransparencyNotice(port, previousSession);

@@ -209,7 +209,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
             ConfigSnapshot original = ConfigSnapshot.from(binding, resolver);
             JsonNode json = original.toJson(OBJECT_MAPPER);
 
-            ((tools.jackson.databind.node.ObjectNode) json).put("schemaVersion", 999);
+            ((ObjectNode) json).put("schemaVersion", 999);
 
             assertThatThrownBy(() -> ConfigSnapshot.fromJson(json, OBJECT_MAPPER))
                     .isInstanceOf(IllegalStateException.class)
@@ -223,7 +223,7 @@ class ConfigSnapshotTest extends BaseUnitTest {
             ConfigSnapshot original = ConfigSnapshot.from(binding, resolver);
             JsonNode json = original.toJson(OBJECT_MAPPER);
 
-            ((tools.jackson.databind.node.ObjectNode) json).put("futureField", "future-value");
+            ((ObjectNode) json).put("futureField", "future-value");
 
             ConfigSnapshot deserialized = ConfigSnapshot.fromJson(json, OBJECT_MAPPER);
             assertThat(deserialized).isEqualTo(original);

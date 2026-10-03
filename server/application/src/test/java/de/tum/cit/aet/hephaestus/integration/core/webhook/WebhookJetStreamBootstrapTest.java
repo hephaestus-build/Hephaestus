@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -490,8 +491,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     }
 
     /** A live stream at the configured shape and limits, which the argument then perturbs. */
-    private StreamInfo existing(
-            java.util.function.UnaryOperator<StreamConfiguration.Builder> perturb, @Nullable StreamState state) {
+    private StreamInfo existing(UnaryOperator<StreamConfiguration.Builder> perturb, @Nullable StreamState state) {
         StreamConfiguration config = perturb.apply(StreamConfiguration.builder()
                         .name("existing")
                         .subjects("existing.>")

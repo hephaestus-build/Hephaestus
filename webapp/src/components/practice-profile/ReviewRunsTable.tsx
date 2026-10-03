@@ -237,6 +237,7 @@ function ReviewRunRow({
 	position,
 }: ReviewRunRowProps) {
 	const { reviewedWork: work, reviewedAt: at } = run;
+	const today = new Date(useNow());
 	const WorkIcon = reviewedWorkIcon(work.kind, work.provider);
 	const reached = reachedPhrase(run);
 
@@ -245,7 +246,7 @@ function ReviewRunRow({
 			open={open}
 			link={{
 				text: "Open review",
-				name: `of ${work.label}, ${formatDayTime(at)}`,
+				name: `of ${work.label}, ${formatDayTime(at, today)}`,
 				onOpen: () => onOpenReview(run.reviewId),
 			}}
 		>

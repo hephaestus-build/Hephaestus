@@ -217,10 +217,10 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
-            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            var detect = (GateDecision.Detect) decision;
-            assertThat(detect.matchedPractices()).hasSize(1);
-            assertThat(detect.matchedPractices().get(0).getSlug()).isEqualTo("pr-quality");
+            assertThat(decision).isInstanceOf(GateDecision.Run.class);
+            var run = (GateDecision.Run) decision;
+            assertThat(run.matchedPractices()).hasSize(1);
+            assertThat(run.matchedPractices().get(0).getSlug()).isEqualTo("pr-quality");
         }
 
         @Test
@@ -231,10 +231,10 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
-            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            var detect = (GateDecision.Detect) decision;
-            assertThat(detect.matchedPractices()).hasSize(1);
-            assertThat(detect.matchedPractices().get(0).getSlug()).isEqualTo("active-one");
+            assertThat(decision).isInstanceOf(GateDecision.Run.class);
+            var run = (GateDecision.Run) decision;
+            assertThat(run.matchedPractices()).hasSize(1);
+            assertThat(run.matchedPractices().get(0).getSlug()).isEqualTo("active-one");
         }
 
         @Test
@@ -260,10 +260,10 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
-            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            var detect = (GateDecision.Detect) decision;
-            assertThat(detect.matchedPractices()).hasSize(2);
-            assertThat(detect.matchedPractices())
+            assertThat(decision).isInstanceOf(GateDecision.Run.class);
+            var run = (GateDecision.Run) decision;
+            assertThat(run.matchedPractices()).hasSize(2);
+            assertThat(run.matchedPractices())
                     .extracting(Practice::getSlug)
                     .containsExactlyInAnyOrder("practice-a", "practice-b");
         }
@@ -329,9 +329,9 @@ class ReviewGateIntegrationTest extends BaseIntegrationTest {
 
             GateDecision decision = gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO);
 
-            assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-            var detect = (GateDecision.Detect) decision;
-            assertThat(detect.workspace().getId()).isEqualTo(workspace.getId());
+            assertThat(decision).isInstanceOf(GateDecision.Run.class);
+            var run = (GateDecision.Run) decision;
+            assertThat(run.workspace().getId()).isEqualTo(workspace.getId());
         }
 
         @Test

@@ -1,6 +1,6 @@
 import { Globe } from "lucide-react";
 
-import { Github } from "@/components/icons/brand";
+import { GitHubIcon } from "@/components/icons/brand";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 
@@ -45,7 +45,7 @@ export function ProjectManagerCard({ projectManager }: ProjectManagerCardProps) 
 							rel="noopener noreferrer"
 							className={buttonVariants({ variant: "outline", size: "sm" })}
 						>
-							<Github className="h-5 w-5" /> GitHub
+							<GitHubIcon className="h-5 w-5" /> GitHub
 						</a>
 						<a
 							href={projectManager.websiteUrl}

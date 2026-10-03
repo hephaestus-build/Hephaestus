@@ -138,8 +138,8 @@ public class WorkspaceProvisioningService {
         workspace.setRepositorySelection(RepositorySelection.SELECTED);
         Workspace savedWorkspace = workspaceRepository.save(workspace);
 
-        // instance_key="pat" matches the backfill convention for legacy PAT workspaces;
-        // the bearer credential is stored encrypted via the per-row AAD.
+        // Every PAT connection uses instance_key "pat"; the bearer credential is stored encrypted via the
+        // per-row AAD.
         connectionService.provisionPatConnection(
                 savedWorkspace,
                 IntegrationKind.GITHUB,

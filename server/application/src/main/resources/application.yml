@@ -519,8 +519,7 @@ hephaestus:
     # ═══════════════════════════════════════════════════════════════════════════
     # PRACTICE REVIEW GATE
     # ═══════════════════════════════════════════════════════════════════════════
-    # Controls the detection gate for the practice-aware PR review agent.
-    # The gate decides whether to submit an agent job for a PR event.
+    # The gate that decides whether an event on reviewed work starts a practice review.
     practice-review:
         # whether to deliver feedback to already-merged PRs
         deliver-to-merged: ${PRACTICE_REVIEW_DELIVER_TO_MERGED:false}
@@ -587,7 +586,7 @@ hephaestus:
             cpus: ${SANDBOX_CPUS:2.0}
             pids-limit: ${SANDBOX_PIDS_LIMIT:256}
 
-    # Mentor sandbox resource knobs (idleTtlSeconds, maxFrameChars, queue capacities, …) bind
+    # Mentor sandbox resource knobs (idleTtlSeconds, maxFrameBytes, queue capacities, …) bind
     # to hephaestus.mentor.* via InteractiveSandboxProperties. Per-workspace readiness is the Heph model binding.
 
     # Dev-only actuator for manually triggering PR reviews (never enable in production).
@@ -817,7 +816,7 @@ hephaestus:
             # "v0:{ts}:{rawBody}", 300s replay window). Inbound (mentor DM + channel ingest) is inert without it.
             signing-secret: ${HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET:}
             conversation-ingest:
-                # Channel/group message ingestion (the channel-ingest → conversation-detection →
+                # Channel/group message ingestion (the channel-ingest → conversation-review →
                 # conversation-feedback subsystem). The capability is AVAILABLE by default so each workspace can
                 # self-serve, but availability alone reads nothing: actual ingestion still requires a workspace
                 # admin to activate a channel (consent_state=ACTIVE) AND is gated per-person by the opt-out

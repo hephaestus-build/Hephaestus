@@ -9,7 +9,9 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -181,7 +183,7 @@ class DeferredSignalIntegrationTest extends BaseIntegrationTest {
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch go = new CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(2)) {
-            java.util.concurrent.Callable<Integer> consume = () -> {
+            Callable<Integer> consume = () -> {
                 ready.countDown();
                 if (!go.await(30, TimeUnit.SECONDS)) {
                     throw new IllegalStateException("Consumer start timed out");
@@ -206,7 +208,7 @@ class DeferredSignalIntegrationTest extends BaseIntegrationTest {
     private int insert(SignalKey key, Instant now) {
         Integer inserted =
                 transactions.execute(status -> signals.insertDeferred(key, UUID.randomUUID(), now, now, null));
-        return java.util.Objects.requireNonNull(inserted);
+        return Objects.requireNonNull(inserted);
     }
 
     private List<Long> due(Instant now) {

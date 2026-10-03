@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.util.EnumMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -82,7 +83,7 @@ public class FeedbackResponseService {
     private boolean sameResponse(FeedbackResponseDTO current, FeedbackResponseRequestDTO replacement) {
         return (current.usefulness() == replacement.usefulness()
                 && current.resolution() == replacement.resolution()
-                && java.util.Objects.equals(current.comment(), replacement.comment()));
+                && Objects.equals(current.comment(), replacement.comment()));
     }
 
     @Transactional(readOnly = true)

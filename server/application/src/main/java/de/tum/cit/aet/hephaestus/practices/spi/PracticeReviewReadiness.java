@@ -7,7 +7,7 @@ package de.tum.cit.aet.hephaestus.practices.spi;
 public interface PracticeReviewReadiness {
     /**
      * Whether the workspace has an enabled {@code PRACTICE_REVIEW} agent binding whose model is
-     * available now — that is, whether a detection job would actually be submitted.
+     * available now — that is, whether a practice review would actually be submitted.
      */
     boolean hasRunnableAgent(Long workspaceId);
 }

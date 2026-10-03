@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.live;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiPlanSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
@@ -24,10 +26,12 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.LongStream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -155,11 +159,8 @@ class MentorSandboxStressTest {
                         + " KB (override via PEAK_RSS_BUDGET_KB)");
             }
             if (k > 1) {
-                // Clamp negative deltas at 0 — a runner whose RSS DROPPED between the floor and
-                // the K-opens sample (V8 freed memory, jemalloc decay timing) is not a
-                // regression. Only growth is. The previous Math.abs() variant treated benign GC
-                // timing as a "regression" with no actionable signal; this asserts only the
-                // direction we care about.
+                // Clamp negative deltas at 0: a runner whose RSS dropped between the floor and the
+                // K-opens sample (V8 freed memory, jemalloc decay timing) has not regressed.
                 long maxMarginalGrowthKb = runners.stream()
                         .filter(r -> r.rssAfterOpenKb > 0 && r.rssOneSessionFloorKb > 0)
                         .mapToLong(r -> Math.max(0L, (r.rssAfterOpenKb - r.rssOneSessionFloorKb) / (k - 1)))
@@ -403,7 +404,7 @@ class MentorSandboxStressTest {
                         "In one sentence: what is dependency injection? (thread #" + (i + 1) + "/" + r.k + ")",
                         Duration.ofSeconds(10));
                 var turnComplete = turnCompletes.get(tid);
-                org.junit.jupiter.api.Assertions.assertNotNull(turnComplete);
+                assertNotNull(turnComplete);
                 turnComplete.get(SESSION_BUDGET.toSeconds(), TimeUnit.SECONDS);
                 long turnMs = (System.nanoTime() - promptStart) / 1_000_000;
                 r.perTurnMs.add(turnMs);
@@ -719,7 +720,7 @@ class MentorSandboxStressTest {
         try {
             workspaceLit = MAPPER.writeValueAsString(workspace.toString());
             runnerLit = MAPPER.writeValueAsString(runner.toUri().toString());
-        } catch (tools.jackson.core.JacksonException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("failed to encode shim literals", e);
         }
         return ("""
@@ -755,7 +756,7 @@ class MentorSandboxStressTest {
         final UUID[] threadIds;
         final List<Long> perTurnMs = new CopyOnWriteArrayList<>();
         final List<long[]> samples = new CopyOnWriteArrayList<>();
-        volatile @org.jspecify.annotations.Nullable Throwable failure;
+        volatile @Nullable Throwable failure;
 
         MultiSessionRunnerMetrics(int id, int k) {
             this.id = id;
@@ -776,7 +777,7 @@ class MentorSandboxStressTest {
         long promptAcceptedNanos;
         long agentEndNanos;
         final List<long[]> samples = new CopyOnWriteArrayList<>();
-        volatile @org.jspecify.annotations.Nullable Throwable failure;
+        volatile @Nullable Throwable failure;
 
         SessionMetrics(int id) {
             this.id = id;

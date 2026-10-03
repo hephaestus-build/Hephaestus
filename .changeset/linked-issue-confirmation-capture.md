@@ -1,5 +1,4 @@
 ---
-"hephaestus": patch
 ---
 
-Linked-issue outcome reviews assess the confirmation captured for merged work, keeping later checklist repairs distinct from what was recorded at merge time.
+No release note of its own: linked-issue-confirmation-is-read-as-captured.md carries it.

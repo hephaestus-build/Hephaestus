@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.conversation;
 
 import java.time.Instant;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -18,7 +19,7 @@ import tools.jackson.databind.node.ObjectNode;
  */
 public interface ConversationThreadProjection {
     /** Streams all permitted messages from this workspace; no review history window applies. */
-    void forEachWorkspaceMessage(long workspaceId, java.util.function.Consumer<ObjectNode> consumer);
+    void forEachWorkspaceMessage(long workspaceId, Consumer<ObjectNode> consumer);
 
     /** The message still passes the source owner's consent, participant and erasure gates. */
     boolean isMessageReadable(long workspaceId, String channelId, String messageTs);
@@ -32,8 +33,8 @@ public interface ConversationThreadProjection {
     ObjectNode buildPayload(long workspaceId, long developerId);
 
     /**
-     * The ordered-turns payload for a single settled thread (conversation detection). No participant
-     * firewall — the detection job judges the thread as a work artifact — but the same
+     * The ordered-turns payload for a single settled thread under conversation review. No participant
+     * firewall — the review judges the thread as reviewed work — but the same
      * {@code consent_state = 'ACTIVE'} gate and quarantine envelope apply.
      */
     ObjectNode buildThreadPayload(long workspaceId, String channelId, String threadTs);

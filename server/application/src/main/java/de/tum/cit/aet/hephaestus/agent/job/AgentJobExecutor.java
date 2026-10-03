@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
@@ -49,11 +50,16 @@ import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.Serial;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -71,7 +77,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
@@ -103,9 +109,8 @@ import tools.jackson.databind.node.ObjectNode;
  * no transaction and no DB connection held.
  */
 @Component
-// Expression rather than two @ConditionalOnProperty: Spring honors only one of those per element.
-@ConditionalOnExpression(
-        "${" + RuntimeRole.AGENT_ENABLED_PROPERTY + ":false} and ${" + RuntimeRole.WORKER_PROPERTY + ":true}")
+@ConditionalOnWorkerRole
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @WorkspaceAgnostic("Job poller processes jobs across all workspaces")
 public class AgentJobExecutor {
 
@@ -770,9 +775,8 @@ public class AgentJobExecutor {
 
         try {
             // Sandboxes access providers through the LLM proxy with an attempt-scoped credential.
-            Instant workDeadline = Instant.now()
-                    .plusSeconds(snapshot.timeoutSeconds())
-                    .truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            Instant workDeadline =
+                    Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
             String jobToken = workerJwtIssuer.issueForJobUntil(
                     jobId,
                     job.getWorkspace().getId(),
@@ -836,7 +840,7 @@ public class AgentJobExecutor {
             AgentJobType jobType,
             @Nullable String promptDigest,
             Map<String, byte[]> inputFiles,
-            Map<String, java.nio.file.Path> inputPaths,
+            Map<String, Path> inputPaths,
             List<EvidenceDirectory> inputDirectories,
             int retryCount,
             @Nullable AutomatedReviewReadinessReport automatedReviewReadinessReport,
@@ -862,8 +866,7 @@ public class AgentJobExecutor {
     }
 
     /** The manifest and admitted practices as the sandbox sees them, and the core of the work it staged. */
-    private static Map<String, byte[]> snapshotMetadata(
-            Map<String, byte[]> scaffolding, Map<String, java.nio.file.Path> paths) {
+    private static Map<String, byte[]> snapshotMetadata(Map<String, byte[]> scaffolding, Map<String, Path> paths) {
         var metadata = new HashMap<>(scaffolding);
         for (String path : List.of(
                 SandboxLayout.MANIFEST_PATH,
@@ -871,12 +874,12 @@ public class AgentJobExecutor {
                 SandboxLayout.CONTEXT_PREFIX + "metadata.json",
                 SandboxLayout.CONTEXT_PREFIX + "issue_metadata.json",
                 GeneratedPathReviewDTO.INPUT_PATH)) {
-            java.nio.file.Path source = paths.get(path);
+            Path source = paths.get(path);
             if (source != null) {
                 try {
-                    metadata.put(path, java.nio.file.Files.readAllBytes(source));
-                } catch (java.io.IOException exception) {
-                    throw new java.io.UncheckedIOException(exception);
+                    metadata.put(path, Files.readAllBytes(source));
+                } catch (IOException exception) {
+                    throw new UncheckedIOException(exception);
                 }
             }
         }
@@ -925,7 +928,7 @@ public class AgentJobExecutor {
     private static SandboxSpec buildSandboxSpec(
             UUID jobId,
             Map<String, byte[]> handlerFiles,
-            Map<String, java.nio.file.Path> handlerFilesOnDisk,
+            Map<String, Path> handlerFilesOnDisk,
             List<EvidenceDirectory> handlerDirectories,
             PracticeSandboxSpec agentSpec,
             ConfigSnapshot snapshot,
@@ -1191,16 +1194,16 @@ public class AgentJobExecutor {
             ConfigSnapshot snapshot;
             try {
                 ConfigSnapshot submitted = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
-                if (java.util.Objects.requireNonNullElse(submitted.dataHandlingTier(), DataHandlingTier.UNDECLARED)
+                if (Objects.requireNonNullElse(submitted.dataHandlingTier(), DataHandlingTier.UNDECLARED)
                         != binding.getDataHandlingTier()) return refuseUnavailableModel(job);
                 if (llmAdmissionService != null) {
                     var admitted = llmAdmissionService.admit(binding);
                     var ref = admitted.connection();
                     if (submitted.connectionScope() != ref.scope()
-                            || !java.util.Objects.equals(submitted.connectionId(), ref.connectionId())
-                            || !java.util.Objects.equals(submitted.modelId(), ref.modelId())
-                            || !java.util.Objects.equals(submitted.workspaceId(), ref.workspaceId())
-                            || !java.util.Objects.equals(
+                            || !Objects.equals(submitted.connectionId(), ref.connectionId())
+                            || !Objects.equals(submitted.modelId(), ref.modelId())
+                            || !Objects.equals(submitted.workspaceId(), ref.workspaceId())
+                            || !Objects.equals(
                                     submitted.upstreamModelId(),
                                     admitted.resolved().upstreamModelId())) {
                         return refuseUnavailableModel(job);

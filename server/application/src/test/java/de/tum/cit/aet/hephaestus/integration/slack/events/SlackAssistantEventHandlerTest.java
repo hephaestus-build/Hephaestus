@@ -1,6 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,7 +18,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -46,12 +49,7 @@ class SlackAssistantEventHandlerTest extends BaseUnitTest {
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<SuggestedPrompt>> prompts = ArgumentCaptor.forClass(List.class);
-        verify(messageService)
-                .setSuggestedPrompts(
-                        ArgumentMatchers.eq(42L),
-                        ArgumentMatchers.eq("D1"),
-                        ArgumentMatchers.eq("Practice mentor"),
-                        prompts.capture());
+        verify(messageService).setSuggestedPrompts(eq(42L), eq("D1"), eq("Practice mentor"), prompts.capture());
         assertThat(prompts.getValue()).hasSize(4);
         assertThat(prompts.getValue())
                 .extracting(SuggestedPrompt::getTitle)
@@ -65,12 +63,7 @@ class SlackAssistantEventHandlerTest extends BaseUnitTest {
     void missingChannelDoesNotSetPrompts() throws Exception {
         handler.onMessagesOpened("T1", JsonMapper.builder().build().readTree("{\"tab\":\"messages\"}"));
 
-        verify(messageService, never())
-                .setSuggestedPrompts(
-                        ArgumentMatchers.anyLong(),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyList());
+        verify(messageService, never()).setSuggestedPrompts(anyLong(), anyString(), anyString(), anyList());
     }
 
     @Test
@@ -81,11 +74,6 @@ class SlackAssistantEventHandlerTest extends BaseUnitTest {
         handler.onMessagesOpened(
                 "T1", JsonMapper.builder().build().readTree("{\"tab\":\"messages\",\"channel\":\"D1\"}"));
 
-        verify(messageService, never())
-                .setSuggestedPrompts(
-                        ArgumentMatchers.anyLong(),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyString(),
-                        ArgumentMatchers.anyList());
+        verify(messageService, never()).setSuggestedPrompts(anyLong(), anyString(), anyString(), anyList());
     }
 }

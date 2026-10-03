@@ -13,6 +13,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.DatabindException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class PracticeDefinitionTest extends BaseUnitTest {
 
@@ -97,8 +101,8 @@ class PracticeDefinitionTest extends BaseUnitTest {
 
     @Test
     void shouldRoundTripTheFlatDefinitionAndRejectRemovedFields() throws Exception {
-        var mapper = tools.jackson.databind.json.JsonMapper.builder()
-                .enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+        var mapper = JsonMapper.builder()
+                .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .build();
         var original = definition(languageModel(), List.of(ScmSignals.PULL_REQUEST_OPENED), List.of(required(CORE)));
         String json = mapper.writeValueAsString(original);
@@ -107,9 +111,9 @@ class PracticeDefinitionTest extends BaseUnitTest {
                 .doesNotContain("bindings", "appliesWhen");
         assertThat(mapper.readValue(json, PracticeDefinition.class)).isEqualTo(original);
         var withRemovedField = mapper.readTree(json).deepCopy();
-        ((tools.jackson.databind.node.ObjectNode) withRemovedField).putArray("bindings");
+        ((ObjectNode) withRemovedField).putArray("bindings");
         assertThatThrownBy(() -> mapper.treeToValue(withRemovedField, PracticeDefinition.class))
-                .isInstanceOf(tools.jackson.databind.DatabindException.class)
+                .isInstanceOf(DatabindException.class)
                 .hasRootCauseInstanceOf(IllegalArgumentException.class)
                 .hasRootCauseMessage("Unknown practice definition field: bindings");
     }

@@ -12,6 +12,7 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
@@ -143,7 +144,7 @@ public class EmailGateway {
         // to tell "connection refused" from "authentication failed" from "address rejected".
         log.warn(
                 "email: delivery {} kind={} messageId={} cause={} rootCause={}",
-                outcome.name().toLowerCase(java.util.Locale.ROOT),
+                outcome.name().toLowerCase(Locale.ROOT),
                 kind.tag(),
                 messageId,
                 e.getClass().getSimpleName(),

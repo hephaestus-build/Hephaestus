@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -32,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -79,7 +81,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     void authorizeObservations() {
         lenient().when(reviewedWorkCoverage.of(anyLong(), any())).thenAnswer(invocation -> {
             Map<UUID, ObjectNode> nodes = new HashMap<>();
-            for (Observation observation : invocation.<java.util.Collection<Observation>>getArgument(1)) {
+            for (Observation observation : invocation.<Collection<Observation>>getArgument(1)) {
                 nodes.put(observation.getId(), objectMapper.createObjectNode().put("coreCoverage", "UNKNOWN"));
             }
             return nodes;
@@ -154,7 +156,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     void rubricVoicedReasoningIsScrubbed() throws Exception {
         var practice = new Practice();
         practice.setSlug("robust-error-handling");
-        // A real student-facing sentence followed by a pure grading-mechanics sentence the detector echoed.
+        // A real student-facing sentence followed by a pure grading-mechanics sentence the review echoed.
         String reasoning =
                 "The retry block swallows the IOException without logging it. The assessment is BAD, capped at MINOR.";
         var observation = Observation.builder()
@@ -307,8 +309,8 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     @DisplayName("an overview of many evidence-heavy rows fits its bound and keeps every row, without evidence")
     void overviewOfEvidenceHeavyRowsKeepsEveryRow() {
         givenDeveloper();
-        List<Observation> verdicts = new java.util.ArrayList<>();
-        List<Observation> abstentions = new java.util.ArrayList<>();
+        List<Observation> verdicts = new ArrayList<>();
+        List<Observation> abstentions = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
             verdicts.add(observation(Outcome.NOT_MET, "Summary " + i, citations(1, 6_000), "r".repeat(1_500)));
         }
@@ -333,7 +335,7 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     @DisplayName("an overview too large leaves out the longest summaries, marked, before any row")
     void overviewLeavesOutSummariesBeforeRows() {
         givenDeveloper();
-        List<Observation> verdicts = new java.util.ArrayList<>();
+        List<Observation> verdicts = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
             verdicts.add(observation(Outcome.NOT_MET, "s".repeat(1_000 + i), citations(1, 10), "r"));
         }
@@ -573,12 +575,12 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
     @DisplayName("received reviews with the longest titles are left out oldest first, counted, and the whole fits")
     void overviewLeavesOutTheOldestReceivedReviewsCounted() {
         givenDeveloper();
-        List<Observation> verdicts = new java.util.ArrayList<>();
+        List<Observation> verdicts = new ArrayList<>();
         for (int i = 0; i < 50; i++) {
             verdicts.add(observation(Outcome.NOT_MET, "Summary " + i, citations(1, 10), "r"));
         }
         givenHistory(verdicts, List.of());
-        List<PullRequestReview> reviews = new java.util.ArrayList<>();
+        List<PullRequestReview> reviews = new ArrayList<>();
         for (int i = 0; i < 20; i++) {
             var pr = new PullRequest();
             pr.setNumber(i);
@@ -604,7 +606,6 @@ class ObservationHistoryContentSourceTest extends BaseUnitTest {
         assertThat(root.get("reviewsReceived")
                         .valueStream()
                         .map(r -> r.get("prNumber").asInt()))
-                .containsExactlyElementsOf(
-                        java.util.stream.IntStream.range(0, shown).boxed().toList());
+                .containsExactlyElementsOf(IntStream.range(0, shown).boxed().toList());
     }
 }

@@ -1,19 +1,28 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
@@ -23,20 +32,25 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -106,27 +120,22 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                         practiceCatalogInjector,
                         new TaskEnvelopeWriter(objectMapper),
                         gitRepositoryManager,
-                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer(),
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.PracticeRevisionService.class,
-                                invocation -> ((de.tum.cit.aet.hephaestus.practices.model.Practice)
-                                                invocation.getArgument(0))
-                                        .getCurrentRevision())),
+                        PreparedJobInputsFixtures.freezer(),
+                        mock(
+                                PracticeRevisionService.class,
+                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision())),
                 practiceCatalogInjector,
                 new ReviewResultParser(objectMapper),
-                new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
+                new FeedbackCompositionResultParser(),
                 deliveryService,
                 InContextDeliveryGateFixtures.gate(
-                        practiceRepository,
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
-                        feedbackLedgerRecorder),
+                        practiceRepository, mock(ObservationRepository.class), feedbackLedgerRecorder),
                 commentPoster,
                 feedbackLedgerRecorder,
                 mock(PracticeFeedbackDeliveryPolicy.class),
                 mock(PracticeFeedbackCommentFormatter.class),
                 feedbackResponseSuppressionFilter,
-                mock(de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
+                mock(ObservationRepository.class),
                 dispatchService,
                 mock(FeedbackDeliveryService.class),
                 InContextDeliveryGateFixtures.noRecurrence());
@@ -157,7 +166,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
                 "Users want a dark theme toggle in settings.",
                 "OPEN",
                 "https://github.com/owner/repo/issues/12",
-                java.time.Instant.ofEpochMilli(1_700_000_000_000L),
+                Instant.ofEpochMilli(1_700_000_000_000L),
                 null);
     }
 
@@ -176,18 +185,17 @@ class IssueReviewHandlerTest extends BaseUnitTest {
         ReflectionTestUtils.setField(revision, "id", 12L);
         practice.setCurrentRevision(revision);
         when(practiceRepository.findByWorkspaceIdAndArtifactKind(1L, ArtifactKinds.ISSUE))
-                .thenReturn(java.util.List.of(practice));
+                .thenReturn(List.of(practice));
         when(workspaceContextBuilder.prepare(any(), any()))
                 .thenReturn(new PreparedEvidence(
                         Map.of(SandboxLayout.CONTEXT_PREFIX + "metadata.json", "{}".getBytes(StandardCharsets.UTF_8)),
                         mock(JobFolderIndex.class)));
         when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any()))
                 .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
-                        java.util.List.of(practice), mock(AutomatedReviewReadinessReport.class)));
+                        List.of(practice), mock(AutomatedReviewReadinessReport.class)));
         try (var prepared = handler.prepareInputs(job)) {
-            var files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(prepared);
-            var task = objectMapper.readTree(
-                    java.util.Objects.requireNonNull(files.get(SandboxLayout.TASK_ENVELOPE_FILENAME)));
+            var files = PreparedJobInputsFixtures.files(prepared);
+            var task = objectMapper.readTree(Objects.requireNonNull(files.get(SandboxLayout.TASK_ENVELOPE_FILENAME)));
             assertThat(task.path("prompt").asString())
                     .contains(
                             SandboxLayout.CONTEXT_PREFIX + "metadata.json",
@@ -202,14 +210,13 @@ class IssueReviewHandlerTest extends BaseUnitTest {
 
         @Test
         void shouldFinishWithoutComposingFeedbackWhenObservationsWereRefused() {
-            var refused = new de.tum.cit.aet.hephaestus.agent.job.AgentJob();
+            var refused = new AgentJob();
             var metadata = objectMapper.createObjectNode();
             metadata.putObject(ObservationAdmissionService.REFUSAL_METADATA_KEY)
                     .put("reasonCode", "no_valid_observations");
             refused.setMetadata(metadata);
-            org.assertj.core.api.Assertions.assertThatCode(() -> handler.deliver(refused))
-                    .doesNotThrowAnyException();
-            org.mockito.Mockito.verifyNoInteractions(dispatchService, feedbackLedgerRecorder, deliveryService);
+            assertThatCode(() -> handler.deliver(refused)).doesNotThrowAnyException();
+            verifyNoInteractions(dispatchService, feedbackLedgerRecorder, deliveryService);
         }
 
         @Test
@@ -256,7 +263,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
         @Test
         void shouldKeepEditorAndSnapshotInJobMetadataWithoutChangingTheReviewedSubject() {
             var request = sampleRequest();
-            var snapshot = java.util.UUID.randomUUID();
+            var snapshot = UUID.randomUUID();
             var attributed = new IssueReviewSubmissionRequest(
                     request.issueId(),
                     request.issueNumber(),
@@ -308,7 +315,7 @@ class IssueReviewHandlerTest extends BaseUnitTest {
         }
     }
 
-    private record WrongRequest() implements de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest {}
+    private record WrongRequest() implements JobSubmissionRequest {}
 
     /** Resolves every workspace to the unset defaults — HUMAN_APPROVAL autonomy, reach on the work. */
     @Nested
@@ -333,9 +340,9 @@ class IssueReviewHandlerTest extends BaseUnitTest {
             assertThatThrownBy(
                             () -> handler.prepareObservations(job, objectMapper.readTree("[{\"practiceSlug\": \"\"}]")))
                     .isInstanceOfSatisfying(
-                            de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException.class,
+                            ObservationsRefusedException.class,
                             e -> assertThat(e.reasonCode()).isEqualTo("no_valid_observations"));
-            org.mockito.Mockito.verifyNoInteractions(deliveryService);
+            verifyNoInteractions(deliveryService);
         }
 
         @Test
@@ -346,15 +353,13 @@ class IssueReviewHandlerTest extends BaseUnitTest {
             EvidenceSnapshotFixtures.admittedPractice(snapshot, "explains-why", 1);
             job.setEvidenceSnapshot(snapshot);
             var admissible = mock(ReviewOutputService.PreparedObservations.class);
-            when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
-                    .thenReturn(admissible);
+            when(deliveryService.prepare(eq(job), any())).thenReturn(admissible);
 
             var prepared = handler.prepareObservations(job, objectMapper.readTree(OBSERVATION));
-            org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
-                    .publish(any(), any());
+            verify(deliveryService, never()).publish(any(), any());
 
             prepared.record(job);
-            org.mockito.Mockito.verify(deliveryService).publish(job, admissible);
+            verify(deliveryService).publish(job, admissible);
         }
     }
 }

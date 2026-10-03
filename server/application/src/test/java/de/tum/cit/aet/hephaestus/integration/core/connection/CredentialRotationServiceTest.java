@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -28,7 +29,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -101,7 +101,7 @@ class CredentialRotationServiceTest extends BaseUnitTest {
 
         service.rotateBatch();
 
-        verify(connectionRepository, never()).findAllById(ArgumentMatchers.anyIterable());
+        verify(connectionRepository, never()).findAllById(anyIterable());
     }
 
     @Test

@@ -96,7 +96,7 @@ public class FeedbackPlacement {
     @Column(name = "placement_type", length = 32, nullable = false)
     private PlacementType placementType;
 
-    // --- Diff anchor coordinates (all nullable: only INLINE placements anchor to a diff) ---
+    // Only INLINE placements anchor to a diff, so every coordinate below is nullable.
 
     /** Granularity of the anchor: LINE / RANGE / FILE / IMAGE. NULL for non-INLINE placements. */
     @Enumerated(EnumType.STRING)
@@ -122,8 +122,6 @@ public class FeedbackPlacement {
     @Enumerated(EnumType.STRING)
     @Column(name = "anchor_side", length = 8)
     private PlacementAnchorSide anchorSide;
-
-    // --- External delivery reconciliation ---
 
     /**
      * Channel-native id of the posted comment/note for this placement (one per row — never one

@@ -57,7 +57,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import tools.jackson.databind.node.ObjectNode;
 
 /**
  * {@code GET /practice-profile/review-runs} and its detail against a seeded history: three runs on the
@@ -263,38 +262,45 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
                 .isEqualTo(oldestRun.getId().toString());
     }
 
-    /** GitHub records the summary comment by its GraphQL node id, which its page anchors cannot address. */
     @Test
     @WithUser
-    @DisplayName("a GitHub run carries no feedback address, and neither does a run that posted no comment")
-    void shouldCarryNoFeedbackAddressWhenTheCommentCannotBeAddressed() {
-        latestRun.setDeliveryCommentId("IC_kwDOBm6k_c6cVyYt");
-        agentJobRepository.save(latestRun);
-
-        readRuns()
-                .jsonPath("$.content[0].feedbackUrl")
-                .doesNotExist()
-                .jsonPath("$.content[1].feedbackUrl")
-                .doesNotExist();
-    }
-
-    /** GitLab records the note a summary was posted as by its global id, whose number the page anchors on. */
-    @Test
-    @WithUser
-    @DisplayName("a GitLab run links to the note its summary was posted as")
-    void shouldLinkTheFeedbackToItsNoteWhenAGitLabRunRecordedOne() {
-        ObjectNode metadata = ((ObjectNode) Objects.requireNonNull(latestRun.getMetadata())).deepCopy();
-        metadata.put("pr_url", "https://gitlab.com/acme/api/-/merge_requests/32");
-        latestRun.setMetadata(metadata);
-        latestRun.setIntegrationKind(IntegrationKind.GITLAB);
-        latestRun.setDeliveryCommentId("gid://gitlab/Note/4711");
-        agentJobRepository.save(latestRun);
+    @DisplayName("a run links to its summary comment at the address the provider returned for it")
+    void shouldLinkTheFeedbackToTheRecordedAddressWhenTheRunPostedASummary() {
+        recordSummary(latestRun, "https://github.com/acme/api/pull/32#issuecomment-4711");
 
         readRuns()
                 .jsonPath("$.content[0].reviewId")
                 .isEqualTo(latestRun.getId().toString())
                 .jsonPath("$.content[0].feedbackUrl")
-                .isEqualTo("https://gitlab.com/acme/api/-/merge_requests/32#note_4711");
+                .isEqualTo("https://github.com/acme/api/pull/32#issuecomment-4711")
+                .jsonPath("$.content[1].feedbackUrl")
+                .doesNotExist();
+    }
+
+    @Test
+    @WithUser
+    @DisplayName("a recorded address that is not a comment on the reviewed work is not linked")
+    void shouldCarryNoFeedbackAddressWhenTheRecordedAddressIsNotOnTheWork() {
+        recordSummary(latestRun, "https://github.com/acme/api/pull/33#issuecomment-4711");
+
+        readRuns().jsonPath("$.content[0].feedbackUrl").doesNotExist();
+    }
+
+    /** The run's delivered summary, as the dispatch records the comment the provider created. */
+    private void recordSummary(AgentJob run, String url) {
+        String commentId = "IC_" + run.getId();
+        run.setIntegrationKind(IntegrationKind.GITHUB);
+        run.setDeliveryCommentId(commentId);
+        agentJobRepository.save(run);
+        jdbcTemplate.update(
+                """
+                INSERT INTO feedback_dispatch (id, destination_key, workspace_id, agent_job_id, destination, state, body,
+                    practice_slugs, package_content, delivered_placements, write_started, delivered_external_ref,
+                    delivered_external_url, next_attempt_at, attempt_count, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'AUTOMATIC_REVIEW_PACKAGE', 'SENT', 'body', '[]'::jsonb,
+                    '{"mrNote":"body","diffNotes":[],"withheld":[]}'::jsonb, '[]'::jsonb, true, ?, ?, now(), 1, now(),
+                    now())
+                """, UUID.randomUUID(), "summary-" + run.getId(), workspace.getId(), run.getId(), commentId, url);
     }
 
     @Test
@@ -492,7 +498,7 @@ class PracticeProfileReviewRunIntegrationTest extends AbstractPracticeReviewInte
     void shouldCountAnEarlierStandardVerdictAsUndecidedWhenItsRevisionPredatesTheCurrentScheme() {
         Instant at = LATEST_RUN_AT.plusSeconds(60);
         AgentJob run = persistPullRequestReview(workspace, 38, at);
-        // The cutover migrated an earlier ABSENT/BAD verdict to MET.
+        // A MET verdict whose practice revision carries an earlier fingerprint scheme.
         UUID migratedMet = observeUnder(
                 historicalRevision(explainChanges, 2, "v4:" + "a".repeat(64)),
                 explainChanges,

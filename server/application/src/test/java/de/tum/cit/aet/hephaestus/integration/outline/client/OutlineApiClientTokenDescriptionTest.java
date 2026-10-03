@@ -10,6 +10,7 @@ import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -53,7 +54,7 @@ class OutlineApiClientTokenDescriptionTest extends BaseUnitTest {
                 CircuitBreaker.ofDefaults("outlineRestApi"),
                 Retry.ofDefaults("outlineRestApi"),
                 WebClient.builder().exchangeFunction(exchange).build(),
-                new OutlineOriginPolicy(java.util.Set.of("https://wiki.example.com")));
+                new OutlineOriginPolicy(Set.of("https://wiki.example.com")));
     }
 
     @Test

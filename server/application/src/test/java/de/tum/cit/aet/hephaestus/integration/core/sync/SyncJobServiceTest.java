@@ -28,11 +28,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -137,7 +139,7 @@ class SyncJobServiceTest extends BaseUnitTest {
             List<Long> ids = inv.getArgument(0);
             return ids.stream()
                     .map(store::get)
-                    .filter(java.util.Objects::nonNull)
+                    .filter(Objects::nonNull)
                     .map(job -> new SyncJobRepository.CancelFlagProjection() {
                         @Override
                         public Long getId() {
@@ -301,7 +303,7 @@ class SyncJobServiceTest extends BaseUnitTest {
     @Test
     void executeBody_duplicateDispatch_invokesBodyOnlyOnce() {
         SyncJobService.Started started = beginTestJob();
-        java.util.concurrent.atomic.AtomicInteger invocations = new java.util.concurrent.atomic.AtomicInteger();
+        AtomicInteger invocations = new AtomicInteger();
 
         service.executeBody(started, handle -> invocations.incrementAndGet());
         service.executeBody(started, handle -> invocations.incrementAndGet());
@@ -589,13 +591,7 @@ class SyncJobServiceTest extends BaseUnitTest {
         SyncJobService.Started started = beginTestJob();
 
         service.executeBody(
-                started,
-                handle -> handle.progress(
-                        4,
-                        12,
-                        de.tum.cit.aet.hephaestus.integration.core.spi.SyncProgress.of(
-                                de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase.PULL_REQUESTS,
-                                "pull-requests")));
+                started, handle -> handle.progress(4, 12, SyncProgress.of(SyncPhase.PULL_REQUESTS, "pull-requests")));
 
         assertThat(started.job().getStatus()).isEqualTo(SyncJobStatus.SUCCEEDED);
         assertThat(started.job().getItemsProcessed()).isEqualTo(4);
@@ -685,7 +681,7 @@ class SyncJobServiceTest extends BaseUnitTest {
     @Test
     void reapAbandonedJobs_findsAndFailsStaleRunningJobs() {
         SyncJob stale = newJob(8L, SyncJobStatus.RUNNING);
-        stale.setHeartbeatAt(Instant.now().minus(java.time.Duration.ofMinutes(30)));
+        stale.setHeartbeatAt(Instant.now().minus(Duration.ofMinutes(30)));
         when(syncJobRepository.findAbandoned(900)).thenReturn(List.of(stale));
         when(syncJobRepository.markAbandoned(8L, "Abandoned: no heartbeat (likely pod restart)", 900))
                 .thenReturn(1);

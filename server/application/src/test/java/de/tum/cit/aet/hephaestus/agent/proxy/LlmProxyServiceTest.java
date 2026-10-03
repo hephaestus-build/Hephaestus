@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -14,11 +15,27 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
+import io.micrometer.tracing.otel.bridge.OtelCurrentTraceContext;
+import io.micrometer.tracing.otel.bridge.OtelTracer;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.sdk.common.CompletableResultCode;
+import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
+import io.opentelemetry.sdk.trace.export.SpanExporter;
+import io.opentelemetry.sdk.trace.samplers.Sampler;
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import mockwebserver3.MockResponse;
@@ -35,11 +52,17 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import tools.jackson.databind.ObjectMapper;
 
 class LlmProxyServiceTest extends BaseUnitTest {
@@ -67,7 +90,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
     void setUp() {
         lenient().when(requestPolicy.allows(any())).thenReturn(true);
         controller = new LlmProxyService(
-                io.micrometer.tracing.Tracer.NOOP,
+                Tracer.NOOP,
                 WebClient.create(),
                 resolver,
                 OBJECT_MAPPER,
@@ -329,7 +352,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .getBytes(StandardCharsets.UTF_8);
 
             var prepared = controller.prepareBody(input, "catalog-model", false);
-            org.junit.jupiter.api.Assertions.assertNotNull(prepared);
+            assertThat(prepared).isNotNull();
 
             assertThat(prepared.body()).isNotNull();
             var tree = OBJECT_MAPPER.readTree(prepared.body());
@@ -354,7 +377,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             byte[] input = "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8);
 
             var prepared = controller.prepareBody(input, "catalog-model", true);
-            org.junit.jupiter.api.Assertions.assertNotNull(prepared);
+            assertThat(prepared).isNotNull();
 
             assertThat(prepared.body()).isNotNull();
             var tree = OBJECT_MAPPER.readTree(prepared.body());
@@ -398,29 +421,26 @@ class LlmProxyServiceTest extends BaseUnitTest {
         "HTTP_ERROR, 502, ERROR"
     })
     void shouldExportTheOperationOutcomeWithoutLeakingFailureDetails(
-            String outcome, int status, io.opentelemetry.api.trace.StatusCode expectedStatus) throws Exception {
-        var exporter = mock(io.opentelemetry.sdk.trace.export.SpanExporter.class);
-        when(exporter.export(any())).thenReturn(io.opentelemetry.sdk.common.CompletableResultCode.ofSuccess());
-        when(exporter.shutdown()).thenReturn(io.opentelemetry.sdk.common.CompletableResultCode.ofSuccess());
-        try (var provider = io.opentelemetry.sdk.trace.SdkTracerProvider.builder()
-                .setSampler(io.opentelemetry.sdk.trace.samplers.Sampler.alwaysOn())
-                .addSpanProcessor(io.opentelemetry.sdk.trace.export.SimpleSpanProcessor.create(exporter))
+            String outcome, int status, StatusCode expectedStatus) throws Exception {
+        var exporter = mock(SpanExporter.class);
+        when(exporter.export(any())).thenReturn(CompletableResultCode.ofSuccess());
+        when(exporter.shutdown()).thenReturn(CompletableResultCode.ofSuccess());
+        try (var provider = SdkTracerProvider.builder()
+                .setSampler(Sampler.alwaysOn())
+                .addSpanProcessor(SimpleSpanProcessor.create(exporter))
                 .build()) {
-            var tracer = new io.micrometer.tracing.otel.bridge.OtelTracer(
-                    provider.get("test"), new io.micrometer.tracing.otel.bridge.OtelCurrentTraceContext(), event -> {});
-            var buffer = org.springframework.core.io.buffer.DefaultDataBufferFactory.sharedInstance.wrap(
-                    "data: response\n\n".getBytes(StandardCharsets.UTF_8));
-            reactor.core.publisher.Flux<org.springframework.core.io.buffer.DataBuffer> body =
-                    outcome.equals("STREAM_FAILED")
-                            ? reactor.core.publisher.Flux.error(new IOException("private-provider-token"))
-                            : reactor.core.publisher.Flux.just(buffer);
-            var upstreamResponse = org.springframework.web.reactive.function.client.ClientResponse.create(
-                            org.springframework.http.HttpStatusCode.valueOf(status))
+            var tracer = new OtelTracer(provider.get("test"), new OtelCurrentTraceContext(), event -> {});
+            var buffer =
+                    DefaultDataBufferFactory.sharedInstance.wrap("data: response\n\n".getBytes(StandardCharsets.UTF_8));
+            Flux<DataBuffer> body = outcome.equals("STREAM_FAILED")
+                    ? Flux.error(new IOException("private-provider-token"))
+                    : Flux.just(buffer);
+            var upstreamResponse = ClientResponse.create(HttpStatusCode.valueOf(status))
                     .header(HttpHeaders.CONTENT_TYPE, status == 200 ? "text/event-stream" : "application/json")
                     .body(body)
                     .build();
             var client = WebClient.builder()
-                    .exchangeFunction(request -> reactor.core.publisher.Mono.just(upstreamResponse))
+                    .exchangeFunction(request -> Mono.just(upstreamResponse))
                     .build();
             var service = new LlmProxyService(
                     tracer,
@@ -438,10 +458,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
             authenticate(routing);
             when(resolver.resolveProxyCredential(any()))
                     .thenReturn(credential("openai-completions", LlmAuthMode.BEARER));
-            jakarta.servlet.http.HttpServletResponse response;
+            HttpServletResponse response;
             if (outcome.equals("CLIENT_DISCONNECTED")) {
-                response = mock(jakarta.servlet.http.HttpServletResponse.class);
-                var output = mock(jakarta.servlet.ServletOutputStream.class);
+                response = mock(HttpServletResponse.class);
+                var output = mock(ServletOutputStream.class);
                 when(response.getOutputStream()).thenReturn(output);
                 when(response.getStatus()).thenReturn(200);
                 doThrow(new IOException("private-client-detail")).when(output).write(any(byte[].class));
@@ -460,13 +480,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 assertThat(result).isNotNull();
                 assertThat(result.getStatusCode().value()).isEqualTo(status);
             }
-            verify(exporter).export(org.mockito.ArgumentMatchers.argThat(spans -> {
+            verify(exporter).export(argThat(spans -> {
                 assertThat(spans).hasSize(1);
                 var span = spans.iterator().next();
                 assertThat(span.getStatus().getStatusCode()).isEqualTo(expectedStatus);
-                var errorType =
-                        span.getAttributes().get(io.opentelemetry.api.common.AttributeKey.stringKey("error.type"));
-                if (expectedStatus == io.opentelemetry.api.trace.StatusCode.ERROR) {
+                var errorType = span.getAttributes().get(AttributeKey.stringKey("error.type"));
+                if (expectedStatus == StatusCode.ERROR) {
                     assertThat(errorType).isEqualTo(status == 502 ? "502" : outcome);
                 } else {
                     assertThat(errorType).isNull();
@@ -496,7 +515,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             upstream.start();
             streamingMeterRegistry = new SimpleMeterRegistry();
             streamingController = new LlmProxyService(
-                    io.micrometer.tracing.Tracer.NOOP,
+                    Tracer.NOOP,
                     WebClient.builder().build(),
                     resolver,
                     OBJECT_MAPPER,
@@ -747,9 +766,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
     @Test
     void shouldBuildCanonicalProtocolUrls() {
         assertThat(LlmProxyService.buildUpstreamUri("https://api.example.com/v1/", "openai-completions"))
-                .isEqualTo(java.net.URI.create("https://api.example.com/v1/chat/completions"));
+                .isEqualTo(URI.create("https://api.example.com/v1/chat/completions"));
         assertThat(LlmProxyService.buildUpstreamUri("https://api.example.com/v1", "openai-responses"))
-                .isEqualTo(java.net.URI.create("https://api.example.com/v1/responses"));
+                .isEqualTo(URI.create("https://api.example.com/v1/responses"));
     }
 
     private static byte[] jsonBody() {
@@ -772,10 +791,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
     }
 
     private static final ProxyRouting.BilledAttempt ATTEMPT = new ProxyRouting.BilledAttempt(
-            de.tum.cit.aet.hephaestus.agent.usage.LlmUsageSourceType.AGENT_JOB,
-            java.util.UUID.fromString("00000000-0000-0000-0000-0000000000aa"),
+            LlmUsageSourceType.AGENT_JOB,
+            UUID.fromString("00000000-0000-0000-0000-0000000000aa"),
             0,
-            java.math.BigDecimal.ZERO,
+            BigDecimal.ZERO,
             "worker-1");
 
     private static ProxyRouting routing(String protocol) {

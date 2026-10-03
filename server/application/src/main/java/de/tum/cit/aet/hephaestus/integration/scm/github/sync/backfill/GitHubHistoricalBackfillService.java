@@ -1226,7 +1226,7 @@ public class GitHubHistoricalBackfillService {
      * Runs a single backfill batch for one repository, applying the same cooldown/failure
      * bookkeeping and rate-limit gate the scheduled cycle ({@link #backfillSession}) applies
      * per-target. Exposed for the manual backfill sync-job runner ({@code
-     * GithubIntegrationSyncRunner}), which drives repository-by-repository progress and cooperative
+     * GitHubIntegrationSyncRunner}), which drives repository-by-repository progress and cooperative
      * cancellation itself instead of the scheduler's whole-cycle parallel fan-out.
      *
      * <p>Deliberately ignores {@link #isEnabled()} — a manually triggered backfill is the point even
@@ -1392,7 +1392,7 @@ public class GitHubHistoricalBackfillService {
         /**
          * Static so callers with the raw fields in hand but no {@link SyncTarget}/{@link
          * BackfillProgress} instance can share the same math — e.g. {@code
-         * GithubConnectionSyncStateProvider} computing a per-resource percent straight from a {@code
+         * GitHubConnectionSyncStateProvider} computing a per-resource percent straight from a {@code
          * RepositoryToMonitor} entity's mirrored fields, without an extra {@link #getProgress} lookup.
          */
         @Nullable
@@ -1408,8 +1408,6 @@ public class GitHubHistoricalBackfillService {
             return (int) Math.round((100.0 * done) / itemsTotal);
         }
     }
-
-    // Cooldown Management for 5xx Errors
 
     /**
      * Checks if a repository is currently in cooldown after experiencing errors.
@@ -1577,8 +1575,6 @@ public class GitHubHistoricalBackfillService {
         }
     }
 
-    // Transport Retry Logic
-
     /**
      * Creates a retry specification for transport-level errors during body streaming.
      * <p>
@@ -1625,8 +1621,6 @@ public class GitHubHistoricalBackfillService {
         }
         return rateLimitAdjusted;
     }
-
-    // Exception Types
 
     /**
      * Signals that backfill hit a transient error after Mono.defer().retryWhen() already exhausted

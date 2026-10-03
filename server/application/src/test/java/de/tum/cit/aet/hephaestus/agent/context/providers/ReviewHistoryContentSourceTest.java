@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -718,7 +719,7 @@ class ReviewHistoryContentSourceTest extends BaseUnitTest {
 
     /** An observation measured under the practice's current review rules; {@code retired} marks it superseded. */
     private static Observation boundObservation(boolean retired) {
-        PracticeRevision revision = org.mockito.Mockito.mock(PracticeRevision.class);
+        PracticeRevision revision = mock(PracticeRevision.class);
         lenient().when(revision.getReviewRuleFingerprint()).thenReturn("v5:rules");
         Practice practice = new Practice();
         practice.setCurrentRevision(revision);

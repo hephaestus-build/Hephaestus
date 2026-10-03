@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.spi;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Manages thread-local sync context for scope isolation and logging.
  */
@@ -14,5 +16,5 @@ public interface SyncContextProvider {
             Long scopeId,
             String slug,
             String displayName,
-            @org.jspecify.annotations.Nullable Long installationId) {}
+            @Nullable Long installationId) {}
 }

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.chat.exception.ClientDisconnectedE
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.wire.UIMessageChunk;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -15,6 +16,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -151,11 +153,8 @@ class MentorSseChannelTest extends BaseUnitTest {
 
     @Test
     void sendAfterCompleteWithDone_isSilentNoOp() {
-        // Setup: register a disconnect hook + bind lifecycle. A correctly-finished turn must
-        // NEVER fire the hook — that hook calls session.abort() against a sandbox we just
-        // cleanly closed. Regression guard: a stray post-complete send (heartbeat tick or a
-        // second agent_end) used to throw IllegalStateException → caught as "disconnect" →
-        // flagDisconnected → hook fired. The `closed` flag now short-circuits before send.
+        // A finished turn never fires the disconnect hook, which would abort a sandbox that closed cleanly,
+        // even when a stray send (a heartbeat tick or a second agent_end) arrives after completion.
         AtomicInteger fired = new AtomicInteger();
         channel.bindLifecycle();
         channel.onDisconnect(fired::incrementAndGet);
@@ -203,7 +202,7 @@ class MentorSseChannelTest extends BaseUnitTest {
         // every recorded comment frame must be intact.
         channel.startKeepAlive();
         // Drive lastSendNanos far in the past so EVERY tick attempts a write.
-        java.lang.reflect.Field lastSendField = MentorSseChannel.class.getDeclaredField("lastSendNanos");
+        Field lastSendField = MentorSseChannel.class.getDeclaredField("lastSendNanos");
         lastSendField.setAccessible(true);
         ((AtomicLong) lastSendField.get(channel)).set(0L);
 
@@ -234,9 +233,9 @@ class MentorSseChannelTest extends BaseUnitTest {
         private final List<String> dataFrames = new ArrayList<>();
         private boolean completed;
         private boolean failOnNextSend;
-        private @org.jspecify.annotations.Nullable Runnable completionCallback;
-        private @org.jspecify.annotations.Nullable Runnable timeoutCallback;
-        private @org.jspecify.annotations.Nullable Consumer<Throwable> errorCallback;
+        private @Nullable Runnable completionCallback;
+        private @Nullable Runnable timeoutCallback;
+        private @Nullable Consumer<Throwable> errorCallback;
 
         @Override
         public void send(SseEventBuilder builder) throws IOException {

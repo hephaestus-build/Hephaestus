@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URI;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -235,7 +236,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.SERVICE_UNAVAILABLE, "Rate limiting is temporarily unavailable.");
         problem.setTitle("Service Unavailable");
-        problem.setInstance(java.net.URI.create(request.getRequestURI()));
+        problem.setInstance(URI.create(request.getRequestURI()));
         response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.getWriter().write(objectMapper.writeValueAsString(problem));

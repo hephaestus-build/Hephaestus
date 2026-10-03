@@ -13,6 +13,7 @@ import jakarta.persistence.EntityManager;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.sql.Connection;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -280,13 +281,13 @@ class WorkspaceConnectionBackfillChangeIntegrationTest extends BaseIntegrationTe
             // have no login (e.g. GitLab-only, null-mode skip tests) — use a placeholder.
             stmt.setString(5, accountLogin != null ? accountLogin : "placeholder");
             if (installationId == null) {
-                stmt.setNull(6, java.sql.Types.BIGINT);
+                stmt.setNull(6, Types.BIGINT);
             } else {
                 stmt.setLong(6, installationId);
             }
             stmt.setString(7, encryptedPat);
             if (gitlabGroupId == null) {
-                stmt.setNull(8, java.sql.Types.BIGINT);
+                stmt.setNull(8, Types.BIGINT);
             } else {
                 stmt.setLong(8, gitlabGroupId);
             }

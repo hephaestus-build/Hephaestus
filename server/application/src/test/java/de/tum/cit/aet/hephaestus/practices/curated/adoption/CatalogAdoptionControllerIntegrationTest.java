@@ -26,7 +26,9 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -294,7 +296,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
         ensureAdminMembership(workspace);
         String slug = "issue-closed-with-unmet-outcome";
         PracticeDefinition shipped =
-                java.util.Objects.requireNonNull(curatedCatalog.practice(slug).shipped());
+                Objects.requireNonNull(curatedCatalog.practice(slug).shipped());
         PracticeAutomatedReviewPolicy policy = guidanceOnly
                 ? new PracticeAutomatedReviewPolicy(
                         shipped.automatedReviewPolicy().sourceContractVersion(),
@@ -319,8 +321,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 shipped.whatGoodLooksLike(),
                 shipped.groupSlug(),
                 shipped.deliveryBehavior());
-        var override = new CuratedPracticeOverride(slug, java.time.Instant.now());
-        override.write(customized, null, java.time.Instant.now());
+        var override = new CuratedPracticeOverride(slug, Instant.now());
+        override.write(customized, null, Instant.now());
         practiceOverrides.save(override);
 
         // A guidance-only customization is never reviewed and stays as written; any other takes the shipped reason.
@@ -354,7 +356,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
         ensureAdminMembership(workspace);
         String slug = "issue-closed-with-unmet-outcome";
         PracticeDefinition shipped =
-                java.util.Objects.requireNonNull(curatedCatalog.practice(slug).shipped());
+                Objects.requireNonNull(curatedCatalog.practice(slug).shipped());
         // Customized on the instance before the upgrade, still asking the model about the close.
         PracticeDefinition automated = new PracticeDefinition(
                 shipped.name(),
@@ -370,8 +372,8 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 shipped.whatGoodLooksLike(),
                 shipped.groupSlug(),
                 shipped.deliveryBehavior());
-        var override = new CuratedPracticeOverride(slug, java.time.Instant.now());
-        override.write(automated, null, java.time.Instant.now());
+        var override = new CuratedPracticeOverride(slug, Instant.now());
+        override.write(automated, null, Instant.now());
         practiceOverrides.save(override);
 
         webTestClient

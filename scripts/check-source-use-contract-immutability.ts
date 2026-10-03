@@ -45,16 +45,9 @@ if (base === git("rev-parse", "HEAD").trim()) {
 	process.exit(0);
 }
 
-const legacyRoot = "server/application/src/main/resources/contracts/artifact-source";
-const baselineRoot =
-	git("ls-tree", "-d", "--name-only", base, "--", root).trim() === root ? root : legacyRoot;
-const rootExists =
-	git("ls-tree", "-d", "--name-only", base, "--", baselineRoot).trim() === baselineRoot;
+const rootExists = git("ls-tree", "-d", "--name-only", base, "--", root).trim() === root;
 const publishedVersions = rootExists
-	? git("ls-tree", "-d", "--name-only", `${base}:${baselineRoot}`)
-			.trim()
-			.split("\n")
-			.filter(Boolean)
+	? git("ls-tree", "-d", "--name-only", `${base}:${root}`).trim().split("\n").filter(Boolean)
 	: [];
 
 if (publishedVersions.length === 0) {
@@ -65,16 +58,12 @@ if (publishedVersions.length === 0) {
 }
 
 for (const version of publishedVersions) {
-	const publishedFiles = git("ls-tree", "-r", "--name-only", `${base}:${baselineRoot}/${version}`)
+	const publishedFiles = git("ls-tree", "-r", "--name-only", `${base}:${root}/${version}`)
 		.trim()
 		.split("\n")
 		.filter(Boolean);
 	for (const file of publishedFiles) {
-		// #1732 retires capture manifests, not historical source-use approvals or policy definitions.
-		if (baselineRoot === legacyRoot && file === "artifact-source-manifest.schema.json") {
-			continue;
-		}
-		const expected = git("show", `${base}:${baselineRoot}/${version}/${file}`);
+		const expected = git("show", `${base}:${root}/${version}/${file}`);
 		try {
 			if (readFileSync(path.join(repoRoot, root, version, file), "utf8") !== expected) {
 				throw new Error("Changed bytes");

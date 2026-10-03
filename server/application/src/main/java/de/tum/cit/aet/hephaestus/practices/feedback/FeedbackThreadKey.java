@@ -9,7 +9,7 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Stable cross-run identity of a {@link Feedback} delivery <em>unit</em> (ADR 0021, F-16) — the join key
+ * Stable cross-run identity of a {@link Feedback} delivery <em>unit</em> (ADR 0021) — the join key
  * that lets a re-review SUPERSEDE the prior delivery and edit its comment in place instead of posting a
  * fresh one.
  *

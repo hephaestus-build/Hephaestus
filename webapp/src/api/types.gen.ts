@@ -609,7 +609,7 @@ export type CatalogAdoptionGroup = {
 };
 
 export type CatalogEntryStatus = {
-  changeKind: 'NONE' | 'WORDING' | 'PRESENTATION' | 'DETECTION';
+  changeKind: 'NONE' | 'WORDING' | 'PRESENTATION' | 'REVIEW';
   /**
    * Strong entity tag to send in If-Match when updating this entry
    */
@@ -1433,8 +1433,8 @@ export type CuratedCatalogSummary = {
   noLongerShipped: number;
   notOffered: number;
   total: number;
-  updatesChangingDetection: number;
   updatesChangingPresentation: number;
+  updatesChangingReview: number;
   updatesChangingWordingOnly: number;
   yours: number;
 };
@@ -2639,7 +2639,7 @@ export type LlmUsageByJobType = {
    */
   ownProviderTotalCostUsd: number;
   /**
-   * LLM API calls, as reported by the runtime. Detection jobs and mentor turns both include every assistant call in an internal tool loop.
+   * LLM API calls, as reported by the runtime. Practice reviews and mentor turns both include every assistant call in an internal tool loop.
    */
   totalCalls: number;
   /**
@@ -2790,7 +2790,6 @@ export type ObservationDetail = {
  */
 export type ObservationEvidence = {
   citations: Array<EvidenceCitation>;
-  detector?: string;
   /**
    * Why this practice had nothing to judge here; null unless the review recorded a reason
    */

@@ -71,7 +71,7 @@ public class SlackMentorIdentityResolver {
         return accountId.map(workspaceMembershipQuery::membershipsForAccount).orElseGet(List::of).stream()
                 .filter(view -> view.workspaceId() == workspaceId)
                 .map(AccountWorkspaceMembershipQuery.WorkspaceMembershipView::memberId)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .findFirst();
     }
 

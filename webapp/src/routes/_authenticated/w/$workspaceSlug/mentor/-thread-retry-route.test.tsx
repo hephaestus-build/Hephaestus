@@ -136,6 +136,13 @@ it("shows a streamed capacity refusal as Heph is busy and lets the developer ret
 			const responses = [
 				[
 					{ type: "start", messageId: answerId },
+					// `UIMessageChunk.DataMentorStatus.of("busy", null)` on the server.
+					{
+						type: "data-mentor-status",
+						id: "mentor-status",
+						data: { state: "busy", reason: null },
+						transient: true,
+					},
 					{ type: "error", errorText: "Heph is busy. Please try again." },
 				],
 				[

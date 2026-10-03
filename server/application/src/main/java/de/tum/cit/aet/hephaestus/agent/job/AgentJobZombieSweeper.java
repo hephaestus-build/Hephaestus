@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -22,7 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -40,7 +41,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @ConditionalOnServerRole
 @Component
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @WorkspaceAgnostic("Zombie sweeper operates across all workspaces")
 public class AgentJobZombieSweeper {
 

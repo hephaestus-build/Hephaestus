@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.DefinitionChange;
 import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceDefaults;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
@@ -32,12 +33,16 @@ import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import org.hamcrest.MatcherAssert;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -123,7 +128,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.summary.updatesChangingDetection")
+                .jsonPath("$.summary.updatesChangingReview")
                 .isEqualTo(0)
                 .jsonPath("$.summary.editedHere")
                 .isEqualTo(0)
@@ -146,17 +151,15 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
                 // Selected by kind rather than by position; the list is ordered by the registered domains.
                 .jsonPath(
                         "$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].recommendedEvidenceRequirements[0].sourceKind")
-                .value((java.util.List<String> value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, contains("slack.conversation.thread")))
+                .value((List<String> value) -> MatcherAssert.assertThat(value, contains("slack.conversation.thread")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'chat.conversation_thread')].allowedSources[0].displayName")
-                .value((java.util.List<String> value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, contains("Slack thread")));
+                .value((List<String> value) -> MatcherAssert.assertThat(value, contains("Slack thread")));
     }
 
     @Test
     void shouldKeepCatalogScopeOnWordingEditAndRequireIntentToRemoveIt() {
         CuratedPracticeDTO before = getPractice();
-        var base = new de.tum.cit.aet.hephaestus.practices.PracticeDefinition(
+        var base = new PracticeDefinition(
                 before.definition().name(),
                 before.definition().signals(),
                 before.definition().evidenceRequirements(),
@@ -173,7 +176,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         PracticePrecondition gate = new PracticePrecondition(
                 "the change has no Swift code",
                 List.of(PracticePreconditionClause.changedPathMatches(List.of("**/*.swift"))));
-        var scoped = new de.tum.cit.aet.hephaestus.practices.PracticeDefinition(
+        var scoped = new PracticeDefinition(
                 base.name(),
                 base.signals(),
                 base.evidenceRequirements(),
@@ -258,7 +261,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
 
         assertThat(edited.shipped()).isNotNull();
         assertThat(edited.shipped().criteria()).isNotEqualTo(edited.definition().criteria());
-        assertThat(edited.status().changeKind()).isEqualTo(CatalogChangeKind.DETECTION);
+        assertThat(edited.status().changeKind()).isEqualTo(CatalogChangeKind.REVIEW);
     }
 
     @Test
@@ -492,10 +495,9 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         assertThat(unchanged.customOrder()).isFalse();
         assertThat(overrideRows()).isZero();
 
-        List<String> reversed = before.groups().stream()
-                .map(CuratedGroupDTO::slug)
-                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
-        java.util.Collections.reverse(reversed);
+        List<String> reversed =
+                before.groups().stream().map(CuratedGroupDTO::slug).collect(Collectors.toCollection(ArrayList::new));
+        Collections.reverse(reversed);
 
         CuratedCatalogDTO after = webTestClient
                 .patch()
@@ -591,9 +593,9 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
         List<String> bucket = before.practices().stream()
                 .filter(practice -> Objects.equals(practice.groupSlug(), sourceGroup))
                 .map(practice -> practice.slug())
-                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+                .collect(Collectors.toCollection(ArrayList::new));
         assertThat(bucket).hasSizeGreaterThan(1);
-        java.util.Collections.reverse(bucket);
+        Collections.reverse(bucket);
 
         CuratedCatalogDTO reordered = webTestClient
                 .patch()
@@ -1160,7 +1162,7 @@ class CuratedCatalogAdminControllerIntegrationTest extends AbstractWorkspaceInte
     private static CuratedPracticeRequestDTO requestWithDefinition(
             CuratedPracticeDTO practice,
             String name,
-            de.tum.cit.aet.hephaestus.practices.PracticeDefinition definition,
+            PracticeDefinition definition,
             @Nullable Set<DefinitionChange> changes) {
         return new CuratedPracticeRequestDTO(
                 name,

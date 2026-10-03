@@ -13,6 +13,7 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import jakarta.persistence.Entity;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 /**
  * Pins the integration cutover so a future commit cannot silently re-introduce:
  * <ol>
- *   <li>The legacy {@code gitprovider} package (now {@code integration.scm}).</li>
+ *   <li>A {@code gitprovider} package beside {@code integration.scm}.</li>
  *   <li>Per-vendor webhook routes alongside the unified {@code /webhooks/{kind}}.</li>
  *   <li>Denormalised SCM columns on {@code Workspace} that the Connection registry owns.</li>
  * </ol>
@@ -129,7 +130,7 @@ class IntegrationCutoverPinsTest extends HephaestusArchitectureTest {
         // `.areDeclaredInClassesThat()` fluents on the ArchRule builder ORs them and would
         // sweep DTOs/context records that legitimately keep these field names on the wire.
         DescribedPredicate<JavaClass> entityInWorkspace = JavaClass.Predicates.resideInAPackage("..workspace..")
-                .and(CanBeAnnotated.Predicates.annotatedWith(jakarta.persistence.Entity.class));
+                .and(CanBeAnnotated.Predicates.annotatedWith(Entity.class));
         ArchRule rule = fields().that()
                 .areDeclaredInClassesThat(entityInWorkspace)
                 .should(notCarryLegacyName)

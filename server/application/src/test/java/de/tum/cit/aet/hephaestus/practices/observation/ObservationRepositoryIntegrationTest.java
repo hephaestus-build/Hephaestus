@@ -123,7 +123,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     void setUp() {
         databaseTestUtils.cleanDatabase();
 
-        workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("finding-test"));
+        workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("observation-test"));
 
         practice = new Practice();
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
@@ -463,7 +463,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     class InsertIfAbsentTests {
 
         @Test
-        void insertsNewFinding() {
+        void insertsNewObservation() {
             UUID id = UUID.randomUUID();
             int result = observationRepository.insertIfAbsent(
                     id,
@@ -582,8 +582,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     class WorkspacePurgeTests {
 
         @Test
-        @DisplayName("deleteAllByPracticeWorkspaceId removes findings for workspace practices")
-        void deletesFindings() {
+        @DisplayName("deleteAllByPracticeWorkspaceId removes observations for workspace practices")
+        void deletesObservations() {
             UUID id = UUID.randomUUID();
             observationRepository.insertIfAbsent(
                     id,
@@ -595,7 +595,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
-                    "Purge test finding",
+                    "Purge test observation",
                     "MET",
                     null,
                     null,
@@ -643,7 +643,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
-                    "WS-A finding",
+                    "WS-A observation",
                     "MET",
                     null,
                     null,
@@ -661,7 +661,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "scm.pull_request",
                     2L,
                     aboutUser.getId(),
-                    "WS-B finding",
+                    "WS-B observation",
                     "NOT_MET",
                     "MINOR",
                     null,
@@ -769,7 +769,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "scm.pull_request",
                     artifactId,
                     aboutUser.getId(),
-                    "finding",
+                    "observation",
                     outcome,
                     severity,
                     null,
@@ -1100,7 +1100,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             long artifactId = 42L;
             insert("workspace-a", agentJob.getId(), artifactId, "MET", Instant.parse("2026-03-20T10:00:00Z"));
 
-            Workspace otherWorkspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("finding-other"));
+            Workspace otherWorkspace =
+                    workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("observation-other"));
             Practice otherPractice = new Practice();
             otherPractice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
             otherPractice.setWorkspace(otherWorkspace);
@@ -1369,7 +1370,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("a campaign's finding on the developer's own work reaches the reflective surface")
+        @DisplayName("a campaign's observation on the developer's own work reaches the reflective surface")
         void backfilledObservationsAreVisibleToTheDeveloper() {
             insert("bf-only", campaignJob().getId(), 900L, Instant.parse("2026-03-20T10:00:00Z"), "BACKFILL");
 

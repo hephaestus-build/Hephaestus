@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.audit.spi;
 
+import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -21,6 +22,5 @@ public interface ConfigAuditQuery {
      *
      * @param workspaceId optional narrowing; null spans every workspace
      */
-    Page<ConfigAuditEntryViewDTO> listForAdmin(
-            @org.jspecify.annotations.Nullable Long workspaceId, ConfigAuditFilter filter, Pageable pageable);
+    Page<ConfigAuditEntryViewDTO> listForAdmin(@Nullable Long workspaceId, ConfigAuditFilter filter, Pageable pageable);
 }

@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -53,7 +54,7 @@ public class FeedbackDispatch {
     private @Nullable UUID feedbackId;
 
     public UUID approvedFeedbackId() {
-        return java.util.Objects.requireNonNull(feedbackId, "an approved dispatch always names its feedback");
+        return Objects.requireNonNull(feedbackId, "an approved dispatch always names its feedback");
     }
 
     @NotNull

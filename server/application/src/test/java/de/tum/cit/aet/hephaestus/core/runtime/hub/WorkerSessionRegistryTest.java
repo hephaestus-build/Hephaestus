@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.runtime.hub;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -13,7 +14,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.socket.WebSocketSession;
@@ -75,8 +75,8 @@ class WorkerSessionRegistryTest extends BaseUnitTest {
 
     private WebSocketSession newTransport() {
         WebSocketSession transport = mock(WebSocketSession.class);
-        Mockito.lenient().when(transport.isOpen()).thenReturn(true);
-        Mockito.lenient().when(transport.getAttributes()).thenReturn(new HashMap<>());
+        lenient().when(transport.isOpen()).thenReturn(true);
+        lenient().when(transport.getAttributes()).thenReturn(new HashMap<>());
         return transport;
     }
 

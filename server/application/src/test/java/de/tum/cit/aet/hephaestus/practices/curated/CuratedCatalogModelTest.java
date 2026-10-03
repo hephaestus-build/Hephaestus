@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalog.BundledEntry;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -47,7 +48,7 @@ class CuratedCatalogModelTest extends BaseUnitTest {
 
     @SafeVarargs
     private static BundledPracticeCatalog catalog(BundledEntry<GroupDefinition>... groups) {
-        List<BundledEntry<GroupDefinition>> entries = new java.util.ArrayList<>(groups.length);
+        List<BundledEntry<GroupDefinition>> entries = new ArrayList<>(groups.length);
         for (BundledEntry<GroupDefinition> group : groups) {
             entries.add(group);
         }

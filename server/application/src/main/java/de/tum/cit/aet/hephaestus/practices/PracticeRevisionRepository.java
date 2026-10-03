@@ -39,7 +39,7 @@ public interface PracticeRevisionRepository
             Long practiceId, String fingerprint);
 
     /**
-     * Returns the definition available at {@code asOf}, so an edit during detection cannot change the
+     * Returns the definition available at {@code asOf}, so an edit during a review cannot change the
      * recorded provenance.
      */
     Optional<PracticeRevision> findFirstByPracticeIdAndCreatedAtLessThanEqualOrderByRevisionNumberDesc(

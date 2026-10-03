@@ -173,7 +173,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 throw new InteractiveSandboxException("Previous sandbox for this session is still closing");
             }
             owned = true;
-            channel = attempt.session().enableInteractive(properties.maxFrameChars());
+            channel = attempt.session().enableInteractive(properties.maxFrameBytes());
             runnerEnv.put("SANDBOX_RUNTIME_URL", attempt.runtimeUrl(appServerIp));
             DockerOperations.ContainerSpec template = new DockerOperations.ContainerSpec(
                     spec.image(),
@@ -340,7 +340,7 @@ public class DockerInteractiveSandboxAdapter implements InteractiveSandboxServic
                 SUBSCRIBER_STALL_TIMEOUT,
                 properties.stdinWriteTimeoutMs(),
                 properties.sendQueueCapacity(),
-                properties.maxFrameChars(),
+                properties.maxFrameBytes(),
                 Duration.ofSeconds(properties.graceTimeoutSeconds()),
                 metrics,
                 lifecycleOps,

@@ -76,6 +76,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Integration tests for workspace purge (deletion) covering data cleanup completeness,
@@ -170,9 +171,7 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private PlatformTransactionManager transactionManager;
 
-    private static final tools.jackson.databind.ObjectMapper OM = new tools.jackson.databind.ObjectMapper();
-
-    // Helpers
+    private static final ObjectMapper OM = new ObjectMapper();
 
     /**
      * Creates a GitLab workspace with typical associated data for purge testing.
@@ -189,11 +188,8 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 "glpat-purge-test-token",
                 null));
 
-        // GitLab webhook ids + Slack credentials live on Connection rows now (the
-        // Connection registry); the legacy Workspace columns are scheduled for removal.
-        // The PAT was already encrypted onto the GitLab Connection by the workspace
-        // creation request above, which is what the credential-clearing assertion below
-        // exercises.
+        // The workspace creation request above encrypted the PAT onto the GitLab Connection, which is what
+        // the credential-clearing assertion below exercises.
 
         // Add a monitored repository (saved directly — purge reloads workspace with EAGER fetch)
         RepositoryToMonitor monitor = new RepositoryToMonitor();
@@ -265,8 +261,6 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     assertThat(connection.getCredentialsEncrypted()).isNotNull();
                 });
     }
-
-    // Data cleanup completeness
 
     @Nested
     class DataCleanup {
@@ -369,11 +363,9 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
             // Purge
             workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
 
-            // Verify status
             Workspace purged = workspaceRepository.findById(workspaceId).orElseThrow();
             assertThat(purged.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
 
-            // Verify all workspace-scoped data deleted
             assertThat(repositoryToMonitorRepository.findByWorkspaceId(workspaceId))
                     .isEmpty();
             assertThat(workspaceSlugHistoryRepository.findByWorkspaceOrderByChangedAtDesc(purged))
@@ -385,8 +377,6 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     .isFalse();
         }
     }
-
-    // Idempotency
 
     @Nested
     class Idempotency {
@@ -405,7 +395,6 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     "glpat-idempotent-token",
                     null));
 
-            // First purge
             Workspace first = workspaceLifecycleService.purgeWorkspace(workspace.getWorkspaceSlug());
             assertThat(first.getStatus()).isEqualTo(Workspace.WorkspaceStatus.PURGED);
 
@@ -467,8 +456,6 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
-    // Shared entity protection
-
     @Nested
     class SharedEntityProtection {
 
@@ -491,19 +478,13 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
-    // Credential and sensitive field clearing
-
     @Nested
     class SensitiveFieldClearing {
 
         /**
-         * Per-workspace credentials now live on the {@code Connection} aggregate (PAT,
-         * Slack token, GitLab webhook ids). On workspace purge,
+         * Per-workspace credentials live on the {@code Connection} aggregate. On workspace purge,
          * {@code ConnectionPurgeContributor} transitions every still-ACTIVE Connection to
-         * {@code UNINSTALLED}, which clears the encrypted credential blob inside the
-         * same transaction. We assert the post-purge state of those rows directly here
-         * — the legacy {@code Workspace.personal_access_token / slack_token / …} columns
-         * no longer carry runtime state.
+         * {@code UNINSTALLED}, which clears the encrypted credential blob inside the same transaction.
          */
         @Test
         void purgeClearsCredentialBlobsOnConnections() {
@@ -612,8 +593,6 @@ class WorkspacePurgeIntegrationTest extends AbstractWorkspaceIntegrationTest {
         Workspace unchanged = workspaceRepository.findById(workspace.getId()).orElseThrow();
         assertThat(unchanged.getStatus()).isEqualTo(Workspace.WorkspaceStatus.ACTIVE);
     }
-
-    // Slack purge + retention
 
     @Nested
     class SlackCleanup {

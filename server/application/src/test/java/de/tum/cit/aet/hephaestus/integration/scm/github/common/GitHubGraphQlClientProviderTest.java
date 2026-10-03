@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,7 +19,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.HttpGraphQlClient;
 
@@ -58,7 +58,7 @@ class GitHubGraphQlClientProviderTest extends BaseUnitTest {
         when(tokenProvider.isScopeActive(42L)).thenReturn(true);
         when(tokenProvider.getAuthMode(42L)).thenReturn(AuthMode.PERSONAL_ACCESS_TOKEN);
         when(tokenProvider.getPersonalAccessToken(42L)).thenReturn(Optional.of("github-token"));
-        HttpGraphQlClient guardedClient = Mockito.mock(HttpGraphQlClient.class);
+        HttpGraphQlClient guardedClient = mock(HttpGraphQlClient.class);
         when(clientFactory.withBearerToken(baseClient, "github-token")).thenReturn(guardedClient);
 
         HttpGraphQlClient result = provider.forScope(42L);
@@ -72,7 +72,7 @@ class GitHubGraphQlClientProviderTest extends BaseUnitTest {
 
         @Test
         void trackRateLimitDelegates() {
-            ClientGraphQlResponse response = Mockito.mock(ClientGraphQlResponse.class);
+            ClientGraphQlResponse response = mock(ClientGraphQlResponse.class);
             GHRateLimit rateLimit = new GHRateLimit();
             when(rateLimitTracker.updateFromResponse(eq(42L), eq(response))).thenReturn(rateLimit);
 

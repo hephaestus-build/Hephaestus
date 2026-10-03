@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,7 +58,7 @@ class DevLoginIntegrationTest extends RealAuthIntegrationTest {
                 .returnResult(Void.class)
                 .getResponseCookies()
                 .getFirst(cookieName);
-        org.junit.jupiter.api.Assertions.assertNotNull(responseCookie);
+        assertThat(responseCookie).isNotNull();
         String cookie = responseCookie.getValue();
 
         webTestClient
@@ -88,8 +90,7 @@ class DevLoginIntegrationTest extends RealAuthIntegrationTest {
                 .jsonPath("$.appRole")
                 .isEqualTo("APP_ADMIN")
                 .jsonPath("$.roles")
-                .value((java.util.List<String> value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, hasItem("app_admin")));
+                .value((List<String> value) -> MatcherAssert.assertThat(value, hasItem("app_admin")));
     }
 
     @Test
@@ -120,7 +121,7 @@ class DevLoginIntegrationTest extends RealAuthIntegrationTest {
                 .returnResult(Void.class)
                 .getResponseCookies()
                 .getFirst(cookieName);
-        org.junit.jupiter.api.Assertions.assertNotNull(fresh);
+        assertThat(fresh).isNotNull();
 
         assertThat(accountIdFrom(fresh.getValue())).isEqualTo(accountId);
         webTestClient
@@ -158,7 +159,7 @@ class DevLoginIntegrationTest extends RealAuthIntegrationTest {
                 .returnResult(Void.class)
                 .getResponseCookies()
                 .getFirst(cookieName);
-        org.junit.jupiter.api.Assertions.assertNotNull(cookie);
+        assertThat(cookie).isNotNull();
         return cookie.getValue();
     }
 
@@ -173,9 +174,9 @@ class DevLoginIntegrationTest extends RealAuthIntegrationTest {
                 .expectBody(Map.class)
                 .returnResult()
                 .getResponseBody();
-        org.junit.jupiter.api.Assertions.assertNotNull(body);
+        assertThat(body).isNotNull();
         Object id = body.get("id");
-        org.junit.jupiter.api.Assertions.assertNotNull(id);
+        assertThat(id).isNotNull();
         assertThat(id).isInstanceOf(Number.class);
         return ((Number) id).longValue();
     }

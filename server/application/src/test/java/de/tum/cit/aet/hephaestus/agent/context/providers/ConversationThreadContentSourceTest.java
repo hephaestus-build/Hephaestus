@@ -23,7 +23,6 @@ import org.mockito.Mock;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Unit tests for the conversation-thread content source. */
 class ConversationThreadContentSourceTest extends BaseUnitTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();

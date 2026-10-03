@@ -52,13 +52,6 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Unit tests for {@link GitHubHistoricalBackfillService}.
- *
- * <p>Tests the backfill orchestration logic including enable/disable gating,
- * per-repository skip conditions (incremental sync pending, cooldown, rate limits,
- * already complete), and progress tracking records.
- */
 class GitHubHistoricalBackfillServiceTest extends BaseUnitTest {
 
     @Mock

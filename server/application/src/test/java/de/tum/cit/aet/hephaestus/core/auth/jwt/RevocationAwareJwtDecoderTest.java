@@ -345,7 +345,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         // ACTIVE is never cached — both calls hit the DB, so a revoke is visible within DB lag, not TTL.
         verify(repo, times(2)).findActive(eq(jti), any());
         var cache = cm.getCache(RevocationAwareJwtDecoder.CACHE_NAME);
-        org.junit.jupiter.api.Assertions.assertNotNull(cache);
+        assertThat(cache).isNotNull();
         assertThat(cache.get(jti)).isNull();
     }
 

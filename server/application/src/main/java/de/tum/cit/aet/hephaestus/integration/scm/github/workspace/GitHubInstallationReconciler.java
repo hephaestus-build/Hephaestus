@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProvisioningHook;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GithubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -53,7 +53,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
     private static final Logger log = LoggerFactory.getLogger(GitHubInstallationReconciler.class);
 
     private final GitHubAppTokenService gitHubAppTokenService;
-    private final GithubLifecycleListener githubLifecycleListener;
+    private final GitHubLifecycleListener githubLifecycleListener;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceService workspaceService;
     private final WorkspaceRepositoryMonitorService workspaceRepositoryMonitorService;
@@ -62,7 +62,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
     public GitHubInstallationReconciler(
             GitHubAppTokenService gitHubAppTokenService,
-            GithubLifecycleListener githubLifecycleListener,
+            GitHubLifecycleListener githubLifecycleListener,
             WorkspaceRepository workspaceRepository,
             WorkspaceService workspaceService,
             WorkspaceRepositoryMonitorService workspaceRepositoryMonitorService,

@@ -14,13 +14,26 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.AttachedSandbox;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxIdentity;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.*;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameCodec;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.FrameEnvelope;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.MentorSessionCommand;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerHello;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerWelcome;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.*;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
@@ -149,9 +162,8 @@ public final class TestMentorWorker implements AutoCloseable {
                 }
                 case "prompt" -> {
                     if (credentials
-                                    .validate(java.util.Objects.requireNonNull(
-                                            java.util.Objects.requireNonNull(spec.networkPolicy())
-                                                    .llmProxyToken()))
+                                    .validate(Objects.requireNonNull(Objects.requireNonNull(spec.networkPolicy())
+                                            .llmProxyToken()))
                                     .orElseThrow()
                                     .attempt()
                             == null) throw new IllegalStateException("Prompt has no worker billing binding");

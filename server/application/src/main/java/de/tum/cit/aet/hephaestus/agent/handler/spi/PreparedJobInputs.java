@@ -4,6 +4,8 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
@@ -21,7 +23,7 @@ public record PreparedJobInputs(
     private static final Logger log = LoggerFactory.getLogger(PreparedJobInputs.class);
 
     public PreparedJobInputs {
-        filesOnDisk = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(filesOnDisk));
+        filesOnDisk = Collections.unmodifiableMap(new LinkedHashMap<>(filesOnDisk));
         directories = List.copyOf(directories);
         cleanups = List.copyOf(cleanups);
         if ((folderIndex == null) != (automatedReviewReadinessReport == null)) {

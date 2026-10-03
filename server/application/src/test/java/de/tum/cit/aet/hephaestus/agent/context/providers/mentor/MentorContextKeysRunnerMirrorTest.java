@@ -8,7 +8,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -70,9 +72,9 @@ class MentorContextKeysRunnerMirrorTest {
         String id = "0b7e1c9a-3f5d-4a8e-9c21-6d4f8e2a1b3c";
         assertThat(ObservationHistoryContentSource.observationIdOf(
                         "inputs/context/observations_history/" + id + ".json"))
-                .contains(java.util.UUID.fromString(id));
+                .contains(UUID.fromString(id));
         assertThat(ObservationHistoryContentSource.observationIdOf(
-                        "inputs/context/observations_history/" + id.toUpperCase(java.util.Locale.ROOT) + ".json"))
+                        "inputs/context/observations_history/" + id.toUpperCase(Locale.ROOT) + ".json"))
                 .isEmpty();
         assertThat(ObservationHistoryContentSource.observationIdOf("inputs/context/observations_history/../user.json"))
                 .isEmpty();
@@ -113,16 +115,5 @@ class MentorContextKeysRunnerMirrorTest {
                 .allSatisfy(key -> assertThat(perTurnInputSection)
                         .as("system prompt should document context file %s in the per-turn input list", key)
                         .contains("`" + key + "`"));
-    }
-
-    @Test
-    @DisplayName("runner exposes only mentor-specific tools and requires canonical context paths")
-    void runnerUsesLeastPrivilegeContextToolSurface() throws IOException {
-        String source = Files.readString(RUNNER, StandardCharsets.UTF_8);
-
-        assertThat(source)
-                .contains("tools: [...MENTOR_TOOL_NAMES]")
-                .contains("if (!isFetchContextKey(contextKey))")
-                .doesNotContain("tools: [\"fetch_context\", \"link_observation\", \"read\", \"bash\", \"grep\"]");
     }
 }

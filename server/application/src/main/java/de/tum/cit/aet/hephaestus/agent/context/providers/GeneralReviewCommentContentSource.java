@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommen
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -120,9 +121,8 @@ public class GeneralReviewCommentContentSource implements EvidenceSource {
 
     private ObjectNode collect(long pullRequestId) {
         try {
-            List<IssueComment> comments =
-                    new java.util.ArrayList<>(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
-                            pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
+            List<IssueComment> comments = new ArrayList<>(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(
+                    pullRequestId, WorkspaceScmProjection.HEPHAESTUS_MARKER, Pageable.unpaged()));
             comments.removeIf(comment -> {
                 String body = comment == null ? null : comment.getBody();
                 return body == null || body.isBlank() || body.contains(WorkspaceScmProjection.HEPHAESTUS_MARKER);

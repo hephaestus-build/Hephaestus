@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -201,10 +202,7 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
 
     private String tokenFor(Account account) {
         return jwtIssuer
-                .issue(
-                        java.util.Objects.requireNonNull(account.getId()),
-                        TokenConstraints.session(null, Instant.now()),
-                        null)
+                .issue(Objects.requireNonNull(account.getId()), TokenConstraints.session(null, Instant.now()), null)
                 .value();
     }
 

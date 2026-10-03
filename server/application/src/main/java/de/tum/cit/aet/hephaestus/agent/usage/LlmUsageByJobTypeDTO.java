@@ -26,7 +26,7 @@ public record LlmUsageByJobTypeDTO(
 
         @NonNull
         @Schema(
-                description = "LLM API calls, as reported by the runtime. Detection jobs and mentor turns both "
+                description = "LLM API calls, as reported by the runtime. Practice reviews and mentor turns both "
                         + "include every assistant call in an internal tool loop.")
         Long totalCalls,
 

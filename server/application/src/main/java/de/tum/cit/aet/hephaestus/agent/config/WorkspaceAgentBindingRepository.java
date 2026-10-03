@@ -2,9 +2,11 @@ package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -39,7 +41,7 @@ public interface WorkspaceAgentBindingRepository extends JpaRepository<Workspace
     Optional<WorkspaceAgentBinding> findByWorkspaceIdAndPurposeAndDataHandlingTier(
             Long workspaceId, AgentPurpose purpose, DataHandlingTier tier);
 
-    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT b FROM WorkspaceAgentBinding b WHERE b.workspace.id = :workspaceId AND b.id = :id")
     Optional<WorkspaceAgentBinding> findByWorkspaceIdAndIdForUpdate(Long workspaceId, Long id);
 

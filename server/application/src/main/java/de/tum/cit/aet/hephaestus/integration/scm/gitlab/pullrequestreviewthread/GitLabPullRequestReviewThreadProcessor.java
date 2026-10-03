@@ -91,71 +91,6 @@ public class GitLabPullRequestReviewThreadProcessor {
             @Nullable Instant createdAt,
             /** When GitLab says the discussion was resolved; the discussion states it, the sync copies it. */
             @Nullable Instant resolvedAt) {
-        /** Overload for callers that do not carry the resolution time. */
-        public ThreadData(
-                String discussionGlobalId,
-                boolean resolved,
-                @Nullable User resolvedBy,
-                @Nullable String filePath,
-                @Nullable Integer newLine,
-                @Nullable Integer oldLine,
-                PullRequestReviewComment.@Nullable Side side,
-                @Nullable String commitSha,
-                @Nullable String originalCommitSha,
-                @Nullable Boolean outdated,
-                @Nullable Instant createdAt) {
-            this(
-                    discussionGlobalId,
-                    resolved,
-                    resolvedBy,
-                    filePath,
-                    newLine,
-                    oldLine,
-                    side,
-                    commitSha,
-                    originalCommitSha,
-                    outdated,
-                    createdAt,
-                    null);
-        }
-
-        /** Backward-compatible overload for callers that don't carry outdated data. */
-        public ThreadData(
-                String discussionGlobalId,
-                boolean resolved,
-                @Nullable User resolvedBy,
-                @Nullable String filePath,
-                @Nullable Integer newLine,
-                @Nullable Integer oldLine,
-                PullRequestReviewComment.@Nullable Side side,
-                @Nullable String commitSha,
-                @Nullable String originalCommitSha,
-                @Nullable Instant createdAt) {
-            this(
-                    discussionGlobalId,
-                    resolved,
-                    resolvedBy,
-                    filePath,
-                    newLine,
-                    oldLine,
-                    side,
-                    commitSha,
-                    originalCommitSha,
-                    null,
-                    createdAt);
-        }
-
-        /** Backward-compatible overload for callers that don't carry side/SHA data. */
-        public ThreadData(
-                String discussionGlobalId,
-                boolean resolved,
-                @Nullable User resolvedBy,
-                @Nullable String filePath,
-                @Nullable Integer newLine,
-                @Nullable Instant createdAt) {
-            this(discussionGlobalId, resolved, resolvedBy, filePath, newLine, null, null, null, null, null, createdAt);
-        }
-
         /** The same discussion, resolved by {@code user}. */
         public ThreadData withResolvedBy(@Nullable User user) {
             return new ThreadData(
@@ -418,7 +353,7 @@ public class GitLabPullRequestReviewThreadProcessor {
 
         // Backfill position metadata populated in later syncs. We only fill when the
         // current row is null so that a manual correction upstream is never clobbered
-        // and legacy GitHub rows (which arrive via a different processor) are untouched.
+        // and GitHub rows (written by a different processor) are untouched.
         if (existing.getPath() == null && data.filePath() != null) {
             existing.setPath(data.filePath());
             changed = true;

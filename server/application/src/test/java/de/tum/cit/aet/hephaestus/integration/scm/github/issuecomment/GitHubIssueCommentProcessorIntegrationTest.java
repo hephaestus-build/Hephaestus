@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -34,14 +35,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Integration tests for GitHubIssueCommentProcessor.
- * <p>
- * Tests the processor independently from the webhook handler to verify:
- * - Comment upsert logic (create vs update)
- * - Domain event publishing (CommentCreated, CommentUpdated, CommentDeleted)
- * - Context handling and workspace association
- */
 class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
 
     private static final Long TEST_ORG_ID = 215361191L;

@@ -6,7 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
@@ -20,12 +20,12 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import tools.jackson.databind.JsonNode;
@@ -37,8 +37,8 @@ import tools.jackson.databind.node.ObjectNode;
  * The authenticated token chooses a catalog model; callers cannot choose an upstream host, path,
  * protocol, credential header, or model id.
  */
-@org.springframework.stereotype.Service
-@ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@Service
+@ConditionalOnWorkerRole
 class LlmProxyService {
 
     private static final Logger log = LoggerFactory.getLogger(LlmProxyService.class);

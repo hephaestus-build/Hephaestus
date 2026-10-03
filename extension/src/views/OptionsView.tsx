@@ -3,11 +3,11 @@ import { browser } from "@wxt-dev/browser";
 import { CircleAlertIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { HephaestusLogo } from "~/components/brand/HephaestusLogo";
+import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "~/components/common/Button";
 import { Card } from "~/components/common/Card";
 import { Notice } from "~/components/common/Notice";
-import { Skeleton } from "~/components/common/Skeleton";
 import { AccountSummary } from "~/components/options/AccountSummary";
 import { ConsentPrompt } from "~/components/options/ConsentPrompt";
 import { InstanceCard } from "~/components/options/InstanceCard";
@@ -392,7 +392,7 @@ export function OptionsView() {
 		<div className="min-h-screen bg-muted/40 text-foreground">
 			<div className="mx-auto flex max-w-2xl flex-col gap-6 px-5 py-8 sm:py-12">
 				<header className="flex items-center justify-between gap-4">
-					<HephaestusLogo />
+					<HephaestusLogo markClassName="size-7" wordmarkClassName="text-lg" />
 					<h1 className="sr-only">Hephaestus for Chrome settings</h1>
 				</header>
 				<main className="flex flex-col gap-5" key={generation}>

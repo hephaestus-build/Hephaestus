@@ -17,7 +17,7 @@ describe("practice review search", () => {
 			from: "not-a-date",
 			page: -4,
 		});
-		const findings = observationsSearchSchema.parse({
+		const observations = observationsSearchSchema.parse({
 			outcome: ["MET", "MET", "unknown"],
 			severity: "MAJOR",
 			from: "2026-08-10",
@@ -25,14 +25,13 @@ describe("practice review search", () => {
 		});
 
 		expect(feedback).toMatchObject({ deliveryState: ["DELIVERED"] });
-		// IN_APP survives now that the in-app lane has a producer and the toolbar offers the place:
-		// a filter the toolbar cannot show would be applied with nothing on screen saying so and no way
-		// to clear it short of a full reset, which is why `made-up` still goes.
+		// A filter the toolbar cannot show would be applied with nothing on screen saying so and no way
+		// to clear it short of a full reset, so `made-up` goes while every place the toolbar offers stays.
 		expect(feedback.channel).toStrictEqual(["IN_APP", "IN_CHAT"]);
 		expect(feedback.from).toBeUndefined();
 		expect(feedback.page).toBeUndefined();
-		expect(findings).toMatchObject({ outcome: ["MET"], severity: ["MAJOR"] });
-		expect(findings.to).toBeUndefined();
+		expect(observations).toMatchObject({ outcome: ["MET"], severity: ["MAJOR"] });
+		expect(observations.to).toBeUndefined();
 		expect(feedbackSearchSchema.parse({ to: "2026-07-03" }).to).toBeUndefined();
 	});
 

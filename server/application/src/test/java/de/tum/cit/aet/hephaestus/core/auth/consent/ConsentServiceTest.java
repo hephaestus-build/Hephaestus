@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,7 +62,7 @@ class ConsentServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(decision));
     }
 
-    private java.util.List<ConsentDecision> saved(int times) {
+    private List<ConsentDecision> saved(int times) {
         ArgumentCaptor<ConsentDecision> decisions = ArgumentCaptor.forClass(ConsentDecision.class);
         verify(decisionRepository, times(times)).save(decisions.capture());
         return decisions.getAllValues();

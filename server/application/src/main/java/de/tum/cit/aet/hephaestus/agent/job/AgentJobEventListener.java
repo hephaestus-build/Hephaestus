@@ -5,6 +5,7 @@ import static de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent.T
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
@@ -29,7 +30,7 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -52,7 +53,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 // Ledger rows this listener writes are only ever drained by the server-role PendingSignalReaper;
 // recording one anywhere else would queue work nothing consumes.
 @ConditionalOnServerRole
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class AgentJobEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(AgentJobEventListener.class);
@@ -178,8 +179,6 @@ public class AgentJobEventListener {
         dispatch(event.pullRequest(), event.context(), TriggerEventNames.PULL_REQUEST_CLOSED, null);
     }
 
-    // PR event handling
-
     private void handlePullRequestEvent(
             ScmEventPayload.PullRequestData prData, EventContext context, String triggerEventName) {
         if (isClosedOrMerged(prData.state(), prData.isMerged())) {
@@ -262,8 +261,8 @@ public class AgentJobEventListener {
                             skip.reason());
                     signalRecorder.markRefused(key, skip.resolvedSignalReason());
                 }
-                case GateDecision.Detect detect -> {
-                    if (MergeActorAdmission.awaitsMerger(manifests, pr, key.signalName(), detect.matchedPractices())) {
+                case GateDecision.Run run -> {
+                    if (MergeActorAdmission.awaitsMerger(manifests, pr, key.signalName(), run.matchedPractices())) {
                         log.debug(
                                 "Merge review waits for its merger: prNumber={}, repoName={}",
                                 prData.number(),
@@ -273,7 +272,7 @@ public class AgentJobEventListener {
                     }
                     // The job carries the merge request as stored now, not as the event saw it: a merger or merge
                     // commit recorded since the event is what the review judges.
-                    submitJob(ScmEventPayload.PullRequestData.from(pr), pr, detect, key, reviewData);
+                    submitJob(ScmEventPayload.PullRequestData.from(pr), pr, run, key, reviewData);
                 }
             }
         } catch (Exception e) {
@@ -285,8 +284,6 @@ public class AgentJobEventListener {
                     e);
         }
     }
-
-    // Review event handling
 
     private void handleReviewEvent(ScmEventPayload.ReviewData reviewData, EventContext context) {
         try {
@@ -320,8 +317,6 @@ public class AgentJobEventListener {
                     e);
         }
     }
-
-    // Shared helpers
 
     /**
      * The ledger identity of this event, or null when there is nothing stable to key it on yet.
@@ -386,7 +381,7 @@ public class AgentJobEventListener {
     private void submitJob(
             ScmEventPayload.PullRequestData prData,
             PullRequest pr,
-            GateDecision.Detect detect,
+            GateDecision.Run run,
             SignalKey signalKey,
             ScmEventPayload.@Nullable ReviewData reviewData) {
         String headRefOid = pr.getHeadRefOid();
@@ -405,14 +400,14 @@ public class AgentJobEventListener {
 
         try {
             agentJobService
-                    .submit(detect.workspace().getId(), AgentJobType.PULL_REQUEST_REVIEW, request, signalKey, detect)
+                    .submit(run.workspace().getId(), AgentJobType.PULL_REQUEST_REVIEW, request, signalKey, run)
                     .ifPresent(job -> log.info(
                             "Agent job submitted: jobId={}, prNumber={}, repoName={}, signal={}, matchedPractices={}",
                             job.getId(),
                             prData.number(),
                             repositoryNameOf(prData),
                             signalKey.signalName(),
-                            detect.matchedPractices().size()));
+                            run.matchedPractices().size()));
         } catch (Exception e) {
             log.error(
                     "Failed to submit agent job: prNumber={}, repoName={}, signal={}",

@@ -51,7 +51,7 @@ class LoginProviderAdminControllerCallbackTest extends BaseUnitTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
 
         var body = controller.list().getBody();
-        org.junit.jupiter.api.Assertions.assertNotNull(body);
+        assertThat(body).isNotNull();
         return body.getFirst().redirectUri();
     }
 

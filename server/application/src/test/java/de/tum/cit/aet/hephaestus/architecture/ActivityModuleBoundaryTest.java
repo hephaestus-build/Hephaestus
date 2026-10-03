@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.*;
-import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.*;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.Nested;
@@ -20,8 +20,8 @@ import org.junit.jupiter.api.Test;
  * <ul>
  *   <li><b>practices.model</b> - Practice and Observation entities</li>
  *   <li><b>practices.spi</b> - Service provider interfaces (UserRoleChecker)</li>
- *   <li><b>practices.observation</b> - Contributor findings, detection events, and finding API</li>
- *   <li><b>practices.review</b> - Detection and delivery gate decisions</li>
+ *   <li><b>practices.observation</b> - Observations and their API</li>
+ *   <li><b>practices.review</b> - Review and delivery gate decisions</li>
  * </ul>
  *
  * <p>These tests enforce proper separation of concerns within the activity module and practices module.
@@ -29,8 +29,6 @@ import org.junit.jupiter.api.Test;
  * @see ArchitectureTestConstants
  */
 class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
-
-    // ACTIVITY MODULE ISOLATION
 
     @Nested
     class ActivityModuleIsolationTests {
@@ -84,8 +82,6 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
         }
     }
 
-    // PRACTICES MODULE ISOLATION
-
     @Nested
     class PracticesModuleTests {
 
@@ -101,8 +97,6 @@ class ActivityModuleBoundaryTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // PRACTICES MODULE CONTROLLER ISOLATION
 
     @Nested
     class PracticesControllerTests {

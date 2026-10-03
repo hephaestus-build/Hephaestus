@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobHandle;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 
@@ -28,7 +29,7 @@ class OutlineIntegrationSyncRunnerTest extends BaseUnitTest {
 
     private OutlineIntegrationSyncRunner runner;
 
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void setUp() {
         runner = new OutlineIntegrationSyncRunner(syncScheduler);
     }

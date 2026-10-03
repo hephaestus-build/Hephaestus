@@ -1,5 +1,9 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -16,9 +20,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -96,14 +98,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                         "slack.T1.U1.message_im",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"im\",\"channel\":\"D1\",\"user\":\"U1\",\"bot_id\":\"B1\",\"text\":\"help\",\"ts\":\"100.1\"}}"));
 
-        verify(mentorService, never())
-                .handleDm(
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any());
+        verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -113,14 +108,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                         "slack.T1.C1.message_im",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\",\"user\":\"U1\",\"text\":\"hello\",\"ts\":\"100.1\"}}"));
 
-        verify(mentorService, never())
-                .handleDm(
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any(),
-                        ArgumentMatchers.any());
+        verify(mentorService, never()).handleDm(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -140,8 +128,8 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                         "slack.T1.U1.app_home_opened",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"app_home_opened\",\"tab\":\"messages\",\"user\":\"U1\",\"channel\":\"D1\"}}"));
 
-        verify(assistantEventHandler).onMessagesOpened(ArgumentMatchers.eq("T1"), ArgumentMatchers.any(JsonNode.class));
-        verify(appHomeService, never()).onHomeOpened(ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+        verify(assistantEventHandler).onMessagesOpened(eq("T1"), any(JsonNode.class));
+        verify(appHomeService, never()).onHomeOpened(anyString(), anyString());
         verify(mentorService).prepare("T1", "U1");
     }
 
@@ -152,9 +140,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                         "slack.T1.C1.member_joined_channel",
                         "{\"team_id\":\"T1\",\"event\":{\"type\":\"member_joined_channel\",\"channel\":\"C1\",\"user\":\"U1\"}}"));
 
-        verify(joinNoticeHandler)
-                .onMemberJoined(
-                        ArgumentMatchers.eq("T1"), ArgumentMatchers.any(JsonNode.class), ArgumentMatchers.eq(true));
+        verify(joinNoticeHandler).onMemberJoined(eq("T1"), any(JsonNode.class), eq(true));
     }
 
     @Test
@@ -166,9 +152,7 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
 
         // The durable bot-self-join registration must survive a stale redelivery; only the
         // time-sensitive ephemeral notice is suppressed (noticeAllowed = false).
-        verify(joinNoticeHandler)
-                .onMemberJoined(
-                        ArgumentMatchers.eq("T1"), ArgumentMatchers.any(JsonNode.class), ArgumentMatchers.eq(false));
+        verify(joinNoticeHandler).onMemberJoined(eq("T1"), any(JsonNode.class), eq(false));
     }
 
     @Test
@@ -194,12 +178,11 @@ class SlackEventMessageHandlerTest extends BaseUnitTest {
                         "slack.T1.workspace.tokens_revoked",
                         "{\"team_id\":\"T1\",\"event_id\":\"Ev3\",\"event\":{\"type\":\"tokens_revoked\",\"tokens\":{\"oauth\":[\"U1\"],\"bot\":[]}}}"));
 
-        verify(uninstallService, never())
-                .onUninstall(ArgumentMatchers.anyString(), ArgumentMatchers.anyString(), ArgumentMatchers.anyString());
+        verify(uninstallService, never()).onUninstall(anyString(), anyString(), anyString());
     }
 
     private static Message nats(String ignoredSubject, String body) {
-        Message message = Mockito.mock(Message.class);
+        Message message = mock(Message.class);
         when(message.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
         return message;
     }

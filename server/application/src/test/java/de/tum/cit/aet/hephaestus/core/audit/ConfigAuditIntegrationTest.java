@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLink;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
+import de.tum.cit.aet.hephaestus.core.tenancy.TenancyViolationException;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
@@ -26,15 +27,26 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import jakarta.persistence.EntityManager;
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
+import org.hamcrest.MatcherAssert;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.util.UriBuilder;
 
 /**
  * End-to-end coverage of the config audit trail: that producers actually write rows, that the rows
@@ -58,7 +70,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private EntityManager entityManager;
 
     @Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     @WithAdminUser
@@ -151,7 +163,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Test
     @WithAdminUser
-    void practiceDefinitionLifecycleIsRecordedWithoutPersistingDetectionContent() {
+    void practiceDefinitionLifecycleIsRecordedWithoutPersistingCriteria() {
         Workspace workspace = setupWorkspace("audit-practice");
 
         PracticeDTO practice = webTestClient
@@ -207,10 +219,10 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .expectBody(Void.class);
 
         List<ConfigAuditEvent> rows = configAuditEventRepository.findAll().stream()
-                .filter(row -> java.util.Objects.equals(row.getWorkspaceId(), workspace.getId()))
+                .filter(row -> Objects.equals(row.getWorkspaceId(), workspace.getId()))
                 .filter(row -> row.getEntityType() == ConfigAuditEntityType.PRACTICE_DEFINITION)
                 .filter(row -> row.getEntityId().equals(String.valueOf(practice.id())))
-                .sorted(java.util.Comparator.comparing(ConfigAuditEvent::getId))
+                .sorted(Comparator.comparing(ConfigAuditEvent::getId))
                 .toList();
 
         assertThat(rows)
@@ -250,7 +262,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         patchPracticeReview(workspace, Map.of("reset", List.of("COOLDOWN_MINUTES")));
 
         List<ConfigAuditEvent> rows = configAuditEventRepository.findAll().stream()
-                .sorted(java.util.Comparator.comparing(ConfigAuditEvent::getId))
+                .sorted(Comparator.comparing(ConfigAuditEvent::getId))
                 .toList();
         assertThat(rows).hasSize(2);
         assertThat(rows.get(1).changedKeyList()).containsExactly("cooldownMinutes");
@@ -382,25 +394,23 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
      * predicate transposed to match NOTHING passes every zero case on its own — and a failure has to
      * name which predicate broke, which one fat test cannot.
      */
-    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> filterCases() {
+    static Stream<Arguments> filterCases() {
         String future = Instant.now().plusSeconds(60).toString();
         String past = Instant.now().minusSeconds(60).toString();
-        return java.util.stream.Stream.of(
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "entityType matches", "entityType", "WORKSPACE_LLM_CONNECTION", 1),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "entityType matches the other kind", "entityType", "PRACTICE_REVIEW_SETTINGS", 1),
-                org.junit.jupiter.params.provider.Arguments.of("action matches", "action", "CREATED", 1),
-                org.junit.jupiter.params.provider.Arguments.of("action excludes", "action", "DELETED", 0),
-                org.junit.jupiter.params.provider.Arguments.of("actorId excludes", "actorId", "999999", 0),
-                org.junit.jupiter.params.provider.Arguments.of("from excludes the past", "from", future, 0),
-                org.junit.jupiter.params.provider.Arguments.of("from includes the past", "from", past, 2),
-                org.junit.jupiter.params.provider.Arguments.of("to excludes the present", "to", past, 0),
-                org.junit.jupiter.params.provider.Arguments.of("to includes the present", "to", future, 2));
+        return Stream.of(
+                Arguments.of("entityType matches", "entityType", "WORKSPACE_LLM_CONNECTION", 1),
+                Arguments.of("entityType matches the other kind", "entityType", "PRACTICE_REVIEW_SETTINGS", 1),
+                Arguments.of("action matches", "action", "CREATED", 1),
+                Arguments.of("action excludes", "action", "DELETED", 0),
+                Arguments.of("actorId excludes", "actorId", "999999", 0),
+                Arguments.of("from excludes the past", "from", future, 0),
+                Arguments.of("from includes the past", "from", past, 2),
+                Arguments.of("to excludes the present", "to", past, 0),
+                Arguments.of("to includes the present", "to", future, 2));
     }
 
-    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
-    @org.junit.jupiter.params.provider.MethodSource("filterCases")
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("filterCases")
     @WithAdminUser
     void eachFilterPredicateNarrowsIndependently(String name, String param, String value, int expected) {
         Workspace workspace = setupWorkspace("audit-matrix");
@@ -458,7 +468,7 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         patchPracticeReview(workspace, Map.of("cooldownMinutes", 46));
         jdbcTemplate.update(
                 "UPDATE config_audit_event SET occurred_at = ? WHERE workspace_id = ?",
-                java.sql.Timestamp.from(java.time.Instant.parse("2026-07-01T00:00:00Z")),
+                Timestamp.from(Instant.parse("2026-07-01T00:00:00Z")),
                 workspace.getId());
 
         webTestClient
@@ -470,11 +480,9 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isOk()
                 .expectBody()
                 .jsonPath("$.content[0].newValue")
-                .value((String value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, org.hamcrest.Matchers.containsString("46")))
+                .value((String value) -> MatcherAssert.assertThat(value, Matchers.containsString("46")))
                 .jsonPath("$.content[1].newValue")
-                .value((String value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, org.hamcrest.Matchers.containsString("45")));
+                .value((String value) -> MatcherAssert.assertThat(value, Matchers.containsString("45")));
     }
 
     @Test
@@ -504,14 +512,11 @@ class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThatThrownBy(() -> entityManager
                         .createNativeQuery("SELECT * FROM config_audit_event", ConfigAuditEvent.class)
                         .getResultList())
-                .isInstanceOf(de.tum.cit.aet.hephaestus.core.tenancy.TenancyViolationException.class)
+                .isInstanceOf(TenancyViolationException.class)
                 .hasMessageContaining("config_audit_event");
     }
 
-    private void assertFilterYields(
-            Workspace workspace,
-            java.util.function.UnaryOperator<org.springframework.web.util.UriBuilder> query,
-            int expected) {
+    private void assertFilterYields(Workspace workspace, UnaryOperator<UriBuilder> query, int expected) {
         webTestClient
                 .get()
                 .uri(uri ->

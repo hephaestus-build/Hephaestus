@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
 import de.tum.cit.aet.hephaestus.core.security.UserViewContextHolder;
 import de.tum.cit.aet.hephaestus.observability.ReplicaIdentityFilter;
 import de.tum.cit.aet.hephaestus.observability.RequestCorrelationFilter;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -55,6 +57,7 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
@@ -223,7 +226,7 @@ public class SecurityConfig {
             ObjectProvider<StaleAuthCookieFilter> staleAuthCookieFilterProvider,
             Converter<Jwt, AbstractAuthenticationToken> authenticationConverter,
             ObjectProvider<AuthRateLimitFilter> authRateLimitFilterProvider,
-            tools.jackson.databind.ObjectMapper objectMapper)
+            ObjectMapper objectMapper)
             throws Exception {
         http.sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()));
@@ -423,7 +426,7 @@ public class SecurityConfig {
      * Unsafe requests require CSRF unless they use only bearer auth, only an installed-client session
      * secret, or an enabled dev endpoint.
      */
-    private boolean requiresCsrf(jakarta.servlet.http.HttpServletRequest request) {
+    private boolean requiresCsrf(HttpServletRequest request) {
         if (EMAIL_UNSUBSCRIBE_MATCHER.matches(request) || SAFE_METHODS.contains(request.getMethod())) {
             return false;
         }
@@ -444,12 +447,12 @@ public class SecurityConfig {
         return true;
     }
 
-    private boolean hasAuthCookie(jakarta.servlet.http.HttpServletRequest request) {
-        jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+    private boolean hasAuthCookie(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
         if (cookies == null) {
             return false;
         }
-        for (jakarta.servlet.http.Cookie cookie : cookies) {
+        for (Cookie cookie : cookies) {
             if (authCookieName.equals(cookie.getName())
                     && cookie.getValue() != null
                     && !cookie.getValue().isBlank()) {

@@ -69,7 +69,7 @@ public class IntegrationPoisonHandler {
      * unconditional {@link Message#nak()} and then to silence. The message will be
      * redelivered after the JetStream ack-wait if all NAK strategies fail.
      */
-    public void nakWithBackoff(@org.jspecify.annotations.Nullable Message msg) {
+    public void nakWithBackoff(@Nullable Message msg) {
         if (msg == null) {
             return;
         }

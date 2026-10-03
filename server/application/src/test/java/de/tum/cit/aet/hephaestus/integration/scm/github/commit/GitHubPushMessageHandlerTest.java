@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -26,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NatsMessageDeseri
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.repository.dto.GitHubRepositoryRefDTO;
@@ -584,7 +586,7 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
 
             handler.handleEvent(event);
 
-            var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey(1, 100);
+            var key = new RepositoryKey(1, 100);
             verify(gitRepositoryManager).ensureRepository(key, "https://github.com/owner/repo.git", "test-token");
             verify(gitRepositoryManager).forEachCommitInRange(eq(key), eq("abc123"), eq("def456"), any(), any());
         }
@@ -600,12 +602,9 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             mockActiveScopeForRepo("owner/repo");
             when(gitRepositoryManager.isEnabled()).thenReturn(true);
             when(tokenService.isConfigured()).thenReturn(false);
-            org.mockito.Mockito.doThrow(new RuntimeException("Git clone failed"))
+            doThrow(new RuntimeException("Git clone failed"))
                     .when(gitRepositoryManager)
-                    .ensureRepository(
-                            any(de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey.class),
-                            any(),
-                            any());
+                    .ensureRepository(any(RepositoryKey.class), any(), any());
 
             handler.handleEvent(event);
 
@@ -775,18 +774,9 @@ class GitHubPushMessageHandlerTest extends BaseUnitTest {
             handler.handleEvent(event);
 
             // Should NOT use local git
+            verify(gitRepositoryManager, never()).ensureRepository(any(RepositoryKey.class), anyString(), any());
             verify(gitRepositoryManager, never())
-                    .ensureRepository(
-                            any(de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey.class),
-                            anyString(),
-                            any());
-            verify(gitRepositoryManager, never())
-                    .forEachCommitInRange(
-                            any(de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey.class),
-                            any(),
-                            any(),
-                            any(),
-                            any());
+                    .forEachCommitInRange(any(RepositoryKey.class), any(), any(), any(), any());
 
             // Should process via webhook instead (non-fallback: additions=0, not null)
             verify(commitRepository)

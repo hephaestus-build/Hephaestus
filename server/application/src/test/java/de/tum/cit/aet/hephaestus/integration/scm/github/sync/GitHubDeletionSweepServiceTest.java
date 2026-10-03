@@ -5,6 +5,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,9 +16,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.SyncExecutionHandle;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier.ClassificationResult;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSyncCoordinator;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
@@ -29,6 +34,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
@@ -44,9 +50,7 @@ import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
 /**
- * Unit tests for {@link GitHubDeletionSweepService}.
- *
- * <p>The centre of gravity here is {@link FailsClosed}. A phantom row is a visible, self-correcting
+ * The centre of gravity here is {@link FailsClosed}. A phantom row is a visible, self-correcting
  * annoyance; a wrongly-deleted issue is invisible and takes its feedback with it. So the tests that
  * matter most are the ones asserting that the sweep deletes <em>nothing</em> when it cannot prove it
  * saw the whole upstream set — one per way a listing can come up short.
@@ -215,10 +219,9 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
 
             var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
 
-            ArgumentCaptor<java.util.Collection<Integer>> captor = ArgumentCaptor.captor();
+            ArgumentCaptor<Collection<Integer>> captor = ArgumentCaptor.captor();
             verify(issueRepository)
-                    .tombstoneIssuesByRepositoryIdAndNumbers(
-                            org.mockito.ArgumentMatchers.eq(REPO_ID), captor.capture(), any(Instant.class));
+                    .tombstoneIssuesByRepositoryIdAndNumbers(eq(REPO_ID), captor.capture(), any(Instant.class));
             assertThat(captor.getValue()).containsExactly(2);
             assertThat(outcome.issuesTombstoned()).isEqualTo(1);
             assertThat(outcome.skipped()).isFalse();
@@ -236,10 +239,9 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
 
             var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
 
-            ArgumentCaptor<java.util.Collection<Integer>> captor = ArgumentCaptor.captor();
+            ArgumentCaptor<Collection<Integer>> captor = ArgumentCaptor.captor();
             verify(issueRepository)
-                    .tombstonePullRequestsByRepositoryIdAndNumbers(
-                            org.mockito.ArgumentMatchers.eq(REPO_ID), captor.capture(), any(Instant.class));
+                    .tombstonePullRequestsByRepositoryIdAndNumbers(eq(REPO_ID), captor.capture(), any(Instant.class));
             assertThat(captor.getValue()).containsExactly(11);
             assertThat(outcome.pullRequestsTombstoned()).isEqualTo(1);
         }
@@ -327,10 +329,9 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
 
             var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
 
-            ArgumentCaptor<java.util.Collection<Integer>> captor = ArgumentCaptor.captor();
+            ArgumentCaptor<Collection<Integer>> captor = ArgumentCaptor.captor();
             verify(issueRepository)
-                    .tombstoneIssuesByRepositoryIdAndNumbers(
-                            ArgumentMatchers.eq(REPO_ID), captor.capture(), any(Instant.class));
+                    .tombstoneIssuesByRepositoryIdAndNumbers(eq(REPO_ID), captor.capture(), any(Instant.class));
             // #2 only — never the concurrently-created #4.
             assertThat(captor.getValue()).containsExactly(2);
             assertThat(outcome.issuesTombstoned()).isEqualTo(1);
@@ -399,8 +400,7 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
             scriptedResponses.add(Mono.just(pullRequestPage(List.of(), false, 0)));
             stubLocalNumbers(List.of(1, 2, 3), List.of());
             when(graphQlSyncHelper.classifyGraphQlErrors(any()))
-                    .thenReturn(de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubExceptionClassifier
-                            .ClassificationResult.rateLimited(Duration.ofMinutes(30), "rate limited"));
+                    .thenReturn(ClassificationResult.rateLimited(Duration.ofMinutes(30), "rate limited"));
             when(graphQlSyncHelper.handleGraphQlClassification(any())).thenReturn(false);
 
             var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
@@ -553,10 +553,9 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
 
             var outcome = service.sweepRepository(SCOPE_ID, repository(), handle);
 
-            ArgumentCaptor<java.util.Collection<Integer>> captor = ArgumentCaptor.captor();
+            ArgumentCaptor<Collection<Integer>> captor = ArgumentCaptor.captor();
             verify(issueRepository)
-                    .tombstoneIssuesByRepositoryIdAndNumbers(
-                            ArgumentMatchers.eq(REPO_ID), captor.capture(), any(Instant.class));
+                    .tombstoneIssuesByRepositoryIdAndNumbers(eq(REPO_ID), captor.capture(), any(Instant.class));
             assertThat(captor.getValue()).containsExactly(2);
             assertThat(outcome.issuesTombstoned()).isEqualTo(1);
             assertThat(outcome.skipped()).isFalse();
@@ -625,12 +624,8 @@ class GitHubDeletionSweepServiceTest extends BaseUnitTest {
 
             service.sweepScope(SCOPE_ID, handle);
 
-            verify(handle, org.mockito.Mockito.atLeastOnce())
-                    .progress(
-                            any(),
-                            any(),
-                            ArgumentMatchers.argThat(progress -> progress.phase()
-                                    == de.tum.cit.aet.hephaestus.integration.core.spi.SyncPhase.SWEEP));
+            verify(handle, atLeastOnce())
+                    .progress(any(), any(), argThat(progress -> progress.phase() == SyncPhase.SWEEP));
         }
 
         @Test

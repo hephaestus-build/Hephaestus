@@ -52,7 +52,7 @@ public class JobTypeHandlerConfiguration {
     }
 
     @Bean
-    ReviewResultParser practiceDetectionResultParser() {
+    ReviewResultParser reviewResultParser() {
         return new ReviewResultParser(objectMapper);
     }
 

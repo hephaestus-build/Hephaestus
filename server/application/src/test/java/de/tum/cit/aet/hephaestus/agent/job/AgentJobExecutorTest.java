@@ -19,14 +19,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
+import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
@@ -36,6 +40,7 @@ import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
@@ -46,10 +51,13 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
@@ -62,9 +70,14 @@ import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.evidence.SourceReadinessReason;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
@@ -74,10 +87,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
-import org.assertj.core.api.Assertions;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -90,7 +106,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.dao.TransientDataAccessResourceException;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
@@ -99,18 +119,13 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 class AgentJobExecutorTest extends BaseUnitTest {
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void allowMemberAiForUnrelatedScenarios() {
-        org.mockito.Mockito.lenient()
-                .when(memberAiPolicy.permitsReview(
-                        org.mockito.ArgumentMatchers.anyLong(),
-                        org.mockito.ArgumentMatchers.any(),
-                        org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
+        lenient().when(memberAiPolicy.permitsReview(anyLong(), any(), any())).thenReturn(true);
     }
 
-    @org.mockito.Mock
-    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
+    @Mock
+    private ReviewMemberAiPolicy memberAiPolicy;
 
     @Mock
     private LlmUsageRecorder usageRecorder;
@@ -150,8 +165,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
     private AgentJobExecutor executor;
 
-    private static final de.tum.cit.aet.hephaestus.agent.usage.@org.jspecify.annotations.Nullable LlmAdmissionService
-            NO_LIVE_ADMISSION = null;
+    private static final @Nullable LlmAdmissionService NO_LIVE_ADMISSION = null;
 
     private static final AgentProperties AGENT_PROPS = new AgentProperties(
             true, Duration.ofSeconds(1), 5, 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90));
@@ -179,7 +193,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 objectMapper,
                 meterRegistry,
                 new PracticeReviewRefusalMetrics(meterRegistry),
-                new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                 usageRecorder,
                 llmBudgetService,
                 NO_LIVE_ADMISSION,
@@ -233,7 +247,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         lenient()
                 .doAnswer(inv -> {
                     @SuppressWarnings("unchecked")
-                    java.util.function.Consumer<TransactionStatus> callback = inv.getArgument(0);
+                    Consumer<TransactionStatus> callback = inv.getArgument(0);
                     callback.accept(mock(TransactionStatus.class));
                     return null;
                 })
@@ -285,7 +299,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
     }
 
     @Nested
-    @DisplayName("Job-scoped cancellation (#1138)")
+    @DisplayName("Job-scoped cancellation")
     class ScopedCancellation {
 
         @Test
@@ -293,7 +307,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         void cancelLocalJobUnknownIsNoOp() {
             boolean cancelled = executor.cancelLocalJob(UUID.randomUUID(), "user-cancel");
 
-            Assertions.assertThat(cancelled).isFalse();
+            assertThat(cancelled).isFalse();
             verify(sandboxManager, never()).cancel(any());
         }
 
@@ -326,7 +340,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -348,7 +362,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
             executor.processJob(jobId);
 
-            // The job is no longer ours — we must not double-deliver the sibling's findings.
+            // The job is no longer ours — its feedback is not delivered twice.
             verify(handler, never()).deliver(any());
         }
     }
@@ -401,7 +415,6 @@ class AgentJobExecutorTest extends BaseUnitTest {
             boolean claimed = executor.processJob(jobId);
 
             assertThat(claimed).isTrue();
-            // Assert the actual claim contract, not just "save was called": status flips to RUNNING.
             ArgumentCaptor<AgentJob> captured = ArgumentCaptor.forClass(AgentJob.class);
             verify(jobRepository).save(captured.capture());
             assertThat(captured.getValue().getStatus()).isEqualTo(AgentJobStatus.RUNNING);
@@ -458,7 +471,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
         private void bindFundedBy(FundingSource fundingSource) {
             if (fundingSource == FundingSource.INSTANCE) {
-                binding.setInstanceModel(new de.tum.cit.aet.hephaestus.agent.catalog.LlmModel());
+                binding.setInstanceModel(new LlmModel());
             }
             when(memberAiPolicy.binding(eq(99L), eq(AgentJobType.PULL_REQUEST_REVIEW), any()))
                     .thenReturn(Optional.of(binding));
@@ -712,8 +725,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
             when(handler.prepareInputs(any()))
-                    .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
-                            Map.of("task.json", "{}".getBytes())));
+                    .thenReturn(PreparedJobInputsFixtures.filesOnly(Map.of("task.json", "{}".getBytes())));
             when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
             when(jobRepository.updateProvenanceDigests(any(), any(), anyInt(), any()))
                     .thenReturn(0);
@@ -741,7 +753,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     ArgumentCaptor.forClass(AgentJobRepository.ProvenanceStamp.class);
             verify(jobRepository).updateProvenanceDigests(eq(jobId), isNull(), eq(0), stamp.capture());
             var snapshot = stamp.getValue().evidenceSnapshot();
-            org.junit.jupiter.api.Assertions.assertNotNull(snapshot);
+            assertThat(snapshot).isNotNull();
             JsonNode reviewed = snapshot.path(ReviewedWork.SNAPSHOT_KEY);
             assertThat(reviewed.path("artifactId").asLong()).isEqualTo(42L);
             assertThat(reviewed.path("head").asString()).isEqualTo(HEAD_SHA);
@@ -772,9 +784,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             stubClaimableJob();
             var handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
-            when(handler.prepareInputs(any()))
-                    .thenThrow(
-                            new de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException(513L, 512L));
+            when(handler.prepareInputs(any())).thenThrow(new WorkspaceBudgetExceededException(513L, 512L));
             when(jobRepository.transitionToEvidenceRefused(any(), any(), anyInt(), any(), any()))
                     .thenReturn(1);
             executor.processJob(jobId);
@@ -813,9 +823,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     now,
                     List.of(new AutomatedReviewReadinessDecision(
                             "example", now, false, List.of(), List.of(assessment))));
-            var released = new java.util.concurrent.atomic.AtomicBoolean();
-            PreparedJobInputs inputs = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
-                    new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(
+            var released = new AtomicBoolean();
+            PreparedJobInputs inputs = PreparedJobInputsFixtures.inputs(
+                    new PreparedEvidence(
                             Map.of(SandboxLayout.MANIFEST_PATH, "{}".getBytes()),
                             Map.of(),
                             List.of(() -> released.set(true)),
@@ -834,9 +844,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     ArgumentCaptor.forClass(AgentJobRepository.ProvenanceStamp.class);
             verify(jobRepository).updateProvenanceDigests(eq(jobId), isNull(), eq(0), stamp.capture());
             var provenance = stamp.getValue();
-            org.junit.jupiter.api.Assertions.assertNotNull(provenance);
+            assertThat(provenance).isNotNull();
             var storedReadiness = provenance.reviewReadiness();
-            org.junit.jupiter.api.Assertions.assertNotNull(storedReadiness);
+            assertThat(storedReadiness).isNotNull();
             assertThat(storedReadiness.path("decisions").get(0).path("ready").asBoolean())
                     .isFalse();
             ArgumentCaptor<JsonNode> output = ArgumentCaptor.forClass(JsonNode.class);
@@ -988,7 +998,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 boolean admitted,
                 String rawOutput,
                 AgentJobStatus expected,
-                @org.jspecify.annotations.Nullable DeliveryStatus expectedDelivery) {
+                @Nullable DeliveryStatus expectedDelivery) {
             job.setConfigSnapshot(snapshot.withPriceSnapshot(pricedSnapshot()).toJson(objectMapper));
             stubClaimableJob();
             JobTypeHandler handler =
@@ -1186,8 +1196,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             new SandboxInfrastructureException("docker daemon unreachable"),
                             true,
                             "provably-transient infrastructure"),
-                    Arguments.of(
-                            new java.io.IOException("connection reset"), true, "a bare IOException is network-ish"),
+                    Arguments.of(new IOException("connection reset"), true, "a bare IOException is network-ish"),
                     Arguments.of(
                             new SandboxException("path traversal detected"),
                             false,
@@ -1225,7 +1234,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -1243,9 +1252,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(jobId), eq("infra-retry-worker"), eq(AGENT_PROPS.maxRetries()), any(), any(), any()))
                     .thenReturn(1);
 
-            setupFullExecutionWithException(
-                    new de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException(
-                            "image pull failed"));
+            setupFullExecutionWithException(new SandboxInfrastructureException("image pull failed"));
 
             executor.processJob(jobId);
 
@@ -1289,7 +1296,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -1351,7 +1358,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -1406,7 +1413,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -1468,7 +1475,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -1527,7 +1534,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -1549,9 +1556,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             when(jobRepository.transitionStatusOwnedBy(any(), any(), any(), any(), any(), any()))
                     .thenReturn(1);
 
-            setupFullExecutionWithException(
-                    new de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException(
-                            "output collection failed"));
+            setupFullExecutionWithException(new SandboxInfrastructureException("output collection failed"));
 
             executor.processJob(jobId);
 
@@ -1586,7 +1591,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -1605,9 +1610,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             when(jobRepository.transitionStatusOwnedBy(any(), eq(AgentJobStatus.FAILED), any(), any(), any(), any()))
                     .thenReturn(1);
 
-            setupFullExecutionWithException(
-                    new de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException(
-                            "image pull failed"));
+            setupFullExecutionWithException(new SandboxInfrastructureException("image pull failed"));
 
             executor.processJob(jobId);
 
@@ -1633,7 +1636,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -1698,15 +1701,15 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @Test
         @DisplayName("a crashed job that made priced proxy calls bills them PRICED, not zero")
         void cancelledAfterStart_withProxyMeteredCalls_recordsPricedLedgerEntry() {
-            var priced = new de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot(
-                    de.tum.cit.aet.hephaestus.agent.usage.FundingSource.INSTANCE,
-                    de.tum.cit.aet.hephaestus.agent.usage.PricingState.PRICED,
+            var priced = new LlmPriceSnapshot(
+                    FundingSource.INSTANCE,
+                    PricingState.PRICED,
                     1L,
                     null,
-                    new java.math.BigDecimal("1.00"),
-                    new java.math.BigDecimal("2.00"),
-                    new java.math.BigDecimal("0.10"),
-                    new java.math.BigDecimal("0.20"));
+                    new BigDecimal("1.00"),
+                    new BigDecimal("2.00"),
+                    new BigDecimal("0.10"),
+                    new BigDecimal("0.20"));
             job.setConfigSnapshot(snapshot.withPriceSnapshot(priced).toJson(objectMapper));
 
             when(jobRepository.findByIdQueuedForUpdateSkipLocked(eq(jobId), any()))
@@ -1765,7 +1768,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 "worker-drain records an attempt-aware UNPRICED ledger entry in the same transaction as its winning CAS")
         void workerDrain_cancelInFlight_recordsAnUnpricedLedgerEntry() throws Exception {
             job.setExecutionStartedAt(Instant.now());
-            java.lang.reflect.Field localRunningJobsField = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
+            Field localRunningJobsField = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
             localRunningJobsField.setAccessible(true);
             @SuppressWarnings("unchecked")
             Set<UUID> localRunningJobs = (Set<UUID>) localRunningJobsField.get(executor);
@@ -1793,7 +1796,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
         @Test
         void workerDrain_whileJobIsStillPreparing_neverTouchesTheLedger() throws Exception {
-            java.lang.reflect.Field localRunningJobsField = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
+            Field localRunningJobsField = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
             localRunningJobsField.setAccessible(true);
             @SuppressWarnings("unchecked")
             Set<UUID> localRunningJobs = (Set<UUID>) localRunningJobsField.get(executor);
@@ -1908,8 +1911,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
             assertThat(sample.getValue().inputTokens()).isEqualTo(900);
             assertThat(sample.getValue().outputTokens()).isEqualTo(600);
             assertThat(sample.getValue().cacheReadTokens()).isEqualTo(100);
-            assertThat(sample.getValue().price().pricingState())
-                    .isEqualTo(de.tum.cit.aet.hephaestus.agent.usage.PricingState.PRICED);
+            assertThat(sample.getValue().price().pricingState()).isEqualTo(PricingState.PRICED);
             verify(usageRecorder, never()).recordUnverifiable(any(), any());
         }
 
@@ -2040,18 +2042,18 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             new TransientDataAccessResourceException("blip")))
                     .isTrue();
             assertThat(AgentJobExecutor.TERMINAL_PERSIST_POLICY.shouldRetry(
-                            new org.springframework.transaction.CannotCreateTransactionException("pool exhausted")))
+                            new CannotCreateTransactionException("pool exhausted")))
                     .isTrue();
             // A TransactionTemplate and JPA both surface the underlying failure wrapped, so the match has
             // to reach the cause and not just the top of the chain.
-            assertThat(AgentJobExecutor.TERMINAL_PERSIST_POLICY.shouldRetry(new RuntimeException(
-                            "wrapped", new org.springframework.dao.RecoverableDataAccessException("gone"))))
+            assertThat(AgentJobExecutor.TERMINAL_PERSIST_POLICY.shouldRetry(
+                            new RuntimeException("wrapped", new RecoverableDataAccessException("gone"))))
                     .isTrue();
             assertThat(AgentJobExecutor.TERMINAL_PERSIST_POLICY.shouldRetry(
                             new IllegalStateException("no price snapshot")))
                     .isFalse();
             assertThat(AgentJobExecutor.TERMINAL_PERSIST_POLICY.shouldRetry(
-                            new org.springframework.dao.DataIntegrityViolationException("constraint")))
+                            new DataIntegrityViolationException("constraint")))
                     .isFalse();
         }
 
@@ -2079,7 +2081,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .find("agent.job.execution.duration")
                     .tag("status", "PERSISTENCE_FAILED")
                     .timer();
-            org.junit.jupiter.api.Assertions.assertNotNull(timer);
+            assertThat(timer).isNotNull();
             assertThat(timer.count()).isEqualTo(1L);
         }
     }
@@ -2104,7 +2106,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -2149,7 +2151,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
          * committed claim — more machinery than a capacity assertion needs.
          */
         private Set<UUID> heldJobs() throws Exception {
-            java.lang.reflect.Field field = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
+            Field field = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
             field.setAccessible(true);
             @SuppressWarnings("unchecked")
             Set<UUID> held = (Set<UUID>) requireNonNull(field.get(executor));
@@ -2165,8 +2167,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @Test
         @DisplayName("free capacity is reviewMax minus jobs already running locally")
         void freeCapacityIsReviewMaxMinusLocalRunning() throws Exception {
-            de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState capacityState =
-                    new de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState(workerProps("w"));
+            WorkerCapacityState capacityState = new WorkerCapacityState(workerProps("w"));
             capacityState.claimReview();
             capacityState.claimReview(); // 2 in flight; reviewMax is 2 (see workerProps)
 
@@ -2184,7 +2185,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -2211,13 +2212,12 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     Duration.ofSeconds(25),
                     Duration.ofDays(14),
                     Duration.ofDays(90));
-            de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState capacityState =
-                    new de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState(new WorkerProperties(
-                            "w",
-                            new WorkerProperties.Capacity("10", "1"), // reviewMax=10, far above claimBatchSize=2
-                            new WorkerProperties.Drain(Duration.ofMinutes(5)),
-                            new WorkerProperties.Heartbeat(Duration.ofSeconds(20)),
-                            new WorkerProperties.Control(URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
+            WorkerCapacityState capacityState = new WorkerCapacityState(new WorkerProperties(
+                    "w",
+                    new WorkerProperties.Capacity("10", "1"), // reviewMax=10, far above claimBatchSize=2
+                    new WorkerProperties.Drain(Duration.ofMinutes(5)),
+                    new WorkerProperties.Heartbeat(Duration.ofSeconds(20)),
+                    new WorkerProperties.Control(URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
 
             executor = new AgentJobExecutor(
                     smallBatch,
@@ -2233,7 +2233,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -2267,21 +2267,18 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("capacity is further bounded by the sandbox executor's pool size — reviewMax "
                 + "alone is not enough, it can exceed the pool size")
         void capacityIsBoundedBySandboxExecutorPoolSize() throws Exception {
-            org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor realPool =
-                    new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
+            ThreadPoolTaskExecutor realPool = new ThreadPoolTaskExecutor();
             realPool.setCorePoolSize(1);
             realPool.setMaxPoolSize(2); // pool cap of 2, far below reviewMax (10) and claimBatchSize (5)
             realPool.setQueueCapacity(0);
             realPool.initialize();
             try {
-                de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState capacityState =
-                        new de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState(new WorkerProperties(
-                                "w",
-                                new WorkerProperties.Capacity("10", "1"),
-                                new WorkerProperties.Drain(Duration.ofMinutes(5)),
-                                new WorkerProperties.Heartbeat(Duration.ofSeconds(20)),
-                                new WorkerProperties.Control(
-                                        URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
+                WorkerCapacityState capacityState = new WorkerCapacityState(new WorkerProperties(
+                        "w",
+                        new WorkerProperties.Capacity("10", "1"),
+                        new WorkerProperties.Drain(Duration.ofMinutes(5)),
+                        new WorkerProperties.Heartbeat(Duration.ofSeconds(20)),
+                        new WorkerProperties.Control(URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
 
                 executor = new AgentJobExecutor(
                         AGENT_PROPS,
@@ -2297,7 +2294,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         objectMapper,
                         meterRegistry,
                         new PracticeReviewRefusalMetrics(meterRegistry),
-                        new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                        new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                         usageRecorder,
                         llmBudgetService,
                         NO_LIVE_ADMISSION,
@@ -2316,21 +2313,18 @@ class AgentJobExecutorTest extends BaseUnitTest {
         @DisplayName("a job this worker already holds occupies a pool slot, whether or not the pool "
                 + "thread has entered it yet")
         void heldJobsOccupyPoolSlots() throws Exception {
-            org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor realPool =
-                    new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
+            ThreadPoolTaskExecutor realPool = new ThreadPoolTaskExecutor();
             realPool.setCorePoolSize(1);
             realPool.setMaxPoolSize(2);
             realPool.setQueueCapacity(0);
             realPool.initialize();
             try {
-                de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState capacityState =
-                        new de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState(new WorkerProperties(
-                                "w",
-                                new WorkerProperties.Capacity("10", "1"),
-                                new WorkerProperties.Drain(Duration.ofMinutes(5)),
-                                new WorkerProperties.Heartbeat(Duration.ofSeconds(20)),
-                                new WorkerProperties.Control(
-                                        URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
+                WorkerCapacityState capacityState = new WorkerCapacityState(new WorkerProperties(
+                        "w",
+                        new WorkerProperties.Capacity("10", "1"),
+                        new WorkerProperties.Drain(Duration.ofMinutes(5)),
+                        new WorkerProperties.Heartbeat(Duration.ofSeconds(20)),
+                        new WorkerProperties.Control(URI.create("ws://example"), "tok", Duration.ofSeconds(10))));
 
                 executor = new AgentJobExecutor(
                         AGENT_PROPS,
@@ -2346,7 +2340,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                         objectMapper,
                         meterRegistry,
                         new PracticeReviewRefusalMetrics(meterRegistry),
-                        new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                        new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                         usageRecorder,
                         llmBudgetService,
                         NO_LIVE_ADMISSION,
@@ -2389,7 +2383,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -2404,7 +2398,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            doThrow(new java.util.concurrent.RejectedExecutionException("pool saturated"))
+            doThrow(new RejectedExecutionException("pool saturated"))
                     .when(sandboxExecutor)
                     .execute(any());
 
@@ -2433,7 +2427,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -2448,16 +2442,16 @@ class AgentJobExecutorTest extends BaseUnitTest {
                             eq(99L), eq(AgentPurpose.PRACTICE_REVIEW), any()))
                     .thenReturn(0L);
             when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            doThrow(new java.util.concurrent.RejectedExecutionException("pool saturated"))
+            doThrow(new RejectedExecutionException("pool saturated"))
                     .when(sandboxExecutor)
                     .execute(any());
-            java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
+            AtomicInteger attempts = new AtomicInteger();
             doAnswer(inv -> {
                         if (attempts.incrementAndGet() <= 2) {
-                            throw new org.springframework.dao.TransientDataAccessResourceException("blip");
+                            throw new TransientDataAccessResourceException("blip");
                         }
                         @SuppressWarnings("unchecked")
-                        java.util.function.Consumer<TransactionStatus> callback = inv.getArgument(0);
+                        Consumer<TransactionStatus> callback = inv.getArgument(0);
                         callback.accept(mock(TransactionStatus.class));
                         return null;
                     })
@@ -2468,8 +2462,8 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
             // 3 transaction attempts (2 failed, 1 succeeded); the underlying repository write only
             // actually happens on the attempt whose transaction callback ran.
-            verify(transactionTemplate, org.mockito.Mockito.times(3)).executeWithoutResult(any());
-            verify(jobRepository, org.mockito.Mockito.times(1)).requeueRejectedClaim(jobId, "rejecting-worker");
+            verify(transactionTemplate, times(3)).executeWithoutResult(any());
+            verify(jobRepository, times(1)).requeueRejectedClaim(jobId, "rejecting-worker");
         }
     }
 
@@ -2494,7 +2488,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -2534,7 +2528,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     objectMapper,
                     meterRegistry,
                     new PracticeReviewRefusalMetrics(meterRegistry),
-                    new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP),
+                    new AgentJobTelemetry(meterRegistry, Tracer.NOOP),
                     usageRecorder,
                     llmBudgetService,
                     NO_LIVE_ADMISSION,
@@ -2562,7 +2556,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
         @SuppressWarnings("unchecked")
         private void addToLocalRunningJobs(AgentJobExecutor exec, UUID id) throws Exception {
-            java.lang.reflect.Field field = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
+            Field field = AgentJobExecutor.class.getDeclaredField("localRunningJobs");
             field.setAccessible(true);
             ((Set<UUID>) field.get(exec)).add(id);
         }
@@ -2589,7 +2583,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
 
         private boolean threadIsAlive(AgentJobExecutor exec) {
             try {
-                java.lang.reflect.Field field = AgentJobExecutor.class.getDeclaredField("pollThread");
+                Field field = AgentJobExecutor.class.getDeclaredField("pollThread");
                 field.setAccessible(true);
                 Thread thread = (Thread) field.get(exec);
                 return thread != null && thread.isAlive();
@@ -2618,8 +2612,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                     .thenReturn(1);
             JobTypeHandler handler = mock(JobTypeHandler.class);
             when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
-            when(handler.prepareInputs(any()))
-                    .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(Map.of()));
+            when(handler.prepareInputs(any())).thenReturn(PreparedJobInputsFixtures.filesOnly(Map.of()));
             when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
 
             executor.processJob(jobId);
@@ -2647,9 +2640,9 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 capturedAt,
                 List.of(new AutomatedReviewReadinessDecision("example", capturedAt, true, List.of(), List.of(check))));
         Map<String, byte[]> files = Map.of(
-                de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO.INPUT_PATH,
-                objectMapper.writeValueAsBytes(new de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO(
-                        List.of("generated/**"), List.of("generated/client.ts"))),
+                GeneratedPathReviewDTO.INPUT_PATH,
+                objectMapper.writeValueAsBytes(
+                        new GeneratedPathReviewDTO(List.of("generated/**"), List.of("generated/client.ts"))),
                 SandboxLayout.MANIFEST_PATH,
                 objectMapper.writeValueAsBytes(manifest),
                 SandboxLayout.CONTEXT_PREFIX + "metadata.json",
@@ -2657,8 +2650,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         JobTypeHandler handler = mock(JobTypeHandler.class);
         when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
         when(handler.prepareInputs(any()))
-                .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.inputs(
-                        new de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence(files, manifest), readiness));
+                .thenReturn(PreparedJobInputsFixtures.inputs(new PreparedEvidence(files, manifest), readiness));
         when(practiceAgent.buildSandboxSpec(any())).thenReturn(minimalSpec());
     }
 
@@ -2672,16 +2664,16 @@ class AgentJobExecutorTest extends BaseUnitTest {
         when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
-    private static de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot pricedSnapshot() {
-        return new de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot(
-                de.tum.cit.aet.hephaestus.agent.usage.FundingSource.INSTANCE,
-                de.tum.cit.aet.hephaestus.agent.usage.PricingState.PRICED,
+    private static LlmPriceSnapshot pricedSnapshot() {
+        return new LlmPriceSnapshot(
+                FundingSource.INSTANCE,
+                PricingState.PRICED,
                 1L,
                 null,
-                new java.math.BigDecimal("1.00"),
-                new java.math.BigDecimal("2.00"),
-                new java.math.BigDecimal("0.10"),
-                new java.math.BigDecimal("0.20"));
+                new BigDecimal("1.00"),
+                new BigDecimal("2.00"),
+                new BigDecimal("0.10"),
+                new BigDecimal("0.20"));
     }
 
     private JobTypeHandler setupFullExecution() {
@@ -2701,8 +2693,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
         JobTypeHandler handler = mock(JobTypeHandler.class);
         when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
         when(handler.prepareInputs(any()))
-                .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(
-                        Map.of("code.py", "print('hi')".getBytes())));
+                .thenReturn(PreparedJobInputsFixtures.filesOnly(Map.of("code.py", "print('hi')".getBytes())));
 
         PracticeSandboxSpec agentSpec = new PracticeSandboxSpec(
                 "ghcr.io/agent:latest",
@@ -2747,8 +2738,7 @@ class AgentJobExecutorTest extends BaseUnitTest {
                 .thenReturn(1);
         JobTypeHandler handler = mock(JobTypeHandler.class);
         when(handlerRegistry.getHandler(AgentJobType.PULL_REQUEST_REVIEW)).thenReturn(handler);
-        when(handler.prepareInputs(any()))
-                .thenReturn(de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.filesOnly(Map.of()));
+        when(handler.prepareInputs(any())).thenReturn(PreparedJobInputsFixtures.filesOnly(Map.of()));
 
         PracticeSandboxSpec agentSpec = new PracticeSandboxSpec(
                 "ghcr.io/agent:latest", List.of("/bin/agent"), Map.of(), Map.of(), "/output", null, null, null);

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -31,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -233,9 +235,9 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
             verify(containerManager, times(2)).createContainer(any());
             verify(workspaceManager).createInputTar(any(), any(), any());
             verify(containerManager).startContainer(CONTAINER_ID);
-            ArgumentCaptor<java.time.Duration> runtimeWait = ArgumentCaptor.forClass(java.time.Duration.class);
+            ArgumentCaptor<Duration> runtimeWait = ArgumentCaptor.forClass(Duration.class);
             verify(containerManager).waitForCompletion(eq(CONTAINER_ID), runtimeWait.capture());
-            assertThat(runtimeWait.getValue()).isGreaterThan(java.time.Duration.ofMinutes(19));
+            assertThat(runtimeWait.getValue()).isGreaterThan(Duration.ofMinutes(19));
             Map<String, String> runtimeEnvironment = runtimeContainer.get().environment();
             long workDeadline = Long.parseLong(runtimeEnvironment.get("SANDBOX_WORK_DEADLINE_MS"));
             long uploadDeadline = Long.parseLong(runtimeEnvironment.get("SANDBOX_UPLOAD_DEADLINE_MS"));
@@ -620,7 +622,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         @Test
         void shouldToleratePartialCleanupFailure() throws Exception {
             setupHappyPath();
-            org.mockito.Mockito.doNothing().when(containerManager).forceRemove("initializer");
+            doNothing().when(containerManager).forceRemove("initializer");
             doThrow(new SandboxException("Container stuck"))
                     .when(containerManager)
                     .forceRemove(CONTAINER_ID);
@@ -856,7 +858,7 @@ class DockerSandboxAdapterTest extends BaseUnitTest {
         @Test
         void shouldIncrementCleanupFailureCounterWithStep() throws Exception {
             setupHappyPath();
-            org.mockito.Mockito.doNothing().when(containerManager).forceRemove("initializer");
+            doNothing().when(containerManager).forceRemove("initializer");
             doThrow(new SandboxException("stuck")).when(containerManager).forceRemove(CONTAINER_ID);
 
             sandboxAdapter.execute(createSpec());

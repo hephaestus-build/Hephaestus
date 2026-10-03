@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.*;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
-import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.*;
-import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.*;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
+import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.haveSecurityAnnotationIfEndpoint;
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
@@ -11,7 +13,10 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityManager;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
@@ -19,7 +24,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Spring & DDD Architecture Tests.
@@ -82,7 +92,7 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
         void entitiesDoNotDependOnDtos() {
             ArchRule rule = noClasses()
                     .that()
-                    .areAnnotatedWith(jakarta.persistence.Entity.class)
+                    .areAnnotatedWith(Entity.class)
                     .should()
                     .dependOnClassesThat()
                     .haveSimpleNameEndingWith("DTO")
@@ -276,7 +286,7 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
                     .areAnnotatedWith(RestController.class)
                     .should()
                     .dependOnClassesThat()
-                    .areAssignableTo(jakarta.persistence.EntityManager.class)
+                    .areAssignableTo(EntityManager.class)
                     .because("Controllers should not access JPA directly - use services");
             rule.check(classes);
         }
@@ -486,7 +496,7 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
      * Returns the top-level module name ({@code activity}, {@code workspace}, …) for a
      * package, or {@code null} if the package is outside {@code BASE_PACKAGE}.
      */
-    private static @org.jspecify.annotations.Nullable String topLevelModule(String packageName) {
+    private static @Nullable String topLevelModule(String packageName) {
         if (!packageName.startsWith(BASE_PACKAGE + ".")) {
             return null;
         }

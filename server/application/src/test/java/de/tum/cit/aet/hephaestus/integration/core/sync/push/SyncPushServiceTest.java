@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.events.ConnectionLifecycleEvent;
@@ -81,7 +83,7 @@ class SyncPushServiceTest extends BaseUnitTest {
         ObjectProvider<Connection> provider = objectProviderReturning(connection);
 
         SyncPushService service = new SyncPushService(hub, MAPPER, provider, meters);
-        org.mockito.Mockito.verifyNoInteractions(connection);
+        verifyNoInteractions(connection);
         service.subscribeIfNatsAvailable();
 
         verify(dispatcher).subscribe("hephaestus.syncstatus.>");
@@ -109,7 +111,7 @@ class SyncPushServiceTest extends BaseUnitTest {
     @Test
     void withNats_publishFailure_deliversLocallyAndRecordsBothOutcomes() {
         when(connection.createDispatcher(any(MessageHandler.class))).thenReturn(dispatcher);
-        org.mockito.Mockito.doThrow(new IllegalStateException("broker unavailable"))
+        doThrow(new IllegalStateException("broker unavailable"))
                 .when(connection)
                 .publish(anyString(), any(byte[].class));
         SyncPushService service = new SyncPushService(hub, MAPPER, objectProviderReturning(connection), meters);

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
@@ -11,7 +12,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
-import org.assertj.core.api.Assertions;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -219,7 +220,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .jsonPath("$.totalElements")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].occurredAt")
-                .value(v -> Assertions.assertThat((String) v).startsWith("2026-06-05"));
+                .value(v -> assertThat((String) v).startsWith("2026-06-05"));
     }
 
     @Test
@@ -264,16 +265,16 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .expectStatus()
                 .isOk()
                 .expectHeader()
-                .value("Content-Type", ct -> Assertions.assertThat(ct).contains("text/csv"))
+                .value("Content-Type", ct -> assertThat(ct).contains("text/csv"))
                 .expectHeader()
-                .value("Content-Disposition", cd -> Assertions.assertThat(cd).contains("audit-log.csv"))
+                .value("Content-Disposition", cd -> assertThat(cd).contains("audit-log.csv"))
                 .expectBody(String.class)
                 .returnResult()
                 .getResponseBody();
 
-        Assertions.assertThat(csv).isNotNull();
-        Assertions.assertThat(csv).startsWith("occurred_at_utc,event_type,result");
-        Assertions.assertThat(csv).contains("LOGIN").contains("Keeper Admin");
+        assertThat(csv).isNotNull();
+        assertThat(csv).startsWith("occurred_at_utc,event_type,result");
+        assertThat(csv).contains("LOGIN").contains("Keeper Admin");
     }
 
     @Test
@@ -297,11 +298,11 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
                 .returnResult()
                 .getResponseBody();
 
-        Assertions.assertThat(csv).isNotNull();
+        assertThat(csv).isNotNull();
         // Formula trigger neutralized: the cell is quoted and the leading '=' is prefixed with an apostrophe.
-        Assertions.assertThat(csv).contains("\"'=cmd");
+        assertThat(csv).contains("\"'=cmd");
         // RFC-4180: the embedded double-quote is doubled.
-        Assertions.assertThat(csv).contains("\"\"x\"\"");
+        assertThat(csv).contains("\"\"x\"\"");
     }
 
     @Test
@@ -364,10 +365,7 @@ class AuthAuditControllerIntegrationTest extends RealAuthIntegrationTest {
 
     private String tokenFor(Account account) {
         return jwtIssuer
-                .issue(
-                        java.util.Objects.requireNonNull(account.getId()),
-                        TokenConstraints.session(null, Instant.now()),
-                        null)
+                .issue(Objects.requireNonNull(account.getId()), TokenConstraints.session(null, Instant.now()), null)
                 .value();
     }
 

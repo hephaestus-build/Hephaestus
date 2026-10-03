@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,6 +44,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.assertj.core.api.InstanceOfAssertFactories;
+import org.hamcrest.MatcherAssert;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -97,7 +99,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
         practice.setSlug(slug);
         practice.setName(name);
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
-        practice.setCriteria("Detect prompt for " + slug);
+        practice.setCriteria("Review prompt for " + slug);
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         practice.setAutonomy(active ? PracticeAutonomy.AUTOMATIC : PracticeAutonomy.OFF);
         return practiceRepository.save(practice);
@@ -190,7 +192,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 Map.of(),
                 ActorRole.AUTHOR,
                 null,
-                "Detect if the PR follows best practices",
+                "Check that the PR follows best practices",
                 null,
                 PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                 null,
@@ -299,26 +301,22 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                 // Selected by kind rather than by position: the list is whatever the registered domains
                 // declare reviewable, so an index would pin the wrong thing the first time a domain is added.
                 .jsonPath("$.workTypes[*].artifactKind")
-                .value((java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
+                .value((List<String> value) -> MatcherAssert.assertThat(
                         value,
                         containsInAnyOrder(
                                 "scm.pull_request", "scm.issue", "chat.conversation_thread", "docs.document")))
                 .jsonPath(
                         "$.workTypes[?(@.artifactKind == 'scm.pull_request')].recommendedEvidenceRequirements[1].sourceKind")
-                .value((java.util.List<String> value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, contains("scm.pull-request.diff")))
+                .value((List<String> value) -> MatcherAssert.assertThat(value, contains("scm.pull-request.diff")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].allowedSources[0].displayName")
-                .value((java.util.List<String> value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, contains("Pull request details")))
+                .value((List<String> value) -> MatcherAssert.assertThat(value, contains("Pull request details")))
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].allowedSources[0].description")
                 .exists()
                 .jsonPath("$.workTypes[?(@.artifactKind == 'scm.pull_request')].reviewWhenDimensions[0].key")
-                .value((java.util.List<String> value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, contains("draftStatus")))
+                .value((List<String> value) -> MatcherAssert.assertThat(value, contains("draftStatus")))
                 .jsonPath(
                         "$.workTypes[?(@.artifactKind == 'scm.pull_request')].reviewWhenDimensions[0].values[1].value")
-                .value((java.util.List<String> value) ->
-                        org.hamcrest.MatcherAssert.assertThat(value, contains("NOT_DRAFT")));
+                .value((List<String> value) -> MatcherAssert.assertThat(value, contains("NOT_DRAFT")));
     }
 
     @ParameterizedTest
@@ -610,7 +608,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(result.autonomy().override()).isEqualTo(PracticeAutonomy.AUTOMATIC);
             assertThat(result.autonomy().inherited()).isFalse();
             assertThat(signalsOf(result)).containsExactly(ScmSignals.PULL_REQUEST_OPENED);
-            assertThat(result.criteria()).isEqualTo("Detect prompt for target-practice");
+            assertThat(result.criteria()).isEqualTo("Review prompt for target-practice");
             assertThat(result.createdAt()).isNotNull();
             assertThat(result.updatedAt()).isNotNull();
         }
@@ -696,7 +694,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(result.name()).isEqualTo("Practice new-practice");
             assertThat(signalsOf(result))
                     .containsExactly(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_REVIEWED);
-            assertThat(result.criteria()).isEqualTo("Detect if the PR follows best practices");
+            assertThat(result.criteria()).isEqualTo("Check that the PR follows best practices");
             assertThat(result.automatedReviewPolicy())
                     .isEqualTo(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
             // A new practice inherits the fail-closed workspace default until an admin widens it.
@@ -1209,7 +1207,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(result).isNotNull();
             assertThat(result.name()).isEqualTo("Updated Name");
             assertThat(signalsOf(result)).containsExactly(ScmSignals.PULL_REQUEST_OPENED);
-            assertThat(result.criteria()).isEqualTo("Detect prompt for update-me");
+            assertThat(result.criteria()).isEqualTo("Review prompt for update-me");
             assertThat(result.autonomy().effective()).isEqualTo(PracticeAutonomy.AUTOMATIC);
             assertThat(result.groupSlug()).isEqualTo("existing-group");
 
@@ -1859,7 +1857,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertNotNull(practices);
             return practices.stream()
                     .filter(practice -> groupSlug.equals(practice.groupSlug()))
-                    .sorted(java.util.Comparator.comparing(PracticeDTO::displayOrder))
+                    .sorted(Comparator.comparing(PracticeDTO::displayOrder))
                     .map(PracticeDTO::slug)
                     .toList();
         }
@@ -2363,7 +2361,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(revisions.get(0).getArtifactKind()).isEqualTo(ArtifactKinds.PULL_REQUEST);
             assertThat(revisions.get(0).getSignals())
                     .containsExactly(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_REVIEWED);
-            assertThat(revisions.get(0).getCriteria()).isEqualTo("Detect if the PR follows best practices");
+            assertThat(revisions.get(0).getCriteria()).isEqualTo("Check that the PR follows best practices");
             assertThat(revisions.get(0).getReviewRuleFingerprint()).hasSize(67).startsWith("v5:");
             assertThat(revisions.get(0).getCreatedAt()).isNotNull();
         }
@@ -2392,7 +2390,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     null,
-                    "A revised detection rubric",
+                    "A revised review rubric",
                     null,
                     null,
                     null,
@@ -2417,8 +2415,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(revisions)
                     .extracting(PracticeRevision::getRevisionNumber)
                     .containsExactly(1, 2);
-            assertThat(revisions.get(0).getCriteria()).isEqualTo("Detect if the PR follows best practices");
-            assertThat(revisions.get(1).getCriteria()).isEqualTo("A revised detection rubric");
+            assertThat(revisions.get(0).getCriteria()).isEqualTo("Check that the PR follows best practices");
+            assertThat(revisions.get(1).getCriteria()).isEqualTo("A revised review rubric");
         }
 
         @Test
@@ -2486,7 +2484,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     null,
                     null,
                     null,
-                    "Detect if the PR follows best practices",
+                    "Check that the PR follows best practices",
                     null,
                     null,
                     null,
@@ -2675,7 +2673,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     Map.of(),
                     ActorRole.AUTHOR,
                     null,
-                    "Detect constructive conversations",
+                    "Check for constructive conversations",
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.CONVERSATION_THREAD),
                     null,
@@ -2721,7 +2719,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     Map.of(),
                     ActorRole.AUTHOR,
                     null,
-                    "INTERNAL detection rubric — must never reach a developer",
+                    "INTERNAL review rubric — must never reach a developer",
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     "Small, focused PRs are easier to review.",
@@ -2752,7 +2750,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
             assertThat(rawJson).isNotNull();
             assertThat(rawJson).doesNotContain("\"criteria\"");
-            assertThat(rawJson).doesNotContain("INTERNAL detection rubric");
+            assertThat(rawJson).doesNotContain("INTERNAL review rubric");
             assertThat(rawJson).contains("whyItMatters");
             assertThat(rawJson).contains("whatGoodLooksLike");
             assertThat(rawJson).contains("Small, focused PRs are easier to review.");
@@ -2773,7 +2771,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     Map.of(),
                     ActorRole.AUTHOR,
                     null,
-                    "Detect prompt",
+                    "Review prompt",
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     "Why it matters.",
@@ -2827,7 +2825,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
 
         @Test
         @WithAdminUser
-        @DisplayName("create with detector vocab in whyItMatters → 400 (whyItMatters is also developer-facing)")
+        @DisplayName(
+                "create with review-internal vocabulary in whyItMatters → 400 (whyItMatters is also developer-facing)")
         void rejectsVocabInWhyItMatters() {
             ensureAdminMembership(workspace);
 
@@ -2839,7 +2838,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     Map.of(),
                     ActorRole.AUTHOR,
                     null,
-                    "Detect prompt",
+                    "Review prompt",
                     null,
                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST),
                     "The error handler is PRESENT in every case.",

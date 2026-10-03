@@ -1,8 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import jakarta.annotation.PostConstruct;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -15,7 +14,7 @@ import org.springframework.stereotype.Component;
  * Same shape and reason as {@code IntegrationFrameworkBootstrap}.
  */
 @Component
-@ConditionalOnProperty(name = RuntimeRole.SERVER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnServerRole
 public class PracticeSignalVocabularyCheck {
 
     private final PracticeSignalCoverage coverage;

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
@@ -65,7 +66,7 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
     void shouldLimitNumberOfReturnedModels() {
         String models = IntStream.range(0, 1_001)
                 .mapToObj(i -> "{\"id\":\"model-" + i + "\"}")
-                .collect(java.util.stream.Collectors.joining(","));
+                .collect(Collectors.joining(","));
         upstream.enqueue(jsonResponse("{\"data\":[" + models + "]}"));
 
         LlmProbeResultDTO result = service.probeDraft(request());

@@ -584,9 +584,7 @@ public class GitHubProjectSyncService {
         HttpGraphQlClient client = graphQlClientProvider.forScope(scopeId);
         Duration timeout = syncProperties.graphqlTimeout();
 
-        // P2 optimization: skip field and status update syncs when within cooldown.
-        // Fields and status updates rarely change, but were previously re-synced on every run
-        // for all projects (106 projects × 2 queries = 212 wasted calls in the audit).
+        // Fields and status updates rarely change, so their syncs are skipped within the cooldown.
         Instant cooldownThreshold = Instant.now().minusSeconds(syncSchedulerProperties.cooldownMinutes() * 60L);
 
         // Phase 1: Sync fields (with cooldown — field definitions rarely change)
@@ -1566,7 +1564,7 @@ public class GitHubProjectSyncService {
      * Returns all projects ordered by last sync time (oldest first) that haven't
      * been synced within the cooldown period (from {@code SyncSchedulerProperties}).
      * <p>
-     * This mirrors the repository sync behavior in {@code GithubDataSyncService.shouldSync()}.
+     * This mirrors the repository sync behavior in {@code GitHubDataSyncService.shouldSync()}.
      *
      * @param organizationId the organization ID
      * @return list of projects needing item sync

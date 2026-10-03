@@ -1,4 +1,3 @@
-import type { ChatStatus } from "ai";
 import { AlertCircleIcon, RotateCcwIcon } from "lucide-react";
 
 import type { ChatMessageVote } from "@/api/types.gen";
@@ -14,7 +13,7 @@ import {
 	MessageScrollerProvider,
 	MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ChatTurn } from "@/lib/types";
 
 import { ChatComposer } from "./ChatComposer";
 import { Greeting } from "./Greeting";
@@ -24,10 +23,7 @@ import { visibleTexts } from "./message-text";
 export interface ChatProps {
 	messages: ChatMessage[];
 	votes?: ChatMessageVote[];
-	status: ChatStatus;
-	/** The turn in flight is waiting for Heph's sandbox to start, so its first words come late. */
-	warmingUp?: boolean;
-	errorMessage?: string;
+	turn: ChatTurn;
 	/** A saved conversation the reader can look at but not continue: no composer, no actions. */
 	readonly?: boolean;
 	onMessageSubmit: (text: string) => void;
@@ -47,9 +43,7 @@ export interface ChatProps {
 export function Chat({
 	messages,
 	votes,
-	status,
-	warmingUp = false,
-	errorMessage,
+	turn,
 	readonly = false,
 	onMessageSubmit,
 	onStop,
@@ -59,24 +53,24 @@ export function Chat({
 	onReload,
 	inputPlaceholder,
 }: ChatProps) {
-	const busy = status === "submitted" || status === "streaming";
+	const busy = turn.kind === "submitted" || turn.kind === "streaming";
+	const streaming = turn.kind === "streaming";
+	const failure = turn.kind === "error" ? turn.failure : undefined;
 	const lastMessage = messages.at(-1);
 	// Until a reply shows words, it is a status line rather than an empty message.
 	const replyPending =
 		busy && (lastMessage?.role !== "assistant" || visibleTexts(lastMessage).length === 0);
 	const shownMessages =
 		replyPending && lastMessage?.role === "assistant" ? messages.slice(0, -1) : messages;
-	const pendingStatus = warmingUp
-		? "Getting ready. The first reply takes a little longer."
-		: "Thinking…";
+	const pendingStatus =
+		busy && turn.warmingUp ? "Getting ready. The first reply takes a little longer." : "Thinking…";
 
 	// The live error is gone once the conversation is reopened, but a reply saved as interrupted can still
 	// be tried again.
-	const isBusyError = status === "error" && errorMessage === "Heph is busy. Please try again.";
 	const canRetry =
-		status === "error" ||
+		turn.kind === "error" ||
 		(onReload !== undefined &&
-			status === "ready" &&
+			turn.kind === "ready" &&
 			lastMessage?.role === "assistant" &&
 			lastMessage.metadata?.status === "interrupted");
 
@@ -87,7 +81,7 @@ export function Chat({
 					<MessageScrollerViewport aria-label="Conversation with Heph">
 						<MessageScrollerContent
 							// Busy while words arrive, so assistive technology can wait for the whole reply.
-							aria-busy={status === "streaming"}
+							aria-busy={streaming}
 							className="mx-auto w-full max-w-3xl px-4 py-6"
 						>
 							{messages.length === 0 && (
@@ -105,7 +99,7 @@ export function Chat({
 									<MentorMessage
 										message={message}
 										vote={votes?.find((vote) => vote.messageId === message.id)}
-										streaming={status === "streaming" && message === lastMessage}
+										streaming={streaming && message === lastMessage}
 										readonly={readonly}
 										onMessageEdit={onMessageEdit}
 										onCopy={onCopy}
@@ -139,12 +133,14 @@ export function Chat({
 
 				<div className="mx-auto flex w-full max-w-3xl flex-col gap-2 px-4 pb-2">
 					{canRetry && (
-						<Alert variant={isBusyError ? "warning" : "destructive"}>
+						<Alert variant={failure === "busy" ? "warning" : "destructive"}>
 							<AlertCircleIcon />
-							<AlertTitle>{isBusyError ? "Heph is busy" : "Something went wrong"}</AlertTitle>
+							<AlertTitle>
+								{failure === "busy" ? "Heph is busy" : "Something went wrong"}
+							</AlertTitle>
 							<AlertDescription className="flex items-center justify-between gap-4">
 								<span>
-									{isBusyError
+									{failure === "busy"
 										? "Please try again in a moment."
 										: "An error occurred while generating the response. Please try again."}
 								</span>

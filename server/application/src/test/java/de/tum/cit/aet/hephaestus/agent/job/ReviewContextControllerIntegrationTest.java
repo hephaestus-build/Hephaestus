@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -425,7 +426,7 @@ class ReviewContextControllerIntegrationTest extends AbstractWorkspaceIntegratio
                     .expectStatus()
                     .isBadRequest()
                     .expectHeader()
-                    .contentTypeCompatibleWith(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON)
+                    .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
                     .expectBody(Void.class);
         }
 
@@ -533,8 +534,6 @@ class ReviewContextControllerIntegrationTest extends AbstractWorkspaceIntegratio
         }
     }
 
-    // Requests
-
     private WebTestClient.ResponseSpec get(Account caller, String url) {
         return webTestClient
                 .get()
@@ -555,8 +554,6 @@ class ReviewContextControllerIntegrationTest extends AbstractWorkspaceIntegratio
     private static String member(Account account) {
         return "mock-jwt-member-" + account.getId();
     }
-
-    // Fixtures
 
     private IdentityProvider gitLabProvider(String serverUrl) {
         return gitProviderRepository

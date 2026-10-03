@@ -1,11 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.backfill;
 
-import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticDetection;
+import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticRun;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
@@ -35,7 +36,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 
 /** One artifact's turn in a campaign: what it records, what it stamps, and when it declines to act. */
 @DisplayName("Review backfill submitter")
@@ -75,8 +75,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(signalRecorder.record(any(), any(), eq(DiscoveredVia.BACKFILL))).thenReturn(true);
         Workspace workspace = workspace();
-        when(reviewGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL)))
-                .thenReturn(automaticDetection(workspace, List.of()));
+        when(reviewGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL))).thenReturn(automaticRun(workspace, List.of()));
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.SUBMITTED);
 
@@ -96,7 +95,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
      * The same two stamps, taken from the run instead of written here.
      *
      * <p>A sweep's window is bounded to the recent past, so it measures the population events measure and
-     * its findings belong in the live trend line.
+     * its observations belong in the live trend line.
      */
     @Test
     void aScheduledSweepIsStampedAsASweepAndMeasuredAsLiveWork() {
@@ -104,7 +103,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
         when(signalRecorder.record(any(), any(), eq(DiscoveredVia.SWEEP))).thenReturn(true);
         when(reviewGate.evaluate(eq(pr), any(), eq(TriggerMode.MANUAL)))
-                .thenReturn(automaticDetection(workspace(), List.of()));
+                .thenReturn(automaticRun(workspace(), List.of()));
         ReviewBackfillRun run = run();
         run.setDiscoveredVia(DiscoveredVia.SWEEP);
 
@@ -129,7 +128,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.PASSED);
 
-        Mockito.verifyNoInteractions(reviewGate, agentJobService);
+        verifyNoInteractions(reviewGate, agentJobService);
     }
 
     @Test
@@ -153,7 +152,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.PASSED);
-        Mockito.verifyNoInteractions(signalRecorder, reviewGate, agentJobService);
+        verifyNoInteractions(signalRecorder, reviewGate, agentJobService);
     }
 
     @Test
@@ -161,7 +160,7 @@ class ReviewBackfillSubmitterTest extends BaseUnitTest {
         when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.empty());
 
         assertThat(submitter().offer(run(), PR_ID)).isEqualTo(ReviewBackfillSubmitter.Outcome.PASSED);
-        Mockito.verifyNoInteractions(signalRecorder, reviewGate, agentJobService);
+        verifyNoInteractions(signalRecorder, reviewGate, agentJobService);
     }
 
     private PullRequest mergedPullRequest() {

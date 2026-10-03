@@ -4,9 +4,10 @@ import static de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSync
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabCredentialHealthFilter;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabCredentialHealthFilter;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -32,7 +33,7 @@ public class GitLabGraphQlClientProvider {
      */
     public static final String SCOPE_ID_ATTRIBUTE = "hephaestus.integration.gitlab.scopeId";
 
-    private final GitlabCredentialHealthFilter credentialHealth;
+    private final GitLabCredentialHealthFilter credentialHealth;
     private final HttpGraphQlClient baseClient;
     private final GitLabTokenService tokenService;
     private final CircuitBreaker circuitBreaker;
@@ -45,7 +46,7 @@ public class GitLabGraphQlClientProvider {
             @Qualifier("gitlabGraphQlCircuitBreaker") CircuitBreaker circuitBreaker,
             GitLabRateLimitTracker rateLimitTracker,
             SilentModeGraphQlClientFactory clientFactory,
-            GitlabCredentialHealthFilter credentialHealth) {
+            GitLabCredentialHealthFilter credentialHealth) {
         this.credentialHealth = credentialHealth;
         this.baseClient = gitLabGraphQlClient;
         this.tokenService = tokenService;
@@ -63,7 +64,6 @@ public class GitLabGraphQlClientProvider {
         return circuitBreaker.getState() != CircuitBreaker.State.OPEN;
     }
 
-    /** Gets the current circuit breaker state. */
     public CircuitBreaker.State getCircuitState() {
         return circuitBreaker.getState();
     }
@@ -148,8 +148,6 @@ public class GitLabGraphQlClientProvider {
         return clientFactory.withBearerToken(baseClient, serverUrl + GITLAB_GRAPHQL_PATH, token);
     }
 
-    // Rate Limit Tracking (Per-Scope)
-
     /**
      * Updates the rate limit tracker from HTTP response headers.
      * <p>
@@ -162,7 +160,6 @@ public class GitLabGraphQlClientProvider {
         rateLimitTracker.updateFromHeaders(scopeId, headers);
     }
 
-    /** Gets the rate limit tracker instance. */
     public GitLabRateLimitTracker getRateLimitTracker() {
         return rateLimitTracker;
     }
@@ -182,13 +179,11 @@ public class GitLabGraphQlClientProvider {
         return rateLimitTracker.isCritical(scopeId);
     }
 
-    /** Gets the remaining rate limit points. */
     public int getRateLimitRemaining(Long scopeId) {
         return rateLimitTracker.getRemaining(scopeId);
     }
 
-    /** Gets the rate limit reset time. */
-    public java.time.@Nullable Instant getRateLimitResetAt(Long scopeId) {
+    public @Nullable Instant getRateLimitResetAt(Long scopeId) {
         return rateLimitTracker.getResetAt(scopeId);
     }
 }

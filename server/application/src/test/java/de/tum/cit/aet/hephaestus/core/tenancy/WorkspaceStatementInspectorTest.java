@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.tenancy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,7 +14,6 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 
 class WorkspaceStatementInspectorTest extends BaseUnitTest {
 
@@ -463,8 +463,6 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
 
     @Test
     void theSingleKeyFormIsHeldToTheSameRules() {
-        // The older exemption used to accept these, so the newer one could simply be routed around
-        // by naming one key column instead of two.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
         when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
         for (String sql : List.of(
@@ -488,10 +486,5 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         String sql = "delete from repository_collaborator where repository_id" + " ".repeat(9000) + "=? and user_id=?";
         inspector.inspect(sql);
         verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
-    }
-
-    // helper: Mockito.any() shorthand
-    private static <T> T any() {
-        return ArgumentMatchers.any();
     }
 }

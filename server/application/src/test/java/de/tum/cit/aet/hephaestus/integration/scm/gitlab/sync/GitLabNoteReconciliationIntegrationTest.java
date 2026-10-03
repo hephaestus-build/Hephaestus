@@ -23,10 +23,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabWorkspac
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -37,7 +39,7 @@ import reactor.core.publisher.Mono;
 
 class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
-    private org.springframework.context.ApplicationEventPublisher events;
+    private ApplicationEventPublisher events;
 
     @Autowired
     private IssueRepository issues;
@@ -188,9 +190,7 @@ class GitLabNoteReconciliationIntegrationTest extends AbstractWorkspaceIntegrati
                         .removed())
                 .isEqualTo(2);
         assertThat(comments.findByNativeIdAndProviderId(
-                        5304L,
-                        java.util.Objects.requireNonNull(
-                                repository.getProvider().getId())))
+                        5304L, Objects.requireNonNull(repository.getProvider().getId())))
                 .isPresent();
     }
 

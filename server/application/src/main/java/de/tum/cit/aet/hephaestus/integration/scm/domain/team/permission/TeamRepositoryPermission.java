@@ -11,6 +11,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.MapsId;
+import jakarta.persistence.PostLoad;
+import jakarta.persistence.PostPersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.io.Serial;
@@ -95,8 +97,8 @@ public class TeamRepositoryPermission implements Persistable<TeamRepositoryPermi
      * Marks this entity as persisted (not new).
      * Called after the entity is loaded from the database.
      */
-    @jakarta.persistence.PostLoad
-    @jakarta.persistence.PostPersist
+    @PostLoad
+    @PostPersist
     void markNotNew() {
         this.isNew = false;
     }

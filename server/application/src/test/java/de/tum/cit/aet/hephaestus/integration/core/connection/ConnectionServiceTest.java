@@ -5,9 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.TransitionRequest;
@@ -24,8 +29,10 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -34,7 +41,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.SyncTaskExecutor;
@@ -85,7 +91,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         credentialConverter = new CredentialBundleConverter("a".repeat(32), false);
         // Provider teardown runs through a TransactionTemplate over this manager; a stub status is
         // enough to let the template execute, and it lets us assert the propagation it asked for.
-        Mockito.lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
+        lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         service = new ConnectionService(
                 connectionRepository,
                 auditRepository,
@@ -100,13 +106,11 @@ class ConnectionServiceTest extends BaseUnitTest {
                         new SyncTaskExecutor(),
                         Clock.systemUTC()));
         // Default: the connection is free. Only the disconnect fence ever asks.
-        Mockito.lenient()
-                .when(syncJobService.requestCancelForTeardown(anyLong()))
-                .thenReturn(java.util.Optional.empty());
+        lenient().when(syncJobService.requestCancelForTeardown(anyLong())).thenReturn(Optional.empty());
         workspace = new Workspace();
         workspace.setId(7L);
         // transition() returns the saved entity; echo it back so callers see the mutated row.
-        Mockito.lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @AfterEach
@@ -163,7 +167,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         setId(connection, 55L);
         connection.setState(IntegrationState.UNINSTALLED);
         when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
-                .thenReturn(java.util.Optional.of(connection));
+                .thenReturn(Optional.of(connection));
 
         Connection result = service.transition(
                 connection,
@@ -185,7 +189,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     void shouldReactivateTheWorkspacesOwnDisconnectedGitHubInstallationWhenAConnectProvesItAgain() {
         Connection connection = connectionInState(IntegrationState.UNINSTALLED);
         when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
-                .thenReturn(java.util.Optional.of(connection));
+                .thenReturn(Optional.of(connection));
 
         Connection result = service.transition(
                 connection,
@@ -233,7 +237,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         Connection stale = connectionInState(IntegrationState.ACTIVE);
         Connection authoritative = connectionInState(IntegrationState.UNINSTALLED);
         when(connectionRepository.findByIdAndWorkspaceId(stale.getId(), workspace.getId()))
-                .thenReturn(java.util.Optional.of(authoritative));
+                .thenReturn(Optional.of(authoritative));
 
         assertThatThrownBy(() -> service.transition(
                         stale,
@@ -337,11 +341,11 @@ class ConnectionServiceTest extends BaseUnitTest {
     @Test
     void disconnect_erasesAndPreparesTeardownUnderTheFenceButTearsDownOnlyAfterCommit() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
-        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
-        Runnable teardown = Mockito.mock(Runnable.class);
+        ConnectionStrategy strategy = mock(ConnectionStrategy.class);
+        Runnable teardown = mock(Runnable.class);
         IntegrationRef ref = new IntegrationRef(IntegrationKind.GITHUB, workspace.getId(), "100", connection.getId());
         when(strategy.prepareProviderTeardown(ref)).thenReturn(Optional.of(teardown));
-        InOrder order = Mockito.inOrder(connectionRepository, syncJobService, strategy, auditRepository);
+        InOrder order = inOrder(connectionRepository, syncJobService, strategy, auditRepository);
 
         service.disconnect(connection, disconnectRequest(), strategy);
 
@@ -365,7 +369,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     void disconnect_preparesTheTeardownWithTheTransactionSuspended() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
 
-        service.disconnect(connection, disconnectRequest(), Mockito.mock(ConnectionStrategy.class));
+        service.disconnect(connection, disconnectRequest(), mock(ConnectionStrategy.class));
 
         ArgumentCaptor<TransactionDefinition> definition = ArgumentCaptor.forClass(TransactionDefinition.class);
         verify(transactionManager).getTransaction(definition.capture());
@@ -377,7 +381,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     void disconnect_teardownCannotBePrepared_stillCommitsUninstalledWithNothingScheduled() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
         connection.setCredentials(new BearerToken("xoxb-secret", null), credentialConverter);
-        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        ConnectionStrategy strategy = mock(ConnectionStrategy.class);
         when(strategy.prepareProviderTeardown(any())).thenThrow(new IllegalStateException("token unavailable"));
 
         Connection result = service.disconnect(connection, disconnectRequest(), strategy);
@@ -390,7 +394,7 @@ class ConnectionServiceTest extends BaseUnitTest {
     @Test
     void disconnect_teardownFailsAfterCommit_isLoggedRatherThanThrown() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
-        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        ConnectionStrategy strategy = mock(ConnectionStrategy.class);
         when(strategy.prepareProviderTeardown(any())).thenReturn(Optional.of(() -> {
             throw new IllegalStateException("provider unavailable");
         }));
@@ -403,8 +407,8 @@ class ConnectionServiceTest extends BaseUnitTest {
     void disconnect_eraseFails_propagatesBeforeTouchingTheProviderOrTheConnection() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
         connection.setCredentials(new BearerToken("xoxb-secret", null), credentialConverter);
-        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
-        Mockito.doThrow(new QueryTimeoutException("statement timeout erasing workspace mirror"))
+        ConnectionStrategy strategy = mock(ConnectionStrategy.class);
+        doThrow(new QueryTimeoutException("statement timeout erasing workspace mirror"))
                 .when(strategy)
                 .eraseLocalData(any());
 
@@ -421,8 +425,8 @@ class ConnectionServiceTest extends BaseUnitTest {
     @Test
     void disconnect_withActiveSyncRejectsBeforeErasing() {
         Connection connection = connectionInState(IntegrationState.ACTIVE);
-        when(syncJobService.requestCancelForTeardown(connection.getId())).thenReturn(java.util.Optional.of(99L));
-        ConnectionStrategy strategy = Mockito.mock(ConnectionStrategy.class);
+        when(syncJobService.requestCancelForTeardown(connection.getId())).thenReturn(Optional.of(99L));
+        ConnectionStrategy strategy = mock(ConnectionStrategy.class);
 
         assertThatThrownBy(() -> service.disconnect(connection, disconnectRequest(), strategy))
                 .isInstanceOf(ConnectionBusyException.class)
@@ -430,7 +434,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                 .hasMessageContaining("active sync job 99")
                 .hasMessageContaining("retry");
 
-        Mockito.verifyNoInteractions(strategy);
+        verifyNoInteractions(strategy);
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
         verify(auditRepository, never()).save(any());
         verify(connectionRepository, never()).save(any());
@@ -459,7 +463,7 @@ class ConnectionServiceTest extends BaseUnitTest {
      * over the connected fleet — {@code /webhooks/**} is exempt from the auth rate limiter), a forged
      * id resolves to nothing, and a delivery can never select another workspace's secret.
      */
-    @org.junit.jupiter.api.Nested
+    @Nested
     class FindOutlineSubscription {
 
         /**
@@ -468,7 +472,7 @@ class ConnectionServiceTest extends BaseUnitTest {
          * {@code UnfinishedStubbingException}.
          */
         private ConnectionRepository.OutlineSubscriptionProjection projection(
-                Long workspaceId, @org.jspecify.annotations.Nullable String secret) {
+                Long workspaceId, @Nullable String secret) {
             return new ConnectionRepository.OutlineSubscriptionProjection() {
                 @Override
                 public Long getWorkspaceId() {
@@ -481,7 +485,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                 }
 
                 @Override
-                public @org.jspecify.annotations.Nullable String getSigningSecret() {
+                public @Nullable String getSigningSecret() {
                     return secret;
                 }
             };
@@ -490,7 +494,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         @Test
         void resolvesTheMatchingSubscriptionToItsWorkspaceAndSecret() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-b"))
-                    .thenReturn(java.util.List.of(projection(2L, "secret-b")));
+                    .thenReturn(List.of(projection(2L, "secret-b")));
 
             var resolved = service.findOutlineSubscription("sub-b");
 
@@ -503,7 +507,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         @Test
         void resolvesWithASingleIndexedLookupAndNeverEnumeratesTheFleet() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-b"))
-                    .thenReturn(java.util.List.of(projection(2L, "secret-b")));
+                    .thenReturn(List.of(projection(2L, "secret-b")));
 
             service.findOutlineSubscription("sub-b");
 
@@ -517,7 +521,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         @Test
         void aForgedSubscriptionIdResolvesToNoSecret() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("forged"))
-                    .thenReturn(java.util.List.of());
+                    .thenReturn(List.of());
 
             assertThat(service.findOutlineSubscription("forged")).isEmpty();
         }
@@ -526,9 +530,9 @@ class ConnectionServiceTest extends BaseUnitTest {
         void aDeliveryForWorkspaceANeverSelectsWorkspaceBsSecret() {
             // The query is keyed on the subscription id, so B's row is simply not in the result set.
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-a"))
-                    .thenReturn(java.util.List.of(projection(1L, "secret-a")));
+                    .thenReturn(List.of(projection(1L, "secret-a")));
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-b"))
-                    .thenReturn(java.util.List.of(projection(2L, "secret-b")));
+                    .thenReturn(List.of(projection(2L, "secret-b")));
 
             var a = service.findOutlineSubscription("sub-a").orElseThrow();
             var b = service.findOutlineSubscription("sub-b").orElseThrow();
@@ -542,7 +546,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         @Test
         void failsClosedWhenTwoActiveConnectionsClaimTheSameSubscriptionId() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-dup"))
-                    .thenReturn(java.util.List.of(projection(1L, "secret-a"), projection(2L, "secret-b")));
+                    .thenReturn(List.of(projection(1L, "secret-a"), projection(2L, "secret-b")));
 
             assertThat(service.findOutlineSubscription("sub-dup")).isEmpty();
         }
@@ -550,7 +554,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         @Test
         void isEmptyWhenTheSubscriptionMatchesButNoSecretIsStored() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-a"))
-                    .thenReturn(java.util.List.of(projection(1L, null)));
+                    .thenReturn(List.of(projection(1L, null)));
 
             assertThat(service.findOutlineSubscription("sub-a")).isEmpty();
         }
@@ -606,7 +610,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                     new TransitionRequest(
                             IntegrationState.ACTIVE, "INSTALL_BIND", "SYSTEM", "actor-1", "corr-3", "again"));
 
-            Mockito.verifyNoInteractions(eventPublisher);
+            verifyNoInteractions(eventPublisher);
         }
 
         @Test
@@ -620,7 +624,7 @@ class ConnectionServiceTest extends BaseUnitTest {
                     new TransitionRequest(
                             IntegrationState.ACTIVE, "INSTALL_BIND", "SYSTEM", "actor-1", "corr-dup", "linked"));
 
-            Mockito.verifyNoInteractions(eventPublisher);
+            verifyNoInteractions(eventPublisher);
         }
     }
 
@@ -637,9 +641,9 @@ class ConnectionServiceTest extends BaseUnitTest {
         // Lifecycle events carry the connection id; persisted rows always have one.
         setId(connection, 55L);
         connection.setState(state);
-        Mockito.lenient()
+        lenient()
                 .when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
-                .thenReturn(java.util.Optional.of(connection));
+                .thenReturn(Optional.of(connection));
         return connection;
     }
 
@@ -647,9 +651,9 @@ class ConnectionServiceTest extends BaseUnitTest {
         Connection connection = new Connection(workspace, kind, kind.name().toLowerCase(), config);
         setId(connection, 55L + kind.ordinal());
         connection.setState(IntegrationState.ACTIVE);
-        Mockito.lenient()
+        lenient()
                 .when(connectionRepository.findByIdAndWorkspaceId(connection.getId(), workspace.getId()))
-                .thenReturn(java.util.Optional.of(connection));
+                .thenReturn(Optional.of(connection));
         return connection;
     }
 

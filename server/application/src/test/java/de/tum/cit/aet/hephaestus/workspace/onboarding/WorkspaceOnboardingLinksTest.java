@@ -1,7 +1,8 @@
 package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
@@ -18,6 +19,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class WorkspaceOnboardingLinksTest extends BaseUnitTest {
     @Mock
@@ -45,7 +47,7 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
                 IntegrationKind.SLACK,
                 "T123",
                 new ConnectionConfig.SlackConfig("T123", "Engineering", null, Set.of()));
-        org.springframework.test.util.ReflectionTestUtils.setField(connection, "id", 9L);
+        ReflectionTestUtils.setField(connection, "id", 9L);
         connection.setState(IntegrationState.ACTIVE);
         return connection;
     }
@@ -89,7 +91,7 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
                 IntegrationKind.OUTLINE,
                 "team",
                 new ConnectionConfig.OutlineConfig("https://docs.example.org", null, null, Set.of()));
-        org.springframework.test.util.ReflectionTestUtils.setField(connection, "id", 9L);
+        ReflectionTestUtils.setField(connection, "id", 9L);
         connection.setState(IntegrationState.ACTIVE);
         when(connections.findByWorkspaceId(1L)).thenReturn(List.of(connection));
         when(providers.enabledProviders())
@@ -119,7 +121,7 @@ class WorkspaceOnboardingLinksTest extends BaseUnitTest {
                 IntegrationKind.OUTLINE,
                 "team",
                 new ConnectionConfig.OutlineConfig("not-a-url", null, null, Set.of()));
-        org.springframework.test.util.ReflectionTestUtils.setField(connection, "id", 9L);
+        ReflectionTestUtils.setField(connection, "id", 9L);
         connection.setState(IntegrationState.ACTIVE);
         when(connections.findByWorkspaceId(1L)).thenReturn(List.of(connection));
         when(providers.enabledProviders())

@@ -121,7 +121,7 @@ public class CapturedReviewedWorkChanges implements ReviewedWorkChanges {
         var closing = pullRequests.findClosingIssuesById(pullRequestId);
         if (!closing.stream()
                 .map(issue -> issue.getId())
-                .collect(java.util.stream.Collectors.toSet())
+                .collect(Collectors.toSet())
                 .equals(Set.copyOf(closingIds))) return false;
         EntityManager managed = Objects.requireNonNull(entityManager);
         closing.forEach(managed::refresh);

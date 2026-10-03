@@ -4,7 +4,7 @@ import { assert, describe, expect, it } from "vitest";
 import type { ChatMessage as ThreadMessage } from "@/api/types.gen";
 import type { ChatMessage } from "@/lib/types";
 
-import { isWarmingUp, parseThreadMessages, shownFeedbackText } from "./chat-validation";
+import { mentorStatus, parseThreadMessages, shownFeedbackText } from "./chat-validation";
 
 const UUID = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 const UUID2 = "c9bf9e57-1685-4c89-bafb-ff5af830be8a";
@@ -129,25 +129,25 @@ describe("shownFeedbackText", () => {
 	});
 });
 
-describe("isWarmingUp", () => {
+describe("mentorStatus", () => {
 	// `UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold")` on the server.
-	it("reads the server's cold-start status", () => {
+	it("reads the state the server reports", () => {
 		expect(
-			isWarmingUp({
+			mentorStatus({
 				type: "data-mentor-status",
 				data: { state: "warming-up", reason: "container-cold" },
 			}),
-		).toBe(true);
+		).toBe("warming-up");
 	});
 
 	it.each([
-		["another status", { type: "data-mentor-status", data: { state: "conflict", reason: "busy" } }],
 		[
 			"a status without a state",
 			{ type: "data-mentor-status", data: { reason: "container-cold" } },
 		],
+		["a state this client does not know", { type: "data-mentor-status", data: { state: "idle" } }],
 		["another data part", { type: "data-observation", data: { state: "warming-up" } }],
 	])("ignores %s", (_name, part) => {
-		expect(isWarmingUp(part)).toBe(false);
+		expect(mentorStatus(part)).toBeUndefined();
 	});
 });

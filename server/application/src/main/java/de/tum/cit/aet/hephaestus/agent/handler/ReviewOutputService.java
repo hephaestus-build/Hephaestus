@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationFingerprint;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
+import java.io.BufferedReader;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,6 +43,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -571,8 +573,7 @@ public class ReviewOutputService {
             }
         }
         if (candidates.isEmpty()) return new CodeQuotes(Map.of(), Set.of(), Map.of());
-        var groups = candidates.stream()
-                .collect(java.util.stream.Collectors.groupingBy(ReviewOutputService::repositoryRoot));
+        var groups = candidates.stream().collect(Collectors.groupingBy(ReviewOutputService::repositoryRoot));
         var matches = new HashMap<HistoricalGitEvidence.Citation, JobEvidenceFiles.QuoteMatch>();
         var heads = new HashMap<String, String>();
         Set<String> changedPaths = Set.of();
@@ -585,7 +586,7 @@ public class ReviewOutputService {
                     ? captured.pinnedHead()
                     : evidenceFiles
                             .inspect(job, root + ".git/HEAD", head.sha256(), reader -> {
-                                String identity = new java.io.BufferedReader(reader).readLine();
+                                String identity = new BufferedReader(reader).readLine();
                                 if (identity == null || !identity.matches(CitationVerification.GIT_OBJECT_ID))
                                     throw new JobDeliveryException("Captured repository has no pinned head");
                                 return identity;

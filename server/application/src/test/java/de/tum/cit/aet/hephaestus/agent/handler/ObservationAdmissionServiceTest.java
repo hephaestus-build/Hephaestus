@@ -2,9 +2,20 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
@@ -24,12 +35,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -62,7 +76,7 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     private final JsonNode NO_FAILURES = mapper.createArrayNode();
 
     @Mock
-    private de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles evidenceFiles;
+    private JobEvidenceFiles evidenceFiles;
 
     private ObservationAdmissionService service;
     private AgentJob job;
@@ -104,9 +118,9 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
     }
 
     /** Submits an admission and returns once its thread is parked on the running one. */
-    private static Future<ObjectNode> joiningRetry(
-            ExecutorService pool, java.util.concurrent.Callable<ObjectNode> admit) throws InterruptedException {
-        var thread = new java.util.concurrent.atomic.AtomicReference<Thread>();
+    private static Future<ObjectNode> joiningRetry(ExecutorService pool, Callable<ObjectNode> admit)
+            throws InterruptedException {
+        var thread = new AtomicReference<Thread>();
         Future<ObjectNode> retry = pool.submit(() -> {
             thread.set(Thread.currentThread());
             return admit.call();
@@ -137,14 +151,14 @@ class ObservationAdmissionServiceTest extends BaseUnitTest {
 
     @Test
     void shouldRemoveEvidenceOnlyAfterAdmissionCommits() {
-        var committed = new java.util.concurrent.atomic.AtomicBoolean();
-        org.mockito.Mockito.doAnswer(invocation -> {
+        var committed = new AtomicBoolean();
+        doAnswer(invocation -> {
                     committed.set(true);
                     return null;
                 })
                 .when(transactionManager)
                 .commit(any());
-        org.mockito.Mockito.doAnswer(invocation -> {
+        doAnswer(invocation -> {
                     assertThat(committed).isTrue();
                     assertThat(ObservationAdmissionService.isAdmitted(job)).isTrue();
                     return null;

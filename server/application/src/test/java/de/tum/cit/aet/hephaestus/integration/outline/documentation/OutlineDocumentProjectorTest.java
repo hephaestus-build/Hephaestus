@@ -191,8 +191,6 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
         });
     }
 
-    // --- archived flag + collection name ---
-
     @Test
     @DisplayName("an archived (soft, recoverable) row projects archived=true and keeps its body, unlike a tombstone")
     void documentsForWorkspace_archivedRowProjectsArchivedTrueWithBodyIntact() {
@@ -252,8 +250,6 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 .singleElement()
                 .satisfies(projected -> assertThat(projected.collectionName()).isNull());
     }
-
-    // --- authorship projection ---
 
     @Test
     @DisplayName("author substrate projects and a linked author resolves to their workspace member id")

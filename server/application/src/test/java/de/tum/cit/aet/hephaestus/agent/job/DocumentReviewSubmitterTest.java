@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticDetection;
+import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticRun;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
@@ -111,8 +112,8 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
                         PUBLISHED,
                         TriggerMode.AUTO,
                         new ReviewSubject(42L, true),
-                        java.util.Map.of("state", "ACTIVE")))
-                .thenReturn(automaticDetection(workspace, List.of()));
+                        Map.of("state", "ACTIVE")))
+                .thenReturn(automaticRun(workspace, List.of()));
 
         submitter.onDocumentSignal(KEY, DiscoveredVia.EVENT);
 
@@ -124,7 +125,7 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
                         eq(AgentJobType.DOCUMENT_REVIEW),
                         request.capture(),
                         eq(KEY),
-                        any(GateDecision.Detect.class));
+                        any(GateDecision.Run.class));
         assertThat(request.getValue().documentId()).isEqualTo(DOCUMENT_ID);
         assertThat(request.getValue().aboutUserId()).isEqualTo(42L);
         assertThat(request.getValue().signal()).isEqualTo(PUBLISHED);
@@ -144,8 +145,8 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
                         PUBLISHED,
                         TriggerMode.AUTO,
                         new ReviewSubject(42L, true),
-                        java.util.Map.of("state", "ACTIVE")))
-                .thenReturn(automaticDetection(workspace, List.of()));
+                        Map.of("state", "ACTIVE")))
+                .thenReturn(automaticRun(workspace, List.of()));
         ArtifactSignal signal = new ArtifactSignal();
         signal.setWorkspace(workspace);
         signal.setArtifactKind(ArtifactKinds.DOCUMENT.value());
@@ -164,7 +165,7 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
                         eq(AgentJobType.DOCUMENT_REVIEW),
                         request.capture(),
                         any(),
-                        any(GateDecision.Detect.class));
+                        any(GateDecision.Run.class));
         assertThat(request.getValue().observationOrigin()).isEqualTo(ObservationOrigin.BACKFILL);
     }
 
@@ -177,7 +178,7 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
         submitter.onDocumentSignal(KEY, DiscoveredVia.EVENT);
 
         verify(signalRecorder).markRefused(KEY, SignalStateReason.ARTIFACT_GONE);
-        verify(agentJobService, never()).submit(any(), any(), any(), any(), any(GateDecision.Detect.class));
+        verify(agentJobService, never()).submit(any(), any(), any(), any(), any(GateDecision.Run.class));
     }
 
     @Test
@@ -213,7 +214,7 @@ class DocumentReviewSubmitterTest extends BaseUnitTest {
                         PUBLISHED,
                         TriggerMode.AUTO,
                         new ReviewSubject(42L, true),
-                        java.util.Map.of("state", "ACTIVE")))
+                        Map.of("state", "ACTIVE")))
                 .thenReturn(new GateDecision.Skip(
                         "every practice bound to this signal is off", SignalStateReason.PRACTICE_AUTONOMY_OFF));
 

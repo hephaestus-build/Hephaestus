@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.config;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
@@ -50,7 +51,7 @@ public class CacheConfig {
     }
 
     private static CaffeineCache buildCache(CacheSpec spec, MeterRegistry meterRegistry) {
-        com.github.benmanes.caffeine.cache.Cache<Object, Object> cache = Caffeine.newBuilder()
+        Cache<Object, Object> cache = Caffeine.newBuilder()
                 .expireAfterWrite(spec.ttl())
                 .maximumSize(spec.maxSize())
                 .recordStats()

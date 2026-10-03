@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>A workspace deleted between the read that produced the id and this one resolves to
  * {@link WorkspaceReviewDefaults#UNSET} rather than throwing: every caller is already deciding what to do
- * with findings, and failing that decision over a race is worse than answering with defaults.
+ * with observations, and failing that decision over a race is worse than answering with defaults.
  */
 @Service
 @RequiredArgsConstructor

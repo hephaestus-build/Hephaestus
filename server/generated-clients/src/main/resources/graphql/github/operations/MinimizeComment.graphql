@@ -1,5 +1,5 @@
 # Minimizes (hides as OUTDATED) a pull request review comment.
-# Used by GithubInlineFeedbackChannel#clearStaleFeedback to collapse the anchor comment
+# Used by GitHubInlineFeedbackChannel#clearStaleFeedback to collapse the anchor comment
 # of a bot review thread the current run no longer emits — GitHub reviews are
 # append-only, so a stale thread cannot be deleted, only minimized.
 

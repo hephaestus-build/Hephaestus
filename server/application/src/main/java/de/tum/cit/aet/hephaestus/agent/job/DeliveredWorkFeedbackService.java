@@ -60,10 +60,10 @@ class DeliveredWorkFeedbackService {
             if (commentRef == null || commentRef.isBlank()) {
                 continue;
             }
-            String permalink = verifiedLink(work, placement.getPostedCommentUrl())
+            String permalink = verifiedLink(work.url(), work.provider(), placement.getPostedCommentUrl())
                     .orElseGet(() -> ReviewedWorkUrls.commentNativeId(work.provider(), placement.getPostedCommentRef())
                             .map(mirroredLinks::get)
-                            .flatMap(link -> verifiedLink(work, link))
+                            .flatMap(link -> verifiedLink(work.url(), work.provider(), link))
                             .orElse(null));
             byFeedback
                     .computeIfAbsent(placement.getFeedbackId(), ignored -> new ArrayList<>())
@@ -103,15 +103,15 @@ class DeliveredWorkFeedbackService {
         rows.addAll(repository.findInlineLinks(workspaceId, artifactId, nativeIds));
         Map<Long, String> links = new HashMap<>();
         for (var row : rows) {
-            verifiedLink(work, row.getUrl()).ifPresent(link -> links.put(row.getNativeId(), link));
+            verifiedLink(work.url(), work.provider(), row.getUrl())
+                    .ifPresent(link -> links.put(row.getNativeId(), link));
         }
         return links;
     }
 
     /** A recorded URL is still untrusted input: only a comment on this exact provider work is a link. */
-    static Optional<String> verifiedLink(ReviewedWorkRefDTO work, @Nullable String url) {
-        String workUrl = work.url();
-        IntegrationKind provider = work.provider();
+    static Optional<String> verifiedLink(
+            @Nullable String workUrl, @Nullable IntegrationKind provider, @Nullable String url) {
         if (url == null || workUrl == null || provider == null) {
             return Optional.empty();
         }

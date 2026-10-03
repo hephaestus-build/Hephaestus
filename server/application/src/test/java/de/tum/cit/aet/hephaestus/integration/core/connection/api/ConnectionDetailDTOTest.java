@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -142,7 +143,7 @@ class ConnectionDetailDTOTest {
 
     private IntegrationManifestRegistry manifests() {
         IntegrationManifestRegistry registry = mock(IntegrationManifestRegistry.class);
-        when(registry.capabilitiesFor(org.mockito.ArgumentMatchers.any())).thenReturn(Set.of());
+        when(registry.capabilitiesFor(any())).thenReturn(Set.of());
         return registry;
     }
 

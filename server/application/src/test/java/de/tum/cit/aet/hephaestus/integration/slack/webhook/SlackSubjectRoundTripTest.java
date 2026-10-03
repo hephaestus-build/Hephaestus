@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -49,7 +50,7 @@ class SlackSubjectRoundTripTest extends BaseUnitTest {
         // so a filter built from the stored team id always matches the subjects the receiver publishes.
         JsonNode payload = MAPPER.readTree(
                 "{\"type\":\"event_callback\",\"team_id\":\"T.dotted\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\"}}");
-        String subject = DERIVER.deriveSubject(payload, java.util.Map.of());
+        String subject = DERIVER.deriveSubject(payload, Map.of());
         String filterPrefix = ConsumerSubjectMath.teamFilter("slack", "T.dotted");
         assertThat(filterPrefix).isEqualTo("slack.T~dotted.>");
         assertThat(subject).startsWith("slack.T~dotted.");

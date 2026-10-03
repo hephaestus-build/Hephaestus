@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
+import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.ValidatedObservation;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
@@ -52,6 +53,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -250,7 +252,7 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
     private Installed install(Provider source) {
         IdentityProviderType type = source.type;
         String serverUrl = source.serverUrl;
-        String suffix = type.name().toLowerCase(java.util.Locale.ROOT);
+        String suffix = type.name().toLowerCase(Locale.ROOT);
         Workspace workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("close-" + suffix));
         IdentityProvider provider = identityProviderRepository
                 .findByTypeAndServerUrl(type, serverUrl)
@@ -309,7 +311,7 @@ class ClosedIssueOutcomeWithdrawalIntegrationTest extends BaseIntegrationTest {
         return practiceRepository.saveAndFlush(practice);
     }
 
-    private de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex completeIssueCapture(Installed installed) {
+    private JobFolderIndex completeIssueCapture(Installed installed) {
         Map<String, byte[]> files = new LinkedHashMap<>();
         files.put("context/metadata.json", "{}".getBytes(StandardCharsets.UTF_8));
         files.put("context/comments.json", "[]".getBytes(StandardCharsets.UTF_8));

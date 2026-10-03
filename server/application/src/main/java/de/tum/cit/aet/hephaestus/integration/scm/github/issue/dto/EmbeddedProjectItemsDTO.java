@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto;
 
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHOrganization;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2Item;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHProjectV2ItemConnection;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUser;
@@ -130,8 +131,7 @@ public record EmbeddedProjectItemsDTO(
          * @return EmbeddedProjectReference or null if project is null
          */
         @Nullable
-        public static EmbeddedProjectReference fromProjectV2(
-                de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.@Nullable GHProjectV2 project) {
+        public static EmbeddedProjectReference fromProjectV2(@Nullable GHProjectV2 project) {
             if (project == null || project.getId() == null) {
                 return null;
             }

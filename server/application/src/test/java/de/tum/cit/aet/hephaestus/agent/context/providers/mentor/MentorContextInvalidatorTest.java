@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers.mentor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -29,7 +30,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -100,7 +100,7 @@ class MentorContextInvalidatorTest extends BaseUnitTest {
 
         invalidator.onPullRequestUpdated(buildPrUpdated(42L, 9L, null));
 
-        verify(userCache, never()).evict(ArgumentMatchers.any());
+        verify(userCache, never()).evict(any());
     }
 
     @ParameterizedTest

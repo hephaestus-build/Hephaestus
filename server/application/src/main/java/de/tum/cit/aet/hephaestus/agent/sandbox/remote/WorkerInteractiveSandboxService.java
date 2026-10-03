@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxService;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.InteractiveSandboxSpec;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.MentorBusyException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxIdentity;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerControlWebSocketHandler;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerDisconnectedEvent;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerMentorSessionEvent;
@@ -18,7 +18,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.event.EventListener;
@@ -28,7 +27,7 @@ import tools.jackson.databind.ObjectMapper;
 /** Server-side placement. No local execution path, including when both roles share a JVM. */
 @Service
 @Primary
-@ConditionalOnProperty(name = RuntimeRole.SERVER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnServerRole
 @EnableConfigurationProperties(InteractiveSandboxProperties.class)
 public final class WorkerInteractiveSandboxService implements InteractiveSandboxService {
     private final WorkerSessionRegistry workers;

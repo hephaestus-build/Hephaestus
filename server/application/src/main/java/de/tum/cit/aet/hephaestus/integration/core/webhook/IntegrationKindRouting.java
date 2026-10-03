@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,7 +26,7 @@ public class IntegrationKindRouting {
             "outline",
             IntegrationKind.OUTLINE);
 
-    public Optional<IntegrationKind> resolve(@org.jspecify.annotations.Nullable String pathSegment) {
+    public Optional<IntegrationKind> resolve(@Nullable String pathSegment) {
         if (pathSegment == null) return Optional.empty();
         return Optional.ofNullable(ROUTES.get(pathSegment.toLowerCase(Locale.ROOT)));
     }

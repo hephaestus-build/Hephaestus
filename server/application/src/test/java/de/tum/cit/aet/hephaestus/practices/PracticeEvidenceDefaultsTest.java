@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.internal.ClasspathArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import java.time.Clock;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Tag;
@@ -25,7 +26,7 @@ class PracticeEvidenceDefaultsTest {
         // Declaration order, not alphabetical — this is the list an authoring UI shows first. Sorting is
         // the binding's business, since that list is what the fingerprint is taken over.
         JsonMapper mapper = JsonMapper.builder().build();
-        var catalogs = new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC());
+        var catalogs = new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC());
         var defaults = new PracticeEvidenceDefaults(catalogs, PracticeSignalOptionsFixture.catalog());
 
         assertThat(defaults.needsFor(artifact))
@@ -46,7 +47,7 @@ class PracticeEvidenceDefaultsTest {
     void shouldRefuseAKindItHasNoDefaultFor() {
         JsonMapper mapper = JsonMapper.builder().build();
         var defaults = new PracticeEvidenceDefaults(
-                new ClasspathArtifactSourceCatalogRegistry(mapper, java.time.Clock.systemUTC()),
+                new ClasspathArtifactSourceCatalogRegistry(mapper, Clock.systemUTC()),
                 PracticeSignalOptionsFixture.catalog());
 
         // Spelled like a plausible future domain, not gibberish: the case that matters is a kind real to

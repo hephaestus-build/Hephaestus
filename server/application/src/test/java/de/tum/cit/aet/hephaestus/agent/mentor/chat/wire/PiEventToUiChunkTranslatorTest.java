@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,8 +51,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
             return mapper.readTree(in);
         }
     }
-
-    // message_start
 
     @Test
     void messageStart_assistant_emitsStartAndCapturesModel() throws Exception {
@@ -109,8 +108,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         assertThat(first).extracting(c -> c.getClass().getSimpleName()).containsExactly("Start", "StartStep");
         assertThat(second).extracting(c -> c.getClass().getSimpleName()).containsExactly("StartStep");
     }
-
-    // message_update (Pi's authoritative shape)
 
     @Test
     void delta_type_translatesTo_textDelta_chunk() throws Exception {
@@ -201,8 +198,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         assertThat(state.observedCallCount()).isEqualTo(2);
     }
 
-    // tool_execution_start / end with real camelCase shapes
-
     @Test
     void tool_call_start_emits_inputAvailable() throws Exception {
         JsonNode event = fixture("tool_execution_start.json");
@@ -263,13 +258,13 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         List<UIMessageChunk> out = translator.translate(event, state);
 
         UIMessageChunk.Finish finish = (UIMessageChunk.Finish) out.get(out.size() - 1);
-        assertThat(finish.messageMetadata()).isNotNull();
-        assertThat(finish.messageMetadata().usage()).isNotNull();
-        assertThat(finish.messageMetadata()).isNotNull();
-        assertThat(finish.messageMetadata().model()).isEqualTo("claude-3-5-haiku-20241022");
-        assertThat(finish.messageMetadata().usage()).isNotNull();
-        assertThat(finish.messageMetadata().usage().input()).isEqualTo(25);
-        assertThat(finish.messageMetadata().usage().output()).isEqualTo(5);
+        var metadata = finish.messageMetadata();
+        assertThat(metadata).isNotNull();
+        assertThat(metadata.model()).isEqualTo("claude-3-5-haiku-20241022");
+        var usage = metadata.usage();
+        assertThat(usage).isNotNull();
+        assertThat(usage.input()).isEqualTo(25);
+        assertThat(usage.output()).isEqualTo(5);
     }
 
     @Test
@@ -290,9 +285,9 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         UIMessageChunk.Finish finish = (UIMessageChunk.Finish) out.get(out.size() - 1);
         var metadata = finish.messageMetadata();
-        org.junit.jupiter.api.Assertions.assertNotNull(metadata);
+        assertThat(metadata).isNotNull();
         var usage = metadata.usage();
-        org.junit.jupiter.api.Assertions.assertNotNull(usage);
+        assertThat(usage).isNotNull();
         assertThat(usage.input()).isEqualTo(999);
         assertThat(state.observedCallCount()).isEqualTo(1);
     }
@@ -340,8 +335,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         assertThat(finish.finishReason()).isSameAs(UIMessageChunk.FinishReason.STOP);
     }
 
-    // turn_end + open block closure
-
     @Test
     void turnEnd_closesAllOpenBlocks() throws Exception {
         translator.translate(fixture("message_update_text_delta.json"), state);
@@ -358,8 +351,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         List<UIMessageChunk> out = translator.translate(fixture("tool_execution_start.json"), state);
         assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd");
     }
-
-    // link_observation (runner-emitted, camelCase canonical)
 
     /** The observation {@code runner_link_observation.json} links. */
     private static final UUID FIXTURE_LINK = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
@@ -455,8 +446,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("Error");
     }
 
-    // synthetic runner events (snake-case, runner-owned)
-
     @ParameterizedTest
     @ValueSource(strings = {"error", "aborted"})
     void shouldFailWhenTheSettledAssistantDidNotFinish(String stopReason) throws Exception {
@@ -544,9 +533,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
                 .isEmpty();
 
         assertThat(state.compactionAttempted()).isTrue();
-        assertThat(java.util.Objects.requireNonNull(state.observedUsage())
-                        .get("input")
-                        .asInt())
+        assertThat(Objects.requireNonNull(state.observedUsage()).get("input").asInt())
                 .isEqualTo(25);
         assertThat(state.observedCallCount()).isEqualTo(1);
     }
@@ -673,8 +660,6 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
                 .extracting(c -> c.getClass().getSimpleName())
                 .containsExactly("Error");
     }
-
-    // parts accumulation
 
     @Test
     void stateAccumulatesPartsAcrossDeltas() throws Exception {

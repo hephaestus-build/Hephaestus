@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticDetection;
+import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticRun;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,17 +41,20 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.practices.review.GateDecision;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeReviewReadiness;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.practices.spi.UserRoleChecker;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -60,9 +63,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 class AgentJobEventListenerTest extends BaseUnitTest {
@@ -104,8 +109,6 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         lenient().when(signalRecorder.record(any(), any(), any())).thenReturn(true);
         lenient().when(pullRequestRepository.findHeadRefOidById(any())).thenReturn(Optional.of("abc123"));
     }
-
-    // Helpers
 
     private ScmEventPayload.PullRequestData createPrData(Issue.State state, boolean isDraft, boolean isMerged) {
         return new ScmEventPayload.PullRequestData(
@@ -160,9 +163,9 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         repository.setNameWithOwner(REPO_REF.nameWithOwner());
         repository.setDefaultBranch(REPO_REF.defaultBranch());
         pr.setRepository(repository);
-        org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefOid", headRefOid);
-        org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefName", headRefName);
-        org.springframework.test.util.ReflectionTestUtils.setField(pr, "baseRefName", baseRefName);
+        ReflectionTestUtils.setField(pr, "headRefOid", headRefOid);
+        ReflectionTestUtils.setField(pr, "headRefName", headRefName);
+        ReflectionTestUtils.setField(pr, "baseRefName", baseRefName);
         pr.setState(Issue.State.OPEN);
         pr.setMerged(false);
         return pr;
@@ -188,8 +191,8 @@ class AgentJobEventListenerTest extends BaseUnitTest {
 
         Workspace workspace = new Workspace();
         workspace.setId(WORKSPACE_ID);
-        var detect = automaticDetection(workspace, List.of());
-        when(reviewGate.evaluate(eq(pr), any(), any())).thenReturn(detect);
+        var run = automaticRun(workspace, List.of());
+        when(reviewGate.evaluate(eq(pr), any(), any())).thenReturn(run);
         when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
         return pr;
@@ -202,8 +205,6 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         assertThat(captor.getValue().baseRefOid()).isEqualTo("a".repeat(40));
         return captor.getValue();
     }
-
-    // Test Groups
 
     @Nested
     class TombstonedWorkTests {
@@ -276,32 +277,11 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             verify(agentJobService, never()).submit(any(), any(), any(), any());
         }
 
-        @Test
-        void shouldSkipClosedPRs() {
-            var prData = createPrData(Issue.State.CLOSED, false, false);
-            var event = new ScmDomainEvent.PullRequestCreated(prData, webhookContext(1L));
-
-            listener.onPullRequestCreated(event);
-
-            verify(pullRequestRepository, never()).findByIdWithAllForGate(any());
-            verify(agentJobService, never()).submit(any(), any(), any(), any());
-        }
-
-        @Test
-        void shouldSkipMergedPRs() {
-            var prData = createPrData(Issue.State.MERGED, false, true);
-            var event = new ScmDomainEvent.PullRequestCreated(prData, webhookContext(1L));
-
-            listener.onPullRequestCreated(event);
-
-            verify(pullRequestRepository, never()).findByIdWithAllForGate(any());
-            verify(agentJobService, never()).submit(any(), any(), any(), any());
-        }
-
-        @Test
-        void shouldSkipWhenIsMergedTrueButStateIsOpen() {
-            // Race condition: merge flag set before state update in webhook
-            var prData = createPrData(Issue.State.OPEN, false, true);
+        /** {@code OPEN} with the merge flag set: the webhook can set the flag before the state. */
+        @ParameterizedTest
+        @CsvSource({"CLOSED, false", "MERGED, true", "OPEN, true"})
+        void shouldSkipWhenThePullRequestIsClosedOrMerged(Issue.State state, boolean merged) {
+            var prData = createPrData(state, false, merged);
             var event = new ScmDomainEvent.PullRequestCreated(prData, webhookContext(1L));
 
             listener.onPullRequestCreated(event);
@@ -358,7 +338,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             var event = new ScmDomainEvent.PullRequestCreated(
                     createPrData(Issue.State.OPEN, false, false), webhookContext(1L));
             PullRequest pr = setupHappyPath();
-            org.springframework.test.util.ReflectionTestUtils.setField(pr, "baseRefOid", null);
+            ReflectionTestUtils.setField(pr, "baseRefOid", null);
             listener.onPullRequestCreated(event);
             var captor = ArgumentCaptor.forClass(PullRequestReviewSubmissionRequest.class);
             verify(agentJobService)
@@ -425,9 +405,9 @@ class AgentJobEventListenerTest extends BaseUnitTest {
 
             Workspace workspace = new Workspace();
             workspace.setId(42L);
-            var detect = automaticDetection(workspace, List.of());
+            var run = automaticRun(workspace, List.of());
             when(reviewGate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO))
-                    .thenReturn(detect);
+                    .thenReturn(run);
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             listener.onPullRequestCreated(event);
@@ -453,8 +433,8 @@ class AgentJobEventListenerTest extends BaseUnitTest {
 
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
-            var detect = automaticDetection(workspace, List.of());
-            when(reviewGate.evaluate(eq(pr), any(), any())).thenReturn(detect);
+            var run = automaticRun(workspace, List.of());
+            when(reviewGate.evaluate(eq(pr), any(), any())).thenReturn(run);
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             listener.onPullRequestCreated(event);
@@ -518,7 +498,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
             when(reviewGate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO))
-                    .thenReturn(automaticDetection(workspace, List.of()));
+                    .thenReturn(automaticRun(workspace, List.of()));
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenThrow(new RuntimeException("DB error"));
 
             // Swallowing is the contract: this listener runs on the webhook consumer, and a thrown
@@ -596,10 +576,10 @@ class AgentJobEventListenerTest extends BaseUnitTest {
 
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
-            var detect = automaticDetection(workspace, List.of());
+            var run = automaticRun(workspace, List.of());
             when(reviewGate.evaluate(
                             pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, ReviewSubject.reviewer(200L, true)))
-                    .thenReturn(detect);
+                    .thenReturn(run);
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             listener.onReviewSubmitted(event);
@@ -651,45 +631,15 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             verify(agentJobService, never()).submit(any(), any(), any(), any());
         }
 
-        @Test
-        void shouldSkipWhenPRIsClosed() {
+        @ParameterizedTest
+        @CsvSource({"CLOSED, false", "MERGED, true", "OPEN, true"})
+        void shouldSkipWhenThePullRequestIsClosedOrMerged(Issue.State state, boolean merged) {
             var reviewData = createReviewData();
             var event = new ScmDomainEvent.ReviewSubmitted(reviewData, webhookContext(1L));
 
             PullRequest pr = new PullRequest();
-            pr.setState(Issue.State.CLOSED);
-            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-
-            listener.onReviewSubmitted(event);
-
-            verify(reviewGate, never()).evaluate(any(), any(), any());
-            verify(agentJobService, never()).submit(any(), any(), any(), any());
-        }
-
-        @Test
-        void shouldSkipWhenPRIsMerged() {
-            var reviewData = createReviewData();
-            var event = new ScmDomainEvent.ReviewSubmitted(reviewData, webhookContext(1L));
-
-            PullRequest pr = new PullRequest();
-            pr.setState(Issue.State.MERGED);
-            pr.setMerged(true);
-            when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
-
-            listener.onReviewSubmitted(event);
-
-            verify(reviewGate, never()).evaluate(any(), any(), any());
-            verify(agentJobService, never()).submit(any(), any(), any(), any());
-        }
-
-        @Test
-        void shouldSkipWhenIsMergedTrueButStateIsOpen() {
-            var reviewData = createReviewData();
-            var event = new ScmDomainEvent.ReviewSubmitted(reviewData, webhookContext(1L));
-
-            PullRequest pr = new PullRequest();
-            pr.setState(Issue.State.OPEN);
-            pr.setMerged(true);
+            pr.setState(state);
+            pr.setMerged(merged);
             when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
 
             listener.onReviewSubmitted(event);
@@ -749,7 +699,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             workspace.setId(WORKSPACE_ID);
             when(reviewGate.evaluate(
                             pr, ScmSignals.PULL_REQUEST_REVIEWED, TriggerMode.AUTO, ReviewSubject.reviewer(200L, true)))
-                    .thenReturn(automaticDetection(workspace, List.of()));
+                    .thenReturn(automaticRun(workspace, List.of()));
             when(agentJobService.submit(any(), any(), any(), any(), any()))
                     .thenThrow(new RuntimeException("submission failed"));
 
@@ -795,7 +745,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
             when(reviewGate.evaluate(pr, ScmSignals.PULL_REQUEST_MERGED, TriggerMode.AUTO))
-                    .thenReturn(automaticDetection(workspace, List.of()));
+                    .thenReturn(automaticRun(workspace, List.of()));
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             var prData = createPrData(Issue.State.MERGED, false, true);
@@ -807,7 +757,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
 
         @Test
         void onPullRequestMerged_recordsSyncDiscoveredMergesWithoutReviewingThem() {
-            // A sync replays every historical merge, unlike a live merge event; retrospective detection
+            // A sync replays every historical merge, unlike a live merge event; retrospective review
             // only runs for real-time transitions.
             var prData = createPrData(Issue.State.MERGED, false, true);
             listener.onPullRequestMerged(new ScmDomainEvent.PullRequestMerged(prData, syncContext()));
@@ -825,7 +775,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
             when(reviewGate.evaluate(pr, ScmSignals.PULL_REQUEST_CLOSED, TriggerMode.AUTO))
-                    .thenReturn(automaticDetection(workspace, List.of()));
+                    .thenReturn(automaticRun(workspace, List.of()));
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             var prData = createPrData(Issue.State.CLOSED, false, false);
@@ -871,7 +821,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
         private record CollaborationFixture(
                 AgentJobEventListener listener,
                 UserRoleChecker userRoleChecker,
-                PracticeReviewReadiness practiceDetectionReadiness,
+                PracticeReviewReadiness practiceReviewReadiness,
                 PracticeRepository practiceRepository,
                 WorkspaceResolver workspaceResolver) {
             static CollaborationFixture create(
@@ -879,7 +829,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                     PullRequestRepository pullRequestRepository,
                     SignalRecorder signalRecorder) {
                 var userRoleChecker = mock(UserRoleChecker.class);
-                var practiceDetectionReadiness = mock(PracticeReviewReadiness.class);
+                var practiceReviewReadiness = mock(PracticeReviewReadiness.class);
                 var practiceRepository = mock(PracticeRepository.class);
                 var workspaceResolver = mock(WorkspaceResolver.class);
                 var coverageService = mock(PracticeReviewCoverageService.class);
@@ -891,21 +841,21 @@ class AgentJobEventListenerTest extends BaseUnitTest {
                                 nullable(ReviewSubject.class)))
                         .thenReturn(true);
                 var realGate = new ReviewGate(
-                        practiceDetectionReadiness,
+                        practiceReviewReadiness,
                         practiceRepository,
                         workspaceResolver,
                         mock(PracticeSignalOptions.class),
                         coverageService,
-                        new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(java.util.Map.of()),
+                        new AutomatedReviewFence(Map.of()),
                         mock(ObservationRepository.class),
                         mock(ObservationVisibilityPolicy.class),
-                        mock(de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.class));
+                        mock(ReviewedWorkChanges.class));
                 // One resolver for both, as in production: the ledger key and the gate must agree on which
                 // workspace owns the repository.
                 var listener = new AgentJobEventListener(
                         agentJobService, pullRequestRepository, realGate, workspaceResolver, signalRecorder, MANIFESTS);
                 return new CollaborationFixture(
-                        listener, userRoleChecker, practiceDetectionReadiness, practiceRepository, workspaceResolver);
+                        listener, userRoleChecker, practiceReviewReadiness, practiceRepository, workspaceResolver);
             }
         }
 
@@ -936,7 +886,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             workspace.setWorkspaceSlug("test-workspace");
             workspace.getFeatures().setPracticesEnabled(true);
             when(fixture.workspaceResolver().resolveForRepository("owner/repo")).thenReturn(Optional.of(workspace));
-            when(fixture.practiceDetectionReadiness().hasRunnableAgent(WORKSPACE_ID))
+            when(fixture.practiceReviewReadiness().hasRunnableAgent(WORKSPACE_ID))
                     .thenReturn(true);
 
             Practice practice = new Practice();
@@ -964,7 +914,7 @@ class AgentJobEventListenerTest extends BaseUnitTest {
             workspace.setId(WORKSPACE_ID);
             workspace.getFeatures().setPracticesEnabled(true);
             when(fixture.workspaceResolver().resolveForRepository("owner/repo")).thenReturn(Optional.of(workspace));
-            when(fixture.practiceDetectionReadiness().hasRunnableAgent(WORKSPACE_ID))
+            when(fixture.practiceReviewReadiness().hasRunnableAgent(WORKSPACE_ID))
                     .thenReturn(true);
 
             // Practice only matches ReviewSubmitted, not PullRequestCreated

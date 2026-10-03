@@ -1,15 +1,13 @@
 package de.tum.cit.aet.hephaestus.integration.scm.common;
 
+import java.io.IOException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.graphql.client.GraphQlTransportException;
 import reactor.netty.http.client.PrematureCloseException;
 
 /**
- * Shared utility for detecting transport-level errors during GitHub GraphQL operations.
- * <p>
- * Consolidates the transport error detection logic previously duplicated across
- * multiple sync services. Covers all known transport failure modes including
- * connection resets, premature closes, aborted connections, and blocking read timeouts.
+ * Recognises transport-level errors during GitHub GraphQL operations: connection resets, premature closes,
+ * aborted connections and blocking read timeouts.
  */
 @Slf4j
 public final class ScmTransportErrors {
@@ -59,7 +57,7 @@ public final class ScmTransportErrors {
             }
 
             // Check for IOException indicating connection issues
-            if (cause instanceof java.io.IOException && message != null) {
+            if (cause instanceof IOException && message != null) {
                 String lower = message.toLowerCase();
                 if (lower.contains("connection reset")
                         || lower.contains("broken pipe")

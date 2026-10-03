@@ -411,7 +411,7 @@ public class JobEvidenceFiles {
                 job.getId(),
                 job.getWorkspace().getId(),
                 job.getRetryCount(),
-                java.util.Objects.requireNonNull(job.getWorkerId()));
+                Objects.requireNonNull(job.getWorkerId()));
     }
 
     private void cleanStaleGitSpool() {

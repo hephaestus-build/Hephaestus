@@ -35,20 +35,9 @@ export default function GlobalCopilot() {
 }
 
 function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
-	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
-	// already is, rather than as a toast away from the conversation that failed.
 	const mentorChat = useMentorChat({});
 
 	const router = useRouter();
-
-	const handleMessageEdit = (messageId: string, content: string) => {
-		const messageIndex = mentorChat.messages.findIndex((message) => message.id === messageId);
-		if (messageIndex === -1) {
-			return;
-		}
-		mentorChat.setMessages(mentorChat.messages.slice(0, messageIndex));
-		mentorChat.sendMessage(content);
-	};
 
 	return (
 		<Copilot
@@ -69,18 +58,13 @@ function WorkspaceCopilot({ workspaceSlug }: { workspaceSlug: string }) {
 			<Chat
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
-				status={mentorChat.status}
-				warmingUp={mentorChat.warmingUp}
-				errorMessage={mentorChat.error?.message}
+				turn={mentorChat.turn}
 				onMessageSubmit={mentorChat.sendMessage}
-				onMessageEdit={handleMessageEdit}
+				onMessageEdit={mentorChat.editMessage}
 				onStop={() => {
 					void mentorChat.stop();
 				}}
-				onReload={() => {
-					mentorChat.clearError();
-					mentorChat.retry();
-				}}
+				onReload={mentorChat.retry}
 				onCopy={copyToClipboard}
 				onVote={mentorChat.voteMessage}
 			/>

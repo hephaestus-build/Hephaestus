@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.*;
-import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.*;
-import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.*;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
+import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.beNotNullableIfWorkspaceType;
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
@@ -11,6 +13,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
+import jakarta.persistence.Entity;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Nested;
@@ -83,7 +86,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // Feedback synthesis seam — scoped via a raw workspace_id scalar (cross-module
             // FK to avoid a Modulith cycle, mirrors Observation.agentJobId).
             "Feedback", // direct workspace_id scalar column (sfk_feedback_workspace)
-            "FeedbackObservation", // through Feedback.workspace_id (and finding -> Practice.workspace)
+            "FeedbackObservation", // through Feedback.workspace_id (and observation -> Practice.workspace)
             "FeedbackPlacement", // through Feedback.workspace_id
             // Slack integration — every table carries a direct workspace_id scalar and is therefore
             // auto-classified scoped by WorkspaceScopedTables (absent from GLOBAL_TABLES). Listed here
@@ -129,11 +132,9 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "LoginProvider", // Instance-scoped OAuth login provider (sign-in option); not workspace-scoped
             "ConsentDecision", // Account-scoped consent evidence; spans workspaces
             "AccountAiChoice", // The account's own AI choice; one answer for every workspace
-            "WorkerRegistry", // Fleet-wide worker liveness/capacity registry (#1138); not workspace-scoped
-            "InstanceSettings" // Singleton instance-wide operator settings (silent-mode brake, #1386)
+            "WorkerRegistry", // Fleet-wide worker liveness/capacity registry; not workspace-scoped
+            "InstanceSettings" // Singleton instance-wide operator settings (silent-mode brake)
             );
-
-    // ENTITY WORKSPACE RELATIONSHIPS
 
     @Nested
     class EntityWorkspaceRelationshipTests {
@@ -189,7 +190,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
 
             ArchRule rule = classes()
                     .that()
-                    .areAnnotatedWith(jakarta.persistence.Entity.class)
+                    .areAnnotatedWith(Entity.class)
                     .and()
                     .resideInAPackage(BASE_PACKAGE + "..")
                     .should(haveWorkspacePath)
@@ -231,7 +232,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
 
             ArchRule rule = classes()
                     .that()
-                    .areAnnotatedWith(jakarta.persistence.Entity.class)
+                    .areAnnotatedWith(Entity.class)
                     .and()
                     .resideInAPackage(BASE_PACKAGE + "..")
                     .should(haveWorkspaceIdField)
@@ -244,15 +245,13 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
         void directWorkspaceRelationshipsNotNullable() {
             ArchRule rule = fields().that()
                     .areDeclaredInClassesThat()
-                    .areAnnotatedWith(jakarta.persistence.Entity.class)
+                    .areAnnotatedWith(Entity.class)
                     .should(beNotNullableIfWorkspaceType())
                     .because("Workspace relationships should be required to prevent orphaned data");
 
             rule.check(classes);
         }
     }
-
-    // DTO WORKSPACE CONTEXT
 
     @Nested
     class DtoWorkspaceContextTests {
@@ -307,8 +306,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // REPOSITORY RETURN TYPE SAFETY
 
     @Nested
     class RepositoryReturnTypeSafetyTests {
@@ -409,8 +406,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
         }
     }
 
-    // CASCADE DELETE WORKSPACE SAFETY
-
     @Nested
     class CascadeDeleteSafetyTests {
 
@@ -464,7 +459,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
 
             ArchRule rule = classes()
                     .that()
-                    .areAnnotatedWith(jakarta.persistence.Entity.class)
+                    .areAnnotatedWith(Entity.class)
                     .should(notCascadeDeleteGlobalEntities)
                     .because("Workspace deletion should not cascade to global entities");
 

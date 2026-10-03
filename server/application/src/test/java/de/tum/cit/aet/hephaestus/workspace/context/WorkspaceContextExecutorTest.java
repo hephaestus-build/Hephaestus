@@ -1,11 +1,20 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import java.util.Set;
-import java.util.concurrent.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
@@ -121,13 +130,11 @@ class WorkspaceContextExecutorTest {
         latch.await(5, TimeUnit.SECONDS);
         executor.shutdown();
 
-        // Assert - Context should be cleaned up
         assertNull(contextAfterExecution.get());
     }
 
     @Test
     void shouldHandleNullContextGracefully() throws Exception {
-        // Arrange - No context set
         AtomicReference<WorkspaceContext> capturedContext = new AtomicReference<>();
 
         Runnable wrapped = WorkspaceContextExecutor.wrap(() -> {
@@ -164,7 +171,6 @@ class WorkspaceContextExecutorTest {
         AtomicReference<String> capturedSlug1 = new AtomicReference<>();
         AtomicReference<String> capturedSlug2 = new AtomicReference<>();
 
-        // Act - Wrap two different contexts
         WorkspaceContextHolder.setContext(context1);
         Runnable wrapped1 = WorkspaceContextExecutor.wrap(() -> {
             capturedSlug1.set(WorkspaceContextHolder.getContext().slug());
@@ -184,7 +190,6 @@ class WorkspaceContextExecutorTest {
         executor.shutdown();
         executor.awaitTermination(5, TimeUnit.SECONDS);
 
-        // Assert - Each should capture its own context
         assertEquals("ws1", capturedSlug1.get());
         assertEquals("ws2", capturedSlug2.get());
     }

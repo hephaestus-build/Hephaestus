@@ -90,7 +90,7 @@ public class GitLabHistoricalBackfillService {
     /**
      * One backfill pass, optionally threading the job's {@link SyncExecutionHandle} so a manually
      * triggered {@code BACKFILL} job reports per-repository progress and can be cancelled between
-     * repositories — the per-connection entry point behind {@code GitlabIntegrationSyncRunner}.
+     * repositories — the per-connection entry point behind {@code GitLabIntegrationSyncRunner}.
      * Performs exactly the same per-repository step (cooldown and initial-sync gates included)
      * regardless of caller, under the handle's progress reporting instead of the scheduler's cadence.
      *

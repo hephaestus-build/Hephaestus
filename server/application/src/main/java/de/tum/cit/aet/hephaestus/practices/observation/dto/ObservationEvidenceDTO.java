@@ -15,7 +15,6 @@ import tools.jackson.databind.JsonNode;
 @Schema(description = "Verified, source-bound evidence for an observation")
 public record ObservationEvidenceDTO(
         @NonNull List<EvidenceCitationDTO> citations,
-        @Nullable String detector,
 
         @Nullable
         @Schema(description = "Where the review looked when it found nothing; null unless it recorded a search")
@@ -36,14 +35,12 @@ public record ObservationEvidenceDTO(
 
     public static @Nullable ObservationEvidenceDTO from(@Nullable JsonNode evidence) {
         if (evidence == null || !evidence.isObject()) return null;
-        String detector = evidence.path("detector").asString(null);
         List<EvidenceCitationDTO> citations = evidence.path("citations")
                 .valueStream()
                 .map(EvidenceCitationDTO::from)
                 .toList();
         return new ObservationEvidenceDTO(
                 citations,
-                detector,
                 EvidenceSearchDTO.from(evidence.path("search")),
                 EvidenceInapplicabilityDTO.from(evidence.path("inapplicability")),
                 EvidenceUndecidabilityDTO.from(evidence.path("undecidability")));

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -151,7 +152,7 @@ class PiResultParserTest extends BaseUnitTest {
         };
 
         for (String coverage : invalid) {
-            Map<String, Object> output = new java.util.HashMap<>();
+            Map<String, Object> output = new HashMap<>();
             parser.addPracticeCoverage(output, coverage.getBytes(StandardCharsets.UTF_8));
             assertThat(output).doesNotContainKey("practiceCoverage");
         }

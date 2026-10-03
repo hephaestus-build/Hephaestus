@@ -10,13 +10,13 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.IdentityLinkRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 
 /**
  * Pins the instance-admin authority string emitted into the JWT. It MUST be the namespaced
  * {@code app_admin} (matching the {@code /.well-known} discovery doc and the {@code @PreAuthorize}
- * checks), NOT the legacy bare {@code admin} (which collides with the per-workspace "admin" role).
- * This is the drift guard against the issuer, the discovery doc, and the authorize rules diverging.
+ * checks), not the bare {@code admin}, which collides with the per-workspace "admin" role.
  */
 class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
 
@@ -71,7 +71,6 @@ class JwtPrincipalFactoryRolesTest extends BaseUnitTest {
     }
 
     private JwtPrincipal principal(Account account) {
-        return factory.forAuthority(
-                java.util.Objects.requireNonNull(account.getId()), IssuanceAuthorityFixture.of(account));
+        return factory.forAuthority(Objects.requireNonNull(account.getId()), IssuanceAuthorityFixture.of(account));
     }
 }

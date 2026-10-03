@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -83,7 +84,7 @@ class ReleaseCheckClientTest {
 
     @Test
     void shouldRejectDraftsPrereleasesUnboundedTagsAndNonJsonAsMalformed() {
-        var malformed = new java.util.ArrayList<String>();
+        var malformed = new ArrayList<String>();
         for (String tag : new String[] {"v1.0.0-rc.1", "v01.2.3", "v9999999999.0.0", "1.2.3", "main"}) {
             malformed.add(release(tag, ""));
         }

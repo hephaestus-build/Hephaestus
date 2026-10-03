@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewSubject;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryTarget;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,13 +58,12 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         var second = monitor(12L, "group/second");
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(first, second));
         service.patchGeneratedPaths(
-                workspace,
-                java.util.Map.of("owner/first", List.of("generated/**"), "group/second", List.of("client/**")));
+                workspace, Map.of("owner/first", List.of("generated/**"), "group/second", List.of("client/**")));
         service.replace(workspace, WorkspaceReviewScope.ALL);
         assertThat(service.generatedPaths(workspace))
                 .containsEntry("owner/first", List.of("generated/**"))
                 .containsEntry("group/second", List.of("client/**"));
-        service.patchGeneratedPaths(workspace, java.util.Map.of("owner/first", List.of()));
+        service.patchGeneratedPaths(workspace, Map.of("owner/first", List.of()));
         assertThat(service.generatedPaths(workspace)).containsOnlyKeys("group/second");
     }
 
@@ -71,17 +72,14 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
         var local = monitor(11L, "owner/local");
         when(monitors.findByWorkspaceId(1L)).thenReturn(List.of(local));
         assertThatThrownBy(() -> service.patchGeneratedPaths(
-                        workspace,
-                        java.util.Map.of("owner/local", List.of("generated/**"), "other/tenant", List.of("**"))))
+                        workspace, Map.of("owner/local", List.of("generated/**"), "other/tenant", List.of("**"))))
                 .isInstanceOf(InvalidReviewCoverageException.class);
         assertThat(local.getGeneratedPaths()).isEmpty();
     }
 
     @Test
     void shouldRefuseBotSubjectEvenWhenWorkspaceMembershipExists() {
-        org.mockito.Mockito.lenient()
-                .when(membershipService.isPracticeReviewEligible(1L, 8L))
-                .thenReturn(true);
+        lenient().when(membershipService.isPracticeReviewEligible(1L, 8L)).thenReturn(true);
         var assessment = service.assess(workspace, "owner/repo", "main", new ReviewSubject(8L, false), true);
         assertThat(assessment.subjectStatus()).isEqualTo(ReviewSubjectStatus.NON_HUMAN);
         assertThat(assessment.admitted()).isFalse();

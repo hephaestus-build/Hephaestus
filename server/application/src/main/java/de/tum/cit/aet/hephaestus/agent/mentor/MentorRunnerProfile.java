@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 public final class MentorRunnerProfile implements PiRunnerProfile {
 
@@ -33,8 +34,7 @@ public final class MentorRunnerProfile implements PiRunnerProfile {
 
     @Override
     public List<String> runtimeFlags() {
-        return java.util.stream.Stream.concat(
-                        PiRunnerProfile.super.runtimeFlags().stream(), java.util.stream.Stream.of("--expose-gc"))
+        return Stream.concat(PiRunnerProfile.super.runtimeFlags().stream(), Stream.of("--expose-gc"))
                 .toList();
     }
 

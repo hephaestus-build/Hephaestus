@@ -11,6 +11,8 @@ import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
@@ -57,7 +59,7 @@ public class CuratedPracticeOverride {
     @Column(name = "review_when", columnDefinition = "jsonb")
     private Map<String, Set<String>> reviewWhen = Map.of();
 
-    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Enumerated(EnumType.STRING)
     @Column(name = "subject", length = 16)
     private ActorRole subject = ActorRole.AUTHOR;
 
@@ -100,7 +102,7 @@ public class CuratedPracticeOverride {
     private @Nullable PracticeDefinition adoptedBase;
 
     @Column(name = "adopted_base_source", length = 32)
-    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Enumerated(EnumType.STRING)
     private @Nullable AdoptedBaseSource adoptedBaseSource;
 
     @Column(name = "retired_at")

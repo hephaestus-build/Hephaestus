@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -61,10 +62,10 @@ class LlmUsageRepricerTest extends BaseUnitTest {
     }
 
     private static UnpricedLedgerRow row(
-            @org.jspecify.annotations.Nullable String model,
+            @Nullable String model,
             FundingSource funding,
-            @org.jspecify.annotations.Nullable Long appliedPriceId,
-            @org.jspecify.annotations.Nullable Long appliedWorkspaceModelId) {
+            @Nullable Long appliedPriceId,
+            @Nullable Long appliedWorkspaceModelId) {
         return new UnpricedLedgerRow(
                 EVENT_ID,
                 WORKSPACE_ID,
@@ -78,7 +79,7 @@ class LlmUsageRepricerTest extends BaseUnitTest {
                 appliedWorkspaceModelId);
     }
 
-    private static LlmModelPrice price(PricingMode mode, @org.jspecify.annotations.Nullable BigDecimal input) {
+    private static LlmModelPrice price(PricingMode mode, @Nullable BigDecimal input) {
         LlmModelPrice price = new LlmModelPrice();
         price.setId(11L);
         price.setPricingMode(mode);

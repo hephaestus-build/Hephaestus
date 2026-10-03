@@ -3,12 +3,13 @@ package de.tum.cit.aet.hephaestus.practices;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import de.tum.cit.aet.hephaestus.evidence.EvidenceCollection;
+import de.tum.cit.aet.hephaestus.evidence.PracticePreconditionAspect;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.evidence.SubjectAspect;
-import de.tum.cit.aet.hephaestus.evidence.SubjectEvidenceCollection;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -40,7 +41,7 @@ public record PracticePreconditionClause(
         List<String> diffContains,
 
         @Schema(description = "Named evidence collection; holds when it has at least one entry") @Nullable
-        SubjectEvidenceCollection evidenceHasItems)
+        EvidenceCollection evidenceHasItems)
         implements ClosedPracticeInput {
     public static final SourceKind DIFF_SOURCE = new SourceKind("scm.pull-request.diff");
 
@@ -58,11 +59,11 @@ public record PracticePreconditionClause(
     public PracticePreconditionClause(
             @JsonProperty("changedPathMatches") @Nullable List<String> changedPathMatches,
             @JsonProperty("diffContains") @Nullable List<String> diffContains,
-            @JsonProperty("evidenceHasItems") @Nullable SubjectEvidenceCollection evidenceHasItems) {
+            @JsonProperty("evidenceHasItems") @Nullable EvidenceCollection evidenceHasItems) {
         this.changedPathMatches = copyTerms(changedPathMatches, CHANGED_PATH_MATCHES);
         this.diffContains = copyTerms(diffContains, DIFF_CONTAINS);
         this.evidenceHasItems = evidenceHasItems;
-        long declared = java.util.stream.Stream.of(this.changedPathMatches, this.diffContains, this.evidenceHasItems)
+        long declared = Stream.of(this.changedPathMatches, this.diffContains, this.evidenceHasItems)
                 .filter(Objects::nonNull)
                 .count();
         if (declared != 1) {
@@ -79,14 +80,14 @@ public record PracticePreconditionClause(
         return new PracticePreconditionClause(null, literals, null);
     }
 
-    public static PracticePreconditionClause evidenceHasItems(SubjectEvidenceCollection collection) {
+    public static PracticePreconditionClause evidenceHasItems(EvidenceCollection collection) {
         return new PracticePreconditionClause(null, null, collection);
     }
 
-    public SubjectAspect aspect() {
-        if (changedPathMatches != null) return SubjectAspect.CHANGED_PATH;
-        if (diffContains != null) return SubjectAspect.DIFF_TEXT;
-        return SubjectAspect.EVIDENCE_ITEMS;
+    public PracticePreconditionAspect aspect() {
+        if (changedPathMatches != null) return PracticePreconditionAspect.CHANGED_PATH;
+        if (diffContains != null) return PracticePreconditionAspect.DIFF_TEXT;
+        return PracticePreconditionAspect.EVIDENCE_ITEMS;
     }
 
     public SourceKind readsFrom() {

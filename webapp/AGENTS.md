@@ -19,7 +19,7 @@ already tells you are not here.
 
 ## Ask first
 
-A new UI library dependency · a new Zustand store · a global style · a change under
+A new UI library dependency · a global style · a change under
 `src/components/ui/` (below). Each of these is cheap to add and expensive to reverse, and none of them
 has a gate.
 
@@ -190,7 +190,6 @@ suppressed at the call site with their reason.
 | State | Where |
 |---|---|
 | Server data | TanStack Query |
-| UI preferences | Zustand (`src/stores/**`) |
 | Form state | React state / controlled components |
 | URL state | TanStack Router search params |
 

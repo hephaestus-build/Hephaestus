@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.trace.TraceInputs.TracedPractice;
 import de.tum.cit.aet.hephaestus.practices.trace.dto.PracticeTraceEntryDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -417,7 +418,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
     @Test
     @DisplayName("every explanation a practice can get is written in words, never in identifiers")
     void shouldExplainEveryOutcomeWithoutARawIdentifier() {
-        List<PracticeTraceEntryDTO> entries = new java.util.ArrayList<>();
+        List<PracticeTraceEntryDTO> entries = new ArrayList<>();
         for (SignalStateReason reason : SignalStateReason.values()) {
             entries.add(only(
                     practice(PracticeAutonomy.AUTOMATIC, READY),

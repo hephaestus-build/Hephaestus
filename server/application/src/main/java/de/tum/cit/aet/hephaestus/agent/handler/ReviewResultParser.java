@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -117,7 +118,7 @@ public class ReviewResultParser {
 
     private ValidatedObservation validateEntry(JsonNode entry, int index) {
         List<String> unknownFields = entry.properties().stream()
-                .map(java.util.Map.Entry::getKey)
+                .map(Entry::getKey)
                 .filter(field -> !OBSERVATION_FIELDS.contains(field))
                 .toList();
         if (!unknownFields.isEmpty()) {
@@ -151,7 +152,7 @@ public class ReviewResultParser {
             throw new EntryValidationException("missing or non-object field: evidence");
         }
         List<String> unknownEvidenceFields = evidence.properties().stream()
-                .map(java.util.Map.Entry::getKey)
+                .map(Entry::getKey)
                 .filter(field -> !EVIDENCE_FIELDS.contains(field))
                 .toList();
         if (!unknownEvidenceFields.isEmpty()) {

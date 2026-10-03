@@ -1,5 +1,5 @@
 import deepEqual from "fast-deep-equal";
-import { AlertCircle, ChevronDownIcon, Loader2Icon } from "lucide-react";
+import { AlertCircle, ChevronDownIcon } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import type {
 	PracticeReviewCoveragePreview,
@@ -39,6 +39,7 @@ import {
 	ItemTitle,
 } from "@/components/ui/item";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Spinner } from "@/components/ui/spinner";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 
 type CoverageOptionState<TOption> =
@@ -170,14 +171,14 @@ export function PracticeReviewCoverageSettings({
 	if (workflow.status === "checking") {
 		reviewButtonContent = (
 			<>
-				<Loader2Icon className="animate-spin" aria-hidden />
+				<Spinner />
 				Checking impact…
 			</>
 		);
 	} else if (workflow.status === "saving") {
 		reviewButtonContent = (
 			<>
-				<Loader2Icon className="animate-spin" aria-hidden />
+				<Spinner />
 				Saving…
 			</>
 		);
@@ -466,8 +467,8 @@ function CoverageWorkflowStatus({ workflow, dirty }: { workflow: Workflow; dirty
 		return (
 			<p role="alert" className="max-w-md text-sm text-destructive">
 				{workflow.action === "preview"
-					? "Couldn't estimate the impact. Your draft is unchanged; try again."
-					: "Couldn't save the coverage. Your draft is unchanged; try again."}
+					? "Couldn't estimate the impact. Your draft is unchanged. Try again."
+					: "Couldn't save the coverage. Your draft is unchanged. Try again."}
 			</p>
 		);
 	}

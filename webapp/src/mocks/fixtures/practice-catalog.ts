@@ -25,6 +25,3 @@ export const realPracticeDefinition = {
 		"A record that names the two or three options that were genuinely in play and gives each one a sentence saying what ruled it out — the constraint it failed, the cost it carried, the thing the team was not willing to trade. Written for someone who arrives a year later with a changed constraint, so they can tell in a minute whether the decision still stands.",
 	groupSlug: "decisions-and-documentation",
 } satisfies CuratedPracticeDefinition;
-
-export const realGroupName = "Recording decisions and documenting changes";
-export const realGroupSlug = "decisions-and-documentation";

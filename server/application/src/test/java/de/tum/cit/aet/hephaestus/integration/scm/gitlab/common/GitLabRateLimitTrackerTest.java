@@ -12,15 +12,13 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 
-/**
- * Unit tests for {@link GitLabRateLimitTracker}.
- */
 @Tag("unit")
 class GitLabRateLimitTrackerTest extends BaseUnitTest {
 
@@ -289,7 +287,7 @@ class GitLabRateLimitTrackerTest extends BaseUnitTest {
         @Test
         void throttleDecisionMustNotWriteBackIntoObservedState() {
             Long scopeId = 1L;
-            Instant pastReset = Instant.now().minusSeconds(30).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            Instant pastReset = Instant.now().minusSeconds(30).truncatedTo(ChronoUnit.SECONDS);
             tracker.updateFromHeaders(scopeId, createHeaders(2, 100, pastReset, 98));
 
             // Every decision API that reads the throttle state.
@@ -372,7 +370,7 @@ class GitLabRateLimitTrackerTest extends BaseUnitTest {
             Long scopeId = 1L;
             // The RateLimit-Reset header is Unix-epoch-seconds, so the tracker's parsed Instant is
             // truncated to second precision — round the expectation the same way.
-            Instant resetTime = Instant.now().plusSeconds(60).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            Instant resetTime = Instant.now().plusSeconds(60).truncatedTo(ChronoUnit.SECONDS);
             tracker.updateFromHeaders(scopeId, createHeaders(80, 100, resetTime, 5));
 
             var snapshot = tracker.snapshot(scopeId);
@@ -440,7 +438,7 @@ class GitLabRateLimitTrackerTest extends BaseUnitTest {
         @Test
         void closedWindow_retiresRemainingButKeepsTheObservedCeiling() {
             Long scopeId = 1L;
-            Instant pastReset = Instant.now().minusSeconds(30).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            Instant pastReset = Instant.now().minusSeconds(30).truncatedTo(ChronoUnit.SECONDS);
             tracker.updateFromHeaders(scopeId, createHeaders(2, 100, pastReset, 98));
 
             // Decision API assumes a full budget because the window rolled over...

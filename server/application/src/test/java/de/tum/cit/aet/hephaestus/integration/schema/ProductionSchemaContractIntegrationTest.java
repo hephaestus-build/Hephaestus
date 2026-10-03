@@ -61,6 +61,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -205,7 +206,7 @@ class ProductionSchemaContractIntegrationTest {
                         provider, IDENTITY_SUBJECT, ACCOUNT_FEATURE))
                 .isTrue();
 
-        identity.setDisabledAt(java.time.Instant.now());
+        identity.setDisabledAt(Instant.now());
         identityLinkRepository.save(identity);
 
         assertThat(accountFeatureRepository.existsActiveFeatureForProviderSubject(
@@ -356,16 +357,13 @@ class ProductionSchemaContractIntegrationTest {
                 .hasMessageContaining(constraint);
     }
 
-    static Stream<org.junit.jupiter.params.provider.Arguments> invalidDispatchStates() {
+    static Stream<Arguments> invalidDispatchStates() {
         return Stream.of(
-                org.junit.jupiter.params.provider.Arguments.of("state = 'CLAIMED'", "chk_feedback_dispatch_lease"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "lease_owner = 'worker', lease_expires_at = now()", "chk_feedback_dispatch_lease"),
-                org.junit.jupiter.params.provider.Arguments.of("state = 'SENT'", "chk_feedback_dispatch_delivery"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "state = 'SUPPRESSED'", "chk_feedback_dispatch_suppression"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "suppression_reason = 'WORKSPACE_DELIVERY_PAUSED'", "chk_feedback_dispatch_suppression"));
+                Arguments.of("state = 'CLAIMED'", "chk_feedback_dispatch_lease"),
+                Arguments.of("lease_owner = 'worker', lease_expires_at = now()", "chk_feedback_dispatch_lease"),
+                Arguments.of("state = 'SENT'", "chk_feedback_dispatch_delivery"),
+                Arguments.of("state = 'SUPPRESSED'", "chk_feedback_dispatch_suppression"),
+                Arguments.of("suppression_reason = 'WORKSPACE_DELIVERY_PAUSED'", "chk_feedback_dispatch_suppression"));
     }
 
     /**
@@ -409,17 +407,15 @@ class ProductionSchemaContractIntegrationTest {
         assertThat(inserted).isEqualTo(accepted);
     }
 
-    static Stream<org.junit.jupiter.params.provider.Arguments> restorationStates() {
+    static Stream<Arguments> restorationStates() {
         Instant now = Instant.now();
         return Stream.of(
-                org.junit.jupiter.params.provider.Arguments.argumentSet("active", null, null, null, true),
-                org.junit.jupiter.params.provider.Arguments.argumentSet("restored", now, 1L, "Right after all", true),
-                org.junit.jupiter.params.provider.Arguments.argumentSet(
-                        "missing time", null, 1L, "Right after all", false),
-                org.junit.jupiter.params.provider.Arguments.argumentSet(
-                        "missing actor", now, null, "Right after all", false),
-                org.junit.jupiter.params.provider.Arguments.argumentSet("missing reason", now, 1L, null, false),
-                org.junit.jupiter.params.provider.Arguments.argumentSet("blank reason", now, 1L, "   ", false));
+                Arguments.argumentSet("active", null, null, null, true),
+                Arguments.argumentSet("restored", now, 1L, "Right after all", true),
+                Arguments.argumentSet("missing time", null, 1L, "Right after all", false),
+                Arguments.argumentSet("missing actor", now, null, "Right after all", false),
+                Arguments.argumentSet("missing reason", now, 1L, null, false),
+                Arguments.argumentSet("blank reason", now, 1L, "   ", false));
     }
 
     @Test
@@ -513,16 +509,13 @@ class ProductionSchemaContractIntegrationTest {
                 .isTrue();
     }
 
-    static Stream<org.junit.jupiter.params.provider.Arguments> invalidWithdrawalRestores() {
+    static Stream<Arguments> invalidWithdrawalRestores() {
         return Stream.of(
                 // A CHECK passes on UNKNOWN: a missing reason must fail on its own, not through btrim(NULL).
-                org.junit.jupiter.params.provider.Arguments.of("restored_at = now(), restored_by_account_id = %d"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_at = now(), restoration_reason = 'Right after all'"),
-                org.junit.jupiter.params.provider.Arguments.of(
-                        "restored_by_account_id = %d, restoration_reason = 'Right after all'"));
+                Arguments.of("restored_at = now(), restored_by_account_id = %d"),
+                Arguments.of("restored_at = now(), restored_by_account_id = %d, restoration_reason = '  '"),
+                Arguments.of("restored_at = now(), restoration_reason = 'Right after all'"),
+                Arguments.of("restored_by_account_id = %d, restoration_reason = 'Right after all'"));
     }
 
     @ParameterizedTest
@@ -856,8 +849,8 @@ class ProductionSchemaContractIntegrationTest {
     static class JsonConfiguration {
 
         @Bean
-        tools.jackson.databind.ObjectMapper objectMapper() {
-            return new tools.jackson.databind.ObjectMapper();
+        ObjectMapper objectMapper() {
+            return new ObjectMapper();
         }
     }
 }

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -8,7 +9,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.Cache;
@@ -73,11 +73,11 @@ class CacheConfigTest extends BaseUnitTest {
 
     @Test
     void cacheSpecValidation() {
-        Assertions.assertThatThrownBy(() -> new CacheConfig.CacheSpec("", Duration.ofMinutes(1), 1L))
+        assertThatThrownBy(() -> new CacheConfig.CacheSpec("", Duration.ofMinutes(1), 1L))
                 .isInstanceOf(IllegalArgumentException.class);
-        Assertions.assertThatThrownBy(() -> new CacheConfig.CacheSpec("ok", Duration.ZERO, 1L))
+        assertThatThrownBy(() -> new CacheConfig.CacheSpec("ok", Duration.ZERO, 1L))
                 .isInstanceOf(IllegalArgumentException.class);
-        Assertions.assertThatThrownBy(() -> new CacheConfig.CacheSpec("ok", Duration.ofMinutes(1), 0L))
+        assertThatThrownBy(() -> new CacheConfig.CacheSpec("ok", Duration.ofMinutes(1), 0L))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

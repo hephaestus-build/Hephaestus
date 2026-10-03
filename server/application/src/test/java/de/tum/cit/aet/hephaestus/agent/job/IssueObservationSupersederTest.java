@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
@@ -37,9 +39,9 @@ class IssueObservationSupersederTest extends BaseUnitTest {
         superseder.onUpdated(update("first", Set.of("title")));
 
         ArgumentCaptor<UUID> versions = ArgumentCaptor.forClass(UUID.class);
-        verify(issues, org.mockito.Mockito.times(3)).advanceReviewSnapshot(eq(42L), versions.capture(), any());
+        verify(issues, times(3)).advanceReviewSnapshot(eq(42L), versions.capture(), any());
         assertThat(versions.getAllValues()).doesNotHaveDuplicates();
-        verify(observations, org.mockito.Mockito.times(3)).supersedeIssueObservations(eq(42L), any(Instant.class));
+        verify(observations, times(3)).supersedeIssueObservations(eq(42L), any(Instant.class));
     }
 
     @Test
@@ -70,14 +72,7 @@ class IssueObservationSupersederTest extends BaseUnitTest {
                 null,
                 null);
         var context = new EventContext(
-                UUID.randomUUID(),
-                Instant.now(),
-                7L,
-                repository,
-                de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource.WEBHOOK,
-                "edited",
-                "test",
-                null);
+                UUID.randomUUID(), Instant.now(), 7L, repository, DataSource.WEBHOOK, "edited", "test", null);
         return new ScmDomainEvent.IssueUpdated(issue, fields, context);
     }
 }

@@ -254,8 +254,6 @@ class OutlineDocumentContentSourceTest extends BaseUnitTest {
         assertThat(root.get(1).has("collection_name")).isFalse();
     }
 
-    // --- (b') authorship exposure ---
-
     @Test
     void mentorPathEmitsAuthorNameAndResolvedMemberId() throws Exception {
         when(projection.documentsForWorkspace(WORKSPACE_ID))

@@ -1,15 +1,15 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.evidence.EvidenceCollection;
 import de.tum.cit.aet.hephaestus.evidence.PracticePreconditionCheck;
+import de.tum.cit.aet.hephaestus.evidence.PracticePreconditionClauseCheck;
+import de.tum.cit.aet.hephaestus.evidence.PracticePreconditionResult;
 import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.evidence.SubjectClauseFinding;
-import de.tum.cit.aet.hephaestus.evidence.SubjectEvidenceCollection;
-import de.tum.cit.aet.hephaestus.evidence.SubjectFinding;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import java.util.ArrayList;
@@ -26,7 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Evaluates mechanical practice preconditions against staged evidence.
  *
  * <p>Only complete captures can prove absence. Missing, partial, malformed, or unsupported evidence is
- * {@link de.tum.cit.aet.hephaestus.evidence.SubjectFinding#UNDECIDABLE} and keeps the practice eligible.
+ * {@link PracticePreconditionResult#UNDECIDABLE} and keeps the practice eligible.
  */
 @Component
 public class PracticePreconditionEvaluator {
@@ -52,29 +52,30 @@ public class PracticePreconditionEvaluator {
         }
         Map<SourceKind, SourceCapture> captures = new HashMap<>();
         manifest.sources().forEach(capture -> captures.put(capture.kind(), capture));
-        List<SubjectClauseFinding> clauses = new ArrayList<>(subject.anyOf().size());
+        List<PracticePreconditionClauseCheck> clauses =
+                new ArrayList<>(subject.anyOf().size());
         for (PracticePreconditionClause clause : subject.anyOf()) {
             SourceKind readFrom = clause.readsFrom();
-            SubjectFinding finding = find(clause, captures.get(readFrom), change, staged);
-            clauses.add(new SubjectClauseFinding(clause.aspect(), readFrom, finding));
+            PracticePreconditionResult result = find(clause, captures.get(readFrom), change, staged);
+            clauses.add(new PracticePreconditionClauseCheck(clause.aspect(), readFrom, result));
         }
-        boolean absent = clauses.stream().allMatch(clause -> clause.finding() == SubjectFinding.NOT_FOUND);
+        boolean absent = clauses.stream().allMatch(clause -> clause.result() == PracticePreconditionResult.NOT_FOUND);
         return new PracticePreconditionCheck(absent, subject.skipReason(), clauses);
     }
 
-    private SubjectFinding find(
+    private PracticePreconditionResult find(
             PracticePreconditionClause clause,
             @Nullable SourceCapture capture,
             @Nullable ReviewChange change,
             Map<String, byte[]> staged) {
         if (capture == null || !(capture.state() instanceof SourceCaptureState.Available available)) {
-            return SubjectFinding.UNDECIDABLE;
+            return PracticePreconditionResult.UNDECIDABLE;
         }
         if (available.completeness() != SourceCompleteness.COMPLETE) {
-            return SubjectFinding.UNDECIDABLE;
+            return PracticePreconditionResult.UNDECIDABLE;
         }
         if (available.content() == SourceContentState.EMPTY) {
-            return SubjectFinding.NOT_FOUND;
+            return PracticePreconditionResult.NOT_FOUND;
         }
         return switch (clause.aspect()) {
             case CHANGED_PATH -> changedPath(clause.changedPathMatches(), change);
@@ -83,30 +84,32 @@ public class PracticePreconditionEvaluator {
         };
     }
 
-    private SubjectFinding changedPath(@Nullable List<String> globs, @Nullable ReviewChange change) {
+    private PracticePreconditionResult changedPath(@Nullable List<String> globs, @Nullable ReviewChange change) {
         if (globs == null || change == null) {
-            return SubjectFinding.UNDECIDABLE;
+            return PracticePreconditionResult.UNDECIDABLE;
         }
         List<Pattern> patterns =
                 globs.stream().map(PracticePreconditionEvaluator::globToPattern).toList();
         boolean matched = change.changedPaths().stream()
                 .anyMatch(
                         path -> patterns.stream().anyMatch(p -> p.matcher(path).matches()));
-        return matched ? SubjectFinding.FOUND : SubjectFinding.NOT_FOUND;
+        return matched ? PracticePreconditionResult.FOUND : PracticePreconditionResult.NOT_FOUND;
     }
 
-    private SubjectFinding diffText(@Nullable List<String> literals, @Nullable ReviewChange change) {
+    private PracticePreconditionResult diffText(@Nullable List<String> literals, @Nullable ReviewChange change) {
         if (literals == null || change == null) {
-            return SubjectFinding.UNDECIDABLE;
+            return PracticePreconditionResult.UNDECIDABLE;
         }
         String text = change.text();
-        return literals.stream().anyMatch(text::contains) ? SubjectFinding.FOUND : SubjectFinding.NOT_FOUND;
+        return literals.stream().anyMatch(text::contains)
+                ? PracticePreconditionResult.FOUND
+                : PracticePreconditionResult.NOT_FOUND;
     }
 
-    private SubjectFinding evidenceItems(
-            @Nullable SubjectEvidenceCollection collection, SourceCapture capture, Map<String, byte[]> staged) {
+    private PracticePreconditionResult evidenceItems(
+            @Nullable EvidenceCollection collection, SourceCapture capture, Map<String, byte[]> staged) {
         if (collection == null) {
-            return SubjectFinding.UNDECIDABLE;
+            return PracticePreconditionResult.UNDECIDABLE;
         }
         String fileName = fileNameOf(collection);
         SourceArtifact artifact = capture.artifacts().stream()
@@ -115,23 +118,23 @@ public class PracticePreconditionEvaluator {
                 .orElse(null);
         byte @Nullable [] bytes = artifact == null ? null : staged.get(artifact.path());
         if (bytes == null || bytes.length == 0) {
-            return SubjectFinding.UNDECIDABLE;
+            return PracticePreconditionResult.UNDECIDABLE;
         }
         JsonNode root;
         try {
             root = objectMapper.readTree(bytes);
         } catch (RuntimeException unparseable) {
-            return SubjectFinding.UNDECIDABLE;
+            return PracticePreconditionResult.UNDECIDABLE;
         }
         String field = fieldOf(collection);
         JsonNode items = field.isEmpty() ? root : root.path(field);
         if (!items.isArray()) {
-            return SubjectFinding.UNDECIDABLE;
+            return PracticePreconditionResult.UNDECIDABLE;
         }
-        return items.isEmpty() ? SubjectFinding.NOT_FOUND : SubjectFinding.FOUND;
+        return items.isEmpty() ? PracticePreconditionResult.NOT_FOUND : PracticePreconditionResult.FOUND;
     }
 
-    private static String fileNameOf(SubjectEvidenceCollection collection) {
+    private static String fileNameOf(EvidenceCollection collection) {
         return switch (collection) {
             case SCM_REVIEW_THREADS -> "review_threads.json";
             case SCM_INLINE_REVIEW_COMMENTS -> "comments.json";
@@ -140,7 +143,7 @@ public class PracticePreconditionEvaluator {
     }
 
     /** The field holding the entries, or empty where the document is itself the array. */
-    private static String fieldOf(SubjectEvidenceCollection collection) {
+    private static String fieldOf(EvidenceCollection collection) {
         return switch (collection) {
             case SCM_REVIEW_THREADS -> "threads";
             case SCM_INLINE_REVIEW_COMMENTS -> "";

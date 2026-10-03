@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
@@ -22,7 +23,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 
 /**
  * The campaign walk: a run that cannot afford to continue stops rather than thinning itself, so
@@ -99,14 +99,14 @@ class ReviewBackfillDriverTest extends BaseUnitTest {
         assertThat(run.getStatus()).isEqualTo(ReviewBackfillStatus.PAUSED);
         assertThat(run.getPauseReason()).isEqualTo(ReviewBackfillPauseReason.BUDGET_EXHAUSTED);
         assertThat(run.getCursorArtifactId()).isEqualTo(9L);
-        Mockito.verifyNoInteractions(submitter);
+        verifyNoInteractions(submitter);
         verify(scopeRepository, never()).findPullRequestIds(anyLong(), any(), any(), anyLong(), any());
     }
 
     @Test
     void aWorkspaceWithNoEnabledBindingPausesRatherThanFailing() {
         ReviewBackfillRun run = running();
-        when(bindingRepository.findByWorkspaceIdWithModels(WORKSPACE_ID)).thenReturn(java.util.List.of());
+        when(bindingRepository.findByWorkspaceIdWithModels(WORKSPACE_ID)).thenReturn(List.of());
 
         driver().advance(run);
 
@@ -151,14 +151,14 @@ class ReviewBackfillDriverTest extends BaseUnitTest {
 
         driver().advance(run);
 
-        Mockito.verifyNoInteractions(submitter, scopeRepository, llmBudgetService, bindingRepository);
+        verifyNoInteractions(submitter, scopeRepository, llmBudgetService, bindingRepository);
     }
 
     private void enabledBinding() {
         WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
         binding.setEnabled(true);
         binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
-        when(bindingRepository.findByWorkspaceIdWithModels(WORKSPACE_ID)).thenReturn(java.util.List.of(binding));
+        when(bindingRepository.findByWorkspaceIdWithModels(WORKSPACE_ID)).thenReturn(List.of(binding));
     }
 
     private void fundedAndEnabled() {

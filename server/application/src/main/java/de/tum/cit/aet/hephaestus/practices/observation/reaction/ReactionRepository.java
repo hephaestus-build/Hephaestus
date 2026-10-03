@@ -14,7 +14,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-/** Persistence for append-only feedback-response snapshots in the legacy {@code reaction} table. */
+/** Persistence for append-only feedback-response snapshots in the {@code reaction} table. */
 @Repository
 @WorkspaceAgnostic("Reaction scoped through Feedback.workspaceId relationship")
 public interface ReactionRepository extends JpaRepository<Reaction, UUID> {

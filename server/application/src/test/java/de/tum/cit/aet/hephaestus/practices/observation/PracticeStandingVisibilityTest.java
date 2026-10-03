@@ -97,7 +97,7 @@ class PracticeStandingVisibilityTest extends BaseUnitTest {
         return practiceStandingService.getStandings(WORKSPACE_ID);
     }
 
-    private Observation bad(Practice practice, @org.jspecify.annotations.Nullable Severity severity) {
+    private Observation bad(Practice practice, @Nullable Severity severity) {
         return Observation.builder()
                 .id(UUID.randomUUID())
                 .practice(practice)

@@ -28,7 +28,6 @@ import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.assertj.core.api.Assertions;
 import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -190,7 +189,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         Connection existing = newConnection(7L, 42L, IntegrationKind.SLACK, "T_ORIG", IntegrationState.ACTIVE);
         ConnectFinalization.Completed completed =
                 new ConnectFinalization.Completed("T_NEW", new BearerToken("t", null), "Renamed");
-        Assertions.assertThatThrownBy(() -> service.completeConnection(existing, completed, "alice"))
+        assertThatThrownBy(() -> service.completeConnection(existing, completed, "alice"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("instance_key");
     }
@@ -386,8 +385,6 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 .isSameAs(violation);
     }
 
-    // helpers
-
     private void givenActiveSlackTeam(Connection... active) {
         when(connectionRepository.findAllByKindAndInstanceKeyAndStateIn(
                         IntegrationKind.SLACK, "T1", Set.of(IntegrationState.ACTIVE)))
@@ -429,8 +426,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                                 null);
                     case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
                     case OUTLINE ->
-                        new ConnectionConfig.OutlineConfig(
-                                "https://app.getoutline.com", null, null, java.util.Set.of());
+                        new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
                 };
         Connection c = new Connection(ws, kind, instanceKey, cfg);
         c.setState(state);

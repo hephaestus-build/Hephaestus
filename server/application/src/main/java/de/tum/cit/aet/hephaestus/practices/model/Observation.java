@@ -21,6 +21,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Builder.Default;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.ColumnDefault;
@@ -74,7 +75,7 @@ public class Observation {
     private UUID id;
 
     /**
-     * Per-occurrence dedup grain: identifies this one detection event so {@code insertIfAbsent} is
+     * Per-occurrence dedup grain: identifies this one recorded result so {@code insertIfAbsent} is
      * idempotent. Enforced unique by {@code uk_observation_occurrence}; distinct from the cross-run
      * {@link #recurrenceKey}.
      */
@@ -172,7 +173,7 @@ public class Observation {
     @Enumerated(EnumType.STRING)
     @Column(name = "origin", length = 16, nullable = false)
     @ColumnDefault("'LIVE'")
-    @Builder.Default
+    @Default
     private ObservationOrigin origin = ObservationOrigin.LIVE;
 
     /**

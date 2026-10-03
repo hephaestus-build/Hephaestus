@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler.conversation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
@@ -351,7 +352,7 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 assistant.getId(),
                 Instant.now(),
                 "test-model",
-                org.mockito.Mockito.mock(LlmPriceSnapshot.class));
+                mock(LlmPriceSnapshot.class));
     }
 
     /** A stored link; one with no text is how replies stored links before they carried the feedback. */

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountSummaryQuery;
 import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicyEvaluationRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackChannel;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
@@ -106,12 +107,9 @@ class ReviewFeedbackInAppBodyTest extends BaseUnitTest {
                                 WORKSPACE_ID,
                                 unit.getAgentJobId(),
                                 switch (channel) {
-                                    case IN_CONTEXT ->
-                                        de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface.ARTIFACT;
-                                    case IN_APP ->
-                                        de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface.IN_APP;
-                                    case IN_CHAT ->
-                                        de.tum.cit.aet.hephaestus.practices.feedback.DeliveryPolicySurface.CONVERSATION;
+                                    case IN_CONTEXT -> DeliveryPolicySurface.ARTIFACT;
+                                    case IN_APP -> DeliveryPolicySurface.IN_APP;
+                                    case IN_CHAT -> DeliveryPolicySurface.CONVERSATION;
                                 }))
                 .thenReturn(List.of());
         when(approvalRepository.findByFeedbackIdAndWorkspaceId(feedbackId, WORKSPACE_ID))

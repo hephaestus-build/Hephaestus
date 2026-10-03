@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.testconfig;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -66,8 +68,7 @@ public final class SchemaRowSeeder {
             case "real", "double precision", "numeric" -> 0.0;
             case "boolean" -> Boolean.FALSE;
             case "jsonb", "json" -> "{}";
-            case "timestamp with time zone", "timestamp without time zone" ->
-                java.sql.Timestamp.from(java.time.Instant.now());
+            case "timestamp with time zone", "timestamp without time zone" -> Timestamp.from(Instant.now());
             // Unique, so a UNIQUE NOT NULL column does not collide across seeded rows, and within the
             // column's own width, so a narrow VARCHAR does not reject the filler.
             default -> {

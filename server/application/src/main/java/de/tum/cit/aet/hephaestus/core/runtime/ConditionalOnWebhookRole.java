@@ -7,7 +7,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
-/** Gates a bean to the WEBHOOK runtime role. */
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 @Documented

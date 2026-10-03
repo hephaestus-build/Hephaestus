@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.feedback;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import org.jspecify.annotations.Nullable;
 
 public record ProposedPlacement(
@@ -9,8 +10,7 @@ public record ProposedPlacement(
         @Nullable Integer startLine,
         @Nullable Integer endLine,
 
-        @com.fasterxml.jackson.annotation.JsonAlias("recurrenceKey") @Nullable
-        String deliveryKey) {
+        @JsonAlias("recurrenceKey") @Nullable String deliveryKey) {
     public static ProposedPlacement summary(String body) {
         return new ProposedPlacement(PlacementType.SUMMARY, body, null, null, null, null);
     }

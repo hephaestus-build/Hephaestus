@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
@@ -83,7 +86,7 @@ class WorkspaceContextHolderTest {
     }
 
     @Test
-    void shouldIsolateContextBetweenThreads() throws InterruptedException {
+    void shouldIsolateContextBetweenThreads() throws Exception {
         WorkspaceContext mainContext = new WorkspaceContext(
                 1L, "main-workspace", "Main", AccountType.ORG, 100L, false, Set.of(WorkspaceRole.OWNER));
 
@@ -92,23 +95,22 @@ class WorkspaceContextHolderTest {
 
         WorkspaceContextHolder.setContext(mainContext);
 
-        // Act - Create another thread and set different context
-        ExecutorService executor = Executors.newSingleThreadExecutor();
-        executor.submit(() -> {
-            WorkspaceContextHolder.setContext(otherContext);
-            WorkspaceContext retrieved = WorkspaceContextHolder.getContext();
+        WorkspaceContext otherRetrieved;
+        try (ExecutorService executor = Executors.newSingleThreadExecutor()) {
+            otherRetrieved = executor.submit(() -> {
+                        WorkspaceContextHolder.setContext(otherContext);
+                        try {
+                            return WorkspaceContextHolder.getContext();
+                        } finally {
+                            WorkspaceContextHolder.clearContext();
+                        }
+                    })
+                    .get(5, TimeUnit.SECONDS);
+        }
+        assertNotNull(otherRetrieved);
+        assertEquals("other-workspace", otherRetrieved.slug());
+        assertEquals(2L, otherRetrieved.id());
 
-            // Assert in other thread
-            assertEquals("other-workspace", retrieved.slug());
-            assertEquals(2L, retrieved.id());
-
-            WorkspaceContextHolder.clearContext();
-        });
-
-        executor.shutdown();
-        executor.awaitTermination(5, TimeUnit.SECONDS);
-
-        // Assert - Main thread context should be unchanged
         WorkspaceContext mainRetrieved = WorkspaceContextHolder.getContext();
         assertNotNull(mainRetrieved);
         assertEquals("main-workspace", mainRetrieved.slug());

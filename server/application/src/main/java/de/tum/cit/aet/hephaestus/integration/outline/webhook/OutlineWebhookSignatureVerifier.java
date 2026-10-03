@@ -11,6 +11,7 @@ import java.time.Clock;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import javax.crypto.Mac;
@@ -29,7 +30,7 @@ import org.springframework.stereotype.Component;
  * <p>The signing secret is scoped per subscription: the subscription id arrives in the event body as
  * an untrusted routing key that selects the stored secret ({@link OutlineWebhookSecretSource}), so a
  * forged id selects a secret the attacker does not hold and the HMAC fails. This class resolves that
- * secret via the OUTLINE-filtered {@link WebhookSecretSource} (the {@code GitlabWebhookSignatureVerifier}
+ * secret via the OUTLINE-filtered {@link WebhookSecretSource} (the {@code GitLabWebhookSignatureVerifier}
  * ctor pattern), recomputes the digest over the exact request bytes, compares constant-time, and enforces
  * a ±{@value #MAX_SKEW_SECONDS}s replay window on the timestamp.
  *
@@ -163,7 +164,7 @@ public class OutlineWebhookSignatureVerifier implements WebhookSignatureVerifier
         Map<String, String> out = new LinkedHashMap<>();
         for (Map.Entry<String, String> e : raw.entrySet()) {
             if (e.getKey() != null) {
-                out.put(e.getKey().toLowerCase(java.util.Locale.ROOT), e.getValue());
+                out.put(e.getKey().toLowerCase(Locale.ROOT), e.getValue());
             }
         }
         return out;

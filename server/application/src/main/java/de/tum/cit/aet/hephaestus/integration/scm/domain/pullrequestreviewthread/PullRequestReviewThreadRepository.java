@@ -37,7 +37,7 @@ public interface PullRequestReviewThreadRepository extends JpaRepository<PullReq
      * for the marker check.) Read-only context materialisation; the caller establishes workspace scope.
      *
      * <p>Ordered because the caller materialises the result into a CAPPED context file: without it the plan's
-     * arbitrary order would vary both which threads the detector sees and in what order — and so would the
+     * arbitrary order would vary both which threads the review sees and in what order — and so would the
      * {@code agent_job.inputs_digest} that claims to identify those inputs.
      */
     @Query("""

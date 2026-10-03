@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { expect, waitFor } from "storybook/test";
 
 import { HephMark, HephaestusLogo, HephaestusWordmark } from "./HephaestusLogo";
 
@@ -23,6 +24,11 @@ export const LightAndDark: Story = {
 			</div>
 		</div>
 	),
+	play: async ({ canvasElement }) => {
+		for (const mark of canvasElement.querySelectorAll("img")) {
+			await waitFor(async () => expect(mark.naturalWidth).toBeGreaterThan(0));
+		}
+	},
 };
 
 export const PlatformFit: Story = {

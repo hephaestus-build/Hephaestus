@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.jwt;
 
 import static de.tum.cit.aet.hephaestus.testconfig.TestSystemEncryptionKeys.systemKey;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -14,7 +15,6 @@ import com.nimbusds.jose.jwk.JWK;
 import com.nimbusds.jose.jwk.JWKSet;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.env.MockEnvironment;
@@ -109,11 +109,11 @@ class JwtSigningKeyServiceSealingTest extends BaseUnitTest {
         JwtSigningKeyService service = new JwtSigningKeyService(repo, env("prod"), sealer);
 
         // Startup assertion (called from AuthJwtConfig OUTSIDE the swallow) aborts boot.
-        Assertions.assertThatThrownBy(service::assertProdKeysSealed)
+        assertThatThrownBy(service::assertProdKeysSealed)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("unsealed");
         // Signing path also refuses to materialize the unsealed key.
-        Assertions.assertThatThrownBy(service::currentSigningKey)
+        assertThatThrownBy(service::currentSigningKey)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("unsealed");
     }

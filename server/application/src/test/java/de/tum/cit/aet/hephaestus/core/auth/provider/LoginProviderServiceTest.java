@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
@@ -25,7 +27,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -149,7 +150,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
                 .seedFromEnvOnStartup();
 
         ArgumentCaptor<LoginProvider> captor = ArgumentCaptor.forClass(LoginProvider.class);
-        verify(repository, Mockito.times(2)).save(captor.capture());
+        verify(repository, times(2)).save(captor.capture());
         assertThat(captor.getAllValues())
                 .extracting(LoginProvider::getRegistrationId)
                 .containsExactlyInAnyOrder("github", "gitlab-lrz");
@@ -208,7 +209,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
     void skipsTheBlankOutlineSeedSlotBeforeItCanValidateTheBlankBaseUrl() {
         service(Map.of("outline", outlineSeed("", "", ""))).seedFromEnvOnStartup();
 
-        Mockito.verifyNoInteractions(repository);
+        verifyNoInteractions(repository);
     }
 
     @Test
@@ -254,7 +255,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
                         new AuthProperties.LoginProviderSeed(type, "https://host.example.com", "client-id", "", "")))
                 .seedFromEnvOnStartup();
 
-        Mockito.verifyNoInteractions(repository);
+        verifyNoInteractions(repository);
     }
 
     @ParameterizedTest
@@ -265,7 +266,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
                         new AuthProperties.LoginProviderSeed(type, "https://host.example.com", "  ", "secret", "")))
                 .seedFromEnvOnStartup();
 
-        Mockito.verifyNoInteractions(repository);
+        verifyNoInteractions(repository);
     }
 
     @Test
@@ -341,7 +342,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
     @Test
     void updateRejectsOutlineOpenidScope() {
         LoginProvider existing = outlineProvider("outline", "sealed");
-        when(repository.findByRegistrationId("outline")).thenReturn(java.util.Optional.of(existing));
+        when(repository.findByRegistrationId("outline")).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> adminService()
                         .update("outline", new LoginProviderService.Patch(null, null, null, null, "openid read", null)))
@@ -504,7 +505,7 @@ class LoginProviderServiceTest extends BaseUnitTest {
         service.delete("gitlab-acme");
 
         ArgumentCaptor<AuthEventData> captor = ArgumentCaptor.forClass(AuthEventData.class);
-        verify(authEventWriter, Mockito.times(3)).write(captor.capture());
+        verify(authEventWriter, times(3)).write(captor.capture());
         assertThat(captor.getAllValues())
                 .extracting(AuthEventData::type)
                 .containsExactly(

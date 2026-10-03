@@ -29,8 +29,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
-import de.tum.cit.aet.hephaestus.integration.scm.github.feedback.ScriptedGithubComments;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.ScriptedGitlabNotes;
+import de.tum.cit.aet.hephaestus.integration.scm.github.feedback.ScriptedGitHubComments;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.ScriptedGitLabNotes;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDeliveryState;
@@ -151,14 +151,14 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
     private Practice practice;
     private Repository repository;
     private long mergeRequestId;
-    private ScriptedGitlabNotes gitlab;
-    private ScriptedGithubComments github;
+    private ScriptedGitLabNotes gitlab;
+    private ScriptedGitHubComments github;
 
     @BeforeEach
     void seedMergeRequest() {
         reset(commentPoster, accountPreferences);
-        gitlab = new ScriptedGitlabNotes(egressGuard);
-        github = new ScriptedGithubComments(egressGuard);
+        gitlab = new ScriptedGitLabNotes(egressGuard);
+        github = new ScriptedGitHubComments(egressGuard);
         var poster = new PullRequestCommentPoster(List.of(gitlab.channel(), github.channel()));
         doAnswer(delegatesTo(poster)).when(commentPoster).summaryWrite(any(), anyBoolean(), anyString(), anyString());
         doAnswer(delegatesTo(poster)).when(commentPoster).findExisting(any());
@@ -244,7 +244,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
 
         approve(proposal);
 
-        String mergeRequest = ScriptedGitlabNotes.mergeRequest(1);
+        String mergeRequest = ScriptedGitLabNotes.mergeRequest(1);
         await().atMost(Duration.ofSeconds(15))
                 .untilAsserted(() -> assertDelivered(proposal, onlyNote(gitlab.threads(), mergeRequest, proposal)));
     }
@@ -280,7 +280,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         // GitLab kept the note; its marker now answers the lookup.
         recoverNow(proposal);
 
-        assertDelivered(proposal, onlyNote(gitlab.threads(), ScriptedGitlabNotes.mergeRequest(1), proposal));
+        assertDelivered(proposal, onlyNote(gitlab.threads(), ScriptedGitLabNotes.mergeRequest(1), proposal));
     }
 
     @Test
@@ -294,12 +294,12 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         assertThat(stored(proposal).getDeliveryState()).isEqualTo(FeedbackDeliveryState.PREPARED);
         assertThat(dispatch(proposal).getState()).isEqualTo(FeedbackDispatchState.UNCERTAIN);
         assertThat(dispatch(proposal).getWriteStarted()).isFalse();
-        assertThat(gitlab.threads().on(ScriptedGitlabNotes.mergeRequest(1))).isEmpty();
+        assertThat(gitlab.threads().on(ScriptedGitLabNotes.mergeRequest(1))).isEmpty();
 
         gitlab.threads().failLookups(false);
         recoverNow(proposal);
 
-        assertDelivered(proposal, onlyNote(gitlab.threads(), ScriptedGitlabNotes.mergeRequest(1), proposal));
+        assertDelivered(proposal, onlyNote(gitlab.threads(), ScriptedGitLabNotes.mergeRequest(1), proposal));
     }
 
     @Test
@@ -575,7 +575,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
     private record IssueHost(Repository repository, User author, ScriptedCommentThreads threads, String thread) {}
 
     private IssueHost onGitLab() {
-        return new IssueHost(repository, developer, gitlab.threads(), ScriptedGitlabNotes.issue(ISSUE));
+        return new IssueHost(repository, developer, gitlab.threads(), ScriptedGitLabNotes.issue(ISSUE));
     }
 
     private IssueHost onGitHub() {
@@ -591,7 +591,7 @@ class ApprovedFeedbackDeliveryIntegrationTest extends AbstractPracticeReviewInte
         hosted.setDefaultBranch("main");
         hosted = repositoryRepository.save(hosted);
         repositoryToMonitorRepository.save(WorkspaceTestFixtures.repositoryMonitor(workspace, "acme/web"));
-        return new IssueHost(hosted, author, github.threads(), ScriptedGithubComments.issue(ISSUE));
+        return new IssueHost(hosted, author, github.threads(), ScriptedGitHubComments.issue(ISSUE));
     }
 
     private Feedback proposeOnIssue(IssueHost host) {

@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -119,7 +120,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
     private PracticeRepository practices;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository scmConnections;
+    private ConnectionRepository scmConnections;
 
     private Workspace workspace;
     private IssueUpdateCoalescer coalescer;
@@ -172,7 +173,7 @@ class IssueUpdateCoalescerIntegrationTest extends BaseIntegrationTest {
         finalActorId = createUser(provider, "final-editor", 3L).getId();
         when(fixture.issues().findByIdWithRepositoryAndAssignees(issue.getId())).thenReturn(Optional.of(issue));
         when(fixture.gate().evaluateIssue(issue, workspace.getId(), ScmSignals.ISSUE_UPDATED, TriggerMode.AUTO))
-                .thenReturn(new GateDecision.Detect(workspace, List.of(), 0L, TriggerMode.AUTO));
+                .thenReturn(new GateDecision.Run(workspace, List.of(), 0L, TriggerMode.AUTO));
         when(fixture.workspaceResolver().resolveAllForRepository("owner/repo")).thenReturn(List.of(workspace));
         current = ScmSignals.issueKey(
                         workspace.getId(), ScmSignals.ISSUE_UPDATED, ScmEventPayload.IssueData.from(issue))

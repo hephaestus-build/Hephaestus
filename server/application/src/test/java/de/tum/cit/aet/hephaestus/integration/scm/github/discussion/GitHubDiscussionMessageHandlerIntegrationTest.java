@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.discussion;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -37,20 +38,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Integration tests for GitHubDiscussionMessageHandler.
- * <p>
- * Tests the full webhook handling flow using JSON fixtures parsed directly
- * into DTOs for complete isolation. Verifies:
- * - Correct routing of webhook actions to processor methods
- * - Discussion persistence for all action types
- * - Event publishing through the handler → processor chain
- * - Category creation and association
- * - Edge cases in event handling
- * <p>
  * Note: This test class does NOT use @Transactional because the discussion processing
  * chain calls GitHubUserProcessor.findOrCreate() which uses REQUIRES_NEW propagation.
  * Having @Transactional here would cause connection pool deadlocks under parallel test
- * execution (-T 2C) as the test transaction holds a connection while REQUIRES_NEW
+ * execution as the test transaction holds a connection while REQUIRES_NEW
  * needs an additional one. We use TransactionTemplate for lazy-loading assertions.
  * <p>
  * <b>Fixture Values (discussion.created.json - Discussion #27):</b>
@@ -177,7 +168,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             handler.handleEvent(event);
 
-            // Then - verify ALL persisted fields against hardcoded fixture values
             // Use TransactionTemplate for lazy-loading assertions
             transactionTemplate.executeWithoutResult(status -> {
                 Discussion discussion = discussionRepository
@@ -240,7 +230,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldUpdateDiscussionOnEditedEvent() throws Exception {
-            // Given - create discussion first
             handler.handleEvent(loadPayload("discussion.created"));
             eventListener.clear();
 
@@ -261,7 +250,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleClosedEvent() throws Exception {
-            // Given - create discussion first
             handler.handleEvent(loadPayload("discussion.created"));
             eventListener.clear();
 
@@ -283,7 +271,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleReopenedEvent() throws Exception {
-            // Given - create and close discussion
             handler.handleEvent(loadPayload("discussion.created"));
             handler.handleEvent(loadPayload("discussion.closed"));
             eventListener.clear();
@@ -305,7 +292,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldDeleteDiscussionOnDeletedEvent() throws Exception {
-            // Given - the deleted fixture uses discussion #28 (ID 9096674)
             // First, we create it by simulating it exists
             Discussion discussionToDelete = new Discussion();
             discussionToDelete.setNativeId(DISCUSSION_28_ID);
@@ -340,7 +326,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleAnsweredEvent() throws Exception {
-            // Given - create discussion first
             handler.handleEvent(loadPayload("discussion.created"));
             eventListener.clear();
 
@@ -364,7 +349,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleUnansweredEvent() throws Exception {
-            // Given - create discussion and mark as answered
             handler.handleEvent(loadPayload("discussion.created"));
             handler.handleEvent(loadPayload("discussion.answered"));
             eventListener.clear();
@@ -373,7 +357,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             handler.handleEvent(unansweredEvent);
 
-            // Then - discussion should still exist and be processed
             assertThat(discussionRepository.existsByRepositoryIdAndNumber(testRepository.getId(), 27))
                     .isTrue();
         }
@@ -386,7 +369,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleLabeledEvent() throws Exception {
-            // Given - create discussion first
             handler.handleEvent(loadPayload("discussion.created"));
             eventListener.clear();
 
@@ -394,7 +376,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             handler.handleEvent(labeledEvent);
 
-            // Then - use TransactionTemplate for lazy-loading assertions
             transactionTemplate.executeWithoutResult(status -> {
                 Discussion discussion = discussionRepository
                         .findByRepositoryIdAndNumber(testRepository.getId(), 27)
@@ -410,7 +391,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleUnlabeledEvent() throws Exception {
-            // Given - create discussion with label
             handler.handleEvent(loadPayload("discussion.created"));
             handler.handleEvent(loadPayload("discussion.labeled"));
             eventListener.clear();
@@ -419,7 +399,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             handler.handleEvent(unlabeledEvent);
 
-            // Then - discussion should still exist
             assertThat(discussionRepository.existsByRepositoryIdAndNumber(testRepository.getId(), 27))
                     .isTrue();
         }
@@ -432,7 +411,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleLockedEvent() throws Exception {
-            // Given - create discussion first
             handler.handleEvent(loadPayload("discussion.created"));
             eventListener.clear();
 
@@ -440,7 +418,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             handler.handleEvent(lockedEvent);
 
-            // Then - verify lock state
             Discussion discussion = discussionRepository
                     .findByRepositoryIdAndNumber(testRepository.getId(), 27)
                     .orElse(null);
@@ -454,7 +431,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleUnlockedEvent() throws Exception {
-            // Given - create and lock discussion
             handler.handleEvent(loadPayload("discussion.created"));
             handler.handleEvent(loadPayload("discussion.locked"));
             eventListener.clear();
@@ -478,7 +454,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandlePinnedEvent() throws Exception {
-            // Given - create discussion first
             handler.handleEvent(loadPayload("discussion.created"));
             eventListener.clear();
 
@@ -486,14 +461,12 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             handler.handleEvent(pinnedEvent);
 
-            // Then - discussion should still exist
             assertThat(discussionRepository.existsByRepositoryIdAndNumber(testRepository.getId(), 27))
                     .isTrue();
         }
 
         @Test
         void shouldHandleUnpinnedEvent() throws Exception {
-            // Given - create discussion first
             handler.handleEvent(loadPayload("discussion.created"));
             handler.handleEvent(loadPayload("discussion.pinned"));
             eventListener.clear();
@@ -514,7 +487,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
         @Test
         void shouldHandleCategoryChangedEvent() throws Exception {
-            // Given - create discussion first (starts in General category)
             handler.handleEvent(loadPayload("discussion.created"));
             eventListener.clear();
 
@@ -522,7 +494,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             handler.handleEvent(categoryChangedEvent);
 
-            // Then - category should be updated to Q&A
             transactionTemplate.executeWithoutResult(status -> {
                 Discussion discussion = discussionRepository
                         .findByRepositoryIdAndNumber(testRepository.getId(), 27)
@@ -543,18 +514,15 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
         void shouldHandleUnknownActionGracefully() throws Exception {
             GitHubDiscussionEventDTO event = loadPayload("discussion.created");
 
-            // When/Then - should not throw
             assertThatCode(() -> handler.handleEvent(event)).doesNotThrowAnyException();
         }
 
         @Test
         void shouldHandleMissingRepositoryContextGracefully() throws Exception {
-            // Given - remove the repository so context creation fails
             repositoryRepository.deleteAll();
 
             GitHubDiscussionEventDTO event = loadPayload("discussion.created");
 
-            // When/Then - should not throw, just log warning
             assertThatCode(() -> handler.handleEvent(event)).doesNotThrowAnyException();
 
             // Discussion should not be persisted since context is null
@@ -566,19 +534,17 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
         void shouldBeIdempotent() throws Exception {
             GitHubDiscussionEventDTO event = loadPayload("discussion.created");
 
-            // When - handle same event twice
             handler.handleEvent(event);
             long countAfterFirst = discussionRepository.count();
 
             handler.handleEvent(event);
 
-            // Then - still only one discussion
             assertThat(discussionRepository.count()).isEqualTo(countAfterFirst);
         }
 
         @Test
         void shouldVerifyGetDatabaseIdFallback() throws Exception {
-            // Given - webhook payloads have 'id' not 'database_id'
+            // Webhook payloads carry 'id', not 'database_id'.
             GitHubDiscussionEventDTO event = loadPayload("discussion.created");
 
             // Verify the DTO is using the fallback correctly
@@ -586,7 +552,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
 
             handler.handleEvent(event);
 
-            // Then - discussion should be persisted with the correct ID
             assertThat(discussionRepository.findByRepositoryIdAndNumber(testRepository.getId(), 27))
                     .isPresent();
         }
@@ -594,12 +559,10 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
         @Test
         @DisplayName("Should create author and category entities with correct field values")
         void shouldCreateAllRelatedEntitiesFromCreatedEvent() throws Exception {
-            // Given - no users or categories exist
             assertThat(userRepository.count()).isZero();
 
             handler.handleEvent(loadPayload("discussion.created"));
 
-            // Then - author created with exact fixture values
             var author = userRepository
                     .findByNativeIdAndProviderId(FIXTURE_AUTHOR_ID, gitProviderId())
                     .orElseThrow();
@@ -607,7 +570,6 @@ class GitHubDiscussionMessageHandlerIntegrationTest extends BaseIntegrationTest 
             assertThat(author.getAvatarUrl()).isEqualTo(FIXTURE_AUTHOR_AVATAR_URL);
             assertThat(author.getHtmlUrl()).isEqualTo(FIXTURE_AUTHOR_HTML_URL);
 
-            // Then - category created with exact fixture values
             var category =
                     categoryRepository.findById(FIXTURE_GENERAL_CATEGORY_ID).orElseThrow();
             assertThat(category.getName()).isEqualTo(FIXTURE_GENERAL_CATEGORY_NAME);

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -431,28 +432,28 @@ class GitHubGraphQlErrorUtilsTest {
         void timeoutWait() {
             var error = new GitHubGraphQlErrorUtils.TransientError(
                     GitHubGraphQlErrorUtils.TransientErrorType.TIMEOUT, "test");
-            assertThat(error.getRecommendedWait()).isEqualTo(java.time.Duration.ofSeconds(5));
+            assertThat(error.getRecommendedWait()).isEqualTo(Duration.ofSeconds(5));
         }
 
         @Test
         void rateLimitWait() {
             var error = new GitHubGraphQlErrorUtils.TransientError(
                     GitHubGraphQlErrorUtils.TransientErrorType.RATE_LIMIT, "test");
-            assertThat(error.getRecommendedWait()).isEqualTo(java.time.Duration.ofMinutes(1));
+            assertThat(error.getRecommendedWait()).isEqualTo(Duration.ofMinutes(1));
         }
 
         @Test
         void serverErrorWait() {
             var error = new GitHubGraphQlErrorUtils.TransientError(
                     GitHubGraphQlErrorUtils.TransientErrorType.SERVER_ERROR, "test");
-            assertThat(error.getRecommendedWait()).isEqualTo(java.time.Duration.ofSeconds(10));
+            assertThat(error.getRecommendedWait()).isEqualTo(Duration.ofSeconds(10));
         }
 
         @Test
         void resourceLimitWait() {
             var error = new GitHubGraphQlErrorUtils.TransientError(
                     GitHubGraphQlErrorUtils.TransientErrorType.RESOURCE_LIMIT, "test");
-            assertThat(error.getRecommendedWait()).isEqualTo(java.time.Duration.ofSeconds(0));
+            assertThat(error.getRecommendedWait()).isEqualTo(Duration.ofSeconds(0));
         }
 
         @Test

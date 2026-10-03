@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountFeatureRepository;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountRoleQuery;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -26,10 +27,7 @@ public class AccountRoleQueryService implements AccountRoleQuery {
 
     @Override
     @Transactional(readOnly = true)
-    public boolean hasFeatureFlag(
-            long gitProviderId,
-            @org.jspecify.annotations.Nullable String subject,
-            @org.jspecify.annotations.Nullable String flag) {
+    public boolean hasFeatureFlag(long gitProviderId, @Nullable String subject, @Nullable String flag) {
         if (subject == null || subject.isBlank() || flag == null || flag.isBlank()) {
             return false;
         }

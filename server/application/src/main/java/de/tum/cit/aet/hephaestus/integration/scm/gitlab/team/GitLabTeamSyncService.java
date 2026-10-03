@@ -848,8 +848,6 @@ public class GitLabTeamSyncService {
         });
     }
 
-    // Helpers
-
     private void throttle() {
         try {
             Thread.sleep(gitLabProperties.paginationThrottle().toMillis());

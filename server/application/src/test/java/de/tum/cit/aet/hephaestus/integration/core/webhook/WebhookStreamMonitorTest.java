@@ -23,6 +23,7 @@ import io.nats.client.api.SequenceInfo;
 import io.nats.client.api.StreamConfiguration;
 import io.nats.client.api.StreamInfo;
 import io.nats.client.api.StreamState;
+import java.io.IOException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -128,7 +129,7 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
         WebhookStreamMonitor monitor = monitor();
         give(1_000, consumer(CONSUMER, 900, 40, 0, 1));
         monitor.poll();
-        doThrow(new java.io.IOException("broker unreachable")).when(jsm).getConsumers(STREAM);
+        doThrow(new IOException("broker unreachable")).when(jsm).getConsumers(STREAM);
 
         monitor.poll();
 
@@ -144,7 +145,7 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
     void reportsRecoveryAndOnlyTheFirstOfARunOfFailures(CapturedOutput output) throws Exception {
         WebhookStreamMonitor monitor = monitor();
         give(1_000, caughtUp(CONSUMER, 999));
-        doThrow(new java.io.IOException("broker unreachable")).when(jsm).getStreamInfo(STREAM);
+        doThrow(new IOException("broker unreachable")).when(jsm).getStreamInfo(STREAM);
         monitor.poll();
         monitor.poll();
         give(1_000, caughtUp(CONSUMER, 999));
@@ -165,7 +166,7 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
                 .isNaN();
 
         give(1_000, caughtUp(CONSUMER, 999));
-        doThrow(new java.io.IOException("broker unreachable")).when(jsm).getStreamInfo(STREAM);
+        doThrow(new IOException("broker unreachable")).when(jsm).getStreamInfo(STREAM);
         monitor.poll();
         assertThat(pollAge())
                 .as("a poll that failed did not refresh the gauges, so it must not say it did")

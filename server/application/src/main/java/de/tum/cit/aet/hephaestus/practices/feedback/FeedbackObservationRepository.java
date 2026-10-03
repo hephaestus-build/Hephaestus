@@ -228,8 +228,6 @@ public interface FeedbackObservationRepository extends JpaRepository<FeedbackObs
         String getBody();
     }
 
-    // --- conversational feedback delivery loop ---
-
     /**
      * The id(s) of the PREPARED IN_CHAT piece of feedback(s) for this recipient/workspace bound (as PRIMARY) to the
      * given observation. Maps a mentor {@code link_observation} id back to the unit to flip to DELIVERED.

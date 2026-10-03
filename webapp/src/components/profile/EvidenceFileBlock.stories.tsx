@@ -59,49 +59,26 @@ const withheldCode = {
 	},
 } satisfies ComponentProps<typeof EvidenceFileBlock>;
 
-const OTHER_REDACTIONS = [
-	{
-		location: {
-			path: "conversation_thread.json",
-			startLine: 62,
-			endLine: 70,
-			sourceKind: "slack.conversation.thread",
-			redacted: true,
-		},
+const withheldObject = {
+	location: {
+		path: "conversation_thread.json",
+		startLine: 62,
+		endLine: 70,
+		sourceKind: "slack.conversation.thread",
+		redacted: true,
 	},
-	{
-		location: {
-			path: "server/application/src/main/resources/application-local.yml",
-			startLine: 12,
-			endLine: 12,
-			sourceKind: "scm.pull-request.diff",
-			side: "NEW",
-			redacted: true,
-		},
-		detector: "secret-diff-scanner",
-	},
-	{
-		location: {
-			path: "inputs/context/metadata.json",
-			startLine: 9,
-			endLine: 9,
-			sourceKind: "scm.pull-request.core",
-			redacted: true,
-		},
-		detector: "secret-diff-scanner",
-	},
-] satisfies ComponentProps<typeof EvidenceFileBlock>[];
+} satisfies ComponentProps<typeof EvidenceFileBlock>;
 
 /**
- * Every way a quote is withheld — by the reviewer or by the secret scanner, on a code source or an
- * object one. A code source's caption names a path and a line, so its sentence may point at them;
- * an object source's caption names neither, so its sentence promises nothing it does not show.
+ * A quote withheld on a code source and on an object one. A code source's caption names a path and
+ * a line, so its sentence may point at them; an object source's caption names neither, so its
+ * sentence promises nothing it does not show.
  */
 export const Redactions: Story = {
 	args: withheldCode,
 	render: (args) => (
 		<div className="flex flex-col gap-3">
-			{[args, ...OTHER_REDACTIONS].map((props) => (
+			{[args, withheldObject].map((props) => (
 				<EvidenceFileBlock key={props.location.path} {...props} />
 			))}
 		</div>
@@ -112,8 +89,6 @@ export const Redactions: Story = {
 		).toStrictEqual([
 			"Not quoted. The passage was withheld, so only its location was kept.",
 			"Not quoted. The passage was withheld.",
-			"Not quoted. This looked like a credential, so the text was never stored. The path and line above are where it sits.",
-			"Not quoted. This looked like a credential, so the text was never stored.",
 		]);
 		await expect(canvas.getByText("lines 31 to 44")).toBeVisible();
 		await expect(canvas.getByText("The conversation")).toBeVisible();

@@ -6,6 +6,7 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.lang.EvaluationResult;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditSnapshot;
 import java.util.List;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,8 +28,8 @@ class ConfigAuditSnapshotSecretDetectionTest {
 
     record PresenceFlagSnapshot(String modelName, boolean llmApiKeySet) implements ConfigAuditSnapshot {}
 
-    static java.util.stream.Stream<Arguments> snapshots() {
-        return java.util.stream.Stream.of(
+    static Stream<Arguments> snapshots() {
+        return Stream.of(
                 // Neither the component name (`gateway`) nor the record name trips the deny-list, so only
                 // the recursion can catch this — the snapshot is serialized whole.
                 Arguments.of(NestedSecretSnapshot.class, "gateway.apiKey", "a secret one level down"),

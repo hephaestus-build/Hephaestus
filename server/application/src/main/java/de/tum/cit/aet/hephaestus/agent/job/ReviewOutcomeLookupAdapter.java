@@ -95,7 +95,7 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
     /**
      * The practice author's own sentence for "the thing this judges was not in this work", or null.
      *
-     * <p>Read from the subject check rather than reconstructed from the clause findings: the sentence is
+     * <p>Read from the subject check rather than reconstructed from the clause results: the sentence is
      * the record, and a surface that paraphrased it would drift from the catalogue the moment somebody
      * edited the declaration. Guarded on {@code absent} because a check is also recorded when the
      * subject was found, and that decision is a ready one with nothing to explain.

@@ -10,10 +10,12 @@ import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import java.time.Clock;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
@@ -43,8 +45,8 @@ class AccountBootstrapServiceIntegrationTest extends BaseIntegrationTest {
                 accountRepository,
                 authEventLogger,
                 properties,
-                java.time.Clock.systemUTC(),
-                org.mockito.Mockito.mock(org.springframework.context.ApplicationEventPublisher.class));
+                Clock.systemUTC(),
+                mock(ApplicationEventPublisher.class));
     }
 
     private Account persistUser(String name) {

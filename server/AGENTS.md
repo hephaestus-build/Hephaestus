@@ -30,6 +30,7 @@ are not here: write code that reads like the file you are editing.
 - **Handwritten javac warnings fail compilation.** Application and test sources use `-Werror`;
   generated clients stay in their separate module. Missing dependency annotation metadata belongs
   on the needed compile-only classpath, not in lint suppressions or annotation processors.
+- **Error Prone fails compilation** on an unnecessary fully qualified name or a wildcard import.
 - **One build invocation per checkout at a time.** Gradle owns the module `build/` directories.
 - **Tests always execute when requested.** Test result caching and up-to-date skipping are disabled;
   PostgreSQL, containers and provider state are not content-addressed inputs. Compilation remains
@@ -112,8 +113,8 @@ or on "the only" result, and never write cleanup that another test depends on ha
 - **`EntityManager` is injected as a `@PersistenceContext` field**, not through the constructor
   (`WorkspaceMembershipService`, `GitHubUserProcessor`). Everything else is constructor injection via
   `@RequiredArgsConstructor`.
-- **A bean that exists in one runtime role only is gated on that role** (`@ConditionalOnProperty` on
-  a `RuntimeRole` property, as in `ShedLockConfig`), and a consumer that must survive its
+- **A bean that exists in one runtime role only is gated on that role** (`@ConditionalOnServerRole`,
+  `@ConditionalOnWorkerRole` or `@ConditionalOnWebhookRole`), and a consumer that must survive its
   absence takes `ObjectProvider` (`WorkspaceSyncTargetProvider`). An ungated consumer crash-loops the
   `worker` and `webhook` runtimes, which start a different slice of the context.
 - **A test-tree `package-info.java` shadows the main one.** Test classes sit first on the classpath,
@@ -138,7 +139,7 @@ or on "the only" result, and never write cleanup that another test depends on ha
   `docs/contributor/api-error-handling.md`.
 - **A schema type without a `DTO` suffix is dropped from the generated spec** unless it is listed in
   `OpenAPIConfiguration.ALLOWED_DOMAIN_OBJECTS`. The webapp client then simply has no type for it, with
-  no error anywhere. Domain types the API deliberately exposes (`ProblemDetail`, `PracticeBinding`, …)
+  no error anywhere. Domain types the API deliberately exposes (`ProblemDetail`, `PracticeDefinition`, …)
   are there for this reason.
 - DTOs are records. All bare components are non-null under `@NullMarked`; add JSpecify `@NonNull` when
   that component must also appear in the generated schema's `required` list. A component the API may
@@ -163,8 +164,8 @@ Procedure: `docs/contributor/database-migration.mdx`. What the drift gate reads 
 `integration/core/webhook/` is the receive-side substrate: one `POST /webhooks/{kind}` entry point
 resolves the kind through `IntegrationKindRouting` and hands it to `WebhookIngestPipeline`, which
 selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDeriver` and publishes the verified
-envelope to JetStream, all gated on `RuntimeRole.WEBHOOK_PROPERTY`. Configuration binds to `hephaestus.webhook.*` through
-`core.webhook.WebhookProperties`, shared with auto-registration in
+envelope to JetStream, all gated with `@ConditionalOnWebhookRole`. Configuration binds to
+`hephaestus.webhook.*` through `core.webhook.WebhookProperties`, shared with auto-registration in
 `integration/scm/gitlab/workspace/GitLabWebhookService`.
 
 - **Production runs it in its own `webhook-server` container** — the same image as `application-server`
@@ -172,7 +173,7 @@ envelope to JetStream, all gated on `RuntimeRole.WEBHOOK_PROPERTY`. Configuratio
   That matters because push events on GitHub and GitLab are **not manually redeliverable**: a webhook
   missed during a restart is lost.
 - **Subject grammar**: `github.<owner>.<repo>.<event>`; registered GitLab group hooks use
-  `gitlab.?connection.<connectionId>.<event>` from `GitlabSubjectKeyDeriver.deriveConnectionSubject`,
+  `gitlab.?connection.<connectionId>.<event>` from `GitLabSubjectKeyDeriver.deriveConnectionSubject`,
   after the connection endpoint verifies the route credential. Operator-created GitLab hooks on
   the shared endpoint retain `gitlab.<namespace>.<project>.<event>`.
   `ConsumerSubjectMath#connectionFilter` matches connection subjects;

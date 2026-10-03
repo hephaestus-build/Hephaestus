@@ -13,7 +13,9 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges.PullRequestRevision;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -36,11 +38,7 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final ArtifactSourceCatalogRegistry catalogs = mock(ArtifactSourceCatalogRegistry.class);
     private final CapturedReviewedWorkChanges changes = new CapturedReviewedWorkChanges(
-            jobs,
-            mapper,
-            catalogs,
-            mock(de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository.class),
-            mock(de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository.class));
+            jobs, mapper, catalogs, mock(PullRequestRepository.class), mock(IssueRepository.class));
 
     @BeforeEach
     void permitCapturedSources() {
@@ -165,7 +163,7 @@ class CapturedReviewedWorkChangesTest extends BaseUnitTest {
         var row = mock(AgentJobRepository.CapturedReviewedWorkRow.class);
         when(row.getReviewedWork()).thenReturn(json);
         lenient().when(row.getContractVersion()).thenReturn("1.3.0");
-        org.mockito.Mockito.lenient().when(row.getId()).thenReturn(RUN);
+        lenient().when(row.getId()).thenReturn(RUN);
         when(jobs.findCapturedReviewedWork(7, Set.of(RUN))).thenReturn(List.of(row));
     }
 

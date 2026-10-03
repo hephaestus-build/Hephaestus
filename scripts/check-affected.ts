@@ -44,14 +44,17 @@ const fullGateInputs = [
 const SHARED_THEME_TOKENS = "webapp/src/styles/theme-tokens.css";
 
 // Webapp files the extension imports by path (`@/…`), the files those import, and the stylesheet
-// the formatter sorts the extension's Tailwind classes by. The webapp lint plugin, which both trees
-// load, is a full-gate input above. Keep in step with the `extension` filter in `cicd.yml`.
+// the formatter sorts the extension's Tailwind classes by; `check-affected.test.ts` derives them from
+// the extension's imports and holds this list and the `extension` filters in `cicd.yml` to them. The
+// webapp lint plugin, which both trees load, is a full-gate input above.
 const webappInputsOfTheExtension = [
 	/^webapp\/brand\/hephaestus-mark\.svg$/u,
+	/^webapp\/src\/components\/brand\/HephaestusLogo\.tsx$/u,
+	/^webapp\/src\/components\/ui\/(?:skeleton|spinner)\.tsx$/u,
 	/^webapp\/src\/components\/icons\/brand\.tsx$/u,
 	/^webapp\/src\/components\/practice-vocabulary\//u,
 	/^webapp\/src\/components\/common\/(?:status-def\.ts|FacetMultiSelect\.tsx)$/u,
-	/^webapp\/src\/lib\/(?:artifact-kind-slugs|artifact-kinds|sign-in-providers)\.ts$/u,
+	/^webapp\/src\/lib\/(?:artifact-kind-slugs|artifact-kinds|sign-in-providers|text)\.ts$/u,
 	/^webapp\/src\/styles\.css$/u,
 ];
 

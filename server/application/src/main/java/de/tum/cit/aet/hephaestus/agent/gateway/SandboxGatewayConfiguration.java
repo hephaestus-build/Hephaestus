@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import io.github.bucket4j.Bucket;
 import java.time.Duration;
@@ -19,7 +20,7 @@ import org.springframework.context.annotation.Configuration;
  * the monolith opens it too.
  */
 @Configuration
-@ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWorkerRole
 @EnableConfigurationProperties(SandboxGatewayProperties.class)
 public class SandboxGatewayConfiguration {
 

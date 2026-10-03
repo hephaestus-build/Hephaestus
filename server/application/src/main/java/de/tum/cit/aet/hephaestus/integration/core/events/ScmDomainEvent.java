@@ -29,7 +29,7 @@ public final class ScmDomainEvent {
         public static final String PULL_REQUEST_SYNCHRONIZED = "PullRequestSynchronized";
         public static final String PULL_REQUEST_UPDATED = "PullRequestUpdated";
         public static final String REVIEW_SUBMITTED = "ReviewSubmitted";
-        /** Retrospective: a PR landed. Drives at-merge, feed-forward detection (loop-closure before merge). */
+        /** Retrospective: a PR landed. Drives at-merge, feed-forward review (loop-closure before merge). */
         public static final String PULL_REQUEST_MERGED = "PullRequestMerged";
         /** Retrospective: a PR was closed WITHOUT merging (abandoned). Distinct from PULL_REQUEST_MERGED so a
          *  practice can opt into the not-landed outcome only. On a merge BOTH PullRequestClosed(wasMerged=true)
@@ -39,7 +39,7 @@ public final class ScmDomainEvent {
         public static final String ISSUE_CREATED = "IssueCreated";
         public static final String ISSUE_UPDATED = "IssueUpdated";
 
-        /** Retrospective: an issue was closed. Drives at-close, feed-forward detection (outcome before close). */
+        /** Retrospective: an issue was closed. Drives at-close, feed-forward review (outcome before close). */
         public static final String ISSUE_CLOSED = "IssueClosed";
 
         private TriggerEventNames() {}

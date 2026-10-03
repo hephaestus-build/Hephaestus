@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -48,7 +49,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -118,7 +118,7 @@ class DockerInteractiveSandboxLiveTest {
                 /* attachFirstFrameTimeoutSeconds */ 15,
                 /* maxSessionsPerUser */ 3,
                 /* maxSessionsTotal */ 50,
-                /* maxFrameChars */ 64 * 1024);
+                /* maxFrameBytes */ 64 * 1024);
 
         dockerClient = DockerClientImpl.getInstance(
                 DefaultDockerClientConfig.createDefaultConfigBuilder().build(),
@@ -569,8 +569,7 @@ class DockerInteractiveSandboxLiveTest {
                     base.resourceLimits(),
                     base.securityProfile(),
                     base.inputFiles());
-            Assertions.assertThatThrownBy(() -> adapter.attach(brokenSpec))
-                    .isInstanceOf(InteractiveSandboxException.class);
+            assertThatThrownBy(() -> adapter.attach(brokenSpec)).isInstanceOf(InteractiveSandboxException.class);
             // Must distinguish runner-crash from flow-control timeout for dashboards.
             assertThat(metrics.attachFailureFirstFrameFailed.count() - failedBefore)
                     .isEqualTo(1.0);
@@ -786,7 +785,7 @@ class DockerInteractiveSandboxLiveTest {
         void sendAfterClose() {
             AttachedSandbox sb = adapter.attach(buildSpec("u9", "w9"));
             sb.close(Duration.ofSeconds(2));
-            Assertions.assertThatThrownBy(() -> sb.send(ping())).isInstanceOf(InteractiveSandboxException.class);
+            assertThatThrownBy(() -> sb.send(ping())).isInstanceOf(InteractiveSandboxException.class);
         }
     }
 }

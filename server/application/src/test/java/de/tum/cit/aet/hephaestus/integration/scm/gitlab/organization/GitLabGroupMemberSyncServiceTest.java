@@ -203,11 +203,9 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
             assertThat(result).isEqualTo(2);
 
-            // Verify upserts with correct user IDs (not anyLong)
             verify(organizationMembershipRepository).upsertMembership(42L, 1010L, OrganizationMemberRole.MEMBER);
             verify(organizationMembershipRepository).upsertMembership(42L, 1020L, OrganizationMemberRole.ADMIN);
 
-            // Verify native SQL upsert was used (not JPA save)
             verify(userRepository, times(2))
                     .upsertUser(
                             anyLong(),
@@ -223,18 +221,14 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             any());
             verify(userRepository, never()).save(any(User.class));
 
-            // Verify login conflict resolution
             verify(userRepository).freeLoginConflicts("alice", 10L, TEST_PROVIDER_ID);
             verify(userRepository).freeLoginConflicts("bob", 20L, TEST_PROVIDER_ID);
 
-            // Verify circuit breaker + rate limit per page
             verify(graphQlClientProvider).acquirePermission();
             verify(graphQlClientProvider).waitIfRateLimitLow(SCOPE_ID);
 
-            // Verify success recorded
             verify(graphQlClientProvider).recordSuccess();
 
-            // Verify listener event
             ArgumentCaptor<OrganizationSyncedEvent> eventCaptor =
                     ArgumentCaptor.forClass(OrganizationSyncedEvent.class);
             verify(organizationMembershipListener).onOrganizationMembershipsSynced(eventCaptor.capture());
@@ -593,13 +587,10 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
             assertThat(userId).isEqualTo(1042L);
 
-            // Verify advisory lock acquired
             verify(userRepository).tryAcquireLoginLock("alice", TEST_PROVIDER_ID);
 
-            // Verify login conflicts freed
             verify(userRepository).freeLoginConflicts("alice", 42L, TEST_PROVIDER_ID);
 
-            // Verify native SQL upsert (not JPA save)
             verify(userRepository)
                     .upsertUser(
                             42L,
@@ -775,8 +766,6 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                     .isEqualTo(OrganizationMemberRole.MEMBER);
         }
     }
-
-    // Helpers
 
     private GitLabGroupMemberResponse createMember(String gid, String username, String name, int accessLevel) {
         return new GitLabGroupMemberResponse(

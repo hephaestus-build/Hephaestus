@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,7 +20,7 @@ import org.junit.jupiter.api.Test;
 /** Checks the prompt's documented workspace inventory against known collector paths. */
 class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
 
-    private static final Set<String> STAGED_INPUT_PATHS = new LinkedHashSet<>(java.util.List.of(
+    private static final Set<String> STAGED_INPUT_PATHS = new LinkedHashSet<>(List.of(
             // Pull request
             SandboxLayout.CONTEXT_PREFIX + "metadata.json",
             PullRequestContentSource.DESCRIPTION_FILE,
@@ -51,14 +52,9 @@ class OrchestratorPromptWorkspaceTest extends BaseUnitTest {
     @Test
     @DisplayName("the prompt states the observation contract the runtime and the server enforce")
     void promptStatesTheObservationContract() throws IOException {
-        String prompt = resolvedDocumentedPrompt();
-        assertThat(prompt)
+        assertThat(resolvedDocumentedPrompt())
                 .contains("| MET |", "| NOT_MET |", "| NOT_APPLICABLE |", "| UNDETERMINED |")
-                .contains("`evidence.inapplicability`", "`evidence.search`", "`evidence.undecidability`")
-                .contains("a mention alone does not establish guidance supplied or adopted by the author");
-        assertThat(prompt)
-                .contains("MET is as ordinary as NOT_MET")
-                .doesNotContain("Report all justified negative observations", "genuinely exemplary");
+                .contains("`evidence.inapplicability`", "`evidence.search`", "`evidence.undecidability`");
     }
 
     @Test

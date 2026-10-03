@@ -16,7 +16,6 @@ public final class DockerOperations {
 
     private DockerOperations() {}
 
-    /** Specification for creating a container. */
     public record ContainerSpec(
             String image,
             List<String> command,

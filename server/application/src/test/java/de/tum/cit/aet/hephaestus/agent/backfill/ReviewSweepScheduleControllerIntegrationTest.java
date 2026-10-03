@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -192,7 +193,7 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
                 .exchange();
     }
 
-    private static java.util.function.Consumer<HttpHeaders> asAdminAccount() {
+    private static Consumer<HttpHeaders> asAdminAccount() {
         return headers -> headers.setBearerAuth(ADMIN_ACCOUNT_TOKEN);
     }
 

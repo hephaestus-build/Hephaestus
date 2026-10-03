@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.common;
 
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.metrics.GitlabMetrics;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.metrics.GitLabMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
@@ -86,22 +86,22 @@ public class GitLabExceptionClassifier {
     private final Counter unknownCounter;
 
     public GitLabExceptionClassifier(MeterRegistry meterRegistry) {
-        this.retryableCounter = Counter.builder(GitlabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
+        this.retryableCounter = Counter.builder(GitLabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
                 .tag("category", "retryable")
                 .register(meterRegistry);
-        this.rateLimitedCounter = Counter.builder(GitlabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
+        this.rateLimitedCounter = Counter.builder(GitLabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
                 .tag("category", "rate_limited")
                 .register(meterRegistry);
-        this.notFoundCounter = Counter.builder(GitlabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
+        this.notFoundCounter = Counter.builder(GitLabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
                 .tag("category", "not_found")
                 .register(meterRegistry);
-        this.authErrorCounter = Counter.builder(GitlabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
+        this.authErrorCounter = Counter.builder(GitLabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
                 .tag("category", "auth_error")
                 .register(meterRegistry);
-        this.clientErrorCounter = Counter.builder(GitlabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
+        this.clientErrorCounter = Counter.builder(GitLabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
                 .tag("category", "client_error")
                 .register(meterRegistry);
-        this.unknownCounter = Counter.builder(GitlabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
+        this.unknownCounter = Counter.builder(GitLabMetrics.GITLAB_SYNC_ERRORS_TOTAL)
                 .tag("category", "unknown")
                 .register(meterRegistry);
     }

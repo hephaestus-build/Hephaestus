@@ -25,6 +25,7 @@ import com.sun.source.util.TreeScanner;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -508,7 +509,7 @@ class MetricOwnershipArchTest {
         for (Class<?> api : List.of(MeterRegistry.class, MeterRegistry.More.class, Metrics.class, Metrics.More.class)) {
             var methods = Arrays.stream(api.getMethods())
                     .filter(method -> method.getParameterCount() > 0 && method.getParameterTypes()[0] == String.class)
-                    .map(java.lang.reflect.Method::getName)
+                    .map(Method::getName)
                     .filter(name -> !Set.of("find", "get").contains(name))
                     .collect(Collectors.toSet());
             assertThat(REGISTRATIONS)

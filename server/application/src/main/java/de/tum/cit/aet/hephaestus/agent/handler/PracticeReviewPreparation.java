@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.StreamSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -98,8 +99,8 @@ final class PracticeReviewPreparation {
             }
             Map<String, byte[]> files = new LinkedHashMap<>(prepared.files());
             if (artifactKind.equals(ArtifactKinds.PULL_REQUEST) && change != null) {
-                var metadata = java.util.Objects.requireNonNull(job.getMetadata());
-                var patterns = java.util.stream.StreamSupport.stream(
+                var metadata = Objects.requireNonNull(job.getMetadata());
+                var patterns = StreamSupport.stream(
                                 metadata.path("generated_path_patterns").spliterator(), false)
                         .map(JsonNode::asString)
                         .toList();

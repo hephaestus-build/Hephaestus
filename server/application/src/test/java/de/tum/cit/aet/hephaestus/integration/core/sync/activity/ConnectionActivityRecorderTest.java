@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -19,12 +21,14 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncStateChangedEvent;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -58,10 +62,10 @@ class ConnectionActivityRecorderTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         clock = new MutableClock(Instant.parse("2026-07-14T10:00:00Z"), ZoneId.of("UTC"));
-        org.mockito.Mockito.lenient()
+        lenient()
                 .doAnswer(invocation -> {
-                    java.util.function.Consumer<TransactionStatus> action = invocation.getArgument(0);
-                    action.accept(org.mockito.Mockito.mock(TransactionStatus.class));
+                    Consumer<TransactionStatus> action = invocation.getArgument(0);
+                    action.accept(mock(TransactionStatus.class));
                     return null;
                 })
                 .when(transactionTemplate)
@@ -163,7 +167,7 @@ class ConnectionActivityRecorderTest extends BaseUnitTest {
 
     private static void setConnectionId(Connection connection, long id) {
         try {
-            java.lang.reflect.Field field = Connection.class.getDeclaredField("id");
+            Field field = Connection.class.getDeclaredField("id");
             field.setAccessible(true);
             field.set(connection, id);
         } catch (ReflectiveOperationException e) {

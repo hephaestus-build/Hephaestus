@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.curated.CuratedCatalogLock;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -90,7 +91,7 @@ public class CatalogAdoptionService {
                 .map(practice -> practiceService.adoptPracticeFromCatalog(
                         context, practice.slug(), practice.definition(), practice.initialAutonomy()))
                 .toList();
-        List<Practice> moved = new java.util.ArrayList<>();
+        List<Practice> moved = new ArrayList<>();
         int position = 0;
         for (CatalogGroupPracticeActionDTO action : plan.actions()) {
             if (action.action() == CatalogGroupPracticeAction.MOVE_TO_GROUP) {

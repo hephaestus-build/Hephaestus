@@ -4,7 +4,7 @@ import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
-import { GithubIcon } from "@/components/icons/brand";
+import { GitHubIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -37,7 +37,7 @@ function GitHubSetupPage() {
 				rel="noopener noreferrer"
 				className={buttonVariants({ className: "w-full" })}
 			>
-				<GithubIcon className="mr-2 size-4" />
+				<GitHubIcon className="mr-2 size-4" />
 				Install GitHub App
 				<ExternalLinkIcon className="ml-2 size-3.5" />
 			</a>
@@ -65,7 +65,7 @@ function GitHubSetupPage() {
 			</Link>
 
 			<div className="mb-6 flex items-center gap-3">
-				<GithubIcon className="size-8" />
+				<GitHubIcon className="size-8" />
 				<div>
 					<h1 className="text-2xl font-semibold tracking-tight">Connect GitHub</h1>
 					<p className="text-muted-foreground">

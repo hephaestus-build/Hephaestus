@@ -238,7 +238,7 @@
 			"rules": { "import/no-relative-parent-imports": "off" }
 		},
 		{
-			"files": ["src/lib/**", "src/stores/**"],
+			"files": ["src/lib/**"],
 			"rules": {
 				"no-restricted-imports": [
 					"error",

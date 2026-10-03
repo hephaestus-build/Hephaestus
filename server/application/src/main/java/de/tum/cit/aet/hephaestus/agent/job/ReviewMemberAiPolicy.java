@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -74,7 +75,7 @@ public class ReviewMemberAiPolicy {
                             snapshot.connectionId(),
                             snapshot.modelId(),
                             snapshot.workspaceId()));
-        } catch (IllegalArgumentException | IllegalStateException | tools.jackson.core.JacksonException e) {
+        } catch (IllegalArgumentException | IllegalStateException | JacksonException e) {
             return false;
         }
     }

@@ -5,7 +5,7 @@ import org.jspecify.annotations.NonNull;
 
 public record CuratedCatalogSummaryDTO(
         @NonNull Integer total,
-        @NonNull Integer updatesChangingDetection,
+        @NonNull Integer updatesChangingReview,
         @NonNull Integer updatesChangingWordingOnly,
         @NonNull Integer updatesChangingPresentation,
         @NonNull Integer editedHere,
@@ -15,7 +15,7 @@ public record CuratedCatalogSummaryDTO(
     public static CuratedCatalogSummaryDTO from(EffectiveCatalog.CatalogSummary summary) {
         return new CuratedCatalogSummaryDTO(
                 summary.total(),
-                summary.updatesChangingDetection(),
+                summary.updatesChangingReview(),
                 summary.updatesChangingWordingOnly(),
                 summary.updatesChangingPresentation(),
                 summary.editedHere(),

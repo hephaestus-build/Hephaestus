@@ -39,8 +39,6 @@ export type ReasonVocabulariesAgree<
 	T extends true = Agree<RequestRefusalReason, SignalStateReason>,
 > = T;
 
-export type RefusalReason = SignalStateReason;
-
 /** Names the destination on its own: a link is read out of its sentence (WCAG 2.4.4). */
 interface RefusalFixLabel {
 	label: string;
@@ -97,7 +95,7 @@ export const DISCOVERED_VIA_DESCRIPTIONS: Record<DiscoveredVia, string> = {
 	MANUAL: "Someone asked for this review explicitly.",
 	BACKFILL: "Recorded while catching up on work that predates the connection.",
 	SWEEP:
-		"Found by the recurring check over recent work, not announced by the provider — so the time is only as precise as the check.",
+		"Found by the recurring check over recent work, not announced by the provider, so the time is only as precise as the check.",
 };
 
 export function occurrenceDomId(signalId: string): string {

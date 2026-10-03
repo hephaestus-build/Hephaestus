@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -16,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionReques
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.RevisionScheme;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
@@ -29,6 +31,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -40,6 +43,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -68,7 +72,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     private PracticeSignalOptions signalOptions;
 
     @Mock
-    private de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder signalRecorder;
+    private SignalRecorder signalRecorder;
 
     @Mock
     private AgentJobService agentJobService;
@@ -147,7 +151,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
                         eq(AgentJobType.PULL_REQUEST_REVIEW),
                         captor.capture(),
                         any(),
-                        any(GateDecision.Detect.class));
+                        any(GateDecision.Run.class));
         assertThat(captor.getValue().triggerSignal()).isNull();
         assertThat(captor.getValue().observationOrigin()).isEqualTo(ObservationOrigin.MANUAL);
     }
@@ -181,8 +185,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
         requests.requestPullRequestReview(workspace, pullRequest(), requesters());
 
         var captor = ArgumentCaptor.forClass(SignalKey.class);
-        verify(signalRecorder, org.mockito.Mockito.times(2))
-                .record(captor.capture(), any(), eq(DiscoveredVia.MANUAL), eq(REQUESTER_ID));
+        verify(signalRecorder, times(2)).record(captor.capture(), any(), eq(DiscoveredVia.MANUAL), eq(REQUESTER_ID));
         assertThat(captor.getAllValues().get(0))
                 .isNotEqualTo(captor.getAllValues().get(1));
     }
@@ -200,12 +203,12 @@ class ManualReviewRequestsTest extends BaseUnitTest {
         assertThat(outcome.reason()).isEqualTo(SignalStateReason.PRACTICE_AUTONOMY_OFF);
         assertThat(outcome.describeReason()).isEqualTo(SignalStateReason.PRACTICE_AUTONOMY_OFF.describe());
         verify(signalRecorder).markRefused(any(), eq(SignalStateReason.PRACTICE_AUTONOMY_OFF));
-        verify(agentJobService, never()).submitWithOutcome(any(), any(), any(), any(), any(GateDecision.Detect.class));
+        verify(agentJobService, never()).submitWithOutcome(any(), any(), any(), any(), any(GateDecision.Run.class));
     }
 
     @Test
     void anAdministratorCanRequestAnInternalReviewOutsideCoverage() {
-        GateDecision.Detect detection = new GateDecision.Detect(
+        GateDecision.Run admission = new GateDecision.Run(
                 workspace,
                 List.of(new Practice()),
                 workspace.getReviewSettings().getRolloutRevision(),
@@ -214,13 +217,13 @@ class ManualReviewRequestsTest extends BaseUnitTest {
                 .thenReturn(new GateDecision.Skip("outside coverage", SignalStateReason.OUT_OF_REVIEW_SCOPE));
         when(authority.isWorkspaceAdmin(WORKSPACE_ID, REQUESTER_ID)).thenReturn(true);
         when(gate.evaluatePullRequestAdministrative(any(), any(), eq(ScmSignals.PULL_REQUEST_MANUAL_REVIEW)))
-                .thenReturn(detection);
+                .thenReturn(admission);
         givenSubmissionSucceeds();
 
         ManualReviewOutcome outcome = requests.requestPullRequestReview(workspace, pullRequest(), requesters());
 
         assertThat(outcome.status()).isEqualTo(ManualReviewOutcome.Status.SUBMITTED);
-        verify(agentJobService).submitWithOutcome(anyLong(), any(), any(), any(), eq(detection));
+        verify(agentJobService).submitWithOutcome(anyLong(), any(), any(), any(), eq(admission));
     }
 
     @Test
@@ -238,7 +241,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     @Test
     void aSubmissionRefusalKeepsTheReasonTheSubmissionStoppedOn() {
         givenGateDetects();
-        when(agentJobService.submitWithOutcome(anyLong(), any(), any(), any(), any(GateDecision.Detect.class)))
+        when(agentJobService.submitWithOutcome(anyLong(), any(), any(), any(), any(GateDecision.Run.class)))
                 .thenReturn(SubmissionOutcome.refused(SignalStateReason.BUDGET_EXHAUSTED));
 
         ManualReviewOutcome outcome = requests.requestPullRequestReview(workspace, pullRequest(), requesters());
@@ -302,7 +305,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
                 workspace, pullRequest(), List.of(requesters().get(0), second));
 
         @SuppressWarnings("unchecked")
-        ArgumentCaptor<java.util.Collection<Long>> ids = ArgumentCaptor.forClass(java.util.Collection.class);
+        ArgumentCaptor<Collection<Long>> ids = ArgumentCaptor.forClass(Collection.class);
         verify(rateLimits).refusalFor(eq(workspace), eq(ScmSignals.PULL_REQUEST), eq(PR_ID), ids.capture());
         assertThat(ids.getValue()).containsExactly(REQUESTER_ID, 7777L);
     }
@@ -311,7 +314,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     @Test
     void aPullRequestWithNoHeadCommitIsRefusedBeforeAnythingIsRecorded() {
         PullRequest pr = pullRequest();
-        org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefOid", null);
+        ReflectionTestUtils.setField(pr, "headRefOid", null);
 
         ManualReviewOutcome outcome = requests.requestPullRequestReview(workspace, pr, requesters());
 
@@ -320,11 +323,9 @@ class ManualReviewRequestsTest extends BaseUnitTest {
         verifyNoInteractions(signalRecorder, agentJobService);
     }
 
-    // Fixtures
-
     private void givenGateDetects() {
         when(gate.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(new GateDecision.Detect(
+                .thenReturn(new GateDecision.Run(
                         workspace,
                         List.of(new Practice()),
                         workspace.getReviewSettings().getRolloutRevision(),
@@ -334,7 +335,7 @@ class ManualReviewRequestsTest extends BaseUnitTest {
     private void givenSubmissionSucceeds() {
         AgentJob job = new AgentJob();
         job.setId(UUID.randomUUID());
-        when(agentJobService.submitWithOutcome(anyLong(), any(), any(), any(), any(GateDecision.Detect.class)))
+        when(agentJobService.submitWithOutcome(anyLong(), any(), any(), any(), any(GateDecision.Run.class)))
                 .thenReturn(SubmissionOutcome.created(job));
     }
 

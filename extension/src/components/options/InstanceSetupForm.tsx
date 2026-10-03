@@ -1,7 +1,7 @@
 import { type SubmitEvent, useId, useState } from "react";
 
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
-import { Spinner } from "~/components/common/Spinner";
 
 export type InstanceSetupState =
 	| { status: "idle" }

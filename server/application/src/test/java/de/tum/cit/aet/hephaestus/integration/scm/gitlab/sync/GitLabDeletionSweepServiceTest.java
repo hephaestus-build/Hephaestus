@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.inOrder;
@@ -47,7 +48,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
@@ -59,9 +59,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 /**
- * Unit tests for {@link GitLabDeletionSweepService}.
- *
- * <p>The sweep fails closed: it deletes <em>nothing</em> unless it can prove it saw the whole upstream
+ * The sweep fails closed: it deletes <em>nothing</em> unless it can prove it saw the whole upstream
  * set. A phantom row is a visible, self-correcting annoyance; a wrongly-deleted issue is invisible and
  * takes its feedback with it. {@link FailsClosed} covers one case per way a GitLab listing can come up
  * short.
@@ -135,7 +133,7 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
                 workspaceLinkService,
                 new TransactionTemplate(transactionManager),
                 noteReconciliation,
-                org.mockito.Mockito.mock(SyncTargetProvider.class));
+                mock(SyncTargetProvider.class));
         // Default: the scope is connected to the repository's instance and may still write it.
         lenient().when(actorSelector.connectedProviderId(SCOPE_ID)).thenReturn(Optional.of(PROVIDER_ID));
         lenient()
@@ -725,7 +723,7 @@ class GitLabDeletionSweepServiceTest extends BaseUnitTest {
             service.sweepScope(SCOPE_ID, handle);
 
             verify(handle, atLeastOnce())
-                    .progress(any(), any(), ArgumentMatchers.argThat(progress -> progress.phase() == SyncPhase.SWEEP));
+                    .progress(any(), any(), argThat(progress -> progress.phase() == SyncPhase.SWEEP));
         }
 
         @Test

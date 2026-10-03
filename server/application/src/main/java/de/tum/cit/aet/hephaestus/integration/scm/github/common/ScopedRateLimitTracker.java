@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.spi.RateLimitSnapshot;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRateLimit;
-import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GithubMetrics;
+import de.tum.cit.aet.hephaestus.integration.scm.github.metrics.GitHubMetrics;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -326,9 +326,8 @@ public class ScopedRateLimitTracker implements RateLimitTracker, RateLimitObserv
                 state.remaining.get(),
                 state.resetAt.get(),
                 observedAt,
-                // GitHub's secondary (abuse) limits are the only 429-style back-off signal it sends, and they
-                // surface on the REST/GraphQL transport rather than in the rateLimit field this tracker reads.
-                // Left null until GitHubExceptionClassifier's secondary-limit detection is wired through.
+                // GitHub's secondary (abuse) limits, its only 429-style back-off signal, surface on the REST/GraphQL
+                // transport rather than in the rateLimit field this tracker reads, so it has none to report.
                 null);
     }
 
@@ -397,27 +396,27 @@ public class ScopedRateLimitTracker implements RateLimitTracker, RateLimitObserv
         Tags tags = Tags.of("scope_id", String.valueOf(scopeId));
 
         // NaN, not 0, while unobserved: a gauge is a measurement too, and 0 would read as "exhausted".
-        Gauge.builder(GithubMetrics.GITHUB_GRAPHQL_RATELIMIT_POINTS_REMAINING, state, s -> asDouble(s.remaining.get()))
+        Gauge.builder(GitHubMetrics.GITHUB_GRAPHQL_RATELIMIT_POINTS_REMAINING, state, s -> asDouble(s.remaining.get()))
                 .tags(tags)
                 .description("GitHub GraphQL API rate limit points remaining")
                 .register(meterRegistry);
 
-        Gauge.builder(GithubMetrics.GITHUB_GRAPHQL_RATELIMIT_POINTS_LIMIT, state, s -> asDouble(s.limit.get()))
+        Gauge.builder(GitHubMetrics.GITHUB_GRAPHQL_RATELIMIT_POINTS_LIMIT, state, s -> asDouble(s.limit.get()))
                 .tags(tags)
                 .description("GitHub GraphQL API rate limit total points per hour")
                 .register(meterRegistry);
 
-        Gauge.builder(GithubMetrics.GITHUB_GRAPHQL_RATELIMIT_POINTS_USED, state.used, AtomicInteger::get)
+        Gauge.builder(GitHubMetrics.GITHUB_GRAPHQL_RATELIMIT_POINTS_USED, state.used, AtomicInteger::get)
                 .tags(tags)
                 .description("GitHub GraphQL API rate limit points used in current window")
                 .register(meterRegistry);
 
-        Gauge.builder(GithubMetrics.GITHUB_GRAPHQL_RATELIMIT_LAST_QUERY_COST, state.lastQueryCost, AtomicInteger::get)
+        Gauge.builder(GitHubMetrics.GITHUB_GRAPHQL_RATELIMIT_LAST_QUERY_COST, state.lastQueryCost, AtomicInteger::get)
                 .tags(tags)
                 .description("Cost of the last GitHub GraphQL query")
                 .register(meterRegistry);
 
-        Gauge.builder(GithubMetrics.GITHUB_GRAPHQL_RATELIMIT_SECONDS_UNTIL_RESET, state, s -> {
+        Gauge.builder(GitHubMetrics.GITHUB_GRAPHQL_RATELIMIT_SECONDS_UNTIL_RESET, state, s -> {
                     Instant reset = s.resetAt.get();
                     if (reset == null) {
                         return 0.0;

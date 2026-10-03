@@ -11,16 +11,21 @@ import de.tum.cit.aet.hephaestus.testconfig.GitTestFixtures;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Stream;
+import org.assertj.core.groups.Tuple;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.CommitBuilder;
+import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.FileMode;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
+import org.eclipse.jgit.lib.TreeFormatter;
 import org.eclipse.jgit.revwalk.RevWalk;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -111,8 +116,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             assertThat(commits.get(1).fileChanges())
                     .extracting(CommitDetails.FileChange::filename, CommitDetails.FileChange::changeType)
                     .containsExactlyInAnyOrder(
-                            org.assertj.core.groups.Tuple.tuple("a.txt", ChangeType.ADDED),
-                            org.assertj.core.groups.Tuple.tuple("b.txt", ChangeType.ADDED));
+                            Tuple.tuple("a.txt", ChangeType.ADDED), Tuple.tuple("b.txt", ChangeType.ADDED));
             assertThat(commits.get(1).message()).isEqualTo("feat: add a and b");
             assertThat(commits.get(1).messageBody()).isEqualTo("Closes #7");
             assertThat(commits.get(1).parentShas()).containsExactly(first);
@@ -174,8 +178,7 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             Files.writeString(source.resolve("large.txt"), "source\n".repeat(300_000));
             Files.write(source.resolve("image.bin"), new byte[64 * 1024]);
             Files.writeString(source.resolve("run.sh"), "#!/bin/sh\n");
-            Files.setPosixFilePermissions(
-                    source.resolve("run.sh"), java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-xr-x"));
+            Files.setPosixFilePermissions(source.resolve("run.sh"), PosixFilePermissions.fromString("rwxr-xr-x"));
             String sha = commit(git, "Add full source");
             git.tag().setName("v1").setSigned(false).call();
             prepare();
@@ -259,12 +262,12 @@ class GitRepositoryManagerTest extends BaseUnitTest {
             ObjectId withSubmodule;
             try (var inserter = git.getRepository().newObjectInserter();
                     var walk = new RevWalk(git.getRepository())) {
-                var tree = new org.eclipse.jgit.lib.TreeFormatter();
-                tree.append("vendor", org.eclipse.jgit.lib.FileMode.GITLINK, ObjectId.fromString("c".repeat(40)));
+                var tree = new TreeFormatter();
+                tree.append("vendor", FileMode.GITLINK, ObjectId.fromString("c".repeat(40)));
                 tree.append(
                         "README.md",
-                        org.eclipse.jgit.lib.FileMode.REGULAR_FILE,
-                        inserter.insert(org.eclipse.jgit.lib.Constants.OBJ_BLOB, "Repository\n".getBytes()));
+                        FileMode.REGULAR_FILE,
+                        inserter.insert(Constants.OBJ_BLOB, "Repository\n".getBytes()));
                 CommitBuilder commit = new CommitBuilder();
                 commit.setTreeId(inserter.insert(tree));
                 commit.setParentId(walk.parseCommit(ObjectId.fromString(sha)));

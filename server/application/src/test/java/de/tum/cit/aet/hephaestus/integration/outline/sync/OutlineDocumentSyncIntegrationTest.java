@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -140,7 +141,7 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
 
     private void stubCollection(List<String> docIds, Instant docOneUpdatedAt, Instant docTwoUpdatedAt) {
         List<OutlineNavigationNode> tree = docIds.stream()
-                .map(id -> OutlineClientModels.node(id, id.toUpperCase(java.util.Locale.ROOT), "/doc/" + id, List.of()))
+                .map(id -> OutlineClientModels.node(id, id.toUpperCase(Locale.ROOT), "/doc/" + id, List.of()))
                 .toList();
         when(outlineApiClient.listCollectionDocuments(anyString(), anyString(), eq(COLLECTION_ID)))
                 .thenReturn(tree);
@@ -258,7 +259,7 @@ class OutlineDocumentSyncIntegrationTest extends BaseIntegrationTest {
                 .thenReturn(List.of(OutlineClientModels.document(
                         DOC_TWO,
                         "/doc/" + DOC_TWO,
-                        DOC_TWO.toUpperCase(java.util.Locale.ROOT),
+                        DOC_TWO.toUpperCase(Locale.ROOT),
                         T0,
                         T1,
                         DOC_TWO,

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntFunction;
 import java.util.stream.Collectors;
@@ -58,7 +59,7 @@ class OutlineApiClientPagingTest extends BaseUnitTest {
                 CircuitBreaker.ofDefaults("outlineRestApi"),
                 Retry.ofDefaults("outlineRestApi"),
                 WebClient.builder().exchangeFunction(exchange).build(),
-                new OutlineOriginPolicy(java.util.Set.of("https://wiki.example.com")));
+                new OutlineOriginPolicy(Set.of("https://wiki.example.com")));
     }
 
     @Test

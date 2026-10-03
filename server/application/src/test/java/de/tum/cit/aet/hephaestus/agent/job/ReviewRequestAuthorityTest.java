@@ -169,8 +169,6 @@ class ReviewRequestAuthorityTest extends BaseUnitTest {
         assertThat(authority.isActorOn(artifact(), List.of(user(BYSTANDER_ID)))).isFalse();
     }
 
-    // Fixtures
-
     private Issue artifact() {
         PullRequest pr = new PullRequest();
         pr.setId(500L);

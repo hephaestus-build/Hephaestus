@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
@@ -19,7 +20,6 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 
 /**
@@ -105,8 +105,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
 
         service.ingestChannelMessage("T1", "C1", "100.1", null, "U1", "hi");
 
-        verify(messageRepository, never())
-                .insertIfAbsent(ArgumentMatchers.anyLong(), any(), any(), any(), any(), any(), any(), any());
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -117,9 +116,8 @@ class SlackIngestServiceTest extends BaseUnitTest {
         service.ingestChannelMessage("T1", "C1", "100.1", null, "U1", "hi");
 
         // The message and thread are NOT persisted until consent is ACTIVE.
-        verify(messageRepository, never())
-                .insertIfAbsent(ArgumentMatchers.anyLong(), any(), any(), any(), any(), any(), any(), any());
-        verify(threadRepository, never()).upsertOnMessage(ArgumentMatchers.anyLong(), any(), any(), any(), any());
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
+        verify(threadRepository, never()).upsertOnMessage(anyLong(), any(), any(), any(), any());
     }
 
     @Test
@@ -134,9 +132,8 @@ class SlackIngestServiceTest extends BaseUnitTest {
         service.ingestChannelMessage("T1", "C1", "100.1", "99.0", "U1", "hi");
 
         // The store does not happen; the identity resolver is never even consulted.
-        verify(messageRepository, never())
-                .insertIfAbsent(ArgumentMatchers.anyLong(), any(), any(), any(), any(), any(), any(), any());
-        verify(threadRepository, never()).upsertOnMessage(ArgumentMatchers.anyLong(), any(), any(), any(), any());
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
+        verify(threadRepository, never()).upsertOnMessage(anyLong(), any(), any(), any(), any());
     }
 
     @Test
@@ -153,8 +150,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
         service.ingestChannelMessage("T1", "C1", "100.1", null, "U1", "old");
 
         verifyNoInteractions(participantConsentGate);
-        verify(messageRepository, never())
-                .insertIfAbsent(ArgumentMatchers.anyLong(), any(), any(), any(), any(), any(), any(), any());
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -170,8 +166,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
         service.ingestChannelMessage("T1", "C1", "100.0", null, "U1", "at the announcement instant");
 
         verifyNoInteractions(participantConsentGate);
-        verify(messageRepository, never())
-                .insertIfAbsent(ArgumentMatchers.anyLong(), any(), any(), any(), any(), any(), any(), any());
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -185,8 +180,7 @@ class SlackIngestServiceTest extends BaseUnitTest {
         service.ingestChannelMessage("T1", "C1", "100.1", null, "U1", "hi");
 
         verifyNoInteractions(participantConsentGate);
-        verify(messageRepository, never())
-                .insertIfAbsent(ArgumentMatchers.anyLong(), any(), any(), any(), any(), any(), any(), any());
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -253,6 +247,6 @@ class SlackIngestServiceTest extends BaseUnitTest {
         service.ingestChannelMessage("T1", "C1", "100.1", null, "U1", "hi");
 
         // Idempotent retry: the message already existed (0 inserted) → no double thread bookkeeping.
-        verify(threadRepository, never()).upsertOnMessage(ArgumentMatchers.anyLong(), any(), any(), any(), any());
+        verify(threadRepository, never()).upsertOnMessage(anyLong(), any(), any(), any(), any());
     }
 }

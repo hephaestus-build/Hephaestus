@@ -215,7 +215,7 @@ class DeliveryComposer {
             }
         }
 
-        // The notes on the diff are built first, because a finding that could not be placed on a line —
+        // The notes on the diff are built first, because feedback that could not be placed on a line —
         // capped, or its anchor no longer in the diff — has to fall back into the summary rather than
         // vanish between the two surfaces.
         var placed = collectDiffNotes(inlinable, rendering);
@@ -372,10 +372,10 @@ class DeliveryComposer {
     private static final int RECURRING_BUDGET = 200;
 
     /**
-     * The opening sits where a reader trusts the message most, so it is held to a narrower contract than a
-     * finding body: nothing that can restructure the comment around itself, no link, and no verdict on
+     * The opening sits where a reader trusts the message most, so it is held to a narrower contract than an
+     * observation's body: nothing that can restructure the comment around itself, no link, and no verdict on
      * merging — which the composer is never told and could only invent. A lead reaching for any of them is
-     * dropped whole, and the note opens on its first finding instead.
+     * dropped whole, and the note opens on its first observation instead.
      */
     private static final Pattern LEAD_REJECTED = Pattern.compile(
             "```|~~~|<!--|\\]\\(|\\]\\[|^\\s{0,3}(?:#{1,6}\\s|>|\\||[-+*]\\s|\\d+[.)]\\s|-{3,}|={3,})"
@@ -524,7 +524,7 @@ class DeliveryComposer {
     }
 
     private static void composeObservation(StringBuilder sb, ValidatedObservation f, Rendering rendering) {
-        // A finding about the pull request itself has no line to point at, so it reads as a sentence among
+        // An observation about the pull request itself has no line to point at, so it reads as a sentence among
         // the ones the review wrote. Three bold headers in a row turn an opening paragraph into a form.
         if (extractPrimaryLocation(f) == null) {
             composeArtifactObservation(sb, f, rendering);

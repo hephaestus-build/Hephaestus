@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -78,7 +79,7 @@ class AgentJobSubmissionIntegrationTest extends BaseIntegrationTest {
     private UserRepository userRepository;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository scmConnections;
+    private ConnectionRepository scmConnections;
 
     private Workspace workspace;
     private WorkspaceAgentBinding agentBinding;
@@ -138,7 +139,7 @@ class AgentJobSubmissionIntegrationTest extends BaseIntegrationTest {
 
         Instant now = Instant.now();
         Long providerId = provider.getId();
-        org.junit.jupiter.api.Assertions.assertNotNull(providerId);
+        assertThat(providerId).isNotNull();
         pullRequestRepository.upsertCore(
                 6001L,
                 providerId,
@@ -182,7 +183,7 @@ class AgentJobSubmissionIntegrationTest extends BaseIntegrationTest {
 
     private PullRequestReviewSubmissionRequest createRequest(String commitSha) {
         String defaultBranch = repo.getDefaultBranch();
-        org.junit.jupiter.api.Assertions.assertNotNull(defaultBranch);
+        assertThat(defaultBranch).isNotNull();
         RepositoryRef repoRef = new RepositoryRef(repo.getId(), repo.getNameWithOwner(), defaultBranch);
         ScmEventPayload.PullRequestData prData = new ScmEventPayload.PullRequestData(
                 prId,
@@ -225,7 +226,7 @@ class AgentJobSubmissionIntegrationTest extends BaseIntegrationTest {
             assertThat(job.getPurpose()).isEqualTo(AgentPurpose.PRACTICE_REVIEW);
             assertThat(job.getConfigSnapshot()).isNotNull();
             var metadata = job.getMetadata();
-            org.junit.jupiter.api.Assertions.assertNotNull(metadata);
+            assertThat(metadata).isNotNull();
             assertThat(metadata.get("pull_request_id").asLong()).isEqualTo(prId);
             assertThat(metadata.get("pr_number").asInt()).isEqualTo(10);
             assertThat(metadata.get("commit_sha").asString()).isEqualTo("abc123");

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelConsentGate;
@@ -11,7 +12,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -49,7 +49,7 @@ class SlackChannelMessagePublishGateTest extends BaseUnitTest {
 
         assertThat(decision.publish()).isFalse();
         assertThat(decision.reason()).isEqualTo("slack-channel-not-active");
-        Mockito.verifyNoInteractions(consentGate);
+        verifyNoInteractions(consentGate);
     }
 
     @Test
@@ -62,7 +62,7 @@ class SlackChannelMessagePublishGateTest extends BaseUnitTest {
         var decision = gate(true).evaluate(payload, Map.of());
 
         assertThat(decision.publish()).isTrue();
-        Mockito.verifyNoInteractions(workspaceResolver, consentGate);
+        verifyNoInteractions(workspaceResolver, consentGate);
     }
 
     @Test

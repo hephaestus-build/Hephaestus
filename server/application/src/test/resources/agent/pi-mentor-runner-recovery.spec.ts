@@ -413,11 +413,8 @@ const longHistory = (root: string, ...more: SavedReply[]) =>
 		...more,
 	]);
 
-/**
- * The measured incident: the last reply ran on about 96k input tokens after fetching a 199,907-character
- * observation history, far under Pi's default threshold of 111,616 at the real 128k window.
- */
-const incident = (root: string) =>
+/** A restored session past the working trigger, yet under Pi's default threshold of 111,616 at a 128k window. */
+const heavySession = (root: string) =>
 	longHistory(root, {
 		toolResultChars: 199_907,
 		inputTokens: 90_000,
@@ -675,7 +672,7 @@ void test("each native request receives this turn's evidence without persisting 
 	assert.ok(!request.includes("CURRENT-RECEIPT") && !request.includes("OLD-RECEIPT"));
 });
 
-void test("the measured restored session is compacted before its first ordinary request", async (t) => {
+void test("a heavy restored session is compacted before its first ordinary request", async (t) => {
 	const root = runnerRoot();
 	const model = await fakeModel(t, (kind) =>
 		kind === "summary"
@@ -686,7 +683,7 @@ void test("the measured restored session is compacted before its first ordinary 
 	await openAndPrompt(
 		runner,
 		"and the tests?",
-		incident(root),
+		heavySession(root),
 		'{"marker":"AFTER-RESTORE-CURRENT"}',
 	);
 	await runner.next(isEvent("agent_end"));
@@ -710,13 +707,13 @@ void test("the measured restored session is compacted before its first ordinary 
 	assert.ok(turn.length < 20_000, `the ordinary request is ${turn.length} characters`);
 });
 
-void test("a failed compaction of the measured session sends no ordinary request", async (t) => {
+void test("a failed compaction of a heavy restored session sends no ordinary request", async (t) => {
 	const root = runnerRoot();
 	const model = await fakeModel(t, (kind) =>
 		kind === "summary" ? { status: 400 } : { text: "answer", promptTokens: 3000 },
 	);
 	const runner = spawnRealRunner(t, root, model);
-	await openAndPrompt(runner, "and the tests?", incident(root));
+	await openAndPrompt(runner, "and the tests?", heavySession(root));
 	await runner.next(isEvent("agent_end"));
 
 	const types = typesOf(runner);
@@ -896,11 +893,9 @@ void test("a link the server admits only after Stop is neither shown nor reporte
 });
 
 /**
- * The measured staging turn, with made-up content: the question fetched a merge request's detail, then a small
- * observation detail, and the reply that asked for the second crossed the working trigger, so Pi compacted between
- * the two tool batches. What the turn read before that stays verbatim, not only in the summary: the question, and
- * the reviewer's and the student's comments told apart. Only the messages are measured here; the system prompt,
- * tool schemas and the reply's headroom come on top of them and are not modelled by the scripted usage.
+ * The question fetches a merge request's detail, then a small observation detail, and the reply that asks for the
+ * second crosses the working trigger, so Pi compacts between the two tool batches. What the turn read before that
+ * stays verbatim, not only in the summary: the question, and the reviewer's and the student's comments told apart.
  */
 void test("a compaction during a turn keeps its question and the comments it fetched", async (t) => {
 	const question = "What did the tutor ask on !10, and did I answer it?";
@@ -990,7 +985,7 @@ void test("aborting during the pre-prompt compaction ends the turn once, without
 		kind === "summary" ? "hang" : { text: "answer", promptTokens: 3000 },
 	);
 	const runner = spawnRealRunner(t, root, model);
-	await openAndPrompt(runner, "and the tests?", incident(root));
+	await openAndPrompt(runner, "and the tests?", heavySession(root));
 	await runner.next(isEvent("compaction_start"));
 	runner.send({ jsonrpc: "2.0", id: "abort", method: "abort", params: { threadId: THREAD } });
 	await runner.next(isResult("abort"));

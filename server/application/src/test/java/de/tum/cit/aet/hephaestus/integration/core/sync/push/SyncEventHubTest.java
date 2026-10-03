@@ -18,8 +18,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
@@ -31,7 +33,7 @@ class SyncEventHubTest extends BaseUnitTest {
 
     private final List<RecordingEmitter> createdEmitters = Collections.synchronizedList(new ArrayList<>());
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
-    private @org.jspecify.annotations.Nullable SyncEventHub hub;
+    private @Nullable SyncEventHub hub;
 
     private SyncEventHub newHub(Duration coalesceWindow) {
         return new SyncEventHub(MAPPER, meters, coalesceWindow, () -> {
@@ -169,8 +171,7 @@ class SyncEventHubTest extends BaseUnitTest {
             currentHub.subscribe(WORKSPACE_ID);
         }
 
-        assertThatThrownBy(() -> currentHub.subscribe(WORKSPACE_ID))
-                .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThatThrownBy(() -> currentHub.subscribe(WORKSPACE_ID)).isInstanceOf(ResponseStatusException.class);
         assertThat(currentHub.subscriberCount(WORKSPACE_ID)).isEqualTo(20);
         assertThat(counter("integration.sync.sse.subscriptions", "outcome", "accepted"))
                 .isEqualTo(20.0);
@@ -191,7 +192,7 @@ class SyncEventHubTest extends BaseUnitTest {
                 futures.add(executor.submit(() -> {
                     try {
                         currentHub.subscribe(WORKSPACE_ID);
-                    } catch (org.springframework.web.server.ResponseStatusException expected) {
+                    } catch (ResponseStatusException expected) {
                         rejected.incrementAndGet();
                     }
                 }));

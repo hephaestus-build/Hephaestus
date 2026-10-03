@@ -125,7 +125,6 @@ class WorkspaceProvisioningServiceTest {
         when(workspaceService.createWorkspace(anyString(), anyString(), anyString(), any(AccountType.class), anyLong()))
                 .thenReturn(workspace);
         when(workspaceRepository.save(any(Workspace.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        // User lookup for PAT bootstrap — scoped by provider id post-#1198
         when(userRepository.findByLoginAndProviderId("aet-org", 100L)).thenReturn(Optional.of(owner));
         when(userRepository.findByLogin("admin")).thenReturn(Optional.of(admin));
 

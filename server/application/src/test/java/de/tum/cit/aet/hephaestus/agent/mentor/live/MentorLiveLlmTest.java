@@ -98,7 +98,7 @@ class MentorLiveLlmTest {
 
     private StdioAttachedSandbox activeSandbox() {
         StdioAttachedSandbox current = sandbox;
-        org.junit.jupiter.api.Assertions.assertNotNull(current);
+        assertThat(current).isNotNull();
         return current;
     }
 
@@ -509,8 +509,6 @@ class MentorLiveLlmTest {
         }
     }
 
-    // Workspace + process plumbing
-
     private Path stageWorkspace(LiveLlmCredentials creds) throws IOException {
         Path tmp = Files.createTempDirectory("hephaestus-mentor-live-");
         workspaceDirs.add(tmp);
@@ -563,7 +561,7 @@ class MentorLiveLlmTest {
         // pi-provider.json — the single non-secret provider spec both runners read via the shared
         // pi-provider.ts helper. Written at the workspace root (mirrors PiRuntimeFactory.build()).
         byte[] providerConfigBytes = MAPPER.writerWithDefaultPrettyPrinter()
-                .writeValueAsBytes(java.util.Map.of(
+                .writeValueAsBytes(Map.of(
                         "apiProtocol",
                         spec.apiProtocol(),
                         "modelId",
@@ -582,7 +580,7 @@ class MentorLiveLlmTest {
     private StdioAttachedSandbox spawnRunner(LiveLlmCredentials creds, Path workspace) throws IOException {
         ProcessBuilder pb = new ProcessBuilder();
         Map<String, String> env = pb.environment();
-        env.putAll(creds.asProcessEnv()); // OPENAI_API_KEY + OPENAI_BASE_URL (legacy back-compat)
+        env.putAll(creds.asProcessEnv());
         env.put("AGENT_BUDGET_MS", Long.toString(TURN_TIMEOUT.toMillis()));
         // The runner reads LLM_PROXY_URL / LLM_PROXY_TOKEN — the same env vars the sandbox adapter sets
         // in production (via NetworkPolicy). No real proxy sits in front of this live test, so these point

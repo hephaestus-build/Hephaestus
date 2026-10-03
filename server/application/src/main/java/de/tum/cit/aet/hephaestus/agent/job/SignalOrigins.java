@@ -20,7 +20,7 @@ public final class SignalOrigins {
             // review on its own, only a later live redelivery or campaign does.
             //
             // SWEEP groups with LIVE, not BACKFILL: its window is bounded to the recent past by rule rather
-            // than chosen with hindsight, so filing it as BACKFILL would hide its findings from the
+            // than chosen with hindsight, so filing it as BACKFILL would hide its observations from the
             // reflection read model.
             case EVENT, SYNC, SWEEP -> ObservationOrigin.LIVE;
             case MANUAL -> ObservationOrigin.MANUAL;

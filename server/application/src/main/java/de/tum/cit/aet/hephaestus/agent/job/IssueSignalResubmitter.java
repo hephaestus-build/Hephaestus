@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactSignal;
@@ -17,13 +18,13 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Issue-side mirror of {@link PullRequestSignalResubmitter}, with the same replay-the-decision rule. */
 @Component
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class IssueSignalResubmitter implements PendingSignalResubmitter {
 
     private static final Logger log = LoggerFactory.getLogger(IssueSignalResubmitter.class);
@@ -86,9 +87,9 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
                         skip.reason());
                 signalRecorder.markRefused(key, skip.resolvedSignalReason());
             }
-            case GateDecision.Detect detect ->
+            case GateDecision.Run run ->
                 agentJobService.submit(
-                        detect.workspace().getId(),
+                        run.workspace().getId(),
                         AgentJobType.ISSUE_REVIEW,
                         new IssueReviewSubmissionRequest(
                                 issue.getId(),
@@ -107,7 +108,7 @@ public class IssueSignalResubmitter implements PendingSignalResubmitter {
                                 signal.getActorUserId(),
                                 issue.getReviewSnapshotId()),
                         key,
-                        detect);
+                        run);
         }
     }
 }

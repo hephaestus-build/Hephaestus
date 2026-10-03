@@ -197,7 +197,7 @@ void test("the input practice lists edge constructs in code only, and none the l
 			],
 		);
 		const directions = result.directions.join(" ");
-		assert.match(directions, /not a finding/u);
+		assert.match(directions, /not an observation/u);
 		assert.doesNotMatch(directions, /investigate whether|is absent|exported-function/u);
 	} finally {
 		rmSync(root, { recursive: true, force: true });

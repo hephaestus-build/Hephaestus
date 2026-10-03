@@ -91,7 +91,7 @@ public class GitLabGroupSyncService {
      *                   or {@code null} to fall back to the global default
      * @throws IllegalStateException if no GitLab provider row exists for the URL
      */
-    private IdentityProvider resolveProvider(@org.jspecify.annotations.Nullable String serverUrl) {
+    private IdentityProvider resolveProvider(@Nullable String serverUrl) {
         String effective = (serverUrl == null || serverUrl.isBlank()) ? gitLabProperties.defaultServerUrl() : serverUrl;
         return gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITLAB, effective)
@@ -104,14 +104,12 @@ public class GitLabGroupSyncService {
      *
      * @param scopeId       the workspace/scope ID for authentication
      * @param groupFullPath the full path of the group (e.g., {@code org/team})
-     * @param serverUrl     workspace's GitLab base URL — passed through to provider
-     *                      resolution so self-hosted instances do not get stamped with
-     *                      gitlab.com. May be null only for legacy callers.
+     * @param serverUrl     workspace's GitLab base URL, so a self-hosted instance is not stamped
+     *                      as gitlab.com; null resolves the gitlab.com provider
      * @return the synced Organization entity, or empty if not found or on error
      */
     @Transactional
-    public Optional<Organization> syncGroup(
-            Long scopeId, @Nullable String groupFullPath, @org.jspecify.annotations.Nullable String serverUrl) {
+    public Optional<Organization> syncGroup(Long scopeId, @Nullable String groupFullPath, @Nullable String serverUrl) {
         if (groupFullPath == null || groupFullPath.isBlank()) {
             log.warn("Skipped group sync: reason=nullOrBlankGroupPath, scopeId={}", scopeId);
             return Optional.empty();
@@ -181,8 +179,7 @@ public class GitLabGroupSyncService {
      *
      * @param scopeId       the workspace/scope ID for authentication
      * @param groupFullPath the full path of the group
-     * @param serverUrl     workspace's GitLab base URL; null = fall back to the global
-     *                      default (preserves legacy behaviour but stamps gitlab.com)
+     * @param serverUrl     workspace's GitLab base URL; null resolves the gitlab.com provider
      * @return structured result with synced repositories, page counts, and error counts
      */
     // Note: intentionally NOT @Transactional — this is an orchestrator that makes multiple
@@ -190,7 +187,7 @@ public class GitLabGroupSyncService {
     // have their own @Transactional boundaries, so we don't hold a DB connection during
     // network calls or Thread.sleep().
     public GitLabSyncResult syncGroupProjects(
-            Long scopeId, @Nullable String groupFullPath, @org.jspecify.annotations.Nullable String serverUrl) {
+            Long scopeId, @Nullable String groupFullPath, @Nullable String serverUrl) {
         if (groupFullPath == null || groupFullPath.isBlank()) {
             log.warn("Skipped group projects sync: reason=nullOrBlankGroupPath, scopeId={}", scopeId);
             return GitLabSyncResult.aborted(GitLabSyncResult.Status.ABORTED_ERROR, Collections.emptyList(), 0, 0);
@@ -388,9 +385,6 @@ public class GitLabGroupSyncService {
                         GitLabSyncResult.Status.ABORTED_ERROR, syncedRepositories, totalPages, projectsSkipped);
             }
 
-            // Reconciliation pass: re-query with includeSubgroups=false to recover
-            // any direct projects silently dropped by the GitLab includeSubgroups bug.
-            // See: https://gitlab.com/gitlab-org/gitlab/-/issues/33419
             int projectsReconciled = 0;
             boolean directProjectsListed = true;
             if (!hadApiFailure && topLevelOrganization != null) {
@@ -462,12 +456,11 @@ public class GitLabGroupSyncService {
 
     /**
      * Reconciliation pass: fetches direct projects (excludeSubgroups) and adds any that were
-     * missing from the primary sync to {@code reconciled}. This works around a GitLab bug where
-     * {@code includeSubgroups: true} can silently drop direct projects on certain versions.
+     * missing from the primary sync to {@code reconciled}, because {@code includeSubgroups: true} can
+     * silently drop direct projects ({@link GitLabSyncResult#projectsReconciled()}).
      *
      * @return whether every direct project was listed and processed; the projects recovered before
      *     an incomplete pass stay in {@code reconciled}
-     * @see <a href="https://gitlab.com/gitlab-org/gitlab/-/issues/33419">GitLab #33419</a>
      */
     private boolean reconcileDirectProjects(
             Long scopeId,

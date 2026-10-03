@@ -18,6 +18,7 @@ import {
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { useNow } from "@/components/common/use-now";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailPath, type LevelPath } from "@/components/layout/detail-drawer/DetailPath";
@@ -247,6 +248,7 @@ function ReviewHead({
 }: ReviewHeadProps) {
 	const work = run?.reviewedWork;
 	const at = run?.reviewedAt;
+	const today = new Date(useNow());
 	const WorkIcon = reviewedWorkIcon(work?.kind, work?.provider);
 	const reached = run?.practicesEvaluated;
 	const isRequesting =
@@ -271,7 +273,7 @@ function ReviewHead({
 					<span>
 						Reviewed{" "}
 						<time dateTime={at.toISOString()} className="text-foreground">
-							{formatDayTime(at)}
+							{formatDayTime(at, today)}
 						</time>
 					</span>
 				)}

@@ -287,8 +287,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .expectBody(Void.class);
     }
 
-    // GET /practices/observations
-
     @Nested
     class ListObservations {
 
@@ -855,7 +853,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             insertObservation(
                     practiceA, developer, "My WS observation", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
 
-            // Create a second workspace with its own practice and observation
             User otherOwner = persistUser("other-ws-owner");
             Workspace otherWorkspace =
                     createWorkspace("other-ws", "Other WS", "other-org", AccountType.ORG, otherOwner);
@@ -912,7 +909,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("My WS observation")
                     .jsonPath("$.totalElements")
                     .isEqualTo(1);
-            for (String sort : java.util.List.of("DATE", "SEVERITY")) {
+            for (String sort : List.of("DATE", "SEVERITY")) {
                 webTestClient
                         .get()
                         .uri(
@@ -931,8 +928,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             }
         }
     }
-
-    // GET /practices/observations/summary
 
     @Nested
     class GetSummary {
@@ -1054,8 +1049,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo(1);
         }
     }
-
-    // GET /practices/observations/{observationId}
 
     @Nested
     class GetObservationDetail {
@@ -1476,7 +1469,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @Test
         @WithUser
         void shouldReturn404ForObservationInDifferentWorkspace() {
-            // Create observation in current workspace
             UUID observationId = insertObservation(
                     practiceA,
                     developer,
@@ -1488,7 +1480,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     1L,
                     Instant.now());
 
-            // Create a different workspace
             User otherOwner = persistUser("ws2-owner");
             Workspace otherWorkspace =
                     createWorkspace("other-ws2", "Other WS2", "other-org2", AccountType.ORG, otherOwner);
@@ -1505,8 +1496,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .expectBody(Void.class);
         }
     }
-
-    // GET /practices/standings
 
     @Nested
     class GetStandings {

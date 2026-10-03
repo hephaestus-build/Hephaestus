@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedObservationFixtures;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
@@ -22,6 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -44,11 +46,11 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         boolean permitted = new EvidenceDeliveryAuthorization(
                         jobs,
                         catalogs,
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                        mock(
+                                CitedSourceAccess.class,
                                 call -> call.getMethod().getName().equals("permits")
                                         ? true
-                                        : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)))
+                                        : Mockito.RETURNS_DEFAULTS.answer(call)))
                 .permits(
                         7L,
                         jobId,
@@ -73,11 +75,11 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         assertThat(new EvidenceDeliveryAuthorization(
                                 jobs,
                                 catalogs,
-                                org.mockito.Mockito.mock(
-                                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                                mock(
+                                        CitedSourceAccess.class,
                                         call -> call.getMethod().getName().equals("permits")
                                                 ? true
-                                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)))
+                                                : Mockito.RETURNS_DEFAULTS.answer(call)))
                         .permits(
                                 7L,
                                 jobId,
@@ -93,11 +95,11 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         EvidenceDeliveryAuthorization authorization = new EvidenceDeliveryAuthorization(
                 jobs,
                 catalogs,
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                mock(
+                        CitedSourceAccess.class,
                         call -> call.getMethod().getName().equals("permits")
                                 ? true
-                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)));
+                                : Mockito.RETURNS_DEFAULTS.answer(call)));
         UUID malformedJobId = UUID.randomUUID();
         when(jobs.findEvidenceContractVersion(malformedJobId, 7L)).thenReturn(Optional.of("1.3.0"));
 
@@ -132,11 +134,11 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         EvidenceDeliveryAuthorization authorization = new EvidenceDeliveryAuthorization(
                 jobs,
                 catalogs,
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                mock(
+                        CitedSourceAccess.class,
                         call -> call.getMethod().getName().equals("permits")
                                 ? true
-                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)));
+                                : Mockito.RETURNS_DEFAULTS.answer(call)));
 
         Observation permittedSource = observation("scm.pull-request.diff");
         Observation deniedSource = observation("hephaestus.observation-history");
@@ -193,11 +195,11 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         assertThat(new EvidenceDeliveryAuthorization(
                                 jobs,
                                 catalogs,
-                                org.mockito.Mockito.mock(
-                                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                                mock(
+                                        CitedSourceAccess.class,
                                         call -> call.getMethod().getName().equals("permits")
                                                 ? true
-                                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)))
+                                                : Mockito.RETURNS_DEFAULTS.answer(call)))
                         .permitsAll(7L, List.of(transientObservation), SourceUsePurpose.CONVERSATIONAL_MENTORING))
                 .isEmpty();
         verifyNoInteractions(jobs);
@@ -215,11 +217,11 @@ class EvidenceDeliveryAuthorizationTest extends BaseUnitTest {
         var authorization = new EvidenceDeliveryAuthorization(
                 jobs,
                 catalogs,
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess.class,
+                mock(
+                        CitedSourceAccess.class,
                         call -> call.getMethod().getName().equals("permits")
                                 ? true
-                                : org.mockito.Mockito.RETURNS_DEFAULTS.answer(call)));
+                                : Mockito.RETURNS_DEFAULTS.answer(call)));
         assertThat(authorization.permitsAll(7L, List.of(observation), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY))
                 .containsExactly(observation.getId());
         assertThat(authorization.permitsForNewDelivery(

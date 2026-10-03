@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -44,7 +45,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -175,7 +175,7 @@ class OutlineWebhookFixtureRoutingTest extends BaseUnitTest {
         // Route the fixture bytes exactly as they arrive off the wire — the handler only trusts
         // event/payload.id/actorId/createdAt for routing (never the document body), but feeding the
         // full real envelope (rather than a hand-built minimal one) exercises the actual JSON shape.
-        Message message = Mockito.mock(Message.class);
+        Message message = mock(Message.class);
         when(message.getData()).thenReturn(rawBody);
 
         handler.onMessage(message);

@@ -1842,8 +1842,7 @@ void describe("CI contract", () => {
 		// Parity with the release gate, asserted by the release gate itself: this is the manifest that
 		// would evidence exactly the pre-release subject set, and validateManifest rejects a manifest
 		// whose subjects are not exactly the inventory. So an image the pre-release scans miss, or one
-		// they cover that the release does not, fails here — which is what v0.75.0 needed and did not
-		// have when the upstream half was scanned nowhere before the release (#1741).
+		// they cover that the release does not, fails here.
 		const manifest = {
 			schemaVersion: 1,
 			subjects: scanned.flatMap((subject) =>
@@ -1922,7 +1921,7 @@ void describe("CI contract", () => {
 	});
 
 	void test("performs every release evidence check that does not need a release before the release", async () => {
-		// #1741 pinned *subject* parity: the pre-release scans cover the images the release covers.
+		// The test above pins *subject* parity: the pre-release scans cover the images the release covers.
 		// This is *check* parity, which subject parity does not imply — the vulnerability policy was
 		// only ever one of the things the release gate evaluates. The bundle it judges is produced by
 		// one generator and judged by one verifier, and both run before a release exists, so the only
@@ -2115,10 +2114,9 @@ void describe("CI contract", () => {
 
 		// A demand the run cannot satisfy is not a gate, it is a wall. The preflight evidences every
 		// image on both published platforms — the vulnerability policy's match key includes the
-		// platform, so an arm64-only finding must not reach a release undiscovered (#1743) — and it
-		// can only do that for manifests that exist. So wherever the gate demands a preflight, the
-		// same run's image builds have to publish both. A pull request on that branch published
-		// `linux/amd64` alone and could not, which is what blocked v0.75.1.
+		// platform, so an arm64-only finding must not reach a release undiscovered — and it can only
+		// do that for manifests that exist. So wherever the gate demands a preflight, the same run's
+		// image builds have to publish both.
 		const architectures = String(workflow.getIn([...detection, "outputs", "single-arch"]));
 		const shape =
 			/^\$\{\{ \(github\.event_name == '(?<first>\w+)' \|\| github\.event_name == '(?<second>\w+)'\) && steps\.release_candidate\.outputs\.release-candidate != 'true' \}\}$/u.exec(
@@ -3274,7 +3272,7 @@ void test("CI does not run CodeQL analysis or retain extraction-only compiler ex
 		assert.doesNotMatch(await readFile(file, "utf8"), /codeqlExtraction/u);
 	}
 	const build = await readFile("server/application/build.gradle.kts", "utf8");
-	assert.match(build, /error\("NullAway", "RequireExplicitNullMarking"\)/u);
+	assert.match(build, /error\(\s*"NullAway",\s*"RequireExplicitNullMarking"[,)]/u);
 	assert.match(build, /"-Werror"/u);
 });
 

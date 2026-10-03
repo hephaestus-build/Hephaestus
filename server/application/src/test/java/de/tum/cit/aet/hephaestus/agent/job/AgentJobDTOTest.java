@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
@@ -51,8 +53,8 @@ class AgentJobDTOTest extends BaseUnitTest {
         ObjectNode captured = MAPPER.createObjectNode();
         captured.set(
                 "generatedPaths",
-                MAPPER.valueToTree(new de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO(
-                        java.util.List.of("generated/**"), java.util.List.of("generated/client.ts"))));
+                MAPPER.valueToTree(
+                        new GeneratedPathReviewDTO(List.of("generated/**"), List.of("generated/client.ts"))));
         job.setEvidenceSnapshot(captured);
         AgentJobDTO dto = AgentJobDTO.from(job, ReviewRunTargetMapper.from(job));
         var policy = dto.generatedPaths();

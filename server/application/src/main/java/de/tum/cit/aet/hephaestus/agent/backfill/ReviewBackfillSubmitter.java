@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.handler.PullRequestReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobService;
 import de.tum.cit.aet.hephaestus.agent.job.SignalOrigins;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
@@ -23,7 +24,7 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,7 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
  * must not unwind the batch around it.
  */
 @Component
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class ReviewBackfillSubmitter {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewBackfillSubmitter.class);
@@ -104,9 +105,9 @@ public class ReviewBackfillSubmitter {
                 signalRecorder.markRefused(key.get(), skip.resolvedSignalReason());
                 return Outcome.PASSED;
             }
-            case GateDecision.Detect detect -> {
+            case GateDecision.Run admission -> {
                 agentJobService.submit(
-                        detect.workspace().getId(),
+                        admission.workspace().getId(),
                         AgentJobType.PULL_REQUEST_REVIEW,
                         new PullRequestReviewSubmissionRequest(
                                 ScmEventPayload.PullRequestData.from(pr),
@@ -117,7 +118,7 @@ public class ReviewBackfillSubmitter {
                                 key.get().signalName(),
                                 SignalOrigins.observationOriginOf(run.getDiscoveredVia())),
                         key.get(),
-                        detect);
+                        admission);
                 return Outcome.SUBMITTED;
             }
         }
@@ -141,9 +142,9 @@ public class ReviewBackfillSubmitter {
                 signalRecorder.markRefused(key.get(), skip.resolvedSignalReason());
                 return Outcome.PASSED;
             }
-            case GateDecision.Detect detect -> {
+            case GateDecision.Run admission -> {
                 agentJobService.submit(
-                        detect.workspace().getId(),
+                        admission.workspace().getId(),
                         AgentJobType.ISSUE_REVIEW,
                         new IssueReviewSubmissionRequest(
                                 issue.getId(),
@@ -160,7 +161,7 @@ public class ReviewBackfillSubmitter {
                                 null,
                                 issue.getReviewSnapshotId()),
                         key.get(),
-                        detect);
+                        admission);
                 return Outcome.SUBMITTED;
             }
         }

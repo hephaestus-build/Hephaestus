@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Unit coverage for {@link MentorPiAdapter#buildSandboxSpec}: the genuinely error-prone branches the
@@ -95,7 +97,7 @@ class MentorPiAdapterTest extends BaseUnitTest {
 
     private ProxyRouting routingFor(PiPlanSpec spec) {
         String jobToken = spec.jobToken();
-        org.junit.jupiter.api.Assertions.assertNotNull(jobToken);
+        assertThat(jobToken).isNotNull();
         return proxyRegistry.validate(jobToken).orElseThrow();
     }
 
@@ -125,9 +127,9 @@ class MentorPiAdapterTest extends BaseUnitTest {
 
     @Test
     void shouldReserveCleanupFromTheFrozenTimeoutInTheActualRunnerEnvironment() {
-        org.mockito.Mockito.reset(runtimeFactory);
+        reset(runtimeFactory);
         var actualAdapter = new MentorPiAdapter(
-                new PiRuntimeFactory(new tools.jackson.databind.ObjectMapper()),
+                new PiRuntimeFactory(new ObjectMapper()),
                 new AgentImageProperties("test-image:latest", ImagePullPolicy.IF_NOT_PRESENT),
                 proxyRegistry);
         MentorLlmConfig config = llmConfig(null, false, 300);
@@ -158,7 +160,7 @@ class MentorPiAdapterTest extends BaseUnitTest {
     void mintsProxyToken() {
         PiPlanSpec spec = capturePlanSpec(llmConfig(null));
         String jobToken = spec.jobToken();
-        org.junit.jupiter.api.Assertions.assertNotNull(jobToken);
+        assertThat(jobToken).isNotNull();
         assertThat(jobToken).isNotBlank();
         assertThat(proxyRegistry.validate(jobToken)).isPresent();
     }

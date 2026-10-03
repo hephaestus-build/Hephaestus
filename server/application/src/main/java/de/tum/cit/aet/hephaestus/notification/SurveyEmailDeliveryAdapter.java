@@ -7,7 +7,9 @@ import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionKind;
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.productfeedback.notification.SurveyEmailDelivery;
+import java.time.Clock;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +26,7 @@ class SurveyEmailDeliveryAdapter implements SurveyEmailDelivery {
     private final NotificationSubscriptionService subscriptions;
     private final AccountContactQuery contacts;
     private final ApplicationEventPublisher events;
-    private final java.time.Clock clock;
+    private final Clock clock;
     private final EmailGateway gateway;
 
     @Override
@@ -65,8 +67,8 @@ class SurveyEmailDeliveryAdapter implements SurveyEmailDelivery {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void requestSummary(UUID surveyId, Instant endedAt, Instant expiresAt) {
-        var subscribed = new java.util.HashSet<>(
-                subscriptions.subscribedAccountIds(NotificationSubscriptionKind.SURVEY_SUMMARIES));
+        var subscribed =
+                new HashSet<>(subscriptions.subscribedAccountIds(NotificationSubscriptionKind.SURVEY_SUMMARIES));
         for (long accountId : contacts.activeVerifiedAdministratorIds()) {
             if (subscribed.contains(accountId))
                 events.publishEvent(

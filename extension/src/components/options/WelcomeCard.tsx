@@ -1,11 +1,11 @@
 import { ShieldCheckIcon } from "lucide-react";
 import { useId } from "react";
 
-import { HephMark } from "~/components/brand/HephaestusLogo";
+import { HephMark } from "@/components/brand/HephaestusLogo";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
 import { Disclosure } from "~/components/common/Disclosure";
 import { ExternalLink } from "~/components/common/ExternalLink";
-import { Spinner } from "~/components/common/Spinner";
 import { InstanceSetupForm } from "~/components/options/InstanceSetupForm";
 
 export type ConnectTarget = "hosted" | "custom";

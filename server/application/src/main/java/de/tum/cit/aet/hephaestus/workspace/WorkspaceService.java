@@ -16,7 +16,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.dto.CreateWorkspaceRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.dto.UpdateWorkspaceFeaturesRequestDTO;
 import de.tum.cit.aet.hephaestus.workspace.events.WorkspaceCreatedEvent;
-import de.tum.cit.aet.hephaestus.workspace.exception.*;
+import de.tum.cit.aet.hephaestus.workspace.exception.WorkspaceSlugConflictException;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceTeamSettingsService;
 import java.util.Objects;
 import java.util.Optional;
@@ -46,7 +46,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <ul>
  *   <li>{@link WorkspaceQueryService} – Read-only queries and lookups</li>
  *   <li>{@link WorkspaceLifecycleService} – Status transitions (suspend/resume/purge)</li>
- *   <li>{@link de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GithubLifecycleListener} – GitHub App installation handling</li>
+ *   <li>{@link de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener} – GitHub App installation handling</li>
  *   <li>{@link WorkspaceRepositoryMonitorService} – Repository monitoring configuration</li>
  *   <li>{@link WorkspaceActivationService} – Activation/startup orchestration</li>
  *   <li>{@link WorkspaceTeamSettingsService} – Workspace-scoped team settings</li>
@@ -110,13 +110,9 @@ public class WorkspaceService {
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
-    // Workspace Lookup
-
     public Optional<Workspace> getWorkspaceBySlug(String slug) {
         return workspaceRepository.findByWorkspaceSlug(slug);
     }
-
-    // Workspace Creation
 
     @Transactional
     public Workspace createWorkspace(
@@ -228,7 +224,7 @@ public class WorkspaceService {
                     "create-workspace-" + workspace.getId());
         } else {
             // kind == GITHUB → PAT-backed; App installations bypass this DTO entirely
-            // (they arrive via GithubLifecycleListener.createOrUpdateFromInstallation).
+            // (they arrive via GitHubLifecycleListener.createOrUpdateFromInstallation).
             // The DTO validator rejects any other kind.
             workspaceRepository.save(workspace);
             connectionService.provisionPatConnection(
@@ -269,8 +265,6 @@ public class WorkspaceService {
         workspaceMembershipService.createMembership(workspace, ownerUserId, WorkspaceMembership.WorkspaceRole.OWNER);
     }
 
-    // Workspace Account Login Management
-
     @Transactional
     public Workspace updateAccountLogin(Long workspaceId, String accountLogin) {
         Workspace workspace = workspaceRepository
@@ -284,8 +278,6 @@ public class WorkspaceService {
 
         return workspace;
     }
-
-    // Settings Delegation
 
     public Workspace updateToken(String slug, String personalAccessToken) {
         Workspace workspace = requireWorkspace(slug);
@@ -309,8 +301,6 @@ public class WorkspaceService {
         Workspace workspace = requireWorkspace(requireSlug(workspaceContext));
         return workspaceSettingsService.updateFeatures(workspace.getId(), request);
     }
-
-    // Slug Renaming
 
     @Transactional
     public Workspace renameSlug(WorkspaceContext workspaceContext, String newSlug) {
@@ -367,8 +357,6 @@ public class WorkspaceService {
 
         return saved;
     }
-
-    // Helper Methods
 
     private Workspace requireWorkspace(String slug) {
         if (slug == null || slug.isBlank()) {

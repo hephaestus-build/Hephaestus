@@ -36,6 +36,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryMan
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -44,6 +46,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -128,7 +131,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         Issue linked = issue(18, "Acceptance criteria", "- [x] Confirm repair");
         assertThat(LinkedWorkItemContentSource.currentClosingMaterialKey(99L, pr, List.of(linked)))
                 .isPresent();
-        linked.setDeletedAt(java.time.Instant.now());
+        linked.setDeletedAt(Instant.now());
         assertThat(LinkedWorkItemContentSource.currentClosingMaterialKey(99L, pr, List.of(linked)))
                 .isEmpty();
     }
@@ -148,13 +151,13 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
         assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(
                         closingManifest(List.of(first)), List.of(first, second)))
                 .isEmpty();
-        first.setDeletedAt(java.time.Instant.now());
+        first.setDeletedAt(Instant.now());
         assertThat(LinkedWorkItemContentSource.capturedClosingMaterialMatches(captured, List.of(first, second)))
                 .isEmpty();
     }
 
     private static JobFolderIndex closingManifest(List<Issue> issues) {
-        var capturedAt = java.time.Instant.parse("2026-09-01T00:00:00Z");
+        var capturedAt = Instant.parse("2026-09-01T00:00:00Z");
         var base = ReviewedWorkFixtures.pullRequestManifest(capturedAt, "Closes #18 and #19", HEAD);
         var sources = new ArrayList<>(base.sources());
         sources.add(new SourceCapture(
@@ -353,7 +356,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             assertThat(item.has("closedAt")).isFalse();
             assertThat(new String(
                             captured.files().get(LinkedWorkItemContentSource.ITEMS_PREFIX + "1.md"),
-                            java.nio.charset.StandardCharsets.UTF_8))
+                            StandardCharsets.UTF_8))
                     .contains("state OPEN")
                     .doesNotContain("closed");
         }
@@ -383,8 +386,8 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 42)).thenReturn(Optional.of(linked));
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, 999)).thenReturn(Optional.empty());
 
-            linked.setCreatedAt(java.time.Instant.parse("2026-04-01T09:00:00Z"));
-            linked.setClosedAt(java.time.Instant.parse("2026-04-03T12:00:00Z"));
+            linked.setCreatedAt(Instant.parse("2026-04-01T09:00:00Z"));
+            linked.setClosedAt(Instant.parse("2026-04-03T12:00:00Z"));
             linked.setState(Issue.State.CLOSED);
 
             var captured = provider.capture(request(sampleMetadata()), Set.of(KIND));
@@ -395,7 +398,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
                             LinkedWorkItemContentSource.ITEMS_PREFIX + "42.md");
             assertThat(new String(
                             captured.files().get(LinkedWorkItemContentSource.ITEMS_PREFIX + "42.md"),
-                            java.nio.charset.StandardCharsets.UTF_8))
+                            StandardCharsets.UTF_8))
                     .isEqualTo("# Add token refresh\n\n"
                             + "Opened 2026-04-01T09:00:00Z, closed 2026-04-03T12:00:00Z, state CLOSED.\n"
                             + "The body below is the issue's text as mirrored when this was captured; these dates "
@@ -606,7 +609,7 @@ class LinkedWorkItemContentSourceTest extends BaseUnitTest {
             pr.setId(PR_ID);
             when(pullRequestRepository.findByIdWithAllForGate(PR_ID)).thenReturn(Optional.of(pr));
             when(pullRequestRepository.findClosingIssuesById(PR_ID))
-                    .thenReturn(java.util.stream.IntStream.rangeClosed(1, 10_001)
+                    .thenReturn(IntStream.rangeClosed(1, 10_001)
                             .mapToObj(number -> issue(number, "Issue", ""))
                             .toList());
             assertThat(itemNumbers(payload(sampleMetadata()))).hasSize(10_001);

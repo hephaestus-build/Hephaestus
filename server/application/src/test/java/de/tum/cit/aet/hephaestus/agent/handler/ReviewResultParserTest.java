@@ -608,17 +608,14 @@ class ReviewResultParserTest extends BaseUnitTest {
             assertThat(result.validObservations()).hasSize(5);
             assertThat(result.discarded()).isEmpty();
 
-            // Verify first observation
             ValidatedObservation first = result.validObservations().get(0);
             assertThat(first.practiceSlug()).isEqualTo("pr-description-quality");
             assertThat(first.outcome()).isEqualTo(Outcome.MET);
 
-            // Verify negative observation
             ValidatedObservation negative = result.validObservations().get(1);
             assertThat(negative.outcome()).isEqualTo(Outcome.NOT_MET);
             assertThat(negative.severity()).isEqualTo(Severity.MAJOR);
 
-            // Verify remaining outcomes
             assertThat(result.validObservations().get(3).outcome()).isEqualTo(Outcome.MET);
             assertThat(result.validObservations().get(4).outcome()).isEqualTo(Outcome.NOT_MET);
         }

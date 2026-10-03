@@ -103,8 +103,7 @@ public interface SlackThreadRepository extends JpaRepository<SlackThread, Long> 
     @Modifying
     @Transactional
     @Query("DELETE FROM SlackThread t WHERE t.workspaceId = :workspaceId AND t.id IN :ids")
-    int deleteByWorkspaceIdAndIdIn(
-            @Param("workspaceId") Long workspaceId, @Param("ids") java.util.Collection<Long> ids);
+    int deleteByWorkspaceIdAndIdIn(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<Long> ids);
 
     /**
      * Person erasure (opt-out / account hard-delete): drop one member's id out of every thread's

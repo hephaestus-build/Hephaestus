@@ -56,7 +56,7 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 		<Card>
 			<CardHeader>
 				<IntegrationCardHeading className="flex items-center gap-2">
-					<SlackIcon className="size-4" aria-hidden />
+					<SlackIcon className="size-4" />
 					Slack integration
 				</IntegrationCardHeading>
 				<CardDescription>

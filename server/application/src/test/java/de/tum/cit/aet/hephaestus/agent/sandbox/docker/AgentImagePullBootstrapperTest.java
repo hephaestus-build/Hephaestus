@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -18,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 class AgentImagePullBootstrapperTest extends BaseUnitTest {
@@ -107,8 +107,7 @@ class AgentImagePullBootstrapperTest extends BaseUnitTest {
                 .pullOnStartup();
 
         verify(imageOps).imageIsPresent(IMAGE);
-        verify(imageOps, alreadyPresent ? never() : Mockito.times(expectedPulls))
-                .pullImage(IMAGE);
+        verify(imageOps, alreadyPresent ? never() : times(expectedPulls)).pullImage(IMAGE);
     }
 
     @Test

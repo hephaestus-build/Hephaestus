@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -12,12 +13,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookPublishGate;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
+import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -75,8 +77,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
         // the pipeline, mirroring the GitLab webhook→NATS path.
         WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
                 List.of(stubVerifier(IntegrationKind.OUTLINE, new VerificationResult.Verified())),
-                List.of(new de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectKeyDeriver(
-                        objectMapper)),
+                List.of(new OutlineSubjectKeyDeriver(objectMapper)),
                 publisher,
                 objectMapper);
 
@@ -190,7 +191,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
             }
 
             @Override
-            public Decision evaluate(tools.jackson.databind.JsonNode payload, Map<String, String> headers) {
+            public Decision evaluate(JsonNode payload, Map<String, String> headers) {
                 return Decision.drop("not-consented");
             }
         };
@@ -250,7 +251,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void duplicateVerifierRejected() {
-        Assertions.assertThatThrownBy(() -> new WebhookIngestPipeline(
+        assertThatThrownBy(() -> new WebhookIngestPipeline(
                         List.of(
                                 stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified()),
                                 stubVerifier(IntegrationKind.GITHUB, new VerificationResult.Verified())),
@@ -263,7 +264,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Test
     void duplicateDeriverRejected() {
-        Assertions.assertThatThrownBy(() -> new WebhookIngestPipeline(
+        assertThatThrownBy(() -> new WebhookIngestPipeline(
                         List.of(),
                         List.of(
                                 stubDeriver(IntegrationKind.GITHUB, "s", "d"),
@@ -298,7 +299,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
             }
 
             @Override
-            public String deriveSubject(tools.jackson.databind.JsonNode payload, Map<String, String> headers) {
+            public String deriveSubject(JsonNode payload, Map<String, String> headers) {
                 return subject;
             }
 

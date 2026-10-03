@@ -86,9 +86,6 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         this.eventPublisher = eventPublisher;
     }
 
-    /**
-     * Process a GitLab issue webhook event.
-     */
     @Transactional
     @Nullable
     public Issue process(GitLabIssueEventDTO event, ProcessingContext context) {
@@ -442,8 +439,6 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         return issue;
     }
 
-    // Private helpers
-
     private EventContext actorContext(GitLabIssueEventDTO event, ProcessingContext context) {
         User actor = event.user() != null && context.providerId() != null
                 ? findOrCreateUser(event.user(), context.providerId())
@@ -656,12 +651,10 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         }
         // Subgroups become their own Organization rows but share provider-global
         // issue_type primary keys (GitLab GraphQL global IDs), so a provider-scoped
-        // name lookup yields the exact same row. Without this fallback, issues
-        // synced from subgroups would resolve to null because the subgroup org
-        // never had its own issue_type seed rows materialised. Resolve the provider
-        // id via a JPQL subquery on organizationId — touching the lazy Organization
-        // proxy here raised LazyInitializationException when the Repository outlived
-        // its original Hibernate session.
+        // name lookup yields the exact same row; a subgroup org has no issue_type seed
+        // rows of its own. The provider id is resolved by a JPQL subquery on organizationId
+        // because the lazy Organization proxy throws LazyInitializationException once the
+        // Repository has outlived its Hibernate session.
         return issueTypeRepository
                 .findFirstByOrganizationProviderAndNameIgnoreCase(organization.getId(), humanised)
                 .map(IssueType::getId)

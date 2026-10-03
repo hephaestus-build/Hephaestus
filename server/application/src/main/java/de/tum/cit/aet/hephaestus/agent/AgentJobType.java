@@ -7,12 +7,12 @@ package de.tum.cit.aet.hephaestus.agent;
  * volume, parse output, and deliver results.
  */
 public enum AgentJobType {
-    /** Detection over a pull/merge request's diff, comments, and review state. */
+    /** Practice review of a pull/merge request's diff, comments, and review state. */
     PULL_REQUEST_REVIEW,
-    /** Detection over an issue's body, comment thread, and lifecycle state. */
+    /** Practice review of an issue's body, comment thread, and lifecycle state. */
     ISSUE_REVIEW,
-    /** Detection over a settled Slack conversation thread. */
+    /** Practice review of a settled Slack conversation thread. */
     CONVERSATION_REVIEW,
-    /** Detection over one mirrored wiki document — its prose, its collection, and who wrote it. */
+    /** Practice review of one mirrored wiki document — its prose, its collection, and who wrote it. */
     DOCUMENT_REVIEW,
 }

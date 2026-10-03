@@ -10015,7 +10015,7 @@ components:
           - NONE
           - WORDING
           - PRESENTATION
-          - DETECTION
+          - REVIEW
         etag:
           type: string
           description: Strong entity tag to send in If-Match when updating this entry
@@ -11489,10 +11489,10 @@ components:
         total:
           type: integer
           format: int32
-        updatesChangingDetection:
+        updatesChangingPresentation:
           type: integer
           format: int32
-        updatesChangingPresentation:
+        updatesChangingReview:
           type: integer
           format: int32
         updatesChangingWordingOnly:
@@ -11506,8 +11506,8 @@ components:
       - noLongerShipped
       - notOffered
       - total
-      - updatesChangingDetection
       - updatesChangingPresentation
+      - updatesChangingReview
       - updatesChangingWordingOnly
       - yours
     CuratedGroup:
@@ -13414,7 +13414,7 @@ components:
         totalCalls:
           type: integer
           format: int64
-          description: "LLM API calls, as reported by the runtime. Detection jobs\
+          description: "LLM API calls, as reported by the runtime. Practice reviews\
             \ and mentor turns both include every assistant call in an internal tool\
             \ loop."
         unpricedEventCount:
@@ -13644,8 +13644,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EvidenceCitation"
-        detector:
-          type: string
         inapplicability:
           $ref: "#/components/schemas/EvidenceInapplicability"
           description: Why this practice had nothing to judge here; null unless the

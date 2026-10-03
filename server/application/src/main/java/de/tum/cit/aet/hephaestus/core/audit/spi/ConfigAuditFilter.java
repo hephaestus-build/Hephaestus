@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.audit.spi;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -28,10 +29,9 @@ public record ConfigAuditFilter(
         }
         return entityTypes.stream()
                 .flatMap(value -> switch (value) {
-                    case PRACTICE_GROUP -> java.util.stream.Stream.of("PRACTICE_GROUP", "PRACTICE_AREA");
-                    case CURATED_PRACTICE_GROUP ->
-                        java.util.stream.Stream.of("CURATED_PRACTICE_GROUP", "CURATED_PRACTICE_AREA");
-                    default -> java.util.stream.Stream.of(value.name());
+                    case PRACTICE_GROUP -> Stream.of("PRACTICE_GROUP", "PRACTICE_AREA");
+                    case CURATED_PRACTICE_GROUP -> Stream.of("CURATED_PRACTICE_GROUP", "CURATED_PRACTICE_AREA");
+                    default -> Stream.of(value.name());
                 })
                 .toArray(String[]::new);
     }

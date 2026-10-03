@@ -169,8 +169,8 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a newer IN_APP unit bound to the same observation does not become its advice: the per-finding "
-            + "surfaces keep showing what was said about that finding")
+    @DisplayName("a newer IN_APP unit bound to the same observation does not become its advice: the per-observation "
+            + "surfaces keep showing what was said about that observation")
     void findLatestFeedbackBodiesAnswersOnlyForTheChannelsTheCallerNames() {
         Observation observation = saveObservation("obs-both-lanes");
         bind(
@@ -182,7 +182,7 @@ class FeedbackObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                         Instant.parse("2026-01-01T00:00:00Z")),
                 observation);
         // The in-app unit is newer, DELIVERED and non-null-bodied, so it wins every other clause of
-        // the query — the channel predicate is the only thing keeping it off a per-finding surface.
+        // the query — the channel predicate is the only thing keeping it off a per-observation surface.
         bind(
                 saveFeedback(
                         null,

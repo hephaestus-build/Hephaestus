@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.evidence.EvidenceCollection;
+import de.tum.cit.aet.hephaestus.evidence.PracticePreconditionAspect;
 import de.tum.cit.aet.hephaestus.evidence.PracticePreconditionCheck;
+import de.tum.cit.aet.hephaestus.evidence.PracticePreconditionResult;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceArtifact;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
@@ -12,9 +15,6 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
-import de.tum.cit.aet.hephaestus.evidence.SubjectAspect;
-import de.tum.cit.aet.hephaestus.evidence.SubjectEvidenceCollection;
-import de.tum.cit.aet.hephaestus.evidence.SubjectFinding;
 import de.tum.cit.aet.hephaestus.practices.PracticePrecondition;
 import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -48,8 +48,8 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
     private final PracticePreconditionEvaluator evaluator = new PracticePreconditionEvaluator(mapper);
 
     @Nested
-    @DisplayName("A subject may never hide a finding")
-    class NeverHidesAFinding {
+    @DisplayName("A subject may never hide an observation")
+    class NeverHidesAnObservation {
 
         /**
          * The rule stated as a test. Every other case in this class is one way of reaching it: unless the
@@ -66,8 +66,8 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
 
             assertThat(check.absent()).isFalse();
             assertThat(check.clauses())
-                    .extracting(clause -> clause.finding())
-                    .containsExactly(SubjectFinding.UNDECIDABLE);
+                    .extracting(clause -> clause.result())
+                    .containsExactly(PracticePreconditionResult.UNDECIDABLE);
         }
 
         @Test
@@ -100,8 +100,8 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
 
             assertThat(check.absent()).isFalse();
             assertThat(check.clauses())
-                    .extracting(clause -> clause.finding())
-                    .containsExactly(SubjectFinding.UNDECIDABLE, SubjectFinding.UNDECIDABLE);
+                    .extracting(clause -> clause.result())
+                    .containsExactly(PracticePreconditionResult.UNDECIDABLE, PracticePreconditionResult.UNDECIDABLE);
         }
 
         @Test
@@ -138,7 +138,7 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
                     "the change touches no test file and holds no test marker",
                     List.of(
                             PracticePreconditionClause.changedPathMatches(List.of("**/*Test*")),
-                            PracticePreconditionClause.evidenceHasItems(SubjectEvidenceCollection.SCM_REVIEW_THREADS)));
+                            PracticePreconditionClause.evidenceHasItems(EvidenceCollection.SCM_REVIEW_THREADS)));
 
             PracticePreconditionCheck check = evaluate(
                     subject,
@@ -148,8 +148,8 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
                     TWO_FILE_CHANGE);
 
             assertThat(check.clauses())
-                    .extracting(clause -> clause.finding())
-                    .containsExactly(SubjectFinding.NOT_FOUND, SubjectFinding.UNDECIDABLE);
+                    .extracting(clause -> clause.result())
+                    .containsExactly(PracticePreconditionResult.NOT_FOUND, PracticePreconditionResult.UNDECIDABLE);
             assertThat(check.absent()).isFalse();
         }
     }
@@ -166,7 +166,7 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
 
             assertThat(check.absent()).isTrue();
             assertThat(check.describedAs()).isEqualTo("the change touches no dependency manifest or lockfile");
-            assertThat(check.clauses().getFirst().aspect()).isEqualTo(SubjectAspect.CHANGED_PATH);
+            assertThat(check.clauses().getFirst().aspect()).isEqualTo(PracticePreconditionAspect.CHANGED_PATH);
             assertThat(check.clauses().getFirst().readFrom()).isEqualTo(DIFF);
         }
 
@@ -178,7 +178,7 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
                     change(Set.of("src/App.java", "docs/readme.md", "pom.xml"), "+<dependency/>\n"));
 
             assertThat(check.absent()).isFalse();
-            assertThat(check.clauses().getFirst().finding()).isEqualTo(SubjectFinding.FOUND);
+            assertThat(check.clauses().getFirst().result()).isEqualTo(PracticePreconditionResult.FOUND);
         }
 
         /**
@@ -215,8 +215,8 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
 
             assertThat(check.absent()).isFalse();
             assertThat(check.clauses())
-                    .extracting(clause -> clause.finding())
-                    .containsExactly(SubjectFinding.NOT_FOUND, SubjectFinding.FOUND);
+                    .extracting(clause -> clause.result())
+                    .containsExactly(PracticePreconditionResult.NOT_FOUND, PracticePreconditionResult.FOUND);
         }
 
         /** The change is read only when a clause asks about it, and only the aspect the clause names. */
@@ -239,7 +239,7 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
                     manifestWith(availableDiff(SourceCompleteness.COMPLETE, SourceContentState.NON_EMPTY)),
                     pathsOnly);
 
-            assertThat(check.clauses().getFirst().finding()).isEqualTo(SubjectFinding.FOUND);
+            assertThat(check.clauses().getFirst().result()).isEqualTo(PracticePreconditionResult.FOUND);
         }
 
         @Test
@@ -416,7 +416,7 @@ class PracticePreconditionEvaluatorTest extends BaseUnitTest {
     private static PracticePrecondition threadSubject() {
         return new PracticePrecondition(
                 "nobody left a review comment on this pull request",
-                List.of(PracticePreconditionClause.evidenceHasItems(SubjectEvidenceCollection.SCM_REVIEW_THREADS)));
+                List.of(PracticePreconditionClause.evidenceHasItems(EvidenceCollection.SCM_REVIEW_THREADS)));
     }
 
     private static SourceCapture availableDiff(SourceCompleteness completeness, SourceContentState content) {

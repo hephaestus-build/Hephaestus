@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.PracticeReviewSettings;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -23,11 +24,11 @@ record PracticeReviewSnapshot(
         Map<String, List<String>> generatedPaths)
         implements ConfigAuditSnapshot {
     boolean sameRolloutPolicyAs(PracticeReviewSnapshot other) {
-        return (java.util.Objects.equals(deliverToMerged, other.deliverToMerged)
-                && java.util.Objects.equals(reviewScope, other.reviewScope)
-                && java.util.Objects.equals(deliveryStatus, other.deliveryStatus)
-                && java.util.Objects.equals(defaultAutonomy, other.defaultAutonomy)
-                && java.util.Objects.equals(generatedPaths, other.generatedPaths));
+        return (Objects.equals(deliverToMerged, other.deliverToMerged)
+                && Objects.equals(reviewScope, other.reviewScope)
+                && Objects.equals(deliveryStatus, other.deliveryStatus)
+                && Objects.equals(defaultAutonomy, other.defaultAutonomy)
+                && Objects.equals(generatedPaths, other.generatedPaths));
     }
 
     static PracticeReviewSnapshot of(

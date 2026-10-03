@@ -82,7 +82,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
     @Test
     void shouldKeepPracticeNetworkIsolatedBehindTheLlmProxy() {
         var policy = adapter.buildSandboxSpec(proxyRequest()).networkPolicy();
-        org.junit.jupiter.api.Assertions.assertNotNull(policy);
+        assertThat(policy).isNotNull();
         assertThat(policy.internetAccess()).isFalse();
         assertThat(policy.llmProxyToken()).isEqualTo("job-token-123");
     }
@@ -107,7 +107,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
 
         assertThat(spec.image()).isEqualTo(IMAGE);
         var networkPolicy = spec.networkPolicy();
-        org.junit.jupiter.api.Assertions.assertNotNull(networkPolicy);
+        assertThat(networkPolicy).isNotNull();
         assertThat(networkPolicy.llmProxyToken()).isEqualTo("job-token-123");
     }
 }

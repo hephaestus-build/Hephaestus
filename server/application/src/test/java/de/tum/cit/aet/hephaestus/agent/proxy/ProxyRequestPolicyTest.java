@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;

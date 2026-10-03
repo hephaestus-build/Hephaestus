@@ -9,6 +9,7 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.util.unit.DataSize;
@@ -80,7 +81,7 @@ class WebhookPropertiesTest extends BaseUnitTest {
                 Duration.ofSeconds(60));
     }
 
-    private static java.util.List<String> violations(WebhookProperties properties) {
+    private static List<String> violations(WebhookProperties properties) {
         try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
             Validator validator = factory.getValidator();
             return validator.validate(properties).stream()

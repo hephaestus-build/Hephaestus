@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -161,10 +162,10 @@ class SurveyEmailInvitationService implements SurveyEmailInvitations {
         Instant now = clock.instant();
         for (Survey survey :
                 surveys.findEndedWithoutSummary(now, now.minus(MAX_AGE), PageRequest.of(0, MAX_BATCH_SIZE))) {
-            if (surveys.claimSummary(survey.getId(), java.util.Objects.requireNonNull(survey.getEndsAt()), now) == 1) {
+            if (surveys.claimSummary(survey.getId(), Objects.requireNonNull(survey.getEndsAt()), now) == 1) {
                 delivery.requestSummary(
                         survey.getId(),
-                        java.util.Objects.requireNonNull(survey.getEndsAt()),
+                        Objects.requireNonNull(survey.getEndsAt()),
                         survey.getEndsAt().plus(MAX_AGE));
             }
         }

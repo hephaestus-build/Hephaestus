@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.architecture;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.properties.HasAnnotations;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
 import de.tum.cit.aet.hephaestus.core.RecentSignInExempt;
@@ -10,6 +11,7 @@ import de.tum.cit.aet.hephaestus.core.RequiresRecentSignIn;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -78,7 +80,7 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
                 : Optional.of("'" + type + "' is not an " + AuthEvent.EventType.class.getSimpleName());
     }
 
-    private java.util.stream.Stream<JavaMethod> instanceAdminMutations() {
+    private Stream<JavaMethod> instanceAdminMutations() {
         return classes.stream()
                 .filter(AuditByDefaultArchTest::isController)
                 .flatMap(c -> c.getMethods().stream())
@@ -90,7 +92,7 @@ class RecentSignInByDefaultArchTest extends HephaestusArchitectureTest {
         return method.getOwner().getSimpleName() + "." + method.getName();
     }
 
-    private static boolean isInstanceAdminGated(com.tngtech.archunit.core.domain.properties.HasAnnotations<?> element) {
+    private static boolean isInstanceAdminGated(HasAnnotations<?> element) {
         return element.tryGetAnnotationOfType(PreAuthorize.class)
                 .or(() -> element.getAnnotations().stream()
                         .flatMap(a -> a.getRawType().tryGetAnnotationOfType(PreAuthorize.class).stream())

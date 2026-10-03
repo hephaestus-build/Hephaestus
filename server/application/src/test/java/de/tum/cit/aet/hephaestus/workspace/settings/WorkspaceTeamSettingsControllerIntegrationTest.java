@@ -36,17 +36,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-/**
- * Integration tests for {@link WorkspaceTeamSettingsController}.
- *
- * <p>Tests cover:
- * <ul>
- *   <li>Team visibility settings (hidden)</li>
- *   <li>Repository contribution visibility settings</li>
- *   <li>Label filter management</li>
- *   <li>Security requirements (admin-only mutations)</li>
- * </ul>
- */
 @Tag("integration")
 class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -87,7 +76,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
 
     @BeforeEach
     void setUp() {
-        // Arrange: Create base test data
         owner = persistUser("settings-owner-" + System.nanoTime());
         workspace = createWorkspace(
                 "settings-test-" + System.nanoTime(), "Settings Test", "settings-org", AccountType.ORG, owner);
@@ -99,7 +87,7 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
 
     /**
      * Links the synced {@link Organization} that install creates before any team is synced
-     * ({@code GithubLifecycleListener}). Team scoping resolves the workspace's provider through it, so
+     * ({@code GitHubLifecycleListener}). Team scoping resolves the workspace's provider through it, so
      * without this the workspace has no resolvable team scope and correctly sees no teams.
      */
     private void linkSyncedOrganization(String login) {
@@ -111,8 +99,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
         workspace.setOrganization(organizationRepository.save(organization));
         workspace = workspaceRepository.save(workspace);
     }
-
-    // Team Visibility Settings Tests
 
     @Nested
     class TeamVisibilitySettingsTests {
@@ -220,8 +206,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .expectBody(Void.class);
         }
     }
-
-    // Repository Visibility Settings Tests
 
     @Nested
     class RepositoryVisibilitySettingsTests {
@@ -352,8 +336,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
         }
     }
 
-    // Label Filter Settings Tests
-
     @Nested
     class LabelFilterSettingsTests {
 
@@ -399,7 +381,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .isCreated()
                     .expectBody(Void.class);
 
-            // Assert: Verify database state
             var filters = labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId());
             assertThat(filters).hasSize(1);
             assertThat(filters.get(0).getLabel().getId()).isEqualTo(label.getId());
@@ -446,7 +427,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .isCreated()
                     .expectBody(Void.class);
 
-            // Act: Try to add the same filter again
             webTestClient
                     .post()
                     .uri(
@@ -460,7 +440,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .isCreated()
                     .expectBody(Void.class);
 
-            // Assert: Only one filter exists
             var filters = labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId());
             assertThat(filters).hasSize(1);
         }
@@ -501,7 +480,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .isNoContent()
                     .expectBody(Void.class);
 
-            // Assert: Verify database state
             var filtersAfter = labelFilterRepository.findByWorkspaceIdAndTeamId(workspace.getId(), team.getId());
             assertThat(filtersAfter).isEmpty();
         }
@@ -580,8 +558,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
         }
     }
 
-    // Activity filter persistence
-
     @Nested
     class ActivityFilterPersistenceTests {
 
@@ -590,7 +566,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
         void hiddenTeamSettings_shouldPersistAcrossRequests() {
             ensureAdminMembership(workspace);
 
-            // Act: Hide the team
             webTestClient
                     .patch()
                     .uri("/workspaces/{slug}/teams/{teamId}/settings", workspace.getWorkspaceSlug(), team.getId())
@@ -602,7 +577,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .isOk()
                     .expectBody(Void.class);
 
-            // Assert: Verify the team is hidden when fetching settings
             WorkspaceTeamSettingsDTO result = webTestClient
                     .get()
                     .uri("/workspaces/{slug}/teams/{teamId}/settings", workspace.getWorkspaceSlug(), team.getId())
@@ -623,7 +597,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
         void hiddenRepositorySettings_shouldPersistAcrossRequests() {
             ensureAdminMembership(workspace);
 
-            // Act: Hide the repository from contributions
             webTestClient
                     .patch()
                     .uri(
@@ -639,7 +612,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .isOk()
                     .expectBody(Void.class);
 
-            // Assert: Verify the repository is hidden when fetching settings
             WorkspaceTeamRepositorySettingsDTO result = webTestClient
                     .get()
                     .uri(
@@ -664,7 +636,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
         void toggleTeamVisibility_shouldWorkBothWays() {
             ensureAdminMembership(workspace);
 
-            // Act: Hide the team
             webTestClient
                     .patch()
                     .uri("/workspaces/{slug}/teams/{teamId}/settings", workspace.getWorkspaceSlug(), team.getId())
@@ -676,7 +647,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
                     .isOk()
                     .expectBody(Void.class);
 
-            // Act: Unhide the team
             WorkspaceTeamSettingsDTO result = webTestClient
                     .patch()
                     .uri("/workspaces/{slug}/teams/{teamId}/settings", workspace.getWorkspaceSlug(), team.getId())
@@ -694,8 +664,6 @@ class WorkspaceTeamSettingsControllerIntegrationTest extends AbstractWorkspaceIn
             assertThat(result.hidden()).isFalse();
         }
     }
-
-    // Test Helper Methods
 
     /**
      * Creates and persists a team entity for testing.

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.events.BotCommandReceivedEvent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -17,7 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -50,7 +51,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * reviews of work they were already unsure of) into the population the trend line is read from.
  */
 @Component
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class BotCommandProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(BotCommandProcessor.class);

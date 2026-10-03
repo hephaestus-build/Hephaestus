@@ -2,7 +2,11 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;

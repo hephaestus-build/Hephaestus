@@ -2,9 +2,12 @@ package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -32,7 +35,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -78,7 +80,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
             @Nullable String payloadId,
             @Nullable String actorId,
             @Nullable String createdAt) {
-        Message msg = Mockito.mock(Message.class);
+        Message msg = mock(Message.class);
         String payload = payloadId == null ? "{}" : "{\"id\":\"" + payloadId + "\"}";
         StringBuilder body = new StringBuilder("{\"webhookSubscriptionId\":\"")
                 .append(subscriptionId)
@@ -125,7 +127,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         handler.onMessage(message("sub-1", "documents.update", "doc-9"));
 
         verify(syncScheduler).refreshDocumentNow(42L, "documents.update", "doc-9", null);
-        verify(syncScheduler, never()).syncWorkspaceNow(Mockito.anyLong());
+        verify(syncScheduler, never()).syncWorkspaceNow(anyLong());
     }
 
     @Test
@@ -144,12 +146,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         handler().onMessage(message("sub-1", "documents.update", null));
 
         verify(syncScheduler).syncWorkspaceNow(42L);
-        verify(syncScheduler, never())
-                .refreshDocumentNow(
-                        Mockito.anyLong(),
-                        Mockito.anyString(),
-                        Mockito.anyString(),
-                        org.mockito.ArgumentMatchers.any());
+        verify(syncScheduler, never()).refreshDocumentNow(anyLong(), anyString(), anyString(), any());
         // No document id → nothing to attribute an event row to.
         verifyNoInteractions(documentEventRepository);
     }
@@ -193,8 +190,6 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         verifyNoInteractions(syncScheduler);
         verifyNoInteractions(documentEventRepository);
     }
-
-    // --- the append-only document event log ---
 
     @Test
     void documentEvent_appendsOneEventRowWithActorAndUpstreamClock() {
@@ -260,8 +255,6 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         verify(syncScheduler).refreshDocumentNow(42L, "documents.update", "doc-9", null);
     }
 
-    // --- tolerant parsing: malformed input is acked, never crashes the consumer ---
-
     static Stream<byte[]> malformedBodies() {
         return Stream.of("not json at all {{{".getBytes(StandardCharsets.UTF_8), new byte[0], (byte[]) null);
     }
@@ -269,7 +262,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @ParameterizedTest(name = "malformed body [{index}] is acked without crash or dispatch")
     @MethodSource("malformedBodies")
     void malformedBody_isAcknowledgedWithoutCrashOrDispatch(byte[] body) {
-        Message msg = Mockito.mock(Message.class);
+        Message msg = mock(Message.class);
         when(msg.getData()).thenReturn(body);
 
         handler().onMessage(msg);
@@ -283,7 +276,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         // payload.model is a JSON string, not the expected object — parseModel's field lookups on a
         // scalar node must degrade to "no usable model", not throw.
         resolves("sub-1", 42L);
-        Message msg = Mockito.mock(Message.class);
+        Message msg = mock(Message.class);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":\"not-an-object\"}}";
         when(msg.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
@@ -293,12 +286,10 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         verify(syncScheduler).refreshDocumentNow(42L, "documents.update", "doc-9", null);
     }
 
-    // --- payload.model trust: parsed when usable, ignored otherwise ---
-
     @Test
     void documentEventWithUsableModel_passesItThrough() {
         resolves("sub-1", 42L);
-        Message msg = Mockito.mock(Message.class);
+        Message msg = mock(Message.class);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":{\"id\":\"doc-9\",\"collectionId\":\"col-1\","
                 + "\"title\":\"Doc\",\"url\":\"/doc/doc-9\"}}}";
@@ -317,7 +308,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @Test
     void documentEventWithModelMissingCollectionId_fallsBackToNull() {
         resolves("sub-1", 42L);
-        Message msg = Mockito.mock(Message.class);
+        Message msg = mock(Message.class);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":{\"id\":\"doc-9\",\"title\":\"Doc\"}}}";
         when(msg.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));

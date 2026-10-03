@@ -408,7 +408,7 @@ public class GitLabWorkspaceInitializationService {
 
     /**
      * Same as {@link #syncFullData(Workspace)}, but cooperatively cancellable — used by
-     * {@code GitlabIntegrationSyncRunner} so a {@code SyncJob} cancel request can stop the pass
+     * {@code GitLabIntegrationSyncRunner} so a {@code SyncJob} cancel request can stop the pass
      * between repositories rather than running to completion. {@code cancelled} is polled at the
      * top of the per-repository loop in {@link #syncGitLabRepositories}, which dominates the
      * runtime of a full sync; the membership/issue-type/teams phases that bookend the loop are
@@ -565,7 +565,7 @@ public class GitLabWorkspaceInitializationService {
         var commitBackfillService = gitLabServices.getCommitBackfillService();
 
         // Map nameWithOwner → sync target id so each phase can stamp its per-repo watermark
-        // via the SPI. Mirrors GitlabDataSyncScheduler.syncRepositories — without this the
+        // via the SPI. Mirrors GitLabDataSyncScheduler.syncRepositories — without this the
         // initial sync left every watermark column NULL until the first cron run.
         Map<String, Long> syncTargetIdsByNameWithOwner =
                 repositoryToMonitorRepository.findByWorkspaceId(workspace.getId()).stream()

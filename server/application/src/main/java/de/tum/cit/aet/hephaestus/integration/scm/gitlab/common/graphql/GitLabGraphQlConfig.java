@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.core.graphql.FragmentMergingDocumen
 import de.tum.cit.aet.hephaestus.integration.scm.common.ScmTransportErrors;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabRateLimitTracker;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabCredentialHealthFilter;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabCredentialHealthFilter;
 import io.netty.resolver.DefaultAddressResolverGroup;
 import java.io.Serial;
 import java.time.Duration;
@@ -73,7 +73,7 @@ public class GitLabGraphQlConfig {
 
     @Bean
     @Qualifier("gitLabGraphQlWebClient")
-    public WebClient gitLabGraphQlWebClient(JsonMapper baseObjectMapper, GitlabCredentialHealthFilter healthFilter) {
+    public WebClient gitLabGraphQlWebClient(JsonMapper baseObjectMapper, GitLabCredentialHealthFilter healthFilter) {
         // Set the buffer limit on the custom decoder too — defaultCodecs().maxInMemorySize()
         // does not apply to custom-registered codecs, so large responses would otherwise hit
         // the 256 KB default. Mirrors GitHubGraphQlConfig.

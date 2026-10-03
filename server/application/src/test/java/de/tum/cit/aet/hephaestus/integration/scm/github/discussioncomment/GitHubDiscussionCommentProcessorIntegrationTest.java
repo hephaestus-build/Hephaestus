@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.discussioncomment;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -33,15 +34,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Integration tests for GitHubDiscussionCommentProcessor.
- * <p>
- * Tests the processor independently from the webhook handler to verify:
- * - Comment upsert logic (create vs update)
- * - Domain event publishing (DiscussionCommentCreated, DiscussionCommentEdited, DiscussionCommentDeleted)
- * - Context handling and workspace association
- * - Reply threading via parent comment resolution
- */
 class GitHubDiscussionCommentProcessorIntegrationTest extends BaseIntegrationTest {
 
     private static final Long TEST_ORG_ID = 215361191L;

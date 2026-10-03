@@ -45,8 +45,11 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.hamcrest.MatcherAssert;
+import org.hamcrest.Matchers;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -432,10 +435,10 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].outcome")
                     .isEqualTo("DORMANT")
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].explanation")
-                    .value((java.util.List<String> value) -> org.hamcrest.MatcherAssert.assertThat(
+                    .value((List<String> value) -> MatcherAssert.assertThat(
                             value,
-                            org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.equalTo(
-                                    "Nothing connected to this workspace reports the moments this "
+                            Matchers.hasItem(
+                                    Matchers.equalTo("Nothing connected to this workspace reports the moments this "
                                             + "practice watches for (Merged); GitHub or GitLab would."))))
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].watches[0].signal")
                     .isEqualTo(ScmSignals.PULL_REQUEST_MERGED.value())
@@ -465,9 +468,8 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                     .jsonPath("$.practices[0].explanation")
                     .value(
                             String.class,
-                            value -> org.hamcrest.MatcherAssert.assertThat(
-                                    value,
-                                    org.hamcrest.Matchers.equalTo(SignalStateReason.BUDGET_EXHAUSTED.describe())))
+                            value -> MatcherAssert.assertThat(
+                                    value, Matchers.equalTo(SignalStateReason.BUDGET_EXHAUSTED.describe())))
                     .jsonPath("$.signals[0].stateReason")
                     .isEqualTo("BUDGET_EXHAUSTED")
                     .jsonPath("$.signals[0].stateReasonDescription")

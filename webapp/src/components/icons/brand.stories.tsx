@@ -1,10 +1,10 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 
-import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 
 const ICONS = [
-	{ label: "GitHub", Icon: GithubIcon },
-	{ label: "GitLab", Icon: GitlabIcon },
+	{ label: "GitHub", Icon: GitHubIcon },
+	{ label: "GitLab", Icon: GitLabIcon },
 	{ label: "Slack", Icon: SlackIcon },
 	{ label: "Outline", Icon: OutlineIcon },
 ];

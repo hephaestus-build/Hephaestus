@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen, userEvent, within } from "storybook/test";
+import { expect, fn, screen, userEvent } from "storybook/test";
 
 import { expectSettledVisible } from "@/stories/overlay";
 import { Stateful } from "@/stories/stateful";
@@ -145,10 +145,8 @@ export const CustomGitLabRegistration: Story = {
 		],
 	},
 	play: async () => {
-		const button = await screen.findByRole("button", { name: "Continue with Company GitLab" });
-		await expect(within(button).getByRole("img", { hidden: true })).toHaveAttribute(
-			"aria-hidden",
-			"true",
-		);
+		const button = await screen.findByRole("button", { name: /Company GitLab/u });
+		// The provider mark beside the label is decorative, so it adds nothing to the button's name.
+		await expect(button).toHaveAccessibleName("Continue with Company GitLab");
 	},
 };

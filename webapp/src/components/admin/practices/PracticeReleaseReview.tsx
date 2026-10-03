@@ -47,9 +47,9 @@ const BASE_SOURCE = {
 	BUNDLED_DIGEST_MATCH: "A bundled version matched by its saved digest",
 	BUNDLED_FINGERPRINT_MATCH: "A bundled version matched by its review fingerprint",
 	REVISION_FINGERPRINT_MATCH:
-		"A recorded version matched by its saved source fingerprint; it may not show the original guidance or delivery. Choose a version for each changed field.",
+		"A recorded version matched by its saved source fingerprint. It may not show the original guidance or delivery. Choose a version for each changed field.",
 	CURRENT_DEFINITION:
-		"The current definition; the original adopted version could not be proved. Choose a version for each changed field.",
+		"The current definition, because the original adopted version could not be proved. Choose a version for each changed field.",
 } satisfies Record<PracticeReleaseProposal["baseSource"], string>;
 
 function fieldText(definition: PracticeDefinition, field: Field): string {

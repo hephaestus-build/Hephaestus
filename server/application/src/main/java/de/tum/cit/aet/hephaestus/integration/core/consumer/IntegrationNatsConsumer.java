@@ -3,7 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.consumer;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.core.event.WorkspacesInitializedEvent;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
@@ -45,7 +45,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
@@ -61,7 +60,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 @Order(1)
 @Service
-@ConditionalOnProperty(name = RuntimeRole.SERVER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnServerRole
 public class IntegrationNatsConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(IntegrationNatsConsumer.class);

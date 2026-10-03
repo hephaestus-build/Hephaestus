@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.milestone;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -29,16 +30,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Integration tests for GitHubMilestoneProcessor.
- * <p>
- * Tests the processor independently from the webhook handler to verify:
- * - Milestone upsert logic (create vs update)
- * - Domain event publishing (MilestoneProcessed, MilestoneDeleted)
- * - Context handling and workspace association
- * - Creator user association
- * - Edge cases in DTO processing
- */
 class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
     // IDs from the actual GitHub webhook fixtures
@@ -170,7 +161,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
             Milestone result = processor.process(dto, testRepository, createCreatorDto(), createContext());
 
-            // Then - verify milestone created
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(milestoneId);
             assertThat(result.getNumber()).isEqualTo(3);
@@ -200,7 +190,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateExistingMilestoneAndPublishEvent() {
-            // Given - create existing milestone
             Long milestoneId = 14028854L;
             Milestone existing = new Milestone();
             existing.setNativeId(milestoneId);
@@ -233,7 +222,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
             Milestone result = processor.process(dto, testRepository, createCreatorDto(), createContext());
             assertNotNull(result);
 
-            // Then - verify milestone updated
             assertThat(result.getTitle()).isEqualTo("Updated Title");
             assertThat(result.getDescription()).isEqualTo("Updated description");
             assertThat(result.getState()).isEqualTo(Milestone.State.CLOSED);
@@ -262,7 +250,7 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCreateMilestoneWithGeneratedIdWhenDtoHasNullId() {
-            // Given - DTO without ID (like GraphQL sync)
+            // A GraphQL sync DTO carries no ID.
             GitHubMilestoneDTO dto = new GitHubMilestoneDTO(
                     null, // null ID - simulates GraphQL response
                     1,
@@ -280,7 +268,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
             Milestone result = processor.process(dto, testRepository, null, createContext());
 
-            // Then - milestone should be created with a generated negative ID
             assertNotNull(result);
             assertThat(result.getNativeId()).isNotNull();
             assertThat(result.getNativeId()).isNegative(); // Generated IDs are negative to avoid collision
@@ -292,7 +279,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateExistingMilestoneByNumberWhenDtoHasNullId() {
-            // Given - existing milestone
             Long existingId = 999888777L;
             Milestone existingMilestone = new Milestone();
             existingMilestone.setNativeId(existingId);
@@ -322,7 +308,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
             Milestone result = processor.process(dto, testRepository, null, createContext());
 
-            // Then - should update existing milestone, not create new one
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(existingId); // keeps original nativeId
             assertThat(result.getTitle()).isEqualTo("Updated Title");
@@ -407,12 +392,10 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
                     null // closedAt
                     );
 
-            // When - process twice
             processor.process(dto, testRepository, null, createContext());
             eventListener.clear();
             processor.process(dto, testRepository, null, createContext());
 
-            // Then - only one milestone exists, second time emits MilestoneUpdated (not Created)
             assertThat(milestoneRepository.count()).isEqualTo(1);
             assertThat(eventListener.ofType(ScmDomainEvent.MilestoneUpdated.class))
                     .hasSize(1);
@@ -505,7 +488,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
             Milestone result = processor.process(dto, testRepository, null, createContext());
 
-            // Then - milestone saved but creator is null
             assertNotNull(result);
             assertThat(result.getCreator()).isNull();
         }
@@ -566,7 +548,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldDeleteMilestoneAndPublishEvent() {
-            // Given - create milestone
             Long milestoneId = 14028854L;
             Milestone milestone = new Milestone();
             milestone.setNativeId(milestoneId);
@@ -583,7 +564,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.delete(milestoneId, createContext());
 
-            // Then - milestone deleted
             assertThat(milestoneRepository.findByNativeIdAndProviderId(milestoneId, providerId()))
                     .isEmpty();
 
@@ -602,12 +582,10 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldHandleDeletionOfNonExistentMilestone() {
-            // Given - milestone doesn't exist
             Long nonExistentId = 999999999L;
             assertThat(milestoneRepository.findByNativeIdAndProviderId(nonExistentId, providerId()))
                     .isEmpty();
 
-            // When/Then - should not throw
             assertThatCode(() -> processor.delete(nonExistentId, createContext()))
                     .doesNotThrowAnyException();
 
@@ -618,7 +596,6 @@ class GitHubMilestoneProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldHandleNullMilestoneId() {
-            // When/Then - should not throw
             assertThatCode(() -> processor.delete(null, createContext())).doesNotThrowAnyException();
 
             // No event published

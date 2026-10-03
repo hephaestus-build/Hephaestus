@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -14,10 +16,10 @@ public final class DockerAttemptWorkspace implements AutoCloseable {
 
     public DockerAttemptWorkspace(DockerVolumeOperations volumes, UUID id, Map<String, String> labels) {
         this.volumes = volumes;
-        var volumeLabels = new java.util.HashMap<>(labels);
+        var volumeLabels = new HashMap<>(labels);
         volumeLabels.put(SandboxLabels.KIND, SandboxLabels.KIND_ATTEMPT_WORKSPACE);
         volumeLabels.putIfAbsent(SandboxLabels.JOB_ID, labels.getOrDefault(SandboxLabels.SESSION_ID, id.toString()));
-        volumeLabels.put(SandboxLabels.CREATED_AT, java.time.Instant.now().toString());
+        volumeLabels.put(SandboxLabels.CREATED_AT, Instant.now().toString());
         try {
             for (int index = 0; index < TARGETS.size(); index++) {
                 var mount =

@@ -68,7 +68,7 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
                 ArtifactKinds.PULL_REQUEST.value(),
                 7L,
                 owner.getId(),
-                "Stored finding",
+                "Stored observation",
                 "NOT_MET",
                 "MAJOR",
                 "{}",

@@ -13,8 +13,11 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -48,7 +51,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
         return workspace;
     }
 
-    private static java.util.function.Consumer<org.springframework.http.HttpHeaders> asAdminAccount() {
+    private static Consumer<HttpHeaders> asAdminAccount() {
         return headers -> headers.setBearerAuth(ADMIN_ACCOUNT_TOKEN);
     }
 
@@ -249,8 +252,7 @@ class ReviewBackfillControllerIntegrationTest extends AbstractWorkspaceIntegrati
                 .getResponseBody();
         assertThat(body).isNotNull();
         return runRepository
-                .findByWorkspaceIdOrderByCreatedAtDesc(
-                        workspace.getId(), org.springframework.data.domain.PageRequest.ofSize(1))
+                .findByWorkspaceIdOrderByCreatedAtDesc(workspace.getId(), PageRequest.ofSize(1))
                 .getFirst()
                 .getId()
                 .toString();

@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 
 class CurrentThreadHistoryContentSourceTest extends BaseUnitTest {
 
@@ -78,7 +79,7 @@ class CurrentThreadHistoryContentSourceTest extends BaseUnitTest {
         UUID threadId = UUID.randomUUID();
         ChatMessage assistant =
                 message(ChatMessage.Role.ASSISTANT, "Let me look.", Instant.parse("2026-01-01T00:00:00Z"));
-        var parts = (tools.jackson.databind.node.ArrayNode) assistant.getParts();
+        var parts = (ArrayNode) assistant.getParts();
         parts.addObject()
                 .put("type", "data-observation")
                 .put("id", "named")

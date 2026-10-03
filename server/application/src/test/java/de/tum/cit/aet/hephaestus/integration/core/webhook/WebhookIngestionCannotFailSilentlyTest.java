@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,11 +48,8 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
     private static final Path NATS_COMPOSE = Path.of("..", "..", "docker", "compose.core.yaml");
     private static final Path SHIPPED_ENV = Path.of("..", "..", "docker", ".env.example");
 
-    /**
-     * Peak measured on the deployment that filled its disk: ~46,500 GitHub deliveries and 0.75 GB in
-     * one day.
-     */
-    private static final long MEASURED_GITHUB_BYTES_PER_DAY = 750_000_000L;
+    /** A busy instance's daily GitHub delivery volume: about 46,500 deliveries. */
+    private static final long BUSY_GITHUB_BYTES_PER_DAY = 750_000_000L;
 
     /**
      * Health contributors the readiness group may name, as bean name to the contributor name Spring
@@ -123,7 +122,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         WebhookProperties.Stream stream = shippedStream();
         int reconciliationWindowDays = widestShippedReconciliationWindowDays();
 
-        long repairableTraffic = reconciliationWindowDays * MEASURED_GITHUB_BYTES_PER_DAY;
+        long repairableTraffic = reconciliationWindowDays * BUSY_GITHUB_BYTES_PER_DAY;
 
         assertThat(stream.maxBytesFor("github"))
                 .as(
@@ -176,7 +175,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
      */
     private Map<String, Long> shippedEnvSizes(String... names) throws IOException {
         String env = Files.readString(SHIPPED_ENV);
-        Map<String, Long> values = new java.util.LinkedHashMap<>();
+        Map<String, Long> values = new LinkedHashMap<>();
         for (String name : names) {
             Matcher m = Pattern.compile("^" + Pattern.quote(name) + "=(\\S+)$", Pattern.MULTILINE)
                     .matcher(env);
@@ -249,7 +248,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         return values.toArray(String[]::new);
     }
 
-    private static List<String> union(Set<String> first, java.util.Collection<String> second) {
+    private static List<String> union(Set<String> first, Collection<String> second) {
         List<String> all = new ArrayList<>(first);
         all.addAll(second);
         return all;

@@ -54,9 +54,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/**
- * Unit tests for {@link GitLabWorkspaceInitializationService}.
- */
 @Tag("unit")
 class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
@@ -255,25 +252,12 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
     class InitializeGuards {
 
         @Test
-        void shouldSkipNonGitLab() {
-            // Drop the default GitLab Connection mock — this workspace has no GitLab
-            // binding so initialize() must short-circuit before touching any sync service.
+        void shouldSkipWhenTheWorkspaceHasNoGitLabConnection() {
             when(connectionService.findActiveGitLabConfig(anyLong())).thenReturn(Optional.empty());
 
             initService.initialize(workspace);
 
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
-            verifyNoInteractions(gitLabWebhookServiceProvider);
-        }
-
-        @Test
-        void shouldSkipGitHubApp() {
-            // GitHub App workspace = no GitLab Connection at all.
-            when(connectionService.findActiveGitLabConfig(anyLong())).thenReturn(Optional.empty());
-
-            initService.initialize(workspace);
-
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            verifyNoInteractions(gitLabSyncServiceHolderProvider, gitLabWebhookServiceProvider);
         }
 
         @Test
@@ -547,7 +531,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabGroupSyncService.syncGroupProjects(anyLong(), any(), any()))
                     .thenThrow(new RuntimeException("GraphQL timeout"));
 
-            // Should not throw
             initService.initialize(workspace);
 
             verify(repositoryMonitors, never()).monitorAll(any(), any());

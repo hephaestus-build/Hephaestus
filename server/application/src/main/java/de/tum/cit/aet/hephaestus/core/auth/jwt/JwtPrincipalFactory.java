@@ -39,7 +39,7 @@ public class JwtPrincipalFactory {
     /**
      * Authority strings that must never originate from a grantable {@code account_feature} flag — the
      * instance-admin authority comes only from {@link Account.AppRole#APP_ADMIN}. {@code admin} is
-     * also reserved (it is the legacy pre-rename string and the per-workspace role name).
+     * also reserved, because it is the per-workspace role name.
      */
     private static final Set<String> RESERVED_INSTANCE_AUTHORITIES = Set.of("app_admin", "admin");
 

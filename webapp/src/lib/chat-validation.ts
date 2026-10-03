@@ -1,8 +1,9 @@
+import type { ChatStatus } from "ai";
 import { z } from "zod";
 
 import type { ChatMessage as ThreadMessage } from "@/api/types.gen";
 import { hasText } from "@/lib/text";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ChatTurn } from "@/lib/types";
 
 /** A `data-observation` part's data. A link stored without `text` showed nothing and proves nothing. */
 export const observationDataSchema = z.object({
@@ -12,17 +13,34 @@ export const observationDataSchema = z.object({
 
 /** A `data-mentor-status` part's data. */
 export const mentorStatusDataSchema = z.object({
-	state: z.string(),
+	state: z.enum(["warming-up", "busy", "conflict"]),
 	reason: z.string().nullish(),
 });
 
-/** Whether a streamed data part says Heph's sandbox is starting cold, so the reply will be slow. */
-export function isWarmingUp(part: { type: string; data: unknown }): boolean {
+export type MentorTurnState = z.infer<typeof mentorStatusDataSchema>["state"];
+
+export function mentorStatus(part: { type: string; data: unknown }): MentorTurnState | undefined {
 	if (part.type !== "data-mentor-status") {
-		return false;
+		return undefined;
 	}
 	const parsed = mentorStatusDataSchema.safeParse(part.data);
-	return parsed.success && parsed.data.state === "warming-up";
+	return parsed.success ? parsed.data.state : undefined;
+}
+
+/** The turn `useChat` reports, read with the latest state the server streamed for it. */
+export function mentorTurn(status: ChatStatus, state: MentorTurnState | undefined): ChatTurn {
+	switch (status) {
+		case "ready": {
+			return { kind: "ready" };
+		}
+		case "error": {
+			return { kind: "error", failure: state === "busy" ? "busy" : "failed" };
+		}
+		case "submitted":
+		case "streaming": {
+			return { kind: status, warmingUp: state === "warming-up" };
+		}
+	}
 }
 
 /** Parsed where it is read, so a streamed part and a stored one pass the same check. */

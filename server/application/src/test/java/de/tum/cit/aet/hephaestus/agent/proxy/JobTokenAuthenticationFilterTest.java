@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import java.math.BigDecimal;
@@ -434,7 +436,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
 
             filter.doFilterInternal(request, new MockHttpServletResponse(), filterChain);
             Authentication authentication = authCapture.get();
-            org.junit.jupiter.api.Assertions.assertNotNull(authentication);
+            assertThat(authentication).isNotNull();
             return authentication;
         }
 
@@ -444,7 +446,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             when(jwtVerifier.verify(JOB_JWT)).thenReturn(jobJwt(job, Set.of("llm_proxy")));
             when(agentJobRepository.findByIdWithWorkspace(job.getId())).thenReturn(Optional.of(job));
             doAnswer(invocation -> {
-                        throw new jakarta.servlet.ServletException("Simulated failure");
+                        throw new ServletException("Simulated failure");
                     })
                     .when(filterChain)
                     .doFilter(any(), any());
@@ -455,7 +457,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             var response = new MockHttpServletResponse();
 
             assertThatThrownBy(() -> filter.doFilterInternal(request, response, filterChain))
-                    .isInstanceOf(jakarta.servlet.ServletException.class);
+                    .isInstanceOf(ServletException.class);
 
             assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         }
@@ -504,8 +506,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
 
             assertThat(response.getStatus()).isEqualTo(HttpServletResponse.SC_OK);
             Authentication authentication = authCapture.get();
-            org.junit.jupiter.api.Assertions.assertNotNull(authentication);
-            org.junit.jupiter.api.Assertions.assertInstanceOf(JobTokenAuthentication.class, authentication);
+            assertThat(authentication).isNotNull();
+            assertInstanceOf(JobTokenAuthentication.class, authentication);
             ProxyRouting routing = ((JobTokenAuthentication) authentication).getPrincipal();
             assertThat(routing.apiProtocol()).isEqualTo("openai-completions");
         }
@@ -589,8 +591,8 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             filter.doFilterInternal(request, new MockHttpServletResponse(), filterChain);
 
             Authentication authentication = authCapture.get();
-            org.junit.jupiter.api.Assertions.assertNotNull(authentication);
-            org.junit.jupiter.api.Assertions.assertInstanceOf(JobTokenAuthentication.class, authentication);
+            assertThat(authentication).isNotNull();
+            assertInstanceOf(JobTokenAuthentication.class, authentication);
             return ((JobTokenAuthentication) authentication).getPrincipal();
         }
     }
@@ -599,7 +601,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         return createRunningJob(null);
     }
 
-    private AgentJob createRunningJob(@org.jspecify.annotations.Nullable LlmPriceSnapshot price) {
+    private AgentJob createRunningJob(@Nullable LlmPriceSnapshot price) {
         var job = new AgentJob();
         ConfigSnapshot snapshot = new ConfigSnapshot(
                 ConfigSnapshot.SCHEMA_VERSION,
@@ -619,7 +621,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
                 price,
                 null);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
-        job.setId(java.util.UUID.randomUUID());
+        job.setId(UUID.randomUUID());
         Workspace workspace = new Workspace();
         workspace.setId(7L);
         job.setWorkspace(workspace);

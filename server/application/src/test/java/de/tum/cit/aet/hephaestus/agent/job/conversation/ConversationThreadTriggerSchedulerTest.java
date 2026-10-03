@@ -34,7 +34,7 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Deterministic gate logic for conversation-thread detection: quiescence, depth, growth, and ts parsing. */
+/** The conversation-review trigger gates: quiescence, depth, growth, and ts parsing. */
 class ConversationThreadTriggerSchedulerTest extends BaseUnitTest {
 
     private static final int QUIESCENCE_MIN = 10;
@@ -138,7 +138,7 @@ class ConversationThreadTriggerSchedulerTest extends BaseUnitTest {
         f.givenOneReadyThread();
         when(f.signalRecorder.record(any(), any(), eq(DiscoveredVia.SYNC))).thenReturn(true);
 
-        f.scheduler().detectNow();
+        f.scheduler().sweepNow();
 
         InOrder inOrder = inOrder(f.signalRecorder, f.submitter);
         inOrder.verify(f.signalRecorder).record(any(), any(), eq(DiscoveredVia.SYNC));
@@ -152,7 +152,7 @@ class ConversationThreadTriggerSchedulerTest extends BaseUnitTest {
         f.givenOneReadyThread();
         when(f.signalRecorder.record(any(), any(), eq(DiscoveredVia.SYNC))).thenReturn(true);
 
-        f.scheduler().detectNow();
+        f.scheduler().sweepNow();
 
         ArgumentCaptor<SignalKey> captor = ArgumentCaptor.forClass(SignalKey.class);
         verify(f.signalRecorder).record(captor.capture(), any(), eq(DiscoveredVia.SYNC));
@@ -172,7 +172,7 @@ class ConversationThreadTriggerSchedulerTest extends BaseUnitTest {
         // submitted once the ledger says another sweep owns this occurrence.
         lenient().when(f.signalRecorder.record(any(), any(), any())).thenReturn(false);
 
-        assertThat(f.scheduler().detectNow()).isZero();
+        assertThat(f.scheduler().sweepNow()).isZero();
 
         verifyNoInteractions(f.submitter);
         verify(f.candidateSource, never()).markReviewed(anyLong(), anyLong(), any());
@@ -186,28 +186,26 @@ class ConversationThreadTriggerSchedulerTest extends BaseUnitTest {
         when(f.signalRecorder.record(any(), any(), any())).thenReturn(true);
         when(f.submitter.submitAndSettle(any(), any())).thenReturn(0L);
 
-        f.scheduler().detectNow();
+        f.scheduler().sweepNow();
 
         verify(f.candidateSource, never()).markReviewed(anyLong(), anyLong(), any());
     }
 
     @Test
-    void detectNow_withCapabilityFlagOff_isDormantAndDoesNoWork() {
+    void shouldDoNoWorkWhenConversationIngestIsOff() {
         ConversationCandidateSource candidateSource = mock(ConversationCandidateSource.class);
         ConversationReviewSubmitter submitter = mock(ConversationReviewSubmitter.class);
         SignalRecorder signalRecorder = mock(SignalRecorder.class);
         var disabled = new ConversationThreadTriggerScheduler(
                 candidateSource, submitter, signalRecorder, mock(TransactionTemplate.class), false);
 
-        // Kill-switch driven explicitly OFF: the sweep no-ops without even running the candidate scan. Remove the
-        // flag gate and this fails — settledCandidates() would be queried through the SPI. Nothing reaches the
-        // ledger either: a dormant subsystem must not leave rows claiming it looked.
-        assertThat(disabled.detectNow()).isZero();
+        // A dormant subsystem leaves no ledger row claiming it looked.
+        assertThat(disabled.sweepNow()).isZero();
         verifyNoInteractions(candidateSource, submitter, signalRecorder);
     }
 
     @Test
-    void detectNow_withCapabilityFlagOn_runsTheCandidateScan() {
+    void shouldScanForCandidatesWhenConversationIngestIsOn() {
         ConversationCandidateSource candidateSource = mock(ConversationCandidateSource.class);
         ConversationReviewSubmitter submitter = mock(ConversationReviewSubmitter.class);
         SignalRecorder signalRecorder = mock(SignalRecorder.class);
@@ -215,9 +213,7 @@ class ConversationThreadTriggerSchedulerTest extends BaseUnitTest {
         var enabled = new ConversationThreadTriggerScheduler(
                 candidateSource, submitter, signalRecorder, mock(TransactionTemplate.class), true);
 
-        // With the capability enabled the gate opens: the candidate scan runs through the SPI. The mock yields no
-        // candidates, so nothing is enqueued (0) — but the scan itself did execute.
-        assertThat(enabled.detectNow()).isZero();
+        assertThat(enabled.sweepNow()).isZero();
         verify(candidateSource).settledCandidates(anyInt());
         verifyNoInteractions(submitter, signalRecorder);
     }

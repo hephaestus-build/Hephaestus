@@ -8,10 +8,11 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRep
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GithubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import java.time.Instant;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +29,7 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
     protected WorkspaceService workspaceService;
 
     @Autowired
-    protected GithubLifecycleListener githubLifecycleListener;
+    protected GitHubLifecycleListener githubLifecycleListener;
 
     @Autowired
     protected WorkspaceMembershipService workspaceMembershipService;
@@ -87,7 +88,7 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
         user.setCreatedAt(Instant.now());
         user.setUpdatedAt(Instant.now());
         user = userRepository.save(user);
-        if (java.util.Set.of("admin", "mentor", "testuser").contains(login)) {
+        if (Set.of("admin", "mentor", "testuser").contains(login)) {
             TestUserFactory.ensureAccountForUser(accountRepository, fixtureIdentities, user);
         }
         return user;

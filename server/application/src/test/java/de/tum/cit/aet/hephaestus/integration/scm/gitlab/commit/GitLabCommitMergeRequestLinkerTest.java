@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -515,7 +516,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         assertVendorCouldReturn(GITLAB, "GetMergeRequestAllCommits", "project.mergeRequests.nodes", List.of(mrNode));
 
         ClientResponseField nodesField = mock(ClientResponseField.class);
-        org.mockito.Mockito.doReturn(List.of(mrNode)).when(nodesField).toEntityList(Map.class);
+        doReturn(List.of(mrNode)).when(nodesField).toEntityList(Map.class);
         when(resp.field("project.mergeRequests.nodes")).thenReturn(nodesField);
 
         return resp;
@@ -545,7 +546,7 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
         assertVendorCouldReturn(GITLAB, "GetMergeRequestCommits", "project.mergeRequests.nodes", List.of(mrNode));
 
         ClientResponseField nodesField = mock(ClientResponseField.class);
-        org.mockito.Mockito.doReturn(List.of(mrNode)).when(nodesField).toEntityList(Map.class);
+        doReturn(List.of(mrNode)).when(nodesField).toEntityList(Map.class);
         when(resp.field("project.mergeRequests.nodes")).thenReturn(nodesField);
 
         return resp;

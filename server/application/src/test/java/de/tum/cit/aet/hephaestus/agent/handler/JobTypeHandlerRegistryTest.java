@@ -2,19 +2,26 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobTypeHandler;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 class JobTypeHandlerRegistryTest extends BaseUnitTest {
@@ -50,11 +57,10 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 practiceCatalogInjector,
                 new TaskEnvelopeWriter(objectMapper),
                 gitRepositoryManager,
-                de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer(),
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.practices.PracticeRevisionService.class,
-                        invocation -> ((de.tum.cit.aet.hephaestus.practices.model.Practice) invocation.getArgument(0))
-                                .getCurrentRevision()));
+                PreparedJobInputsFixtures.freezer(),
+                mock(
+                        PracticeRevisionService.class,
+                        invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision()));
     }
 
     private JobTypeHandler prReviewHandler() {
@@ -65,16 +71,13 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 practiceCatalogInjector,
                 preparation(practiceCatalogInjector),
                 parser,
-                new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
+                new FeedbackCompositionResultParser(),
                 deliveryService,
                 feedbackService,
-                org.mockito.Mockito.mock(FeedbackResponseSuppressionFilter.class),
+                mock(FeedbackResponseSuppressionFilter.class),
                 InContextDeliveryGateFixtures.gate(
-                        practiceRepository,
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
-                        org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
+                        practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
+                mock(ObservationRepository.class),
                 InContextDeliveryGateFixtures.noRecurrence());
     }
 
@@ -86,21 +89,18 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 preparation(practiceCatalogInjector),
                 practiceCatalogInjector,
                 parser,
-                new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
+                new FeedbackCompositionResultParser(),
                 deliveryService,
                 InContextDeliveryGateFixtures.gate(
-                        practiceRepository,
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
-                        org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
-                org.mockito.Mockito.mock(PullRequestCommentPoster.class),
-                org.mockito.Mockito.mock(FeedbackLedgerRecorder.class),
-                org.mockito.Mockito.mock(PracticeFeedbackDeliveryPolicy.class),
-                org.mockito.Mockito.mock(PracticeFeedbackCommentFormatter.class),
-                org.mockito.Mockito.mock(FeedbackResponseSuppressionFilter.class),
-                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
-                org.mockito.Mockito.mock(PracticeFeedbackDispatchService.class),
-                org.mockito.Mockito.mock(FeedbackDeliveryService.class),
+                        practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
+                mock(PullRequestCommentPoster.class),
+                mock(FeedbackLedgerRecorder.class),
+                mock(PracticeFeedbackDeliveryPolicy.class),
+                mock(PracticeFeedbackCommentFormatter.class),
+                mock(FeedbackResponseSuppressionFilter.class),
+                mock(ObservationRepository.class),
+                mock(PracticeFeedbackDispatchService.class),
+                mock(FeedbackDeliveryService.class),
                 InContextDeliveryGateFixtures.noRecurrence());
     }
 
@@ -112,8 +112,8 @@ class JobTypeHandlerRegistryTest extends BaseUnitTest {
                 preparation(practiceCatalogInjector),
                 parser,
                 deliveryService,
-                org.mockito.Mockito.mock(ApplicationEventPublisher.class),
-                org.mockito.Mockito.mock(org.springframework.transaction.support.TransactionTemplate.class));
+                mock(ApplicationEventPublisher.class),
+                mock(TransactionTemplate.class));
     }
 
     private JobTypeHandler documentReviewHandler() {

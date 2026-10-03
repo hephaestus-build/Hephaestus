@@ -26,7 +26,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * repositories before it registers the webhook, and runs the full sync after both.
  *
  * <p><b>Deactivation</b> tears the group webhook down (best-effort). An admin disconnect deletes it with
- * the PAT {@code GitlabConnectionStrategy#prepareProviderTeardown} read before the transition cleared it;
+ * the PAT {@code GitLabConnectionStrategy#prepareProviderTeardown} read before the transition cleared it;
  * this AFTER_COMMIT hook is the symmetric guard mirroring
  * {@code OutlineConnectionStateListener.onDeactivated} and covers a torn-down row by connection id.
  *

@@ -53,7 +53,7 @@ public record CatalogEntry<D extends CatalogDefinition>(
         }
         return shipped.provenanceFingerprint(slug).equals(overridden.provenanceFingerprint(slug))
                 ? CatalogChangeKind.WORDING
-                : CatalogChangeKind.DETECTION;
+                : CatalogChangeKind.REVIEW;
     }
 
     public boolean offered() {

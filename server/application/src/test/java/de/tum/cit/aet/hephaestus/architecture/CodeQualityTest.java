@@ -1,8 +1,16 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.*;
-import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.*;
-import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.*;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.GENERATED_GRAPHQL_PACKAGE;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.MAX_CONTROLLER_DEPENDENCIES;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.MAX_INTERFACE_METHODS;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.MAX_SERVICE_DEPENDENCIES;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.MAX_SERVICE_METHODS;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.MAX_SPI_METHODS;
+import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.haveAtMostBusinessMethods;
+import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.haveAtMostConstructorParameters;
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaField;
@@ -47,7 +55,7 @@ class CodeQualityTest extends HephaestusArchitectureTest {
         @Test
         void servicesHaveLimitedConstructorParams() {
             Set<String> orchestratorExceptions = Set.of(
-                    "GithubDataSyncService", // Coordinates 15 entity-specific sync services
+                    "GitHubDataSyncService", // Coordinates 15 entity-specific sync services
                     "GitHubHistoricalBackfillService", // Coordinates multiple sync services for historical data
                     // backfill
                     "GitHubPullRequestSyncService", // Coordinates review, review comment, and project item sub-sync
@@ -395,11 +403,11 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     "FairRetryPostProcessor", // A static BeanPostProcessor must not initialize JDBC/serializer beans
                     // early.
                     "WorkspaceActivationService",
-                    "GithubLifecycleListener", // IntegrationNatsConsumer absent under the webhook runtime role
+                    "GitHubLifecycleListener", // IntegrationNatsConsumer absent under the webhook runtime role
                     // (server.enabled=false) — see ADR 0008
                     "WorkspaceLifecycleService", // IntegrationNatsConsumer absent under the webhook runtime role
                     "GitHubWorkspaceProvisioningAdapter", // Lazy-loaded to break circular reference with
-                    // GithubDataSyncService
+                    // GitHubDataSyncService
                     "WorkspaceRepositoryMonitorService",
                     "ScmWorkspaceContentEraser", // IntegrationNatsConsumer absent under the webhook runtime role — the
                     // erase refreshes the scope consumer once after dropping the
@@ -408,16 +416,16 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // reconcileSyncTargetIdentity refreshes the scope consumer after a
                     // rename re-key
                     "GitLabWorkspaceInitializationService", // Optional GitLab beans gated by @ConditionalOnProperty
-                    "GitlabCredentialHealthFilter", // Breaks WebClient builder -> health -> connection strategies ->
+                    "GitLabCredentialHealthFilter", // Breaks WebClient builder -> health -> connection strategies ->
                     // GitLab clients -> builder
                     "GitLabWebhookService", // Optional GitLab beans gated by @ConditionalOnProperty
                     "GitLabUserService", // Always present for the GitLab processors; its GraphQL client beans exist
                     // only
                     // when GitLab is enabled (@ConditionalOnProperty)
-                    "GitlabDataSyncScheduler", // Optional GitLab beans gated by @ConditionalOnProperty
+                    "GitLabDataSyncScheduler", // Optional GitLab beans gated by @ConditionalOnProperty
                     "GitLabHistoricalBackfillService", // Optional GitLab beans gated by @ConditionalOnProperty
                     "HistoricalBackfillScheduler", // Optional GitLab backfill service gated by @ConditionalOnProperty
-                    "GitHubWorkspaceDataSyncTrigger", // Lazy-loads GithubDataSyncService + SyncTargetProvider to break
+                    "GitHubWorkspaceDataSyncTrigger", // Lazy-loads GitHubDataSyncService + SyncTargetProvider to break
                     // the same circular reference WorkspaceProvisioningAdapter
                     // handled; the workspace-side trigger sits on the GitHub adapter
                     // post-SPI extraction
@@ -442,13 +450,13 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     // reconciler must not require the bean
                     "SyncPushService", // Qualified NATS connection is optional when sync push is disabled or under
                     // specs
-                    "GitlabConnectionSyncStateProvider", // Rate-limit tracker is conditional with the GitLab runtime
+                    "GitLabConnectionSyncStateProvider", // Rate-limit tracker is conditional with the GitLab runtime
                     // beans
                     "OutlineConnectionSyncStateProvider", // Rate-limit tracker (OutlineRateLimitTracker) is
                     // @ConditionalOnProperty(outline.enabled) — same
                     // optional-bean break as the GitLab provider
                     "OutlineDocumentSyncService", // DocumentReviewTrigger's sole impl is
-                    // @ConditionalOnProperty(hephaestus.agent.enabled); the mirror
+                    // gated on hephaestus.agent.enabled; the mirror
                     // records every document signal on every runtime role and only skips
                     // the review offer where nothing could run one
                     "SecurityConfig", // InstalledClientRegistry is server-role only; the CORS configuration

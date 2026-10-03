@@ -33,7 +33,9 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -106,7 +108,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
         agentJob.setConfigSnapshot(OBJECT_MAPPER.valueToTree(Map.of("model", "test")));
         agentJob = agentJobRepository.save(agentJob);
 
-        Observation finding = Observation.builder()
+        Observation observation = Observation.builder()
                 .occurrenceKey("test-key-" + UUID.randomUUID())
                 .recurrenceKey(RECURRENCE_KEY)
                 .agentJobId(agentJob.getId())
@@ -120,8 +122,8 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .severity(Severity.MAJOR)
                 .observedAt(Instant.now())
                 .build();
-        finding = observationRepository.save(finding);
-        observationId = finding.getId();
+        observation = observationRepository.save(observation);
+        observationId = observation.getId();
 
         feedbackUnit = feedbackRepository.save(Feedback.builder()
                 .agentJobId(agentJob.getId())
@@ -139,7 +141,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .build());
 
         feedbackObservationRepository.insertIfAbsent(
-                feedbackUnit.getId(), finding.getId(), EvidenceRole.PRIMARY.name(), 0);
+                feedbackUnit.getId(), observation.getId(), EvidenceRole.PRIMARY.name(), 0);
     }
 
     @Nested
@@ -414,7 +416,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .expectStatus()
                     .isOk()
                     .expectBody(Void.class);
-            long admin = java.util.Objects.requireNonNull(
+            long admin = Objects.requireNonNull(
                     accountRepository.save(new Account("Withdrawing admin")).getId());
             withdrawalService.setWithdrawn(workspace.getId(), card.getId(), admin, true, "About older issues");
 
@@ -645,7 +647,7 @@ class FeedbackResponseControllerIntegrationTest extends AbstractWorkspaceIntegra
                     .expectBody(Void.class);
         }
 
-        private @org.jspecify.annotations.Nullable FeedbackResponseDTO current() {
+        private @Nullable FeedbackResponseDTO current() {
             return webTestClient
                     .get()
                     .uri(FEEDBACK_URI, workspace.getWorkspaceSlug(), feedbackUnit.getId())

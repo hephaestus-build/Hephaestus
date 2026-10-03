@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -133,7 +134,7 @@ class GitLabSubIssueSyncServiceTest extends BaseUnitTest {
 
     @SafeVarargs
     private void mockWorkItemResponse(Map<String, Object>... nodes) {
-        List<Map<String, Object>> nodeList = new java.util.ArrayList<>(nodes.length);
+        List<Map<String, Object>> nodeList = new ArrayList<>(nodes.length);
         for (Map<String, Object> node : nodes) {
             nodeList.add(node);
         }

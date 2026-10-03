@@ -280,16 +280,14 @@ class MentorRunnerClientTest extends BaseUnitTest {
         assertThat(response.get("id").asLong()).isEqualTo(9999L);
         assertThat(response.get("result").get("content").get("ok").asBoolean()).isTrue();
         var fetchContext = lastFetchContext.get();
-        org.junit.jupiter.api.Assertions.assertNotNull(fetchContext);
+        assertThat(fetchContext).isNotNull();
         assertThat(fetchContext.path()).isEqualTo("inputs/context/workspace.json");
     }
 
     @Test
     void fetchContextRoundTrip_preservesStringIds() {
-        // Regression: an earlier impl coerced frame.get("id").asLong() → 0 for any non-numeric
-        // id, then echoed back `id: 0` which the runner's pendingFetchContexts (keyed by the
-        // original string) never matched. Result: every `fetch_context` LLM tool call hung
-        // until the runner's 10s timeout fired.
+        // The runner keys pending fetches by the original id; an id echoed back as anything else is never
+        // matched and the tool call hangs until the runner's timeout.
         String callbackId = "fc-" + UUID.randomUUID();
         ObjectNode callback = mapper.createObjectNode();
         callback.put("jsonrpc", "2.0");
@@ -365,8 +363,6 @@ class MentorRunnerClientTest extends BaseUnitTest {
         assertThat(response.get("id").asString()).isEqualTo(callbackId);
         assertThat(response.get("error").get("code").asInt()).isEqualTo(-32600);
     }
-
-    // helpers
 
     private ObjectNode responseOf(long id, JsonNode result) {
         ObjectNode out = mapper.createObjectNode();

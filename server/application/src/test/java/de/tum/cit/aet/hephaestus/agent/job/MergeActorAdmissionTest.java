@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class MergeActorAdmissionTest extends BaseUnitTest {
@@ -66,7 +67,7 @@ class MergeActorAdmissionTest extends BaseUnitTest {
                 .isFalse();
     }
 
-    private static PullRequest merged(IdentityProviderType type, @org.jspecify.annotations.Nullable User mergedBy) {
+    private static PullRequest merged(IdentityProviderType type, @Nullable User mergedBy) {
         PullRequest pr = new PullRequest();
         pr.setProvider(new IdentityProvider(type, "https://example.test"));
         if (mergedBy != null) {

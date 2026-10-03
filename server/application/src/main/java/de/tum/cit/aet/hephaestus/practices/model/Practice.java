@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.AccessLevel;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -104,7 +105,7 @@ public class Practice {
      * {@code referencedColumnName} only against columns already bound.
      */
     @Column(name = "workspace_id", nullable = false, insertable = false, updatable = false)
-    @Setter(lombok.AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private Long workspaceId;
 
     /** Stable machine key, unique per workspace ({@code uk_practice_workspace_slug}); survives a {@link #name} rename. */
@@ -122,7 +123,7 @@ public class Practice {
      */
     @Column(name = "applies_to", nullable = false, length = ArtifactKind.MAX_LENGTH)
     @ColumnDefault("'scm.pull_request'")
-    @Setter(lombok.AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private ArtifactKind artifactKind = ArtifactKinds.PULL_REQUEST;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -165,7 +166,7 @@ public class Practice {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "signals", columnDefinition = "jsonb", nullable = false)
     @ToString.Exclude
-    @Setter(lombok.AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private List<SignalName> signals = List.of();
 
     @JdbcTypeCode(SqlTypes.JSON)

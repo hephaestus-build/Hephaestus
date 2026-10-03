@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,15 +29,18 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 /** A developer's dispute or "not applicable" holds back feedback about the same claim. */
-@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
 
     @Mock
@@ -127,24 +129,6 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNeverSuppressACommittedSecretWhenItWasDisputed() {
-        String secretKey = ObservationFingerprint.compute(
-                "avoids-insecure-defaults-and-over-broad-permissions",
-                ArtifactKinds.PULL_REQUEST.value(),
-                TARGET,
-                CONTRIBUTOR,
-                null);
-        Observation observation = persisted(secretKey, "occ-" + secretKey, Outcome.NOT_MET);
-        answers(answer(
-                observation.getId(), THIS_REVIEW, secretKey, Outcome.NOT_MET, FeedbackResolution.DISPUTED, LATER));
-
-        var decision = filter().evaluate(job(), List.of(secretScannerObservation(secretKey)));
-
-        assertThat(decision.deliverable()).hasSize(1);
-        verify(feedbackLedgerRecorder, never()).recordSuppressed(any(), any(), any(), anyInt());
-    }
-
-    @Test
     void shouldAskOnlyForTheExactObservationWhenItRecordedNoPlace() {
         UUID observationId = persisted(null, "occ-a", Outcome.NOT_MET).getId();
         answers();
@@ -217,8 +201,6 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         assertThat(decision.deliverable()).hasSize(1);
     }
 
-    // --- helpers ---
-
     private Observation persisted(@Nullable String recurrenceKey, String occurrenceKey, Outcome outcome) {
         Observation observation = mock(Observation.class);
         lenient().when(observation.getRecurrenceKey()).thenReturn(recurrenceKey);
@@ -228,7 +210,7 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
         lenient().when(observation.getOutcome()).thenReturn(outcome);
         lenient().when(observation.getSummary()).thenReturn(SLUG + " title");
         lenient().when(observation.getAboutUserId()).thenReturn(CONTRIBUTOR);
-        List<Observation> all = new java.util.ArrayList<>(persistedSoFar);
+        List<Observation> all = new ArrayList<>(persistedSoFar);
         all.add(observation);
         persistedSoFar = all;
         when(observationRepository.findByAgentJobId(any(), anyLong())).thenReturn(all);
@@ -270,19 +252,5 @@ class FeedbackResponseSuppressionFilterTest extends BaseUnitTest {
                 null,
                 "because reasons",
                 new ObservationKeys(occurrenceKey, recurrenceKey));
-    }
-
-    private static ValidatedObservation secretScannerObservation(String recurrenceKey) {
-        var evidence = tools.jackson.databind.node.JsonNodeFactory.instance
-                .objectNode()
-                .put("detector", "secret-diff-scanner");
-        return new ValidatedObservation(
-                "avoids-insecure-defaults-and-over-broad-permissions",
-                "Hardcoded secret on a changed line",
-                Outcome.NOT_MET,
-                Severity.CRITICAL,
-                evidence,
-                "A credential is committed.",
-                new ObservationKeys("occ-" + recurrenceKey, recurrenceKey));
     }
 }

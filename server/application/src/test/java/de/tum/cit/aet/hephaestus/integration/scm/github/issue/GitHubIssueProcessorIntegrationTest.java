@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.issue;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -45,18 +46,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Integration tests for GitHubIssueProcessor.
- * <p>
- * Tests the processor independently from the webhook handler to verify:
- * - Issue upsert logic (create vs update)
- * - Domain event publishing (Created, Updated, Closed, Labeled, etc.)
- * - Context handling and workspace association
- * - Author user association and creation
- * - Label and milestone associations
- * - Issue type handling
- * - Edge cases in DTO processing including the critical getDatabaseId() fallback
- */
 class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
     // IDs from the actual GitHub webhook fixtures
@@ -114,7 +103,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
     }
 
     private void setupTestData() {
-        // Create GitHub provider
         githubProvider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseGet(() -> gitProviderRepository.save(
@@ -147,7 +135,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         testRepository.setProvider(githubProvider);
         testRepository = repositoryRepository.save(testRepository);
 
-        // Create workspace
         testWorkspace = new Workspace();
         testWorkspace.setWorkspaceSlug("hephaestus-test");
         testWorkspace.setDisplayName("Hephaestus Test");
@@ -202,14 +189,11 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                 );
     }
 
-    // Critical: getDatabaseId() Fallback Tests
-
     @Nested
     class GetDatabaseIdFallback {
 
         @Test
         void shouldUseDatabaseIdWhenPresent() {
-            // Given - GraphQL style DTO with databaseId
             Long databaseId = 123456789L;
             GitHubIssueDTO dto = new GitHubIssueDTO(
                     999L, // id (node id as number, but databaseId is what matters)
@@ -239,7 +223,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             Issue result = processor.process(dto, createContext());
 
-            // Then - should use databaseId
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(databaseId);
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 1))
@@ -248,7 +231,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldFallbackToIdWhenDatabaseIdNull() {
-            // Given - Webhook style DTO with only id
             Long webhookId = FIXTURE_ISSUE_ID;
             GitHubIssueDTO dto = new GitHubIssueDTO(
                     webhookId, // id (this is the database ID in webhooks)
@@ -276,12 +258,10 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null // subIssuesSummary
                     );
 
-            // Verify the fallback works
             assertThat(dto.getDatabaseId()).isEqualTo(webhookId);
 
             Issue result = processor.process(dto, createContext());
 
-            // Then - should use id as fallback
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(webhookId);
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 20))
@@ -290,7 +270,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldReturnNullWhenBothIdsNull() {
-            // Given - malformed DTO with no IDs
             GitHubIssueDTO dto = new GitHubIssueDTO(
                     null, // id
                     null, // databaseId
@@ -317,7 +296,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null // subIssuesSummary
                     );
 
-            // Verify fallback returns null
             assertThat(dto.getDatabaseId()).isNull();
 
             Issue result = processor.process(dto, createContext());
@@ -326,8 +304,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).isEmpty();
         }
     }
-
-    // Process (Create/Update) Tests
 
     @Nested
     class ProcessMethodCreate {
@@ -339,7 +315,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             Issue result = processor.process(dto, createContext());
 
-            // Then - verify issue created
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(issueId);
             assertThat(result.getNumber()).isEqualTo(20);
@@ -347,11 +322,9 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.getState()).isEqualTo(Issue.State.OPEN);
             assertThat(result.requireRepository().getNativeId()).isEqualTo(FIXTURE_REPO_ID);
 
-            // Verify persisted
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 20))
                     .isPresent();
 
-            // Verify Created event published
             assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class))
                     .hasSize(1)
                     .first()
@@ -363,7 +336,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCreateAuthorIfNotExists() {
-            // Given - no user exists
             assertThat(userRepository.findByNativeIdAndProviderId(FIXTURE_AUTHOR_ID, providerId()))
                     .isEmpty();
 
@@ -382,7 +354,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldReuseExistingAuthor() {
-            // Given - create user first
             User existingUser = new User();
             existingUser.setNativeId(FIXTURE_AUTHOR_ID);
             existingUser.setLogin(FIXTURE_AUTHOR_LOGIN);
@@ -398,7 +369,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             Issue result = processor.process(dto, createContext());
             assertNotNull(result);
 
-            // Then - should reuse existing user, not create new
             assertNotNull(result.getAuthor());
             assertThat(result.getAuthor().getNativeId()).isEqualTo(FIXTURE_AUTHOR_ID);
             assertThat(userRepository.count()).isEqualTo(userCountBefore);
@@ -615,8 +585,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Process (Update) Tests
-
     @Nested
     class ProcessMethodUpdate {
 
@@ -625,7 +593,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                 value = Issue.State.class,
                 names = {"OPEN", "CLOSED"})
         void shouldUpdateExistingIssueAndPublishEvent(Issue.State state) {
-            // Given - create existing issue
             Long issueId = FIXTURE_ISSUE_ID;
             Issue existing = new Issue();
             existing.setNativeId(issueId);
@@ -669,11 +636,9 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             Issue result = processor.process(dto, createContext());
             assertNotNull(result);
 
-            // Then - verify issue updated
             assertThat(result.getTitle()).isEqualTo("New Title");
             assertThat(result.getBody()).isEqualTo("New body");
 
-            // Verify Updated event with changedFields
             assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
                     .hasSize(1)
                     .first()
@@ -685,7 +650,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         @Test
         @DisplayName("Should not publish Updated event when no fields changed")
         void shouldNotPublishWhenNoChanges() {
-            // Given - create existing issue
             Long issueId = FIXTURE_ISSUE_ID;
             Issue existing = new Issue();
             existing.setNativeId(issueId);
@@ -732,7 +696,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.process(dto, createContext());
 
-            // Then - no Updated event (empty changedFields)
             // Note: Event is still published but with empty changedFields
             assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).allSatisfy(event -> {
                 // changedFields should be empty
@@ -746,14 +709,12 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             Long issueId = 111222333L;
             GitHubIssueDTO dto = createBasicIssueDto(issueId, 10);
 
-            // When - process twice
             processor.process(dto, createContext());
             long countAfterFirst = issueRepository.count();
 
             eventListener.clear();
             processor.process(dto, createContext());
 
-            // Then - only one issue exists
             assertThat(issueRepository.count()).isEqualTo(countAfterFirst);
         }
 
@@ -853,7 +814,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateMilestoneWhenChanged() {
-            // Given - create issue without milestone
             Long issueId = 888999000L;
             Issue existing = new Issue();
             existing.setNativeId(issueId);
@@ -921,7 +881,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldRemoveMilestoneWhenDemilestoned() {
-            // Given - create milestone and issue with milestone
             Long milestoneId = 14028563L;
             Milestone milestone = new Milestone();
             milestone.setNativeId(milestoneId);
@@ -984,8 +943,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // State Transition Tests
-
     @Nested
     class StateTransitions {
 
@@ -1039,7 +996,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
             assertThat(eventListener.ofType(ScmDomainEvent.IssueCreated.class)).hasSize(createdEvents);
 
-            // Verify Closed event
             assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class))
                     .hasSize(1)
                     .first()
@@ -1050,7 +1006,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void processReopenedShouldPublishUpdatedEvent() {
-            // Given - create closed issue first
             Long issueId = 222333444L;
             Issue existing = new Issue();
             existing.setNativeId(issueId);
@@ -1096,7 +1051,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             assertThat(result.getState()).isEqualTo(Issue.State.OPEN);
 
-            // Verify Updated event with "state" in changedFields
             assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class))
                     .anySatisfy(event -> assertThat(event.changedFields()).contains("state"));
         }
@@ -1137,14 +1091,11 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Label Event Tests
-
     @Nested
     class LabelEvents {
 
         @Test
         void processLabeledShouldPublishEvent() {
-            // Given - create issue first
             Long issueId = FIXTURE_ISSUE_ID;
             GitHubIssueDTO issueDto = createBasicIssueDto(issueId, 20);
             processor.process(issueDto, createContext());
@@ -1167,7 +1118,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void processUnlabeledShouldPublishEvent() {
-            // Given - create issue with label
             Long issueId = FIXTURE_ISSUE_ID;
             Long labelId = 9567656085L;
             GitHubLabelDTO labelDto = new GitHubLabelDTO(labelId, "LA_node", "bug", "Bug", "ff0000", null, null);
@@ -1211,14 +1161,11 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Issue Type Tests
-
     @Nested
     class IssueTypeEvents {
 
         @Test
         void processTypedShouldPublishEvent() {
-            // Given - create issue first
             Long issueId = FIXTURE_ISSUE_ID;
             GitHubIssueDTO issueDto = createBasicIssueDto(issueId, 20);
 
@@ -1289,7 +1236,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void processUntypedShouldPublishEvent() {
-            // Given - create issue type
             IssueType issueType = new IssueType();
             issueType.setId("IT_node_123");
             issueType.setName("Bug");
@@ -1299,7 +1245,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             issueType.setOrganization(testOrganization);
             issueType = issueTypeRepository.save(issueType);
 
-            // Create issue with type
             Long issueId = FIXTURE_ISSUE_ID;
             Issue existing = new Issue();
             existing.setNativeId(issueId);
@@ -1332,14 +1277,11 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Delete Tests
-
     @Nested
     class DeleteMethod {
 
         @Test
         void processDeletedShouldDeleteIssue() {
-            // Given - create issue via process() to match real workflow
             Long issueId = FIXTURE_ISSUE_ID;
             GitHubIssueDTO createDto = createBasicIssueDto(issueId, 20);
             processor.process(createDto, createContext());
@@ -1351,7 +1293,6 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
             eventListener.clear();
 
-            // When - delete via processDeleted (uses natural key lookup with synthetic PKs)
             GitHubIssueDTO deleteDto = createBasicIssueDto(issueId, 20);
             processor.processDeleted(deleteDto, createContext());
 
@@ -1361,14 +1302,12 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void processDeletedShouldHandleNonExistent() {
-            // Given - issue doesn't exist
             Long nonExistentId = 999999999L;
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 99))
                     .isEmpty();
 
             GitHubIssueDTO dto = createBasicIssueDto(nonExistentId, 99);
 
-            // When/Then - should not throw
             assertThatCode(() -> processor.processDeleted(dto, createContext())).doesNotThrowAnyException();
         }
 
@@ -1400,13 +1339,11 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null // subIssuesSummary
                     );
 
-            // When/Then - should not throw
             assertThatCode(() -> processor.processDeleted(dto, createContext())).doesNotThrowAnyException();
         }
 
         @Test
         void processDeletedShouldSyncBidirectionalRelationships() {
-            // Given - create issue with labels (ManyToMany relationship)
             Long issueId = FIXTURE_ISSUE_ID;
             Issue existing = new Issue();
             existing.setNativeId(issueId);
@@ -1431,31 +1368,25 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
             existing.addLabel(label);
             existing = issueRepository.save(existing);
 
-            // Verify setup
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 21))
                     .isPresent();
             assertThat(labelRepository.findById(label.getId())).isPresent();
 
-            // When - delete via processDeleted (uses natural key lookup with synthetic PKs)
             GitHubIssueDTO deleteDto = createBasicIssueDto(issueId, 21);
             assertThatCode(() -> processor.processDeleted(deleteDto, createContext()))
                     .doesNotThrowAnyException();
 
-            // Then - issue deleted, label still exists
             assertThat(issueRepository.findByRepositoryIdAndNumber(testRepository.getId(), 21))
                     .isEmpty();
             assertThat(labelRepository.findById(label.getId())).isPresent();
         }
     }
 
-    // Edge Cases
-
     @Nested
     class EdgeCases {
 
         @Test
         void shouldHandleNullDtoIds() {
-            // When - DTO with null IDs (getDatabaseId() will return null)
             GitHubIssueDTO nullIdDto = new GitHubIssueDTO(
                     null,
                     null,

@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -73,7 +74,7 @@ class AgentQueueHealthSamplerTest extends BaseUnitTest {
     }
 
     private static AgentJobRepository.QueueHealthSnapshot snapshot(
-            long depth, @org.jspecify.annotations.Nullable Instant oldestAvailableAt, long held, long running) {
+            long depth, @Nullable Instant oldestAvailableAt, long held, long running) {
         return new AgentJobRepository.QueueHealthSnapshot() {
             @Override
             public long getDepth() {
@@ -81,7 +82,7 @@ class AgentQueueHealthSamplerTest extends BaseUnitTest {
             }
 
             @Override
-            public @org.jspecify.annotations.Nullable Instant getOldestAvailableAt() {
+            public @Nullable Instant getOldestAvailableAt() {
                 return oldestAvailableAt;
             }
 

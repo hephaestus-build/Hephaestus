@@ -15,6 +15,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.YearMonth;
+import java.util.Optional;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,7 +57,7 @@ class LlmBudgetServiceTest extends BaseUnitTest {
 
     private LlmBudgetDecision decideWithBudgets(@Nullable BigDecimal instanceBudget, @Nullable BigDecimal byoBudget) {
         when(workspaceRepository.findById(WORKSPACE_ID))
-                .thenReturn(java.util.Optional.of(workspaceWithBudgets(instanceBudget, byoBudget)));
+                .thenReturn(Optional.of(workspaceWithBudgets(instanceBudget, byoBudget)));
         return budgetService.decide(WORKSPACE_ID);
     }
 
@@ -134,7 +135,7 @@ class LlmBudgetServiceTest extends BaseUnitTest {
         @Test
         @DisplayName("an unknown workspace id is allowed on both purses")
         void unknownWorkspaceIdIsNeverBlocked() {
-            when(workspaceRepository.findById(99L)).thenReturn(java.util.Optional.empty());
+            when(workspaceRepository.findById(99L)).thenReturn(Optional.empty());
 
             assertThat(budgetService.decide(99L)).isEqualTo(LlmBudgetDecision.ALLOWED);
         }

@@ -1,9 +1,9 @@
 import { ServerIcon } from "lucide-react";
 import { useState } from "react";
 
-import { HephMark } from "~/components/brand/HephaestusLogo";
+import { HephMark } from "@/components/brand/HephaestusLogo";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
-import { Spinner } from "~/components/common/Spinner";
 
 export interface InstanceCardProps {
 	/** The instance's host, as the reader typed or chose it. */

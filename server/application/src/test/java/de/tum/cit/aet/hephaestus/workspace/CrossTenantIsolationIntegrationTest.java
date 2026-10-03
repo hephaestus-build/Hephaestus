@@ -267,7 +267,7 @@ class CrossTenantIsolationIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Nested
-    @DisplayName("Observations (practice findings)")
+    @DisplayName("Observations")
     class Observations {
 
         @Test

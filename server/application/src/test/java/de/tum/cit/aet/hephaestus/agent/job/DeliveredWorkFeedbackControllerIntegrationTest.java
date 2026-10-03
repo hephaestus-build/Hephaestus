@@ -52,6 +52,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -369,7 +370,7 @@ class DeliveredWorkFeedbackControllerIntegrationTest extends AbstractWorkspaceIn
         assertThat(result.hasMore()).isTrue();
         assertThat(result.feedback())
                 .extracting(DeliveredWorkFeedbackItemDTO::deliveredAt)
-                .isSortedAccordingTo(java.util.Comparator.reverseOrder());
+                .isSortedAccordingTo(Comparator.reverseOrder());
     }
 
     @ParameterizedTest

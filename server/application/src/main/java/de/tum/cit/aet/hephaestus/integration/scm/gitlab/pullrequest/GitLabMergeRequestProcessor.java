@@ -54,13 +54,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Processor for GitLab merge requests.
- * <p>
- * Handles conversion of GitLab MR data (from webhooks and GraphQL sync) to PullRequest entities.
- * Follows the same patterns as {@link de.tum.cit.aet.hephaestus.integration.scm.gitlab.issue.GitLabIssueProcessor}.
- * <p>
- * GitLab approvals are mapped to PullRequestReview entities with state APPROVED.
- * Deterministic review IDs prevent collisions with GitHub review IDs.
+ * Stores GitLab merge requests from webhooks and GraphQL sync as {@link PullRequest}s. An approval is stored as an
+ * APPROVED {@link PullRequestReview} under a deterministic id that cannot collide with a GitHub review id.
  */
 @Service
 @ConditionalOnProperty(name = "hephaestus.integration.gitlab.enabled", havingValue = "true", matchIfMissing = false)
@@ -423,8 +418,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         return issues;
     }
 
-    // Sync Data Records
-
     public record SyncLabelData(
             @Nullable String globalId,
             @Nullable String title,
@@ -498,8 +491,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
              */
             @Nullable List<Integer> closingIssueNumbers,
             GitLabApprovalClient.@Nullable Snapshot approvalRows) {}
-
-    // Webhook Processing
 
     /**
      * Process a GitLab merge request webhook event (open/update).
@@ -646,9 +637,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         return pr;
     }
 
-    /**
-     * Process a closed event (not merged).
-     */
     @Transactional
     @Nullable
     public PullRequest processClosed(GitLabMergeRequestEventDTO event, ProcessingContext context) {
@@ -662,9 +650,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         return pr;
     }
 
-    /**
-     * Process a reopened event.
-     */
     @Transactional
     @Nullable
     public PullRequest processReopened(GitLabMergeRequestEventDTO event, ProcessingContext context) {
@@ -783,7 +768,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 log.debug("Updated review to APPROVED: prId={}, reviewerId={}", pr.getId(), approver.getLogin());
             }
         } else {
-            // First approval: create new review
             PullRequestReview review = createApprovalReview(approvalNativeId, pr, approver);
             review.setSubmittedAt(null);
             review.setCreatedAt(approvedAt);
@@ -959,8 +943,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         pr.setMergeStateStatus(null);
         return changed;
     }
-
-    // Sync Processing
 
     /**
      * Looks up the current state of an existing PR before processing a webhook event.
@@ -1250,8 +1232,6 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
 
         return pr;
     }
-
-    // Private Helpers
 
     @Nullable
     private User resolveWebhookAuthor(GitLabMergeRequestEventDTO event, Long providerId) {

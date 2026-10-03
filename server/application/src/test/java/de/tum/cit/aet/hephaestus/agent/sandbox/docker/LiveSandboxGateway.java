@@ -3,10 +3,15 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayWebSocketConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxWorkspaceController;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.apache.catalina.LifecycleException;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.tomcat.websocket.server.WsSci;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.util.FileSystemUtils;
 import org.springframework.web.context.support.AnnotationConfigWebApplicationContext;
 import org.springframework.web.servlet.DispatcherServlet;
@@ -14,7 +19,7 @@ import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfigu
 
 /** Runs the production transfer controllers and WebSocket channel for Docker transport tests. */
 public final class LiveSandboxGateway implements AutoCloseable {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LiveSandboxGateway.class);
+    private static final Logger log = LoggerFactory.getLogger(LiveSandboxGateway.class);
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
     private final Tomcat tomcat = new Tomcat();
     private final Path directory;
@@ -60,13 +65,13 @@ public final class LiveSandboxGateway implements AutoCloseable {
         try {
             tomcat.stop();
             tomcat.destroy();
-        } catch (org.apache.catalina.LifecycleException exception) {
+        } catch (LifecycleException exception) {
             throw new IllegalStateException("Could not stop test gateway", exception);
         } finally {
             try {
                 FileSystemUtils.deleteRecursively(directory);
-            } catch (java.io.IOException exception) {
-                throw new java.io.UncheckedIOException(exception);
+            } catch (IOException exception) {
+                throw new UncheckedIOException(exception);
             }
         }
     }

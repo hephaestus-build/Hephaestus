@@ -8,8 +8,8 @@ public final class GateDecisionTestFixtures {
 
     private GateDecisionTestFixtures() {}
 
-    public static GateDecision.Detect automaticDetection(Workspace workspace, List<Practice> practices) {
-        return new GateDecision.Detect(
+    public static GateDecision.Run automaticRun(Workspace workspace, List<Practice> practices) {
+        return new GateDecision.Run(
                 workspace, practices, workspace.getReviewSettings().getRolloutRevision(), TriggerMode.AUTO);
     }
 }

@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -96,7 +97,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 lifecycleService,
                 usageRecorder,
                 meterRegistry,
-                new AgentJobTelemetry(meterRegistry, io.micrometer.tracing.Tracer.NOOP));
+                new AgentJobTelemetry(meterRegistry, Tracer.NOOP));
         workspace = workspaceRepository.save(TestEntities.activeWorkspace("orphan-recovery-ws"));
 
         LlmConnection connection = connectionRepository.save(LlmCatalogTestFixtures.connection("orphan-recovery"));

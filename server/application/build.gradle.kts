@@ -121,7 +121,12 @@ tasks.withType<JavaCompile>().configureEach {
     )
     options.errorprone {
         disableAllChecks.set(true)
-        error("NullAway", "RequireExplicitNullMarking")
+        error(
+            "NullAway",
+            "RequireExplicitNullMarking",
+            "UnnecessarilyFullyQualified",
+            "WildcardImport",
+        )
         option("NullAway:AnnotatedPackages", "de.tum.cit.aet.hephaestus")
         option("NullAway:JSpecifyMode", "true")
         option("NullAway:TreatGeneratedAsUnannotated", "true")
@@ -346,7 +351,7 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookie",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepository",
             "de.tum.cit.aet.hephaestus.integration.core.connection.EncryptionContext",
-            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabWebhookSignatureVerifier",
+            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabWebhookSignatureVerifier",
         )
     )
     targetTests.set(
@@ -361,7 +366,7 @@ pitest {
             "de.tum.cit.aet.hephaestus.core.auth.oauth.AuthIntentCookieTest",
             "de.tum.cit.aet.hephaestus.core.auth.oauth.CookieOAuth2AuthorizationRequestRepositoryTest",
             "de.tum.cit.aet.hephaestus.integration.core.connection.EncryptionContextTest",
-            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabWebhookSignatureVerifierTest",
+            "de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabWebhookSignatureVerifierTest",
         )
     )
 }

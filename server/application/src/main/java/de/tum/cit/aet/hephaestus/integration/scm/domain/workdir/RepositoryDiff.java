@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.workdir;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
@@ -88,7 +89,7 @@ public final class RepositoryDiff {
         }
     }
 
-    private static DiffFormatter formatter(Repository repo, java.io.OutputStream out) {
+    private static DiffFormatter formatter(Repository repo, OutputStream out) {
         DiffFormatter formatter = new DiffFormatter(out);
         formatter.setRepository(repo);
         formatter.setDiffAlgorithm(DiffAlgorithm.getAlgorithm(DiffAlgorithm.SupportedAlgorithm.HISTOGRAM));

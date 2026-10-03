@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -41,14 +42,12 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
-import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -89,7 +88,7 @@ class ConnectionControllerTest extends BaseUnitTest {
         gitlabStrategy = new FakeStrategy(IntegrationKind.GITLAB);
         // admin.manifests() is the single source of truth for capability lookups in the controller;
         // wire it lazily-lenient so list/read/suspend/reactivate tests don't all need to restate it.
-        Mockito.lenient().when(admin.manifests()).thenReturn(manifests);
+        lenient().when(admin.manifests()).thenReturn(manifests);
         controller = new ConnectionController(
                 admin, connectionService, objectMapper, List.of(githubStrategy, gitlabStrategy));
     }
@@ -338,13 +337,13 @@ class ConnectionControllerTest extends BaseUnitTest {
         Connection c = newConnection(7L, workspaceId, IntegrationKind.GITHUB, "100", IntegrationState.ACTIVE);
         when(admin.findInWorkspaceOrThrow(workspaceId, 7L)).thenReturn(c);
 
-        Assertions.assertThatThrownBy(() -> controller.updateStatus(
+        assertThatThrownBy(() -> controller.updateStatus(
                         ctx(workspaceId),
                         7L,
                         new UpdateConnectionStatusRequestDTO(IntegrationState.PENDING, null),
                         null))
                 .isInstanceOf(IllegalArgumentException.class);
-        verify(connectionService, Mockito.never()).transition(any(Connection.class), any(TransitionRequest.class));
+        verify(connectionService, never()).transition(any(Connection.class), any(TransitionRequest.class));
     }
 
     @Test
@@ -397,8 +396,6 @@ class ConnectionControllerTest extends BaseUnitTest {
         assertThat(problem.getDetail()).contains("999");
         assertThat(problem.getTitle()).isEqualTo("Resource not found");
     }
-
-    // helpers
 
     /**
      * Minimal admin {@link WorkspaceContext} for the given workspace id. The controller only reads

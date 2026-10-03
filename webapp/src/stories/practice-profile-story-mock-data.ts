@@ -16,6 +16,8 @@ import type {
 } from "@/api/types.gen";
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
 
+import { inStoryYear } from "./story-clock";
+
 /**
  * Reviewed work as the wire names it, for every practice-profile fixture. The pull requests and
  * issues are real ones in the development workspace's test repositories, so every link lands on
@@ -81,7 +83,7 @@ function group(
 		autonomy: { effective: "AUTOMATIC", inherited: true, source: "WORKSPACE" },
 		icon: visual.icon,
 		color: visual.color,
-		createdAt: new Date("2026-01-01T00:00:00Z"),
+		createdAt: inStoryYear("01-01T00:00:00Z"),
 	};
 }
 
@@ -265,7 +267,7 @@ export const practicesByGroup: Record<string, PracticeStanding[]> = {
 
 export const practiceStandings: PracticeStanding[] = Object.values(practicesByGroup).flat();
 
-const LATEST_RUN_AT = new Date("2026-09-09T14:10:00");
+const LATEST_RUN_AT = inStoryYear("09-09T14:10:00");
 
 const PACKAGING = { groupSlug: "review-ready-work", groupName: "Packaging work for review" };
 const COMMUNICATION = { groupSlug: "communication", groupName: "Communicating in the open" };
@@ -388,7 +390,7 @@ const REVIEWING_CHANGES: ProfileChange[] = [
 			practiceName: "Leave specific, actionable review comments",
 		},
 		{
-			at: new Date("2026-09-02T11:40:00"),
+			at: inStoryYear("09-02T11:40:00"),
 			feedbackId: "review-comments-specific-resolved",
 			resolvedBy: "WORK",
 			evidence: [1, 4, 23].map(pullRequest),
@@ -422,7 +424,7 @@ const REVIEWING_CHANGES: ProfileChange[] = [
  */
 export const SHARED_TRANSITION_OVERVIEW: PracticeProfileOverview = {
 	latestRun: { reviewId: "run-2026-09-09", at: LATEST_RUN_AT, reviewedWork: pullRequest(22) },
-	window: { since: new Date("2026-09-02T09:00:00"), until: LATEST_RUN_AT },
+	window: { since: inStoryYear("09-02T09:00:00"), until: LATEST_RUN_AT },
 	holdingUp: [],
 	changes: [
 		change(
@@ -488,7 +490,7 @@ export const SHARED_TRANSITION_OVERVIEW: PracticeProfileOverview = {
 /** The overview the stories show: one run, eleven changes, one of them a group moving. */
 export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
 	latestRun: { reviewId: "run-2026-09-09", at: LATEST_RUN_AT, reviewedWork: pullRequest(22) },
-	window: { since: new Date("2026-09-02T09:00:00"), until: LATEST_RUN_AT },
+	window: { since: inStoryYear("09-02T09:00:00"), until: LATEST_RUN_AT },
 	holdingUp: [
 		{
 			practiceSlug: "ready-and-traceable-handoff",
@@ -497,7 +499,7 @@ export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
 			holdsAs: "every pull request names its issue",
 			cleanWork: 9,
 			workKind: ARTIFACT_KIND.pullRequest,
-			since: new Date("2026-07-14T10:00:00"),
+			since: inStoryYear("07-14T10:00:00"),
 		},
 		{
 			practiceSlug: "engaging-with-inline-review-comments",
@@ -506,7 +508,7 @@ export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
 			holdsAs: "every reviewer comment gets a visible answer",
 			cleanWork: 4,
 			workKind: ARTIFACT_KIND.pullRequest,
-			since: new Date("2026-08-20T10:00:00"),
+			since: inStoryYear("08-20T10:00:00"),
 		},
 		{
 			practiceSlug: "commit-subjects-explain-each-change",
@@ -515,7 +517,7 @@ export const OVERVIEW_FIXTURE: PracticeProfileOverview = {
 			holdsAs: "subjects name the change, not the file",
 			cleanWork: 6,
 			workKind: ARTIFACT_KIND.pullRequest,
-			since: new Date("2026-08-05T10:00:00"),
+			since: inStoryYear("08-05T10:00:00"),
 		},
 	],
 	changes: [...PACKAGING_CHANGES, ...COMMUNICATION_CHANGES, ...REVIEWING_CHANGES],

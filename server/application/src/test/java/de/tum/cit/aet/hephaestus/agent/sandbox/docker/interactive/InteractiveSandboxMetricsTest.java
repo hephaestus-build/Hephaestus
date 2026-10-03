@@ -26,7 +26,7 @@ class InteractiveSandboxMetricsTest extends BaseUnitTest {
 
         Set<String> meterNames = reg.getMeters().stream()
                 .map(Meter::getId)
-                .map(io.micrometer.core.instrument.Meter.Id::getName)
+                .map(Meter.Id::getName)
                 .collect(Collectors.toSet());
 
         // Note: `mentor.session.active` and `mentor.watchdog.targets` are gauges owned by

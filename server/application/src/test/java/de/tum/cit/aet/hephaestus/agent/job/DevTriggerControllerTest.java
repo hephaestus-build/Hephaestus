@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticDetection;
+import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticRun;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -30,6 +30,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -126,7 +127,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
     void shouldSettleNothingWhenTheGatePasses() {
         PullRequest pr = pullRequest();
         when(artifactLoader.findPullRequestForGate(WORKSPACE_ID, PR_ID)).thenReturn(Optional.of(pr));
-        when(reviewGate.evaluate(any(), any(), any())).thenReturn(automaticDetection(new Workspace(), List.of()));
+        when(reviewGate.evaluate(any(), any(), any())).thenReturn(automaticRun(new Workspace(), List.of()));
         when(agentJobService.buildReviewRequest(any(), any())).thenReturn(null);
 
         controller.triggerReview(PR_ID, null, WORKSPACE_ID, "scm.pull_request.merged");
@@ -139,7 +140,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
         // Keyed on the head commit; minting a ledger row without one would assert an occurrence
         // nobody observed.
         PullRequest pr = pullRequest();
-        org.springframework.test.util.ReflectionTestUtils.setField(pr, "headRefOid", null);
+        ReflectionTestUtils.setField(pr, "headRefOid", null);
         when(artifactLoader.findPullRequestForGate(WORKSPACE_ID, PR_ID)).thenReturn(Optional.of(pr));
         when(reviewGate.evaluate(any(), any(), any())).thenReturn(new GateDecision.Skip("no assignee"));
 
@@ -179,7 +180,7 @@ class DevTriggerControllerTest extends BaseUnitTest {
     @Test
     void shouldRefuseAnIssueWithNoRepositoryBeforeConsultingTheGate() {
         Issue issue = issue();
-        org.springframework.test.util.ReflectionTestUtils.setField(issue, "repository", null);
+        ReflectionTestUtils.setField(issue, "repository", null);
         when(artifactLoader.findIssueForGate(WORKSPACE_ID, ISSUE_ID)).thenReturn(Optional.of(issue));
         when(agentJobService.buildIssueRequest(any(), any())).thenReturn(null);
 

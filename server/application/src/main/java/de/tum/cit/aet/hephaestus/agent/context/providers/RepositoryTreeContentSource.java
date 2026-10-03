@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,7 +76,7 @@ public class RepositoryTreeContentSource implements EvidenceSource {
             return absent(absence);
         }
         GitRepositoryManager.GitTreeSnapshot snapshot = snapshot(request);
-        Map<String, java.nio.file.Path> onDisk = Map.of(
+        Map<String, Path> onDisk = Map.of(
                 SandboxLayout.REPO_MOUNT_RELATIVE + ".git/HEAD",
                         snapshot.stagingDir().resolve(".git/HEAD"),
                 SandboxLayout.REPO_MOUNT_RELATIVE + ".git/hephaestus-captured-refs",

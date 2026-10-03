@@ -1,6 +1,13 @@
 package de.tum.cit.aet.hephaestus.productfeedback;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;

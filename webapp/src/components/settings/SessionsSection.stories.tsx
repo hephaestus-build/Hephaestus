@@ -1,21 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect } from "storybook/test";
 
-import { noSessions, sessionsError } from "@/mocks/handlers";
+import { noSessions, sessionsError, sessionsPending } from "@/mocks/handlers";
 
 import { SessionsSection } from "./SessionsSection";
 
-/**
- * Active-sessions settings section (ADR 0017 native auth). Lists the account's
- * sessions via the `GET /user/sessions` TanStack Query hook — rendered here against
- * MSW-mocked responses (see `src/mocks/handlers.ts`) plus the global
- * `QueryClientProvider` decorator wired in `.storybook/preview.tsx`.
- */
 const meta = {
 	component: SessionsSection,
 	parameters: {
 		layout: "centered",
-		// One MSW worker answers a whole Docs page, so each story gets its own frame until MSW goes.
+		// One MSW worker answers a whole Docs page, so each story gets its own frame.
 		docs: { story: { inline: false, height: "600px" } },
 	},
 	tags: ["autodocs"],
@@ -24,7 +18,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Default: the shared fixture's sessions — the current device, two other browsers and a browser extension. */
+/** The current device, two other browsers and a browser extension. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(
@@ -33,7 +27,18 @@ export const Default: Story = {
 	},
 };
 
-/** No active sessions — empty-state copy. */
+export const Loading: Story = {
+	parameters: { msw: { handlers: [sessionsPending] } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("list", { name: "Loading sessions" })).toHaveAttribute(
+			"aria-busy",
+			"true",
+		);
+		await expect(canvas.queryByText("No active sessions found.")).toBeNull();
+		await expect(canvas.queryByRole("button")).toBeNull();
+	},
+};
+
 export const Empty: Story = {
 	parameters: { msw: { handlers: [noSessions] } },
 	play: async ({ canvas }) => {
@@ -41,7 +46,6 @@ export const Empty: Story = {
 	},
 };
 
-/** Server error fetching sessions — error-state copy. */
 export const ErrorState: Story = {
 	parameters: { msw: { handlers: [sessionsError] } },
 	play: async ({ canvas }) => {

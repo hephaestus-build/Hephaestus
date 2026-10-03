@@ -125,7 +125,6 @@ export const detailObservation: ObservationDetail = {
 	nextStep:
 		"Land the rename on its own first; the caching change then reads as the small diff it is.",
 	evidence: {
-		detector: "practice-observer",
 		citations: [
 			{
 				sourceKind: "scm.pull-request.diff",
@@ -246,7 +245,6 @@ export const searchedAndFoundNothing: ObservationDetail = {
 	evidenceRationale:
 		"The branch is new in this change: `loadFromCache` is called in `DocumentLoader`, and no test file in the diff names it at all.",
 	evidence: {
-		detector: "practice-observer",
 		citations: [],
 		search: {
 			lookedFor: "a test exercising the new caching branch of the loader",

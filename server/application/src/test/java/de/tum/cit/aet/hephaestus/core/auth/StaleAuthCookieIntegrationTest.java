@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Instant;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -60,10 +61,7 @@ class StaleAuthCookieIntegrationTest extends RealAuthIntegrationTest {
     void validCookieIsUntouchedAndStillAuthenticates() {
         Account account = accountRepository.save(new Account("Valid Vera"));
         String token = jwtIssuer
-                .issue(
-                        java.util.Objects.requireNonNull(account.getId()),
-                        TokenConstraints.session(null, Instant.now()),
-                        null)
+                .issue(Objects.requireNonNull(account.getId()), TokenConstraints.session(null, Instant.now()), null)
                 .value();
 
         var result = webTestClient

@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxOutputArchive;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -18,17 +18,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 @Component
-@ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWorkerRole
 public class SandboxGatewaySessions {
     public static final long WORKSPACE_BYTE_BUDGET = 512L * 1024 * 1024;
     private final long workspaceByteBudget;
@@ -160,7 +160,7 @@ public class SandboxGatewaySessions {
                             var output = new TarArchiveOutputStream(Files.newOutputStream(selected))) {
                         output.setLongFileMode(TarArchiveOutputStream.LONGFILE_POSIX);
                         output.setBigNumberMode(TarArchiveOutputStream.BIGNUMBER_POSIX);
-                        org.apache.commons.compress.archivers.tar.TarArchiveEntry entry;
+                        TarArchiveEntry entry;
                         while ((entry = input.getNextEntry()) != null) {
                             if (!entry.getName().startsWith(prefix)) continue;
                             Path path = Path.of(entry.getName());

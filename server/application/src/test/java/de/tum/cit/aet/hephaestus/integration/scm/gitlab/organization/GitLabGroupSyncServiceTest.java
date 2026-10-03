@@ -78,7 +78,6 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
                 .when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.com"))
                 .thenReturn(Optional.of(gitLabProvider));
 
-        // Default: responseHandler.handle() returns CONTINUE (valid response)
         lenient()
                 .when(responseHandler.handle(any(), anyString(), any()))
                 .thenReturn(new HandleResult(HandleResult.Action.CONTINUE, null));
@@ -455,11 +454,8 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.ABORTED_ERROR);
         }
 
-        // Reconciliation Tests (GitLab #33419 workaround)
-
         @Test
         void reconciliation_recoversDroppedDirectProjects() {
-            // Subgroup query returns only proj-a (simulates bug dropping proj-b)
             var projA = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
             var projB = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
@@ -747,8 +743,6 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             assertThat(result.projectsReconciled()).isZero();
         }
 
-        // SyncGroupProjects Helpers
-
         private static Repository createTestRepository(long nativeId) {
             Repository repo = new Repository();
             repo.setId(nativeId);
@@ -832,8 +826,6 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             }
         }
     }
-
-    // Helpers
 
     private HttpGraphQlClient mockClient() {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);

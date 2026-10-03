@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.Builder.Default;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.Immutable;
@@ -100,7 +101,7 @@ public class Feedback {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "proposed_placements", nullable = false, columnDefinition = "jsonb")
-    @Builder.Default
+    @Default
     private List<ProposedPlacement> proposedPlacements = List.of();
 
     @Column(name = "reviewed_revision", length = 64)
@@ -108,7 +109,7 @@ public class Feedback {
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "proposed_practice_slugs", nullable = false, columnDefinition = "jsonb")
-    @Builder.Default
+    @Default
     private List<String> proposedPracticeSlugs = List.of();
 
     @NotNull

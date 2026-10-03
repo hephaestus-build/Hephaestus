@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.core.EntityTagPrecondition;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
+import de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery.Preferences;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
+import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -16,6 +19,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import tools.jackson.databind.ObjectMapper;
 
 class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
@@ -35,7 +40,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
     private NotificationPreferencesExportAdapter export;
 
     @Autowired
-    private org.springframework.test.web.reactive.server.WebTestClient web;
+    private WebTestClient web;
 
     @Autowired
     private ObjectMapper mapper;
@@ -294,7 +299,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .isTrue();
         web.post()
                 .uri(path)
-                .contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .bodyValue("List-Unsubscribe=invalid")
                 .exchange()
                 .expectStatus()
@@ -302,11 +307,10 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 .expectBody(Void.class);
         assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.PRODUCT_SURVEYS))
                 .isTrue();
-        for (String candidate :
-                java.util.List.of(token, token, UUID.randomUUID().toString(), "invalid")) {
+        for (String candidate : List.of(token, token, UUID.randomUUID().toString(), "invalid")) {
             web.post()
                     .uri("/notifications/unsubscribe/" + candidate)
-                    .contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .bodyValue("List-Unsubscribe=One-Click")
                     .exchange()
                     .expectStatus()
@@ -350,7 +354,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 choices,
                 EntityTagPrecondition.parse(subscriptions.get(account).etag()),
                 true);
-        var originalRequest = java.time.Instant.now();
+        var originalRequest = Instant.now();
         String token =
                 subscriptions.unsubscribeToken(account, kind, originalRequest).orElseThrow();
         subscriptions.unsubscribe(token);
@@ -361,8 +365,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
                 true);
         assertThat(subscriptions.unsubscribeToken(account, kind, originalRequest))
                 .isEmpty();
-        assertThat(subscriptions.unsubscribeToken(account, kind, java.time.Instant.now()))
-                .contains(token);
+        assertThat(subscriptions.unsubscribeToken(account, kind, Instant.now())).contains(token);
     }
 
     @Test
@@ -391,9 +394,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
         long second = account();
         update(first, true, false);
         update(second, false, true);
-        assertThat(export.preferences(first))
-                .isEqualTo(new de.tum.cit.aet.hephaestus.core.auth.spi.NotificationPreferencesExportQuery.Preferences(
-                        false, true, false, false, false));
+        assertThat(export.preferences(first)).isEqualTo(new Preferences(false, true, false, false, false));
         String token = subscriptions
                 .unsubscribeToken(first, NotificationSubscriptionKind.PRODUCT_SURVEYS)
                 .orElseThrow();
@@ -415,7 +416,7 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
     private long account() {
         var row = new Account("Subscription " + UUID.randomUUID());
         row.setPrimaryEmail(UUID.randomUUID() + "@example.org");
-        row.setPrimaryEmailVerifiedAt(java.time.Instant.now());
+        row.setPrimaryEmailVerifiedAt(Instant.now());
         return Objects.requireNonNull(accounts.save(row).getId());
     }
 }

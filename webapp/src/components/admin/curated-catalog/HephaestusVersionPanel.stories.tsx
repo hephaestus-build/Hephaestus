@@ -75,7 +75,7 @@ export const Customized: Story = {
 };
 
 export const UpdateChangesReviewBehavior: Story = {
-	args: { status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }), shipped },
+	args: { status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }), shipped },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/would change review rules/u)).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Review Hephaestus update" }));
@@ -150,7 +150,7 @@ export const RemovedFromDefaults: Story = {
 
 export const TakingTheUpdate: Story = {
 	args: {
-		status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
+		status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }),
 		shipped,
 		isResetPending: true,
 	},
@@ -158,7 +158,7 @@ export const TakingTheUpdate: Story = {
 
 export const KeepingSavedVersion: Story = {
 	args: {
-		status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
+		status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }),
 		shipped,
 		isKeepPending: true,
 	},

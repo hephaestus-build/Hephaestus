@@ -114,6 +114,7 @@ function installFakeChat(initialStatus: ChatStatus = "ready"): FakeChat {
 			options.onError?.(raised);
 		};
 		fake.finishTurn = () => {
+			setStatus("ready");
 			options.onFinish?.({
 				message: createMockMessage("assistant", "Done"),
 				messages,
@@ -212,7 +213,7 @@ describe("useMentorChat", () => {
 			});
 
 			expect(result.current.messages).toStrictEqual([]);
-			expect(result.current.status).toBe("ready");
+			expect(result.current.turn).toStrictEqual({ kind: "ready" });
 			expect(result.current.error).toBeUndefined();
 			expect(result.current.currentThreadId).toBe(SELF_GENERATED_THREAD_ID);
 		});
@@ -266,7 +267,7 @@ describe("useMentorChat", () => {
 			assert(sent);
 			expect(sent.role).toBe("user");
 			expect(textOf(sent)).toBe("Hello AI!");
-			expect(result.current.status).toBe("submitted");
+			expect(result.current.turn).toStrictEqual({ kind: "submitted", warmingUp: false });
 		});
 
 		it.each<[string, string]>([
@@ -282,7 +283,7 @@ describe("useMentorChat", () => {
 			});
 
 			expect(result.current.messages).toStrictEqual([]);
-			expect(result.current.status).toBe("ready");
+			expect(result.current.turn).toStrictEqual({ kind: "ready" });
 		});
 
 		it("sends nothing while no workspace is active, because there is no endpoint to send to", () => {
@@ -297,25 +298,63 @@ describe("useMentorChat", () => {
 			});
 
 			expect(result.current.messages).toStrictEqual([]);
-			expect(result.current.status).toBe("ready");
+			expect(result.current.turn).toStrictEqual({ kind: "ready" });
 		});
 	});
 
 	describe("error handling", () => {
-		it("surfaces a failed stream as state and tells the caller about it once", async () => {
-			const onError = vi.fn();
-			const streamingError = new Error("Streaming error");
-			const { result } = renderHook(() => useMentorChat({ onError }), {
+		it("reports a failed stream as a failure", () => {
+			const { result } = renderHook(() => useMentorChat({}), {
+				wrapper: createWrapper(queryClient),
+			});
+			act(() => {
+				chat.raiseError(new Error("Streaming error"));
+			});
+
+			expect(result.current.turn).toStrictEqual({ kind: "error", failure: "failed" });
+		});
+
+		it("reports Heph as busy when the server said so before the stream failed", () => {
+			const { result } = renderHook(() => useMentorChat({}), {
 				wrapper: createWrapper(queryClient),
 			});
 
 			act(() => {
-				chat.raiseError(streamingError);
+				chat.lastOptions.onData?.({ type: "data-mentor-status", data: { state: "busy" } });
+			});
+			act(() => {
+				chat.raiseError(new Error("Heph is busy. Please try again."));
+			});
+			expect(result.current.turn).toStrictEqual({ kind: "error", failure: "busy" });
+
+			act(() => {
+				result.current.sendMessage("Try again");
+			});
+			expect(result.current.turn).toStrictEqual({ kind: "submitted", warmingUp: false });
+		});
+	});
+
+	describe("editing a message", () => {
+		it("drops the edited message and everything after it, then sends the new text", () => {
+			const initialMessages = [
+				createMockMessage("user", "First question", "first"),
+				createMockMessage("assistant", "First answer"),
+				createMockMessage("user", "Second question", "second"),
+				createMockMessage("assistant", "Second answer"),
+			];
+			const { result } = renderHook(() => useMentorChat({ initialMessages }), {
+				wrapper: createWrapper(queryClient),
 			});
 
-			expect(result.current.error).toBe(streamingError);
-			expect(result.current.status).toBe("error");
-			await waitFor(() => expect(onError).toHaveBeenCalledExactlyOnceWith(streamingError));
+			act(() => {
+				result.current.editMessage("second", "Second question, reworded");
+			});
+
+			expect(result.current.messages.map(textOf)).toStrictEqual([
+				"First question",
+				"First answer",
+				"Second question, reworded",
+			]);
 		});
 	});
 
@@ -329,17 +368,18 @@ describe("useMentorChat", () => {
 			const { result } = renderHook(() => useMentorChat({}), {
 				wrapper: createWrapper(queryClient),
 			});
-			expect(result.current.warmingUp).toBe(false);
-
+			act(() => {
+				result.current.sendMessage("Hello");
+			});
 			act(() => {
 				chat.lastOptions.onData?.(coldStart);
 			});
-			expect(result.current.warmingUp).toBe(true);
+			expect(result.current.turn).toStrictEqual({ kind: "submitted", warmingUp: true });
 
 			act(() => {
 				chat.finishTurn();
 			});
-			expect(result.current.warmingUp).toBe(false);
+			expect(result.current.turn).toStrictEqual({ kind: "ready" });
 		});
 
 		it("stops saying so when the turn fails", () => {
@@ -348,13 +388,16 @@ describe("useMentorChat", () => {
 			});
 
 			act(() => {
+				result.current.sendMessage("Hello");
+			});
+			act(() => {
 				chat.lastOptions.onData?.(coldStart);
 			});
 			act(() => {
 				chat.raiseError(new Error("Streaming error"));
 			});
 
-			expect(result.current.warmingUp).toBe(false);
+			expect(result.current.turn).toStrictEqual({ kind: "error", failure: "failed" });
 		});
 	});
 

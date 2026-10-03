@@ -1732,7 +1732,7 @@ interface ReportSummaryDetails {
 	stored: number;
 }
 
-/** Refused leads before the tool answers that the review opens on its first finding and stays quiet. */
+/** Refused leads before the tool answers that the review opens on its first piece of feedback and stays quiet. */
 const MAX_LEAD_REFUSALS = 3;
 
 function buildSummaryTool() {
@@ -1745,7 +1745,7 @@ function buildSummaryTool() {
 		description:
 			"Write how this review opens, in your own words: one or two sentences, at most " +
 			`${LEAD_MAX_LENGTH} characters, no counts, no quotes. One call; a second call replaces the ` +
-			"first. Skip it and the review opens on its first finding.",
+			"first. Skip it and the review opens on its first piece of feedback.",
 		// Shape and documentation only; the bound is applied below, with the reason, like every rule of
 		// the other recording tools.
 		parameters: {
@@ -1766,13 +1766,13 @@ function buildSummaryTool() {
 				);
 			}
 			// A session that cannot land a lead in three tries is spending the composition on it; the
-			// review opens on its first finding, which is a fine opening, and the units are what matter.
+			// review opens on its first piece of feedback, which is a fine opening, and the units are what matter.
 			if (leadRefusals >= MAX_LEAD_REFUSALS) {
 				return {
 					content: [
 						{
 							type: "text",
-							text: "The review opens on its first finding; do not call report_summary again — persist the units with report_feedback.",
+							text: "The review opens on its first piece of feedback; do not call report_summary again — persist the units with report_feedback.",
 						},
 					],
 					details: { stored: 0 },
