@@ -76,23 +76,22 @@ public class PracticesAcrossWorkspaceService {
         StandingSnapshot yours = reader == null ? NOTHING_READ : snapshots.getOrDefault(reader, NOTHING_READ);
 
         List<PracticeGroup> groups = practiceGroupService.listGroups(context, true);
-        Map<Long, Map<String, PracticeGroupStandingDTO.Standing>> groupStandings = new HashMap<>();
+        Map<Long, Map<String, PracticeGroupStandingDTO>> groupStandings = new HashMap<>();
         for (Long developer : read) {
             groupStandings.put(developer, groupStandings(groups, snapshots.getOrDefault(developer, NOTHING_READ)));
         }
         // Observed: a verdict in a group the page shows, the same verdicts the group standings are read off.
         List<Long> observed = eligible.stream()
                 .filter(developer -> Objects.requireNonNull(groupStandings.get(developer)).values().stream()
-                        .anyMatch(PracticeGroupStandingDTO::isVerdict))
+                        .anyMatch(group -> PracticeGroupStandingDTO.isVerdict(group.standing())))
                 .toList();
         boolean readerEligible = reader != null && eligible.contains(reader);
         boolean readerCounted = reader != null && observed.contains(reader);
         int others = observed.size() - (readerCounted ? 1 : 0);
 
-        Map<String, PracticeGroupStandingDTO> yourGroups =
-                practiceGroupStandingService.summarize(groups, yours).stream()
-                        .collect(Collectors.toMap(
-                                PracticeGroupStandingDTO::groupSlug, Function.identity(), (a, b) -> a));
+        Map<String, PracticeGroupStandingDTO> yourGroups = reader == null
+                ? groupStandings(groups, NOTHING_READ)
+                : Objects.requireNonNull(groupStandings.get(reader));
         List<WorkspaceGroupSplitDTO> rows = new ArrayList<>();
         for (PracticeGroup group : groups) {
             PracticeGroupStandingDTO yourGroup = Objects.requireNonNull(yourGroups.get(group.getSlug()));
@@ -102,7 +101,8 @@ public class PracticesAcrossWorkspaceService {
                     .toList();
             Function<Long, Row> rowOf = developer -> new Row(
                     Bucket.of(Objects.requireNonNull(Objects.requireNonNull(groupStandings.get(developer))
-                            .get(group.getSlug()))),
+                                    .get(group.getSlug()))
+                            .standing()),
                     practices.stream()
                             .map(practice ->
                                     practiceBucket(snapshots.getOrDefault(developer, NOTHING_READ), practice.slug()))
@@ -175,11 +175,10 @@ public class PracticesAcrossWorkspaceService {
         return practice == null ? Bucket.NONE_YET : Bucket.of(practice.dto().standing());
     }
 
-    private Map<String, PracticeGroupStandingDTO.Standing> groupStandings(
+    private Map<String, PracticeGroupStandingDTO> groupStandings(
             List<PracticeGroup> groups, StandingSnapshot snapshot) {
         return practiceGroupStandingService.summarize(groups, snapshot).stream()
-                .collect(Collectors.toMap(
-                        PracticeGroupStandingDTO::groupSlug, PracticeGroupStandingDTO::standing, (a, b) -> a));
+                .collect(Collectors.toMap(PracticeGroupStandingDTO::groupSlug, Function.identity(), (a, b) -> a));
     }
 
     private static WorkspaceTileDTO tile(

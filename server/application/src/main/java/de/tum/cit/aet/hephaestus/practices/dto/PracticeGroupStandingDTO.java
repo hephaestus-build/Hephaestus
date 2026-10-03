@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.practices.dto;
 
+import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.PracticeStandingObservationDTO;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.TrendDirection;
 import de.tum.cit.aet.hephaestus.practices.observation.trend.dto.TrendSupportDTO;
@@ -56,7 +57,18 @@ public record PracticeGroupStandingDTO(
         STRENGTH,
         MIXED,
         NOT_OBSERVED,
-        NO_OPPORTUNITY,
+        NO_OPPORTUNITY;
+
+        /** A group's standing is its practices' rolled up, on the same scale under the same names. */
+        public PracticeStandingDTO.Standing asPracticeStanding() {
+            return switch (this) {
+                case DEVELOPING -> PracticeStandingDTO.Standing.DEVELOPING;
+                case STRENGTH -> PracticeStandingDTO.Standing.STRENGTH;
+                case MIXED -> PracticeStandingDTO.Standing.MIXED;
+                case NOT_OBSERVED -> PracticeStandingDTO.Standing.NOT_OBSERVED;
+                case NO_OPPORTUNITY -> PracticeStandingDTO.Standing.NO_OPPORTUNITY;
+            };
+        }
     }
 
     public static boolean isVerdict(Standing standing) {

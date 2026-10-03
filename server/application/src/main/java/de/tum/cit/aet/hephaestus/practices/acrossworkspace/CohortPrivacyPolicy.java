@@ -47,12 +47,7 @@ public final class CohortPrivacyPolicy {
         NONE_YET;
 
         public static Bucket of(PracticeGroupStandingDTO.Standing standing) {
-            return switch (standing) {
-                case DEVELOPING -> NEEDS_ATTENTION;
-                case MIXED -> MIXED_FEEDBACK;
-                case STRENGTH -> GOING_WELL;
-                case NOT_OBSERVED, NO_OPPORTUNITY -> NONE_YET;
-            };
+            return of(standing.asPracticeStanding());
         }
 
         public static Bucket of(PracticeStandingDTO.Standing standing) {
