@@ -80,7 +80,7 @@ public class PersonDataService {
 
     @Transactional
     public void requestErasure(UUID id, long administratorId, boolean externalCopiesRemoved) {
-        // All writers take global admission, native keys and accounts before a request row.
+        // Acquire global admission, native keys and accounts before the request row.
         // The unlocked snapshot contains only the immutable admission scope; revalidate after locking.
         var admission = jdbc.query(
                 "SELECT state,scope_json FROM person_data_request WHERE id=?",
