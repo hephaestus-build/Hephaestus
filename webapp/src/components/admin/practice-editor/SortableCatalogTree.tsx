@@ -650,6 +650,7 @@ function SortableGroupSection<
 				</Button>
 				{renderLeading?.(group)}
 				<AccordionTrigger
+					headingLevel={2}
 					disabled={collapseDisabled}
 					className="py-2.5 hover:no-underline disabled:opacity-100"
 				>

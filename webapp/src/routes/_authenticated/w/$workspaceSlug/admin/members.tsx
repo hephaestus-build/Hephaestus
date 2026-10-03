@@ -124,7 +124,7 @@ function AdminMembersContainer() {
 	}, [navigate, search.team, selectedTeam, teamsData, teamsError]);
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
-		return <NoWorkspace />;
+		return <NoWorkspace headingLevel={1} />;
 	}
 
 	return (

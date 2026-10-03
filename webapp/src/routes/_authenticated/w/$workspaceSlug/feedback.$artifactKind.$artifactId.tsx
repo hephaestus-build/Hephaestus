@@ -6,7 +6,7 @@ import { reviewRunFeedState } from "@/components/profile/review-runs";
 import { ReviewedWorkFeedbackPage } from "@/components/profile/ReviewedWorkFeedbackPage";
 import { useFeedbackResponseWrite } from "@/hooks/use-feedback-response-write";
 import { REVIEW_RUN_PAGE_SIZE } from "@/hooks/use-practice-group-detail";
-import { workspaceHead } from "@/lib/page-title";
+import { pageHead } from "@/lib/page-title";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { slicePageParams } from "@/runtime/tanstack-query/spring-page";
 
@@ -26,7 +26,7 @@ export const Route = createFileRoute(
 		}
 		return { artifactId: id };
 	},
-	head: workspaceHead("Your feedback on this work"),
+	head: pageHead("Your feedback on this work"),
 	component: ReviewedWorkFeedbackRoute,
 });
 

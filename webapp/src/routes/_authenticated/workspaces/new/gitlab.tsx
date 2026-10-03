@@ -27,11 +27,13 @@ import { WizardStepIndicator } from "@/components/create-workspace/WizardStepInd
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { pageHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { firstNonBlank, hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/workspaces/new/gitlab")({
+	head: pageHead("Connect GitLab"),
 	component: GitLabWizardPage,
 });
 

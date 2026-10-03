@@ -29,13 +29,13 @@ import {
 	useMemberActivity,
 	useOpenWork,
 } from "@/hooks/use-activity";
-import { workspaceHead } from "@/lib/page-title";
+import { pageHead } from "@/lib/page-title";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState, carriedSearchParams } from "@/lib/search-params";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/workspace-activity")({
 	component: WorkspaceActivity,
-	head: workspaceHead("Workspace activity"),
+	head: pageHead("Workspace activity"),
 	validateSearch: workspaceActivitySearchSchema,
 	search: {
 		// The team is this workspace's; only the range carries over to another workspace.

@@ -117,7 +117,7 @@ export function WorkspaceSwitcher({
 		<SidebarMenu>
 			<SidebarMenuItem>
 				<DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
-					<DropdownMenuTrigger render={<SidebarMenuButton size="lg" className="" />}>
+					<DropdownMenuTrigger render={<SidebarMenuButton size="lg" className="h-auto min-h-12" />}>
 						<div className="flex aspect-square size-8 items-center justify-center rounded-lg text-sidebar-primary-foreground">
 							<Avatar className="size-8 rounded-lg">
 								<AvatarImage
@@ -142,10 +142,10 @@ export function WorkspaceSwitcher({
 							</Avatar>
 						</div>
 						<div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-							<span className="truncate font-semibold">
+							<span className="font-semibold break-words">
 								{activeWorkspace?.displayName ?? "No workspace"}
 							</span>
-							<span className="truncate text-xs text-muted-foreground">
+							<span className="text-xs break-words text-muted-foreground">
 								{activeWorkspace?.accountLogin ?? "Select a workspace"}
 							</span>
 						</div>

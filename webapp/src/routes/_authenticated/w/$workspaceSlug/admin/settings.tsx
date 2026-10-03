@@ -23,7 +23,7 @@ function AdminSettings() {
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading) {
-		return <NoWorkspace />;
+		return <NoWorkspace headingLevel={1} />;
 	}
 
 	let settings: ReactNode;

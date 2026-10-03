@@ -260,6 +260,7 @@ export function InstancePersonDataPage({
 				<EmptyState
 					icon={<UserSearchIcon />}
 					title="No person selected"
+					headingLevel={2}
 					description="Enter an account ID or a provider identity, then preview what Hephaestus holds about them."
 				/>
 			)}

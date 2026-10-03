@@ -102,7 +102,7 @@ export function AppSidebar({
 	} else if (!activeWorkspace) {
 		sidebarContent = (
 			<div className="group-data-[collapsible=icon]:hidden">
-				<NoWorkspace />
+				<NoWorkspace headingLevel={2} />
 			</div>
 		);
 	} else if (context === "mentor") {

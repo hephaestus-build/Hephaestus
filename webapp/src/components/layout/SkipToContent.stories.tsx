@@ -12,6 +12,30 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** The app's own sidebar is fixed at the top left, and the link is shown in the same corner. */
+export const ShownAboveTheSidebar: Story = {
+	render: () => (
+		<>
+			<SkipToContent />
+			<div className="fixed inset-y-0 left-0 z-10 w-64 bg-muted">Sidebar</div>
+			<main id="main-content" tabIndex={-1} className="p-6 pl-72">
+				<h1>Main content</h1>
+			</main>
+		</>
+	),
+	play: async ({ canvas }) => {
+		await userEvent.tab();
+		const skipLink = canvas.getByRole("link", { name: "Skip to main content" });
+		await expect(skipLink).toHaveFocus();
+		const box = skipLink.getBoundingClientRect();
+		await expect(box.top).toBeGreaterThanOrEqual(0);
+		await expect(box.left).toBeGreaterThanOrEqual(0);
+		await expect(
+			document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2),
+		).toBe(skipLink);
+	},
+};
+
 export const KeyboardNavigation: Story = {
 	render: () => (
 		<>

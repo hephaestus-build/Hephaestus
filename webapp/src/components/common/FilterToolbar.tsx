@@ -20,7 +20,9 @@ export function FilterToolbar({ children, hasFilter, onReset, actions }: FilterT
 					<XIcon aria-hidden data-icon="inline-end" />
 				</Button>
 			)}
-			{actions !== undefined && <div className="flex items-center gap-2 sm:ml-auto">{actions}</div>}
+			{actions !== undefined && (
+				<div className="flex flex-wrap items-center gap-2 sm:ml-auto">{actions}</div>
+			)}
 		</div>
 	);
 }

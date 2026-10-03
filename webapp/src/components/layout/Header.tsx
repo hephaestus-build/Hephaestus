@@ -78,7 +78,7 @@ export default function Header({
 
 	return (
 		<header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-			<div className="flex items-center gap-2 px-2 sm:px-4">
+			<div className="flex items-center gap-1 px-2 sm:gap-2 sm:px-4">
 				{sidebarTrigger}
 				<div className="flex items-center gap-2">
 					{hasWorkspace ? (
@@ -140,12 +140,12 @@ export default function Header({
 					)}
 				</div>
 			</div>
-			<div className="flex gap-2 px-2 sm:px-4">
+			<div className="flex gap-1 px-2 sm:gap-2 sm:px-4">
 				{isAuthenticated ? feedbackDialog : null}
 				<ModeToggle />
-				<div className="flex items-center gap-2">
+				<div className="flex items-center gap-1 sm:gap-2">
 					{isAuthenticated ? (
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-1 sm:gap-2">
 							<DropdownMenu>
 								<DropdownMenuTrigger
 									aria-label="Account"
@@ -172,28 +172,30 @@ export default function Header({
 										<>
 											<DropdownMenuGroup>
 												{hasWorkspace ? (
-													<Link
-														to="/w/$workspaceSlug/activity"
-														params={{ workspaceSlug: workspaceSlug ?? "" }}
-														className="[&]:no-underline"
+													<DropdownMenuItem
+														render={
+															<Link
+																to="/w/$workspaceSlug/activity"
+																params={{ workspaceSlug: workspaceSlug ?? "" }}
+																className="[&]:no-underline"
+															/>
+														}
 													>
-														<DropdownMenuItem>
-															<Activity />
-															<span>Activity</span>
-														</DropdownMenuItem>
-													</Link>
+														<Activity />
+														<span>Activity</span>
+													</DropdownMenuItem>
 												) : (
 													<DropdownMenuItem disabled title="Join a workspace to see your activity">
 														<Activity />
 														<span>Activity</span>
 													</DropdownMenuItem>
 												)}
-												<Link to="/settings" className="[&]:no-underline">
-													<DropdownMenuItem>
-														<Settings />
-														<span>Settings</span>
-													</DropdownMenuItem>
-												</Link>
+												<DropdownMenuItem
+													render={<Link to="/settings" className="[&]:no-underline" />}
+												>
+													<Settings />
+													<span>Settings</span>
+												</DropdownMenuItem>
 											</DropdownMenuGroup>
 											<DropdownMenuSeparator />
 										</>

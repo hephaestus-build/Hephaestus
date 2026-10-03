@@ -1,6 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, userEvent } from "storybook/test";
 
+import { Button } from "@/components/ui/button";
+import { expectNoPageOverflow } from "@/stories/reflow";
+
 import { FilterToolbar } from "./FilterToolbar";
 
 const meta = {
@@ -30,4 +33,19 @@ export const Filtered: Story = {
 		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
 		await expect(args.onReset).toHaveBeenCalledOnce();
 	},
+};
+
+/** A count and two actions are wider than 320px, so they wrap under the filters instead of past them. */
+export const ActionsAtReflowWidth: Story = {
+	args: {
+		actions: (
+			<>
+				<p className="text-sm whitespace-nowrap text-muted-foreground">128 observations.</p>
+				<Button variant="outline">Export observations as CSV</Button>
+				<Button variant="outline">Export observations as JSON</Button>
+			</>
+		),
+	},
+	parameters: { viewport: { defaultViewport: "reflow" } },
+	play: expectNoPageOverflow,
 };

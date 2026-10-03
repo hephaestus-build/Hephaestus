@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect } from "storybook/test";
+import { expect, within } from "storybook/test";
 
 import type { ChatThreadSummary } from "@/api/types.gen";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -54,6 +54,9 @@ export const RegularUser: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Administration")).not.toBeInTheDocument();
 		await expect(canvas.getByRole("link", { name: /AI mentor/u })).toBeVisible();
+		// The only landmark a screen reader can jump to for the app's navigation.
+		const navigation = canvas.getByRole("navigation", { name: "Primary" });
+		await expect(within(navigation).getByRole("link", { name: "Activity" })).toBeVisible();
 	},
 };
 

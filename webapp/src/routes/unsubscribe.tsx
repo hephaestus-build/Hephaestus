@@ -5,6 +5,7 @@ import { unsubscribeEmailMutation } from "@/api/@tanstack/react-query.gen";
 import { createClient } from "@/api/client";
 import { EmailUnsubscribePage } from "@/components/settings/EmailUnsubscribePage";
 import environment from "@/environment";
+import { pageTitle } from "@/lib/page-title";
 
 // This capability must work independently of stale sessions, CSRF cookies and impersonation.
 const anonymousClient = createClient({
@@ -16,7 +17,7 @@ const anonymousClient = createClient({
 export const Route = createFileRoute("/unsubscribe")({
 	staticData: { surface: "auth" },
 	head: () => ({
-		meta: [{ title: "Unsubscribe — Hephaestus" }, { name: "robots", content: "noindex, nofollow" }],
+		meta: [{ title: pageTitle("Unsubscribe") }, { name: "robots", content: "noindex, nofollow" }],
 	}),
 	validateSearch: (search): { token?: string } => ({
 		token: typeof search.token === "string" && search.token.length > 0 ? search.token : undefined,

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { expect } from "storybook/test";
 
 import { NoWorkspace } from "./NoWorkspace";
 
@@ -13,6 +14,7 @@ const meta = {
 		},
 	},
 	tags: ["autodocs"],
+	args: { headingLevel: 1 },
 } satisfies Meta<typeof NoWorkspace>;
 
 export default meta;
@@ -21,4 +23,9 @@ type Story = StoryObj<typeof meta>;
 /**
  * Default presentation.
  */
-export const Default: Story = {};
+export const Default: Story = {
+	play: async ({ canvas }) => {
+		// The page this fills has nothing else to name it, so its title is the page's heading.
+		await expect(canvas.getByRole("heading", { level: 1, name: "No workspace" })).toBeVisible();
+	},
+};

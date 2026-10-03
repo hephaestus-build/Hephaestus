@@ -65,6 +65,21 @@ export const Default: Story = {
 	},
 };
 
+export const FromTheCatalog: Story = {
+	args: {
+		state: ready({
+			practice: {
+				...practice,
+				catalogOrigin: { slug: practice.slug, link: "IN_SYNC", sourceOffered: true },
+			},
+		}),
+	},
+	play: async () => {
+		// What the badge in the catalog list can only label is spelled out here, in the page it opens.
+		await expectSettledVisible(await screen.findByText(/will not edit your copy/u));
+	},
+};
+
 export const InheritedAutonomy: Story = {
 	args: {
 		state: ready({

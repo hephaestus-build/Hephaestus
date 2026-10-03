@@ -37,7 +37,7 @@ import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overvie
 import { usePracticeProfileReviewRuns } from "@/hooks/use-practice-profile-review-runs";
 import { usePracticeStandings } from "@/hooks/use-practice-standings";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { workspaceHead } from "@/lib/page-title";
+import { pageHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
@@ -46,7 +46,7 @@ import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-profile")({
 	component: PracticeProfile,
-	head: workspaceHead("Practice profile"),
+	head: pageHead("Practice profile"),
 	validateSearch: practiceProfileSearchSchema,
 	search: {
 		middlewares: [

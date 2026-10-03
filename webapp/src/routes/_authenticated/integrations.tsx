@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 
 /** What the page shows for each outcome the provider sent back — or for a visit with none. */
@@ -24,6 +25,7 @@ const OUTCOMES = {
 };
 
 export const Route = createFileRoute("/_authenticated/integrations")({
+	head: pageHead("Connecting an integration"),
 	component: IntegrationsCallback,
 	// The server's failure redirect: `reason` is a code, `description` the sentence written for the user.
 	validateSearch: z.object({

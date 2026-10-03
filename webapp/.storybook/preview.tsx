@@ -126,6 +126,10 @@ const preview: Preview = {
 					name: "Reflow (320px)",
 					styles: { width: "320px", height: "568px" },
 				},
+				zoom200: {
+					name: "200% zoom (640px)",
+					styles: { width: "640px", height: "480px" },
+				},
 				mobile: {
 					name: "Mobile",
 					styles: { width: "375px", height: "667px" },

@@ -8,9 +8,11 @@ import { GitHubIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 
 export const Route = createFileRoute("/_authenticated/workspaces/new/github")({
+	head: pageHead("Connect GitHub"),
 	component: GitHubSetupPage,
 });
 

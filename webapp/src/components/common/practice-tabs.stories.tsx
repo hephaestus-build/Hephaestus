@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect } from "storybook/test";
+import { expect, userEvent } from "storybook/test";
 
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -65,6 +65,18 @@ export const WithCounts: Story = {
 			"aria-selected",
 			"true",
 		);
+	},
+};
+
+/** A panel with nothing to focus inside is a tab stop itself, so it has to show that it has focus. */
+export const KeyboardReachesThePanel: Story = {
+	play: async ({ canvas }) => {
+		await userEvent.tab();
+		await expect(canvas.getByRole("tab", { name: "Newest 2" })).toHaveFocus();
+		await userEvent.tab();
+		const panel = canvas.getByRole("tabpanel");
+		await expect(panel).toHaveFocus();
+		await expect(getComputedStyle(panel).boxShadow).not.toBe("none");
 	},
 };
 

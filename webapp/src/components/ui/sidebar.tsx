@@ -25,6 +25,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
  *
  * 1. `SidebarProvider` does not write the `sidebar_state` cookie: upstream sets it so a Next.js
  *    server render can read the open state, and nothing in this SPA reads it.
+ * 2. The panel is a `<nav aria-label="Primary">`, where upstream renders a `<div>`: the sidebar is the
+ *    app's main navigation, and a screen reader's landmark list had nothing to jump to (WCAG 2.2
+ *    SC 1.3.1, 2.4.1). The mobile sheet's panel is the same landmark.
  */
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
@@ -155,7 +158,8 @@ function Sidebar({
 
 	if (collapsible === "none") {
 		return (
-			<div
+			<nav
+				aria-label="Primary"
 				data-slot="sidebar"
 				className={cn(
 					"flex h-full w-(--sidebar-width) flex-col bg-sidebar text-sidebar-foreground",
@@ -164,7 +168,7 @@ function Sidebar({
 				{...props}
 			>
 				{children}
-			</div>
+			</nav>
 		);
 	}
 
@@ -186,7 +190,9 @@ function Sidebar({
 						<SheetTitle>Sidebar</SheetTitle>
 						<SheetDescription>Displays the mobile sidebar.</SheetDescription>
 					</SheetHeader>
-					<div className="flex h-full w-full flex-col">{children}</div>
+					<nav aria-label="Primary" className="flex h-full w-full flex-col">
+						{children}
+					</nav>
 				</SheetContent>
 			</Sheet>
 		);
@@ -226,13 +232,14 @@ function Sidebar({
 				)}
 				{...props}
 			>
-				<div
+				<nav
+					aria-label="Primary"
 					data-sidebar="sidebar"
 					data-slot="sidebar-inner"
 					className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
 				>
 					{children}
-				</div>
+				</nav>
 			</div>
 		</div>
 	);

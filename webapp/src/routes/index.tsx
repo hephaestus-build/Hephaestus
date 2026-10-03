@@ -5,11 +5,13 @@ import { NoWorkspace } from "@/components/common/NoWorkspace";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { LandingPage } from "@/components/site/landing/LandingPage";
 import { useLoginNavigation } from "@/hooks/use-login-navigation";
+import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/")({
+	head: pageHead("AI mentor for software teams"),
 	staticData: { surface: "bleed" },
 	beforeLoad: async ({ context }) => {
 		const user = await resolveCurrentUser(context.queryClient);
@@ -37,7 +39,7 @@ function IndexPage() {
 	const { isAuthenticated } = useAuth();
 	return isAuthenticated ? (
 		<StandardPageSurface className="h-full">
-			<NoWorkspace />
+			<NoWorkspace headingLevel={1} />
 		</StandardPageSurface>
 	) : (
 		<LandingContainer />

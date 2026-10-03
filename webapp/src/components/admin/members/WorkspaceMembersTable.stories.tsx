@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, fn, userEvent } from "storybook/test";
 
 import type { TeamInfo } from "@/api/types.gen";
+import { expectNoPageOverflow } from "@/stories/reflow";
 
 import type { ExtendedUserTeams } from "./user-teams";
 import { WorkspaceMembersTable } from "./WorkspaceMembersTable";
@@ -164,6 +165,12 @@ export const Default: Story = {
 			page: 0,
 		});
 	},
+};
+
+/** 200% zoom on a laptop: the toolbar's search, filter and columns do not fit one row, so they wrap. */
+export const AtTwoHundredPercentZoom: Story = {
+	parameters: { viewport: { defaultViewport: "zoom200" } },
+	play: expectNoPageOverflow,
 };
 
 export const Loading: Story = {

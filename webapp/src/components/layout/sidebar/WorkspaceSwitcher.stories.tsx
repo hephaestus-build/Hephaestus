@@ -55,6 +55,21 @@ type Story = StoryObj<typeof meta>;
 
 export const SingleWorkspace: Story = {};
 
+const longName = "Software Engineering Education Research Group, Practice Review Pilot";
+
+/** A name wraps rather than ending in an ellipsis, since it is the only place the reader sees it. */
+export const LongWorkspaceName: Story = {
+	args: {
+		activeWorkspace: { ...meta.args.activeWorkspace, displayName: longName },
+		workspaces: [{ ...meta.args.activeWorkspace, displayName: longName }],
+	},
+	play: async ({ canvas }) => {
+		const name = canvas.getByText(longName);
+		await expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth);
+		await expect(name.getBoundingClientRect().height).toBeGreaterThan(20);
+	},
+};
+
 export const WithoutAddWorkspace: Story = {
 	args: { onAddWorkspace: undefined },
 	play: async ({ canvas }) => {

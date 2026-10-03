@@ -42,6 +42,14 @@ export const Creating: Story = {
 	},
 };
 
+/** The body scrolls, so it is the first tab stop; focus belongs on the field, not on the box around it. */
+export const OpensOnTheName: Story = {
+	play: async () => {
+		const field = await screen.findByLabelText("Name");
+		await waitFor(async () => expect(field).toHaveFocus());
+	},
+};
+
 export const Renaming: Story = {
 	args: { group: reviewReadyGroup },
 	play: async ({ args }) => {
