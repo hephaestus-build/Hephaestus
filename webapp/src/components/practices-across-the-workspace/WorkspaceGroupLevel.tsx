@@ -1,12 +1,12 @@
 import { ArrowRightIcon } from "lucide-react";
 
 import type { WorkspaceGroupSplit } from "@/api/types.gen";
+import { InlineLink } from "@/components/common/InlineLink";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
-import { Button } from "@/components/ui/button";
 import { DrawerBody } from "@/components/ui/drawer";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { useRevealedRows } from "@/hooks/use-revealed-rows";
@@ -36,8 +36,9 @@ export interface WorkspaceGroupLevelProps {
 
 /**
  * One practice group over Practices across the workspace: the reader's own standing and trend in
- * it, the way to their own group with the group's split under it, and each practice of the group
- * beside how the workspace splits across that practice. Both open the next level over this one.
+ * it with the way to their own group under them, the group's split beside the title, and each
+ * practice of the group beside how the workspace splits across that practice. Both open the next
+ * level over this one.
  */
 export function WorkspaceGroupLevel({
 	nested,
@@ -66,37 +67,41 @@ export function WorkspaceGroupLevel({
 						/>
 					)
 				}
+				// Side by side, as the profile's own group level shows them.
 				chips={
 					group && (
-						<span className="flex flex-col items-start gap-1.5">
+						<>
 							<StandingBadge standing={group.yourStanding} scope="group" />
 							<TrendNote
 								direction={group.yourDirection}
 								support={group.yourTrendSupport}
 								scope="group"
 							/>
-						</span>
+						</>
+					)
+				}
+				// The way on is a link in the header's one line, not a column beside the title.
+				description={
+					group && (
+						<InlineLink
+							onClick={onOpenOwnGroup}
+							aria-label={`Open your group ${group.groupName}`}
+							className="inline-flex items-center gap-1 self-start font-medium"
+						>
+							Open your group
+							<ArrowRightIcon className="size-3.5 shrink-0" aria-hidden />
+						</InlineLink>
 					)
 				}
 				aside={
 					state.status === "ready" ? (
-						<div className="flex w-full flex-col items-stretch gap-3 sm:w-88 sm:items-end">
-							<Button
-								variant="outline"
-								onClick={onOpenOwnGroup}
-								aria-label={`Open your group ${state.group.groupName}`}
-							>
-								Open your group
-								<ArrowRightIcon aria-hidden data-icon="inline-end" />
-							</Button>
-							<div className="w-full">
-								<WorkspaceSplitBar
-									split={state.group.split}
-									yourStanding={state.group.yourStanding}
-									showYourWord={false}
-									{...state.context}
-								/>
-							</div>
+						<div className="w-full sm:w-88">
+							<WorkspaceSplitBar
+								split={state.group.split}
+								yourStanding={state.group.yourStanding}
+								showYourWord={false}
+								{...state.context}
+							/>
 						</div>
 					) : undefined
 				}
