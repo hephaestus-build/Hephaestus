@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineRule, type ESTree } from "@oxlint/plugins";
+import { decodeHTMLStrict } from "entities";
 
 import { asStringArray, isRecord, parseJson } from "../../../../scripts/lib/json.ts";
 import {
@@ -53,6 +54,9 @@ function literalText(node: ESTree.Node): string[] {
 		return [...literalText(node.consequent), ...literalText(node.alternate)];
 	}
 	if (node.type === "LogicalExpression") {
+		if (node.operator === "&&") {
+			return literalText(node.right);
+		}
 		return [...literalText(node.left), ...literalText(node.right)];
 	}
 	if (node.type === "BinaryExpression" && node.operator === "+") {
@@ -117,7 +121,7 @@ export const steUiText = defineRule({
 		}
 		return {
 			JSXText(node) {
-				check(node, node.value);
+				check(node, decodeHTMLStrict(node.value));
 			},
 			JSXAttribute(node) {
 				if (
@@ -130,7 +134,7 @@ export const steUiText = defineRule({
 				const value =
 					node.value.type === "JSXExpressionContainer" ? node.value.expression : node.value;
 				for (const text of literalText(value)) {
-					check(value, text);
+					check(value, node.value.type === "Literal" ? decodeHTMLStrict(text) : text);
 				}
 			},
 			JSXExpressionContainer(node) {

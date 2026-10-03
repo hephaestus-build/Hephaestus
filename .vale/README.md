@@ -40,6 +40,11 @@ A rename or deletion needs an explicit policy change and maintainer review.
 
 The UI rule uses [oxlint's JavaScript plugin API](https://oxc.rs/docs/guide/usage/linter/js-plugins.html) to read JSX literals.
 
+JSX entity text is decoded with the [entities library](https://github.com/fb55/entities), pinned in the webapp dev dependencies.
+It uses the BSD-2-Clause license and does not enter the application bundle.
+Only JSX text and quoted JSX attributes are decoded.
+JavaScript strings keep their literal meaning.
+
 ## Parser checks
 
 The pinned Vale version includes native MDX support.
@@ -62,12 +67,12 @@ Run `vp run report:prose` to get current counts.
 
 | Rule | User docs | Admin docs | Contributor docs | UI source |
 | --- | ---: | ---: | ---: | ---: |
-| STE.Contractions | 7 | 16 | 11 | 130 |
+| STE.Contractions | 7 | 16 | 11 | 135 |
 | STE.IngForms | 137 | 627 | 600 | — |
 | STE.ParagraphLength | 11 | 46 | 36 | — |
 | STE.PassiveVoice | 182 | 715 | 710 | — |
 | STE.ProcedureLength | 78 | 149 | 188 | — |
-| STE.Semicolons | 132 | 806 | 780 | 55 |
+| STE.Semicolons | 132 | 806 | 780 | 41 |
 | STE.SentenceLength | 134 | 431 | 562 | 1 |
-| STE.Vocabulary | 6100 | 29197 | 31915 | 7015 |
+| STE.Vocabulary | 6100 | 29197 | 31915 | 7000 |
 | STE.Words | 3 | 19 | 30 | 4 |

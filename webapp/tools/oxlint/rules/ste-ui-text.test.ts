@@ -4,6 +4,9 @@ import { steUiText } from "./ste-ui-text.ts";
 const options = [{ allPaths: true }];
 ruleTester.run("ste-ui-text", steUiText, {
 	valid: [
+		{ code: "<p>Fish &amp; chips</p>", options },
+		{ code: '<Input title="Fish &amp; chips" />', options },
+		{ code: '<p>{"utilize" && "Use it"}</p>', options },
 		{ code: "<p>Select the workspace.</p>", options },
 		{ code: '<input placeholder="Select a workspace" aria-label="Workspace" />', options },
 		{ code: '<div className="utilize" id="ensure" data-testid="via" />', options },
@@ -18,6 +21,10 @@ ruleTester.run("ste-ui-text", steUiText, {
 		},
 	],
 	invalid: [
+		{ code: "<p>Don&#39;t stop it.</p>", options, errors: [{ messageId: "word" }] },
+		{ code: "<p>Utili&#122;e it.</p>", options, errors: [{ messageId: "word" }] },
+		{ code: '<Input title="Utili&#122;e it" />', options, errors: [{ messageId: "word" }] },
+		{ code: '<p>{"Fish &amp; chips"}</p>', options, errors: [{ messageId: "semicolon" }] },
 		{
 			code: "<p>We’re ready.</p>",
 			options,
