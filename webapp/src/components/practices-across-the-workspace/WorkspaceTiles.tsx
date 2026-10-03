@@ -53,7 +53,7 @@ export function WorkspaceTiles({ overview }: WorkspaceTilesProps) {
 						}
 						figure={overview.reviewedWork}
 						qualifier={windowPhrase(overview.window)}
-						note="Each pull or merge request or issue a practice review looked at in this range, counted once however often it was reviewed."
+						note="Each pull or merge request, issue, conversation, or document that a practice review looked at in this range. Each counts once, however often it was reviewed."
 					/>
 				</li>
 				<li className="flex">
