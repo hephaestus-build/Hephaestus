@@ -90,7 +90,7 @@ const group = (
 
 /**
  * Packaging's five practices: three split and two held back.
- * Every part shown holds at least six of the 28 observed developers, the reader counted.
+ * Every part shown holds more than K of the 28 observed developers, as CohortPrivacyPolicy requires.
  */
 export const PACKAGING_PRACTICES: WorkspacePracticeSplit[] = [
 	practice(
@@ -136,8 +136,8 @@ export const PACKAGING_GROUP: WorkspaceGroupSplit = {
 };
 
 /**
- * Eight practice groups over 28 observed developers. Every part shown, none yet included, holds at
- * least six developers, as the privacy rule requires, so it stands for five besides any reader.
+ * Eight practice groups over 28 observed developers. Every part shown, none yet included, holds
+ * more than K developers, as CohortPrivacyPolicy requires, so it stands for K besides any reader.
  */
 export const ACROSS_WORKSPACE: PracticesAcrossWorkspace = {
 	window: "DAYS_30",

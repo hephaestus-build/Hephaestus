@@ -88,7 +88,7 @@ function PracticesAcrossTheWorkspace() {
 	const setSearch = useSearchState();
 	const featureState = useWorkspaceFeatures(workspaceSlug);
 	// Read only where this workspace reviews practices, and only the window shown: each window is
-	// its own request, checked against the five developer rule on its own.
+	// its own request, checked against CohortPrivacyPolicy on its own.
 	const query = useQuery({
 		...getPracticesAcrossWorkspaceOptions({ path: { workspaceSlug }, query: { window } }),
 		enabled: featureState.practicesEnabled === true,
