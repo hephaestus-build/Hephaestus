@@ -463,7 +463,7 @@ class PracticeReviewSummaryControllerIntegrationTest extends AbstractWorkspaceIn
                 .jsonPath("$.status")
                 .isEqualTo(400)
                 .jsonPath("$.detail")
-                .isEqualTo("from must not be after to");
+                .isEqualTo("The from parameter must not be after the to parameter.");
     }
 
     private WebTestClient.BodyContentSpec listReviews(String query) {

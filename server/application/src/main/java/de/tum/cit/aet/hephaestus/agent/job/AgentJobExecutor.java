@@ -1157,7 +1157,7 @@ public class AgentJobExecutor {
                     job.getWorkspace().getId(), job.getJobType(), job.getMetadata())) {
                 job.setStatus(AgentJobStatus.CANCELLED);
                 job.setCompletedAt(Instant.now());
-                job.setErrorMessage("Processing is blocked by a personal-data erasure request.");
+                job.setErrorMessage("A personal-data erasure request blocks this job.");
                 job.setCancellationReason(AgentJobCancellationReason.PERSON_DATA_ERASED);
                 jobRepository.save(job);
                 recordPracticeReviewRefusal(job, "person_data_erased");
@@ -1271,7 +1271,7 @@ public class AgentJobExecutor {
         if (tooOldToHold) {
             job.setStatus(AgentJobStatus.CANCELLED);
             job.setCompletedAt(now);
-            job.setErrorMessage("Cancelled: over the monthly AI budget, and this job is more than "
+            job.setErrorMessage("Cancelled. The monthly AI budget is exceeded, and this job is more than "
                     + BUDGET_HOLD_MAX_JOB_AGE.toDays()
                     + " days old.");
             job.setCancellationReason(AgentJobCancellationReason.BUDGET_EXHAUSTED);
@@ -1302,7 +1302,7 @@ public class AgentJobExecutor {
     }
 
     private ClaimAttempt refuseUnavailableModel(AgentJob job) {
-        String message = "Configured model is unavailable.";
+        String message = "The configured model is not available.";
         job.setStatus(AgentJobStatus.CANCELLED);
         job.setCompletedAt(Instant.now());
         job.setErrorMessage(message);
@@ -1422,8 +1422,8 @@ public class AgentJobExecutor {
             AgentJobStatus terminalStatus = determineTerminalStatus(sandboxResult, agentResult, locked);
             String errorMessage =
                     switch (terminalStatus) {
-                        case TIMED_OUT -> "Container timed out";
-                        case FAILED -> "Container exited with code " + sandboxResult.exitCode();
+                        case TIMED_OUT -> "The container timed out.";
+                        case FAILED -> "The container exited with code " + sandboxResult.exitCode() + ".";
                         default -> null;
                     };
             int updated = transitionTerminal(jobId, terminalStatus, Instant.now(), errorMessage);

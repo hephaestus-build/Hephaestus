@@ -223,7 +223,7 @@ public class OAuthCallbackService {
                     return administers(owner.getId(), actorAccountId)
                             ? "This " + exclusive.noun() + " is already connected to the Hephaestus workspace \""
                                     + owner.getDisplayName() + "\" (" + owner.getWorkspaceSlug()
-                                    + "). Disconnect " + exclusive.provider() + " there before connecting it here."
+                                    + "). Disconnect " + exclusive.provider() + " there before you connect it here."
                             : "This " + exclusive.noun() + " is already connected to another Hephaestus workspace."
                                     + " An administrator of that workspace must disconnect " + exclusive.provider()
                                     + " there first.";

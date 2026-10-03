@@ -60,7 +60,7 @@ public class GlobalControllerAdvice {
     @ExceptionHandler(AuthorizationDeniedException.class)
     ProblemDetail handleAuthorizationDenied(AuthorizationDeniedException exception) {
         log.debug("Authorization denied: message={}", messageOf(exception));
-        return problem(HttpStatus.FORBIDDEN, "Access denied", "Insufficient permissions for this operation.");
+        return problem(HttpStatus.FORBIDDEN, "Access denied", "You do not have permission for this operation.");
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -83,7 +83,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Change not recorded",
-                "The change was refused because it could not be written to the audit log.");
+                "The server refused the change because it could not write the change to the audit log.");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
@@ -152,7 +152,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Service unavailable",
-                "An upstream service is temporarily unavailable. Please try again later.");
+                "An upstream service is not available now. Try again later.");
     }
 
     // FALLBACK HANDLER
@@ -164,7 +164,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal server error",
-                "An unexpected error occurred. Please try again later.");
+                "An unexpected error occurred. Try again later.");
     }
 
     @ExceptionHandler(Exception.class)
@@ -177,7 +177,7 @@ public class GlobalControllerAdvice {
         return problem(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Internal server error",
-                "An unexpected error occurred. Please try again later.");
+                "An unexpected error occurred. Try again later.");
     }
 
     // HELPER METHODS

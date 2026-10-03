@@ -216,7 +216,7 @@ public class WorkspaceLlmModelService {
 
     private void requireByoEnabled() {
         if (!instanceLlmSettingsService.get().isAllowWorkspaceConnections()) {
-            throw new AccessForbiddenException("Connecting your own AI provider is disabled on this server.");
+            throw new AccessForbiddenException("This server does not allow you to connect your own AI provider.");
         }
     }
 
@@ -241,7 +241,7 @@ public class WorkspaceLlmModelService {
     private static void requireActivatable(WorkspaceLlmModel model) {
         if (!model.getConnection().isEnabled() || model.getPricingMode() == PricingMode.UNPRICED) {
             throw new IllegalArgumentException(
-                    "Activate the connection and configure a price before activating the model.");
+                    "To activate the model, first activate the connection. Then configure a price for the model.");
         }
     }
 

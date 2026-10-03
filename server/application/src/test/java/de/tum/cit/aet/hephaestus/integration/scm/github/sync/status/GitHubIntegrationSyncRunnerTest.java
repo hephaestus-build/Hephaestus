@@ -289,7 +289,7 @@ class GitHubIntegrationSyncRunnerTest extends BaseUnitTest {
             SyncProgress first = captor.getAllValues().getFirst();
 
             // currentStep is the one string the UI renders — it has to stand alone as a sentence.
-            assertThat(first.currentStep()).isEqualTo("Backfilling ls1intum/Artemis — issues #4812 → #3200");
+            assertThat(first.currentStep()).isEqualTo("Backfill of ls1intum/Artemis: issues #4812 → #3200");
             assertThat(first.phase()).isEqualTo(SyncPhase.ISSUES);
             assertThat(first.currentRepository()).isEqualTo("ls1intum/Artemis");
         }

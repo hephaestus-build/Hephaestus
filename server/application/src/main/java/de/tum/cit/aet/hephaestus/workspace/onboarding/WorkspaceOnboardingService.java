@@ -171,7 +171,7 @@ class WorkspaceOnboardingService {
             return created;
         });
         if (request.revision() != policy.getRevision())
-            throw conflict("Onboarding settings changed. Reload before saving.");
+            throw conflict("Onboarding settings changed. Reload the settings before you save.");
         if (request.requiredConnectionIds().stream().distinct().count()
                 != request.requiredConnectionIds().size())
             throw conflict("Select each required integration only once.");
@@ -198,7 +198,7 @@ class WorkspaceOnboardingService {
     private void requireMember(long workspaceId, long accountId) {
         if (memberships.membershipsForAccount(accountId).stream()
                 .noneMatch(member -> member.workspaceId() == workspaceId))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Join this workspace before starting onboarding.");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Join this workspace before you start onboarding.");
     }
 
     private Workspace lockWorkspace(long id) {

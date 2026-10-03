@@ -26,7 +26,7 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
                 ]}
                 """);
 
-        assertThat(adapter.blockers(decision)).containsExactly("Only part of “Code changes” was captured.");
+        assertThat(adapter.blockers(decision)).containsExactly("Hephaestus captured only part of “Code changes”.");
     }
 
     @Test
@@ -40,9 +40,9 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
 
         assertThat(adapter.blockers(decision))
                 .containsExactly(
-                        "“Code changes” was not captured.",
-                        "Nothing was captured from “Code changes”.",
-                        "“Code changes” could not be read.");
+                        "Hephaestus did not capture “Code changes”.",
+                        "Hephaestus captured nothing from “Code changes”.",
+                        "Hephaestus could not read “Code changes”.");
     }
 
     /**
@@ -59,9 +59,9 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
                 """);
 
         assertThat(ReviewOutcomeLookupAdapter.limitation(humanReview))
-                .isEqualTo("This practice needs human review, so it is not reviewed automatically.");
+                .isEqualTo("This practice needs human review. Hephaestus does not review it automatically.");
         assertThat(ReviewOutcomeLookupAdapter.limitation(guidanceOnly))
-                .isEqualTo("This practice is guidance only, so it is not reviewed automatically.");
+                .isEqualTo("This practice is guidance only. Hephaestus does not review it automatically.");
         assertThat(adapter.blockers(humanReview)).isEmpty();
         assertThat(adapter.blockers(guidanceOnly)).isEmpty();
         assertThat(ReviewOutcomeLookupAdapter.limitation(mapper.readTree("{\"reasonCodes\": []}")))
@@ -82,9 +82,9 @@ class ReviewOutcomeLookupAdapterTest extends BaseUnitTest {
 
         assertThat(adapter.blockers(decision))
                 .containsExactly(
-                        "A required source was not captured.",
-                        "Nothing was captured from a required source.",
-                        "A required source could not be read.")
+                        "Hephaestus did not capture a required source.",
+                        "Hephaestus captured nothing from a required source.",
+                        "Hephaestus could not read a required source.")
                 .allSatisfy(blocker -> assertThat(blocker).doesNotContain("scm.", "Not A Kind", "_"));
     }
 }

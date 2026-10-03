@@ -132,7 +132,7 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
             assertThatThrownBy(() -> service.replaceResponse(
                             workspaceContext, FEEDBACK_ID, new FeedbackResponseRequestDTO(null, null, null)))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("usefulness or resolution");
+                    .hasMessageContaining("needs a usefulness rating or a resolution");
         }
 
         @Test
@@ -203,7 +203,7 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
             var request = new FeedbackResponseRequestDTO(null, FeedbackResolution.DISPUTED, null);
             assertThatThrownBy(() -> service.replaceResponse(workspaceContext, FEEDBACK_ID, request))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("comment is required");
+                    .hasMessageContaining("add a comment");
         }
 
         @Test
@@ -216,7 +216,7 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
             var request = new FeedbackResponseRequestDTO(null, FeedbackResolution.DISPUTED, "   ");
             assertThatThrownBy(() -> service.replaceResponse(workspaceContext, FEEDBACK_ID, request))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("comment is required");
+                    .hasMessageContaining("add a comment");
         }
 
         @Test

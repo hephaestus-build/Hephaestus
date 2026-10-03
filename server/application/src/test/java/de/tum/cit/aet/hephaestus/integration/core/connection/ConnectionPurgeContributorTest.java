@@ -106,7 +106,7 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
         assertThatThrownBy(() -> contributor(List.of(connectionStrategy)).deleteWorkspaceData(WORKSPACE_ID))
                 .isInstanceOf(WorkspacePurgeBlockedException.class)
                 .hasMessage(
-                        "Could not confirm disconnecting GitHub. No local data was deleted; retry when the provider is available.");
+                        "Could not confirm that GitHub is disconnected. Hephaestus did not delete any local data. Retry when the provider is available.");
 
         assertThat(connection.getState()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(connection.getCredentialsEncrypted()).isNotNull();

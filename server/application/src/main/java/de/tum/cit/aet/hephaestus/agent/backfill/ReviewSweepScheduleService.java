@@ -63,7 +63,7 @@ public class ReviewSweepScheduleService {
         if (scheduleRepository.existsByWorkspaceIdAndArtifactKind(context.id(), kind.value())) {
             throw new ReviewSweepScheduleConflictException(
                     "This workspace already has a recurring check for this kind of work. "
-                            + "Change that one instead of adding a second.");
+                            + "Change that check. Do not add a second one.");
         }
         Workspace workspace = workspaceRepository
                 .findById(context.id())
@@ -157,12 +157,12 @@ public class ReviewSweepScheduleService {
                         case DAILY -> "daily";
                         case WEEKLY -> "weekly";
                     }
-                    + " recurring check may look back at most "
+                    + " recurring check can look back at most "
                     + max.toDays()
-                    + " days, not "
+                    + " days. The value "
                     + lookbackDays
-                    + ". To review older work, start a backfill under “Review past work”, which is counted apart "
-                    + "from live work.");
+                    + " is too high. To review older work, start a backfill under “Review past work”. "
+                    + "The server counts a backfill apart from live work.");
         }
     }
 }

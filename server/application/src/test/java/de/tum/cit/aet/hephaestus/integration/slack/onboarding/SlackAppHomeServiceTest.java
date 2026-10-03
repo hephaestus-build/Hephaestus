@@ -129,7 +129,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
                         "Open account settings",
                         "Allowed, 1 active channel")
                 .contains(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT)
-                .doesNotContain("Enabled for you", "Ask in the Messages tab");
+                .doesNotContain("Enabled for you", "In the Messages tab, ask about");
         assertThat(rendered)
                 .contains(
                         switch (refusal) {
@@ -150,9 +150,11 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
         String declined = service.buildHomeView(7L, "T1", "U1").getBlocks().toString();
         String eligible = service.buildHomeView(7L, "T1", "U1").getBlocks().toString();
 
-        assertThat(declined).contains(MentorRefusal.NO_AI.userMessage()).doesNotContain("Ask in the Messages tab");
+        assertThat(declined)
+                .contains(MentorRefusal.NO_AI.userMessage())
+                .doesNotContain("In the Messages tab, ask about");
         assertThat(eligible)
-                .contains("Enabled for you", "Ask in the Messages tab")
+                .contains("Enabled for you", "In the Messages tab, ask about")
                 .doesNotContain(MentorRefusal.NO_AI.userMessage());
     }
 

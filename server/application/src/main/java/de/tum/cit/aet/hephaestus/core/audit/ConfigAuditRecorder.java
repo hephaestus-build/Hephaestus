@@ -72,8 +72,8 @@ class ConfigAuditRecorder implements ConfigAuditPort {
         }
         if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
             throw new ConfigAuditUnavailableException(
-                    "config audit was called inside a read-only transaction; the insert would never be "
-                            + "flushed (FlushMode.MANUAL) and the change would commit with no audit row");
+                    "config audit was called inside a read-only transaction. The insert would never be "
+                            + "flushed (FlushMode.MANUAL), so the change would commit with no audit row");
         }
     }
 }

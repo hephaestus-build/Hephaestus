@@ -134,7 +134,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
             GitLabPreflightResponseDTO result = preflightService.validateToken("glpat-test", null, null);
 
             assertThat(result.valid()).isFalse();
-            assertThat(result.error()).contains("Failed to connect");
+            assertThat(result.error()).contains("could not connect");
         }
 
         @Test

@@ -251,7 +251,7 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
         }
         terminalReason.compareAndSet(null, reason);
         if (!firstFrame.isDone()) {
-            firstFrame.completeExceptionally(new InteractiveSandboxException("Terminated before first frame"));
+            firstFrame.completeExceptionally(new InteractiveSandboxException("Stopped before the first frame"));
         }
         runCloseAsync(defaultGrace);
     }

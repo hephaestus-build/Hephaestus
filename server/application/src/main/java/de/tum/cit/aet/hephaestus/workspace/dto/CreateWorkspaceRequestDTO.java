@@ -86,7 +86,7 @@ public record CreateWorkspaceRequestDTO(
         return personalAccessToken != null && !personalAccessToken.isBlank();
     }
 
-    @AssertTrue(message = "kind must be GITHUB or GITLAB; SLACK flows through OAuth")
+    @AssertTrue(message = "kind must be GITHUB or GITLAB. Use OAuth to create a SLACK workspace.")
     @Schema(hidden = true)
     private boolean isKindSupported() {
         return kind == IntegrationKind.GITHUB || kind == IntegrationKind.GITLAB;

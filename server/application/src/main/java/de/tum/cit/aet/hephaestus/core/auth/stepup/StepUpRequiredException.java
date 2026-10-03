@@ -28,7 +28,7 @@ public class StepUpRequiredException extends ErrorResponseException {
 
     private static ProblemDetail problem(Duration maxAge) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
-                HttpStatus.FORBIDDEN, "This action requires a recent sign-in. Confirm access by signing in again.");
+                HttpStatus.FORBIDDEN, "This action requires a recent sign-in. Sign in again to confirm access.");
         problem.setTitle("Confirm access");
         problem.setProperty("code", CODE);
         problem.setProperty("maxAgeSeconds", maxAge.toSeconds());

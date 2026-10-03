@@ -122,37 +122,39 @@ public enum SignalStateReason {
      */
     public String describe() {
         return switch (this) {
-            case GATE_SKIPPED -> "This workspace's review settings turned it away.";
-            case COOLDOWN_ACTIVE -> "This work was already reviewed within the workspace's cooldown period.";
-            case REQUEST_COOLDOWN_ACTIVE -> "A review of this work was already asked for recently.";
+            case GATE_SKIPPED -> "The review settings of this workspace did not allow a review of this work.";
+            case COOLDOWN_ACTIVE -> "A review of this work already ran in the cooldown period of this workspace.";
+            case REQUEST_COOLDOWN_ACTIVE -> "A person already asked for a review of this work a short time ago.";
             case REQUESTER_QUOTA_EXHAUSTED ->
-                "Whoever asked has used up their review requests for this hour; the allowance refills.";
+                "The person who asked used all of their review requests for this hour. The allowance fills again later.";
             case CONCURRENT_DUPLICATE -> "The same review was already running.";
             case COALESCED -> "A later change to this work replaced this update before a review started.";
             case OUT_OF_REVIEW_SCOPE ->
-                "The author, repository or base branch is outside the workspace's review coverage.";
-            case BOT_AUTHOR -> "The author is a bot; practice reviews only judge people.";
-            case BOT_REVIEWER -> "The reviewer is a bot; practice reviews only judge people.";
+                "The author, repository, or base branch is not in the review scope of this workspace.";
+            case BOT_AUTHOR -> "The author is a bot. Practice reviews only judge people.";
+            case BOT_REVIEWER -> "The reviewer is a bot. Practice reviews only judge people.";
             case STALE_ROLLOUT_REVISION ->
-                "The workspace's review settings changed before this review could start, so it did not run.";
-            case WORKSPACE_INACTIVE -> "The workspace was not active; it is tried again once it is.";
+                "The review settings of this workspace changed before this review could start. The review did not run.";
+            case WORKSPACE_INACTIVE ->
+                "The workspace was not active. Hephaestus tries again when the workspace is active.";
             case PRACTICES_DISABLED ->
-                "Practice reviews are switched off for this workspace; it is tried again once they are on.";
+                "Practice reviews are turned off for this workspace. Hephaestus tries again when they are turned on.";
             case NO_ACTIVE_PRACTICE -> "No practice was watching for this when it happened.";
-            case PERSON_DATA_ERASED -> "Processing is blocked by a personal-data erasure request.";
+            case PERSON_DATA_ERASED -> "A request to erase personal data blocks this review.";
             case MEMBER_AI_DECLINED -> "The developer has not allowed AI practice reviews of their work.";
             case REVIEW_MODEL_UNBOUND -> "No AI model is set up to run practice reviews in this workspace.";
             case PRACTICE_AUTONOMY_OFF -> "Every practice watching for this is turned off.";
-            case BUDGET_EXHAUSTED -> "The workspace's AI budget was used up; it is tried again once it refills.";
+            case BUDGET_EXHAUSTED ->
+                "The workspace used all of its AI budget. Hephaestus tries again when the budget refills.";
             case SUBJECT_UNLINKED ->
-                "The author is unknown or not yet a member of this workspace; it is tried again once they are.";
+                "The author is unknown or is not yet a member of this workspace. Hephaestus tries again when the author is a member.";
             case MERGE_ACTOR_UNAVAILABLE ->
-                "Who merged this is not known yet; the review waits until Hephaestus learns who merged it.";
+                "Hephaestus does not yet know who merged this work. The review waits until Hephaestus knows who merged it.";
             case MODEL_UNAVAILABLE -> "The AI model set up for practice reviews is no longer available.";
             case ARTIFACT_NOT_VISIBLE ->
-                "This work is not showing at its provider right now; it is tried again if it comes back.";
-            case PENDING_DEADLINE_EXCEEDED -> "It waited too long to be picked up for review.";
-            case ARTIFACT_GONE -> "This work no longer exists or can no longer be reviewed.";
+                "The provider does not show this work now. Hephaestus tries again if the provider shows it again.";
+            case PENDING_DEADLINE_EXCEEDED -> "This work waited too long for a review to start.";
+            case ARTIFACT_GONE -> "This work does not exist now, or Hephaestus cannot review it now.";
         };
     }
 }

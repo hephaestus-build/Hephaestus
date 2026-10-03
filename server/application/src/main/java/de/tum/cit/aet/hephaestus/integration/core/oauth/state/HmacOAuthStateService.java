@@ -33,7 +33,7 @@ import org.springframework.stereotype.Component;
  * <p><b>Single-use guarantee.</b> Every {@link #issue} writes a row to
  * {@link OAuthStateNonceStore}; every {@link #consume} attempts an atomic
  * conditional UPDATE on that row. The first caller wins; the second sees zero
- * rows affected and is rejected with {@code "OAuth state already consumed"}.
+ * rows affected and is rejected with {@code "The OAuth state was already used."}.
  * This closes the replay window inside the TTL.
  *
  * <p>{@link OAuthStateNonceStore} is optional in the constructor so the
@@ -163,20 +163,20 @@ public class HmacOAuthStateService implements OAuthStateService {
     @Override
     public StateBinding consume(@Nullable String state) {
         if (state == null || state.isBlank()) {
-            throw new IllegalArgumentException("OAuth state missing");
+            throw new IllegalArgumentException("The OAuth state is missing.");
         }
         String decoded;
         try {
             decoded = new String(Base64.getUrlDecoder().decode(state), StandardCharsets.UTF_8);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("OAuth state malformed", e);
+            throw new IllegalArgumentException("The OAuth state has an incorrect format.", e);
         }
         // -1 limit preserves the trailing empty actorSegment that {@link #issue} writes
         // when actorAccountId is null. Without -1 a trailing empty string is dropped and the
         // arity check below misfires.
         String[] parts = decoded.split("\\|", -1);
         if (parts.length != 7 || !"v2".equals(parts[0])) {
-            throw new IllegalArgumentException("OAuth state malformed");
+            throw new IllegalArgumentException("The OAuth state has an incorrect format.");
         }
         String workspaceIdStr = parts[1];
         String kindStr = parts[2];
@@ -188,43 +188,44 @@ public class HmacOAuthStateService implements OAuthStateService {
         String expectedSig = hmac(payload);
         if (!MessageDigest.isEqual(
                 expectedSig.getBytes(StandardCharsets.UTF_8), suppliedSig.getBytes(StandardCharsets.UTF_8))) {
-            throw new IllegalArgumentException("OAuth state signature mismatch");
+            throw new IllegalArgumentException("The signature of the OAuth state is not correct.");
         }
         long issuedAt;
         try {
             issuedAt = Long.parseLong(issuedAtStr);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("OAuth state issuedAt malformed", e);
+            throw new IllegalArgumentException("The issuedAt value of the OAuth state has an incorrect format.", e);
         }
         Instant issued = Instant.ofEpochSecond(issuedAt);
         if (Instant.now().minus(ttl).isAfter(issued)) {
-            throw new IllegalArgumentException("OAuth state expired");
+            throw new IllegalArgumentException("The OAuth state expired.");
         }
         IntegrationKind kind;
         try {
             kind = IntegrationKind.valueOf(kindStr);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("OAuth state references unknown kind: " + kindStr, e);
+            throw new IllegalArgumentException("The OAuth state names an unknown kind: " + kindStr, e);
         }
         long workspaceId;
         try {
             workspaceId = Long.parseLong(workspaceIdStr);
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("OAuth state workspaceId malformed", e);
+            throw new IllegalArgumentException("The workspaceId value of the OAuth state has an incorrect format.", e);
         }
         Long actorAccountId = decodeActor(actorSegment);
         StateBinding binding = new StateBinding(workspaceId, kind, issued, actorAccountId);
         // Single-use enforcement via atomic UPDATE inside tryConsume. The HMAC + TTL are
         // already verified — any forged or stale token has been rejected.
         if (nonceStore != null && !nonceStore.tryConsume(nonce, binding)) {
-            throw new IllegalArgumentException("OAuth state already consumed");
+            throw new IllegalArgumentException("The OAuth state was already used.");
         }
         return binding;
     }
 
     private static String encodeActor(@Nullable Long actorAccountId) {
         if (actorAccountId == null) return "";
-        if (actorAccountId <= 0) throw new IllegalArgumentException("OAuth state actor malformed");
+        if (actorAccountId <= 0)
+            throw new IllegalArgumentException("The actor value of the OAuth state has an incorrect format.");
         return Base64.getUrlEncoder()
                 .withoutPadding()
                 .encodeToString(actorAccountId.toString().getBytes(StandardCharsets.UTF_8));
@@ -237,11 +238,11 @@ public class HmacOAuthStateService implements OAuthStateService {
             String value = new String(Base64.getUrlDecoder().decode(actorSegment), StandardCharsets.UTF_8);
             long accountId = Long.parseLong(value);
             if (accountId <= 0 || !Long.toString(accountId).equals(value)) {
-                throw new IllegalArgumentException("OAuth state actor malformed");
+                throw new IllegalArgumentException("The actor value of the OAuth state has an incorrect format.");
             }
             return accountId;
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("OAuth state actor malformed", e);
+            throw new IllegalArgumentException("The actor value of the OAuth state has an incorrect format.", e);
         }
     }
 

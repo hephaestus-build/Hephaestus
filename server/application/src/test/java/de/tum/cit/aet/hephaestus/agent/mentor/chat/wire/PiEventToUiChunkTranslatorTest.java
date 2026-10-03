@@ -463,7 +463,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
 
         assertThat(out).extracting(c -> c.getClass().getSimpleName()).containsExactly("TextEnd", "TurnError");
         assertThat(((UIMessageChunk.TurnError) out.get(1)).errorText())
-                .isEqualTo("Heph couldn't finish this reply. Please try again.");
+                .isEqualTo("Heph could not finish this reply. Try again.");
         assertThat(state.partsSnapshot().toString()).contains("Let me check.");
     }
 
@@ -599,7 +599,7 @@ class PiEventToUiChunkTranslatorTest extends BaseUnitTest {
         assertThat(out).hasSize(1).first().isInstanceOf(UIMessageChunk.TurnError.class);
         UIMessageChunk.TurnError err = (UIMessageChunk.TurnError) out.get(0);
         // Must be human-readable, not the raw wire symbol "turn_watchdog_fired".
-        assertThat(err.errorText()).doesNotContain("turn_watchdog_fired").contains("timed out");
+        assertThat(err.errorText()).doesNotContain("turn_watchdog_fired").contains("took too long");
     }
 
     @Test

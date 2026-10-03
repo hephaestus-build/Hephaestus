@@ -132,7 +132,7 @@ public class ReviewOutputService {
             if (!practices.add(slug)) {
                 throw new ObservationsRefusedException(
                         "ambiguous_practice_observations",
-                        "A review must submit one final observation per practice; repeated practice: " + slug,
+                        "A review must submit one final observation for each practice. This practice repeats: " + slug,
                         objectMapper.createArrayNode());
             }
         }
@@ -445,8 +445,8 @@ public class ReviewOutputService {
         if (changeOwed && observations.stream().noneMatch(f -> f.outcome().isDecided()) && !readTheDiff(observations)) {
             throw new ObservationsRefusedException(
                     "did_not_read_the_diff",
-                    "No observation decided anything or quoted the change, and a change was captured — the"
-                            + " review answered without reading it. Refusing to deliver. jobId="
+                    "No observation decided anything or quoted the change, and a change was captured."
+                            + " The review answered without reading the change, so the server does not deliver it. jobId="
                             + jobId);
         }
     }
@@ -487,7 +487,8 @@ public class ReviewOutputService {
     private Admissible requireAdmissible(AgentJob job, JsonNode metadata) {
         if (!citedSourceAccess.permitsReviewResult(job))
             throw new ObservationsRefusedException(
-                    "member_ai_declined", "The developer's AI choice no longer permits recording this review result.");
+                    "member_ai_declined",
+                    "The AI choice of the developer no longer permits the server to record this review result.");
         CapturedEvidence evidence = CapturedEvidence.of(job, objectMapper);
         for (SourceKind kind : evidence.availableSources()) {
             if (!sourceCatalogs.isSourceUsePermitted(
@@ -833,7 +834,7 @@ public class ReviewOutputService {
                 || inapplicability.path("ruledOutBy").asString().isBlank()) {
             throw new JobDeliveryException(
                     "A NOT_APPLICABLE observation must name what the practice looks for and what rules it out "
-                            + "here; if it could not be told either way the answer is UNDETERMINED: slug="
+                            + "here. If you cannot tell either way, the answer is UNDETERMINED. slug="
                             + observation.practiceSlug()
                             + ", jobId="
                             + job.getId());

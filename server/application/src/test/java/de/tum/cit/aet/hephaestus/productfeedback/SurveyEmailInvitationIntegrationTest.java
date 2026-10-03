@@ -436,9 +436,9 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         assertThat(reminderAlternatives.getCount()).isEqualTo(2);
         for (int part = 0; part < 2; part++) {
             assertThat(initialAlternatives.getBodyPart(part).getContent().toString())
-                    .doesNotContain("This is your one reminder.");
+                    .doesNotContain("This is your only reminder.");
             assertThat(reminderAlternatives.getBodyPart(part).getContent().toString())
-                    .contains("This is your one reminder.", "no further reminder is scheduled.");
+                    .contains("This is your only reminder.", "Hephaestus will not send another reminder.");
         }
         var invitation = invitations
                 .findBySurveyIdAndAccountId(survey.getId(), recipient.accountId())
@@ -540,7 +540,7 @@ class SurveyEmailInvitationIntegrationTest extends AbstractWorkspaceIntegrationT
         invitationService.scheduleSummaries();
 
         assertThat(mail.sent()).hasSize(1);
-        assertThat(mail.sent().getFirst().getSubject()).isEqualTo("A Hephaestus survey has ended");
+        assertThat(mail.sent().getFirst().getSubject()).isEqualTo("A Hephaestus survey ended");
         assertThat(surveys.findById(survey.getId()))
                 .get()
                 .extracting(Survey::getSummaryQueuedAt)

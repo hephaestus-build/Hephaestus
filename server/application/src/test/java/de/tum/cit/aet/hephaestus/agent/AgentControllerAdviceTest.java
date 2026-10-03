@@ -34,7 +34,7 @@ class AgentControllerAdviceTest extends BaseUnitTest {
         // ProblemDetail.detail must never be blank: the UI renders it verbatim.
         var problem = advice.handleAgentJobStateConflict(new AgentJobStateConflictException(" "));
 
-        assertThat(problem.getDetail()).isEqualTo("The agent request could not be processed.");
+        assertThat(problem.getDetail()).isEqualTo("The server could not process this request.");
     }
 
     /**

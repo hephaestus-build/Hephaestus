@@ -81,13 +81,13 @@ public class AccountBootstrapService {
         }
         if (presentedToken == null || !constantTimeEquals(configuredToken, presentedToken)) {
             log.warn("auth.bootstrap: rejected bootstrap-admin attempt by accountId={} — bad token", accountId);
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "invalid bootstrap token");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "The bootstrap token is not valid.");
         }
         int promoted = accountRepository.promoteToFirstAdminIfNoneExists(accountId);
         if (promoted == 0) {
             // Either an APP_ADMIN already exists (self-disabled) or this account is already one.
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "bootstrap unavailable: an administrator already exists");
+                    HttpStatus.CONFLICT, "Bootstrap is not available. An administrator already exists.");
         }
         authEventLogger
                 .event(AuthEvent.EventType.APP_ROLE_CHANGED, AuthEvent.Result.SUCCESS)

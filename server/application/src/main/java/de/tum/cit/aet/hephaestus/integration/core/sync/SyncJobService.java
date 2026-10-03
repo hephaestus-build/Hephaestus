@@ -252,15 +252,15 @@ public class SyncJobService implements SmartLifecycle {
                     .orElseThrow(() -> new EntityNotFoundException("SyncJob", jobId));
             if (!SyncJobStatus.ACTIVE.contains(job.getStatus())) {
                 throw new SyncStateConflictException(
-                        "Cannot cancel sync job " + jobId + " — already in terminal status " + job.getStatus(),
+                        "Cannot cancel sync job " + jobId + ". It already has the terminal status " + job.getStatus()
+                                + ".",
                         Map.of("jobId", jobId, "jobStatus", job.getStatus()));
             }
             // Targeted flag-only UPDATE (not a full-row save): a full save would write back this stale
             // snapshot's status column and could resurrect a job that the executor just completed.
             if (syncJobRepository.markCancelRequested(jobId, SyncJobStatus.ACTIVE) == 0) {
                 throw new SyncStateConflictException(
-                        "Cannot cancel sync job " + jobId + " because it completed concurrently",
-                        Map.of("jobId", jobId));
+                        "Cannot cancel sync job " + jobId + ". It completed at the same time.", Map.of("jobId", jobId));
             }
             publish(workspaceId, job.getConnection().getId(), job.getKind(), SyncStateChangedEvent.Scope.JOB);
         });
@@ -381,7 +381,9 @@ public class SyncJobService implements SmartLifecycle {
                 continue;
             }
             int updated = syncJobRepository.markAbandoned(
-                    job.getId(), "Abandoned: no heartbeat (likely pod restart)", leaseTtlSeconds());
+                    job.getId(),
+                    "Abandoned. The job sent no heartbeat, probably because the pod restarted.",
+                    leaseTtlSeconds());
             if (updated == 0) {
                 continue;
             }

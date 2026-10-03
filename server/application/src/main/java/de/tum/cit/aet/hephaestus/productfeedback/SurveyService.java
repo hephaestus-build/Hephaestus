@@ -59,7 +59,7 @@ class SurveyService {
         if (request.purpose() == Survey.Purpose.RESEARCH) {
             organisation = research.researchOrganization()
                     .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.BAD_REQUEST, "This instance runs no research programme"));
+                            HttpStatus.BAD_REQUEST, "This instance does not run a research program."));
         }
         Survey survey = surveys.saveAndFlush(new Survey(
                 request.title(),
@@ -286,7 +286,7 @@ class SurveyService {
         SurveyParticipation participation =
                 participations.findBySurveyIdAndAccountId(surveyId, accountId).orElseThrow();
         if (participation.getStatus() != Status.INVITED)
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "survey already answered or declined");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "You already answered or declined this survey.");
         return participation;
     }
 

@@ -257,7 +257,8 @@ class SyncJobServiceTest extends BaseUnitTest {
     void beginJob_inlineReapClearsAbandonedJobBeforeGuardCheck_thenSucceeds() {
         SyncJob abandoned = newJob(7L, SyncJobStatus.RUNNING);
         when(syncJobRepository.findAbandonedForConnection(CONNECTION_ID, 900)).thenReturn(List.of(abandoned));
-        when(syncJobRepository.markAbandoned(7L, "Abandoned: no heartbeat (likely pod restart)", 900))
+        when(syncJobRepository.markAbandoned(
+                        7L, "Abandoned. The job sent no heartbeat, probably because the pod restarted.", 900))
                 .thenReturn(1);
         when(syncJobRepository.findFirstByConnection_IdAndStatusInOrderByCreatedAtDesc(
                         CONNECTION_ID, SyncJobStatus.ACTIVE))
@@ -265,7 +266,8 @@ class SyncJobServiceTest extends BaseUnitTest {
 
         SyncJobService.Started started = service.beginJob(defaultRequest());
 
-        verify(syncJobRepository).markAbandoned(7L, "Abandoned: no heartbeat (likely pod restart)", 900);
+        verify(syncJobRepository)
+                .markAbandoned(7L, "Abandoned. The job sent no heartbeat, probably because the pod restarted.", 900);
         assertThat(started.job()).isNotNull();
         assertThat(started.job().getStatus()).isEqualTo(SyncJobStatus.PENDING);
     }
@@ -451,7 +453,8 @@ class SyncJobServiceTest extends BaseUnitTest {
         SyncJob crashed = newJob(7L, SyncJobStatus.RUNNING);
         crashed.setHeartbeatAt(Instant.now().minus(Duration.ofMinutes(30)));
         when(syncJobRepository.findAbandonedForConnection(CONNECTION_ID, 900)).thenReturn(List.of(crashed));
-        when(syncJobRepository.markAbandoned(7L, "Abandoned: no heartbeat (likely pod restart)", 900))
+        when(syncJobRepository.markAbandoned(
+                        7L, "Abandoned. The job sent no heartbeat, probably because the pod restarted.", 900))
                 .thenReturn(1);
         when(syncJobRepository.findFirstByConnection_IdAndStatusInOrderByCreatedAtDesc(
                         CONNECTION_ID, SyncJobStatus.ACTIVE))
@@ -459,7 +462,8 @@ class SyncJobServiceTest extends BaseUnitTest {
 
         assertThat(service.requestCancelForTeardown(CONNECTION_ID)).isEmpty();
 
-        verify(syncJobRepository).markAbandoned(7L, "Abandoned: no heartbeat (likely pod restart)", 900);
+        verify(syncJobRepository)
+                .markAbandoned(7L, "Abandoned. The job sent no heartbeat, probably because the pod restarted.", 900);
     }
 
     @Test
@@ -683,13 +687,15 @@ class SyncJobServiceTest extends BaseUnitTest {
         SyncJob stale = newJob(8L, SyncJobStatus.RUNNING);
         stale.setHeartbeatAt(Instant.now().minus(Duration.ofMinutes(30)));
         when(syncJobRepository.findAbandoned(900)).thenReturn(List.of(stale));
-        when(syncJobRepository.markAbandoned(8L, "Abandoned: no heartbeat (likely pod restart)", 900))
+        when(syncJobRepository.markAbandoned(
+                        8L, "Abandoned. The job sent no heartbeat, probably because the pod restarted.", 900))
                 .thenReturn(1);
 
         int reaped = service.reapAbandonedJobs();
 
         assertThat(reaped).isEqualTo(1);
-        verify(syncJobRepository).markAbandoned(8L, "Abandoned: no heartbeat (likely pod restart)", 900);
+        verify(syncJobRepository)
+                .markAbandoned(8L, "Abandoned. The job sent no heartbeat, probably because the pod restarted.", 900);
         verify(eventPublisher).publishEvent(any(SyncStateChangedEvent.class));
         verify(syncJobRepository, never()).save(any());
     }
@@ -705,7 +711,8 @@ class SyncJobServiceTest extends BaseUnitTest {
     void reapAbandonedJobs_heartbeatRefreshedAfterCandidateRead_doesNotReapOrPublish() {
         SyncJob candidate = newJob(8L, SyncJobStatus.RUNNING);
         when(syncJobRepository.findAbandoned(900)).thenReturn(List.of(candidate));
-        when(syncJobRepository.markAbandoned(8L, "Abandoned: no heartbeat (likely pod restart)", 900))
+        when(syncJobRepository.markAbandoned(
+                        8L, "Abandoned. The job sent no heartbeat, probably because the pod restarted.", 900))
                 .thenReturn(0);
 
         assertThat(service.reapAbandonedJobs()).isZero();

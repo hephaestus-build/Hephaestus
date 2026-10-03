@@ -167,7 +167,8 @@ public class ConnectionController {
                     case SUSPENDED -> "SUSPEND";
                     case UNINSTALLED -> "DISCONNECT";
                     case PENDING ->
-                        throw new IllegalArgumentException("PENDING is not an admin-settable connection state");
+                        throw new IllegalArgumentException(
+                                "An administrator cannot set a connection to the state PENDING.");
                 };
 
         String correlationId = eventType.toLowerCase(Locale.ROOT) + "-" + connection.getId() + "-" + UUID.randomUUID();
@@ -184,7 +185,7 @@ public class ConnectionController {
         ConnectionStrategy strategy = strategies.get(connection.getKind());
         if (strategy == null) {
             throw new IllegalStateException("Cannot disconnect " + connection.getKind()
-                    + ": the integration is disabled on this instance, so its data cannot be erased");
+                    + ". The integration is disabled on this instance, so Hephaestus cannot erase its data.");
         }
         return strategy;
     }

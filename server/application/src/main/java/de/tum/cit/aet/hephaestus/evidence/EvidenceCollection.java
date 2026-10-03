@@ -42,9 +42,12 @@ public enum EvidenceCollection {
         return Arrays.stream(values())
                 .filter(collection -> collection.id.equals(id))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("“Evidence present” (evidenceHasItems) counts one of "
-                        + Arrays.stream(values()).map(EvidenceCollection::id).collect(Collectors.joining(", "))
-                        + "; " + id + " is not one of them."));
+                .orElseThrow(
+                        () -> new IllegalArgumentException("“Evidence present” (evidenceHasItems) counts one of these: "
+                                + Arrays.stream(values())
+                                        .map(EvidenceCollection::id)
+                                        .collect(Collectors.joining(", "))
+                                + ". " + id + " is not one of them."));
     }
 
     @Override

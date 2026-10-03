@@ -43,7 +43,7 @@ public class FeedbackResponseService {
         Feedback feedback = requireDeliveredFeedback(workspaceContext.id(), feedbackId, recipientId);
         validate(request);
         if (withdrawalRepository.findActive(workspaceContext.id(), feedbackId).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "This feedback was withdrawn");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This feedback was withdrawn.");
         }
 
         Optional<FeedbackResponseDTO> current = currentResponse(feedbackId, recipientId);
@@ -131,11 +131,11 @@ public class FeedbackResponseService {
 
     private void validate(FeedbackResponseRequestDTO request) {
         if (request.usefulness() == null && request.resolution() == null) {
-            throw new IllegalArgumentException("A feedback response requires usefulness or resolution");
+            throw new IllegalArgumentException("A feedback response needs a usefulness rating or a resolution.");
         }
         if (request.resolution() == FeedbackResolution.DISPUTED
                 && (request.comment() == null || request.comment().isBlank())) {
-            throw new IllegalArgumentException("A comment is required when disputing feedback");
+            throw new IllegalArgumentException("If you dispute feedback, add a comment.");
         }
     }
 }

@@ -18,6 +18,6 @@ class SyncControllerAdviceTest extends BaseUnitTest {
 
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
         assertThat(problem.getTitle()).isEqualTo("Sync dispatch rejected");
-        assertThat(problem.getDetail()).contains("busy").contains("retry");
+        assertThat(problem.getDetail()).contains("busy").contains("Try again");
     }
 }

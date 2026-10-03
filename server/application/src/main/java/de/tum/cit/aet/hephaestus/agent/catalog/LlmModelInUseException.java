@@ -11,6 +11,6 @@ public class LlmModelInUseException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public LlmModelInUseException(Long modelId) {
-        super("Cannot delete LLM model " + modelId + ": one or more agent configurations still use it.");
+        super("Cannot delete LLM model " + modelId + ". One or more agent configurations still use it.");
     }
 }

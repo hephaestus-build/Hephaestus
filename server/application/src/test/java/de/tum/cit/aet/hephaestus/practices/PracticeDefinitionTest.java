@@ -48,7 +48,7 @@ class PracticeDefinitionTest extends BaseUnitTest {
                         List.of(ScmSignals.PULL_REQUEST_OPENED, ScmSignals.PULL_REQUEST_OPENED),
                         List.of(required(CORE))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("The same moment is chosen twice. Choose each moment once.");
+                .hasMessage("You chose the same moment twice. Choose each moment once.");
     }
 
     @Test
@@ -83,7 +83,7 @@ class PracticeDefinitionTest extends BaseUnitTest {
                         List.of(ScmSignals.PULL_REQUEST_OPENED),
                         List.of(required(CORE), contextual(CORE))))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("source is listed twice");
+                .hasMessageContaining("lists an evidence source twice");
     }
 
     @Test

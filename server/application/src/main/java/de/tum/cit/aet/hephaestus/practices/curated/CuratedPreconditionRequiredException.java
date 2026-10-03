@@ -8,6 +8,6 @@ public class CuratedPreconditionRequiredException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     public CuratedPreconditionRequiredException() {
-        super("If-Match must contain the current catalog entry ETag");
+        super("The If-Match header must contain the current ETag of the catalog entry.");
     }
 }

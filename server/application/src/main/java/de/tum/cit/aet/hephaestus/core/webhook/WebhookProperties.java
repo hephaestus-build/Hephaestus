@@ -45,7 +45,7 @@ public record WebhookProperties(
     @AssertTrue(
             message =
                     "hephaestus.webhook.stream.max-bytes, and every max-bytes-by-stream entry, must be at least "
-                            + "4 x hephaestus.webhook.http.max-payload-bytes; a smaller stream rejects payloads the receiver accepted")
+                            + "4 x hephaestus.webhook.http.max-payload-bytes. A smaller stream rejects payloads that the receiver accepted.")
     private boolean isStreamAbleToHoldWhatTheReceiverAccepts() {
         if (stream == null || http == null) {
             return true;

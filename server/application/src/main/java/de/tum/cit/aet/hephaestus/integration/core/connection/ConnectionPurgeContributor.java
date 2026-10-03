@@ -82,8 +82,8 @@ public class ConnectionPurgeContributor implements WorkspacePurgeContributor {
                     connection.getId(),
                     e.toString());
             throw new WorkspacePurgeBlockedException(
-                    "Could not confirm disconnecting " + providerName(connection.getKind())
-                            + ". No local data was deleted; retry when the provider is available.",
+                    "Could not confirm that " + providerName(connection.getKind())
+                            + " is disconnected. Hephaestus did not delete any local data. Retry when the provider is available.",
                     e);
         }
     }

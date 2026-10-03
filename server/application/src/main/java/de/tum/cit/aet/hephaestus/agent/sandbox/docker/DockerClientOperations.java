@@ -341,8 +341,8 @@ public class DockerClientOperations
             if (!complete) {
                 // Say so in the transcript itself: a reader who cannot tell a short run from an
                 // abandoned collection cannot trust either.
-                logs.append("\n[hephaestus] Log collection stopped after " + LOG_COLLECTION_TIMEOUT_SECONDS
-                        + " seconds; this transcript ends early.\n");
+                logs.append("\n[hephaestus] The server stopped the log collection after "
+                        + LOG_COLLECTION_TIMEOUT_SECONDS + " seconds. This transcript ends early.\n");
             }
 
             return logs.toString();

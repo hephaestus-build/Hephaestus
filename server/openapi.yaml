@@ -2229,14 +2229,14 @@ paths:
           content:
             application/json: {}
           description: The request carries the browser session cookie without a valid
-            CSRF token; refused before the endpoint runs
+            CSRF token. The server refuses it before the endpoint runs.
         "429":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Too many installed-client requests from this address; retry
-            after the Retry-After seconds
+          description: "This address sent too many installed-client requests. Wait\
+            \ the number of seconds in the Retry-After header, then try again."
       summary: End the session its refresh secret belongs to
       tags:
       - Client session
@@ -2273,14 +2273,14 @@ paths:
           content:
             application/json: {}
           description: The request carries the browser session cookie without a valid
-            CSRF token; refused before the endpoint runs
+            CSRF token. The server refuses it before the endpoint runs.
         "429":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Too many installed-client requests from this address; retry
-            after the Retry-After seconds
+          description: "This address sent too many installed-client requests. Wait\
+            \ the number of seconds in the Retry-After header, then try again."
       summary: Rotate the session's access token and refresh secret
       tags:
       - Client session
@@ -2312,14 +2312,14 @@ paths:
           content:
             application/json: {}
           description: The request carries the browser session cookie without a valid
-            CSRF token; refused before the endpoint runs
+            CSRF token. The server refuses it before the endpoint runs.
         "429":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: Too many installed-client requests from this address; retry
-            after the Retry-After seconds
+          description: "This address sent too many installed-client requests. Wait\
+            \ the number of seconds in the Retry-After header, then try again."
       summary: Redeem a sign-in handoff code with its PKCE verifier
       tags:
       - Client session

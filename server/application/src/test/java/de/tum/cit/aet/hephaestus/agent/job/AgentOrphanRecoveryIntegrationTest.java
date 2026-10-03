@@ -210,7 +210,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
         AgentJob failed = jobRepository.findById(jobId).orElseThrow();
         assertThat(failed.getStatus()).isEqualTo(AgentJobStatus.FAILED);
-        assertThat(failed.getErrorMessage()).contains("retry limit reached");
+        assertThat(failed.getErrorMessage()).contains("retry limit is reached");
         assertThat(jobRepository.findQueuedIdsOldestFirst(10)).doesNotContain(jobId);
     }
 

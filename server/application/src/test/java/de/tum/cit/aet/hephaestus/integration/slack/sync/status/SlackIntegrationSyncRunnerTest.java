@@ -98,6 +98,6 @@ class SlackIntegrationSyncRunnerTest extends BaseUnitTest {
                 .contains("7 messages")
                 .contains("1 skipped")
                 .contains("1 failed")
-                .contains("request budget exhausted");
+                .contains("request budget ran out");
     }
 }

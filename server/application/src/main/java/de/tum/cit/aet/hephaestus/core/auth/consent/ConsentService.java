@@ -83,14 +83,14 @@ public class ConsentService implements ResearchParticipationQuery {
     public ConsentStatusDTO completeFirstLogin(Long accountId, FirstLoginConsentDTO request) {
         requireCurrentNotice(request.noticeVersion(), request.researchOrganization());
         if (!request.termsAccepted()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Terms must be accepted to use Hephaestus");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Accept the terms to use Hephaestus.");
         }
         String organisation = properties.researchProgramme();
         if (organisation != null && request.participateInResearch() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Answer the research question to continue");
         }
         if (organisation == null && request.participateInResearch() != null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This instance runs no research programme");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "This instance does not run a research program.");
         }
         Account account = requireAccountForUpdate(accountId);
         if (!hasCurrentGrant(accountId, ConsentDecision.Purpose.TERMS_ACCEPTANCE)) {
@@ -122,7 +122,7 @@ public class ConsentService implements ResearchParticipationQuery {
         if (organisation == null) {
             // Participation is already false for every account while no study is configured, so there
             // is nothing here to grant and nothing left to withdraw.
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "This instance runs no research programme");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "This instance does not run a research program.");
         }
         requireCurrentNotice(request.noticeVersion(), request.researchOrganization());
         if (!isCurrentNoticeCompleted(accountId)) {
@@ -188,14 +188,14 @@ public class ConsentService implements ResearchParticipationQuery {
         if (!WORDING_VERSION.equals(noticeVersion)
                 || !Objects.equals(properties.researchProgramme(), researchOrganization)) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "The transparency notice has changed; review it again");
+                    HttpStatus.CONFLICT, "The transparency notice has changed. Review it again.");
         }
     }
 
     private Account requireAccountForUpdate(Long accountId) {
         return accountRepository
                 .findByIdForUpdate(accountId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "The account was not found."));
     }
 
     private boolean hasCurrentGrant(Long accountId, ConsentDecision.Purpose purpose) {

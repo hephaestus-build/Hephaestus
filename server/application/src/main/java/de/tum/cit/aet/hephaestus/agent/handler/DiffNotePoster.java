@@ -130,8 +130,8 @@ class DiffNotePoster {
                 Objects.requireNonNull(job.getIntegrationKind(), "AgentJob.integrationKind must not be null");
         InlineFeedbackChannel channel = channels.get(kind);
         if (channel == null) {
-            throw new JobDeliveryException("No InlineFeedbackChannel wired for kind " + kind
-                    + " — check that the vendor integration is enabled and its channel bean is registered");
+            throw new JobDeliveryException("No InlineFeedbackChannel is wired for kind " + kind
+                    + ". Check that the vendor integration is enabled and its channel bean is registered.");
         }
 
         SummaryChannel.FeedbackTarget target =

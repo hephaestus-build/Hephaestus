@@ -85,18 +85,20 @@ public class NotificationSubscriptionService {
         if (enablingSubscription
                 && contacts.activeVerifiedPrimaryEmail(accountId).isEmpty()) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "A verified email address on an active account is required");
+                    HttpStatus.CONFLICT, "The account must be active and have a verified email address.");
         }
         if (update.productFeedback() && !admin && !enabled(rows, NotificationSubscriptionKind.PRODUCT_FEEDBACK)) {
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "Product feedback notifications require instance administration");
+                    HttpStatus.FORBIDDEN, "Only an instance admin can turn on product feedback notifications.");
         }
         if (update.surveySummaries() && !admin && !enabled(rows, NotificationSubscriptionKind.SURVEY_SUMMARIES)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Survey summaries require instance administration");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "Only an instance admin can turn on survey summaries.");
         }
         if (!precondition.matches(version(rows))) {
             throw new ResponseStatusException(
-                    HttpStatus.PRECONDITION_FAILED, "Notification preferences changed; reload before saving");
+                    HttpStatus.PRECONDITION_FAILED,
+                    "The notification preferences changed. Reload them before you save.");
         }
         for (NotificationSubscriptionKind kind : NotificationSubscriptionKind.values()) {
             NotificationSubscription row =

@@ -17,7 +17,7 @@ class SyncJobWorkspacePurgeGuard implements WorkspacePurgeGuard {
     public void verifyQuiescent(Long workspaceId) {
         if (syncJobRepository.existsByWorkspace_IdAndStatusIn(workspaceId, SyncJobStatus.ACTIVE)) {
             throw new WorkspacePurgeBlockedException(
-                    "This workspace has an active integration sync. Cancel it, wait for it to stop, then try again.");
+                    "This workspace has an active integration sync. Cancel the sync and wait for it to stop. Then try again.");
         }
     }
 }

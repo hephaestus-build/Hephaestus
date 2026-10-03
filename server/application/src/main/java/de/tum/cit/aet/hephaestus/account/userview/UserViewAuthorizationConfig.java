@@ -39,7 +39,8 @@ public class UserViewAuthorizationConfig {
             String reason = request.getHeader(UserViewContextHolder.REASON_HEADER);
             if (reason == null) {
                 throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "Missing " + UserViewContextHolder.REASON_HEADER + " header");
+                        HttpStatus.BAD_REQUEST,
+                        "The request does not include the " + UserViewContextHolder.REASON_HEADER + " header.");
             }
             long workspaceId = WorkspaceContextHolder.getContext().id();
             long userId = viewedUserId(invocation);

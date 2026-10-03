@@ -101,7 +101,7 @@ class PracticeReviewCoverageServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.replace(workspace, crossTenant))
                 .isInstanceOf(InvalidReviewCoverageException.class)
-                .hasMessageContaining("not monitored by this workspace");
+                .hasMessageContaining("does not monitor the repository");
     }
 
     @Test

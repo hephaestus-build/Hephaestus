@@ -35,7 +35,7 @@ class SurveyEmailRendererTest extends BaseUnitTest {
                 .contains("A " + category + " survey", "Unsubscribe from " + category + "-survey emails");
         assertThat(rendered.html()).contains("A " + category + " survey", "stop " + category + "-survey emails");
         String target = EmailTestSupport.WEBAPP_URL + "/w/team?survey=" + surveyId;
-        assertThat(rendered.text()).contains(target, unsubscribeUrl, "Taking part is optional");
+        assertThat(rendered.text()).contains(target, unsubscribeUrl, "You do not have to take part");
         assertThat(rendered.html()).contains("href=\"" + target + "\"", "href=\"" + unsubscribeUrl + "\"");
     }
 
@@ -54,7 +54,7 @@ class SurveyEmailRendererTest extends BaseUnitTest {
                                 "unsubscribeUrl",
                                 EmailTestSupport.WEBAPP_URL + "/unsubscribe?token=opaque-token"));
 
-        assertThat(rendered.text()).contains("People shown an in-app invitation: 3", "Responded: 2", "Declined: 1");
+        assertThat(rendered.text()).contains("People who saw an in-app invitation: 3", "Responded: 2", "Declined: 1");
         assertThat(rendered.html())
                 .contains("/admin/surveys", "<strong>3</strong>", "<strong>2</strong>", "<strong>1</strong>");
     }

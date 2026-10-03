@@ -315,7 +315,7 @@ public class OutlineDocumentSyncService {
                     // (unitsCompleted/unitsTotal travel on the same record).
                     SyncProgress.ofResource(
                             SyncPhase.COLLECTIONS,
-                            collectionName == null ? "Syncing collection" : "Syncing " + collectionName,
+                            collectionName == null ? "Sync of collection" : "Sync of " + collectionName,
                             collectionName,
                             done,
                             total));

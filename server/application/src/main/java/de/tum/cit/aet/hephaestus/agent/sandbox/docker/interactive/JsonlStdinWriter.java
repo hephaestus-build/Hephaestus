@@ -166,7 +166,7 @@ final class JsonlStdinWriter {
         terminated = true;
         WriteEnvelope env;
         while ((env = queue.poll()) != null) {
-            env.ack.completeExceptionally(new IOException("Session terminated"));
+            env.ack.completeExceptionally(new IOException("Session stopped"));
         }
         try {
             onTerminalFailure.run();

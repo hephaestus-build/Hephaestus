@@ -37,7 +37,8 @@ public final class PracticeDefinitionMerge {
                 .map(FieldChange::field)
                 .collect(Collectors.toSet());
         if (!changed.equals(choices.keySet()) || choices.values().stream().anyMatch(Objects::isNull)) {
-            throw new IllegalArgumentException("Choose current or offered for every changed catalogue field");
+            throw new IllegalArgumentException(
+                    "Choose the current or the offered value for every changed catalog field.");
         }
         return new PracticeDefinition(
                 source(PracticeDefinitionField.NAME, current, offered, choices).name(),

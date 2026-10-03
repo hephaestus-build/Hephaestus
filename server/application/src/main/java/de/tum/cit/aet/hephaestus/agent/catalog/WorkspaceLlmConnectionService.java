@@ -163,7 +163,7 @@ public class WorkspaceLlmConnectionService {
 
     private void requireByoEnabled() {
         if (!instanceLlmSettingsService.get().isAllowWorkspaceConnections()) {
-            throw new AccessForbiddenException("Connecting your own AI provider is disabled on this server.");
+            throw new AccessForbiddenException("This server does not allow you to connect your own AI provider.");
         }
     }
 }

@@ -86,7 +86,7 @@ class AccountAdminRoleIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(409)
                 .expectBody()
                 .jsonPath("$.detail")
-                .isEqualTo("You can't revoke your own admin access. Have another admin do it.");
+                .isEqualTo("You cannot revoke your own admin access. Ask another admin to do it.");
 
         assertThat(accountRepository.findById(persistedId(self.getId())))
                 .get()

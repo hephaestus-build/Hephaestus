@@ -112,7 +112,7 @@ public class OAuthCallbackController {
             return failure(
                     kindPathSegment,
                     "unknown_kind",
-                    "No integration registered for path segment: " + sanitize(kindPathSegment),
+                    "No integration is registered for the path segment: " + sanitize(kindPathSegment),
                     HttpStatus.NOT_FOUND,
                     wantsJson);
         }
@@ -134,7 +134,11 @@ public class OAuthCallbackController {
             }
             log.info("OAuth callback for kind={} missing state parameter", kind);
             return failure(
-                    kind.name(), "missing_state", "state parameter is required", HttpStatus.BAD_REQUEST, wantsJson);
+                    kind.name(),
+                    "missing_state",
+                    "The state parameter is required.",
+                    HttpStatus.BAD_REQUEST,
+                    wantsJson);
         }
         StateBinding binding;
         try {
@@ -153,9 +157,9 @@ public class OAuthCallbackController {
             return failure(
                     kind.name(),
                     "kind_mismatch",
-                    "State issued for kind=" + binding.kind()
-                            + " replayed against callback path /oauth/callback/"
-                            + kindPathSegment,
+                    "The state was issued for kind=" + binding.kind()
+                            + ". The request used the callback path /oauth/callback/"
+                            + kindPathSegment + ".",
                     HttpStatus.BAD_REQUEST,
                     wantsJson);
         }
@@ -168,7 +172,7 @@ public class OAuthCallbackController {
             return problemDetail(
                     kind.name(),
                     "no_strategy",
-                    "No ConnectionStrategy registered for kind=" + kind,
+                    "No ConnectionStrategy is registered for kind=" + kind,
                     HttpStatus.INTERNAL_SERVER_ERROR);
         }
 

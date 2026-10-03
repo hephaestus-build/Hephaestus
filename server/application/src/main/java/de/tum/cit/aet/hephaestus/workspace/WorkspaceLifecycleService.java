@@ -95,7 +95,8 @@ public class WorkspaceLifecycleService {
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
         if (workspace.getStatus() == WorkspaceStatus.PURGED) {
-            throw new WorkspaceLifecycleViolationException("Cannot suspend a purged workspace: " + workspaceSlug);
+            throw new WorkspaceLifecycleViolationException(
+                    "Workspace '" + workspaceSlug + "' is purged. You cannot suspend it.");
         }
 
         if (workspace.getStatus() != WorkspaceStatus.SUSPENDED) {
@@ -135,7 +136,8 @@ public class WorkspaceLifecycleService {
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceSlug));
 
         if (workspace.getStatus() == WorkspaceStatus.PURGED) {
-            throw new WorkspaceLifecycleViolationException("Cannot resume a purged workspace: " + workspaceSlug);
+            throw new WorkspaceLifecycleViolationException(
+                    "Workspace '" + workspaceSlug + "' is purged. You cannot resume it.");
         }
 
         if (workspace.getStatus() != WorkspaceStatus.ACTIVE) {
@@ -252,7 +254,7 @@ public class WorkspaceLifecycleService {
             case SUSPENDED -> suspendWorkspaceInTransaction(workspaceSlug);
             case PURGED ->
                 throw new WorkspaceLifecycleViolationException(
-                        "Workspaces cannot be purged via the status endpoint. Use DELETE /workspaces/{workspaceSlug} (requires the OWNER role).");
+                        "You cannot purge a workspace with the status endpoint. Use DELETE /workspaces/{workspaceSlug}. This request needs the OWNER role.");
         };
     }
 

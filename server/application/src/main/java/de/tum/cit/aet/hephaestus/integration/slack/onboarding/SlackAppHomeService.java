@@ -152,9 +152,9 @@ public class SlackAppHomeService {
                                         ? "Allowed, " + activeChannelText
                                         : "Not allowed"))))),
                 section(s -> s.text(markdownText(
-                        "*Context and privacy.* Hephaestus can use your linked project work and new messages "
-                                + "you send in monitored channels. It does not read channel history from before the "
-                                + "channel was activated. It does not mentor in channels."))));
+                        "*Context and privacy.* Hephaestus can use your linked project work and the new messages "
+                                + "that you send in monitored channels. It does not read the history of a channel from "
+                                + "before Hephaestus became active there. It does not mentor in channels."))));
     }
 
     record HomeOverviewState(
@@ -169,9 +169,11 @@ public class SlackAppHomeService {
             return List.of();
         }
         return List.of(
-                section(s ->
-                        s.text(markdownText("*Account settings.* Use this Home tab for Slack message-use controls. "
-                                + "Open Hephaestus to manage sign-in, account linking, and research participation."))),
+                section(
+                        s -> s.text(
+                                markdownText(
+                                        "*Account settings.* Use this Home tab to control how Hephaestus uses your Slack messages. "
+                                                + "Open Hephaestus to manage your sign-in, your linked accounts, and your research participation."))),
                 actions(a -> a.elements(asElements(button(b -> b.text(plainText("Open account settings"))
                         .url(url)
                         .actionId(ACTION_OPEN_HEPHAESTUS)
@@ -180,19 +182,19 @@ public class SlackAppHomeService {
 
     private static String leadText(HomeOverviewState state) {
         if (!state.mentorReady()) {
-            return ("*Mentor unavailable.* The mentor is disabled or not configured for this workspace. "
-                    + "You can still manage privacy here.");
+            return ("*Mentor unavailable.* The mentor is turned off or not set up for this workspace. "
+                    + "You can still manage your privacy here.");
         }
         if (state.login().isEmpty()) {
             return ("*Check your account access to use the mentor.* You need an active Hephaestus account "
-                    + "linked to Slack and a project identity in this workspace. You can still manage "
-                    + "channel-message privacy here.");
+                    + "that you linked to Slack. You also need a project identity in this workspace. "
+                    + "You can still manage channel-message privacy here.");
         }
         if (state.refusal().isPresent()) {
             return state.refusal().get().userMessage();
         }
-        return ("*AI mentor for software project practices.* Ask in the Messages tab about PRs, reviews, issues, "
-                + "tests, or team ways of working. Replies stay in DM.");
+        return ("*AI mentor for software project practices.* In the Messages tab, ask about PRs, reviews, issues, "
+                + "tests, or team ways of working. The replies stay in DMs.");
     }
 
     private static String stateIcon(boolean ok) {
@@ -201,8 +203,9 @@ public class SlackAppHomeService {
 
     List<LayoutBlock> channelMessageBlocks(boolean allowed) {
         String status = allowed
-                ? "*Channel-message context is allowed.* New messages you send in monitored channels may personalize "
-                        + "private mentoring. Turning this off stops future use and deletes channel-message data collected from you."
+                ? "*Channel-message context is allowed.* Hephaestus may use the new messages that you send in monitored "
+                        + "channels to personalize how it mentors you in private. If you turn this off, Hephaestus stops "
+                        + "future use and deletes the channel-message data that it collected from you."
                 : "*Channel-message context is not allowed.* Hephaestus does not use your messages in monitored channels.";
         return List.of(
                 section(s -> s.text(markdownText(status))),
@@ -223,9 +226,8 @@ public class SlackAppHomeService {
     private static ConfirmationDialogObject channelMessageOptInConfirm() {
         return ConfirmationDialogObject.builder()
                 .title(plainText("Allow future channel messages?"))
-                .text(plainText(
-                        "This allows Hephaestus to use new messages you send in monitored channels. Deleted data is "
-                                + "not restored."))
+                .text(plainText("Hephaestus can then use the new messages that you send in monitored channels. "
+                        + "Hephaestus does not restore deleted data."))
                 .confirm(plainText("Allow future messages"))
                 .deny(plainText("Cancel"))
                 .build();

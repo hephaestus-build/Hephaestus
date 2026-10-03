@@ -85,7 +85,7 @@ public class DevLoginController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
         if (username.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "username is required");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The username is required.");
         }
         ClientSignInStart start = ClientSignInStart.decide(installedClients, parameters);
         return switch (start) {

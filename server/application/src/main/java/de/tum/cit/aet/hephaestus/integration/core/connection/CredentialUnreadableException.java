@@ -22,8 +22,8 @@ public class CredentialUnreadableException extends RuntimeException {
         super(
                 "The stored " + kind.name().toLowerCase(Locale.ROOT) + " credential of connection "
                         + connectionId
-                        + " cannot be read with the server's current encryption keys. Replace the credential, or restore the"
-                        + " key it was written with if that was changed by mistake.",
+                        + " cannot be read with the current encryption keys of the server. Replace the credential."
+                        + " If someone changed the key by mistake, restore the key that wrote the credential.",
                 cause);
         this.connectionId = connectionId;
         this.kind = kind;

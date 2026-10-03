@@ -89,7 +89,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
         ConnectFinalization r = strategy.finalizeConnect(ref(), Map.of("code", "c"));
 
         assertThat(r).isInstanceOf(ConnectFinalization.Failed.class);
-        assertThat(((ConnectFinalization.Failed) r).reason()).contains("Token rotation");
+        assertThat(((ConnectFinalization.Failed) r).reason()).contains("token rotation");
     }
 
     @Test
@@ -100,7 +100,7 @@ class SlackConnectionStrategyTest extends BaseUnitTest {
         ConnectFinalization r = strategy.finalizeConnect(ref(), Map.of("code", "c"));
 
         assertThat(r).isInstanceOf(ConnectFinalization.Failed.class);
-        assertThat(((ConnectFinalization.Failed) r).reason()).contains("missing team");
+        assertThat(((ConnectFinalization.Failed) r).reason()).contains("has no team");
     }
 
     @Test

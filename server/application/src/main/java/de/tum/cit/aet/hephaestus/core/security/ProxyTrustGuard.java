@@ -51,9 +51,10 @@ public class ProxyTrustGuard {
         if (internalProxies == null || internalProxies.isBlank()) {
             throw new IllegalStateException(
                     "server.tomcat.remoteip.internal-proxies is unset while forward-headers-strategy=native in "
-                            + "prod. Boot's default trusts ALL of RFC-1918, so a client behind in-cluster ingress can "
-                            + "spoof X-Forwarded-For and forge getRemoteAddr(), defeating the pre-auth IP rate limit. "
-                            + "Pin the ingress address via HEPHAESTUS_TRUSTED_PROXIES (a Tomcat internal-proxies regex).");
+                            + "prod. The Boot default trusts all RFC-1918 addresses. A client behind an in-cluster "
+                            + "ingress can then spoof X-Forwarded-For and forge getRemoteAddr(). This defeats the "
+                            + "pre-auth IP rate limit. Pin the ingress address with HEPHAESTUS_TRUSTED_PROXIES "
+                            + "(a Tomcat internal-proxies regex).");
         }
     }
 

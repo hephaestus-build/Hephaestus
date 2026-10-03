@@ -335,7 +335,7 @@ public class GitHubDataSyncScheduler {
                 // time in these org-level phases, and without a report the UI shows the previous phase's
                 // last tick for their whole duration — the multi-phase sync reads as a stall.
                 int totalRepos = session.syncTargets().size();
-                reportPhase(handle, SyncPhase.ORGANIZATION, "Syncing organization issue types", 0, totalRepos);
+                reportPhase(handle, SyncPhase.ORGANIZATION, "Sync of organization issue types", 0, totalRepos);
 
                 // Issue types are organization-level entities that issues reference, so they must
                 // exist before repository sync processes issues.
@@ -343,7 +343,7 @@ public class GitHubDataSyncScheduler {
 
                 // Projects sync before repositories so embedded project items can be linked.
                 if (syncSchedulerProperties.projects().enabled()) {
-                    reportPhase(handle, SyncPhase.ORGANIZATION, "Syncing organization projects", 0, totalRepos);
+                    reportPhase(handle, SyncPhase.ORGANIZATION, "Sync of organization projects", 0, totalRepos);
                     syncProjects(session, handle);
                 } else {
                     log.debug("Skipped project sync: reason=projectsSyncDisabled, scopeId={}", session.scopeId());
@@ -426,7 +426,7 @@ public class GitHubDataSyncScheduler {
 
                 // Sync teams AFTER repositories exist (team repo permissions need repos).
                 // This mirrors the startup sync order in GitHubDataSyncService.
-                reportPhase(handle, SyncPhase.TEAMS, "Syncing teams and memberships", reposProcessed, totalRepos);
+                reportPhase(handle, SyncPhase.TEAMS, "Sync of teams and memberships", reposProcessed, totalRepos);
                 syncTeams(session, handle);
 
                 // Sub-issues and dependencies are scope-level relationships that need issues/PRs to
@@ -435,7 +435,7 @@ public class GitHubDataSyncScheduler {
                     reportPhase(
                             handle,
                             SyncPhase.ISSUES,
-                            "Linking sub-issues and issue dependencies",
+                            "Sync of sub-issue and issue dependency links",
                             reposProcessed,
                             totalRepos);
                     syncSubIssues(session, handle);

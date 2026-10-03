@@ -102,8 +102,8 @@ public class ConnectionService {
                 .isPresent();
         if (github && gitlab) {
             throw new IllegalStateException("Workspace " + workspaceId
-                    + " has ACTIVE Connections for both GITHUB and GITLAB; "
-                    + "out-of-band fix required");
+                    + " has ACTIVE Connections for both GITHUB and GITLAB. "
+                    + "An operator must fix this outside the application.");
         }
         if (github) return Optional.of(IntegrationKind.GITHUB);
         if (gitlab) return Optional.of(IntegrationKind.GITLAB);
@@ -303,7 +303,7 @@ public class ConnectionService {
         return connectionRepository.findActive(workspaceId, kind).flatMap(c -> {
             if (c.getConfig() instanceof ConnectionConfig.GitHubAppConfig) {
                 throw new ConnectionModeConflictException("The GitHub connection of workspace " + workspaceId
-                        + " is an App installation, which runs on no stored token; there is nothing to replace.");
+                        + " is an App installation. It uses no stored token, so there is nothing to replace.");
             }
             connectionRepository.acquireLifecycleLock(c.getId(), workspaceId);
             Objects.requireNonNull(entityManager).refresh(c);
@@ -533,7 +533,7 @@ public class ConnectionService {
         }
         if (!current.canTransitionTo(req.next()) && !isGuardedReconnect(connection, current, req)) {
             throw new IllegalStateException(
-                    "Illegal transition for connection " + connection.getId() + ": " + current + " → " + req.next());
+                    "Connection " + connection.getId() + " cannot change from " + current + " to " + req.next() + ".");
         }
         if (req.next() == IntegrationState.ACTIVE)
             sourceNamespaces.ensure(connection.getKind(), connection.getConfig());

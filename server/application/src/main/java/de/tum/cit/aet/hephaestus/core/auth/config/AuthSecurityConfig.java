@@ -210,13 +210,13 @@ public class AuthSecurityConfig {
             byte[] decoded = Base64.getDecoder().decode(properties.stateCookieKey());
             if (decoded.length != 32) {
                 throw new IllegalStateException(
-                        "hephaestus.auth.state-cookie-key must decode to 32 bytes (256-bit AES); got "
+                        "hephaestus.auth.state-cookie-key must decode to 32 bytes (256-bit AES). It decoded to "
                                 + decoded.length);
             }
             return decoded;
         }
         if (environment.matchesProfiles("prod")) {
-            throw new IllegalStateException("hephaestus.auth.state-cookie-key is required in production (fail-closed). "
+            throw new IllegalStateException("hephaestus.auth.state-cookie-key is required in production. "
                     + "Set it to a base64-encoded 32-byte (256-bit AES) value.");
         }
         byte[] ephemeral = new byte[32];

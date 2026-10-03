@@ -56,7 +56,7 @@ class SyncControllerAdvice {
         return problem(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "Sync dispatch rejected",
-                "The server is busy and could not start the sync. Please retry.");
+                "The server is busy and could not start the sync. Try again.");
     }
 
     private static ProblemDetail problem(HttpStatus status, String title, String detail) {

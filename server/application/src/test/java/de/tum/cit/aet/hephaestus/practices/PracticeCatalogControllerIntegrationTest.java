@@ -991,8 +991,8 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
             assertThat(problem).isNotNull();
             assertThat(problem.getTitle()).isEqualTo("Invalid workspace request");
             assertThat(problem.getDetail())
-                    .isEqualTo("One of the chosen moments is not one this kind of work offers. Choose from the moments "
-                            + "listed for it.");
+                    .isEqualTo("This kind of work does not offer one of the chosen moments. Choose from the moments "
+                            + "that this kind of work offers.");
         }
 
         @Test
@@ -1026,7 +1026,7 @@ class PracticeCatalogControllerIntegrationTest extends AbstractWorkspaceIntegrat
                     .isBadRequest()
                     .expectBody()
                     .jsonPath("$.detail")
-                    .isEqualTo("The same moment is chosen twice. Choose each moment once.");
+                    .isEqualTo("You chose the same moment twice. Choose each moment once.");
         }
 
         @Test

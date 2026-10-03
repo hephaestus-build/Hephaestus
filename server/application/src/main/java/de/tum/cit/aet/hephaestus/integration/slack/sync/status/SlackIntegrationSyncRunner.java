@@ -58,16 +58,16 @@ public class SlackIntegrationSyncRunner implements IntegrationSyncRunner {
                 .append(summary.channels())
                 .append(summary.channels() == 1 ? " channel" : " channels");
         if (summary.ingested() > 0) {
-            step.append(" — ").append(summary.ingested()).append(" messages");
+            step.append(". ").append(summary.ingested()).append(" messages");
         }
         if (summary.skipped() > 0) {
-            step.append(" · ").append(summary.skipped()).append(" skipped");
+            step.append(". ").append(summary.skipped()).append(" skipped");
         }
         if (summary.failed() > 0) {
-            step.append(" · ").append(summary.failed()).append(" failed");
+            step.append(". ").append(summary.failed()).append(" failed");
         }
         if (summary.budgetExhausted()) {
-            step.append(" · request budget exhausted");
+            step.append(". The request budget ran out.");
         }
         return SyncProgress.ofResource(
                 SyncPhase.CHANNELS, step.toString(), null, summary.synced() + summary.skipped(), summary.channels());

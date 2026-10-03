@@ -126,8 +126,8 @@ public class LoginProviderService {
     private LoginProvider loadRequired(String registrationId) {
         return repository
                 .findByRegistrationId(registrationId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(HttpStatus.NOT_FOUND, "no login provider: " + registrationId));
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "The login provider was not found: " + registrationId));
     }
 
     /** Create a new login provider (instance admin). The client secret is sealed at rest. */
@@ -138,11 +138,11 @@ public class LoginProviderService {
         if (!registrationId.matches("^[a-z][a-z0-9-]{1,62}$")) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_CONTENT,
-                    "registrationId must be 2-63 chars: lowercase letter then lowercase letters, digits, or hyphens");
+                    "The registrationId must have 2 to 63 characters. It must start with a lowercase letter. After that, use only lowercase letters, digits, or hyphens.");
         }
         if (repository.existsByRegistrationId(registrationId)) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "a login provider '" + registrationId + "' already exists");
+                    HttpStatus.CONFLICT, "The login provider '" + registrationId + "' already exists.");
         }
         LoginProvider provider = new LoginProvider();
         provider.setRegistrationId(registrationId);
@@ -384,11 +384,11 @@ public class LoginProviderService {
             ServerUrlValidator.validate(value);
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_CONTENT, "invalid base URL: " + e.getMessage(), e);
+                    HttpStatus.UNPROCESSABLE_CONTENT, "The base URL is not valid: " + e.getMessage(), e);
         }
         if (type == LoginProvider.ProviderType.OUTLINE && !outlineOriginPolicy.allows(value)) {
             throw new ResponseStatusException(
-                    HttpStatus.UNPROCESSABLE_CONTENT, "Outline origin is not approved by the instance operator");
+                    HttpStatus.UNPROCESSABLE_CONTENT, "The instance operator did not approve the Outline origin.");
         }
         return value;
     }
@@ -425,9 +425,9 @@ public class LoginProviderService {
                 if (scope.equalsIgnoreCase("openid")) {
                     throw new ResponseStatusException(
                             HttpStatus.UNPROCESSABLE_CONTENT,
-                            type + " login uses the plain OAuth2 flow — the scope must not contain 'openid' (use "
+                            type + " login uses the plain OAuth2 flow. The scope must not contain 'openid'. Use "
                                     + replacement
-                                    + ")");
+                                    + " instead.");
                 }
             }
         }
@@ -450,7 +450,7 @@ public class LoginProviderService {
         if (!enabled.isEmpty() && isLast) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
-                    "cannot " + verb + " the last enabled login provider — users would be unable to sign in");
+                    "You cannot " + verb + " the last enabled login provider. If you do, users cannot sign in.");
         }
     }
 
@@ -460,7 +460,7 @@ public class LoginProviderService {
 
     private static String requireValue(@Nullable String value, String field) {
         if (value == null || value.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, field + " is required");
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, field + " is required.");
         }
         return value.trim();
     }

@@ -93,7 +93,7 @@ public class CredentialBundleConverter {
         if (encryptionKey == null || encryptionKey.isBlank()) {
             if (production) {
                 throw new IllegalStateException(
-                        "Credential encryption key is required in production! Set hephaestus.security.credential-encryption-key");
+                        "A credential encryption key is required in production. Set hephaestus.security.credential-encryption-key.");
             }
             this.keys = Map.of();
             this.enabled = false;
@@ -212,7 +212,7 @@ public class CredentialBundleConverter {
     private void requireEnabled(String operation) {
         if (!enabled) {
             throw new MissingCredentialKeyException(
-                    "Credential encryption is disabled; cannot " + operation + " without a configured key");
+                    "Credential encryption is disabled. Hephaestus cannot " + operation + " without a configured key.");
         }
     }
 

@@ -108,7 +108,7 @@ public class GitHubSummaryChannel implements SummaryChannel {
 
     private String resolveSubject(long scopeId, String subject) {
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
-            throw new FeedbackDeliveryException("GitHub rate limit critical for scope " + scopeId);
+            throw new FeedbackDeliveryException("The GitHub rate limit is critical for scope " + scopeId);
         }
         if (isIssueSubject(subject)) {
             IssueCoordinates issue = parseIssueSubjectExternalId(subject);
@@ -132,10 +132,10 @@ public class GitHubSummaryChannel implements SummaryChannel {
         long scopeId = target.ref().workspaceId();
         if (externalId == null || externalId.isBlank()) {
             throw new FeedbackDeliveryException(
-                    "Cannot edit a GitHub comment in place: external comment id is missing");
+                    "Cannot edit a GitHub comment in place. The external comment id is missing.");
         }
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
-            return UpdateOutcome.transientFailure("GitHub rate limit critical for scope " + scopeId);
+            return UpdateOutcome.transientFailure("The GitHub rate limit is critical for scope " + scopeId);
         }
 
         ClientGraphQlResponse response;
@@ -155,7 +155,7 @@ public class GitHubSummaryChannel implements SummaryChannel {
         }
 
         if (response == null) {
-            return UpdateOutcome.transientFailure("Null response from updateIssueComment mutation");
+            return UpdateOutcome.transientFailure("The updateIssueComment mutation returned no response");
         }
         gitHubProvider.trackRateLimit(scopeId, response);
 
@@ -320,7 +320,7 @@ public class GitHubSummaryChannel implements SummaryChannel {
                 .block(GRAPHQL_TIMEOUT);
 
         if (response == null) {
-            throw new FeedbackDeliveryException("Null response from AddPullRequestComment mutation");
+            throw new FeedbackDeliveryException("The AddPullRequestComment mutation returned no response");
         }
         gitHubProvider.trackRateLimit(scopeId, response);
 
@@ -361,7 +361,7 @@ public class GitHubSummaryChannel implements SummaryChannel {
             number = Integer.parseInt(numberPart);
         } catch (NumberFormatException e) {
             throw new FeedbackDeliveryException(
-                    "Invalid GitHub PR subjectExternalId — number must be integer: " + subjectExternalId, e);
+                    "Invalid GitHub PR subjectExternalId. The number must be an integer: " + subjectExternalId, e);
         }
         return new PrCoordinates(parts[0], parts[1], number);
     }

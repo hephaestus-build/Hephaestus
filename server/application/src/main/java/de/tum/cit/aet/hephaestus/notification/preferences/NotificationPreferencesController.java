@@ -92,13 +92,14 @@ public class NotificationPreferencesController {
                     String ifMatch,
             Authentication authentication) {
         if (ifMatch == null) {
-            throw new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, "If-Match is required");
+            throw new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, "The If-Match header is required.");
         }
         EntityTagPrecondition precondition;
         try {
             precondition = EntityTagPrecondition.parse(ifMatch);
         } catch (IllegalArgumentException invalid) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "If-Match must be a valid entity tag", invalid);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "The If-Match header must be a valid entity tag.", invalid);
         }
         boolean admin = authentication.getAuthorities().stream().anyMatch(a -> "app_admin".equals(a.getAuthority()));
         var result = subscriptions.update(CurrentAccount.requireId(), request, precondition, admin);

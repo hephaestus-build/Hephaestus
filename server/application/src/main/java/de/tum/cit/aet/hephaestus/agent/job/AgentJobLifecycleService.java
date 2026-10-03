@@ -80,7 +80,7 @@ public class AgentJobLifecycleService {
 
         if (updated == 0) {
             throw new AgentJobStateConflictException(
-                    "Cannot retry delivery: job must be COMPLETED with delivery status FAILED");
+                    "Cannot retry delivery. The job must have status COMPLETED and delivery status FAILED.");
         }
 
         // Reload after the CAS commit so the entity is not stale.
@@ -112,7 +112,7 @@ public class AgentJobLifecycleService {
                     AgentJobTelemetry.Outcome.DELIVERY_FAILED,
                     Duration.between(deliveryStarted, Instant.now()));
             log.warn("Delivery retry failed: jobId={}, error={}", jobId, e.getMessage(), e);
-            throw new AgentJobStateConflictException("The feedback could not be posted. Try again later.", e);
+            throw new AgentJobStateConflictException("The server could not post the feedback. Try again later.", e);
         }
 
         return transactionTemplate.execute(status -> requireJob(workspaceId, jobId));
@@ -171,14 +171,13 @@ public class AgentJobLifecycleService {
         }
 
         if (job.getStatus().isTerminal()) {
-            throw new AgentJobStateConflictException("This review has already finished, so it cannot be cancelled.");
+            throw new AgentJobStateConflictException("This review already finished. You cannot cancel it.");
         }
 
         if (casToCancelled(jobId) == 0) {
             AgentJob raced = requireJob(workspaceId, jobId);
             if (raced.getStatus().isTerminal()) {
-                throw new AgentJobStateConflictException(
-                        "This review finished while it was being cancelled, so it cannot be cancelled.");
+                throw new AgentJobStateConflictException("This review finished before the server could cancel it.");
             }
             // Back inside the CAS window, so a concurrent claim moved it there; retry once and then
             // report whatever state the loser observes rather than spinning against the executor.
@@ -186,7 +185,7 @@ public class AgentJobLifecycleService {
                 AgentJob racedAgain = requireJob(workspaceId, jobId);
                 if (racedAgain.getStatus() != AgentJobStatus.CANCELLED) {
                     throw new AgentJobStateConflictException(
-                            "This review changed state while it was being cancelled. Reload it and try again.");
+                            "This review changed state while the server cancelled it. Reload the review and try again.");
                 }
                 return new CancelOutcome(racedAgain, false);
             }

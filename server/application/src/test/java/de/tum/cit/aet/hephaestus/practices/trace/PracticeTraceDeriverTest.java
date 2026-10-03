@@ -81,7 +81,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.REVIEWED);
-            assertThat(entry.explanation()).contains("nothing to report");
+            assertThat(entry.explanation()).contains("It has nothing to report");
             assertThat(entry.observationCount()).isZero();
         }
 
@@ -159,16 +159,17 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                                     new PracticeReadinessOutcome(
                                             false,
                                             List.of(
-                                                    "Only part of “Code changes” was captured.",
-                                                    "“Review threads” was not captured."),
+                                                    "Hephaestus captured only part of “Code changes”.",
+                                                    "Hephaestus did not capture “Review threads”."),
                                             null,
                                             null)))),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_ASSESSABLE);
             assertThat(entry.explanation())
-                    .isEqualTo("The review could not read the evidence this practice needs. "
-                            + "Only part of “Code changes” was captured. “Review threads” was not captured.");
+                    .isEqualTo(
+                            "The review could not read the evidence this practice needs. "
+                                    + "Hephaestus captured only part of “Code changes”. Hephaestus did not capture “Review threads”.");
         }
 
         /**
@@ -187,13 +188,13 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                                     new PracticeReadinessOutcome(
                                             false,
                                             List.of(),
-                                            "This practice needs human review, so it is not reviewed automatically.",
+                                            "This practice needs human review. Hephaestus does not review it automatically.",
                                             null)))),
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.SKIPPED);
             assertThat(entry.explanation())
-                    .isEqualTo("This practice needs human review, so it is not reviewed automatically.")
+                    .isEqualTo("This practice needs human review. Hephaestus does not review it automatically.")
                     .doesNotContain("could not read", "captured");
             assertThat(entry.reviewId()).isEqualTo(RUN);
         }
@@ -253,7 +254,7 @@ class PracticeTraceDeriverTest extends BaseUnitTest {
                     Map.of());
 
             assertThat(entry.outcome()).isEqualTo(PracticeTraceOutcome.NOT_REACHED);
-            assertThat(entry.explanation()).contains("ended before reaching");
+            assertThat(entry.explanation()).contains("ended before it reached");
         }
 
         @Test

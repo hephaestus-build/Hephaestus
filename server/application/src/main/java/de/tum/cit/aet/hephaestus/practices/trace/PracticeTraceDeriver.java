@@ -81,7 +81,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.REVIEWED,
-                    "Reviewed on this work.",
+                    "Hephaestus reviewed this practice on this work.",
                     occasion,
                     output.latestObservedAt(),
                     output.latestReviewId(),
@@ -111,7 +111,7 @@ final class PracticeTraceDeriver {
                         practice,
                         PracticeTraceOutcome.NOT_REACHED,
                         coverage == PracticeCoverageOutcome.NOT_REACHED
-                                ? "The review ended before reaching this practice."
+                                ? "The review ended before it reached this practice."
                                 : "The review did not record whether it reached this practice.",
                         occurrence,
                         review.decidedAt(),
@@ -122,7 +122,7 @@ final class PracticeTraceDeriver {
                 return entry(
                         practice,
                         PracticeTraceOutcome.REVIEWED,
-                        "Reviewed on this work; nothing to report.",
+                        "Hephaestus reviewed this practice on this work. It has nothing to report.",
                         occurrence,
                         review.decidedAt(),
                         occurrence.reviewId(),
@@ -169,7 +169,7 @@ final class PracticeTraceDeriver {
             return entry(
                     practice,
                     PracticeTraceOutcome.TURNED_OFF,
-                    "This workspace turned the practice off, so it is not reviewed here.",
+                    "This workspace turned the practice off. Hephaestus does not review it here.",
                     latest,
                     null,
                     null,
@@ -217,7 +217,7 @@ final class PracticeTraceDeriver {
                     entry(
                             practice,
                             PracticeTraceOutcome.FAILED,
-                            "The review carrying this practice did not finish.",
+                            "The review that included this practice did not finish.",
                             occurrence,
                             review.decidedAt(),
                             occurrence.reviewId(),
@@ -230,7 +230,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        reasonCopy(occurrence.stateReason(), "Recorded and waiting to be tried again."),
+                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this and will try again."),
                         occurrence,
                         null,
                         null,
@@ -239,7 +239,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.SKIPPED,
-                        reasonCopy(occurrence.stateReason(), "Recorded and deliberately not reviewed."),
+                        reasonCopy(occurrence.stateReason(), "Hephaestus recorded this and chose not to review it."),
                         occurrence,
                         null,
                         null,
@@ -248,7 +248,9 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.LAPSED,
-                        reasonCopy(occurrence.stateReason(), "Expired unreviewed after waiting too long."),
+                        reasonCopy(
+                                occurrence.stateReason(),
+                                "This waited too long for a review. It expired without a review."),
                         occurrence,
                         null,
                         null,
@@ -258,7 +260,7 @@ final class PracticeTraceDeriver {
                 entry(
                         practice,
                         PracticeTraceOutcome.PENDING,
-                        "Recorded; no decision has been taken on it yet.",
+                        "Hephaestus recorded this. It has not decided what to do yet.",
                         occurrence,
                         null,
                         null,

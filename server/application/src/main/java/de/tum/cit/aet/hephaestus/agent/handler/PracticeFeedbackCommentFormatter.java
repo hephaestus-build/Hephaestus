@@ -58,12 +58,12 @@ class PracticeFeedbackCommentFormatter {
     String appendInlineFeedbackPrompt(String sanitizedBody, AgentJob job) {
         var sb = new StringBuilder(sanitizedBody.length() + 240);
         sb.append(sanitizedBody).append("\n\n");
-        sb.append("<sub>AI-generated &middot; ").append(respondLink(job)).append("</sub>\n");
+        sb.append("<sub>AI-generated feedback. ").append(respondLink(job)).append("</sub>\n");
         return sb.toString();
     }
 
     private void appendWhyAndSettingsLink(StringBuilder sb) {
-        sb.append("<sub>[Why you're seeing this and how to stop it](")
+        sb.append("<sub>[Why you see this and how to stop it](")
                 .append(preferencesUrl)
                 .append(")</sub>\n");
     }
@@ -73,9 +73,9 @@ class PracticeFeedbackCommentFormatter {
 
         String modelName = snapshotModelName(job.getConfigSnapshot());
         if (modelName != null && !modelName.isBlank()) {
-            sb.append(" &middot; ").append(HtmlUtils.htmlEscape(modelName));
+            sb.append(" · ").append(HtmlUtils.htmlEscape(modelName));
         }
-        sb.append(" &middot; AI-generated and can be inaccurate. ")
+        sb.append(". This feedback is AI-generated and can be inaccurate. ")
                 .append(respondLink(job))
                 .append("</sub>\n");
     }

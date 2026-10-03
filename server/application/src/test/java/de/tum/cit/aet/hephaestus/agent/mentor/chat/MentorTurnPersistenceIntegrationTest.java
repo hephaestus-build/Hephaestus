@@ -371,7 +371,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         ChatMessage interrupted = chatMessageRepository.findById(failed.reply()).orElseThrow();
         assertThat(interrupted.getStatus()).isEqualTo(ChatMessage.Status.interrupted);
         assertThat(interrupted.getMetadata().path("error").asString())
-                .isEqualTo("Mentor turn timed out before completion.");
+                .isEqualTo("The mentor turn took too long and stopped. Try again.");
         assertThat(messagesIn(failed.thread()))
                 .extracting(ChatMessage::getRole)
                 .containsExactly(ChatMessage.Role.USER, ChatMessage.Role.ASSISTANT, ChatMessage.Role.ASSISTANT);
@@ -651,7 +651,7 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         persistence.interrupt(
                 cookie,
                 new TranslatorState(replyId),
-                new IllegalStateException("Mentor turn timed out before completion."));
+                new IllegalStateException("The mentor turn took too long and stopped. Try again."));
         return new FailedTurn(thread, promptId, replyId);
     }
 
@@ -979,7 +979,8 @@ class MentorTurnPersistenceIntegrationTest extends BaseIntegrationTest {
         byte[] checkpoint = "{\"type\":\"compaction\"}\n".getBytes(StandardCharsets.UTF_8);
         state.observeSessionJsonl(checkpoint);
 
-        persistence.interrupt(cookie, state, new IllegalStateException("Mentor turn timed out before completion."));
+        persistence.interrupt(
+                cookie, state, new IllegalStateException("The mentor turn took too long and stopped. Try again."));
 
         assertThat(chatMessageRepository.findById(assistantId).orElseThrow().getStatus())
                 .isEqualTo(ChatMessage.Status.interrupted);

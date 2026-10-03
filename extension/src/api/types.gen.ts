@@ -8778,11 +8778,11 @@ export type LogoutClientSessionErrors = {
    */
   400: ProblemDetail;
   /**
-   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
    */
   403: unknown;
   /**
-   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
    */
   429: ProblemDetail;
 };
@@ -8815,11 +8815,11 @@ export type RefreshClientSessionErrors = {
    */
   401: ProblemDetail;
   /**
-   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
    */
   403: unknown;
   /**
-   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
    */
   429: ProblemDetail;
 };
@@ -8848,11 +8848,11 @@ export type ExchangeClientSignInErrors = {
    */
   400: ProblemDetail;
   /**
-   * The request carries the browser session cookie without a valid CSRF token; refused before the endpoint runs
+   * The request carries the browser session cookie without a valid CSRF token. The server refuses it before the endpoint runs.
    */
   403: unknown;
   /**
-   * Too many installed-client requests from this address; retry after the Retry-After seconds
+   * This address sent too many installed-client requests. Wait the number of seconds in the Retry-After header, then try again.
    */
   429: ProblemDetail;
 };

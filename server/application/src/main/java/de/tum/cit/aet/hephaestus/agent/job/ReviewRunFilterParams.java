@@ -46,7 +46,8 @@ public record ReviewRunFilterParams(
     /** Rejects a backwards window, which would otherwise return an empty page for no visible reason. */
     public ReviewRunFilterParams validated() {
         if (from != null && to != null && from.isAfter(to)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must not be after to");
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "The from parameter must not be after the to parameter.");
         }
         return this;
     }

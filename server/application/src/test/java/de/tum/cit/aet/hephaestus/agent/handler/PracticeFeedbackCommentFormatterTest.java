@@ -29,12 +29,12 @@ class PracticeFeedbackCommentFormatterTest extends BaseUnitTest {
                 .contains(PullRequestCommentPoster.summaryMarkerFor(job))
                 .contains("Test body content")
                 .contains(
-                        "<sub>Practice review &middot; model&lt;&amp;&gt; &middot; AI-generated and can be inaccurate."
+                        "<sub>Practice review · model&lt;&amp;&gt;. This feedback is AI-generated and can be inaccurate."
                                 + " Answer or dispute it in"
                                 + " [Hephaestus](https://hephaestus.example.com/w/team/feedback/scm.pull_request/42).</sub>")
                 .doesNotContain("React with")
                 .contains(
-                        "[Why you're seeing this and how to stop it](https://hephaestus.example.com/settings#practice-feedback)");
+                        "[Why you see this and how to stop it](https://hephaestus.example.com/settings#practice-feedback)");
     }
 
     @Test
@@ -45,7 +45,7 @@ class PracticeFeedbackCommentFormatterTest extends BaseUnitTest {
 
         assertThat(result)
                 .contains(
-                        "[Why you're seeing this and how to stop it](https://hephaestus.example/app/settings#practice-feedback)");
+                        "[Why you see this and how to stop it](https://hephaestus.example/app/settings#practice-feedback)");
     }
 
     @Test
@@ -55,11 +55,11 @@ class PracticeFeedbackCommentFormatterTest extends BaseUnitTest {
         assertThat(result)
                 .startsWith("Approved feedback\n\n")
                 .contains(
-                        "<sub>Practice review &middot; model&lt;&amp;&gt; &middot; AI-generated and can be inaccurate."
+                        "<sub>Practice review · model&lt;&amp;&gt;. This feedback is AI-generated and can be inaccurate."
                                 + " Answer or dispute it in"
                                 + " [Hephaestus](https://hephaestus.example/w/team/feedback/scm.pull_request/42).</sub>")
                 .endsWith(
-                        "<sub>[Why you're seeing this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n");
+                        "<sub>[Why you see this and how to stop it](https://hephaestus.example/settings#practice-feedback)</sub>\n");
     }
 
     @Test
@@ -68,7 +68,7 @@ class PracticeFeedbackCommentFormatterTest extends BaseUnitTest {
 
         assertThat(result)
                 .isEqualTo("Inline feedback\n\n"
-                        + "<sub>AI-generated &middot; Answer or dispute it in"
+                        + "<sub>AI-generated feedback. Answer or dispute it in"
                         + " [Hephaestus](https://hephaestus.example/w/team/feedback/scm.pull_request/42).</sub>\n");
     }
 

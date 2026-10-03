@@ -73,7 +73,7 @@ public class JwtPrincipalFactory {
         // forgot the upstream check. The OAuth success handler rejects earlier with a friendly redirect;
         // this is the last line.
         if (status != Account.Status.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "account is not active");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "The account is not active.");
         }
         String login = resolveLogin(accountId);
         Set<String> roles = new HashSet<>(accountFeatureRepository.findFlagsByAccountId(accountId));

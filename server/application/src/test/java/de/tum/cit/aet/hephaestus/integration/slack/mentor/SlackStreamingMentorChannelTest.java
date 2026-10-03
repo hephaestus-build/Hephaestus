@@ -239,7 +239,7 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
         channel.close();
 
         assertThat(String.join("", delivered))
-                .contains("Heph couldn't finish this reply. Please try again.")
+                .contains("Heph could not finish this reply. Try again.")
                 .doesNotContain("produced no response", "502", "private upstream");
         verify(slack).stopStream(eq(WS), eq(CH), anyString(), eq(List.of()));
     }

@@ -194,7 +194,7 @@ public class WorkspaceService {
                     .map(user -> Objects.requireNonNull(user.getId()))
                     .findFirst()
                     .orElseThrow(() -> new AccessForbiddenException(
-                            "Link your GitHub account before creating a GitHub workspace"));
+                            "Link your GitHub account before you create a GitHub workspace."));
         }
 
         Workspace workspace =

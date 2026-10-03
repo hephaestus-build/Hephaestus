@@ -314,7 +314,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
                 .toList();
         assertThat(toAddress).hasSize(1);
         MimeMessage message = toAddress.getFirst();
-        assertThat(message.getSubject()).isEqualTo("Your Hephaestus account is scheduled for deletion");
+        assertThat(message.getSubject()).isEqualTo("Hephaestus will delete your account");
         assertThat(message.getFrom()).containsExactly(new InternetAddress("noreply@hephaestus.test", "Hephaestus"));
         assertThat(message.getHeader("Message-ID")).singleElement().asString().endsWith("@hephaestus.test>");
         assertThat(publications(accountId))

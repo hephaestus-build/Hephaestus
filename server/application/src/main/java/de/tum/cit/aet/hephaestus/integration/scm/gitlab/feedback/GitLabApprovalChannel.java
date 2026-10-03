@@ -65,7 +65,8 @@ public class GitLabApprovalChannel implements ApprovalChannel {
     public void approve(SummaryChannel.FeedbackTarget target, @Nullable String message) {
         long scopeId = target.ref().workspaceId();
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
-            throw new FeedbackDeliveryException("GitLab rate limit critical — skipping approval for scope " + scopeId);
+            throw new FeedbackDeliveryException(
+                    "The GitLab rate limit is critical. Hephaestus skips the approval for scope " + scopeId);
         }
 
         MrCoordinates mr = GitLabMrResolver.parseSubjectExternalId(target.subjectExternalId());
@@ -90,7 +91,7 @@ public class GitLabApprovalChannel implements ApprovalChannel {
                             + ": HTTP "
                             + e.getStatusCode()
                             + (e.getStatusCode().value() == 401
-                                    ? " (the token's user may not approve this merge request)"
+                                    ? " (the user of the token may not approve this merge request)"
                                     : ""),
                     e);
         } catch (RuntimeException e) {

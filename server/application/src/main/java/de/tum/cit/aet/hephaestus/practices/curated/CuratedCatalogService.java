@@ -344,7 +344,7 @@ public class CuratedCatalogService {
         }
         String sourceGroupSlug = entry.effective().groupSlug();
         if (Objects.equals(sourceGroupSlug, groupSlug)) {
-            throw new IllegalArgumentException("Use the reorder endpoint to move a practice within its group");
+            throw new IllegalArgumentException("Use the reorder endpoint to move a practice within its group.");
         }
         List<String> source = CuratedCatalogModel.practicesIn(before, sourceGroupSlug).stream()
                 .map(CatalogEntry::slug)
@@ -354,7 +354,8 @@ public class CuratedCatalogService {
                 .map(CatalogEntry::slug)
                 .collect(Collectors.toCollection(ArrayList::new));
         if (position < 0 || position > target.size()) {
-            throw new IllegalArgumentException("position exceeds the destination size");
+            throw new IllegalArgumentException(
+                    "position must be from 0 up to the number of practices in the destination.");
         }
         target.add(position, slug);
 

@@ -185,7 +185,7 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
         ConnectFinalization result =
                 strategy().finalizeConnect(REF, Map.of("code", "code-1", "setup_action", "request"));
 
-        assertThat(((ConnectFinalization.Failed) result).reason()).contains("has to approve the installation request");
+        assertThat(((ConnectFinalization.Failed) result).reason()).contains("must approve the installation request");
         verifyNoInteractions(userAuthorization);
     }
 
@@ -206,7 +206,7 @@ class GitHubConnectionStrategyTest extends BaseUnitTest {
 
         assertThat(result)
                 .isEqualTo(new ConnectFinalization.Failed(
-                        "GitHub could not confirm your access to this installation. Try connecting GitHub again."));
+                        "GitHub could not confirm your access to this installation. Connect GitHub again."));
         verify(userAuthorization, never()).findAccessibleInstallation(anyString(), anyLong());
     }
 

@@ -107,8 +107,8 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext> {
         if (isProd() && !sealer.isEnabled()) {
             // Belt-and-suspenders: the sealer ctor already fails fast in prod when the key is missing.
             throw new IllegalStateException(
-                    "No JWT signing key present and sealing is disabled. Refusing to bootstrap an unsealed "
-                            + "signing key in prod; set hephaestus.security.encryption-key (ADR 0017).");
+                    "No JWT signing key exists and sealing is disabled. The server does not create an unsealed "
+                            + "signing key in prod. Set hephaestus.security.encryption-key (ADR 0017).");
         }
         JwtSigningKey row = generateNewKeyRow();
         repository.save(row);

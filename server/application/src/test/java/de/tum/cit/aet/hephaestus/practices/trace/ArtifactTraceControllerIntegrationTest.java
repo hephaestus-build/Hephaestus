@@ -439,7 +439,7 @@ class ArtifactTraceControllerIntegrationTest extends AbstractPracticeReviewInteg
                             value,
                             Matchers.hasItem(
                                     Matchers.equalTo("Nothing connected to this workspace reports the moments this "
-                                            + "practice watches for (Merged); GitHub or GitLab would."))))
+                                            + "practice watches for (Merged). GitHub or GitLab can report them."))))
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].watches[0].signal")
                     .isEqualTo(ScmSignals.PULL_REQUEST_MERGED.value())
                     .jsonPath("$.practices[?(@.practiceSlug=='dormant')].watches[0].displayName")

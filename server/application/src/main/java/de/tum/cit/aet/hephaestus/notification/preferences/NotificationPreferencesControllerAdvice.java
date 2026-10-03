@@ -15,6 +15,6 @@ class NotificationPreferencesControllerAdvice {
     @ExceptionHandler({DataIntegrityViolationException.class, ObjectOptimisticLockingFailureException.class})
     ProblemDetail concurrentUpdate() {
         return ProblemDetail.forStatusAndDetail(
-                HttpStatus.PRECONDITION_FAILED, "Notification preferences changed; reload before saving");
+                HttpStatus.PRECONDITION_FAILED, "The notification preferences changed. Reload them before you save.");
     }
 }

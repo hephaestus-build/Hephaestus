@@ -65,13 +65,13 @@ public class AgentImageReferenceGuard {
             "Pin the digest, or leave the reference unset so it follows this deployment's image tag. " + DOCS;
 
     private static final String CHANNEL_ADVICE =
-            "A channel tag tracks whatever built most recently, so it resolves to an image built from a "
-                    + "different commit than this server — a pairing no release can produce. "
+            "A channel tag follows the most recent build. It resolves to an image from a "
+                    + "different commit than this server, and no release can produce that pairing. "
                     + FIX;
 
     private static final String SERIES_ADVICE =
-            "A `major.minor` tag is retagged onto every patch release in its line, so it resolves to an "
-                    + "image built from a different commit than this server. Name the full version instead. "
+            "A `major.minor` tag moves to every patch release in its line. It resolves to an "
+                    + "image from a different commit than this server. Name the full version instead. "
                     + FIX;
 
     public AgentImageReferenceGuard(AgentImageProperties properties) {
@@ -99,8 +99,8 @@ public class AgentImageReferenceGuard {
         }
         if (!TAG.matcher(tag).matches()) {
             throw new IllegalStateException(setting + " carries no usable tag: " + reference
-                    + ". The tag follows spring.application.version, so an empty one means APP_VERSION reached "
-                    + "this container empty — give the deployment its image tag, or name the image explicitly. "
+                    + ". The tag follows spring.application.version. An empty tag means APP_VERSION was empty "
+                    + "in this container. Give the deployment its image tag, or name the image explicitly. "
                     + DOCS);
         }
         if (NAMED_CHANNELS.contains(tag)) {

@@ -87,7 +87,7 @@ class SlackChannelMetadataRefresherTest extends BaseUnitTest {
 
         refresher.refreshWorkspace(WS);
 
-        verify(consentService).pauseForPlatformEvent(WS, CHANNEL, "channel archived — detected by sync");
+        verify(consentService).pauseForPlatformEvent(WS, CHANNEL, "The sync found that the channel is archived.");
     }
 
     @Test
@@ -96,7 +96,7 @@ class SlackChannelMetadataRefresherTest extends BaseUnitTest {
 
         refresher.refreshWorkspace(WS);
 
-        verify(consentService).pauseForPlatformEvent(WS, CHANNEL, "bot removed from channel — detected by sync");
+        verify(consentService).pauseForPlatformEvent(WS, CHANNEL, "The sync found that the bot is not in the channel.");
     }
 
     @Test
@@ -105,7 +105,7 @@ class SlackChannelMetadataRefresherTest extends BaseUnitTest {
 
         refresher.refreshWorkspace(WS);
 
-        verify(consentService).pauseForPlatformEvent(WS, CHANNEL, "channel no longer exists — detected by sync");
+        verify(consentService).pauseForPlatformEvent(WS, CHANNEL, "The sync found that the channel no longer exists.");
     }
 
     @Test

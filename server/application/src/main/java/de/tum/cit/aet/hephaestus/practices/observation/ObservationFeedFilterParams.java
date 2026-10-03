@@ -109,8 +109,7 @@ public record ObservationFeedFilterParams(
     /** The domain-facing shape; {@code direction} collapses into the severity sort's only use of it. */
     public ObservationFeedQuery toQuery() {
         if ((artifactKind == null) != (artifactId == null)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "artifactKind and artifactId must be provided together");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Provide artifactKind and artifactId together.");
         }
         return new ObservationFeedQuery(
                 practiceSlug,
