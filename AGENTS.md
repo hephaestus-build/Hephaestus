@@ -83,7 +83,7 @@ Use these words on every task:
   Say *pull request* or *merge request* when the provider is known.
 - **developer** — the person an observation is about.
 - **Heph** — the conversational assistant.
-  **Mentor** is its product area.
+  Its product area is **mentor**.
   Neither Heph, the application, nor a review is an *agent*.
   That word means the sandboxed runtime that executes a review.
 - **runtime role** — `server`, `worker` or `webhook`: the slice of one JAR a container boots.
