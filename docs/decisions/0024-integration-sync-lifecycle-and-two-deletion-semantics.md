@@ -167,7 +167,7 @@ the code actually implements.
   destroys mirrored content, derived observations and feedback, and local clones for repositories
   this workspace was the last to monitor. Reconnecting re-fetches from the vendor and cannot restore
   what the vendor no longer has. This is a behaviour change for operators upgrading past this
-  release — see `docs/contributor/migration-unified-integration.md`.
+  release — see the [database migration procedure](../contributor/database-migration.mdx).
 - **Cross-owner GitHub transfer does not heal in real time.** A transfer to a *different* owner
   derives the new owner's subject and so reaches no filter of the old workspace. It heals on the
   next reconcile pass, which resolves the monitor by `native_id`. GitLab has the identical residual

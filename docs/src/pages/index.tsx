@@ -18,6 +18,8 @@ const guides = [
 		to: "/user/overview",
 		links: [
 			{ label: "Getting started", to: "/user/getting-started" },
+			{ label: "Practice profile", to: "/user/practice-profile" },
+			{ label: "Activity", to: "/user/activity" },
 			{ label: "Practice feedback", to: "/user/ai-code-review" },
 			{ label: "Chat with Heph", to: "/user/ai-mentor" },
 		],

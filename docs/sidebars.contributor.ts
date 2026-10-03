@@ -34,7 +34,6 @@ const sidebars: SidebarsConfig = {
 				"product-feedback",
 				"instance-admin",
 				"sync-lifecycle",
-				"migration-unified-integration",
 				"database-schema",
 				"database-migration",
 			],

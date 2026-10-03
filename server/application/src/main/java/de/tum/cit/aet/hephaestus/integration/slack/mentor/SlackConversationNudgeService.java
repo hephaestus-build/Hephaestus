@@ -140,8 +140,8 @@ public class SlackConversationNudgeService {
     /** Count-only copy — deliberately no observation details, no severity, no artifact references. */
     static String message(int unitCount) {
         return unitCount == 1
-                ? "You have 1 new practice observation to explore — reply here to go through it."
-                : "You have " + unitCount + " new practice observations to explore — reply here to go through them.";
+                ? "You have 1 piece of feedback to explore. Reply here to go through it."
+                : "You have " + unitCount + " pieces of feedback to explore. Reply here to go through them.";
     }
 
     private record Recipient(long workspaceId, long userId) {}
