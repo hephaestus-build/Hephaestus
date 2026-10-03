@@ -136,7 +136,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 catalogs,
                 new PracticePreconditionEvaluator(objectMapper),
                 new AutomatedReviewFence(Map.of()),
-                Clock.fixed(now, java.time.ZoneOffset.UTC));
+                Clock.fixed(now, ZoneOffset.UTC));
         for (String partialKind : List.of("", "scm.issue.comments")) {
             var captures = catalogs.current().sources().stream()
                     .map(source -> new SourceCapture(

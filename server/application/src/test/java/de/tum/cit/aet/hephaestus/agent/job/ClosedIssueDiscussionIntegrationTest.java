@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
@@ -30,6 +31,11 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevi
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabIssueCommentProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.GitLabNoteSyncService;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
@@ -57,10 +63,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Pageable;
+import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.reactive.function.client.ClientResponse;
+import reactor.core.publisher.Mono;
 import tools.jackson.databind.ObjectMapper;
 
 /**
@@ -117,6 +130,19 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private DeferredIssueEventIntegrationTest.Fixture fixture;
+
+    @Autowired
+    @Qualifier("gitLabGraphQlClient")
+    private HttpGraphQlClient gitlabClient;
+
+    @Autowired
+    private GitLabIssueCommentProcessor gitlabComments;
+
+    @Autowired
+    private GitLabGraphQlResponseHandler gitlabResponses;
+
+    @Autowired
+    private GitLabProperties gitlabProperties;
 
     private Workspace workspace;
     private IdentityProvider provider;
@@ -233,6 +259,90 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRecordOnlyTheFinalDiscussionRevisionForASyncBatch() {
+        UUID observation = recordObservation();
+        int before = updates().size();
+        transactions.executeWithoutResult(status -> {
+            saveAndAnnounce(701L, "CSV export completed.", sync());
+            saveAndAnnounce(702L, "JSON export completed.", sync());
+            saveAndAnnounce(703L, "Both exports verified.", sync());
+        });
+
+        assertThat(isSuperseded(observation)).isTrue();
+        assertThat(storedDigest()).isEqualTo(currentRevision());
+        assertThat(updates()).hasSize(before + 1);
+        assertThat(updates())
+                .filteredOn(signal -> signal.key().revision().value().equals(currentRevision()))
+                .singleElement()
+                .satisfies(signal -> {
+                    assertThat(signal.getDiscoveredVia()).isEqualTo(DiscoveredVia.SYNC);
+                    assertThat(signal.getState()).isNotEqualTo(SignalState.DEFERRED);
+                });
+    }
+
+    @Test
+    void shouldNotAdvanceTheSnapshotWhenASyncBatchRollsBack() {
+        UUID snapshot = storedSnapshot();
+        String digest = storedDigest();
+        int before = updates().size();
+        transactions.executeWithoutResult(status -> {
+            saveAndAnnounce(704L, "CSV export completed.", sync());
+            status.setRollbackOnly();
+        });
+
+        assertThat(storedSnapshot()).isEqualTo(snapshot);
+        assertThat(storedDigest()).isEqualTo(digest);
+        assertThat(updates()).hasSize(before);
+    }
+
+    @Test
+    void shouldPersistAGitLabNotePageAsOneDiscussionChangeWithoutHoldingATransactionDuringTheRequest() {
+        IdentityProvider gitlab =
+                providers.save(new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example"));
+        repository.setProvider(gitlab);
+        repository = repositories.save(repository);
+        Issue issue = issues.findById(issueId).orElseThrow();
+        issue.setProvider(gitlab);
+        issues.save(issue);
+        issue = issues.findByIdWithRepository(issueId).orElseThrow();
+        String response = """
+                {"data":{"project":{"issue":{"notes":{"count":2,"nodes":[
+                  {"id":"gid://gitlab/Note/705","body":"CSV export completed.",
+                   "url":"https://gitlab.example/org/project/-/issues/7#note_705",
+                   "createdAt":"2026-10-02T10:00:00Z","updatedAt":"2026-10-02T10:00:00Z"},
+                  {"id":"gid://gitlab/Note/706","body":"JSON export completed.",
+                   "url":"https://gitlab.example/org/project/-/issues/7#note_706",
+                   "createdAt":"2026-10-02T11:00:00Z","updatedAt":"2026-10-02T11:00:00Z"}
+                ],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}}
+                """;
+        HttpGraphQlClient transport = gitlabClient
+                .mutate()
+                .webClient(builder -> builder.exchangeFunction(request -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .isFalse();
+                    return Mono.just(ClientResponse.create(HttpStatus.OK)
+                            .header("Content-Type", "application/json")
+                            .body(response)
+                            .build());
+                }))
+                .build();
+        GitLabGraphQlClientProvider clients = mock(GitLabGraphQlClientProvider.class);
+        when(clients.forScope(workspace.getId())).thenReturn(transport);
+        GitLabNoteSyncService service =
+                new GitLabNoteSyncService(clients, gitlabResponses, gitlabComments, gitlabProperties, transactions);
+        int before = updates().size();
+
+        assertThat(service.syncNotesForIssue(workspace.getId(), repository, 7, issue))
+                .isEqualTo(2);
+
+        assertThat(storedDigest()).isEqualTo(currentRevision());
+        assertThat(updates()).hasSize(before + 1);
+        long providerId = Objects.requireNonNull(gitlab.getId());
+        assertThat(comments.findByNativeIdAndProviderId(705L, providerId)).isPresent();
+        assertThat(comments.findByNativeIdAndProviderId(706L, providerId)).isPresent();
+    }
+
+    @Test
     void shouldStopReadingTheClosedRecordOnReopenAndReadItAgainUnderASecondClose() {
         UUID observation = recordObservation();
 
@@ -288,7 +398,7 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
             Future<?> second = threads.submit(() -> transactions.executeWithoutResult(status -> {
                 jdbc.execute("SET LOCAL lock_timeout = '5s'");
                 // Loaded before the wait, so this transaction's managed issue still has the old body.
-                issues.findById(issueId).orElseThrow();
+                assertThat(issues.findById(issueId).orElseThrow().getBody()).startsWith("- [ ] CSV export");
                 secondBackend.set(
                         Objects.requireNonNull(jdbc.queryForObject("SELECT pg_backend_pid()", Integer.class)));
                 secondLoaded.countDown();
@@ -304,7 +414,7 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
             threads.shutdownNow();
         }
 
-        assertThat(comments.findRecentByIssueIdWithAuthor(issueId, org.springframework.data.domain.Pageable.unpaged()))
+        assertThat(comments.findRecentByIssueIdWithAuthor(issueId, Pageable.unpaged()))
                 .hasSize(2);
         assertThat(storedDigest()).isEqualTo(currentRevision());
         assertThat(issues.findById(issueId).orElseThrow().getBody()).startsWith("- [x] CSV export");
@@ -320,7 +430,7 @@ class ClosedIssueDiscussionIntegrationTest extends BaseIntegrationTest {
             second.get(30, TimeUnit.SECONDS);
         }
 
-        assertThat(comments.findRecentByIssueIdWithAuthor(issueId, org.springframework.data.domain.Pageable.unpaged()))
+        assertThat(comments.findRecentByIssueIdWithAuthor(issueId, Pageable.unpaged()))
                 .hasSize(2);
         assertThat(storedDigest()).isEqualTo(currentRevision());
     }

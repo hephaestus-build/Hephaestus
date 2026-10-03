@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.signal.DiscoveredVia;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRecorder;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalStateReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
@@ -130,12 +131,13 @@ public class IssueAgentJobEventListener {
                 }
             }
         }
+        recordUpdate(event, revisions.of(event.issue()));
+    }
+
+    void recordUpdate(ScmDomainEvent.IssueUpdated event, SignalRevision revision) {
         for (Workspace workspace : workspaceResolver.resolveAllForRepository(
                 event.issue().repository().nameWithOwner())) {
-            SignalKey key = signalKeyFor(event.issue(), TriggerEventNames.ISSUE_UPDATED, workspace.getId());
-            if (key == null) {
-                continue;
-            }
+            SignalKey key = new SignalKey(workspace.getId(), event.issue().id(), ScmSignals.ISSUE_UPDATED, revision);
             if (event.context().isSync()) {
                 signalRecorder.record(key, event.context().occurredAt(), DiscoveredVia.SYNC);
             } else {

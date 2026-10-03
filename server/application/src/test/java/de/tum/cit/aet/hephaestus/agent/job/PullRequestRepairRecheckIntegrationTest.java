@@ -71,6 +71,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.practices.AbstractPracticeReviewIntegrationTest;
@@ -179,7 +180,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     private IssueRepository issueRepository;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision issueEvidenceRevision;
+    private IssueEvidenceRevision issueEvidenceRevision;
 
     @Autowired
     private PlatformTransactionManager transactionManager;

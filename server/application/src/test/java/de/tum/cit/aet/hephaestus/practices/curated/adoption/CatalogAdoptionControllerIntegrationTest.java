@@ -28,7 +28,9 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -329,7 +331,7 @@ class CatalogAdoptionControllerIntegrationTest extends AbstractWorkspaceIntegrat
         assertThat(adopted.getAutonomy()).isEqualTo(PracticeAutonomy.HUMAN_APPROVAL);
         assertThat(adopted.getAutomatedReviewPolicy().automatedReview().canAttemptAutomatedReview())
                 .isTrue();
-        assertThat(adopted.getReviewWhen()).isEqualTo(java.util.Map.of("state", java.util.Set.of("CLOSED")));
+        assertThat(adopted.getReviewWhen()).isEqualTo(Map.of("state", Set.of("CLOSED")));
     }
 
     @ParameterizedTest

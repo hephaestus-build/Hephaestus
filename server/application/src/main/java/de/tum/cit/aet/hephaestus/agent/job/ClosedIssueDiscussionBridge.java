@@ -7,37 +7,37 @@ import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
-import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.ResourceHolderSupport;
+import org.springframework.transaction.support.ResourceHolderSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/**
- * Turns a change to a closed issue's discussion into the issue update it is for that issue's review, so the
- * existing update path keys, coalesces and supersedes it.
- *
- * <p>Synchronous and inside the comment's transaction, so the update's before-commit listeners are registered
- * with that transaction rather than published from within another listener's commit callback. Whether anything
- * moved is decided by the evidence revision of the locked, re-read issue, not by the comment's text, so an edit or a
- * deletion is weighed the same way as a new comment, and Hephaestus's own feedback, which the revision ignores, moves
- * nothing.
- */
+/** Updates closed-issue evidence in the comment transaction, once per issue for a sync batch. */
 @Component
 @ConditionalOnServerRole
 public class ClosedIssueDiscussionBridge {
 
     private final LockedIssueRow lockedRow;
     private final IssueEvidenceRevision revisions;
-    private final ApplicationEventPublisher events;
+    private final IssueObservationSuperseder superseder;
+    private final ObjectProvider<IssueAgentJobEventListener> listener;
 
     ClosedIssueDiscussionBridge(
-            LockedIssueRow lockedRow, IssueEvidenceRevision revisions, ApplicationEventPublisher events) {
+            LockedIssueRow lockedRow,
+            IssueEvidenceRevision revisions,
+            IssueObservationSuperseder superseder,
+            ObjectProvider<IssueAgentJobEventListener> listener) {
         this.lockedRow = lockedRow;
         this.revisions = revisions;
-        this.events = events;
+        this.superseder = superseder;
+        this.listener = listener;
     }
 
     @EventListener
@@ -56,10 +56,39 @@ public class ClosedIssueDiscussionBridge {
     }
 
     private void translate(@Nullable Long issueId, EventContext context) {
-        // Without a transaction no before-commit listener would run for the update either.
+        // Snapshot and signal writes must commit with the comment.
         if (issueId == null || !TransactionSynchronizationManager.isActualTransactionActive()) {
             return;
         }
+        if (context.isSync()) {
+            enqueue(issueId, context);
+        } else {
+            update(issueId, context);
+        }
+    }
+
+    private void enqueue(long issueId, EventContext context) {
+        PendingBatch batch = (PendingBatch) TransactionSynchronizationManager.getResource(this);
+        if (batch == null) {
+            batch = new PendingBatch();
+            TransactionSynchronizationManager.bindResource(this, batch);
+            PendingBatch pending = batch;
+            TransactionSynchronizationManager.registerSynchronization(
+                    new ResourceHolderSynchronization<PendingBatch, ClosedIssueDiscussionBridge>(batch, this) {
+                        @Override
+                        public void beforeCommit(boolean readOnly) {
+                            pending.issues.forEach(ClosedIssueDiscussionBridge.this::update);
+                        }
+                    });
+        }
+        batch.issues.put(issueId, context);
+    }
+
+    private static final class PendingBatch extends ResourceHolderSupport {
+        private final Map<Long, EventContext> issues = new TreeMap<>();
+    }
+
+    private void update(long issueId, EventContext context) {
         Issue issue = lockedRow.lockAndRead(issueId).orElse(null);
         if (issue == null
                 || issue.isPullRequest()
@@ -69,10 +98,13 @@ public class ClosedIssueDiscussionBridge {
             return;
         }
         ScmEventPayload.IssueData current = ScmEventPayload.IssueData.from(issue);
-        if (Objects.equals(revisions.of(current).value(), issue.getReviewSnapshotDigest())) {
+        var revision = revisions.of(current);
+        if (Objects.equals(revision.value(), issue.getReviewSnapshotDigest())) {
             return;
         }
-        events.publishEvent(
-                new ScmDomainEvent.IssueUpdated(current, Set.of(ScmSignals.ISSUE_DISCUSSION_FIELD), context));
+        superseder.advance(issueId, revision.value());
+        listener.ifAvailable(value -> value.recordUpdate(
+                new ScmDomainEvent.IssueUpdated(current, Set.of(ScmSignals.ISSUE_DISCUSSION_FIELD), context),
+                revision));
     }
 }

@@ -38,7 +38,10 @@ class IssueObservationSupersederTest extends BaseUnitTest {
 
     @Test
     void shouldRetireEarlierClaimsOnEachTransitionIncludingReturnToTheSameContent() {
-        when(lockedRow.lockAndRead(42L)).thenReturn(Optional.of(issue()));
+        when(lockedRow.lockAndRead(42L))
+                .thenReturn(Optional.of(issue("first")))
+                .thenReturn(Optional.of(issue("second")))
+                .thenReturn(Optional.of(issue("first")));
         when(issues.advanceReviewSnapshot(eq(42L), any(), any())).thenReturn(1);
 
         superseder.onUpdated(update("first", Set.of("title")));
@@ -46,7 +49,11 @@ class IssueObservationSupersederTest extends BaseUnitTest {
         superseder.onUpdated(update("first", Set.of("title")));
 
         ArgumentCaptor<UUID> versions = ArgumentCaptor.forClass(UUID.class);
-        verify(issues, times(3)).advanceReviewSnapshot(eq(42L), versions.capture(), any());
+        ArgumentCaptor<String> digests = ArgumentCaptor.forClass(String.class);
+        verify(issues, times(3)).advanceReviewSnapshot(eq(42L), versions.capture(), digests.capture());
+        assertThat(digests.getAllValues().get(0))
+                .isEqualTo(digests.getAllValues().get(2))
+                .isNotEqualTo(digests.getAllValues().get(1));
         assertThat(versions.getAllValues()).doesNotHaveDuplicates();
         verify(observations, times(3)).supersedeIssueObservations(eq(42L), any(Instant.class));
     }
@@ -59,14 +66,14 @@ class IssueObservationSupersederTest extends BaseUnitTest {
         verify(observations, never()).supersedeIssueObservations(any(Long.class), any());
     }
 
-    private static Issue issue() {
+    private static Issue issue(String title) {
         Repository repository = new Repository();
         repository.setId(1L);
         repository.setNameWithOwner("owner/repo");
         Issue issue = new Issue();
         issue.setId(42L);
         issue.setNumber(1);
-        issue.setTitle("current");
+        issue.setTitle(title);
         issue.setState(Issue.State.OPEN);
         issue.setRepository(repository);
         return issue;

@@ -127,17 +127,14 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
         if (issue == null || issue.getDeletedAt() != null) {
             return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
         }
-        // NOT_FOUND for a changed issue rather than a dedicated code: reasonCode is a published artifact-source
-        // contract vocabulary, frozen per version once shipped (immutability check on the 1.0.0 directory), so a
-        // new value needs its own contract version, not a quiet addition.
+        // Source absence codes belong to a versioned contract. A stale admission uses NOT_FOUND.
         String signal = metadata.path("signal").asString();
         if (ScmSignals.ISSUE_UPDATED.value().equals(signal)) {
             String admittedRevision =
                     metadata.path(AgentJob.SIGNAL_REVISION_METADATA_KEY).asString("");
             String currentRevision =
                     revisions.of(ScmEventPayload.IssueData.from(issue)).value();
-            // A keyed job with no admission revision predates this fence and cannot be checked against
-            // it; refuse the same way a mismatch does rather than guess which snapshot it meant.
+            // An update without an admission revision cannot identify its evidence.
             if (admittedRevision.isBlank() || !currentRevision.equals(admittedRevision)) {
                 log.info(
                         "Issue evidence changed since the review was admitted: issueId={}, jobId={}",
@@ -146,8 +143,7 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
                 return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
             }
         }
-        // A close is keyed on its moment, which a reopen and a second close can repeat around different evidence;
-        // the snapshot id moves with every change, so it is what tells this close's record from a later one.
+        // The snapshot token distinguishes this close from later edits and reopen/close cycles.
         if (ScmSignals.ISSUE_CLOSED.value().equals(signal)) {
             String admittedSnapshot = metadata.path("review_snapshot_id").asString("");
             UUID currentSnapshot = issue.getReviewSnapshotId();

@@ -63,9 +63,13 @@ public class IssueObservationSuperseder {
             return;
         }
         String digest = revisions.of(ScmEventPayload.IssueData.from(issue)).value();
-        if (issues.advanceReviewSnapshot(issue.getId(), UUID.randomUUID(), digest) != 1) {
+        advance(issue.getId(), digest);
+    }
+
+    void advance(long issueId, String digest) {
+        if (issues.advanceReviewSnapshot(issueId, UUID.randomUUID(), digest) != 1) {
             return;
         }
-        observations.supersedeIssueObservations(issue.getId(), Instant.now());
+        observations.supersedeIssueObservations(issueId, Instant.now());
     }
 }
