@@ -204,6 +204,47 @@ void test("the input practice lists edge constructs in code only, and none the l
 	}
 });
 
+void test("the untrusted-input practice pairs a source with a rendering call, never with a native image template mode", async () => {
+	const { root, script } = await stage("validates-and-escapes-untrusted-input");
+	try {
+		const result = await script(
+			path.join(root, "repo"),
+			new Map([
+				added("App/Settings.swift", [
+					'let dark = UserDefaults.standard.bool(forKey: "dark")',
+					'Image(systemName: "checkmark").renderingMode(.template)',
+				]),
+				added("App/Greeting.swift", [
+					'let name = UserDefaults.standard.string(forKey: "name") ?? ""',
+					String.raw`Text("Hello \(name)")`,
+				]),
+				added("App/Page.swift", [
+					'let html = UserDefaults.standard.string(forKey: "page") ?? ""',
+					"webView.loadHTMLString(html, baseURL: nil)",
+				]),
+				added("server/views.py", [
+					'name = request.args.get("name")',
+					'return render_template_string("Hello " + name)',
+				]),
+			]),
+			metadata,
+		);
+		assert.deepEqual(
+			result.hints.map((h) => [h.file, h.line, h.pattern]),
+			[
+				[
+					"App/Page.swift",
+					2,
+					"source→sink: UserDefaults / FileManager / env → WKWebView loadHTMLString / evaluateJavaScript",
+				],
+				["server/views.py", 2, "source→sink: request/req param → template render"],
+			],
+		);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 void test("the error practice lists the fallbacks and bare returns its criteria ask to classify", async () => {
 	const { root, script } = await stage("handles-errors-instead-of-swallowing-them");
 	try {

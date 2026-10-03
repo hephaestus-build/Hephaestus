@@ -1041,6 +1041,89 @@ void test("current unresolved threads do not establish their state at an earlier
 	}
 });
 
+void test("a resolution the record does not date by the merge, or a merge it does not date, stays a historical question", async () => {
+	const staged = await stage("merged-past-unresolved-review-threads", {
+		"review_threads.json": {
+			threads: [
+				{
+					id: 20,
+					state: "RESOLVED",
+					createdAt: "2026-04-13T14:00:00Z",
+					resolvedAt: "2026-04-13T14:30:00Z",
+				},
+				{
+					id: 21,
+					state: "RESOLVED",
+					createdAt: "2026-04-13T14:00:00Z",
+					resolvedAt: "2026-04-13T15:30:00Z",
+				},
+				{ id: 22, state: "RESOLVED", createdAt: "2026-04-13T14:00:00Z" },
+				{ id: 23, state: "RESOLVED", createdAt: "2026-04-13T14:00:00Z", resolvedAt: "yesterday" },
+				// Opened after the 15:06 merge: whenever it was resolved, it was not open at the merge.
+				{ id: 24, state: "RESOLVED", createdAt: "2026-04-13T16:00:00Z" },
+			],
+			reviewDecisions: [],
+		},
+	});
+	try {
+		const result = await staged.script(
+			nodePath.join(staged.root, "repo"),
+			new Map(),
+			metadata,
+			staged.contextDir,
+			staged.changeDir,
+		);
+		assert.deepEqual(
+			result.hints
+				.filter((h) => h.pattern !== "merge")
+				.map((h) => [h.flags.id, h.pattern, h.flags.createdAt, h.flags.resolvedAt]),
+			[
+				[21, "thread resolved after the merge", "2026-04-13T14:00:00Z", "2026-04-13T15:30:00Z"],
+				[22, "resolved thread, resolution time unknown", "2026-04-13T14:00:00Z", ""],
+				[23, "resolved thread, resolution time unknown", "2026-04-13T14:00:00Z", "yesterday"],
+			],
+		);
+		assert.equal(result.metrics.candidateThreads, 3);
+		assert.equal(result.metrics.resolutionTimeUnknown, 2);
+		assert.equal(result.metrics.resolvedBeforeMerge, 1);
+
+		// Merged without a merge time, or with one that does not parse; and a pull request still open.
+		const [missing, invalid, open] = await Promise.all(
+			[unmerged, { ...metadata, merged_at: "not a time" }, { ...unmerged, state: "OPEN" }].map(
+				async (m) =>
+					staged.script(
+						nodePath.join(staged.root, "repo"),
+						new Map(),
+						m,
+						staged.contextDir,
+						staged.changeDir,
+					),
+			),
+		);
+		for (const undated of [missing, invalid]) {
+			assert.ok(undated);
+			assert.deepEqual(
+				undated.hints.filter((h) => h.pattern !== "merge").map((h) => [h.flags.id, h.pattern]),
+				[
+					[20, "resolved thread, merge time unknown"],
+					[21, "resolved thread, merge time unknown"],
+					[22, "resolved thread, resolution and merge times unknown"],
+					[23, "resolved thread, resolution and merge times unknown"],
+					[24, "resolved thread, resolution and merge times unknown"],
+				],
+			);
+			assert.equal(undated.metrics.resolutionTimeUnknown, 3);
+			assert.equal(undated.metrics.resolvedBeforeMerge, undefined);
+		}
+		assert.deepEqual(
+			open?.hints.map((h) => h.pattern),
+			["merge"],
+		);
+	} finally {
+		rmSync(staged.root, { recursive: true, force: true });
+	}
+});
+
 void test("the merge practices read the threads and decisions as rows against the merge", async () => {
 	const record = {
 		"review_threads.json": {
@@ -1105,8 +1188,8 @@ void test("the merge practices read the threads and decisions as rows against th
 			threads.contextDir,
 			threads.changeDir,
 		);
-		assert.equal(unresolved.metrics.unresolvedThreads, 2);
-		assert.equal(unresolved.metrics.resolvedThreads, 1);
+		assert.equal(unresolved.metrics.candidateThreads, 2);
+		assert.equal(unresolved.metrics.resolvedBeforeMerge, 1);
 		assert.equal(unresolved.metrics.mergedByIsAuthor, 1);
 		assert.equal(unresolved.metrics.threadsFileAbsent, 0);
 		const [merge, thread] = unresolved.hints;
