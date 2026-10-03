@@ -16,6 +16,19 @@ const SCRIPTING: Shapes = {
 	logger: [["logger", /\b(?:log|logger)\.(?:trace|debug|info|warn|error|fatal)\s*\(/u]],
 };
 
+// The Apple system log: NSLog and NSLogv write to it, as the os_log family does.
+const APPLE_SYSTEM_LOG: SourcePattern[] = [
+	["os_log", /\bos_log(?:_(?:info|debug|error|fault))?\s*\(/u],
+	["NSLog", /\bNSLogv?\s*\(/u],
+];
+
+// android.util.Log at any level and whatever its tag, and Timber over it. A bare `Log.` is read by name:
+// the import that makes it android.util.Log is the review's to confirm.
+const ANDROID_LOG: SourcePattern[] = [
+	["android.util.Log", /\b(?:android\.util\.)?Log\.(?:v|d|i|w|e|wtf)\s*\(/u],
+	["Timber", /\bTimber\.(?:v|d|i|w|e|wtf)\s*\(/u],
+];
+
 // language -> the print-style shapes and the logger shapes the criteria list for it.
 const DIAGNOSTICS: Record<string, Shapes> = {
 	swift: {
@@ -23,32 +36,22 @@ const DIAGNOSTICS: Record<string, Shapes> = {
 			["print(", /(?:^|[^\w.])print\s*\(/u],
 			["debugPrint(", /\bdebugPrint\s*\(/u],
 			["dump(", /(?:^|[^\w.])dump\s*\(/u],
-			["NSLog(", /\bNSLog\s*\(/u],
 		],
 		logger: [
 			[
 				"Logger",
 				/\bLogger\s*\(|\b(?:logger|Logger\.shared)\.(?:trace|debug|info|notice|warning|error|critical|fault|log)\s*\(/u,
 			],
-			["os_log", /\bos_log\s*\(/u],
+			...APPLE_SYSTEM_LOG,
 		],
 	},
 	"objective-c": {
-		print: [
-			["NSLog(", /\bNSLog\s*\(/u],
-			["printf(", /\bprintf\s*\(/u],
-		],
-		logger: [["os_log", /\bos_log\s*\(/u]],
+		print: [["printf(", /\bprintf\s*\(/u]],
+		logger: APPLE_SYSTEM_LOG,
 	},
 	kotlin: {
-		print: [
-			["println(", /(?:^|[^\w.])println?\s*\(/u],
-			["Log with ad-hoc tag", /\bLog\.[dviwe]\s*\(\s*"/u],
-		],
-		logger: [
-			["Timber/Log with shared tag", /\bTimber\.[dviwe]\s*\(|\bLog\.[dviwe]\s*\(\s*(?:TAG|tag)\b/u],
-			["logger", /\blog(?:ger)?\.(?:trace|debug|info|warn|error)\s*\(/u],
-		],
+		print: [["println(", /(?:^|[^\w.])println?\s*\(/u]],
+		logger: [...ANDROID_LOG, ["logger", /\blog(?:ger)?\.(?:trace|debug|info|warn|error)\s*\(/u]],
 	},
 	java: {
 		print: [
@@ -56,6 +59,7 @@ const DIAGNOSTICS: Record<string, Shapes> = {
 			["printStackTrace()", /\.printStackTrace\s*\(/u],
 		],
 		logger: [
+			...ANDROID_LOG,
 			["logger", /\b(?:log|logger|LOG|LOGGER)\.(?:trace|debug|info|warn|error|severe|fine)\s*\(/u],
 		],
 	},
@@ -113,9 +117,9 @@ export default async function logsThroughThePlatformLogger(
 	const printsInToolPaths = listed.filter(
 		(h) => h.flags.kind === "print" && h.flags.toolPath === true,
 	).length;
-	// Whether a bounded lexical search of the checkout matches a logger definition or import.
+	// Whether a bounded lexical search of the checkout matches a logger definition, import or native call.
 	const existing = await grep(
-		String.raw`\bLogger\s*\(|\bos_log\b|\bTimber\b|LoggerFactory|import logging|from 'pino'|from "pino"|winston`,
+		String.raw`\bLogger\s*\(|\bos_log|\bNSLogv?\s*\(|import android\.util\.Log\b|\bTimber\b|LoggerFactory|import logging|from 'pino'|from "pino"|winston`,
 		repoPath,
 		{ maxResults: 5 },
 	);
