@@ -116,7 +116,7 @@ function RangeBar({ yours, middle }: { yours: number; middle?: MiddleHalf }) {
 			{middle !== undefined && (
 				<span
 					aria-hidden
-					className="absolute top-1 left-(--low) h-2 w-(--width) min-w-1 rounded-full bg-muted-foreground/50"
+					className="absolute top-1 left-(--low) h-2 w-(--width) min-w-1 rounded-full bg-muted-foreground/70"
 					style={{ "--low": at(middle.low), "--width": at(middle.high - middle.low) }}
 				/>
 			)}

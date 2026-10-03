@@ -95,6 +95,19 @@ export function isSplitStanding(standing: PracticeGroupStandingValue): standing 
 	return (SPLIT_STANDINGS as readonly string[]).includes(standing);
 }
 
+/** The part of a split that counts the developers with no standing yet, whatever the reason. */
+export const NONE_YET = "None yet";
+
+/**
+ * The reader's own standing in the split's words: one of its standings, or none yet with the
+ * profile's own reason after it, so the word matches the part the legend names.
+ */
+export function yourStandingWord(standing: PracticeGroupStandingValue): string {
+	return isSplitStanding(standing)
+		? standingLabel(standing)
+		: `${NONE_YET} (${standingLabel(standing)})`;
+}
+
 /** What the bar and its text alternative need besides the split itself. */
 export interface SplitContext {
 	window: AcrossWorkspaceWindow;
@@ -135,7 +148,7 @@ export function splitDescription(
 	yourStanding: PracticeGroupStandingValue,
 	context: SplitContext,
 ): string {
-	const you = `You: ${standingLabel(yourStanding)}`;
+	const you = `You: ${yourStandingWord(yourStanding)}`;
 	const reference = referenceGroup(context);
 	if (split.shape === "WITHHELD") {
 		return `${HELD_BACK}. ${you}.`;

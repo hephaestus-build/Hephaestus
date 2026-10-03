@@ -75,6 +75,21 @@ export const Withheld: Story = {
 		await expect(canvas.queryByRole("img")).toBeNull();
 		await expect(canvas.getByText("Held back: too few developers to compare yet.")).toBeVisible();
 		await expect(canvas.queryByText(/developers observed/u)).toBeNull();
-		await expect(canvas.getByText("Not observed yet")).toBeVisible();
+		await expect(canvas.getByText("None yet (Not observed yet)")).toBeVisible();
+	},
+};
+
+/**
+ * A reader with nothing to report is counted in none yet: the marker sits over that part, and the
+ * text names it in the legend's words with the profile's reason after them.
+ */
+export const ReaderInNoneYet: Story = {
+	args: { yourStanding: "NO_OPPORTUNITY" },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("You")).toBeVisible();
+		await expect(canvas.queryByText("You:")).toBeNull();
+		await expect(canvas.getByRole("img")).toHaveAccessibleName(
+			/, 8 none yet\. You: None yet \(Nothing to report yet\)\.$/u,
+		);
 	},
 };

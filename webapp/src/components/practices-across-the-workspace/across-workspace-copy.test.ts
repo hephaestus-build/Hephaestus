@@ -35,7 +35,7 @@ describe("splitDescription", () => {
 				{ ...context, window: "DAYS_30", readerCounted: false },
 			),
 		).toMatch(
-			/in the last 30 days: .*, 8 none yet\. You: Not observed yet, not counted in the split\.$/u,
+			/in the last 30 days: .*, 8 none yet\. You: None yet \(Not observed yet\), not counted in the split\.$/u,
 		);
 	});
 });

@@ -1,4 +1,4 @@
-import { TriangleIcon } from "lucide-react";
+import { CircleIcon, TriangleIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
 import { cn } from "cn";
@@ -13,12 +13,13 @@ import {
 	developerCount,
 	HELD_BACK,
 	isSplitStanding,
+	NONE_YET,
 	SPLIT_FIELDS,
 	SPLIT_STANDINGS,
 	type SplitContext,
 	type SplitStanding,
 	splitDescription,
-	standingLabel,
+	yourStandingWord,
 } from "./across-workspace-copy";
 
 export interface WorkspaceSplitBarProps extends SplitContext {
@@ -45,9 +46,13 @@ interface Part {
 	isYours: boolean;
 }
 
-/** None yet is the registry's silence, drawn solid in the one grey family. */
-const NONE_YET_DEF = PRACTICE_GROUP_STANDING_DEFS.NOT_OBSERVED;
-const NONE_YET = "bg-border";
+/**
+ * None yet holds both standings that say why there is none, so it takes a neutral empty circle
+ * rather than either one's icon, and a fill in the one grey family that stays a part of the bar
+ * against the card in both themes.
+ */
+const NONE_YET_ICON = CircleIcon;
+const NONE_YET_FILL = "bg-muted-foreground/40";
 const GREY = "text-muted-foreground";
 /** The empty track of a split held back, dashed so it is never read as a part of none yet. */
 const HELD_BACK_TRACK = "h-2 rounded-sm border border-dashed border-muted-foreground/60";
@@ -65,10 +70,10 @@ function partsOf(
 	const noneYet: Part = {
 		key: "none",
 		count: split.noneYet ?? 0,
-		label: "None yet",
-		icon: NONE_YET_DEF.icon,
+		label: NONE_YET,
+		icon: NONE_YET_ICON,
 		tone: GREY,
-		className: NONE_YET,
+		className: NONE_YET_FILL,
 		isYours: readerCounted && !isSplitStanding(yourStanding),
 	};
 	const standings = SPLIT_STANDINGS.map((standing): Part => {
@@ -175,13 +180,18 @@ function YourWord({
 	/** Whether a screen reader hears it: where the bar's own label already says it, it does not. */
 	spoken?: boolean;
 }) {
-	const def = PRACTICE_GROUP_STANDING_DEFS[standing];
-	const Icon = def.icon;
+	// The icon the reader's part carries under the bar: their standing's, or none yet's.
+	const Icon = isSplitStanding(standing)
+		? PRACTICE_GROUP_STANDING_DEFS[standing].icon
+		: NONE_YET_ICON;
+	const tone = isSplitStanding(standing)
+		? statusToneClass(PRACTICE_GROUP_STANDING_DEFS[standing].badgeVariant)
+		: GREY;
 	return (
 		<span aria-hidden={spoken ? undefined : true} className="inline-flex items-center gap-1">
 			<span className="font-semibold text-mentor">You:</span>
-			<Icon className={cn("size-3 shrink-0", statusToneClass(def.badgeVariant))} />
-			<span className="text-foreground">{standingLabel(standing)}</span>
+			<Icon className={cn("size-3 shrink-0", tone)} />
+			<span className="text-foreground">{yourStandingWord(standing)}</span>
 		</span>
 	);
 }
@@ -203,7 +213,7 @@ export function SplitLegend() {
 				swatch: standingFill(standing),
 			};
 		}),
-		{ key: "none", label: "None yet", icon: NONE_YET_DEF.icon, tone: GREY, swatch: NONE_YET },
+		{ key: "none", label: NONE_YET, icon: NONE_YET_ICON, tone: GREY, swatch: NONE_YET_FILL },
 	];
 	return (
 		<ul
