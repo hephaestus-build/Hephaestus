@@ -8,7 +8,7 @@ description: Runtime roles, module boundaries, and the paths from connected work
 ## Runtime topology
 
 ```mermaid
-flowchart LR
+flowchart TB
     accTitle: Hephaestus runtime topology
     accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and admits jobs to PostgreSQL. Connected workers execute reviews and Heph in sandboxes.
     Providers[GitHub, GitLab, Slack, Outline] --> Webhook[Webhook role]
