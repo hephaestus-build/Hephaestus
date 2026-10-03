@@ -74,12 +74,10 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
     @Test
     void shouldWeaveTheInitiatingAdministratorIntoTheStateWhenInitiating() {
         when(userAuthorization.isConfigured()).thenReturn(true);
-        when(oauthStateService.issue(7L, IntegrationKind.GITHUB, "admin@example.com"))
-                .thenReturn("state-xyz");
+        when(oauthStateService.issue(7L, IntegrationKind.GITHUB, 42L)).thenReturn("state-xyz");
 
-        var initiation = strategy()
-                .initiate(new ConnectionStrategy.InitiateRequest(
-                        7L, IntegrationKind.GITHUB, Map.of(), "admin@example.com"));
+        var initiation =
+                strategy().initiate(new ConnectionStrategy.InitiateRequest(7L, IntegrationKind.GITHUB, Map.of(), 42L));
 
         assertThat(initiation)
                 .isEqualTo(new ConnectionStrategy.ConnectInitiation.RedirectToVendor(
@@ -91,7 +89,7 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
         when(userAuthorization.isConfigured()).thenReturn(false);
 
         assertThatThrownBy(() -> strategy()
-                        .initiate(new ConnectionStrategy.InitiateRequest(7L, IntegrationKind.GITHUB, Map.of(), "7")))
+                        .initiate(new ConnectionStrategy.InitiateRequest(7L, IntegrationKind.GITHUB, Map.of(), 7L)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("client-id");
         verifyNoInteractions(oauthStateService);
@@ -100,7 +98,7 @@ class GithubConnectionStrategyTest extends BaseUnitTest {
     @Test
     void shouldRefuseToInitiateWhenNoInstallationUrlIsConfigured() {
         assertThatThrownBy(() -> strategy(null)
-                        .initiate(new ConnectionStrategy.InitiateRequest(7L, IntegrationKind.GITHUB, Map.of(), "7")))
+                        .initiate(new ConnectionStrategy.InitiateRequest(7L, IntegrationKind.GITHUB, Map.of(), 7L)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("installation-url");
     }

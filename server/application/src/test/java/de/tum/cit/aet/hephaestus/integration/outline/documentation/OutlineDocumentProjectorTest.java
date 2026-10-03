@@ -70,7 +70,8 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 connectionService,
                 identityResolver,
                 documentSelector,
-                new OutlineOriginPolicy(Set.of(SERVER_URL)));
+                new OutlineOriginPolicy(Set.of(SERVER_URL)),
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder.class));
         lenient()
                 .when(connectionService.findActiveOutlineConfig(WORKSPACE_ID))
                 .thenReturn(Optional.of(new ConnectionConfig.OutlineConfig(SERVER_URL, null, null, Set.of())));
@@ -449,7 +450,8 @@ class OutlineDocumentProjectorTest extends BaseUnitTest {
                 connectionService,
                 identityResolver,
                 documentSelector,
-                new OutlineOriginPolicy(Set.of()));
+                new OutlineOriginPolicy(Set.of()),
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder.class));
 
         assertThat(denied.documentsForWorkspace(WORKSPACE_ID)).isEmpty();
         verify(documentRepository, never()).findForProjection(anyLong(), any());

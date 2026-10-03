@@ -237,13 +237,19 @@ public class MentorTurnPersistence {
         if (llmConfig.priceSnapshot() == null) {
             throw new IllegalStateException("Mentor turn has no admitted LLM price snapshot");
         }
+        // Read under the admission lock, before the turn reads its journal or any context.
+        String sessionVersion = chatThreadRepository
+                .findSessionVersion(thread.getId())
+                .orElseThrow(() ->
+                        new EntityNotFoundException("ChatThread", thread.getId().toString()));
         return new TurnPersistenceCookie(
                 thread.getId(),
                 prompt.getId(),
                 assistantMessageId,
                 Instant.now(),
                 llmConfig.upstreamModelId(),
-                llmConfig.priceSnapshot());
+                llmConfig.priceSnapshot(),
+                sessionVersion);
     }
 
     private static ObjectNode admissionMetadata(MentorLlmConfig config) {
@@ -330,7 +336,7 @@ public class MentorTurnPersistence {
 
         byte[] sessionBytes = state.observedSessionJsonl();
         if (sessionBytes != null) {
-            chatThreadRepository.updateSessionJsonl(cookie.threadId(), sessionBytes);
+            chatThreadRepository.updateSessionJsonl(cookie.threadId(), sessionBytes, cookie.sessionVersion());
         }
         return recorded;
     }
@@ -528,7 +534,7 @@ public class MentorTurnPersistence {
         // Session bytes the runner shipped before the interrupt still buy prompt-cache continuity.
         byte[] sessionBytes = state.observedSessionJsonl();
         if (sessionBytes != null) {
-            chatThreadRepository.updateSessionJsonl(cookie.threadId(), sessionBytes);
+            chatThreadRepository.updateSessionJsonl(cookie.threadId(), sessionBytes, cookie.sessionVersion());
         }
     }
 
@@ -601,7 +607,8 @@ public class MentorTurnPersistence {
             UUID assistantMessageId,
             Instant startedAt,
             String upstreamModelId,
-            LlmPriceSnapshot priceSnapshot) {}
+            LlmPriceSnapshot priceSnapshot,
+            String sessionVersion) {}
 
     record UsageBreakdown(
             @Nullable String model, long inputTokens, long outputTokens, long cacheReadTokens, long cacheWriteTokens) {}

@@ -6,6 +6,7 @@
 @org.springframework.modulith.ApplicationModule(
         displayName = "Notification",
         allowedDependencies = {
+            "core::person-data",
             "core",
             "core::current-account",
             "core::runtime",

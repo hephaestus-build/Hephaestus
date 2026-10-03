@@ -16,6 +16,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
@@ -54,6 +56,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -83,12 +86,25 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     @Mock
     private ObservationRepository observationRepository;
 
+    @Mock
+    private PersonDataCopyFence personCopies;
+
+    @Mock
+    private PersonProcessingSuppression personSuppression;
+
     private PracticeFeedbackDispatchService service;
     private AgentJob job;
     private FeedbackDispatch dispatch;
 
     @BeforeEach
     void setUp() {
+        var capture = mock(PersonDataCopyFence.Lease.class);
+        var admissionJdbc = mock(JdbcOperations.class);
+        lenient().when(personCopies.capture()).thenReturn(capture);
+        lenient().when(capture.jdbc()).thenReturn(admissionJdbc);
+        lenient()
+                .when(admissionJdbc.queryForObject(anyString(), eq(Boolean.class), any(), any(), any()))
+                .thenReturn(true);
         var mapper = JsonMapper.builder().build();
         var stateMachine =
                 new FeedbackDispatchStateMachine(repository, transactions, new SimpleMeterRegistry(), mapper);
@@ -103,7 +119,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 diffNotePoster,
                 stateMachine,
                 mock(ObservationInvalidationRepository.class),
-                new RepeatedSummaryCheck(observationRepository, feedbackRepository));
+                new RepeatedSummaryCheck(observationRepository, feedbackRepository),
+                new PracticeFeedbackPersonDataAdmission(personCopies, personSuppression));
         lenient()
                 .when(channel.formatPullRequestSubjectId(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0) + "!" + invocation.getArgument(1));

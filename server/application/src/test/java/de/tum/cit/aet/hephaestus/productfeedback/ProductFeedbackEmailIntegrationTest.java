@@ -288,7 +288,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
             settings.updateSilentMode(
                     engaged,
                     engaged ? "notification test" : null,
-                    "notification-test",
+                    null,
                     EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
         }
     }

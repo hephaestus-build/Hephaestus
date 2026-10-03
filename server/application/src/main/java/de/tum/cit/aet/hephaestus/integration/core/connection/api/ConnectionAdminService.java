@@ -123,7 +123,7 @@ public class ConnectionAdminService {
             @Nullable String instanceKey,
             CredentialBundle credentials,
             Map<String, String> userInput,
-            String actorRef) {
+            @Nullable Long actorAccountId) {
         Workspace workspace = workspaceRepository
                 .findById(workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceId));
@@ -146,11 +146,11 @@ public class ConnectionAdminService {
         String correlationId = "initiate-" + connection.getId() + "-" + UUID.randomUUID();
         connection = connectionService.transition(
                 connection,
-                new TransitionRequest(
+                TransitionRequest.byAccount(
                         IntegrationState.ACTIVE,
                         "INITIATE",
                         "ADMIN",
-                        actorRef,
+                        actorAccountId,
                         correlationId,
                         "Inline credentials accepted"));
         log.info("Initiated inline Connection id={} workspace={} kind={}", connection.getId(), workspaceId, kind);

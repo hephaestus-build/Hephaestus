@@ -31,7 +31,9 @@ public record FeedbackWithdrawalDTO(
                 withdrawal.getId(),
                 withdrawal.getReason(),
                 withdrawal.getWithdrawnAt(),
-                nameOf(accounts.get(withdrawal.getWithdrawnByAccountId())),
+                withdrawal.getWithdrawnByAccountId() == null
+                        ? null
+                        : nameOf(accounts.get(withdrawal.getWithdrawnByAccountId())),
                 withdrawal.getRestorationReason(),
                 withdrawal.getRestoredAt(),
                 restoredBy == null ? null : nameOf(accounts.get(restoredBy)));

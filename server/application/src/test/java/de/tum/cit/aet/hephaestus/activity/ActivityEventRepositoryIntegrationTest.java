@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.activity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.activity.adapter.ActivityPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -25,18 +26,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Integration tests for {@link ActivityEventRepository#backfillCommitActors(Long)}.
+ * Integration tests for {@link ActivityEventService#backfillCommitActors(Long)}.
  *
- * <p>Gap #6 reconciliation: commits ingested before GitLab authors are resolved
- * land COMMIT_CREATED activity events with {@code actor_id = NULL}. Once
- * {@code git_commit.author_id} is backfilled via email match, this native UPDATE
- * attributes the events to the contributor.
+ * Native admission guards ledger maintenance after a stable commit author reference is available.
  */
 @Transactional
 class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ActivityEventRepository activityEventRepository;
+
+    @Autowired
+    private ActivityEventService activityEventService;
+
+    @Autowired
+    private ActivityPersonDataCatalog personData;
+
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -147,7 +154,7 @@ class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
         commit.setAuthor(author);
         commitRepository.save(commit);
 
-        int updated = activityEventRepository.backfillCommitActors(targetRepository.getId());
+        int updated = activityEventService.backfillCommitActors(targetRepository.getId());
 
         assertThat(updated).isEqualTo(1);
         ActivityEvent refreshed =
@@ -162,7 +169,7 @@ class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
         Commit commit = persistCommit("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", targetRepository, null);
         persistCommitCreatedEvent(commit, null);
 
-        int updated = activityEventRepository.backfillCommitActors(targetRepository.getId());
+        int updated = activityEventService.backfillCommitActors(targetRepository.getId());
 
         assertThat(updated).isZero();
     }
@@ -172,7 +179,7 @@ class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
         Commit commit = persistCommit("cccccccccccccccccccccccccccccccccccccccc", targetRepository, author);
         ActivityEvent persisted = persistCommitCreatedEvent(commit, author);
 
-        int updated = activityEventRepository.backfillCommitActors(targetRepository.getId());
+        int updated = activityEventService.backfillCommitActors(targetRepository.getId());
 
         assertThat(updated).isZero();
         ActivityEvent refreshed =
@@ -193,7 +200,7 @@ class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
         commitRepository.save(targetCommit);
         commitRepository.save(otherCommit);
 
-        int updated = activityEventRepository.backfillCommitActors(targetRepository.getId());
+        int updated = activityEventService.backfillCommitActors(targetRepository.getId());
 
         assertThat(updated).isEqualTo(1);
         ActivityEvent refreshedTarget =
@@ -203,6 +210,37 @@ class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
         assertThat(refreshedTarget.getActor()).isNotNull();
         assertThat(refreshedTarget.getActor().getId()).isEqualTo(author.getId());
         assertThat(refreshedOther.getActor()).isNull();
+    }
+
+    @Test
+    void skipsAnErasedNativeAuthorWithoutSkippingAnotherAuthorInTheSameBatch() {
+        var other = userRepository.saveAndFlush(
+                de.tum.cit.aet.hephaestus.testconfig.TestUserFactory.createUser(901L, "another-person", gitProvider));
+        var targetCommit = persistCommit("ffffffffffffffffffffffffffffffffffffffff", targetRepository, author);
+        var otherCommit = persistCommit("1111111111111111111111111111111111111111", targetRepository, other);
+        var targetEvent = persistCommitCreatedEvent(targetCommit, null);
+        var otherEvent = persistCommitCreatedEvent(otherCommit, null);
+        activityEventRepository.flush();
+        jdbc.update(
+                "INSERT INTO person_suppression(id,provider_id,subject,team_key) VALUES (?,?,?,?)",
+                UUID.randomUUID(),
+                gitProvider.getId(),
+                "900",
+                "");
+        assertThat(activityEventService.backfillCommitActors(targetRepository.getId()))
+                .isEqualTo(1);
+        assertThat(activityEventRepository
+                        .findById(targetEvent.getId())
+                        .orElseThrow()
+                        .getActor())
+                .isNull();
+        assertThat(activityEventRepository
+                        .findById(otherEvent.getId())
+                        .orElseThrow()
+                        .getActor())
+                .isEqualTo(other);
+        assertThat(activityEventService.backfillCommitActors(targetRepository.getId()))
+                .isZero();
     }
 
     @Test
@@ -222,7 +260,7 @@ class ActivityEventRepositoryIntegrationTest extends BaseIntegrationTest {
                 .build();
         activityEventRepository.save(prEvent);
 
-        int updated = activityEventRepository.backfillCommitActors(targetRepository.getId());
+        int updated = activityEventService.backfillCommitActors(targetRepository.getId());
 
         assertThat(updated).isZero();
         ActivityEvent refreshed =

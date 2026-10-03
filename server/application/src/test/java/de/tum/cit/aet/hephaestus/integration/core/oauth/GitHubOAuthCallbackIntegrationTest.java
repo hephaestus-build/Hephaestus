@@ -218,7 +218,7 @@ class GitHubOAuthCallbackIntegrationTest extends AbstractWorkspaceIntegrationTes
     }
 
     private String state(Workspace workspace, User caller) {
-        return oauthStateService.issue(workspace.getId(), IntegrationKind.GITHUB, Long.toString(accountId(caller)));
+        return oauthStateService.issue(workspace.getId(), IntegrationKind.GITHUB, accountId(caller));
     }
 
     private User accountHolder(String prefix) {

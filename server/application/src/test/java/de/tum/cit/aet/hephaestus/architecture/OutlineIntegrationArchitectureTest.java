@@ -114,8 +114,10 @@ class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
      * to a workspace. Their callers carry {@code @WorkspaceAgnostic} (pinned by
      * {@link #fleetEnumeratorCallerIsWorkspaceAgnostic()}); everything else must take a workspace id.
      */
-    private static final Set<String> UNSCOPED_ALLOWLIST =
-            Set.of("OutlineCollectionRepository.findDistinctWorkspaceIdsWithPendingSync");
+    private static final Set<String> UNSCOPED_ALLOWLIST = Set.of(
+            // Instance-admin person scope spans workspaces but pins an exact provider/native key.
+            "OutlineDocumentRepository.findPersonSourceIds",
+            "OutlineCollectionRepository.findDistinctWorkspaceIdsWithPendingSync");
 
     @Test
     @DisplayName("Outline repository finders carry the workspace predicate in their signature")

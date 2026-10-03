@@ -58,6 +58,9 @@ export const EVENT_TYPE_LABELS: Record<AuthEventType, string> = {
 	LOGIN_PROVIDER_UPDATED: "Login provider updated",
 	LOGIN_PROVIDER_DELETED: "Login provider removed",
 	SILENT_MODE_CHANGED: "Silent mode changed",
+	PERSON_DATA_PREVIEWED: "Person data previewed",
+	PERSON_DATA_EXPORTED: "Person data exported",
+	PERSON_DATA_ERASURE_REQUESTED: "Person data erasure requested",
 };
 
 export function eventLabel(eventType: string): string {

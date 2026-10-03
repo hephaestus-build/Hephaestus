@@ -44,9 +44,9 @@ public class InstanceSettings {
     @Column(name = "silent_mode_changed_at")
     private Instant silentModeChangedAt;
 
-    /** Login of the admin who last flipped the brake (snapshot, not an FK — survives account deletion). */
-    @Column(name = "silent_mode_changed_by", length = 255)
-    private @Nullable String silentModeChangedBy;
+    /** Stable account reference of the administrator; old display-login attribution is not migrated. */
+    @Column(name = "silent_mode_changed_by_account_id")
+    private @Nullable Long silentModeChangedByAccountId;
 
     static InstanceSettings failSafeDefault() {
         InstanceSettings settings = new InstanceSettings();

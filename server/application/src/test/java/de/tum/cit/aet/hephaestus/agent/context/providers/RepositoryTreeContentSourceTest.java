@@ -40,7 +40,9 @@ class RepositoryTreeContentSourceTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         source = new RepositoryTreeContentSource(
-                gitRepositoryManager, org.mockito.Mockito.mock(ReviewRepositoryPreparer.class));
+                gitRepositoryManager,
+                org.mockito.Mockito.mock(ReviewRepositoryPreparer.class),
+                org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder.class));
     }
 
     @org.junit.jupiter.api.io.TempDir

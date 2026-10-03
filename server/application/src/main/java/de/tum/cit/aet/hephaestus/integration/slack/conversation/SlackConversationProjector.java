@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationThreadProjection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -37,14 +39,17 @@ public class SlackConversationProjector implements ConversationThreadProjection 
 
     private final SlackMessageRepository messageRepository;
     private final ObjectMapper objectMapper;
+    private final PersonDataCopyRecorder personCopies;
 
     public SlackConversationProjector(
             SlackThreadRepository threadRepository,
             SlackMessageRepository messageRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PersonDataCopyRecorder personCopies) {
         this.threadRepository = threadRepository;
         this.messageRepository = messageRepository;
         this.objectMapper = objectMapper;
+        this.personCopies = personCopies;
     }
 
     @Override
@@ -57,6 +62,7 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     public void forEachWorkspaceMessage(long workspaceId, java.util.function.Consumer<ObjectNode> consumer) {
         try (var messages = messageRepository.streamWorkspaceMessages(workspaceId)) {
             messages.forEach(message -> {
+                recordNative(message.getAuthorSlackUserId(), message.getSlackTeamId());
                 ObjectNode record = objectMapper.createObjectNode();
                 record.put("id", message.getId());
                 record.put("channel", message.getSlackChannelId());
@@ -109,9 +115,10 @@ public class SlackConversationProjector implements ConversationThreadProjection 
                 conv.put("channelName", key.channelName());
             }
             conv.put("threadTs", key.threadTs());
-            conv.put("messageCount", key.messageCount());
             ArrayNode messages = conv.putArray("messages");
-            appendThreadMessages(workspaceId, key, messages);
+            boolean truncated = appendThreadMessages(workspaceId, key, messages);
+            conv.put("messageCount", messages.size());
+            conv.put("truncated", truncated);
         }
         root.put("totalThreads", conversations.size());
         return root;
@@ -196,11 +203,17 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      * channel paused or revoked between enqueue and execution: a non-ACTIVE channel yields zero messages,
      * atomically with the read.
      */
+    private void recordNative(@Nullable String subject, String teamId) {
+        if (subject != null && !subject.isBlank())
+            personCopies.recordIdentity(new PersonCopyIdentity("SLACK", "https://slack.com", subject, teamId));
+    }
+
     private boolean appendThreadMessages(long workspaceId, ThreadKey key, ArrayNode messages) {
         List<SlackThreadMessageRow> rows = messageRepository.findThreadMessages(
                 workspaceId, key.channelId(), key.threadTs(), org.springframework.data.domain.Pageable.unpaged());
         for (int index = 0; index < rows.size(); index++) {
             SlackThreadMessageRow row = rows.get(index);
+            recordNative(row.authorSlackUserId(), row.slackTeamId());
             ObjectNode node = messages.addObject();
             node.put("ts", row.slackTs());
             node.put("author", row.authorSlackUserId());

@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
  */
 public record SlackThreadMessageRow(
         String slackTs,
+        String slackTeamId,
         @Nullable String authorSlackUserId,
         @Nullable Long authorMemberId,
         @Nullable String authorLogin,

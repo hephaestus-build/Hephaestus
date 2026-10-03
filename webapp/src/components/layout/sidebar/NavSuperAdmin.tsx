@@ -9,6 +9,7 @@ import {
 	KeyRound,
 	LibraryBig,
 	ScrollText,
+	ShieldCheck,
 	Settings2,
 	Users,
 } from "lucide-react";
@@ -29,6 +30,12 @@ const ADMIN_NAV_GROUPS = [
 		label: "Access",
 		items: [
 			{ to: "/admin/users", label: "Users", icon: Users, tooltip: "Manage accounts" },
+			{
+				to: "/admin/person-data",
+				label: "Person data",
+				icon: ShieldCheck,
+				tooltip: "Access and erasure requests",
+			},
 			{ to: "/admin/workspaces", label: "Workspaces", icon: Building2, tooltip: "All workspaces" },
 			{
 				to: "/admin/login-providers",

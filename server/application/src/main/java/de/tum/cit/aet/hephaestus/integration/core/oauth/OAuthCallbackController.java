@@ -202,7 +202,7 @@ public class OAuthCallbackController {
             IntegrationKind kind,
             boolean wantsJson) {
         try {
-            callbackService.completeConnection(connection, completed, binding.actorRef());
+            callbackService.completeConnection(connection, completed, binding.actorAccountId());
         } catch (OAuthCallbackService.InstanceConnectedElsewhereException e) {
             return failure(kind.name(), "connected_elsewhere", e.getMessage(), HttpStatus.CONFLICT, wantsJson);
         } catch (IllegalStateException e) {

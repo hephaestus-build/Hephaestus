@@ -143,7 +143,7 @@ export function promoteDraft(draftXml: string, timestamp: number, existing?: str
 	);
 	const body = renumbered.map((set) => `    ${set}\n`).join("");
 	if (isSet(existing)) {
-		return existing.replace(closingTag, `${body}${closingTag}`);
+		return existing.replace(closingTag, () => `${body}${closingTag}`);
 	}
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">

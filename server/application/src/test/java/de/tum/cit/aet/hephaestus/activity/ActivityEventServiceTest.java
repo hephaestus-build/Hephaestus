@@ -25,10 +25,36 @@ class ActivityEventServiceTest extends BaseUnitTest {
     private MeterRegistry meterRegistry;
     private ActivityEventService service;
 
+    private final de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence writeFence =
+            org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence.class);
+
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        service = new ActivityEventService(eventRepository, workspaceRepository, meterRegistry);
+        org.mockito.Mockito.lenient()
+                .when(writeFence.holdForUserWrite(org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(true);
+        service = new ActivityEventService(eventRepository, workspaceRepository, meterRegistry, writeFence);
+    }
+
+    @Test
+    void backfillAdmitsTheWholeBatchBeforeUpdatingOnlyPermittedAuthors() {
+        when(eventRepository.unresolvedCommitAuthors(200L)).thenReturn(java.util.List.of(42L, 84L));
+        when(writeFence.holdForUserWrites(java.util.List.of(42L, 84L))).thenReturn(java.util.List.of(84L));
+        when(eventRepository.backfillCommitActors(200L, java.util.List.of(84L))).thenReturn(3);
+        assertThat(service.backfillCommitActors(200L)).isEqualTo(3);
+        var order = inOrder(writeFence, eventRepository);
+        order.verify(eventRepository).unresolvedCommitAuthors(200L);
+        order.verify(writeFence).holdForUserWrites(java.util.List.of(42L, 84L));
+        order.verify(eventRepository).backfillCommitActors(200L, java.util.List.of(84L));
+    }
+
+    @Test
+    void backfillDoesNotUpdateAnEntirelySuppressedBatch() {
+        when(eventRepository.unresolvedCommitAuthors(200L)).thenReturn(java.util.List.of(42L));
+        when(writeFence.holdForUserWrites(java.util.List.of(42L))).thenReturn(java.util.List.of());
+        assertThat(service.backfillCommitActors(200L)).isZero();
+        verify(eventRepository, never()).backfillCommitActors(anyLong(), anyList());
     }
 
     @Test

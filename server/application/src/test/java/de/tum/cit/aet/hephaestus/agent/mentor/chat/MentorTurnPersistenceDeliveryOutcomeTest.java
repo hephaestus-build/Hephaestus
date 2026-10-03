@@ -141,7 +141,8 @@ class MentorTurnPersistenceDeliveryOutcomeTest extends BaseUnitTest {
                 assistantId,
                 Instant.now(),
                 "model",
-                mock(LlmPriceSnapshot.class));
+                mock(LlmPriceSnapshot.class),
+                "test-session-version");
     }
 
     private record Fixture(

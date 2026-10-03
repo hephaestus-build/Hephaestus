@@ -52,6 +52,7 @@ public class ConnectionService {
 
     private final TransactionTemplate providerTeardownTemplate;
     private final CredentialReader credentialReader;
+    private final SourceProviderNamespaces sourceNamespaces;
 
     public ConnectionService(
             ConnectionRepository connectionRepository,
@@ -60,8 +61,10 @@ public class ConnectionService {
             ApplicationEventPublisher eventPublisher,
             SyncJobService syncJobService,
             PlatformTransactionManager transactionManager,
-            CredentialReader credentialReader) {
+            CredentialReader credentialReader,
+            SourceProviderNamespaces sourceNamespaces) {
         this.connectionRepository = connectionRepository;
+        this.sourceNamespaces = sourceNamespaces;
         this.credentialReader = credentialReader;
         this.auditRepository = auditRepository;
         this.credentialConverter = credentialConverter;
@@ -279,7 +282,11 @@ public class ConnectionService {
                         + " → "
                         + next.getClass().getSimpleName());
             }
+            boolean namespaceChanged = !Objects.equals(
+                    SourceProviderNamespaces.configuredUrl(c.getConfig()),
+                    SourceProviderNamespaces.configuredUrl(next));
             c.setConfig(next);
+            if (namespaceChanged) sourceNamespaces.ensure(kind, next);
             return connectionRepository.save(c);
         });
     }
@@ -528,6 +535,8 @@ public class ConnectionService {
             throw new IllegalStateException(
                     "Illegal transition for connection " + connection.getId() + ": " + current + " → " + req.next());
         }
+        if (req.next() == IntegrationState.ACTIVE)
+            sourceNamespaces.ensure(connection.getKind(), connection.getConfig());
         if (beforeLocalTransition != null) {
             beforeLocalTransition.accept(connection);
         }
@@ -540,6 +549,7 @@ public class ConnectionService {
                 req.actorRef(),
                 req.correlationId(),
                 req.detail());
+        audit.setActorAccountId(req.actorAccountId());
         try {
             auditRepository.save(audit);
         } catch (DataIntegrityViolationException e) {
@@ -652,5 +662,32 @@ public class ConnectionService {
             String actorKind,
             @Nullable String actorRef,
             @Nullable String correlationId,
-            @Nullable String detail) {}
+            @Nullable String detail,
+            @Nullable Long actorAccountId) {
+        public TransitionRequest {
+            if (("ADMIN".equals(actorKind) || "USER".equals(actorKind)) && actorRef != null)
+                throw new IllegalArgumentException("Personal actors require a typed account reference");
+        }
+
+        /** Provider and system events have no account actor. */
+        public TransitionRequest(
+                IntegrationState next,
+                String eventType,
+                String actorKind,
+                @Nullable String actorRef,
+                @Nullable String correlationId,
+                @Nullable String detail) {
+            this(next, eventType, actorKind, actorRef, correlationId, detail, null);
+        }
+
+        public static TransitionRequest byAccount(
+                IntegrationState next,
+                String eventType,
+                String actorKind,
+                @Nullable Long accountId,
+                @Nullable String correlationId,
+                @Nullable String detail) {
+            return new TransitionRequest(next, eventType, actorKind, null, correlationId, detail, accountId);
+        }
+    }
 }

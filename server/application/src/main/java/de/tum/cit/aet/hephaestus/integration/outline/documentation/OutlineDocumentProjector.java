@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.outline.documentation;
 
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -46,6 +48,7 @@ public class OutlineDocumentProjector implements DocumentProjection {
     private final OutlineIdentityResolver identityResolver;
     private final OutlineDocumentSelector documentSelector;
     private final OutlineOriginPolicy originPolicy;
+    private final PersonDataCopyRecorder personCopies;
 
     public OutlineDocumentProjector(
             OutlineDocumentRepository documentRepository,
@@ -53,13 +56,15 @@ public class OutlineDocumentProjector implements DocumentProjection {
             ConnectionService connectionService,
             OutlineIdentityResolver identityResolver,
             OutlineDocumentSelector documentSelector,
-            OutlineOriginPolicy originPolicy) {
+            OutlineOriginPolicy originPolicy,
+            PersonDataCopyRecorder personCopies) {
         this.documentRepository = documentRepository;
         this.collectionRepository = collectionRepository;
         this.connectionService = connectionService;
         this.identityResolver = identityResolver;
         this.documentSelector = documentSelector;
         this.originPolicy = originPolicy;
+        this.personCopies = personCopies;
     }
 
     @Override
@@ -83,8 +88,7 @@ public class OutlineDocumentProjector implements DocumentProjection {
     public Optional<ProjectedDocument> documentById(long workspaceId, long documentId) {
         if (!isOriginApproved(workspaceId)) return Optional.empty();
         return documentRepository
-                .findById(documentId)
-                .filter(doc -> doc.getWorkspaceId() != null && doc.getWorkspaceId() == workspaceId)
+                .findByWorkspaceIdAndIdForProjection(workspaceId, documentId)
                 .map(doc -> project(doc, authorContext(workspaceId), collectionNames(workspaceId)));
     }
 
@@ -152,8 +156,22 @@ public class OutlineDocumentProjector implements DocumentProjection {
     }
 
     /** Maps a mirrored row to the agent view; a tombstoned/evicted document serves a null body. */
-    private static ProjectedDocument project(
-            OutlineDocument doc, AuthorContext authors, Map<String, String> collectionNames) {
+    private ProjectedDocument project(OutlineDocument doc, AuthorContext authors, Map<String, String> collectionNames) {
+        connectionService
+                .findInWorkspace(doc.getWorkspaceId(), doc.getConnectionId())
+                .ifPresent(connection -> {
+                    if (connection.getConfig() instanceof ConnectionConfig.OutlineConfig config
+                            && config.serverUrl() != null) {
+                        var subjects = new LinkedHashSet<String>();
+                        if (doc.getCreatedBySubject() != null) subjects.add(doc.getCreatedBySubject());
+                        if (doc.getUpdatedBySubject() != null) subjects.add(doc.getUpdatedBySubject());
+                        if (doc.getCollaboratorSubjects() != null) subjects.addAll(doc.getCollaboratorSubjects());
+                        subjects.stream()
+                                .filter(subject -> !subject.isBlank())
+                                .forEach(subject -> personCopies.recordIdentity(new PersonCopyIdentity(
+                                        "OUTLINE", config.serverUrl(), subject, connection.getInstanceKey())));
+                    }
+                });
         boolean deleted = doc.isDeleted();
         String body = deleted ? null : doc.getBodyMarkdown();
         return new ProjectedDocument(

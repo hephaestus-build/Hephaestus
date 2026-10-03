@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.context;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,10 +14,18 @@ import tools.jackson.databind.node.ObjectNode;
 public class ScmJobFolderProjector implements WorkspaceScmProjection {
     private final JdbcTemplate jdbc;
     private final JsonMapper mapper;
+    private final PersonDataCopyRecorder personCopies;
+    private final PersonProcessingSuppression suppression;
 
-    public ScmJobFolderProjector(JdbcTemplate jdbc, JsonMapper mapper) {
+    public ScmJobFolderProjector(
+            JdbcTemplate jdbc,
+            JsonMapper mapper,
+            PersonDataCopyRecorder personCopies,
+            PersonProcessingSuppression suppression) {
         this.jdbc = jdbc;
         this.mapper = mapper;
+        this.personCopies = personCopies;
+        this.suppression = suppression;
     }
 
     @Override
@@ -111,7 +121,7 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
             long workspace, long repository, String issueType, java.util.function.Consumer<ObjectNode> consumer) {
         rows("""
             SELECT jsonb_build_object('id',i.id,'number',i.number,'title',i.title,'state',i.state,
-              'url',i.html_url,'synced_at',i.last_sync_at,'repository',r.name_with_owner)::text
+              'author_id',i.author_id,'url',i.html_url,'synced_at',i.last_sync_at,'repository',r.name_with_owner)::text
             FROM issue i JOIN repository r ON r.id=i.repository_id
             WHERE i.repository_id=? AND i.issue_type=? AND i.deleted_at IS NULL
               AND EXISTS (SELECT 1 FROM repository_to_monitor m WHERE m.workspace_id=? AND m.name_with_owner=r.name_with_owner)
@@ -131,6 +141,11 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
                     JsonNode value = mapper.readTree(rs.getString(1));
                     if (!(value instanceof ObjectNode object))
                         throw new IllegalStateException("Workspace projection must be an object");
+                    for (String actor :
+                            java.util.List.of("author_id", "merged_by_id", "resolved_by_id", "created_by_id")) {
+                        JsonNode id = object.path(actor);
+                        if (id.isIntegralNumber() && id.asLong() > 0) personCopies.recordUser(id.asLong());
+                    }
                     consumer.accept(object);
                 });
     }

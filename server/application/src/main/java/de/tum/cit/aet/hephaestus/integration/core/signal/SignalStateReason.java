@@ -60,6 +60,9 @@ public enum SignalStateReason {
     /** No choice or No AI: changing preferences affects future reviews, not a silent historical replay. */
     MEMBER_AI_DECLINED(SignalState.SUPPRESSED),
 
+    /** An exact provider identity or captured source is subject to an instance privacy control. */
+    PERSON_DATA_ERASED(SignalState.SUPPRESSED),
+
     /**
      * Separate from {@link #NO_ACTIVE_PRACTICE} on purpose: collapsing them would make "we are
      * deliberately not reviewing this" indistinguishable from "nobody ever set this up".
@@ -136,6 +139,7 @@ public enum SignalStateReason {
             case PRACTICES_DISABLED ->
                 "Practice reviews are switched off for this workspace; it is tried again once they are on.";
             case NO_ACTIVE_PRACTICE -> "No practice was watching for this when it happened.";
+            case PERSON_DATA_ERASED -> "Processing is blocked by a personal-data erasure request.";
             case MEMBER_AI_DECLINED -> "The developer has not allowed AI practice reviews of their work.";
             case REVIEW_MODEL_UNBOUND -> "No AI model is set up to run practice reviews in this workspace.";
             case PRACTICE_AUTONOMY_OFF -> "Every practice watching for this is turned off.";

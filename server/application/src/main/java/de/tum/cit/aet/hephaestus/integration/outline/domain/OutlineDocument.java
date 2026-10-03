@@ -113,12 +113,10 @@ public class OutlineDocument {
      * Outline user id (UUID) of the document's creator — authorship substrate. Subjects join
      * {@code identity_link} lazily at projection time; no member id is stamped here.
      *
-     * <p><strong>Account-erasure posture.</strong> The author subject/name columns are integration-mirror
-     * data, NOT Hephaestus account PII — the same GDPR Art. 17(3) footing as the SCM activity mirror. An
-     * account hard-delete severs the personal ↔ mirror association by deleting {@code identity_link} (so
-     * the Outline subject can no longer be joined back to the erased account) rather than scrubbing every
-     * workspace's mirror; an Outline-only account-erasure hook is deliberately absent. Full erasure of
-     * these columns happens with the workspace/connection purge and on tombstone.
+     * <p>Self-service account deletion severs identity links. Instance-admin person erasure clears
+     * this subject and its display-name snapshot and removes the selected local content copies.
+     * Sync can mirror records that remain upstream; permanent exact-identity controls exclude them
+     * from further AI processing.
      */
     @Column(name = "created_by_subject", length = 64)
     private @Nullable String createdBySubject;

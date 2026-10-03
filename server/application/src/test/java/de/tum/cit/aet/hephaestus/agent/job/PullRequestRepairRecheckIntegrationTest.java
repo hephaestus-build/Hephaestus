@@ -628,6 +628,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         job.setStatus(AgentJobStatus.RUNNING);
         job.setWorkerId("test-worker");
         job = agentJobRepository.saveAndFlush(job);
+        evidenceFiles.beginPersonCapture(job);
         var raw = folderBuilder.prepare(
                 new ContextRequest.PracticeReviewRequest(job), EvidencePlan.compile(List.of(linked)));
         JobFolderIndex manifest = Objects.requireNonNull(raw.manifest());

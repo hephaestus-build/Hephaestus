@@ -46,6 +46,6 @@ public class InstanceLlmSettings {
     private Instant updatedAt;
 
     @Nullable
-    @Column(name = "updated_by", length = 255)
-    private String updatedBy;
+    @Column(name = "updated_by_account_id")
+    private Long updatedByAccountId;
 }

@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Pageable;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -30,9 +29,6 @@ class RecentAuthoredWorkContentSourceTest extends BaseUnitTest {
 
     @Mock
     MentorContextQueryRepository queryRepository;
-
-    @Mock
-    CacheManager cacheManager;
 
     @Spy
     ObjectMapper objectMapper = new ObjectMapper();

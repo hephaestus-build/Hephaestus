@@ -5,8 +5,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import java.time.Instant;
 import org.jspecify.annotations.Nullable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 @WorkspaceAgnostic("Operates on a global pre-workspace nonce table")
 public class OAuthStateNonceStore {
 
-    private static final Logger log = LoggerFactory.getLogger(OAuthStateNonceStore.class);
-
     private final OAuthStateNonceRepository repository;
 
     public OAuthStateNonceStore(OAuthStateNonceRepository repository) {
@@ -42,18 +38,32 @@ public class OAuthStateNonceStore {
      */
     @Transactional
     public void issue(@Nullable String nonce, long workspaceId, IntegrationKind kind, Instant issuedAt) {
+        issueRows(nonce, workspaceId, kind, issuedAt, null);
+    }
+
+    @Transactional
+    public void issue(
+            @Nullable String nonce,
+            long workspaceId,
+            IntegrationKind kind,
+            Instant issuedAt,
+            @Nullable Long actorAccountId) {
+        issueRows(nonce, workspaceId, kind, issuedAt, actorAccountId);
+    }
+
+    private void issueRows(
+            @Nullable String nonce,
+            long workspaceId,
+            IntegrationKind kind,
+            Instant issuedAt,
+            @Nullable Long actorAccountId) {
         if (nonce == null || nonce.isEmpty()) {
             throw new IllegalArgumentException("nonce must be non-empty");
         }
         if (repository.existsById(nonce)) {
-            // SecureRandom 12-byte nonce: collision ~1 in 2^96. Fail-safe no-op rather than overwriting
-            // a live nonce.
-            log.warn(
-                    "OAuth state nonce collision (existing row reused): nonce-prefix={}",
-                    nonce.substring(0, Math.min(4, nonce.length())));
-            return;
+            throw new IllegalStateException("OAuth state nonce collision");
         }
-        repository.save(new OAuthStateNonce(nonce, workspaceId, kind.name(), issuedAt));
+        repository.save(new OAuthStateNonce(nonce, workspaceId, kind.name(), issuedAt, actorAccountId));
     }
 
     /**
@@ -67,11 +77,17 @@ public class OAuthStateNonceStore {
      * still fails closed. Callers should treat false as "reject and audit".
      */
     @Transactional
-    public boolean tryConsume(@Nullable String nonce) {
+    public boolean tryConsume(@Nullable String nonce, OAuthStateService.StateBinding binding) {
         if (nonce == null || nonce.isEmpty()) {
             return false;
         }
-        int updated = repository.markConsumed(nonce, Instant.now());
+        int updated = repository.markConsumed(
+                nonce,
+                Instant.now(),
+                binding.workspaceId(),
+                binding.kind().name(),
+                binding.issuedAt(),
+                binding.actorAccountId());
         return updated == 1;
     }
 }

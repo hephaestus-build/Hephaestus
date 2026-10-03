@@ -38,10 +38,11 @@ class OAuthStateNonceStoreTest extends BaseUnitTest {
     }
 
     @Test
-    void issueSkipsOnCollision() {
+    void issueRejectsCollision() {
         when(repository.existsById("abc")).thenReturn(true);
 
-        store.issue("abc", 7L, IntegrationKind.GITHUB, Instant.parse("2025-01-01T00:00:00Z"));
+        assertThatThrownBy(() -> store.issue("abc", 7L, IntegrationKind.GITHUB, Instant.parse("2025-01-01T00:00:00Z")))
+                .isInstanceOf(IllegalStateException.class);
 
         verify(repository, never()).save(any(OAuthStateNonce.class));
     }
@@ -56,9 +57,12 @@ class OAuthStateNonceStoreTest extends BaseUnitTest {
 
     @Test
     void tryConsumeRejectsBlank() {
-        assertThat(store.tryConsume(null)).isFalse();
-        assertThat(store.tryConsume("")).isFalse();
-        verify(repository, never()).markConsumed(any(), any());
+        assertThat(store.tryConsume(null, new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, Instant.now())))
+                .isFalse();
+        assertThat(store.tryConsume("", new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, Instant.now())))
+                .isFalse();
+        verify(repository, never())
+                .markConsumed(any(), any(), org.mockito.ArgumentMatchers.anyLong(), any(), any(), any());
     }
     // The full consume-once-then-reject sequence (and its concurrency) is proven against real SQL by
     // OAuthStateNonceStoreIntegrationTest; a mock "thin mapper" replay of it here added no signal.

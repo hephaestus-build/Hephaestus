@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
@@ -63,11 +64,22 @@ public class JobEvidenceFiles {
     private final FabricLayout layout;
     private final AgentJobRepository jobs;
     private final Clock clock;
+    private final EvidenceFolderPersonDataCatalog personCopies;
 
-    public JobEvidenceFiles(FabricLayout layout, AgentJobRepository jobs, Clock clock) {
+    public JobEvidenceFiles(
+            FabricLayout layout, AgentJobRepository jobs, Clock clock, EvidenceFolderPersonDataCatalog personCopies) {
         this.layout = layout;
         this.jobs = jobs;
         this.clock = clock;
+        this.personCopies = personCopies;
+    }
+
+    public void beginPersonCapture(AgentJob job) {
+        personCopies.beginCapture(job);
+    }
+
+    public void abortPersonCapture(AgentJob job) {
+        personCopies.abortCapture(job);
     }
 
     /** Rendering scratch belongs to the fenced attempt and has the same cleanup boundary as its frozen folder. */
@@ -155,6 +167,7 @@ public class JobEvidenceFiles {
                     retire(root);
                 }
             });
+            cleanups.add(personCopies.finishCapture(job));
             return new PreparedJobInputs(staged, directories, cleanups, inputs.manifest(), report);
         } catch (IOException | RuntimeException exception) {
             if (staging != null) delete(staging);

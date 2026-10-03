@@ -69,6 +69,10 @@ public class ConnectionAudit {
     @Nullable
     private String actorRef;
 
+    @Column(name = "actor_account_id")
+    @Nullable
+    private Long actorAccountId;
+
     @Column(name = "correlation_id", length = 64)
     @Nullable
     private String correlationId;
@@ -101,6 +105,14 @@ public class ConnectionAudit {
         this.actorRef = actorRef;
         this.correlationId = correlationId;
         this.detail = detail;
+    }
+
+    public void setActorAccountId(@Nullable Long accountId) {
+        this.actorAccountId = accountId;
+    }
+
+    public @Nullable Long getActorAccountId() {
+        return actorAccountId;
     }
 
     public @Nullable Long getId() {

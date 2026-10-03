@@ -525,6 +525,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         // Control-plane lifecycle: a worker's session closed, so the Git operations
                                         // dispatched to it fail; no workspace is party to the event.
                                         "WorkerDisconnectedEvent",
+                                        // Shared provider reference data, not workspace content. The synchronous
+                                        // transaction listener only carries native controls to an equivalent instance.
+                                        "PersonProviderInstanceRegistered",
                                         "ContextRefreshedEvent", // Spring lifecycle, no workspace needed
                                         "WorkspacesInitializedEvent", // Startup lifecycle, signals all workspaces ready
                                         // core.auth (ADR 0017): authentication is USER/SYSTEM-scoped, never
@@ -579,9 +582,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                 // IssueAgentJobEventListener handles ScmDomainEvent.Issue{Created,Labeled} whose EventContext
                 // carries the originating repository → workspaceId is resolved per-event (mirrors the PR listener)
                 "IssueAgentJobEventListener",
-                // MentorContextInvalidator handles ScmDomainEvent.{PullRequest,Issue,Review}* whose
-                // EventContext carries the originating repository → workspaceId is resolved per-event
-                "MentorContextInvalidator",
                 // GitHubProjectActivityListener handles GitHubProjectEvent payloads whose EventContext
                 // carries scopeId (the originating workspace) — same payload-carries-context contract
                 "GitHubProjectActivityListener");

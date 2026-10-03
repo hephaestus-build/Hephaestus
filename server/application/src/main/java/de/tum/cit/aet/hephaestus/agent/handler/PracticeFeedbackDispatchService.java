@@ -54,6 +54,7 @@ class PracticeFeedbackDispatchService {
     private final FeedbackDispatchStateMachine stateMachine;
     private final ObservationInvalidationRepository invalidations;
     private final RepeatedSummaryCheck repeatedSummaries;
+    private final PracticeFeedbackPersonDataAdmission personDataAdmission;
 
     PracticeFeedbackDispatchService(
             FeedbackDispatchRepository repository,
@@ -65,7 +66,8 @@ class PracticeFeedbackDispatchService {
             DiffNotePoster diffNotePoster,
             FeedbackDispatchStateMachine stateMachine,
             ObservationInvalidationRepository invalidations,
-            RepeatedSummaryCheck repeatedSummaries) {
+            RepeatedSummaryCheck repeatedSummaries,
+            PracticeFeedbackPersonDataAdmission personDataAdmission) {
         this.repository = repository;
         this.policy = policy;
         this.commentPoster = commentPoster;
@@ -76,35 +78,40 @@ class PracticeFeedbackDispatchService {
         this.stateMachine = stateMachine;
         this.invalidations = invalidations;
         this.repeatedSummaries = repeatedSummaries;
+        this.personDataAdmission = personDataAdmission;
     }
 
     Result dispatchAutomaticPackage(
             AgentJob job, DeliveryContent packageContent, Set<String> contributingPracticeSlugs) {
-        return dispatch(
-                insertIfAbsentAndLoad(
-                        job,
-                        null,
-                        "review:" + job.getId(),
-                        FeedbackDispatchDestination.AUTOMATIC_REVIEW_PACKAGE,
-                        contributingPracticeSlugs,
-                        packageContent),
-                job);
+        return personDataAdmission.deliver(
+                job,
+                () -> dispatch(
+                        insertIfAbsentAndLoad(
+                                job,
+                                null,
+                                "review:" + job.getId(),
+                                FeedbackDispatchDestination.AUTOMATIC_REVIEW_PACKAGE,
+                                contributingPracticeSlugs,
+                                packageContent),
+                        job));
     }
 
     Result dispatchApproved(AgentJob job, Feedback feedback) {
-        return dispatch(
-                insertIfAbsentAndLoad(
-                        job,
-                        feedback.getId(),
-                        "approved:" + feedback.getId(),
-                        FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE,
-                        Set.copyOf(feedback.getProposedPracticeSlugs()),
-                        new DeliveryContent(
-                                java.util.Objects.requireNonNull(feedback.getBody()),
-                                proposedInlineNotes(feedback),
-                                List.of(),
-                                null)),
-                job);
+        return personDataAdmission.deliver(
+                job,
+                () -> dispatch(
+                        insertIfAbsentAndLoad(
+                                job,
+                                feedback.getId(),
+                                "approved:" + feedback.getId(),
+                                FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE,
+                                Set.copyOf(feedback.getProposedPracticeSlugs()),
+                                new DeliveryContent(
+                                        java.util.Objects.requireNonNull(feedback.getBody()),
+                                        proposedInlineNotes(feedback),
+                                        List.of(),
+                                        null)),
+                        job));
     }
 
     private FeedbackDispatch insertIfAbsentAndLoad(
@@ -541,7 +548,7 @@ class PracticeFeedbackDispatchService {
     }
 
     Result recover(FeedbackDispatch dispatch, AgentJob job) {
-        return dispatch(dispatch, job);
+        return personDataAdmission.deliver(job, () -> dispatch(dispatch, job));
     }
 
     boolean projectApproved(Feedback feedback, Runnable projection) {

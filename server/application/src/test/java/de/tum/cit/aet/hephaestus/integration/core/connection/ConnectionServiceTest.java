@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -98,7 +99,8 @@ class ConnectionServiceTest extends BaseUnitTest {
                         credentialConverter,
                         transactionManager,
                         new SyncTaskExecutor(),
-                        Clock.systemUTC()));
+                        Clock.systemUTC()),
+                mock(SourceProviderNamespaces.class));
         // Default: the connection is free. Only the disconnect fence ever asks.
         Mockito.lenient()
                 .when(syncJobService.requestCancelForTeardown(anyLong()))
@@ -145,7 +147,7 @@ class ConnectionServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.transition(
                         connection,
-                        new TransitionRequest(IntegrationState.ACTIVE, "REVIVE", "ADMIN", "actor-1", "corr-x", "nope")))
+                        TransitionRequest.byAccount(IntegrationState.ACTIVE, "REVIVE", "ADMIN", 42L, "corr-x", "nope")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Illegal transition")
                 .hasMessageContaining("UNINSTALLED")
@@ -167,8 +169,8 @@ class ConnectionServiceTest extends BaseUnitTest {
 
         Connection result = service.transition(
                 connection,
-                new TransitionRequest(
-                        IntegrationState.ACTIVE, "OAUTH_COMPLETE", "USER", "actor-1", "corr-x", "reconnected"));
+                TransitionRequest.byAccount(
+                        IntegrationState.ACTIVE, "OAUTH_COMPLETE", "USER", 42L, "corr-x", "reconnected"));
 
         assertThat(result.getState()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(result.getStateReason()).isEqualTo("reconnected");
@@ -189,7 +191,7 @@ class ConnectionServiceTest extends BaseUnitTest {
 
         Connection result = service.transition(
                 connection,
-                new TransitionRequest(IntegrationState.ACTIVE, "OAUTH_COMPLETE", "USER", "5", "corr-gh", "acme"));
+                TransitionRequest.byAccount(IntegrationState.ACTIVE, "OAUTH_COMPLETE", "USER", 42L, "corr-gh", "acme"));
 
         assertThat(result.getState()).isEqualTo(IntegrationState.ACTIVE);
     }
@@ -200,8 +202,8 @@ class ConnectionServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.transition(
                         connection,
-                        new TransitionRequest(
-                                IntegrationState.PENDING, "REWIND", "ADMIN", "actor-1", "corr-y", "nope")))
+                        TransitionRequest.byAccount(
+                                IntegrationState.PENDING, "REWIND", "ADMIN", 42L, "corr-y", "nope")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("SUSPENDED")
                 .hasMessageContaining("PENDING");
@@ -237,13 +239,8 @@ class ConnectionServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.transition(
                         stale,
-                        new TransitionRequest(
-                                IntegrationState.SUSPENDED,
-                                "SUSPEND",
-                                "ADMIN",
-                                "actor-1",
-                                "corr-stale",
-                                "stale request")))
+                        TransitionRequest.byAccount(
+                                IntegrationState.SUSPENDED, "SUSPEND", "ADMIN", 42L, "corr-stale", "stale request")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("UNINSTALLED")
                 .hasMessageContaining("SUSPENDED");
@@ -590,8 +587,8 @@ class ConnectionServiceTest extends BaseUnitTest {
 
             service.transition(
                     connection,
-                    new TransitionRequest(
-                            IntegrationState.SUSPENDED, "SUSPEND", "ADMIN", "actor-1", "corr-2", "paused"));
+                    TransitionRequest.byAccount(
+                            IntegrationState.SUSPENDED, "SUSPEND", "ADMIN", 42L, "corr-2", "paused"));
 
             verify(eventPublisher)
                     .publishEvent(new ConnectionLifecycleEvent.Deactivated(55L, 7L, IntegrationKind.GITHUB));
@@ -659,8 +656,8 @@ class ConnectionServiceTest extends BaseUnitTest {
     }
 
     private static TransitionRequest disconnectRequest() {
-        return new TransitionRequest(
-                IntegrationState.UNINSTALLED, "DISCONNECT", "ADMIN", "actor-1", "corr-disconnect", "removed");
+        return TransitionRequest.byAccount(
+                IntegrationState.UNINSTALLED, "DISCONNECT", "ADMIN", 42L, "corr-disconnect", "removed");
     }
 
     private static void setId(Connection connection, long id) {

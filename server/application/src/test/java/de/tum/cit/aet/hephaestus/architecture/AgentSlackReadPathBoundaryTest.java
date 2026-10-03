@@ -99,13 +99,17 @@ class AgentSlackReadPathBoundaryTest extends HephaestusArchitectureTest {
         ArchRule rule = noClasses()
                 .that()
                 .resideInAPackage(AGENT)
+                .and()
+                .doNotImplement(de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCatalog.class)
                 .should()
                 .dependOnClassesThat()
                 .haveFullyQualifiedName("org.springframework.jdbc.core.JdbcTemplate")
                 .because(
                         "Raw JdbcTemplate is how the agent used to tunnel into Slack's private tables past the tenancy "
                                 + "StatementInspector and the Modulith import check; the agent reads its own storage via JPA "
-                                + "repositories and reaches Slack only through the agent.conversation SPIs");
+                                + "repositories and reaches Slack only through the agent.conversation SPIs. Registered person-data "
+                                + "adapters are the instance-wide erasure boundary; their mapped ownership and private-source "
+                                + "SQL prohibition are checked separately");
         rule.check(classes);
     }
 

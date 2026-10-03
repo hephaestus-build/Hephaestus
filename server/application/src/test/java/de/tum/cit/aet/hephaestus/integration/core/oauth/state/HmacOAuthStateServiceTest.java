@@ -98,6 +98,32 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void rejectsCorrectlySignedLegacyNumericLogin() throws Exception {
+        String payload = "42|GITHUB|" + java.time.Instant.now().getEpochSecond() + "|nonce|NDI";
+        var mac = javax.crypto.Mac.getInstance("HmacSHA256");
+        mac.init(new javax.crypto.spec.SecretKeySpec(
+                SECRET.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+        var encoder = java.util.Base64.getUrlEncoder().withoutPadding();
+        String signature =
+                encoder.encodeToString(mac.doFinal(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        String state =
+                encoder.encodeToString((payload + "|" + signature).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var service = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
+        assertThatThrownBy(() -> service.consume(state))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("OAuth state malformed");
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0, -1})
+    void rejectsInvalidAccountReference(long accountId) {
+        var service = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
+        assertThatThrownBy(() -> service.issue(42, IntegrationKind.GITHUB, accountId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("OAuth state actor malformed");
+    }
+
+    @Test
     void issuedStateRoundTrips() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
         String state = svc.issue(42L, IntegrationKind.GITHUB);
@@ -150,50 +176,45 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void actorRefRoundTripsThroughHmacPayload() {
+    void actorAccountIdRoundTripsThroughHmacPayload() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
-        String state = svc.issue(42L, IntegrationKind.SLACK, "alice@example.com");
+        String state = svc.issue(42L, IntegrationKind.SLACK, 42L);
 
         StateBinding binding = svc.consume(state);
         assertThat(binding.workspaceId()).isEqualTo(42L);
         assertThat(binding.kind()).isEqualTo(IntegrationKind.SLACK);
-        assertThat(binding.actorRef()).isEqualTo("alice@example.com");
+        assertThat(binding.actorAccountId()).isEqualTo(42L);
     }
 
     @Test
-    void actorRefIsNullWhenIssuedViaLegacyOverload() {
+    void actorAccountIdIsNullForSystemFlow() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
-        // The no-actor overload must keep working byte-compatibly — older callers don't
-        // know about actorRef and the controller should fall back to a sentinel.
         String state = svc.issue(42L, IntegrationKind.GITHUB);
 
         StateBinding binding = svc.consume(state);
-        assertThat(binding.actorRef()).isNull();
+        assertThat(binding.actorAccountId()).isNull();
     }
 
     @Test
-    void actorRefIsNullWhenExplicitNullPassedToNewOverload() {
+    void actorAccountIdIsNullWhenExplicitNullPassedToNewOverload() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
         String state = svc.issue(42L, IntegrationKind.GITHUB, null);
         StateBinding binding = svc.consume(state);
-        assertThat(binding.actorRef()).isNull();
+        assertThat(binding.actorAccountId()).isNull();
     }
 
     @Test
-    void actorRefContainingPipeCharacterSurvivesTokeniser() {
-        // The HMAC payload tokeniser uses '|' as a delimiter; the actor segment is
-        // base64url-encoded specifically so identity sources that emit pipe-bearing
-        // subjects (rare but valid in some IDP configs) don't break the framing.
+    void shouldRoundTripLargestAccountId() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
-        String actor = "user|with|pipes";
+        Long actor = Long.MAX_VALUE;
         String state = svc.issue(42L, IntegrationKind.SLACK, actor);
-        assertThat(svc.consume(state).actorRef()).isEqualTo(actor);
+        assertThat(svc.consume(state).actorAccountId()).isEqualTo(actor);
     }
 
     @Test
     void tamperedActorSegmentRejectedByHmac() {
         HmacOAuthStateService svc = HmacOAuthStateService.withoutNonceStore(SECRET, Duration.ofMinutes(10));
-        String state = svc.issue(42L, IntegrationKind.GITHUB, "alice");
+        String state = svc.issue(42L, IntegrationKind.GITHUB, 42L);
         // Flipping a base64 char in the payload (not the signature) MUST still fail —
         // the actor segment is part of the signed payload.
         String tampered = state.substring(0, 4) + "AAAA" + state.substring(8);
@@ -272,13 +293,18 @@ class HmacOAuthStateServiceTest extends BaseUnitTest {
         }
 
         @Override
-        public void issue(@Nullable String nonce, long workspaceId, IntegrationKind kind, java.time.Instant issuedAt) {
+        public void issue(
+                @Nullable String nonce,
+                long workspaceId,
+                IntegrationKind kind,
+                java.time.Instant issuedAt,
+                @Nullable Long actorAccountId) {
             if (nonce == null) return;
             consumed.putIfAbsent(nonce, false);
         }
 
         @Override
-        public boolean tryConsume(@Nullable String nonce) {
+        public boolean tryConsume(@Nullable String nonce, StateBinding binding) {
             if (nonce == null) return false;
             Boolean prior = consumed.get(nonce);
             if (prior == null || prior) return false;

@@ -22,6 +22,20 @@ public interface SlackParticipantConsentRepository
      */
     boolean existsByWorkspaceIdAndSlackUserIdAndIngestionOptedOutTrue(Long workspaceId, String slackUserId);
 
+    /** Permanent person-erasure controls are separate from reversible workspace consent. */
+    @Query(value = """
+        SELECT EXISTS (
+            SELECT 1 FROM person_suppression s
+            JOIN identity_provider p ON p.id = s.provider_id
+                AND p.type = 'SLACK' AND p.server_url = 'https://slack.com'
+            JOIN connection c ON c.workspace_id = :workspaceId
+                AND c.config->>'teamId' = s.team_key
+            WHERE s.subject = :slackUserId
+        )
+        """, nativeQuery = true)
+    boolean isPersonProcessingSuppressed(
+            @Param("workspaceId") long workspaceId, @Param("slackUserId") String slackUserId);
+
     /**
      * Idempotently records channel-message ingestion opt-out while preserving the historical research column.
      * Research eligibility is determined by the native-account consent ledger, not this row.

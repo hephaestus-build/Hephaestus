@@ -123,6 +123,7 @@ public class SlackAppHomeService {
             mentorState = "Check account access";
         } else if (state.refusal().isPresent()) {
             mentorState = switch (state.refusal().get()) {
+                case PERSON_ERASED -> "Personal data erased";
                 case NO_AI -> "Off for you";
                 case CHOICE_REQUIRED -> "Choose your AI";
                 case UNAVAILABLE -> "Unavailable for your AI choice";

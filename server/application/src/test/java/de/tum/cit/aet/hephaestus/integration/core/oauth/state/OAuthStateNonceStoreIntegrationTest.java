@@ -34,25 +34,49 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
     @Test
     void aNonceCanBeConsumedExactlyOnce() {
         String nonce = "seq-" + Long.toHexString(System.nanoTime()); // <= 32 chars (column limit)
-        store.issue(nonce, 1L, IntegrationKind.GITHUB, Instant.now());
+        var binding = new OAuthStateService.StateBinding(
+                1, IntegrationKind.GITHUB, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+        store.issue(nonce, 1L, IntegrationKind.GITHUB, binding.issuedAt());
 
-        assertThat(store.tryConsume(nonce)).as("first consume wins").isTrue();
-        assertThat(store.tryConsume(nonce))
+        assertThat(store.tryConsume(nonce, binding)).as("first consume wins").isTrue();
+        assertThat(store.tryConsume(nonce, binding))
                 .as("a replay of the same nonce is rejected")
                 .isFalse();
     }
 
     @Test
+    void mismatchedSignedContextDoesNotConsumeNonce() {
+        String nonce = "bound-" + Long.toHexString(System.nanoTime());
+        Instant issued = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        store.issue(nonce, 1L, IntegrationKind.GITHUB, issued);
+        assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(2, IntegrationKind.GITHUB, issued)))
+                .isFalse();
+        assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(1, IntegrationKind.SLACK, issued)))
+                .isFalse();
+        assertThat(store.tryConsume(
+                        nonce, new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, issued.plusSeconds(1))))
+                .isFalse();
+        assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, issued, 42L)))
+                .isFalse();
+        assertThat(store.tryConsume(nonce, new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, issued)))
+                .isTrue();
+    }
+
+    @Test
     void consumingAnUnknownNonceFailsClosed() {
         // No backing row (e.g. a forged state whose HMAC somehow validated) → reject, never accept.
-        assertThat(store.tryConsume("absent-" + Long.toHexString(System.nanoTime())))
+        assertThat(store.tryConsume(
+                        "absent-" + Long.toHexString(System.nanoTime()),
+                        new OAuthStateService.StateBinding(1, IntegrationKind.GITHUB, Instant.now())))
                 .isFalse();
     }
 
     @Test
     void concurrentConsumesOfOneNonceProduceExactlyOneWinner() throws Exception {
         String nonce = "race-" + Long.toHexString(System.nanoTime()); // <= 32 chars (column limit)
-        store.issue(nonce, 1L, IntegrationKind.GITHUB, Instant.now());
+        var binding = new OAuthStateService.StateBinding(
+                1, IntegrationKind.GITHUB, Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
+        store.issue(nonce, 1L, IntegrationKind.GITHUB, binding.issuedAt());
 
         // Two OAuth callbacks land at once (a vendor retrying the redirect). The atomic conditional
         // UPDATE must let only ONE flip unconsumed→consumed; without the consumed_at IS NULL guard
@@ -61,8 +85,8 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
         try {
             CountDownLatch ready = new CountDownLatch(2);
             CountDownLatch go = new CountDownLatch(1);
-            Future<Boolean> first = pool.submit(consume(nonce, ready, go));
-            Future<Boolean> second = pool.submit(consume(nonce, ready, go));
+            Future<Boolean> first = pool.submit(consume(nonce, binding, ready, go));
+            Future<Boolean> second = pool.submit(consume(nonce, binding, ready, go));
             ready.await(10, TimeUnit.SECONDS);
             go.countDown();
 
@@ -76,11 +100,12 @@ class OAuthStateNonceStoreIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    private Callable<Boolean> consume(String nonce, CountDownLatch ready, CountDownLatch go) {
+    private Callable<Boolean> consume(
+            String nonce, OAuthStateService.StateBinding binding, CountDownLatch ready, CountDownLatch go) {
         return () -> {
             ready.countDown();
             go.await(10, TimeUnit.SECONDS);
-            return store.tryConsume(nonce);
+            return store.tryConsume(nonce, binding);
         };
     }
 }

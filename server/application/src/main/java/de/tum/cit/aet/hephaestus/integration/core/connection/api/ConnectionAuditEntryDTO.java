@@ -17,6 +17,7 @@ public record ConnectionAuditEntryDTO(
         @Nullable IntegrationState toState,
         String actorKind,
         @Nullable String actorRef,
+        @Nullable Long actorAccountId,
         @Nullable String correlationId,
         Instant occurredAt) {
     public static ConnectionAuditEntryDTO from(ConnectionAudit audit) {
@@ -26,6 +27,7 @@ public record ConnectionAuditEntryDTO(
                 audit.getToState(),
                 audit.getActorKind(),
                 audit.getActorRef(),
+                audit.getActorAccountId(),
                 audit.getCorrelationId(),
                 audit.getOccurredAt());
     }

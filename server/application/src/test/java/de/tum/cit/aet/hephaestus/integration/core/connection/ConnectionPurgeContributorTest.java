@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -67,7 +68,8 @@ class ConnectionPurgeContributorTest extends BaseUnitTest {
                 eventPublisher,
                 syncJobService,
                 transactionManager,
-                CredentialReaders.forTests(credentialConverter));
+                CredentialReaders.forTests(credentialConverter),
+                mock(SourceProviderNamespaces.class));
         Mockito.lenient().when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
         Mockito.lenient().when(transactionManager.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
         Mockito.lenient().when(connectionStrategy.kind()).thenReturn(IntegrationKind.GITHUB);

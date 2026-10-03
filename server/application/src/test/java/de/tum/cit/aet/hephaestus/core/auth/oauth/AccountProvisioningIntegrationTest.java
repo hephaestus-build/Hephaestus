@@ -127,6 +127,36 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
                 .hasSize(1);
     }
 
+    @Test
+    void deletingAccountCannotAttachANewNativeIdentityOrUpdateAnExistingLink() {
+        seedProvider("github-deleting", LoginProvider.ProviderType.GITHUB);
+        Account account = service.resolveOrProvision(
+                        "github-deleting",
+                        "original-native-subject",
+                        principal("original-native-subject", "contact@example.test", true, "display"),
+                        AuthIntentCookie.Intent.login(null, null))
+                .account();
+        long accountId = persistedId(account.getId());
+        account.setStatus(Account.Status.DELETING);
+        accountRepository.saveAndFlush(account);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github-deleting",
+                        "new-native-subject",
+                        principal("new-native-subject", "contact@example.test", true, "display"),
+                        AuthIntentCookie.Intent.link(accountId, null)))
+                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github-deleting",
+                        "original-native-subject",
+                        principal("original-native-subject", "contact@example.test", true, "display"),
+                        AuthIntentCookie.Intent.login(null, null)))
+                .isInstanceOf(org.springframework.security.oauth2.core.OAuth2AuthenticationException.class);
+        assertThat(identityLinkRepository.findActiveByAccountId(accountId))
+                .extracting(IdentityLink::getSubject)
+                .containsExactly("original-native-subject");
+    }
+
     private void seedProvider(String registrationId, LoginProvider.ProviderType type) {
         LoginProvider provider = new LoginProvider();
         provider.setRegistrationId(registrationId);

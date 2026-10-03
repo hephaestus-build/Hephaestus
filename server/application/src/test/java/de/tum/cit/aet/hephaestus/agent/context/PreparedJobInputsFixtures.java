@@ -50,11 +50,21 @@ public final class PreparedJobInputsFixtures {
     }
 
     public static PreparedJobInputs prepare(JobEvidenceFiles files, AgentJob job, PreparedJobInputs inputs) {
-        return files.prepare(
-                job,
-                new PreparedEvidence(
-                        Map.of(), inputs.filesOnDisk(), inputs.cleanups(), inputs.folderIndex(), inputs.directories()),
-                inputs.automatedReviewReadinessReport());
+        files.beginPersonCapture(job);
+        try {
+            return files.prepare(
+                    job,
+                    new PreparedEvidence(
+                            Map.of(),
+                            inputs.filesOnDisk(),
+                            inputs.cleanups(),
+                            inputs.folderIndex(),
+                            inputs.directories()),
+                    inputs.automatedReviewReadinessReport());
+        } catch (RuntimeException exception) {
+            files.abortPersonCapture(job);
+            throw exception;
+        }
     }
 
     public static JobEvidenceFiles freezer() {
