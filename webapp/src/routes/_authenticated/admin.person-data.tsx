@@ -21,7 +21,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { instanceAdminHead } from "@/lib/page-title";
-import { problemDetailOf, type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
+import { type StepUpChallenge, stepUpChallengeOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/admin/person-data")({
 	head: instanceAdminHead("Person data"),
@@ -36,7 +36,6 @@ function PersonDataRoute() {
 		accountId: "",
 		identities: [],
 	});
-	const [inputError, setInputError] = useState<string | undefined>();
 	const [challenge, setChallenge] = useState<StepUpChallenge | undefined>();
 	const confirmAccess = useConfirmAccess(challenge !== undefined);
 	const onError = (error: unknown) => {
@@ -86,36 +85,21 @@ function PersonDataRoute() {
 		},
 		onError,
 	});
+	// The form's native constraints guarantee positive integers and non-empty subjects here.
 	const onPreview = () => {
-		const accountId = selection.accountId ? Number(selection.accountId) : undefined;
-		if (accountId !== undefined && (!Number.isSafeInteger(accountId) || accountId < 1)) {
-			setInputError("Enter an exact positive account ID.");
-			return;
-		}
-		const identities = selection.identities.map((identity) => ({
-			providerId: Number(identity.providerId),
-			subject: identity.subject,
-			...(identity.teamId ? { teamId: identity.teamId } : {}),
-		}));
-		if (
-			identities.some(
-				(identity) =>
-					!Number.isSafeInteger(identity.providerId) ||
-					identity.providerId < 1 ||
-					!identity.subject,
-			)
-		) {
-			setInputError("Enter the exact provider instance and native user ID for each identity.");
-			return;
-		}
-		setInputError(undefined);
-		preview.mutate({ body: { accountId, identities } });
+		preview.mutate({
+			body: {
+				accountId: selection.accountId === "" ? undefined : Number(selection.accountId),
+				identities: selection.identities.map((identity) => ({
+					providerId: Number(identity.providerId),
+					subject: identity.subject,
+					...(identity.teamId === "" ? {} : { teamId: identity.teamId }),
+				})),
+			},
+		});
 	};
 	const retry = () => {
 		preview.reset();
-		erase.reset();
-		download.reset();
-		setInputError(undefined);
 		void providers.refetch();
 		if (requestId !== undefined) {
 			void request.refetch();
@@ -128,15 +112,10 @@ function PersonDataRoute() {
 		pendingAction = "erase";
 	}
 	const currentRequest = request.data;
-	const error: unknown =
-		providers.error ?? request.error ?? preview.error ?? erase.error ?? download.error;
+	const loadError: unknown = providers.error ?? request.error ?? preview.error;
 	let state: InstancePersonDataPageState;
-	if (inputError !== undefined || (error !== null && error !== undefined)) {
-		state = {
-			status: "error",
-			message: inputError ?? problemDetailOf(error, "Could not complete the person-data request."),
-			onRetry: retry,
-		};
+	if (loadError !== null) {
+		state = { status: "error", error: loadError, onRetry: retry };
 	} else if (
 		providers.isPending ||
 		preview.isPending ||
@@ -148,12 +127,10 @@ function PersonDataRoute() {
 			status: "ready",
 			request: currentRequest,
 			pendingAction,
+			actionError: erase.error ?? download.error ?? undefined,
 			onExport: () => download.mutate(currentRequest.id),
 			onErase: (externalCopiesRemoved) =>
 				erase.mutate({ path: { id: currentRequest.id }, body: { externalCopiesRemoved } }),
-			onRefresh: () => {
-				void request.refetch();
-			},
 		};
 	} else {
 		state = { status: "empty" };
