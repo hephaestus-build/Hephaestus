@@ -2,11 +2,13 @@
 
 This file is the Art. 30 record for the TUM-operated Hephaestus deployment at https://hephaestus.build. Each section maps to a single Art. 30 element. Fenced code blocks are paste-ready into the corresponding TUM DSMS form field at https://dsms.datenschutz.tum.de/; everything outside the fences is contextual.
 
+The institutional statements below come from the existing TUM record. Code verifies product behaviour, not signed agreements, live settings or operational measures. The controller must verify those statements and complete deployment placeholders before using this as a completed record.
+
 ## Identifier
 
 - Title: `Hephaestus – Practice-Aware Feedback for Software Projects`
 - Tags: `Webdienst`, `Lehre`, `Forschungsprojekt`
-- Joint Controller: tick (workspace administrators are joint controllers under Art. 26 GDPR — see "Legal basis" below).
+- Joint Controller: confirm the actual parties and arrangement before ticking; an admin role alone does not establish Art. 26 status — see "Legal basis" below.
 - Relevant for Subject Rights Request (SRR): tick.
 - Responsible department: TUM School of Computation, Information and Technology.
 - Associated TUM Org identifier: `TUS1322`.
@@ -45,7 +47,7 @@ Contributors who sign in with their GitHub or LRZ-GitLab account get a personal 
 
 Signed-in contributors can send product feedback and answer or decline surveys authored by instance administrators. These submissions stay in the instance database and are available to instance administrators for product improvement; they are not reused for research. Research-purpose surveys are covered under *Legal basis* below.
 
-These workspace-level configuration choices are made by the workspace administrator and TUM/AET as joint controllers under Art. 26 GDPR (the choices are enumerated in "Legal basis" below). Hephaestus is built around the contributor's own development: observations serve the contributor and give the workspace administrator a way to deliver targeted feedback during the project. Observations are advisory and contestable; the platform makes no automated decisions within the meaning of Art. 22 GDPR and feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments and related Slack reminders through the in-app **Comments and Slack reminders** setting and respond to individual pieces of feedback by recording whether they were helpful and how they were handled. This delivery setting does not stop review processing; objections to processing under Art. 21 GDPR use the contact process in privacy §7.
+The existing TUM record describes an Art. 26 arrangement for these workspace-level choices; its actual parties and arrangement reference require legal-owner confirmation (the choices are enumerated in "Legal basis" below). Hephaestus is built around the contributor's own development: observations serve the contributor and give the workspace administrator a way to deliver targeted feedback during the project. Observations are advisory and contestable; the platform makes no automated decisions within the meaning of Art. 22 GDPR and feeds no grading, assessment, HR, or access-control pipeline. Signed-in contributors can stop new practice-feedback comments and related Slack reminders through the in-app **Comments and Slack reminders** setting and respond to individual pieces of feedback by recording whether they were helpful and how they were handled. This delivery setting does not stop review processing; objections to processing under Art. 21 GDPR use the contact process in privacy §7.
 ```
 
 ### Optional browser extension
@@ -120,7 +122,7 @@ Product feedback and surveys are first-party processing: submissions stay in the
 
 Browser avatar requests go directly to the source image host, including for unsigned visitors on
 public pages. Record `[actual image hosts, roles, lawful basis, transfer safeguards and host retention]`;
-they receive visitor IP/network metadata and the requested image URL. Optional browser/server Sentry
+they receive visitor IP/network metadata and the requested image URL. Optional browser/backend Sentry
 and trace collectors also need recipient entries when configured; see the processor checklist.
 
 ## Third-country transfers (Art. 30(1)(e))
@@ -145,7 +147,6 @@ Mixed retention by category:
 - Sign-in account data: the in-app account-deletion control revokes access immediately; after a 48-hour cooldown, a scheduled sweeper removes federated identity links and the other authentication rows listed under "Deletion guarantee" and tombstones the account. Product-feedback submissions and survey invitations, responses or declines have no independent time-based expiry; they are removed with account erasure or, for workspace-scoped submissions, workspace purge.
 - Email subscriptions and unsubscribe capabilities: retained until account erasure; opting out preserves the opt-out and disable-only link. Survey email request and relay-acceptance records are retained with the survey, with no independent age-based expiry; account erasure, survey deletion and applicable workspace purge remove them. Pending notification publications are deleted on completion; after their seven-day delivery deadline the next processing attempt expires and removes them. An offline instance cannot run that cleanup. Delivered mailbox copies and relay logs follow the recipient or relay's retention, not this application's deletion schedule.
 - Self-service account exports: download eligibility expires 48 hours after preparation; the export sweeper removes expired archives. Person-data previews expire after 48 hours when abandoned. Wider rights-request delivery copies need an operator-defined secure transfer and expiry.
-- Settings-change history: 365-day automatic window; account erasure detaches actor references while retaining change facts.
 - Authentication-event log (sign-in / sign-out, token issue / refresh, user views by an instance administrator, and historical impersonation events; includes the source IP address and user agent): retained for 12 months in monthly partitions, the oldest dropped automatically, as a security measure (the documented security-processing basis and Art. 32 GDPR). A user-view event records the instance administrator, the workspace, the viewed user, the stated reason and what was read. On account erasure the IP address, user agent, and free-text details are cleared from every event in which the erased account is the instance administrator or the viewed user; account references still point to the tombstoned account, and the event row remains for the rest of its window.
 - Contributor profile (login, name, email, avatar) and account preferences: retained as instance-global identity records independently of workspace repository monitoring. Repository orphan cleanup and workspace purge do not remove them. They are exported and removed or anonymised through the instance-admin Person data procedure on receipt of a verified request. Matching uses exact provider instance and native user keys, not names, logins or email addresses.
 - Authored repository artefacts (issues, pull/merge requests, comments, reviews) synchronised from GitHub / gitlab.lrz.de and their practice observations, delivery-policy traces, and pending delivery packages: the active PostgreSQL mirror is retained while at least one workspace monitors the source repository and is removed when the last workspace stops monitoring it, the last relevant connection is disconnected, the workspace is purged, or verified erasure is completed. A terminal delivery keeps only its idempotency and provider-placement record after the package is projected into the practice-feedback ledger; failed packages remain available for an administrator to retry. Diagnostic, worker-input, and broker copies follow the bounded windows below and do not all support immediate selective erasure.
@@ -164,7 +165,7 @@ Mixed retention by category:
 **Reasoning**
 
 ```text
-Hephaestus is contributor-facing. Account-bound data exists to give the data subject continuity of feedback while they participate, and is removed when they leave or on a verified erasure request (Art. 5(1)(e) GDPR storage limitation). Server-side logs and container stdout are bounded to a window short enough to limit exposure and long enough to investigate security incidents under Art. 32(1) GDPR (Art. 5(1)(c) data minimisation).
+Hephaestus is contributor-facing. Account-bound data exists to give the data subject continuity of feedback while they participate, and is removed when they leave or on a verified erasure request (Art. 5(1)(e) GDPR storage limitation). Authentication and settings-change history have time-based windows; container stdout is bounded by size, not age. The controller must assess their necessity and actual retention under Art. 32(1) GDPR and Art. 5(1)(c) and (e); these bounds alone do not prove proportionality.
 ```
 
 **Deletion responsibility**
@@ -200,7 +201,7 @@ account purger as self-service deletion; self-service cooldown behaviour is unch
     - GitHub / gitlab.lrz.de: the mirrored repository and everything cascading from it — issues, pull/merge requests, reviews, review threads and comments, discussions, labels, milestones, collaborators — plus the workspace's repository monitors, any local git clone, the org-level mirror (teams, team memberships, organisation memberships), the activity-event log, and the SCM-derived practice observations and feedback (whose evidence quotes mirrored content verbatim). Repository rows are instance-global and shared: a repository another workspace still monitors is retained for that workspace, and only the disconnecting workspace's access path is removed. The org-level mirror is removed only when no other workspace is bound to the same organisation.
     - Slack: messages, threads, monitored-channel records, participant-consent records, mentor threads, and the conversation-derived observations and feedback.
     - Outline: documents, collections, and the document event log.
-- Retained after disconnection / purge, for all four integrations: the operational sync history (`sync_job`, `connection_activity`, `connection_audit`) — job kind, type, status and timestamps only, capped per connection, carrying no third-party content — so that the disconnection itself remains auditable. Connection credentials are cleared atomically as part of the same transition. Cross-tenant identity rows (accounts, organisations, identity providers) are not touched by a disconnection; they are covered by the account-deletion and erasure-request paths above.
+- Retained after disconnection / purge, for all four integrations: the operational sync history (`sync_job`, `connection_activity`, `connection_audit`) — including status, timestamps, operator attribution, progress and diagnostic details — so that the disconnection itself remains auditable. These are personal-data stores, not anonymous history: verify applicable caps and review triggers, and include them in person requests. Connection credentials are cleared atomically as part of the same transition. Cross-tenant identity rows (accounts, organisations, identity providers) are not touched by a disconnection; they are covered by the account-deletion and erasure-request paths above.
 - Artifact-source manifests, repository snapshots, citation verdicts, derived assessments, exports, and governed evaluation cases must be traversed by source, workspace, and person erasure. Expiry/erasure may leave only a non-content typed tombstone and makes replay unavailable; audit reproducibility never overrides erasure.
 - Source-side content on GitHub or gitlab.lrz.de: not modified by deletion in Hephaestus.
 - Container stdout (startup and error output): rotated by size by the container runtime (per-service caps under "Where stored") and not selectively prunable — an erasure request cannot reach inside the rotation window, which displaces the lines on its own.
@@ -270,7 +271,7 @@ National multi-select: tick `Art. 4.1 BayDSG (Bavarian data protection act)`.
 ```text
 TUM/AET as platform operator: Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (Allgemeine Aufgaben der Hochschule) and Art. 4(1) BayDSG.
 
-Per-workspace lawful basis: workspace administrator and TUM/AET are joint controllers under Art. 26 GDPR for the workspace's processing. The administrator invokes the basis applicable to their workspace's contributors — typically Art. 6(1)(a) GDPR (consent, e.g. the AET capstone course's application phase) or Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (public-task activity by a TUM unit, e.g. regular courses or public open-source repositories such as ls1intum/Artemis). Administrators outside TUM cannot invoke Art. 6(1)(e) BayHIG and invoke a basis available to them (typically Art. 6(1)(a) consent, or Art. 6(1)(f) for private bodies under their own LIA).
+Per-workspace lawful basis: confirm the actual parties and reference for the existing TUM Art. 26 arrangement. An authorised administrator within one controller is not a separate controller by virtue of their role. The administrator invokes the basis applicable to their workspace's contributors — typically Art. 6(1)(a) GDPR (consent, e.g. the AET capstone course's application phase) or Art. 6(1)(e) GDPR i.V.m. Art. 2 BayHIG (public-task activity by a TUM unit, e.g. regular courses or public open-source repositories such as ls1intum/Artemis). Administrators outside TUM cannot invoke Art. 6(1)(e) BayHIG and invoke a basis available to them (typically Art. 6(1)(a) consent, or Art. 6(1)(f) for private bodies under their own LIA).
 
 Voluntary sign-in by non-TUM contributors to use personal features: Art. 6(1)(b) GDPR.
 
@@ -297,7 +298,7 @@ DSMS multi-select: tick `Data received from third parties` and `Directly from th
 - From the HTTP connection: no general access log in the shipped production stack. Authentication and security processing still use connection metadata. The source IP address and user agent are collected as such only for authentication events, and are retained under the auth-event log's own 12-month window described above.
 ```
 
-## Information duty (Art. 13)
+## Information duty (Arts. 13 and 14)
 
 - https://hephaestus.build/privacy
 - https://hephaestus.build/imprint

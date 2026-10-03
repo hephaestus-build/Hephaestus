@@ -66,7 +66,7 @@ activation. Controller-owned self-hosting and SaaS have different roles. The bro
 and error-monitoring consent, strips request, user and breadcrumb fields, and disables message/body
 collection. Error text and stacks can still carry personal data; inspect synthetic reports and apply
 server-side scrubbing. Withdrawal stops new client reports, not previously received reports.
-The server also includes Sentry, initialized by a nonblank DSN outside the specs profile. Its consent is not controlled by the browser: it disables default PII and strips request, user and breadcrumb fields, while retaining operational trace correlation. Record a separate lawful basis and recipient scope for server diagnostics. Browser consent withdrawal does not turn off server monitoring. Sentry-side rights and retention need their own procedure. Optional trace export also needs an
+The backend also includes Sentry, initialized by a nonblank DSN outside the specs profile. This configuration is not limited to the server role; inspect the DSN supplied to each server, worker and webhook process. Browser consent does not control it: it disables default PII and strips request, user and breadcrumb fields, while retaining operational trace correlation. Record a separate lawful basis and recipient scope for server diagnostics. Browser consent withdrawal does not turn off server monitoring. Sentry-side rights and retention need their own procedure. Optional trace export also needs an
 approved collector and retention; it can contain workspace and run identifiers. Private metrics
 must not be exposed through the public application route.
 
@@ -80,7 +80,7 @@ Art. 26 GDPR (joint controllership) is equally absent: EDPB 07/2020 §§ 50–65
 
 ## Why the workspace administrator is not an Art. 28 processor
 
-Workspace administrators are **joint controllers** with TUM/AET under Art. 26 GDPR for the workspace-configurable decisions enumerated in §10 of the privacy statement (which Git repositories are connected, the practice catalog, the LLM provider and credentials, whether practice reviews are auto-triggered on new pull/merge requests, Slack routing, and whether Outline and selected collections are enabled). The Art. 26(2) Satz 1 allocation of duties and the Art. 26(2) Satz 2 essence of the arrangement are made available to data subjects via the privacy statement; TUM/AET is the single point of contact for data-subject rights, with the workspace administrator additionally addressable for workspace-specific questions.
+The existing TUM notice describes an Art. 26 arrangement for workspace-configurable decisions (§10). Confirm the actual parties and arrangement with the legal owner; an authorised individual acting within TUM is not a separate controller merely because they administer a workspace. The listed decisions cover repository selection, practices, LLM providers and credentials, automatic review triggers, Slack routing and selected Outline collections. The Art. 26(2) Satz 1 allocation of duties and the Art. 26(2) Satz 2 essence of the arrangement are made available to data subjects via the privacy statement; TUM/AET is the single point of contact for data-subject rights, with the workspace administrator additionally addressable for workspace-specific questions.
 
 ## Follow-up if the processing surface changes
 
@@ -90,7 +90,7 @@ Amend this file, the Art. 30 record, and the privacy statement before deploying 
 - A new identity provider beyond GitHub and gitlab.lrz.de.
 - Enabling Outline for a new origin or changing its operator, hosting region, or contractual role.
 - Activating SMTP email delivery (the chosen SMTP host becomes a recipient of personal data; a TUM-internal relay falls under the TUM-internal framework, an external relay needs an Art. 28 DPA).
-- Activating the bundled Sentry client. A self-hosted Sentry on TUM infrastructure is an in-house recipient; a SaaS Sentry tenant is an Art. 28 U.S. processor that needs a DPA, a privacy-statement entry, and a DPIA re-assessment.
+- Activating browser or server Sentry. Record the exact operator, role, region, retention and transfer path; do not assume all SaaS endpoints have the same legal entity or geography. Amend the notice and reassess the DPIA. An external processor needs an Art. 28 agreement.
 - Any external storage (S3, CDN) or any third-party font, script, image, or embed served from the application: requires a recipient-role assessment, any applicable agreement and a privacy-statement entry.
 - Heph internet access or any widening of the practice-review sandbox network posture beyond the governed worker gateway — triggers a re-audit under §5 of `dpia-prescreen.md`.
 - Sending a new artifact-source privacy class to an existing processor, changing its region or provider retention,

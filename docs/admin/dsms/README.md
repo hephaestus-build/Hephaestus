@@ -9,7 +9,7 @@ description: Art. 30 / Art. 35 / Art. 28 records and source-governance controls 
 
 This package describes the shipped processing and the TUM deployment record. Self-hosters must
 complete their own record before collecting data. The TUM identity, public-task basis and institutional
-agreements do not apply to another operator. A setting, a source-use decision or a passing test cannot
+agreements must not be assumed to apply to another operator. A setting, a source-use decision or a passing test cannot
 establish a legal basis or prove that a deployment follows this record.
 
 The TUM privacy notice still needs the legal owner's approval before release. This update does not

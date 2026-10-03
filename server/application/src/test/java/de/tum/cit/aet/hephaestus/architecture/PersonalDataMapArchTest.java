@@ -222,7 +222,7 @@ class PersonalDataMapArchTest {
         try {
             return Class.forName(className, false, PersonalDataMapArchTest.class.getClassLoader());
         } catch (ClassNotFoundException exception) {
-            throw new IllegalStateException("Cannot inspect a personal-data store owner", exception);
+            throw new IllegalStateException("Cannot inspect a production class", exception);
         }
     }
 
@@ -287,25 +287,13 @@ class PersonalDataMapArchTest {
     }
 
     private static boolean usesParentSingleTable(Path source) {
-        String className = "de.tum.cit.aet.hephaestus."
-                + PRODUCTION_SOURCES
-                        .relativize(source)
-                        .toString()
-                        .replace('/', '.')
-                        .replace('\\', '.')
-                        .replace(".java", "");
-        try {
-            Class<?> parent = Class.forName(className, false, PersonalDataMapArchTest.class.getClassLoader())
-                    .getSuperclass();
-            while (parent != null && parent.isAnnotationPresent(Entity.class)) {
-                var inheritance = parent.getDeclaredAnnotation(Inheritance.class);
-                if (inheritance != null) return inheritance.strategy() == InheritanceType.SINGLE_TABLE;
-                parent = parent.getSuperclass();
-            }
-            return false;
-        } catch (ClassNotFoundException exception) {
-            throw new IllegalStateException("Cannot inspect an entity's inheritance", exception);
+        Class<?> parent = sourceClass(source).getSuperclass();
+        while (parent != null && parent.isAnnotationPresent(Entity.class)) {
+            var inheritance = parent.getDeclaredAnnotation(Inheritance.class);
+            if (inheritance != null) return inheritance.strategy() == InheritanceType.SINGLE_TABLE;
+            parent = parent.getSuperclass();
         }
+        return false;
     }
 
     /** Hibernate's default strategy when an entity declares no {@code @Table} name. */
