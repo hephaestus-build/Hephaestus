@@ -137,17 +137,22 @@ function RangeBar({ yours, middle }: { yours: number; middle?: MiddleHalf }) {
 	);
 }
 
-/** The tile's shape while the figures load. */
+/**
+ * The tile's shape while the figures load, line for line as `StatTile` lays it out: the title, the
+ * figure, then the range in words and its track with the scale under it.
+ */
 export function WorkspaceTileSkeleton() {
 	return (
 		<Card size="sm" className="w-full" aria-hidden>
 			<CardHeader>
-				<Skeleton className="h-4 w-36" />
+				<Skeleton className="h-5 w-40" />
 			</CardHeader>
-			<CardContent className="flex flex-col gap-2">
-				<Skeleton className="h-7 w-20" />
-				<Skeleton className="h-4 w-44" />
-				<Skeleton className="h-4 w-full" />
+			<CardContent className="flex flex-1 flex-col gap-3">
+				<Skeleton className="h-6 w-28" />
+				<div className="mt-auto flex flex-col gap-1.5">
+					<Skeleton className="h-5 w-36" />
+					<Skeleton className="mb-5 h-4 w-full" />
+				</div>
 			</CardContent>
 		</Card>
 	);

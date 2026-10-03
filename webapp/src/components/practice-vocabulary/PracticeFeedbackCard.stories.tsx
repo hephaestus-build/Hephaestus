@@ -8,7 +8,7 @@ import { inStoryYear } from "@/stories/story-clock";
 import { expectTouchTarget } from "@/test/controls";
 
 import { text, work } from "./feedback-text";
-import { PracticeFeedbackCard } from "./PracticeFeedbackCard";
+import { PracticeFeedbackCard, PracticeFeedbackCardSkeleton } from "./PracticeFeedbackCard";
 
 const card = NEW_FEEDBACK_CARD;
 /** One clean piece of work, reviewed on the day given, in the reader's own time zone. */
@@ -561,4 +561,16 @@ export const MobileReflow: Story = {
 		chromatic: { viewports: [320] },
 	},
 	play: expectNoPageOverflow,
+};
+
+/**
+ * The card's shape while the feedback loads, band for band, so the list does not jump when the
+ * cards land; hidden from a screen reader, which the list's own busy state tells instead.
+ */
+export const Loading: Story = {
+	render: () => <PracticeFeedbackCardSkeleton />,
+	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("article")).toBeNull();
+		await expect(canvas.queryByRole("button")).toBeNull();
+	},
 };

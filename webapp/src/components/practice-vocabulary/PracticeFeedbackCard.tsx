@@ -21,6 +21,7 @@ import { useNow } from "@/components/common/use-now";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
 import { pillClasses } from "@/components/practice-vocabulary/group-visuals";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
@@ -513,6 +514,52 @@ export function PracticeFeedbackCard({
 					/>
 				)}
 		</article>
+	);
+}
+
+/**
+ * The card's shape while the feedback loads, band for band: the pills, headline, body and strip,
+ * the next step with its meter, and the footer's time, ratings and link.
+ */
+export function PracticeFeedbackCardSkeleton() {
+	return (
+		<div aria-hidden className="flex flex-col overflow-hidden rounded-xl border bg-background">
+			<div className="flex flex-col gap-4 p-4">
+				<div className="flex flex-wrap items-center justify-between gap-4">
+					<div className="flex items-center gap-3">
+						<Skeleton className="h-5 w-48 rounded-full" />
+						<Skeleton className="h-5 w-36 rounded-full" />
+					</div>
+					<Skeleton className="h-5 w-16 rounded-full" />
+				</div>
+				<div className="flex flex-col gap-2.5">
+					<Skeleton className="h-7 w-full max-w-md" />
+					<Skeleton className="h-5 w-full max-w-3xl" />
+					<Skeleton className="h-5 w-3/5" />
+				</div>
+				<Skeleton className="h-5 w-72 max-w-full" />
+			</div>
+			<div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 gap-y-3 border-t bg-sidebar px-4 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
+				<Skeleton className="mt-0.5 size-4 rounded-full" />
+				<div className="flex min-w-0 flex-col gap-1">
+					<Skeleton className="h-5 w-20" />
+					<Skeleton className="h-5 w-full max-w-xl" />
+					<Skeleton className="h-4 w-56 max-w-full" />
+				</div>
+				<div className="col-start-2 flex flex-col items-start gap-1.5 sm:col-start-3 sm:items-end">
+					<Skeleton className="h-2 w-20 rounded-full" />
+					<Skeleton className="h-4 w-20" />
+				</div>
+			</div>
+			<div className="flex flex-wrap items-center justify-between gap-4 border-t p-4">
+				<div className="flex items-center gap-3">
+					<Skeleton className="h-5 w-28" />
+					<Skeleton className="h-8 w-24" />
+					<Skeleton className="h-8 w-28" />
+				</div>
+				<Skeleton className="h-9 w-60" />
+			</div>
+		</div>
 	);
 }
 

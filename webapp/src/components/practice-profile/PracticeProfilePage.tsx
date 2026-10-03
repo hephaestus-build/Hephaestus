@@ -16,9 +16,9 @@ import {
 	type FeedbackRatingProps,
 	PracticeFeedbackCard,
 	type PracticeFeedbackCardEntry,
+	PracticeFeedbackCardSkeleton,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { countPracticeStandings } from "@/components/practice-vocabulary/standing-counts";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 import type { ComposedOverview } from "./compose-overview";
@@ -219,7 +219,7 @@ export function PracticeProfilePage({
 							{isLoading &&
 								// Two cards' worth, the "Newest" tab's count, so the list does not jump.
 								Array.from({ length: NEWEST_CARD_COUNT }, (_, index) => (
-									<Skeleton key={index} className="h-64 w-full rounded-xl" />
+									<PracticeFeedbackCardSkeleton key={index} />
 								))}
 							{!isLoading && cardsByTab[feedbackTab].length === 0 && (
 								<FeedbackEmpty {...EMPTY_TAB[feedbackTab]} />
