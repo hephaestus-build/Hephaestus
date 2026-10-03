@@ -45,6 +45,35 @@ It uses the BSD-2-Clause license and does not enter the application bundle.
 Only JSX text and quoted JSX attributes are decoded.
 JavaScript strings keep their literal meaning.
 
+## Issue and discussion forms
+
+The gate checks YAML files under `.github/ISSUE_TEMPLATE/` and `.github/DISCUSSION_TEMPLATE/`.
+It uses the existing [YAML parser](https://eemeli.org/yaml/#parsing-yaml).
+It selects only these prose fields from the [GitHub issue-form schema](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema):
+
+- The form's `name` and `description`.
+- Each block's `attributes.label`, `attributes.description`, and `attributes.placeholder`.
+- `attributes.value` only for a `markdown` block.
+- Each `attributes.options[].label` only for a `checkboxes` block.
+- Each contact link's `name`.
+
+IDs, types, validation keys, dropdown options, URLs, and non-Markdown values are not prose inputs.
+The gate rejects invalid YAML, duplicate keys, and selected fields that are not strings.
+Each selected field goes through Vale as a separate Markdown document.
+This keeps sentence and paragraph boundaries within the field.
+Alerts identify the source file, field path, and line within that field.
+The gate removes the temporary documents after the check.
+
+The good fixture places rejected words and contractions in machine fields.
+The bad fixture places a rejected word in each selected prose field.
+Together, they prove that prose is checked and configuration values stay unchanged.
+
+## Skill metadata
+
+For `.claude/skills/*/metadata.json`, the gate checks only the `abstract` prose field.
+Version, organization, date, and reference URLs remain configuration values.
+The gate uses the existing JSON helpers to validate the abstract before Vale checks it.
+
 ## Parser checks
 
 The pinned Vale version includes native MDX support.
@@ -52,6 +81,10 @@ The fixtures check that component children are prose and that imports, expressio
 They also check sentence and paragraph boundaries.
 This protects against parser gaps such as [skipped component children](https://github.com/vale-cli/vale/issues/1155) and
 [skipped text after an expression](https://github.com/vale-cli/vale/issues/1179).
+
+An exact-source fixture also checks the boundaries of a rule-specific Vale exception.
+Only the named rule stops inside the marked span.
+Other rules still apply there, and the named rule applies again after the span.
 
 The report scans Markdown and MDX in the three docs trees.
 For UI source, it scans literal JSX text and text props, including stories.
