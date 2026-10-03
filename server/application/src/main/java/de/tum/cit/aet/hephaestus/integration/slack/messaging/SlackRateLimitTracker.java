@@ -148,7 +148,7 @@ public class SlackRateLimitTracker {
                     if (until == null) {
                         return 0.0;
                     }
-                    return Math.max(0, Duration.between(Instant.now(), until).getSeconds());
+                    return Math.max(0, Duration.between(Instant.now(), until).toSeconds());
                 })
                 .tags(tags)
                 .description("Seconds remaining on the last Slack Retry-After back-off for this workspace")

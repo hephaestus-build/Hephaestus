@@ -19,7 +19,7 @@ function chat(messages: ChatMessage[], placeholder?: string) {
 		<Chat
 			messages={messages}
 			votes={CONVERSATION_VOTES}
-			status="ready"
+			turn={{ kind: "ready" }}
 			onMessageSubmit={fn()}
 			onStop={fn()}
 			onMessageEdit={fn()}
@@ -90,8 +90,7 @@ export const Busy: Story = {
 		children: (
 			<Chat
 				messages={LONG_CONVERSATION}
-				status="error"
-				errorMessage="Heph is busy. Please try again."
+				turn={{ kind: "error", failure: "busy" }}
 				onMessageSubmit={fn()}
 				onStop={fn()}
 				onCopy={fn()}

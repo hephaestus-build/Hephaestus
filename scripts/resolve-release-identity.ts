@@ -1,6 +1,6 @@
 /**
  * Resolves the GHCR namespace and cosign certificate identity a release was
- * published under (`security/release-identities.json`, issue #1599).
+ * published under (`security/release-identities.json`).
  *
  * usage: node scripts/resolve-release-identity.ts <vX.Y.Z | X.Y.Z> [field]
  *

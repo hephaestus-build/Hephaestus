@@ -3,12 +3,15 @@ package de.tum.cit.aet.hephaestus.notification.email;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.OutboundEgressGuard;
+import io.github.bucket4j.Bucket;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -46,14 +49,14 @@ class EmailSmtpIntegrationTest {
                                 new OutboundEgressGuard(() -> false),
                                 new EmailDeliveryMetrics(registry),
                                 new EmailRateLimiter(
-                                        (key, config) -> io.github.bucket4j.Bucket.builder()
+                                        (key, config) -> Bucket.builder()
                                                 .addLimit(config.getBandwidths()[0])
                                                 .build(),
                                         new EmailRateLimitProperties(250, 200)));
                         var result = gateway.send(EmailMessage.of(
                                 EmailKind.TEST_MESSAGE,
                                 "developer@hephaestus.test",
-                                EmailTestSupport.renderer().render(EmailKind.TEST_MESSAGE, java.util.Map.of())));
+                                EmailTestSupport.renderer().render(EmailKind.TEST_MESSAGE, Map.of())));
                         assertThat(result.outcome()).isEqualTo(EmailDeliveryResult.Outcome.SENT);
 
                         String inboxUrl = "http://" + mailpit.getHost() + ":" + mailpit.getMappedPort(8025);
@@ -79,7 +82,7 @@ class EmailSmtpIntegrationTest {
                                             .asString())
                                     .isEqualTo("developer@hephaestus.test");
                             assertThat(message.path("MessageID").asString())
-                                    .isEqualTo(java.util.Objects.requireNonNull(result.messageId())
+                                    .isEqualTo(Objects.requireNonNull(result.messageId())
                                             .replace("<", "")
                                             .replace(">", ""));
                         }

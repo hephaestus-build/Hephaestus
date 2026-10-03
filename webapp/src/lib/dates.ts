@@ -40,10 +40,13 @@ export type Wire<T> = T extends Date
  * whose en-GB short month is "Sept".
  *
  * - `formatDay`, "9 September": a day named in prose.
+ * - `formatDate`, "9 September 2026": a day that may lie in another year, such as when something
+ *   was created.
  * - `formatShortDay`, "9 Sep": a day in a row of them, where the full month would widen the row
  *   past its words.
  * - `formatDayTime`, "9 September, 2:10 pm", and `formatTime`, "2:10 pm": the moment a run
- *   happened, the hour written the English way rather than on a 24-hour clock.
+ *   happened, the hour written the English way rather than on a 24-hour clock; `formatDayTime`
+ *   adds the year when it is not `today`'s.
  * - `formatWeekdayDay`, "Monday, 9 September": a day heading a list of what happened on it, with
  *   the year only when it is not `today`'s.
  * - `formatDayRange`, "3–9 September 2026": the days from one to another, both included, saying
@@ -53,21 +56,39 @@ export function formatDay(date: Date): string {
 	return format(date, "d MMMM");
 }
 
+export function formatDate(date: Date): string {
+	return format(date, "d MMMM yyyy");
+}
+
+/**
+ * A wire calendar date (`format: date`), written as `formatDate` writes a day. The generated response
+ * transformer parses one as UTC midnight, so its day is read in UTC; the local day is the one before
+ * anywhere west of UTC.
+ */
+export function formatCalendarDate(date: Date): string {
+	return date.toLocaleDateString("en-GB", {
+		day: "numeric",
+		month: "long",
+		year: "numeric",
+		timeZone: "UTC",
+	});
+}
+
 export function formatWeekdayDay(date: Date, today: Date): string {
 	return format(date, isSameYear(date, today) ? "EEEE, d MMMM" : "EEEE, d MMMM yyyy");
 }
 
 export function formatDayRange(from: Date, to: Date): string {
 	if (isSameDay(from, to)) {
-		return format(to, "d MMMM yyyy");
+		return formatDate(to);
 	}
 	if (isSameMonth(from, to)) {
-		return `${format(from, "d")}–${format(to, "d MMMM yyyy")}`;
+		return `${format(from, "d")}–${formatDate(to)}`;
 	}
 	if (isSameYear(from, to)) {
-		return `${format(from, "d MMMM")} – ${format(to, "d MMMM yyyy")}`;
+		return `${formatDay(from)} – ${formatDate(to)}`;
 	}
-	return `${format(from, "d MMMM yyyy")} – ${format(to, "d MMMM yyyy")}`;
+	return `${formatDate(from)} – ${formatDate(to)}`;
 }
 
 export function formatShortDay(date: Date): string {
@@ -79,8 +100,8 @@ export function formatTime(date: Date): string {
 	return format(date, "h:mm aaa");
 }
 
-export function formatDayTime(date: Date): string {
-	return `${formatDay(date)}, ${formatTime(date)}`;
+export function formatDayTime(date: Date, today: Date): string {
+	return `${isSameYear(date, today) ? formatDay(date) : formatDate(date)}, ${formatTime(date)}`;
 }
 
 /** The browser's IANA time zone, whose midnights start a summary's days, weeks and months. */

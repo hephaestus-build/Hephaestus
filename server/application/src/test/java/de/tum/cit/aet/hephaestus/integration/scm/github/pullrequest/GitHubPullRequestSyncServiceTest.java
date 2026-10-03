@@ -2,11 +2,13 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +42,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -52,13 +55,12 @@ import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.GraphQlClient.RequestSpec;
 import org.springframework.graphql.client.HttpGraphQlClient;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 /**
- * Unit tests for {@link GitHubPullRequestSyncService}.
- * <p>
  * Focuses on PR conversation (top-level) comments. These are the same {@code IssueComment} entity
  * as issue comments, but GitHub's {@code repository.issues} connection — the issue sync's source —
  * excludes pull requests, so the PR sync is the only path that can observe them. Otherwise a PR
@@ -141,7 +143,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
         // Run transaction callbacks inline so page processing actually executes.
         lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
-            return callback.doInTransaction(mock(org.springframework.transaction.TransactionStatus.class));
+            return callback.doInTransaction(mock(TransactionStatus.class));
         });
 
         service = new GitHubPullRequestSyncService(
@@ -189,8 +191,8 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
         comment.setId("IC_node" + databaseId);
         comment.setFullDatabaseId(BigInteger.valueOf(databaseId));
         comment.setBody(body);
-        comment.setCreatedAt(OffsetDateTime.now());
-        comment.setUpdatedAt(OffsetDateTime.now());
+        comment.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
+        comment.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         return comment;
     }
 
@@ -212,7 +214,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
         pr.setFullDatabaseId(BigInteger.valueOf(999L));
         pr.setNumber(PR_NUMBER);
         pr.setTitle("Test PR");
-        pr.setUpdatedAt(OffsetDateTime.now());
+        pr.setUpdatedAt(OffsetDateTime.now(ZoneOffset.UTC));
         pr.setComments(comments);
         return pr;
     }
@@ -276,7 +278,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
             boolean refreshed = service.refreshPullRequest(SCOPE_ID, createRepository(), PR_NUMBER);
 
             assertThat(refreshed).isFalse();
-            verify(pullRequestProcessor, org.mockito.Mockito.never()).process(any(), any());
+            verify(pullRequestProcessor, never()).process(any(), any());
         }
     }
 
@@ -301,7 +303,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
             // Routed through the same processor (and therefore the same issue_comment table) that issue
             // comments use, keyed by the PR's number.
             ArgumentCaptor<GitHubCommentDTO> captor = ArgumentCaptor.forClass(GitHubCommentDTO.class);
-            verify(issueCommentProcessor, org.mockito.Mockito.times(2))
+            verify(issueCommentProcessor, times(2))
                     .process(captor.capture(), eq(PR_NUMBER), any(ProcessingContext.class));
             assertThat(captor.getAllValues()).extracting(GitHubCommentDTO::id).containsExactly(1001L, 1002L);
             assertThat(captor.getAllValues())
@@ -354,7 +356,7 @@ class GitHubPullRequestSyncServiceTest extends BaseUnitTest {
 
             service.syncForRepository(SCOPE_ID, REPO_ID);
 
-            verify(issueCommentProcessor, never()).process(any(), org.mockito.ArgumentMatchers.anyInt(), any());
+            verify(issueCommentProcessor, never()).process(any(), anyInt(), any());
             verify(issueCommentSyncService, never()).syncRemainingComments(any(), any(), any());
         }
     }

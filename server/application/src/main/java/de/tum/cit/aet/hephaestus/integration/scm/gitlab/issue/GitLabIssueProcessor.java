@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -86,9 +87,6 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         this.eventPublisher = eventPublisher;
     }
 
-    /**
-     * Process a GitLab issue webhook event.
-     */
     @Transactional
     @Nullable
     public Issue process(GitLabIssueEventDTO event, ProcessingContext context) {
@@ -442,8 +440,6 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         return issue;
     }
 
-    // Private helpers
-
     private EventContext actorContext(GitLabIssueEventDTO event, ProcessingContext context) {
         User actor = event.user() != null && context.providerId() != null
                 ? findOrCreateUser(event.user(), context.providerId())
@@ -578,7 +574,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         if (state == null) {
             return Issue.State.OPEN;
         }
-        return switch (state.toLowerCase()) {
+        return switch (state.toLowerCase(Locale.ROOT)) {
             case "opened" -> Issue.State.OPEN;
             case "closed" -> Issue.State.CLOSED;
             default -> {
@@ -656,12 +652,10 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         }
         // Subgroups become their own Organization rows but share provider-global
         // issue_type primary keys (GitLab GraphQL global IDs), so a provider-scoped
-        // name lookup yields the exact same row. Without this fallback, issues
-        // synced from subgroups would resolve to null because the subgroup org
-        // never had its own issue_type seed rows materialised. Resolve the provider
-        // id via a JPQL subquery on organizationId — touching the lazy Organization
-        // proxy here raised LazyInitializationException when the Repository outlived
-        // its original Hibernate session.
+        // name lookup yields the exact same row; a subgroup org has no issue_type seed
+        // rows of its own. The provider id is resolved by a JPQL subquery on organizationId
+        // because the lazy Organization proxy throws LazyInitializationException once the
+        // Repository has outlived its Hibernate session.
         return issueTypeRepository
                 .findFirstByOrganizationProviderAndNameIgnoreCase(organization.getId(), humanised)
                 .map(IssueType::getId)
@@ -673,14 +667,14 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
      * to the human-readable form stored in {@code issue_type.name} ({@code "Test Case"}).
      */
     private static String humaniseTypeName(String enumValue) {
-        String[] parts = enumValue.split("_");
+        String[] parts = enumValue.split("_", -1);
         StringBuilder sb = new StringBuilder(enumValue.length());
         for (int i = 0; i < parts.length; i++) {
             if (parts[i].isEmpty()) continue;
             if (i > 0) sb.append(' ');
             sb.append(Character.toUpperCase(parts[i].charAt(0)));
             if (parts[i].length() > 1) {
-                sb.append(parts[i].substring(1).toLowerCase());
+                sb.append(parts[i].substring(1).toLowerCase(Locale.ROOT));
             }
         }
         return sb.toString();

@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.InteractiveSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxMetrics;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.InteractiveSandboxRegistry;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.StdinWriteWatchdog;
 import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
@@ -18,6 +17,8 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -31,6 +32,7 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.config.ScheduledTask;
 import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
@@ -52,7 +54,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                             jobs,
                             containers,
                             networks,
-                            org.mockito.Mockito.mock(SandboxVolumeManager.class),
+                            mock(SandboxVolumeManager.class),
                             mock(SandboxCreator.class),
                             meters,
                             Clock.systemUTC()))
@@ -61,7 +63,6 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
                     () -> new InteractiveSandboxRegistry(
                             new InteractiveSandboxProperties(300, 1, 1, 512, 5000, 64, 64, 30, 3, 50, 1048576),
                             containers,
-                            new InteractiveSandboxMetrics(meters),
                             watchdog,
                             meters,
                             mock(SandboxCreator.class)));
@@ -126,7 +127,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
         when(containers.listManagedContainers()).thenAnswer(invocation -> {
             entered.countDown();
             release.await();
-            return java.util.List.of();
+            return List.of();
         });
         runner.withPropertyValues("hephaestus.sandbox.reconciliation-initial-delay-seconds=0")
                 .run(context -> {
@@ -162,7 +163,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
 
     @Test
     void shouldCancelMaintenanceWhenTheContextCloses() {
-        var tasks = new java.util.ArrayList<org.springframework.scheduling.config.ScheduledTask>();
+        var tasks = new ArrayList<ScheduledTask>();
         runner.run(context -> context.getBeansOfType(ScheduledTaskRegistrar.class)
                 .values()
                 .forEach(registrar -> tasks.addAll(registrar.getScheduledTasks())));

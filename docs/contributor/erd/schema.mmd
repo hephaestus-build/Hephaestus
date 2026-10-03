@@ -289,6 +289,7 @@ erDiagram
         VARCHAR(64) correlation_id
         JSONB detail
         TIMESTAMPTZ occurred_at "NOT NULL"
+        BIGINT actor_account_id FK
     }
 
     ConsentDecision {
@@ -535,7 +536,7 @@ erDiagram
         TIMESTAMPTZ restored_at
         BIGINT restored_by_account_id FK
         TIMESTAMPTZ withdrawn_at "NOT NULL"
-        BIGINT withdrawn_by_account_id FK "NOT NULL"
+        BIGINT withdrawn_by_account_id FK
         BIGINT workspace_id FK "NOT NULL"
     }
 
@@ -608,7 +609,7 @@ erDiagram
         TEXT allowed_egress_hosts
         BOOLEAN allow_workspace_connections "NOT NULL"
         TIMESTAMPTZ updated_at
-        VARCHAR(255) updated_by
+        BIGINT updated_by_account_id FK
     }
 
     InstanceSetting {
@@ -616,8 +617,8 @@ erDiagram
         BOOLEAN silent_mode_engaged "NOT NULL"
         VARCHAR(500) silent_mode_reason
         TIMESTAMPTZ silent_mode_changed_at
-        VARCHAR(255) silent_mode_changed_by
         BIGINT version "NOT NULL"
+        BIGINT silent_mode_changed_by_account_id FK
     }
 
     Issue {
@@ -890,6 +891,7 @@ erDiagram
         VARCHAR(48) kind "NOT NULL"
         TIMESTAMPTZ issued_at "NOT NULL"
         TIMESTAMPTZ consumed_at
+        BIGINT actor_account_id FK
     }
 
     Observation {
@@ -916,7 +918,7 @@ erDiagram
     ObservationInvalidation {
         UUID id PK
         TIMESTAMPTZ invalidated_at "NOT NULL"
-        BIGINT invalidated_by_account_id FK "NOT NULL"
+        BIGINT invalidated_by_account_id FK
         UUID observation_id FK "NOT NULL"
         VARCHAR(16) provider_copy "NOT NULL"
         TIMESTAMPTZ provider_copy_retry_at "NOT NULL"
@@ -1004,6 +1006,38 @@ erDiagram
         VARCHAR(64) actor_subject
         TIMESTAMPTZ occurred_at
         TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    PersonDataRequest {
+        UUID id PK
+        BIGINT administrator_account_id FK
+        TIMESTAMPTZ completed_at
+        TEXT completed_json "NOT NULL"
+        TEXT counts_json "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        VARCHAR(48) failure_code
+        TEXT scope_json
+        TEXT selections_json
+        VARCHAR(24) state "NOT NULL"
+        BIGINT version "NOT NULL"
+    }
+
+    PersonEvidenceCopy {
+        UUID id PK
+        UUID job_id "NOT NULL"
+        VARCHAR(24) state "NOT NULL"
+        JSONB payload "NOT NULL"
+        UUID store_id "NOT NULL"
+        BIGINT workspace_id "NOT NULL"
+    }
+
+    PersonSuppression {
+        UUID id PK
+        UUID active_request_id FK
+        BIGINT provider_id FK,UK "NOT NULL"
+        VARCHAR(255) subject UK "NOT NULL"
+        VARCHAR(255) team_key UK "NOT NULL"
     }
 
     Practice {
@@ -1775,6 +1809,7 @@ erDiagram
     Workspace ||--o{ ConfigAuditEvent : has
     Workspace ||--o{ Connection : has
     Connection ||--o{ ConnectionAudit : has
+    Account ||--o{ ConnectionAudit : has
     Account ||--o{ ConsentDecision : has
     ConsentNotice ||--o{ ConsentDecision : references
     Feedback ||--o{ DeliveryPolicyEvaluation : references
@@ -1808,6 +1843,8 @@ erDiagram
     Repository ||--o{ GitCommit : has
     Account ||--o{ IdentityLink : has
     IdentityProvider ||--o{ IdentityLink : references
+    Account ||--o{ InstanceLlmSetting : has
+    Account ||--o{ InstanceSetting : has
     Repository ||--o{ Issue : has
     Milestone ||--o{ Issue : has
     IssueType ||--o{ Issue : has
@@ -1832,6 +1869,7 @@ erDiagram
     Repository ||--o{ Milestone : has
     User ||--o{ Milestone : created_by
     Account ||--o{ NotificationSubscription : has
+    Account ||--o{ OauthStateNonce : has
     Practice ||--o{ Observation : practice_id
     Practice ||--o{ Observation : practice_id
     PracticeRevision ||--o{ Observation : has
@@ -1848,6 +1886,9 @@ erDiagram
     Workspace ||--o{ OutlineDocument : has
     Connection ||--o{ OutlineDocumentEvent : has
     Workspace ||--o{ OutlineDocumentEvent : has
+    Account ||--o{ PersonDataRequest : has
+    PersonDataRequest ||--o{ PersonSuppression : references
+    IdentityProvider ||--o{ PersonSuppression : references
     PracticeGroup ||--o{ Practice : has
     Workspace ||--o{ Practice : has
     Workspace ||--o{ PracticeGroup : has

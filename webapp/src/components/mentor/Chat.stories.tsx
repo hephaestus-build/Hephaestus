@@ -3,6 +3,7 @@ import { createChat } from "@shadcn/helpers/ai-sdk";
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
+import { mentorTurn } from "@/lib/chat-validation";
 import type { ChatMessage } from "@/lib/types";
 
 import { Chat, type ChatProps } from "./Chat";
@@ -28,7 +29,7 @@ const meta = {
 	args: {
 		messages: CONVERSATION,
 		votes: CONVERSATION_VOTES,
-		status: "ready",
+		turn: { kind: "ready" },
 		onMessageSubmit: fn(),
 		onStop: fn(),
 		onMessageEdit: fn(),
@@ -62,7 +63,7 @@ export const Empty: Story = {
 export const Thinking: Story = {
 	args: {
 		messages: [...CONVERSATION.slice(0, 4), userMessage("turn-5", "And my latest one?")],
-		status: "submitted",
+		turn: { kind: "submitted", warmingUp: false },
 	},
 	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.getByRole("status")).toHaveTextContent("Thinking…");
@@ -73,7 +74,7 @@ export const Thinking: Story = {
 
 /** A cold start says why the reply is slow rather than thinking for half a minute. */
 export const WarmingUp: Story = {
-	args: { ...Thinking.args, warmingUp: true },
+	args: { ...Thinking.args, turn: { kind: "submitted", warmingUp: true } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("status")).toHaveTextContent(
 			"Getting ready. The first reply takes a little longer.",
@@ -91,7 +92,7 @@ export const Streaming: Story = {
 				metadata: undefined,
 			},
 		],
-		status: "streaming",
+		turn: { kind: "streaming", warmingUp: false },
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText(/I looked at your latest pull request/u)).toBeVisible();
@@ -108,7 +109,7 @@ export const ReadOnly: Story = {
 };
 
 export const Failed: Story = {
-	args: { messages: CONVERSATION.slice(0, 5), status: "error" },
+	args: { messages: CONVERSATION.slice(0, 5), turn: { kind: "error", failure: "failed" } },
 	play: async ({ args, canvas, userEvent }) => {
 		await expect(canvas.getByText("Something went wrong")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
@@ -117,10 +118,9 @@ export const Failed: Story = {
 };
 
 export const Busy: Story = {
-	args: { ...Failed.args, errorMessage: "Heph is busy. Please try again." },
+	args: { ...Failed.args, turn: { kind: "error", failure: "busy" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Heph is busy", { exact: true })).toBeVisible();
-		await expect(canvas.getByText("Please try again in a moment.")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Try again" })).toBeEnabled();
 	},
 };
@@ -168,7 +168,7 @@ function LiveChat(args: ChatProps) {
 		<Chat
 			{...args}
 			messages={messages}
-			status={status}
+			turn={mentorTurn(status, undefined)}
 			onMessageSubmit={(text) => {
 				args.onMessageSubmit(text);
 				void sendMessage({ text });

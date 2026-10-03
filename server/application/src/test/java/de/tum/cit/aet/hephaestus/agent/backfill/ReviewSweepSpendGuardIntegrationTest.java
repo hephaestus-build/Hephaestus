@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -42,6 +43,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -128,10 +130,9 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
     private WorkspaceMembershipService workspaceMembershipService;
 
     @Autowired
-    private de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository scmConnections;
+    private ConnectionRepository scmConnections;
 
     private Workspace workspace;
-    private long pullRequestId;
 
     @BeforeEach
     void setUp() {
@@ -199,7 +200,7 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
         monitor.setNameWithOwner(repository.getNameWithOwner());
         repositoryToMonitorRepository.save(monitor);
 
-        pullRequestId = persistPullRequest(provider, repository, author);
+        persistPullRequest(provider, repository, author);
     }
 
     /**
@@ -232,7 +233,7 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
 
     /**
      * The stamp that decides where the measurement is counted. A sweep is bounded to recent work, so it
-     * measures the population events measure; recording it as BACKFILL would hide every finding from the
+     * measures the population events measure; recording it as BACKFILL would hide every observation from the
      * developer it is about and silence every channel but the profile.
      */
     @Test
@@ -293,9 +294,9 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
         scheduleRepository.save(schedule);
     }
 
-    private long persistPullRequest(IdentityProvider provider, Repository repository, User author) {
+    private void persistPullRequest(IdentityProvider provider, Repository repository, User author) {
         Instant now = Instant.now();
-        Long providerId = java.util.Objects.requireNonNull(provider.getId());
+        Long providerId = Objects.requireNonNull(provider.getId());
         pullRequestRepository.upsertCore(
                 5201L,
                 providerId,
@@ -330,9 +331,5 @@ class ReviewSweepSpendGuardIntegrationTest extends BaseIntegrationTest {
                 "sweepbasesha",
                 null,
                 null);
-        return pullRequestRepository
-                .findByRepositoryIdAndNumber(repository.getId(), 12)
-                .orElseThrow()
-                .getId();
     }
 }

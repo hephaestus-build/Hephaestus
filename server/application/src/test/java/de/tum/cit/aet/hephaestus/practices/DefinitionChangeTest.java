@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class DefinitionChangeTest extends BaseUnitTest {
@@ -18,8 +19,7 @@ class DefinitionChangeTest extends BaseUnitTest {
     private final PracticeDefinition scoped = definition(ActorRole.REVIEWER, gate);
     private final PracticeDefinition unscoped = definition(ActorRole.AUTHOR, null);
 
-    private PracticeDefinition definition(
-            ActorRole subject, @org.jspecify.annotations.Nullable PracticePrecondition precondition) {
+    private PracticeDefinition definition(ActorRole subject, @Nullable PracticePrecondition precondition) {
         return new PracticeDefinition(
                 "Review work",
                 List.of(ScmSignals.PULL_REQUEST_OPENED),

@@ -58,7 +58,7 @@ public class InstanceSettingsService implements SilentModeQuery {
     public InstanceSettings updateSilentMode(
             boolean engaged,
             @Nullable String reason,
-            @Nullable String actor,
+            @Nullable Long actor,
             @Nullable EntityTagPrecondition precondition) {
         repository.insertFailSafeSingletonIfMissing();
         String effectiveReason = engaged && reason != null && !reason.isBlank() ? reason.trim() : null;
@@ -83,7 +83,7 @@ public class InstanceSettingsService implements SilentModeQuery {
         return saved;
     }
 
-    private InstanceSettings engage(@Nullable String reason, @Nullable String actor, Instant changedAt) {
+    private InstanceSettings engage(@Nullable String reason, @Nullable Long actor, Instant changedAt) {
         if (repository.engageSilentMode(reason, changedAt, actor) != 1) {
             throw new IllegalStateException("Failed to engage instance Silent Mode");
         }
@@ -91,7 +91,7 @@ public class InstanceSettingsService implements SilentModeQuery {
     }
 
     private InstanceSettings release(
-            @Nullable String actor, Instant changedAt, @Nullable EntityTagPrecondition precondition) {
+            @Nullable Long actor, Instant changedAt, @Nullable EntityTagPrecondition precondition) {
         InstanceSettings settings = currentSettings();
         if (precondition == null) {
             throw new InstanceSettingsPreconditionRequiredException();
@@ -102,7 +102,7 @@ public class InstanceSettingsService implements SilentModeQuery {
         settings.setSilentModeEngaged(false);
         settings.setSilentModeReason(null);
         settings.setSilentModeChangedAt(changedAt);
-        settings.setSilentModeChangedBy(actor);
+        settings.setSilentModeChangedByAccountId(actor);
         try {
             return repository.saveAndFlush(settings);
         } catch (ObjectOptimisticLockingFailureException exception) {

@@ -106,7 +106,6 @@ export function ReviewObservationRow({
 	const evidenceLocations = toEvidenceLocations(observation.evidence);
 	const checks = toEvidenceCheck(observation.evidence);
 	const nextStep = capitalise(observation.nextStep ?? "");
-	const detector = observation.evidence?.detector;
 	// A response needs feedback to respond to and a route that records it.
 	const respondTo = hasText(observation.feedbackResponse?.feedbackId) ? onRespond : undefined;
 	const hasWorkLine = rendersContent(work);
@@ -236,7 +235,6 @@ export function ReviewObservationRow({
 											// two citations of the same lines apart: the side and the redaction tell them apart.
 											key={`${location.sourceKind}-${location.path}-${location.revision ?? ""}-${location.startLine}-${location.side ?? ""}-${location.redacted}`}
 											location={location}
-											detector={detector}
 										/>
 									))}
 								</div>

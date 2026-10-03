@@ -70,8 +70,6 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
         pr.setRepository(repository);
     }
 
-    // deterministicNativeId
-
     @Nested
     class DeterministicNativeId {
 
@@ -99,8 +97,6 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
         }
     }
 
-    // findOrCreateThread — creation populates position metadata
-
     @Nested
     class CreateThread {
 
@@ -121,12 +117,13 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     PullRequestReviewComment.Side.RIGHT,
                     "head-sha",
                     "base-sha",
-                    CREATED_AT);
+                    null,
+                    CREATED_AT,
+                    null);
 
             PullRequestReviewThread saved =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
-            assertThat(saved).isNotNull();
             assertThat(saved.getPath()).isEqualTo("src/Foo.ts");
             assertThat(saved.getLine()).isEqualTo(42);
             assertThat(saved.getSide()).isEqualTo(PullRequestReviewComment.Side.RIGHT);
@@ -219,7 +216,9 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     PullRequestReviewComment.Side.LEFT,
                     "head-sha",
                     "base-sha",
-                    CREATED_AT);
+                    null,
+                    CREATED_AT,
+                    null);
 
             PullRequestReviewThread saved =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
@@ -236,12 +235,11 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     .thenAnswer(inv -> inv.getArgument(0, PullRequestReviewThread.class));
 
             var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
-                    DISCUSSION_GID, false, null, null, null, CREATED_AT);
+                    DISCUSSION_GID, false, null, null, null, null, null, null, null, null, CREATED_AT, null);
 
             PullRequestReviewThread saved =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
-            assertThat(saved).isNotNull();
             assertThat(saved.getPath()).isNull();
             assertThat(saved.getLine()).isNull();
             assertThat(saved.getSide()).isNull();
@@ -268,12 +266,12 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     "head-sha",
                     "base-sha",
                     true,
-                    CREATED_AT);
+                    CREATED_AT,
+                    null);
 
             PullRequestReviewThread saved =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
-            assertThat(saved).isNotNull();
             assertThat(saved.getOutdated()).isTrue();
         }
 
@@ -295,17 +293,15 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     "head-sha",
                     "base-sha",
                     false,
-                    CREATED_AT);
+                    CREATED_AT,
+                    null);
 
             PullRequestReviewThread saved =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
 
-            assertThat(saved).isNotNull();
             assertThat(saved.getOutdated()).isFalse();
         }
     }
-
-    // findOrCreateThread — update backfill
 
     @Nested
     class UpdateThreadBackfill {
@@ -318,7 +314,6 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
             existing.setProvider(provider);
             existing.setPullRequest(pr);
             existing.setState(PullRequestReviewThread.State.UNRESOLVED);
-            // all metadata fields null to simulate legacy row
 
             when(threadRepository.findByNodeIdAndProviderId(DISCUSSION_GID, PROVIDER_ID))
                     .thenReturn(Optional.of(existing));
@@ -335,7 +330,9 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     PullRequestReviewComment.Side.RIGHT,
                     "head-sha",
                     "base-sha",
-                    CREATED_AT);
+                    null,
+                    CREATED_AT,
+                    null);
 
             PullRequestReviewThread result =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
@@ -376,7 +373,9 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     PullRequestReviewComment.Side.RIGHT,
                     "incoming-head",
                     "incoming-base",
-                    CREATED_AT);
+                    null,
+                    CREATED_AT,
+                    null);
 
             PullRequestReviewThread result =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
@@ -419,7 +418,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     "head-sha",
                     "base-sha",
                     true,
-                    CREATED_AT);
+                    CREATED_AT,
+                    null);
 
             PullRequestReviewThread result =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
@@ -457,7 +457,8 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
                     "head-sha",
                     "base-sha",
                     true,
-                    CREATED_AT);
+                    CREATED_AT,
+                    null);
 
             PullRequestReviewThread result =
                     Objects.requireNonNull(processor.findOrCreateThread(data, pr, provider, SCOPE_ID));
@@ -485,7 +486,7 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
             resolver.setLogin("resolver");
 
             var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
-                    DISCUSSION_GID, true, resolver, null, null, null, null, null, null, CREATED_AT);
+                    DISCUSSION_GID, true, resolver, null, null, null, null, null, null, null, CREATED_AT, null);
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(anyLong(), anyInt()))
                     .thenReturn(Optional.of(pr));
 
@@ -498,44 +499,6 @@ class GitLabPullRequestReviewThreadProcessorTest extends BaseUnitTest {
             ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().getClass().getSimpleName()).isEqualTo("ReviewThreadResolved");
-        }
-    }
-
-    // ThreadData backward-compat 6-arg constructor
-
-    @Nested
-    class ThreadDataBackwardCompat {
-
-        @Test
-        void shouldDefaultOptionalFieldsToNullFor6ArgCallers() {
-            var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
-                    DISCUSSION_GID, false, null, "src/Foo.ts", 42, CREATED_AT);
-
-            assertThat(data.side()).isNull();
-            assertThat(data.oldLine()).isNull();
-            assertThat(data.commitSha()).isNull();
-            assertThat(data.originalCommitSha()).isNull();
-            assertThat(data.outdated()).isNull();
-            assertThat(data.filePath()).isEqualTo("src/Foo.ts");
-            assertThat(data.newLine()).isEqualTo(42);
-        }
-
-        @Test
-        void shouldDefaultOutdatedToNullFor10ArgCallers() {
-            var data = new GitLabPullRequestReviewThreadProcessor.ThreadData(
-                    DISCUSSION_GID,
-                    false,
-                    null,
-                    "src/Foo.ts",
-                    42,
-                    null,
-                    PullRequestReviewComment.Side.RIGHT,
-                    "head-sha",
-                    "base-sha",
-                    CREATED_AT);
-
-            assertThat(data.outdated()).isNull();
-            assertThat(data.commitSha()).isEqualTo("head-sha");
         }
     }
 }

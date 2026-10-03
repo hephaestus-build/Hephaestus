@@ -37,6 +37,7 @@ public class ConnectionActivity {
             insertable = false,
             updatable = false,
             foreignKey = @ForeignKey(name = "fk_connection_activity_connection"))
+    @SuppressWarnings("UnusedVariable") // mapping-only: Hibernate reads it to declare fk_connection_activity_connection
     private @Nullable Connection connection;
 
     @Column(name = "workspace_id", nullable = false)
@@ -48,6 +49,7 @@ public class ConnectionActivity {
             insertable = false,
             updatable = false,
             foreignKey = @ForeignKey(name = "fk_connection_activity_workspace"))
+    @SuppressWarnings("UnusedVariable") // mapping-only: Hibernate reads it to declare fk_connection_activity_workspace
     private @Nullable Workspace workspace;
 
     @Column(name = "last_event_at")

@@ -285,10 +285,13 @@ public class SyncStatusService {
     public SyncJobDTO cancelJob(long workspaceId, long connectionId, long jobId) {
         // Validate the (workspace, connection) scope BEFORE mutating anything — a job id that exists
         // but belongs to a different connection must 404, not have its cancel flag flipped first.
-        syncJobRepository
+        boolean jobInScope = syncJobRepository
                 .findByIdAndWorkspace_Id(jobId, workspaceId)
                 .filter(j -> j.getConnection().getId() == connectionId)
-                .orElseThrow(() -> new EntityNotFoundException("SyncJob", jobId));
+                .isPresent();
+        if (!jobInScope) {
+            throw new EntityNotFoundException("SyncJob", jobId);
+        }
 
         syncJobService.requestCancel(workspaceId, jobId);
 

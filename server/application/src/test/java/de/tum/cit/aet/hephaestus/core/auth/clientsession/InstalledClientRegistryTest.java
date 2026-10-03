@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 class InstalledClientRegistryTest extends BaseUnitTest {
@@ -59,7 +60,7 @@ class InstalledClientRegistryTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseToStartWhenAConfiguredIdIsNotAChromeExtensionId() {
-        for (String bad : List.of("short", ID.toUpperCase(java.util.Locale.ROOT), ID.replace('a', 'z'), ID + "a")) {
+        for (String bad : List.of("short", ID.toUpperCase(Locale.ROOT), ID.replace('a', 'z'), ID + "a")) {
             assertThatThrownBy(() -> registry(List.of(bad))).isInstanceOf(IllegalStateException.class);
         }
     }

@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.team.permission.TeamRepo
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.team.dto.GitHubTeamEventDTO;
+import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -106,7 +107,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
                 "Received team event: action={}, teamName={}, orgLogin={}",
                 event.action(),
                 sanitizeForLog(teamDto.name()),
-                orgLogin != null ? sanitizeForLog(orgLogin) : "unknown");
+                sanitizeForLog(orgLogin));
 
         Long scopeId = scopeIdResolver.findScopeIdByOrgLogin(orgLogin).orElse(null);
         if (scopeId == null) {
@@ -244,7 +245,7 @@ public class GitHubTeamMessageHandler extends AbstractIntegrationMessageHandler<
         if (permission == null) {
             return TeamRepositoryPermission.PermissionLevel.READ;
         }
-        return switch (permission.toLowerCase()) {
+        return switch (permission.toLowerCase(Locale.ROOT)) {
             case "admin" -> TeamRepositoryPermission.PermissionLevel.ADMIN;
             case "maintain" -> TeamRepositoryPermission.PermissionLevel.MAINTAIN;
             case "push", "write" -> TeamRepositoryPermission.PermissionLevel.WRITE;

@@ -971,13 +971,11 @@ async function removeSeed(client: Client): Promise<void> {
 	await client.query("DELETE FROM agent_job WHERE id::text LIKE $1", [pattern]);
 }
 
-interface Counts {
-	agent_job: number;
-	observation: number;
-	feedback: number;
-	feedback_observation: number;
-	reaction: number;
-}
+/** Rows written per table; a `Record`, so the summary reads each count as the number it is. */
+type Counts = Record<
+	"agent_job" | "observation" | "feedback" | "feedback_observation" | "reaction",
+	number
+>;
 
 interface Seeded {
 	/** Job id by run key; a card names the run whose cycle composed it. */

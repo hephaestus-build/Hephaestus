@@ -65,7 +65,7 @@ try {
 		path.join(directory, `${asset}.sigstore.json`),
 		"--certificate-identity",
 		// Locks signed before the repository transfer carry the old owner/repo in their
-		// certificate, so the expected identity is the release's, not the run's (issue #1599).
+		// certificate, so the expected identity is the release's, not the run's.
 		releaseCertificateIdentity(release, process.env),
 		"--certificate-oidc-issuer",
 		"https://token.actions.githubusercontent.com",

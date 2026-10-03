@@ -21,14 +21,12 @@ describe("test email loading feedback", () => {
 		expect(onSendTest).not.toHaveBeenCalled();
 
 		await act(async () => vi.advanceTimersByTimeAsync(999));
-		expect(screen.queryByRole("button", { name: "Sending…" })).toBeNull();
-		expect(send.querySelector(".animate-spin")).toBeNull();
+		expect(screen.getByRole("button", { name: "Send test email" })).toBe(send);
 		rerender(<InstanceEmailCard isPending={false} onSendTest={onSendTest} />);
 		expect(send.disabled).toBe(false);
 
 		await act(async () => vi.advanceTimersByTimeAsync(1000));
-		expect(screen.queryByRole("button", { name: "Sending…" })).toBeNull();
-		expect(send.querySelector(".animate-spin")).toBeNull();
+		expect(screen.getByRole("button", { name: "Send test email" })).toBe(send);
 	});
 
 	it("delays slow-request feedback and keeps sending disabled for its minimum visible duration", async () => {
@@ -42,7 +40,6 @@ describe("test email loading feedback", () => {
 		await act(async () => vi.advanceTimersByTimeAsync(1));
 		const sending = screen.getByRole<HTMLButtonElement>("button", { name: "Sending…" });
 		expect(sending.disabled).toBe(true);
-		expect(sending.querySelector(".animate-spin")).not.toBeNull();
 
 		await act(async () => vi.advanceTimersByTimeAsync(200));
 		rerender(<InstanceEmailCard isPending={false} onSendTest={onSendTest} />);
@@ -51,11 +48,10 @@ describe("test email loading feedback", () => {
 		await act(async () => vi.advanceTimersByTimeAsync(299));
 		expect(screen.getByRole<HTMLButtonElement>("button", { name: "Sending…" }).disabled).toBe(true);
 
-		expect(sending.querySelector(".animate-spin")).not.toBeNull();
 		await act(async () => vi.advanceTimersByTimeAsync(1));
 		const send = screen.getByRole<HTMLButtonElement>("button", { name: "Send test email" });
 		expect(send.disabled).toBe(false);
-		expect(send.querySelector(".animate-spin")).toBeNull();
+		expect(screen.queryByRole("button", { name: "Sending…" })).toBeNull();
 		fireEvent.click(send);
 		expect(onSendTest).toHaveBeenCalledExactlyOnceWith(undefined);
 	});

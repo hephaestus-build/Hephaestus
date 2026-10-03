@@ -53,6 +53,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import tools.jackson.databind.ObjectMapper;
@@ -351,7 +352,8 @@ class ConversationalFeedbackDeliveryLoopIntegrationTest extends BaseIntegrationT
                 assistant.getId(),
                 Instant.now(),
                 "test-model",
-                org.mockito.Mockito.mock(LlmPriceSnapshot.class));
+                Mockito.mock(LlmPriceSnapshot.class),
+                "test-session-version");
     }
 
     /** A stored link; one with no text is how replies stored links before they carried the feedback. */

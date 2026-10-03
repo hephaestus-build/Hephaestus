@@ -121,7 +121,7 @@ class MoneyWirePrecisionTest extends BaseUnitTest {
                 .as("this input must reach a clamp, or the test is asserting nothing")
                 .isNotNull();
         BigDecimal usd = cost.usd();
-        org.junit.jupiter.api.Assertions.assertNotNull(usd);
+        assertThat(usd).isNotNull();
         return usd;
     }
 

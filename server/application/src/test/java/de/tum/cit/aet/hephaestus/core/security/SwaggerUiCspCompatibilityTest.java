@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
@@ -42,7 +43,7 @@ class SwaggerUiCspCompatibilityTest extends BaseUnitTest {
                         .contains("src=");
             }
             // No inline event handlers either (onload=/onclick= would also need 'unsafe-inline').
-            assertThat(html.toLowerCase())
+            assertThat(html.toLowerCase(Locale.ROOT))
                     .as("swagger-ui index.html must carry no inline event handlers; %s", index)
                     .doesNotContain("onload=")
                     .doesNotContain("onclick=");

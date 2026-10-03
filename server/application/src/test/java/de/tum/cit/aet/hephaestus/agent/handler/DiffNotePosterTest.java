@@ -3,11 +3,13 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewResultParser.DiffNote;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -24,10 +26,12 @@ import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 class DiffNotePosterTest extends BaseUnitTest {
 
@@ -47,10 +51,8 @@ class DiffNotePosterTest extends BaseUnitTest {
         ws.setId(1L);
         job.setWorkspace(ws);
         job.setIntegrationKind(IntegrationKind.GITLAB);
-        job.setJobType(de.tum.cit.aet.hephaestus.agent.AgentJobType.PULL_REQUEST_REVIEW);
-        job.setMetadata(tools.jackson.databind.node.JsonNodeFactory.instance
-                .objectNode()
-                .put("pull_request_id", 42L));
+        job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
+        job.setMetadata(JsonNodeFactory.instance.objectNode().put("pull_request_id", 42L));
         return job;
     }
 
@@ -206,7 +208,7 @@ class DiffNotePosterTest extends BaseUnitTest {
     }
 
     @Test
-    void postedFindings_reportCounts() {
+    void postedObservations_reportCounts() {
         RecordingChannel channel = new RecordingChannel();
         DiffNotePoster poster = poster(channel);
         var captor = ArgumentCaptor.forClass(IntegrationKind.class);
@@ -222,9 +224,9 @@ class DiffNotePosterTest extends BaseUnitTest {
 
     /** Every workspace is "team": what the footer's link needs of the workspace. */
     private static WorkspaceSummaryQuery teamWorkspace() {
-        WorkspaceSummaryQuery workspaces = org.mockito.Mockito.mock(WorkspaceSummaryQuery.class);
-        org.mockito.Mockito.when(workspaces.findById(org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(java.util.Optional.of(new WorkspaceSummaryQuery.WorkspaceSummary(1L, "team", "Team")));
+        WorkspaceSummaryQuery workspaces = mock(WorkspaceSummaryQuery.class);
+        when(workspaces.findById(anyLong()))
+                .thenReturn(Optional.of(new WorkspaceSummaryQuery.WorkspaceSummary(1L, "team", "Team")));
         return workspaces;
     }
 }

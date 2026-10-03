@@ -1,29 +1,26 @@
 import { LinkIcon, type LucideIcon } from "lucide-react";
-import { hasText } from "@/lib/text";
 
 import {
 	type BrandIcon,
-	GithubIcon,
-	GitlabIcon,
+	GitHubIcon,
+	GitLabIcon,
 	OutlineIcon,
 	SlackIcon,
 } from "@/components/icons/brand";
+import type { WorkProvider } from "@/lib/artifact-kinds";
 
-/** Both types are named because `BrandIcon` is a plain component and `LucideIcon` is not. */
-export const PROVIDER_ICONS: Record<string, LucideIcon | BrandIcon> = {
-	GITHUB: GithubIcon,
-	GITLAB: GitlabIcon,
+export const PROVIDER_ICONS = {
+	GITHUB: GitHubIcon,
+	GITLAB: GitLabIcon,
 	SLACK: SlackIcon,
 	OUTLINE: OutlineIcon,
-};
+} satisfies Record<WorkProvider, BrandIcon>;
 
-/**
- * Resolve a brand icon from a provider type (e.g. "GITHUB", "GITLAB"). Falls back
- * to a generic link icon for unknown providers so new IdPs render gracefully.
- */
+function hasProviderIcon(providerType: string): providerType is WorkProvider {
+	return Object.hasOwn(PROVIDER_ICONS, providerType);
+}
+
 export function getProviderIcon(providerType?: string): LucideIcon | BrandIcon {
-	if (!hasText(providerType)) {
-		return LinkIcon;
-	}
-	return PROVIDER_ICONS[providerType.toUpperCase()] ?? LinkIcon;
+	const key = providerType?.toUpperCase();
+	return key !== undefined && hasProviderIcon(key) ? PROVIDER_ICONS[key] : LinkIcon;
 }

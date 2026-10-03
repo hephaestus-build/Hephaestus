@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,7 +40,7 @@ import org.mockito.Mock;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
- * The cooldown contract behind {@code GitlabIntegrationSyncRunner}'s single-pass backfill: a
+ * The cooldown contract behind {@code GitLabIntegrationSyncRunner}'s single-pass backfill: a
  * repository that did work is parked for {@code COOLDOWN_NORMAL} (5 minutes), so a second pass
  * launched back-to-back can only skip exactly what the first one advanced. That is why the runner
  * does one pass per job instead of looping.
@@ -115,7 +116,7 @@ class GitLabHistoricalBackfillServiceTest extends BaseUnitTest {
         when(syncTargetProvider.isRepositoryUnavailable(SCOPE_ID, SYNC_TARGET_ID))
                 .thenReturn(true);
         assertThat(service.runBackfillPass(SCOPE_ID, handle)).isZero();
-        verify(issueSyncService, org.mockito.Mockito.never()).backfillIssues(any(), any(), any(), anyInt());
+        verify(issueSyncService, never()).backfillIssues(any(), any(), any(), anyInt());
     }
 
     @Test

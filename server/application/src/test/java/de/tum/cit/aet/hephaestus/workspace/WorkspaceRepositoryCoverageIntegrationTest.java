@@ -53,10 +53,11 @@ class WorkspaceRepositoryCoverageIntegrationTest extends BaseIntegrationTest {
         repositoryEnumerator.reset();
         // Ensure GitHub IdentityProvider exists - required by
         // WorkspaceRepositoryMonitorService.ensureRepositoryFromSnapshot
-        gitProviderRepository
+        if (gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseGet(() -> gitProviderRepository.save(
-                        new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
+                .isEmpty()) {
+            gitProviderRepository.save(new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com"));
+        }
         // Clear any suspended installation state from previous tests
         // This prevents test pollution when async syncs mark installations as suspended
         gitHubAppTokenService.markInstallationActive(INSTALLATION_ID);

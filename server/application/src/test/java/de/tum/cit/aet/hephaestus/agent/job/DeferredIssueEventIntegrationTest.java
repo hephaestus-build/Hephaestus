@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -133,13 +134,13 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
     void shouldCommitOtherWorkspaceWhenOneDatabaseWriteFails() {
         Workspace other = workspaces.save(WorkspaceTestFixtures.activeWorkspace("other-event-" + UUID.randomUUID()));
         when(fixture.resolver().resolveAllForRepository("owner/repo")).thenReturn(List.of(workspace, other));
-        var attempts = new java.util.concurrent.atomic.AtomicInteger();
+        var attempts = new AtomicInteger();
         when(fixture.issueRepository().findByIdWithRepositoryAndAssignees(anyLong()))
                 .thenAnswer(invocation -> {
                     if (attempts.getAndIncrement() == 0) {
                         jdbcTemplate.execute("INSERT INTO missing_issue_event_test_table VALUES (1)");
                     }
-                    return java.util.Optional.empty();
+                    return Optional.empty();
                 });
         var listener = new IssueAgentJobEventListener(
                 mock(AgentJobService.class),
@@ -261,7 +262,7 @@ class DeferredIssueEventIntegrationTest extends BaseIntegrationTest {
                 IssueRepository issues,
                 SignalRecorder recorder,
                 IssueEvidenceRevision revisions,
-                org.springframework.transaction.PlatformTransactionManager transactionManager) {
+                PlatformTransactionManager transactionManager) {
             return new IssueAgentJobEventListener(
                     mock(AgentJobService.class),
                     issues,

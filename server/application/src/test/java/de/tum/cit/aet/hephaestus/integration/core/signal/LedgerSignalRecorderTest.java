@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -22,8 +24,7 @@ class LedgerSignalRecorderTest extends BaseUnitTest {
             new SignalKey(7L, 42L, SignalName.of("scm.pull_request.ready"), SignalRevision.ofHeadCommit("abc123"));
 
     private final ArtifactSignalRepository repository = mock(ArtifactSignalRepository.class);
-    private final io.micrometer.core.instrument.simple.SimpleMeterRegistry meterRegistry =
-            new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     private final LedgerSignalRecorder recorder =
             new LedgerSignalRecorder(repository, new PracticeReviewRefusalMetrics(meterRegistry), meterRegistry);
 
@@ -138,8 +139,7 @@ class LedgerSignalRecorderTest extends BaseUnitTest {
 
         verify(repository)
                 .insertOrClaimUndecided(
-                        org.mockito.ArgumentMatchers.argThat(
-                                key -> key.artifactKind().equals(ArtifactKind.of("scm.pull_request"))),
+                        argThat(key -> key.artifactKind().equals(ArtifactKind.of("scm.pull_request"))),
                         any(),
                         any(),
                         anyString(),

@@ -117,7 +117,7 @@ interface ProfileEvent {
 	level: EventLevel;
 	slug: string;
 	name: string;
-	/** The registry's label for the standing or trend the subject moved to. */
+	/** The registry's label for the standing or trend the subject moved to, when this build knows it. */
 	label?: string;
 	/**
 	 * For resolved feedback: the developer's work coming back clean, or the developer marking it
@@ -186,14 +186,11 @@ const TREND_LABELS: Record<string, string | undefined> = Object.fromEntries(
 	Object.entries(PRACTICE_TREND_DEFS).map(([value, def]) => [value, def.label]),
 );
 
-/**
- * The registry's word for a standing or a trend. The wire types both as a bare string, so one this
- * build does not know reads as a phrase that fits the sentence, never as the enum value.
- */
+/** The registry's word for a standing or a trend, which the wire types as a bare string. */
 const standingLabel = (value: string | undefined) =>
-	(value === undefined ? undefined : STANDING_LABELS[value]) ?? "a new standing";
+	value === undefined ? undefined : STANDING_LABELS[value];
 const trendLabel = (value: string | undefined) =>
-	(value === undefined ? undefined : TREND_LABELS[value]) ?? "a new trend";
+	value === undefined ? undefined : TREND_LABELS[value];
 
 function heldEvent(held: HeldPractice): ProfileEvent {
 	return {
@@ -441,9 +438,14 @@ interface Wording {
 	overflow?: (plural: boolean) => string;
 }
 
+// A standing or trend this build does not know reads as a phrase that fits the sentence, never as
+// the enum value.
+const movedTo = (event: ChangeEvent) => `moved to ${event.label ?? "a new standing"}`;
+const trendShown = (event: ChangeEvent) => event.label ?? "a new trend";
+
 const MOVED = {
-	predicate: (event) => `moved to ${event.label}`,
-	alone: (event) => `moved to ${event.label}`,
+	predicate: movedTo,
+	alone: movedTo,
 	seenOn: " after ",
 	overflow: () => "moved the same way",
 } satisfies Wording;
@@ -478,8 +480,8 @@ const WORDING = {
 	},
 	trend: {
 		title: "Trends turned",
-		predicate: (event, plural) => `now show${plural ? "" : "s"} ${event.label}`,
-		alone: (event) => `now shows ${event.label}`,
+		predicate: (event, plural) => `now show${plural ? "" : "s"} ${trendShown(event)}`,
+		alone: (event) => `now shows ${trendShown(event)}`,
 		seenOn: " over ",
 		overflow: (plural) => `saw ${plural ? "their trends" : "its trend"} turn`,
 	},

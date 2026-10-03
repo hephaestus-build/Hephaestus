@@ -10,13 +10,8 @@ import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Worst-first ordering for the measurements of one run, in the one place every stage that ranks them can
- * share it.
- *
- * <p><b>Why this exists at all.</b> Four stages used to carry their own copy of the same comparator, and
- * every copy tiebroke on detector-reported confidence, a field that did not discriminate observations and
- * has since been removed.
- * What replaces it has to be a property of the observation we can check rather than one it reports.
+ * Worst-first ordering for the observations of one run, shared by every stage that ranks them. Every key is a
+ * property of the observation that can be checked, never one the model reports about itself.
  *
  * <p><b>The keys, in order.</b>
  *
@@ -47,7 +42,7 @@ public final class ObservationOrder {
      * rather than re-deriving the tail.
      */
     public static Comparator<Observation> worstFirst() {
-        return Comparator.comparingInt((Observation o) -> severityOrdinal(o.getSeverity()))
+        return Comparator.comparingInt((Observation o) -> severityRank(o.getSeverity()))
                 .thenComparing(Comparator.comparingInt((Observation o) -> evidenceBreadth(o.getEvidence()))
                         .reversed())
                 .thenComparing(o -> o.getId().toString());
@@ -55,7 +50,7 @@ public final class ObservationOrder {
 
     /** This run's observations, worst first: severity, then evidence breadth, then practice + title. */
     public static Comparator<ValidatedObservation> worstFirstUnstored() {
-        return Comparator.comparingInt((ValidatedObservation f) -> severityOrdinal(f.severity()))
+        return Comparator.comparingInt((ValidatedObservation f) -> severityRank(f.severity()))
                 .thenComparing(Comparator.comparingInt((ValidatedObservation f) -> evidenceBreadth(f.evidence()))
                         .reversed())
                 .thenComparing(ObservationOrder::identityKey);
@@ -77,7 +72,7 @@ public final class ObservationOrder {
      * How many distinct places this observation's evidence points at.
      *
      * <p>Distinct, not counted: a model that quotes one line twice has shown us one locus, and paying it
-     * for the repetition would hand it the same lever {@code confidence} used to be. An observation with no
+     * for the repetition would let it lead by repeating itself. An observation with no
      * parseable evidence scores 0 and therefore sorts last within its severity band, which is the right
      * answer — we cannot see what it rests on.
      */
@@ -104,11 +99,11 @@ public final class ObservationOrder {
     }
 
     /**
-     * Severity ordinal for sorting, treating a null band (a positive strength under ADR 0022) as the
+     * Severity rank for sorting, treating a null band (a positive strength under ADR 0022) as the
      * least severe so problems always sort ahead of strengths.
      */
-    public static int severityOrdinal(@Nullable Severity severity) {
-        return severity == null ? Integer.MAX_VALUE : severity.ordinal();
+    public static int severityRank(@Nullable Severity severity) {
+        return severity == null ? Integer.MAX_VALUE : severity.rank();
     }
 
     /**

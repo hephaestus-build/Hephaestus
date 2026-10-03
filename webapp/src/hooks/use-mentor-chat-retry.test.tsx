@@ -62,7 +62,7 @@ describe("useMentorChat retry", () => {
 		);
 		const { result } = renderHook(() => useMentorChat({}), { wrapper });
 		const retryAfterFailure = async (posts: number) => {
-			await waitFor(() => expect(result.current.status).toBe("error"));
+			await waitFor(() => expect(result.current.turn.kind).toBe("error"));
 			act(() => result.current.retry());
 			await waitFor(() => expect(posted).toHaveLength(posts));
 		};
@@ -71,7 +71,7 @@ describe("useMentorChat retry", () => {
 		await retryAfterFailure(2);
 		await retryAfterFailure(3);
 		await retryAfterFailure(4);
-		await waitFor(() => expect(result.current.status).toBe("ready"));
+		await waitFor(() => expect(result.current.turn.kind).toBe("ready"));
 
 		const prompt = posted[0]?.message.id;
 		expect(

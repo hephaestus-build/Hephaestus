@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -8,6 +11,7 @@ import de.tum.cit.aet.hephaestus.config.ApplicationProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -99,9 +103,9 @@ class PracticeFeedbackCommentFormatterTest extends BaseUnitTest {
 
     /** Every workspace is "team": what the footer's link needs of the workspace. */
     private static WorkspaceSummaryQuery teamWorkspace() {
-        WorkspaceSummaryQuery workspaces = org.mockito.Mockito.mock(WorkspaceSummaryQuery.class);
-        org.mockito.Mockito.when(workspaces.findById(org.mockito.ArgumentMatchers.anyLong()))
-                .thenReturn(java.util.Optional.of(new WorkspaceSummaryQuery.WorkspaceSummary(1L, "team", "Team")));
+        WorkspaceSummaryQuery workspaces = mock(WorkspaceSummaryQuery.class);
+        when(workspaces.findById(anyLong()))
+                .thenReturn(Optional.of(new WorkspaceSummaryQuery.WorkspaceSummary(1L, "team", "Team")));
         return workspaces;
     }
 }

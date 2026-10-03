@@ -32,7 +32,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { asDate } from "@/lib/dates";
-import { hasText } from "@/lib/text";
+import { andList, hasText } from "@/lib/text";
 
 import { freshnessTone, stateLabel } from "./sync-format";
 import { TableRowsSkeleton } from "./TableRowsSkeleton";
@@ -104,15 +104,9 @@ function watermarksOf(resource: SyncResourceState): { label: string; date: Date 
 
 /** The classes present in the breakdown that carry no per-class watermark of their own. */
 function untrackedLabelsOf(resource: SyncResourceState): string[] {
-	return resource.counts.filter((count) => asDate(count.lastSyncedAt) == null).map((c) => c.label);
-}
-
-function joinLabels(labels: string[]): string {
-	const lower = labels.map((label) => label.toLowerCase());
-	if (lower.length <= 1) {
-		return lower[0] ?? "";
-	}
-	return `${lower.slice(0, -1).join(", ")} and ${lower.at(-1)}`;
+	return resource.counts
+		.filter((count) => asDate(count.lastSyncedAt) == null)
+		.map((count) => count.label.toLowerCase());
 }
 
 /**
@@ -503,8 +497,8 @@ function LastSyncedCell({
 					)}
 					{untracked.length > 0 && (
 						<p className="text-xs text-muted-foreground">
-							No separate watermark is kept for {joinLabels(untracked)} — they are written by the
-							same sync pass.
+							No separate watermark is kept for {andList.format(untracked)} — they are written by
+							the same sync pass.
 						</p>
 					)}
 				</HoverCardContent>

@@ -18,7 +18,7 @@ import {
 import { type ReactElement, type ReactNode, useState } from "react";
 
 import type { IntegrationCatalogEntry } from "@/api/types.gen";
-import { GithubIcon, GitlabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon, OutlineIcon, SlackIcon } from "@/components/icons/brand";
 import { ADMIN_NAV_LABELS } from "@/components/layout/sidebar/admin-nav-labels";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -108,7 +108,7 @@ export function NavAdmin({
 	const onAudit = Boolean(matchRoute({ to: "/w/$workspaceSlug/admin/audit", fuzzy: true }));
 	const [practicesOpen, setPracticesOpen] = useSectionOpen(onSection);
 	const [integrationsOpen, setIntegrationsOpen] = useSectionOpen(onIntegrationsSection);
-	const ScmIcon = scmProviderType === "GITLAB" ? GitlabIcon : GithubIcon;
+	const ScmIcon = scmProviderType === "GITLAB" ? GitLabIcon : GitHubIcon;
 	const scmLabel = scmProviderType === "GITLAB" ? "GitLab" : "GitHub";
 	const scmKind = scmProviderType === "GITLAB" ? "GITLAB" : "GITHUB";
 	const awaiting =
@@ -274,7 +274,7 @@ export function NavAdmin({
 									<Link to="/w/$workspaceSlug/admin/integrations/scm" params={{ workspaceSlug }} />
 								}
 							>
-								<ScmIcon aria-hidden />
+								<ScmIcon />
 								<span>{scmLabel}</span>
 							</SidebarMenuSubButton>
 						</SidebarMenuSubItem>
@@ -290,7 +290,7 @@ export function NavAdmin({
 									/>
 								}
 							>
-								<SlackIcon aria-hidden />
+								<SlackIcon />
 								<span>Slack</span>
 							</SidebarMenuSubButton>
 						</SidebarMenuSubItem>
@@ -306,7 +306,7 @@ export function NavAdmin({
 									/>
 								}
 							>
-								<OutlineIcon aria-hidden />
+								<OutlineIcon />
 								<span>Outline</span>
 							</SidebarMenuSubButton>
 						</SidebarMenuSubItem>

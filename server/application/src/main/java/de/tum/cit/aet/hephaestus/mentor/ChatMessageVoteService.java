@@ -46,10 +46,13 @@ public class ChatMessageVoteService {
     /** No-op if the vote does not exist (idempotent DELETE semantics). */
     @Transactional
     public void delete(UUID threadId, UUID messageId) {
-        chatMessageRepository
+        boolean inThread = chatMessageRepository
                 .findById(messageId)
                 .filter(m -> m.getThread() != null && m.getThread().getId().equals(threadId))
-                .orElseThrow(() -> new EntityNotFoundException("ChatMessage", messageId.toString()));
+                .isPresent();
+        if (!inThread) {
+            throw new EntityNotFoundException("ChatMessage", messageId.toString());
+        }
         chatMessageVoteRepository.deleteById(messageId);
     }
 }

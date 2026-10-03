@@ -122,7 +122,6 @@ public record WorkspaceProperties(
     }
 
     @AssertTrue(message = "When init-default is true, default.login and default.token must not be blank")
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isCredentialsValidWhenInitDefaultEnabled() {
         if (!initDefault) {
             return true;
@@ -137,7 +136,6 @@ public record WorkspaceProperties(
     @AssertTrue(
             message =
                     "When init-gitlab-default is true, gitlab-default.login and gitlab-default.token must not be blank")
-    @SuppressWarnings("PMD.UnusedPrivateMethod")
     private boolean isGitLabCredentialsValidWhenInitGitlabDefaultEnabled() {
         if (!initGitlabDefault) {
             return true;

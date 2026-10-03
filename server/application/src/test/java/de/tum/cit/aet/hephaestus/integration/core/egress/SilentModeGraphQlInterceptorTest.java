@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.core.egress;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -55,7 +57,7 @@ class SilentModeGraphQlInterceptorTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> interceptor.intercept(request, chain).block())
                 .isInstanceOf(OutboundEgressSuppressedException.class);
-        verify(transport, never()).exchange(org.mockito.ArgumentMatchers.any());
+        verify(transport, never()).exchange(any());
     }
 
     @Test
@@ -68,15 +70,14 @@ class SilentModeGraphQlInterceptorTest extends BaseUnitTest {
                 .requireDeliveryAllowed("scm.graphql.UpdateThing");
         SilentModeGraphQlInterceptor interceptor = new SilentModeGraphQlInterceptor(egressGuard);
         ExchangeFunction transport = mock(ExchangeFunction.class);
-        when(transport.exchange(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(Mono.error(new IllegalStateException()));
+        when(transport.exchange(any())).thenReturn(Mono.error(new IllegalStateException()));
         when(chain.next(request))
                 .thenReturn(httpExchange(interceptor, transport).retry(1));
 
         assertThatThrownBy(() -> interceptor.intercept(request, chain).block())
                 .isInstanceOf(OutboundEgressSuppressedException.class);
         verify(egressGuard, times(2)).requireDeliveryAllowed("scm.graphql.UpdateThing");
-        verify(transport).exchange(org.mockito.ArgumentMatchers.any());
+        verify(transport).exchange(any());
     }
 
     @Test
@@ -87,7 +88,7 @@ class SilentModeGraphQlInterceptorTest extends BaseUnitTest {
 
         interceptor.intercept(request, chain).block();
 
-        verify(egressGuard, never()).requireDeliveryAllowed(org.mockito.ArgumentMatchers.anyString());
+        verify(egressGuard, never()).requireDeliveryAllowed(anyString());
     }
 
     @Test
@@ -100,7 +101,7 @@ class SilentModeGraphQlInterceptorTest extends BaseUnitTest {
 
         interceptor.intercept(request, chain).block();
 
-        verify(egressGuard, never()).requireDeliveryAllowed(org.mockito.ArgumentMatchers.anyString());
+        verify(egressGuard, never()).requireDeliveryAllowed(anyString());
     }
 
     private static ClientGraphQlRequest request(String document) {

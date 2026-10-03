@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.notification.email;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.HashMap;
 import java.util.Map;
@@ -82,9 +83,8 @@ class EmailRendererTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @EnumSource(de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind.class)
-    void shouldDescribeTheProductFeedbackKind(
-            de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind kind) {
+    @EnumSource(Kind.class)
+    void shouldDescribeTheProductFeedbackKind(Kind kind) {
         var rendered = renderer.render(
                 EmailKind.PRODUCT_FEEDBACK,
                 Map.of(

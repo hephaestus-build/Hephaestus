@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
+import java.util.Locale;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
@@ -73,7 +74,7 @@ public final class ServerUrlValidator {
             throw new IllegalArgumentException("Server URL must have a valid hostname");
         }
 
-        String hostLower = host.toLowerCase();
+        String hostLower = host.toLowerCase(Locale.ROOT);
 
         // Block known dangerous hostnames
         if (BLOCKED_HOSTNAMES.contains(hostLower)) {

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.outline.sync;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.documentation.DocumentReviewTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -34,6 +36,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRep
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentSnapshot;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.signal.OutlineDocumentSignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
@@ -42,11 +45,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 /**
@@ -111,13 +116,10 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
                 properties,
                 mirrorWriter,
                 new OutlineMirrorRetentionService(documentRepository, mirrorWriter, properties),
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.integration.outline.domain.signal.OutlineDocumentSignalRecorder
-                                .class),
+                mock(OutlineDocumentSignalRecorder.class),
                 // No review trigger: this suite is about mirroring, and a node that cannot submit a review
                 // still records every signal — which is exactly the ObjectProvider's absent case.
-                new org.springframework.beans.factory.support.StaticListableBeanFactory()
-                        .getBeanProvider(de.tum.cit.aet.hephaestus.agent.documentation.DocumentReviewTrigger.class));
+                new StaticListableBeanFactory().getBeanProvider(DocumentReviewTrigger.class));
     }
 
     @BeforeEach
@@ -125,7 +127,7 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         lenient().when(connection.getId()).thenReturn(CONNECTION);
         lenient()
                 .when(connection.getConfig())
-                .thenReturn(new ConnectionConfig.OutlineConfig(SERVER_URL, "sub-1", "secret", java.util.Set.of()));
+                .thenReturn(new ConnectionConfig.OutlineConfig(SERVER_URL, "sub-1", "secret", Set.of()));
         lenient()
                 .when(connectionService.findActive(WORKSPACE, IntegrationKind.OUTLINE))
                 .thenReturn(Optional.of(connection));
@@ -258,7 +260,7 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         assertThat(staleRow.getCreatedBySubject()).isNull();
     }
 
-    // --- upstream-deletion inference is RECONCILIATION-only, in every integration (ADR 0024) ---
+    // Upstream deletion is inferred only on RECONCILIATION, in every integration (ADR 0024).
 
     @Test
     void initialPass_tombstonesNothing_evenWhenACleanEnumerationOmitsAMirroredDocument() {
@@ -372,7 +374,7 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         verify(documentRepository).saveAndFlush(argThat(d -> "doc-1".equals(d.getDocumentId())));
     }
 
-    // --- the no-wipe invariant: a pass that dies mid-way must never take the mirror with it ---
+    // A pass that dies mid-way must never take the mirror with it.
 
     @Test
     void rateLimitMidPass_keepsEveryMirroredDocument_noTombstoneNoBodyLoss() {
@@ -473,7 +475,7 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         verify(outlineApiClient, never()).exportDocument(anyString(), anyString(), anyString());
     }
 
-    // --- archive is not delete: soft, recoverable, content kept ---
+    // Archive is not delete: soft, recoverable, content kept.
 
     @Test
     void refreshDocument_archiveEvent_keepsContentAndStampsArchivedAt_noApiCall() {
@@ -522,8 +524,6 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         assertThat(row.getBodyMarkdown()).isEqualTo("# fresh");
     }
 
-    // --- payload.model (webhook trust): skip documents.info when usable, fall back otherwise ---
-
     @Test
     void refreshDocument_withUsablePrefetchedMeta_skipsDocumentsInfo() {
         when(documentRepository.findSnapshotByDocumentId(WORKSPACE, CONNECTION, "doc-1"))
@@ -564,8 +564,6 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
 
         verify(outlineApiClient).getDocumentInfo(SERVER_URL, "token", "doc-1");
     }
-
-    // --- archived documents: enumerated separately, never tombstoned by absence ---
 
     @Test
     void syncWorkspace_archivedDocument_isSeenNotTombstoned_andNotReExportedWhenBodyPresent() {
@@ -778,8 +776,6 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         assertThat(row.getCollaboratorSubjects()).isNull();
     }
 
-    // --- the size cap: bounded candidate pages, chunked IN-lists ---
-
     @Test
     void syncPendingCollections_enforcesTheSizeCapAfterThePass() {
         when(collectionRepository.findByWorkspaceIdAndStateAndSyncStatus(
@@ -838,8 +834,6 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         verify(outlineApiClient, never()).listCollections(anyString(), anyString());
         verify(outlineApiClient, never()).listDocuments(anyString(), anyString(), anyString());
     }
-
-    // --- failure-path coverage: multi-collection partial failure, rate limits beyond syncWorkspace ---
 
     @Test
     void syncWorkspace_multiCollectionPartialFailure_collectionBStillSyncsWhileACarriesTheError() {
@@ -907,8 +901,6 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         assertThat(collection.getDocumentsSyncedAt()).isNull();
     }
 
-    // --- optimistic-lock retry: a webhook refresh and a mid-flight reconcile racing the same row ---
-
     @Test
     void refreshDocument_optimisticLockConflict_retriesInAFreshTransactionThenSucceeds() {
         // The retry must be a whole new unit of work, not a second save inside the failed one: an
@@ -953,8 +945,8 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
                 .thenThrow(new ObjectOptimisticLockingFailureException(OutlineDocument.class, 99L));
 
         // The second conflict must be swallowed (logged + skipped) — never escape and abort the caller.
-        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
-                () -> service(10).refreshDocument(WORKSPACE, "documents.update", "doc-1"));
+        assertThatCode(() -> service(10).refreshDocument(WORKSPACE, "documents.update", "doc-1"))
+                .doesNotThrowAnyException();
 
         verify(documentRepository, times(2)).saveAndFlush(any());
     }
@@ -1002,8 +994,6 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
         // The catalog write lost its race and was replayed; the pass still completes the collection.
         assertThat(collection.getSyncStatus()).isEqualTo(SyncStatus.COMPLETE);
     }
-
-    // --- cooperative cancellation: the job handle reaches the per-document loop, not just the collection loop ---
 
     /**
      * Cancellation is checked per document, not just between collections, so a job cancelled while inside a

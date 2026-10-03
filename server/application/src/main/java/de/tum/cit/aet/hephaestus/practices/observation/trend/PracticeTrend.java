@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
@@ -76,9 +77,9 @@ public final class PracticeTrend {
      * <p>Each opportunity contributes its own {@link OutcomeVector#metShare()}, not a clean/dirty bit, so
      * a piece of reviewed work that went half well is counted as half well rather than rounded to a problem.
      *
-     * <p>Weights fall geometrically with age ({@code decay^0, decay^1, …} from the newest), which is what lets
-     * one rule do the job two used to: recent evidence dominates, so a fixed lapse is acknowledged within a
-     * couple of reviews without a separate clean-work override, and a fresh regression is visible just as fast.
+     * <p>Weights fall geometrically with age ({@code decay^0, decay^1, …} from the newest), so recent evidence
+     * dominates: a fixed lapse is acknowledged within a couple of reviews without a separate clean-work
+     * override, and a fresh regression is visible just as fast.
      * A {@code decay} strictly below 0.5 is what makes the two newest opportunities outweigh everything older
      * — see the caller that chooses it.
      *
@@ -189,7 +190,7 @@ public final class PracticeTrend {
                 TrendSupportDTO.from(support),
                 OutcomeVectorDTO.from(currentOutcomes),
                 OutcomeVectorDTO.from(previousOutcomes),
-                java.util.stream.IntStream.range(0, opportunities.size())
+                IntStream.range(0, opportunities.size())
                         .mapToObj(index -> {
                             EvidenceOpportunity opportunity = opportunities.get(index);
                             return new TrendOpportunityDTO(

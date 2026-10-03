@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.sync;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionBusyException;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,9 +30,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -109,7 +111,7 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
         List<Throwable> unexpected = new CopyOnWriteArrayList<>();
 
         try {
-            List<Future<?>> futures = new java.util.ArrayList<>();
+            List<Future<?>> futures = new ArrayList<>();
             for (int i = 0; i < threads; i++) {
                 futures.add(pool.submit(() -> {
                     try {
@@ -146,12 +148,12 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .as("the other concurrent trigger was absorbed as a conflict")
                 .isEqualTo(1);
 
-        long activeRows = syncJobRepository
-                .findByConnection_IdAndWorkspace_Id(
-                        connection.getId(), workspace.getId(), org.springframework.data.domain.Pageable.unpaged())
-                .stream()
-                .filter(j -> SyncJobStatus.ACTIVE.contains(j.getStatus()))
-                .count();
+        long activeRows =
+                syncJobRepository
+                        .findByConnection_IdAndWorkspace_Id(connection.getId(), workspace.getId(), Pageable.unpaged())
+                        .stream()
+                        .filter(j -> SyncJobStatus.ACTIVE.contains(j.getStatus()))
+                        .count();
         assertThat(activeRows).isEqualTo(1);
     }
 
@@ -161,14 +163,14 @@ class SyncJobActiveIndexIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         assertThatThrownBy(() -> connectionService.disconnect(
                         connection,
-                        new ConnectionService.TransitionRequest(
+                        ConnectionService.TransitionRequest.byAccount(
                                 IntegrationState.UNINSTALLED,
                                 "DISCONNECT",
                                 "ADMIN",
-                                "test-admin",
+                                null,
                                 "disconnect-race-test",
                                 "disconnect"),
-                        Mockito.mock(ConnectionStrategy.class)))
+                        mock(ConnectionStrategy.class)))
                 .isInstanceOf(ConnectionBusyException.class)
                 .hasMessageContaining("active sync job");
 

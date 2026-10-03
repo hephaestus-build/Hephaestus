@@ -29,7 +29,8 @@ class DeliveredWorkFeedbackServiceTest {
                 "https://github.com/team/project/pull/5#discussion_r123"
             })
     void shouldAcceptRecordedProviderLinksWhenTheyNameTheExactWork(String url) {
-        assertThat(DeliveredWorkFeedbackService.verifiedLink(work, url)).contains(url);
+        assertThat(DeliveredWorkFeedbackService.verifiedLink(work.url(), work.provider(), url))
+                .contains(url);
     }
 
     @ParameterizedTest
@@ -48,11 +49,13 @@ class DeliveredWorkFeedbackServiceTest {
                 "https://github.com/team/project/pull/5#"
             })
     void shouldOmitARecordedLinkWhenItCannotBeVerifiedAsACommentOnTheExactWork(String url) {
-        assertThat(DeliveredWorkFeedbackService.verifiedLink(work, url)).isEmpty();
+        assertThat(DeliveredWorkFeedbackService.verifiedLink(work.url(), work.provider(), url))
+                .isEmpty();
     }
 
     @Test
     void shouldOmitLinksWhenHistoricalPlacementsHaveNoUrl() {
-        assertThat(DeliveredWorkFeedbackService.verifiedLink(work, null)).isEmpty();
+        assertThat(DeliveredWorkFeedbackService.verifiedLink(work.url(), work.provider(), null))
+                .isEmpty();
     }
 }

@@ -22,7 +22,6 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
-import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -30,6 +29,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.integration.core.signal.PracticeReviewRefusalMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.micrometer.tracing.Tracer;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -115,7 +116,6 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 jobs,
                 policy,
                 mock(JobTypeHandlerRegistry.class),
-                mock(JobEvidenceFiles.class),
                 mock(PracticePiAdapter.class),
                 mock(WorkerJwtIssuer.class),
                 mock(SandboxManager.class),
@@ -124,7 +124,7 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mapper,
                 metrics,
                 new PracticeReviewRefusalMetrics(metrics),
-                new AgentJobTelemetry(metrics, io.micrometer.tracing.Tracer.NOOP),
+                new AgentJobTelemetry(metrics, Tracer.NOOP),
                 mock(LlmUsageRecorder.class),
                 budgets,
                 admission,
@@ -215,7 +215,8 @@ class AgentJobPolicyIntegrationTest extends BaseIntegrationTest {
         var preferences = mock(MemberAiPreferences.class);
         when(preferences.forDeveloper(workspace.getId(), 20L))
                 .thenReturn(new MemberAiPreferences.Decision(true, MemberAiChoice.CLOUD));
-        var routing = new MemberAiRoutingAdapter(bindings, preferences, resolver, workspaces);
+        var routing = new MemberAiRoutingAdapter(
+                bindings, preferences, resolver, workspaces, mock(PersonProcessingSuppression.class));
 
         assertThat(routing.binding(workspace.getId(), AgentPurpose.PRACTICE_REVIEW, 20L))
                 .get()

@@ -2,12 +2,13 @@
  * Outline vendor adapter: mirrors allow-listed Outline collections into local documents and projects them
  * into the agent's context so design docs and decision records reach practice reviews. A closed Modulith
  * module — the agent reads through its own {@code agent::documentation-source} SPI, which this module
- * implements. It records document signals into the shared ledger but produces no observations or
- * findings of its own — a review of a document is composed in the agent module, off that ledger.
+ * implements. It records document signals into the shared ledger but produces no observations
+ * of its own — a review of a document is composed in the agent module, off that ledger.
  */
 @org.springframework.modulith.ApplicationModule(
         displayName = "Integration · Outline",
         allowedDependencies = {
+            "core::person-data",
             // Connection registry + SPI ports (credential provider, manifest, lifecycle listener, connect strategy).
             "integration.core",
             "integration.core::spi",

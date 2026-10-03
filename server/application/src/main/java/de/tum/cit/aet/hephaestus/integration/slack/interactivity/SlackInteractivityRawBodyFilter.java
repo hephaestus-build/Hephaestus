@@ -80,6 +80,11 @@ public final class SlackInteractivityRawBodyFilter extends OncePerRequestFilter 
         }
 
         @Override
+        public int read(byte[] buffer, int offset, int length) {
+            return input.read(buffer, offset, length);
+        }
+
+        @Override
         public boolean isFinished() {
             return input.available() == 0;
         }

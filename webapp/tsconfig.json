@@ -29,6 +29,7 @@
 		"allowUnreachableCode": false,
 		"allowUnusedLabels": false,
 		"paths": {
+			"@/brand/*": ["./brand/*"],
 			"@/*": ["./src/*"],
 			"@bundled-practices": [
 				"../server/application/src/main/resources/practices/default-catalog.json"

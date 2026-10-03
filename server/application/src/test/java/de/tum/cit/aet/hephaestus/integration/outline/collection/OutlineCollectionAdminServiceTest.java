@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.collection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -83,7 +84,7 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
                 .when(connectionService.findActiveBearerToken(WS, IntegrationKind.OUTLINE))
                 .thenReturn(Optional.of(new BearerToken(TOKEN, null)));
         lenient()
-                .when(collectionRepository.save(org.mockito.ArgumentMatchers.any(OutlineCollection.class)))
+                .when(collectionRepository.save(any(OutlineCollection.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
         return new OutlineCollectionAdminService(
                 connectionService,
@@ -159,7 +160,7 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
         assertThat(outcome.created()).isFalse();
         assertThat(outcome.collection().documentCount()).isEqualTo(5L);
         verify(outlineApiClient, never()).listCollections(anyString(), anyString());
-        verify(collectionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(collectionRepository, never()).save(any());
         verify(syncScheduler, never()).syncCollectionNow(eq(WS), anyString());
     }
 
@@ -172,7 +173,7 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> service.register(WS, COLLECTION_ID))
                 .isInstanceOf(UnknownOutlineCollectionException.class);
-        verify(collectionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(collectionRepository, never()).save(any());
         verify(syncScheduler, never()).syncCollectionNow(eq(WS), anyString());
     }
 
@@ -259,9 +260,9 @@ class OutlineCollectionAdminServiceTest extends BaseUnitTest {
         OutlineCollectionDTO dto = service.updateState(WS, COLLECTION_ID, MirrorState.PAUSED);
 
         assertThat(dto.state()).isEqualTo(MirrorState.PAUSED);
-        verify(collectionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verify(collectionRepository, never()).save(any());
         verify(syncScheduler, never()).syncCollectionNow(eq(WS), anyString());
-        verify(eventPublisher, never()).publishEvent(org.mockito.ArgumentMatchers.any(Object.class));
+        verify(eventPublisher, never()).publishEvent(any(Object.class));
     }
 
     @Test

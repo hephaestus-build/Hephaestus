@@ -28,6 +28,8 @@ import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -84,7 +86,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
         lenient()
                 .when(reviewGate.evaluateSignal(
                         eq(workspace), any(), eq(TriggerMode.AUTO), any(ReviewSubject.class), anyMap()))
-                .thenReturn(new GateDecision.Detect(workspace, java.util.List.of(), 0, TriggerMode.AUTO));
+                .thenReturn(new GateDecision.Run(workspace, List.of(), 0, TriggerMode.AUTO));
     }
 
     @Test
@@ -100,7 +102,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
                         eq(AgentJobType.CONVERSATION_REVIEW),
                         any(),
                         eq(null),
-                        any(GateDecision.Detect.class));
+                        any(GateDecision.Run.class));
         verify(signalRecorder).markTriggered(eq(key()), any());
         verify(signalRecorder, never()).markRefused(any(), any());
     }
@@ -165,7 +167,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
         submitter.resubmit(pendingSignal());
 
         verify(agentJobService)
-                .submitWithOutcome(eq(WORKSPACE_ID), any(), any(), eq(null), any(GateDecision.Detect.class));
+                .submitWithOutcome(eq(WORKSPACE_ID), any(), any(), eq(null), any(GateDecision.Run.class));
         verify(signalRecorder).markTriggered(eq(key()), any());
     }
 
@@ -173,8 +175,6 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
     void theKindItSpeaksForIsTheChatThread() {
         assertThat(submitter.artifactKind()).isEqualTo(ChatSignals.CONVERSATION_THREAD);
     }
-
-    // Fixtures
 
     private void givenSubmissionSucceeds() {
         when(agentJobService.submitWithOutcome(anyLong(), any(), any(), any(), any()))
@@ -198,7 +198,7 @@ class ConversationReviewSubmitterTest extends BaseUnitTest {
                 "1700000000.000100",
                 "1700000600.000200",
                 null,
-                participants);
+                Arrays.stream(participants).boxed().toList());
     }
 
     private static ArtifactSignal pendingSignal() {

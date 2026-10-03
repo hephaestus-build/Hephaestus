@@ -132,11 +132,11 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
     void shouldSubmitPullRequestSignalWhenTheArtifactIsVisible() {
         ArtifactSignal signal = signal(ScmSignals.PULL_REQUEST_OPENED.value());
         PullRequest pullRequest = pullRequest();
-        GateDecision.Detect detection = detection();
+        GateDecision.Run admission = admission();
         when(pullRequestRepository.findByIdWithAllForGate(ARTIFACT_ID)).thenReturn(Optional.of(pullRequest));
         when(gate.evaluateQueued(
                         pullRequest, WORKSPACE_ID, ScmSignals.PULL_REQUEST_OPENED, pullRequest.reviewSubject(), false))
-                .thenReturn(detection);
+                .thenReturn(admission);
 
         pullRequestResubmitter().resubmit(signal);
 
@@ -146,7 +146,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
                         eq(AgentJobType.PULL_REQUEST_REVIEW),
                         any(PullRequestReviewSubmissionRequest.class),
                         eq(signal.key()),
-                        eq(detection));
+                        eq(admission));
         verify(signalRecorder, never()).markRefused(any(), any());
     }
 
@@ -154,10 +154,10 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
     void shouldSubmitIssueSignalWhenTheArtifactIsVisible() {
         ArtifactSignal signal = signal(ScmSignals.ISSUE_OPENED.value());
         Issue issue = issue();
-        GateDecision.Detect detection = detection();
+        GateDecision.Run admission = admission();
         when(issueRepository.findByIdWithRepositoryAndAssignees(ARTIFACT_ID)).thenReturn(Optional.of(issue));
         when(gate.evaluateIssue(issue, WORKSPACE_ID, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO))
-                .thenReturn(detection);
+                .thenReturn(admission);
 
         issueResubmitter().resubmit(signal);
 
@@ -167,7 +167,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
                         eq(AgentJobType.ISSUE_REVIEW),
                         any(IssueReviewSubmissionRequest.class),
                         eq(signal.key()),
-                        eq(detection));
+                        eq(admission));
         verify(signalRecorder, never()).markRefused(any(), any());
     }
 
@@ -183,10 +183,10 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         signal.setRevision(ScmSignals.issueUpdatedRevision(ScmEventPayload.IssueData.from(issue))
                 .value());
         signal.setActorUserId(456L);
-        GateDecision.Detect detection = detection();
+        GateDecision.Run admission = admission();
         when(issueRepository.findByIdWithRepositoryAndAssignees(ARTIFACT_ID)).thenReturn(Optional.of(issue));
         when(gate.evaluateIssue(issue, WORKSPACE_ID, ScmSignals.ISSUE_UPDATED, TriggerMode.AUTO))
-                .thenReturn(detection);
+                .thenReturn(admission);
 
         issueResubmitter().resubmit(signal);
 
@@ -198,7 +198,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
                         eq(AgentJobType.ISSUE_REVIEW),
                         request.capture(),
                         eq(signal.key()),
-                        eq(detection));
+                        eq(admission));
         assertThat(request.getValue().actorUserId()).isEqualTo(456L);
         assertThat(author.getId()).isEqualTo(123L);
         assertThat(request.getValue().reviewSnapshotId()).isEqualTo(snapshotId);
@@ -221,14 +221,14 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
         signal.setRevision(SignalRevision.ofEventId(REVIEW_ID).value());
         when(pullRequestRepository.findByIdWithAllForGate(ARTIFACT_ID)).thenReturn(Optional.of(pullRequest));
         when(reviewRepository.findByIdAndPullRequestId(REVIEW_ID, ARTIFACT_ID)).thenReturn(Optional.of(review()));
-        GateDecision.Detect detection = detection();
+        GateDecision.Run admission = admission();
         when(gate.evaluateQueued(
                         pullRequest,
                         WORKSPACE_ID,
                         ScmSignals.PULL_REQUEST_REVIEWED,
                         ReviewSubject.reviewer(REVIEWER_ID, true),
                         false))
-                .thenReturn(detection);
+                .thenReturn(admission);
 
         pullRequestResubmitter().resubmit(signal);
 
@@ -239,7 +239,7 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
                         eq(AgentJobType.PULL_REQUEST_REVIEW),
                         request.capture(),
                         eq(signal.key()),
-                        eq(detection));
+                        eq(admission));
         assertThat(request.getValue().reviewId()).isEqualTo(REVIEW_ID);
         assertThat(request.getValue().aboutUserId()).isEqualTo(REVIEWER_ID);
         verify(signalRecorder, never()).markRefused(any(), any());
@@ -283,8 +283,8 @@ class ScmSignalResubmitterTest extends BaseUnitTest {
                 new IntegrationManifestRegistry(List.of(new GitHubManifest(true), new GitLabManifest(true))));
     }
 
-    private GateDecision.Detect detection() {
-        return new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
+    private GateDecision.Run admission() {
+        return new GateDecision.Run(workspace, List.of(), 1, TriggerMode.AUTO);
     }
 
     private ArtifactSignal signal(String name) {

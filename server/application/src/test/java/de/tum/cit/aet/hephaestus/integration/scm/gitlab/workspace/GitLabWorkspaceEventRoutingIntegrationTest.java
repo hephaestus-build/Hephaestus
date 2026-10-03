@@ -70,13 +70,13 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPi
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.GitLabProjectSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDataSyncScheduler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitLabDeletionSweepService;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.sync.GitlabDataSyncScheduler;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabConnectionWebhookController;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabRouteCredential;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewCoverageService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
@@ -225,7 +225,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private WorkspaceActivationService workspaceActivationService;
 
     @Autowired
-    private GitlabDataSyncScheduler gitlabDataSyncScheduler;
+    private GitLabDataSyncScheduler gitlabDataSyncScheduler;
 
     @Autowired
     private SyncJobService syncJobService;
@@ -291,7 +291,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private GitLabRouteCredential routeCredential;
 
     @Autowired
-    private GitlabSubjectKeyDeriver subjectKeyDeriver;
+    private GitLabSubjectKeyDeriver subjectKeyDeriver;
 
     @Autowired
     private WebhookProperties webhookProperties;
@@ -1385,14 +1385,14 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
         request.addHeader("X-Gitlab-Token", token);
         request.addHeader("X-Gitlab-Instance", instance);
         request.addHeader("Idempotency-Key", deliveryPrefix + "-" + deliveryKey);
-        String[] segments = route.split("/");
+        String[] segments = route.split("/", -1);
         return Objects.requireNonNull(ingress)
                 .ingest(connectionId, segments[0], segments[1], request)
                 .getStatusCode();
     }
 
     private static String routeOf(GitLabWebhookClient.WebhookConfig hook) {
-        String[] segments = hook.url().split("/");
+        String[] segments = hook.url().split("/", -1);
         return segments[segments.length - 2] + "/" + segments[segments.length - 1];
     }
 

@@ -5,6 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
+import com.tngtech.archunit.core.domain.JavaMethod;
+import com.tngtech.archunit.core.domain.properties.HasAnnotations;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.time.Clock;
 import java.util.List;
@@ -13,6 +18,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,36 +29,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Component;
 
 /**
- * Pins two invariants for {@code hephaestus.runtime.*} gates:
- *
- * <ol>
- *   <li>Every gate sets {@code matchIfMissing=true}. Without this, a fresh JAR with no env vars
- *       set boots an empty context — operators become opt-IN to functionality instead of opt-OUT
- *       to disable it.</li>
- *   <li>The classes the gate is supposed to cover actually carry the right
- *       {@code @ConditionalOnProperty}. Drift between {@code RuntimeRole} javadoc and the live
- *       annotations is the bug class this enforces.</li>
- * </ol>
- *
- * <p>Unwraps {@code @ConditionalOnProperty.List} — Spring Boot 3.5+ makes the annotation
- * {@link java.lang.annotation.Repeatable}, so multiple occurrences are wrapped in a {@code .List}
- * synthetic annotation.
- *
- * <p>See ADR 0005 (baseline) and ADR 0008 (webhook role + SERVER_PROPERTY wiring).
+ * Pins the {@code hephaestus.runtime.*} gates: every role defaults to on, a bean gates through the
+ * composed role annotations, and the beans each role must or must not load carry the right gate.
+ * See ADR 0005 and ADR 0008.
  */
 class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
-
-    /** Container annotation Spring Boot 4 uses for repeated {@code @ConditionalOnProperty}. */
-    private static final String CONDITIONAL_CONTAINER =
-            "org.springframework.boot.autoconfigure.condition.ConditionalOnProperties";
-
-    /** SpEL-based conditional; scanned textually for retired-flag references. */
-    private static final String CONDITIONAL_ON_EXPRESSION =
-            "org.springframework.boot.autoconfigure.condition.ConditionalOnExpression";
-
-    /** Composed server-role gate; resolved to its meta {@code @ConditionalOnProperty} when scanning. */
-    private static final String CONDITIONAL_ON_SERVER_ROLE =
-            "de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole";
 
     /**
      * Single property-gated config per role. Controllers inside {@code integration.webhook} are
@@ -203,10 +187,10 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
                     "de.tum.cit.aet.hephaestus.integration.core.connection.api.ConnectionAdminService",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
-                    "de.tum.cit.aet.hephaestus.integration.scm.github.connect.GithubConnectionStrategy",
+                    "de.tum.cit.aet.hephaestus.integration.scm.github.connect.GitHubConnectionStrategy",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
-                    "de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitlabConnectionStrategy",
+                    "de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitLabConnectionStrategy",
                     RuntimeRole.SERVER_PROPERTY),
             Map.entry(
                     "de.tum.cit.aet.hephaestus.integration.slack.connect.SlackConnectionStrategy",
@@ -240,26 +224,6 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             "de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorChatMetrics");
 
     @Test
-    void noStackedConditionalOnPropertyOnSameElement() {
-        // Spring honors only ONE @ConditionalOnProperty per element; the second annotation is
-        // silently ignored. Anyone wanting both conditions must use @ConditionalOnExpression or
-        // compose with @Conditional.
-        List<String> violations = classes.stream()
-                .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))
-                .filter(clazz -> clazz.getAnnotations().stream()
-                                .filter(a -> a.getRawType().isEquivalentTo(ConditionalOnProperty.class))
-                                .count()
-                        > 1)
-                .map(JavaClass::getFullName)
-                .collect(Collectors.toList());
-
-        assertThat(violations)
-                .as("Classes with multiple @ConditionalOnProperty annotations — Spring honors only the "
-                        + "first; use @ConditionalOnExpression for compound predicates instead.")
-                .isEmpty();
-    }
-
-    @Test
     void runtimeGatesAreMatchIfMissingTrue() {
         List<String> violations = classes.stream()
                 .flatMap(clazz -> conditionalOnPropertyAnnotations(clazz).map(ann -> new ConditionalRef(clazz, ann)))
@@ -270,6 +234,43 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
 
         assertThat(violations)
                 .as("Classes with hephaestus.runtime.* gates that don't set matchIfMissing=true")
+                .isEmpty();
+    }
+
+    /**
+     * A role gate is written once, as {@code @ConditionalOn{Server,Worker,Webhook}Role}, so its
+     * {@code matchIfMissing} default cannot be dropped on one bean. A further condition sits beside the
+     * composed annotation, since Boot requires every property condition on an element to match. The
+     * exceptions are the composed annotations themselves and the gates no composed annotation expresses:
+     * the sandbox gateway's rate-limit buckets exist only where the server role is off, and worker tokens
+     * wherever the server or the worker role is on. Each exception must still carry an inline gate, so
+     * one that no longer needs exempting fails here.
+     */
+    @Test
+    void runtimeRoleGatesUseTheComposedAnnotations() {
+        Set<String> exceptions = Set.of(
+                ConditionalOnServerRole.class.getName(),
+                ConditionalOnWorkerRole.class.getName(),
+                ConditionalOnWebhookRole.class.getName(),
+                "de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration.sandboxGatewayBucketResolver()",
+                "de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtConfiguration");
+        List<String> gated = classes.stream()
+                .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))
+                .flatMap(c -> Stream.concat(
+                        Stream.of(c)
+                                .filter(RuntimeRoleBoundaryTest::hasInlineRoleGate)
+                                .map(JavaClass::getFullName),
+                        c.getMethods().stream()
+                                .filter(RuntimeRoleBoundaryTest::hasInlineRoleGate)
+                                .map(JavaMethod::getFullName)))
+                .toList();
+
+        assertThat(gated)
+                .as("Every exemption still carries an inline role gate; remove one that no longer does")
+                .containsAll(exceptions);
+        assertThat(gated.stream().filter(element -> !exceptions.contains(element)))
+                .as("Gate on @ConditionalOnServerRole, @ConditionalOnWorkerRole or @ConditionalOnWebhookRole, not on "
+                        + "a property condition or expression naming a RuntimeRole property")
                 .isEmpty();
     }
 
@@ -408,18 +409,17 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
      * There is deliberately no blanket "every @Scheduled class carries a runtime-role gate" rule.
      * @EnableScheduling lives on the SERVER-gated ServerSchedulingConfig, so off-server no @Scheduled
      * method fires, gated or not; the gate protects bean-construction side effects (meter
-     * registration), not the tick. Every formulation of the rule was measured against the tree and
-     * needs an exemption list as long as EXPECTED_GATES: @Bean-built sandbox classes that Spring never
-     * evaluates @ConditionalOnProperty on, @Service classes whose schedule is secondary to their API
-     * (gating those deletes the service from pods that call its other methods), and the rate-limit
-     * trackers, which must observe limits on whichever role makes the API call.
+     * registration), not the tick. Every formulation of the rule needs an exemption list as long as
+     * EXPECTED_GATES: @Bean-built sandbox classes that Spring never evaluates @ConditionalOnProperty on,
+     * @Service classes whose schedule is secondary to their API (gating those deletes the service from
+     * pods that call its other methods), and the rate-limit trackers, which must observe limits on
+     * whichever role makes the API call.
      */
 
     @Test
     void noBeanIsGatedOnTheRetiredSandboxEnabledFlag() {
-        // hephaestus.sandbox.enabled was a conflated capability flag: the Docker sandbox IS the
-        // worker role (now gated on WORKER_PROPERTY), and mentoring is always-on. The flag is gone;
-        // nothing — @ConditionalOnProperty or @ConditionalOnExpression — may reference it again.
+        // The Docker sandbox is the worker role and Heph is always offered, so no capability flag may
+        // gate either, through @ConditionalOnProperty or @ConditionalOnExpression.
         List<String> violations = classes.stream()
                 .filter(c -> c.getFullName().startsWith("de.tum.cit.aet.hephaestus."))
                 .filter(clazz -> referencesRetiredSandboxFlag(clazz))
@@ -438,43 +438,57 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
         if (viaProperty) {
             return true;
         }
-        // @ConditionalOnExpression carries a single String SpEL value — scan it textually so a
-        // re-introduced compound gate (e.g. "${hephaestus.sandbox.enabled} and ...") is caught too.
-        return clazz.getAnnotations().stream()
-                .filter(a -> a.getRawType().getFullName().equals(CONDITIONAL_ON_EXPRESSION))
-                .map(a -> String.valueOf(a.getProperties().get("value")))
-                .anyMatch(expr -> expr.contains("hephaestus.sandbox.enabled"));
+        return expressions(clazz).anyMatch(expr -> expr.contains("hephaestus.sandbox.enabled"));
     }
 
+    private static boolean hasInlineRoleGate(HasAnnotations<?> element) {
+        return expressions(element).anyMatch(expr -> expr.contains(RuntimeRole.PROPERTY_PREFIX))
+                || element.getAnnotations().stream()
+                        .flatMap(RuntimeRoleBoundaryTest::propertyConditions)
+                        .anyMatch(ann ->
+                                ConditionalRef.propertyNames(ann).anyMatch(RuntimeRoleBoundaryTest::isRoleProperty));
+    }
+
+    /** SpEL is opaque to the annotation model, so an expression is matched as text. */
+    private static Stream<String> expressions(HasAnnotations<?> element) {
+        return element.getAnnotations().stream()
+                .filter(ann -> ann.getRawType().isEquivalentTo(ConditionalOnExpression.class))
+                .map(ann -> String.valueOf(ann.getProperties().get("value")));
+    }
+
+    private static boolean isRoleProperty(String name) {
+        return name.startsWith(RuntimeRole.PROPERTY_PREFIX);
+    }
+
+    /**
+     * The property conditions on a class, including those a composed annotation such as
+     * {@code @ConditionalOnServerRole} carries, which ArchUnit reports only as the composed annotation.
+     */
     private static Stream<JavaAnnotation<?>> conditionalOnPropertyAnnotations(JavaClass clazz) {
-        return clazz.getAnnotations().stream().flatMap(ann -> {
-            if (ann.getRawType().isEquivalentTo(ConditionalOnProperty.class)) {
-                return Stream.of(ann);
-            }
-            // @ConditionalOnServerRole composes @ConditionalOnProperty(SERVER_PROPERTY, matchIfMissing=true);
-            // ArchUnit sees only the direct meta-annotation, so resolve its own @ConditionalOnProperty.
-            if (ann.getRawType().getFullName().equals(CONDITIONAL_ON_SERVER_ROLE)) {
-                return ann.getRawType().getAnnotations().stream()
-                        .filter(meta -> meta.getRawType().isEquivalentTo(ConditionalOnProperty.class));
-            }
-            if (ann.getRawType().getFullName().equals(CONDITIONAL_CONTAINER)) {
-                Object value = ann.getProperties().get("value");
-                if (value instanceof JavaAnnotation<?>[] arr) {
-                    return Stream.of(arr);
-                }
-                if (value instanceof Object[] arr) {
-                    return Stream.of(arr)
-                            .filter(JavaAnnotation.class::isInstance)
-                            .map(o -> (JavaAnnotation<?>) o);
-                }
-            }
-            return Stream.empty();
-        });
+        return clazz.getAnnotations().stream()
+                .flatMap(ann -> Stream.concat(
+                        propertyConditions(ann),
+                        ann.getRawType().getAnnotations().stream()
+                                .flatMap(RuntimeRoleBoundaryTest::propertyConditions)));
+    }
+
+    /** A property condition itself, or the entries of the container a repeated one compiles into. */
+    private static Stream<JavaAnnotation<?>> propertyConditions(JavaAnnotation<?> ann) {
+        if (ann.getRawType().isEquivalentTo(ConditionalOnProperty.class)
+                || ann.getRawType().isEquivalentTo(ConditionalOnBooleanProperty.class)) {
+            return Stream.of(ann);
+        }
+        if ((ann.getRawType().isEquivalentTo(ConditionalOnProperties.class)
+                        || ann.getRawType().isEquivalentTo(ConditionalOnBooleanProperties.class))
+                && ann.getProperties().get("value") instanceof Object[] entries) {
+            return Stream.of(entries).filter(JavaAnnotation.class::isInstance).map(entry -> (JavaAnnotation<?>) entry);
+        }
+        return Stream.empty();
     }
 
     private record ConditionalRef(JavaClass owner, JavaAnnotation<?> annotation) {
         boolean targetsRuntimeRoleProperty() {
-            return propertyNames().anyMatch(n -> n.startsWith(RuntimeRole.PROPERTY_PREFIX));
+            return propertyNames().anyMatch(RuntimeRoleBoundaryTest::isRoleProperty);
         }
 
         boolean missingMatchIfMissingTrue() {
@@ -486,19 +500,19 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
         }
 
         Stream<String> propertyNames() {
-            Stream.Builder<String> names = Stream.builder();
-            Object name = annotation.getProperties().get("name");
-            if (name instanceof Object[] arr) {
-                for (Object element : arr) names.add(String.valueOf(element));
-            } else if (name != null) {
-                names.add(name.toString());
-            }
-            Object prefix = annotation.getProperties().get("prefix");
-            Object subname = annotation.getProperties().get("value");
-            if (prefix != null && subname != null) {
-                names.add(prefix + "." + subname);
-            }
-            return names.build();
+            return propertyNames(annotation);
+        }
+
+        /** {@code name} and its alias {@code value}, each under {@code prefix} as Boot resolves them. */
+        static Stream<String> propertyNames(JavaAnnotation<?> annotation) {
+            Map<String, Object> properties = annotation.getProperties();
+            String prefix = String.valueOf(properties.getOrDefault("prefix", ""));
+            String qualifier = prefix.isEmpty() || prefix.endsWith(".") ? prefix : prefix + ".";
+            return Stream.of("name", "value")
+                    .map(properties::get)
+                    .filter(Object[].class::isInstance)
+                    .flatMap(names -> Stream.of((Object[]) names))
+                    .map(name -> qualifier + name);
         }
     }
 }

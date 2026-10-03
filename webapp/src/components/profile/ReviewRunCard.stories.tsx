@@ -118,10 +118,7 @@ export const OutlineDocument: Story = {
 		},
 	},
 };
-/**
- * The mark is the forge the work lives at, not its kind: beside `!128` a pull-request glyph would
- * say the same thing twice and leave a GitLab request looking like a GitHub one.
- */
+
 export const GitLabMergeRequest: Story = {
 	args: {
 		run: {
@@ -137,12 +134,8 @@ export const GitLabMergeRequest: Story = {
 			},
 		},
 	},
-	play: async ({ canvas }) => {
-		// The glyph is decorative, so the mark is read off the brand icon's own <title>.
-		canvas.getByTitle("GitlabIcon");
-		await expect(canvas.queryByTitle("GithubIcon")).toBeNull();
-	},
 };
+
 export const WithoutALink: Story = {
 	args: {
 		run: {

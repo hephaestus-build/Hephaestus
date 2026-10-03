@@ -47,6 +47,7 @@ import java.math.BigInteger;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -61,6 +62,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -107,7 +109,7 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
     private HttpGraphQlClient client;
 
     @Mock
-    private HttpGraphQlClient.RequestSpec requestSpec;
+    private GraphQlClient.RequestSpec requestSpec;
 
     @Mock
     private PlatformTransactionManager transactionManager;
@@ -704,7 +706,7 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
             item.setType(GHProjectV2ItemType.ISSUE);
             item.setContent(ghIssue);
             item.setIsArchived(false);
-            item.setCreatedAt(OffsetDateTime.now());
+            item.setCreatedAt(OffsetDateTime.now(ZoneOffset.UTC));
             item.setUpdatedAt(updatedAt);
             item.setFieldValues(fvConnection);
             return item;
@@ -767,8 +769,8 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
             Project project = createProject(projectId, "PVT_node10", 1);
 
             GHProjectV2ItemFieldTextValue textFv = createTextFieldValue("PVTF_status", "In Progress");
-            GHProjectV2Item issueItem =
-                    createIssueItem("PVTI_issue1", 12345L, OffsetDateTime.now(), List.of(textFv), false, null);
+            GHProjectV2Item issueItem = createIssueItem(
+                    "PVTI_issue1", 12345L, OffsetDateTime.now(ZoneOffset.UTC), List.of(textFv), false, null);
 
             GHProjectV2ItemConnection itemsConnection = createItemConnection(List.of(issueItem));
             mockThreePhasesWithItems(projectId, itemsConnection);
@@ -804,7 +806,7 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
             GHProjectV2Item oldItem = createIssueItem(
                     "PVTI_old_issue",
                     12345L,
-                    OffsetDateTime.now().minusHours(2),
+                    OffsetDateTime.now(ZoneOffset.UTC).minusHours(2),
                     List.of(createTextFieldValue("PVTF_field1", "value")),
                     false,
                     null);
@@ -846,7 +848,7 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
             GHProjectV2Item recentItem = createIssueItem(
                     "PVTI_recent",
                     12345L,
-                    OffsetDateTime.now(),
+                    OffsetDateTime.now(ZoneOffset.UTC),
                     List.of(createTextFieldValue("PVTF_field1", "value")),
                     false,
                     null);
@@ -899,7 +901,7 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
             GHProjectV2Item recentItem = createIssueItem(
                     "PVTI_recent",
                     12345L,
-                    OffsetDateTime.now(),
+                    OffsetDateTime.now(ZoneOffset.UTC),
                     List.of(createTextFieldValue("PVTF_field1", "value")),
                     false,
                     null);
@@ -948,7 +950,7 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
             GHProjectV2Item item = createIssueItem(
                     "PVTI_item1",
                     12345L,
-                    OffsetDateTime.now(),
+                    OffsetDateTime.now(ZoneOffset.UTC),
                     List.of(createTextFieldValue("PVTF_field1", "value")),
                     false,
                     null);
@@ -984,7 +986,7 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
             GHProjectV2Item truncatedItem = createIssueItem(
                     "PVTI_truncated",
                     12345L,
-                    OffsetDateTime.now(),
+                    OffsetDateTime.now(ZoneOffset.UTC),
                     List.of(createTextFieldValue("PVTF_field1", "value1")),
                     true, // truncated
                     "cursor_fv_page2");
@@ -1031,7 +1033,7 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
             GHProjectV2Item newItem = createIssueItem(
                     "PVTI_not_synced",
                     99999L,
-                    OffsetDateTime.now(),
+                    OffsetDateTime.now(ZoneOffset.UTC),
                     List.of(createTextFieldValue("PVTF_field1", "value")),
                     false,
                     null);
@@ -1099,12 +1101,5 @@ class GitHubProjectSyncServiceTest extends BaseUnitTest {
 
             assertThat(result).isEmpty();
         }
-    }
-
-    private static GHPageInfo pageInfo(@Nullable String endCursor, boolean hasNextPage) {
-        GHPageInfo pageInfo = new GHPageInfo();
-        pageInfo.setHasNextPage(hasNextPage);
-        if (endCursor != null) pageInfo.setEndCursor(endCursor);
-        return pageInfo;
     }
 }

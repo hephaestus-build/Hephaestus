@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.common;
 
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,7 @@ public enum AuthorAssociation {
             return NONE;
         }
         try {
-            return valueOf(value.toUpperCase().replace("-", "_"));
+            return valueOf(value.toUpperCase(Locale.ROOT).replace("-", "_"));
         } catch (IllegalArgumentException e) {
             log.debug("Defaulted author association: value={}, defaultedTo=NONE", value);
             return NONE;

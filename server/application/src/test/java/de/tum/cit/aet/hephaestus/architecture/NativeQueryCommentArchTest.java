@@ -38,7 +38,7 @@ class NativeQueryCommentArchTest extends HephaestusArchitectureTest {
                     @Override
                     public void check(JavaMethod method, ConditionEvents events) {
                         queryStrings(method).forEach((attribute, query) -> {
-                            for (String line : query.split("\\R")) {
+                            for (String line : query.split("\\R", -1)) {
                                 int commentStart = line.indexOf("--");
                                 if (commentStart < 0) {
                                     continue;

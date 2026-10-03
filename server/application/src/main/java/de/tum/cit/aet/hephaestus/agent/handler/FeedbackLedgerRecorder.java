@@ -31,6 +31,8 @@ import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -282,7 +284,7 @@ public class FeedbackLedgerRecorder {
                 .filter(f -> summaryContributors == null
                         ? summaryDelivered || deliveredInlineKeys.contains("observation:" + f.getOccurrenceKey())
                         : landed.contains(f.getOccurrenceKey()))
-                .filter(f -> (f.getOutcome().isDecided()))
+                .filter(f -> f.getOutcome().isDecided())
                 .filter(f -> !excludedIds.contains(f.getId()))
                 // Stable order matching the composer's prioritisation, and the same ObservationOrder it uses:
                 // severity, then how much of the work the observation's citations span, then id — so the persisted
@@ -610,7 +612,7 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         List<Observation> assessed = evidence.stream()
-                .filter(f -> (f.getOutcome().isDecided()))
+                .filter(f -> f.getOutcome().isDecided())
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {
@@ -712,14 +714,12 @@ public class FeedbackLedgerRecorder {
         if (contributors == null) return observations;
         return observations.stream()
                 .filter(observation -> contributors.contains(observation.getOccurrenceKey()))
-                .sorted(java.util.Comparator.comparingInt(
-                        observation -> contributors.indexOf(observation.getOccurrenceKey())))
+                .sorted(Comparator.comparingInt(observation -> contributors.indexOf(observation.getOccurrenceKey())))
                 .toList();
     }
 
     private List<ProposedPlacement> proposedPlacements(AgentJob job, DeliveryContent delivery, String summary) {
-        var placements =
-                new java.util.ArrayList<ProposedPlacement>(delivery.diffNotes().size() + 1);
+        var placements = new ArrayList<ProposedPlacement>(delivery.diffNotes().size() + 1);
         placements.add(ProposedPlacement.summary(summary));
         for (DiffNote note : delivery.diffNotes()) {
             String body = PullRequestCommentPoster.sanitize(note.body());
@@ -830,7 +830,7 @@ public class FeedbackLedgerRecorder {
                 .build());
         int ordinal = 0;
         List<Observation> assessed = writtenFrom(observations, delivery).stream()
-                .filter(f -> (f.getOutcome().isDecided()))
+                .filter(f -> f.getOutcome().isDecided())
                 .sorted(ObservationOrder.worstFirst())
                 .toList();
         for (Observation f : assessed) {

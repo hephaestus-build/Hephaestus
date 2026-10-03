@@ -1,8 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticDetection;
+import static de.tum.cit.aet.hephaestus.practices.review.GateDecisionTestFixtures.automaticRun;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -51,6 +52,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
@@ -171,9 +173,9 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
         Issue issue = createIssue(Issue.State.OPEN);
         when(issueRepository.findByIdWithRepositoryAndAssignees(ISSUE_ID)).thenReturn(Optional.of(issue));
 
-        var detect = automaticDetection(owningWorkspace, List.of());
+        var run = automaticRun(owningWorkspace, List.of());
         when(reviewGate.evaluateIssue(eq(issue), eq(owningWorkspace), any(), any()))
-                .thenReturn(detect);
+                .thenReturn(run);
         when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
         return issue;
@@ -260,7 +262,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
             var event = new ScmDomainEvent.IssueCreated(issueData, webhookContext(1L));
 
             Issue issue = createIssue(Issue.State.OPEN);
-            org.springframework.test.util.ReflectionTestUtils.setField(issue, "repository", null);
+            ReflectionTestUtils.setField(issue, "repository", null);
             when(issueRepository.findByIdWithRepositoryAndAssignees(ISSUE_ID)).thenReturn(Optional.of(issue));
 
             listener.onIssueCreated(event);
@@ -293,7 +295,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldSubmitWhenGateReturnsDetect() {
+        void shouldSubmitWhenGateReturnsRun() {
             var issueData = createIssueData(Issue.State.OPEN);
             var event = new ScmDomainEvent.IssueCreated(issueData, webhookContext(99L));
 
@@ -314,9 +316,9 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
 
             Workspace workspace = new Workspace();
             workspace.setId(42L);
-            var detect = automaticDetection(workspace, List.of());
+            var run = automaticRun(workspace, List.of());
             when(reviewGate.evaluateIssue(issue, owningWorkspace, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO))
-                    .thenReturn(detect);
+                    .thenReturn(run);
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             listener.onIssueCreated(event);
@@ -344,9 +346,9 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
 
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
-            var detect = automaticDetection(workspace, List.of());
+            var run = automaticRun(workspace, List.of());
             when(reviewGate.evaluateIssue(eq(issue), eq(owningWorkspace), any(), any()))
-                    .thenReturn(detect);
+                    .thenReturn(run);
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             listener.onIssueCreated(event);
@@ -378,7 +380,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
             when(reviewGate.evaluateIssue(eq(issue), eq(owningWorkspace), any(), any()))
-                    .thenReturn(automaticDetection(workspace, List.of()));
+                    .thenReturn(automaticRun(workspace, List.of()));
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             listener.onIssueCreated(event);
@@ -425,7 +427,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
             when(reviewGate.evaluateIssue(issue, owningWorkspace, ScmSignals.ISSUE_OPENED, TriggerMode.AUTO))
-                    .thenReturn(automaticDetection(workspace, List.of()));
+                    .thenReturn(automaticRun(workspace, List.of()));
             when(agentJobService.submit(any(), any(), any(), any(), any()))
                     .thenThrow(new RuntimeException("submission failed"));
 
@@ -445,7 +447,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
             Workspace workspace = new Workspace();
             workspace.setId(WORKSPACE_ID);
             when(reviewGate.evaluateIssue(issue, owningWorkspace, ScmSignals.ISSUE_CLOSED, TriggerMode.AUTO))
-                    .thenReturn(automaticDetection(workspace, List.of()));
+                    .thenReturn(automaticRun(workspace, List.of()));
             when(agentJobService.submit(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
             var issueData = createIssueData(Issue.State.CLOSED);
@@ -564,8 +566,7 @@ class IssueAgentJobEventListenerTest extends BaseUnitTest {
                     createIssueData(Issue.State.OPEN), Set.of("title"), webhookContext(1L));
             when(signalRecorder.defer(any(), any(), any()))
                     .thenThrow(new IllegalStateException("database unavailable"));
-            org.assertj.core.api.Assertions.assertThatThrownBy(() -> listener.onIssueUpdated(event))
-                    .isInstanceOf(IllegalStateException.class);
+            assertThatThrownBy(() -> listener.onIssueUpdated(event)).isInstanceOf(IllegalStateException.class);
         }
 
         /**

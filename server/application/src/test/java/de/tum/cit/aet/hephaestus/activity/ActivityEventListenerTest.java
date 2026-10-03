@@ -1,7 +1,13 @@
 package de.tum.cit.aet.hephaestus.activity;
 
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
@@ -22,6 +28,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,20 +38,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-/**
- * Unit tests for ActivityEventListener.
- *
- * <p>Tests verify that activity events are correctly recorded using event payload data
- * and getReferenceById() for entity references (no N+1 queries).
- */
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ActivityEventListenerTest extends BaseUnitTest {
 
     @Mock
     private ActivityEventService activityEventService;
-
-    @Mock
-    private ActivityEventRepository activityEventRepository;
 
     @Mock
     private PullRequestReviewThreadRepository reviewThreadRepository;
@@ -63,11 +61,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         listener = new ActivityEventListener(
-                activityEventService,
-                activityEventRepository,
-                reviewThreadRepository,
-                userRepository,
-                repositoryRepository);
+                activityEventService, reviewThreadRepository, userRepository, repositoryRepository);
 
         testUser = new User();
         testUser.setId(100L);
@@ -103,7 +97,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
                             eq(1L));
-            // Verify no findById was called (N+1 fix)
             verify(userRepository).getReferenceById(100L);
             verify(repositoryRepository).getReferenceById(200L);
         }
@@ -259,8 +252,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
             review.setSubmittedAt(null);
 
             listener.onReviewSubmitted(new ScmDomainEvent.ReviewSubmitted(createReviewData(review), createContext()));
-            listener.onReviewEdited(new ScmDomainEvent.ReviewEdited(
-                    createReviewData(review), java.util.Set.of("body"), createContext()));
+            listener.onReviewEdited(
+                    new ScmDomainEvent.ReviewEdited(createReviewData(review), Set.of("body"), createContext()));
 
             verifyNoInteractions(activityEventService);
         }
@@ -784,13 +777,13 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
         @Test
         void backfillsCommitActorsOnReconciliation() {
-            when(activityEventRepository.backfillCommitActors(200L)).thenReturn(3);
+            when(activityEventService.backfillCommitActors(200L)).thenReturn(3);
 
             var event = new ScmDomainEvent.CommitAuthorsReconciled(200L, createContext());
 
             listener.onCommitAuthorsReconciled(event);
 
-            verify(activityEventRepository).backfillCommitActors(200L);
+            verify(activityEventService).backfillCommitActors(200L);
         }
 
         @Test
@@ -799,22 +792,20 @@ class ActivityEventListenerTest extends BaseUnitTest {
 
             listener.onCommitAuthorsReconciled(event);
 
-            verify(activityEventRepository, never()).backfillCommitActors(anyLong());
+            verify(activityEventService, never()).backfillCommitActors(anyLong());
         }
 
         @Test
         void swallowsBackfillExceptions() {
-            when(activityEventRepository.backfillCommitActors(200L)).thenThrow(new RuntimeException("db outage"));
+            when(activityEventService.backfillCommitActors(200L)).thenThrow(new RuntimeException("db outage"));
 
             var event = new ScmDomainEvent.CommitAuthorsReconciled(200L, createContext());
 
             listener.onCommitAuthorsReconciled(event);
 
-            verify(activityEventRepository).backfillCommitActors(200L);
+            verify(activityEventService).backfillCommitActors(200L);
         }
     }
-
-    // Helpers
 
     private Commit createCommit(Long id) {
         Commit commit = new Commit();

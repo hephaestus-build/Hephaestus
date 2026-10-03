@@ -15,8 +15,8 @@ export type ReviewStatus = AgentJob["status"];
 export type ResultProcessingStatus = NonNullable<AgentJob["deliveryStatus"]>;
 
 /**
- * Whether a review *ran*. Nothing here says anything about what it found or who heard about it —
- * those are `assessment-defs` and `delivery-outcome-defs`.
+ * Whether a review *ran*. Nothing here says anything about what it observed or who heard about it —
+ * those are `outcome-defs` and `delivery-outcome-defs`.
  */
 export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 	QUEUED: {

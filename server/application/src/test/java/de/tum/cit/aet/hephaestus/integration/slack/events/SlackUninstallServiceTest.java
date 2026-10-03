@@ -3,6 +3,9 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -11,6 +14,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.mentor.chat.MentorSlackThreadService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
@@ -25,10 +29,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 
 /**
  * Uninstall-routing unit tests: an {@code app_uninstalled}/{@code tokens_revoked} event flips the Slack
@@ -69,8 +71,7 @@ class SlackUninstallServiceTest extends BaseUnitTest {
                 mentorSlackThreadService,
                 conversationFeedbackErasure,
                 messageService,
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.integration.core.connection.IntegrationAttentionService.class));
+                mock(IntegrationAttentionService.class));
     }
 
     private static Stream<Arguments> eventTypeMapping() {
@@ -85,9 +86,7 @@ class SlackUninstallServiceTest extends BaseUnitTest {
             String slackEventType, String eventId, String expectedEventType, String expectedCorrelationId) {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         when(connectionService.findActive(WORKSPACE, IntegrationKind.SLACK)).thenReturn(Optional.of(connection));
-        org.mockito.Mockito.lenient()
-                .when(connectionService.transition(eq(connection), any()))
-                .thenReturn(connection);
+        lenient().when(connectionService.transition(eq(connection), any())).thenReturn(connection);
 
         service().onUninstall(TEAM, slackEventType, eventId);
 
@@ -103,13 +102,11 @@ class SlackUninstallServiceTest extends BaseUnitTest {
     void appUninstalled_purgesWorkspaceDataInOrder() {
         when(workspaceResolver.resolveWorkspaceId(TEAM)).thenReturn(Optional.of(WORKSPACE));
         when(connectionService.findActive(WORKSPACE, IntegrationKind.SLACK)).thenReturn(Optional.of(connection));
-        org.mockito.Mockito.lenient()
-                .when(connectionService.transition(eq(connection), any()))
-                .thenReturn(connection);
+        lenient().when(connectionService.transition(eq(connection), any())).thenReturn(connection);
 
         service().onUninstall(TEAM, "app_uninstalled", "Ev1");
 
-        InOrder order = Mockito.inOrder(conversationFeedbackErasure, purgeAdapter);
+        InOrder order = inOrder(conversationFeedbackErasure, purgeAdapter);
         order.verify(conversationFeedbackErasure).eraseAllConversationForWorkspace(WORKSPACE);
         order.verify(purgeAdapter).deleteWorkspaceData(WORKSPACE);
         verify(mentorSlackThreadService).purgeSlackThreads(WORKSPACE);
@@ -121,7 +118,7 @@ class SlackUninstallServiceTest extends BaseUnitTest {
 
         service().onUninstall(TEAM, "app_uninstalled", "Ev1");
 
-        verify(connectionService, never()).transition(ArgumentMatchers.any(), ArgumentMatchers.any());
+        verify(connectionService, never()).transition(any(), any());
         verifyNoInteractions(purgeAdapter, mentorSlackThreadService, conversationFeedbackErasure);
     }
 }

@@ -1,8 +1,8 @@
 import { RefreshCwIcon, ScrollTextIcon } from "lucide-react";
 
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
 import { ExternalLink } from "~/components/common/ExternalLink";
-import { Spinner } from "~/components/common/Spinner";
 
 export interface ConsentPromptProps {
 	instanceHost: string;

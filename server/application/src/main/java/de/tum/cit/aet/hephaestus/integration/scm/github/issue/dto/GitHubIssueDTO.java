@@ -19,6 +19,7 @@ import java.math.BigInteger;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
@@ -27,6 +28,8 @@ import org.jspecify.annotations.Nullable;
  * <p>
  * This is the unified model used by both GraphQL sync and webhook handlers.
  * It can be constructed from any source (GraphQL, REST, webhook payload).
+ *
+ * @param subIssuesSummary the provider's rollup over this issue's sub-issues, as a webhook payload carries it
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GitHubIssueDTO(
@@ -51,7 +54,6 @@ public record GitHubIssueDTO(
         @JsonProperty("type") @Nullable GitHubIssueTypeDTO issueType,
         @JsonProperty("repository") @Nullable GitHubRepositoryRefDTO repository,
         @JsonProperty("pull_request") @Nullable PullRequestRef pullRequest,
-        /** The provider's rollup over this issue's sub-issues, as a webhook payload carries it. */
         @JsonProperty("sub_issues_summary") @Nullable SubIssuesSummaryDTO subIssuesSummary) {
     /**
      * Returns true if this issue is actually a pull request.
@@ -181,7 +183,7 @@ public record GitHubIssueDTO(
         if (state == null) {
             return null; // Let processor handle missing state with appropriate logging
         }
-        return state.name().toLowerCase();
+        return state.name().toLowerCase(Locale.ROOT);
     }
 
     @Nullable
@@ -189,7 +191,7 @@ public record GitHubIssueDTO(
         if (stateReason == null) {
             return null;
         }
-        return stateReason.name().toLowerCase();
+        return stateReason.name().toLowerCase(Locale.ROOT);
     }
 
     private static List<GitHubUserDTO> extractAssignees(@Nullable GHUserConnection connection, String context) {

@@ -1,7 +1,7 @@
 import { firstNonBlank, hasText } from "@/lib/text";
 
 export interface AuditRef {
-	id?: number;
+	id: number;
 	displayName?: string;
 	email?: string;
 }

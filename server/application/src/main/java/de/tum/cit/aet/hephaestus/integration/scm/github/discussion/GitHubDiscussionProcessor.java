@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -288,7 +289,9 @@ public class GitHubDiscussionProcessor extends BaseGitHubProcessor {
             return null;
         }
 
-        String slug = dto.slug() != null ? dto.slug() : dto.name().toLowerCase().replace(' ', '-');
+        String slug = dto.slug() != null
+                ? dto.slug()
+                : dto.name().toLowerCase(Locale.ROOT).replace(' ', '-');
 
         // Use atomic upsert to handle concurrent inserts safely
         categoryRepository.upsertCategory(
@@ -356,7 +359,7 @@ public class GitHubDiscussionProcessor extends BaseGitHubProcessor {
         if (stateReason == null) {
             return null;
         }
-        return switch (stateReason.toUpperCase()) {
+        return switch (stateReason.toUpperCase(Locale.ROOT)) {
             case "RESOLVED" -> Discussion.StateReason.RESOLVED;
             case "OUTDATED" -> Discussion.StateReason.OUTDATED;
             case "DUPLICATE" -> Discussion.StateReason.DUPLICATE;
@@ -372,7 +375,7 @@ public class GitHubDiscussionProcessor extends BaseGitHubProcessor {
         if (lockReason == null) {
             return null;
         }
-        return switch (lockReason.toUpperCase()) {
+        return switch (lockReason.toUpperCase(Locale.ROOT)) {
             case "OFF_TOPIC" -> Discussion.LockReason.OFF_TOPIC;
             case "RESOLVED" -> Discussion.LockReason.RESOLVED;
             case "SPAM" -> Discussion.LockReason.SPAM;

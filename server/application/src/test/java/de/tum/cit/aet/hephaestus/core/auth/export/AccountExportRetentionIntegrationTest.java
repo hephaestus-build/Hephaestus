@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.export;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -74,14 +75,14 @@ class AccountExportRetentionIntegrationTest extends BaseIntegrationTest {
         account.setPrimaryEmailVerifiedAt(clock.instant());
         account.setStatus(Account.Status.ACTIVE);
         Long accountId = accountRepository.save(account).getId();
-        org.junit.jupiter.api.Assertions.assertNotNull(accountId);
+        assertThat(accountId).isNotNull();
 
         AccountExport export = new AccountExport(accountId);
         export.setStatus(AccountExport.Status.READY);
         export.setExpiresAt(expiresAt);
-        export.setPayload("{\"pii\":true}".getBytes());
+        export.setPayload("{\"pii\":true}".getBytes(UTF_8));
         Long exportId = accountExportRepository.save(export).getId();
-        org.junit.jupiter.api.Assertions.assertNotNull(exportId);
+        assertThat(exportId).isNotNull();
         return exportId;
     }
 }

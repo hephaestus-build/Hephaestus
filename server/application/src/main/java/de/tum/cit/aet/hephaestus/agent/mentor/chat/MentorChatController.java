@@ -124,7 +124,7 @@ public class MentorChatController {
     /** Emit one error chunk + the AI-SDK [DONE] sentinel; complete the emitter. */
     private void shortCircuitError(SseEmitter emitter, String errorText) {
         try {
-            String json = objectMapperBean.writeValueAsString(new UIMessageChunk.Error(errorText));
+            String json = objectMapperBean.writeValueAsString(new UIMessageChunk.TurnError(errorText));
             emitter.send(SseEmitter.event().data(json));
             emitter.send(SseEmitter.event().data("[DONE]"));
         } catch (Exception ignored) {

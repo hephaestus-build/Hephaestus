@@ -3,7 +3,7 @@ import { isSet } from "./env.ts";
 // The certificate identity cosign expects on a release lock: the release workflow of
 // the repository that cut the release, pinned to its default branch. Deriving it from
 // the run context (GITHUB_SERVER_URL / GITHUB_REPOSITORY) keeps signing and
-// verification aligned automatically across a repository transfer (issue #1599).
+// verification aligned automatically across a repository transfer.
 // Outside CI — the operator flow documented in docs/admin/install.mdx — the canonical
 // repository remains the fallback; releases signed before a transfer keep the old
 // owner/repo in their certificate either way.

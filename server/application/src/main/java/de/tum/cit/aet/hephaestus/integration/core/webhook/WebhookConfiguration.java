@@ -1,11 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
 import io.nats.client.Connection;
 import io.nats.client.JetStreamManagement;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -19,7 +18,7 @@ import org.springframework.context.annotation.Import;
  * not depend on NATS availability.
  */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(name = RuntimeRole.WEBHOOK_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWebhookRole
 // Gate on the specifically-named webhook/sync connection, NOT any Connection: matching an arbitrary
 // Connection bean would activate these producers while `WebhookProducerBeans` still requires
 // @Qualifier("natsConnection"), failing the whole context.

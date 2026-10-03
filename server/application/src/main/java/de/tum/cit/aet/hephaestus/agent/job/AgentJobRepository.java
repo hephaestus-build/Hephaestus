@@ -22,6 +22,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
 @Repository
@@ -74,14 +75,15 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     List<ReviewRunNarrativeRow> findReviewRunNarrativesByWorkspaceIdAndIdIn(Long workspaceId, Collection<UUID> ids);
 
     /**
-     * What these runs record about themselves; {@code output} holds the coverage ledger, and the target columns
-     * address the summary comment on the work's page. A projection, so a listing does not load each run's
-     * whole entity.
+     * What these runs record about themselves; {@code output} holds the coverage ledger, and {@code feedbackUrl}
+     * is the address the provider returned for the run's summary comment. A projection, so a listing does not
+     * load each run's whole entity.
      */
     @Query("SELECT j.id AS id, j.jobType AS jobType, j.integrationKind AS integrationKind, j.metadata AS metadata, "
             + "j.status AS status, j.practiceTriggerMode AS triggerMode, j.output AS output, "
-            + "j.deliveryCommentId AS deliveryCommentId FROM AgentJob j "
-            + "WHERE j.workspace.id = :workspaceId AND j.id IN :ids")
+            + "(SELECT MAX(d.deliveredExternalUrl) FROM FeedbackDispatch d WHERE d.workspaceId = j.workspace.id "
+            + "AND d.agentJobId = j.id AND d.deliveredExternalRef = j.deliveryCommentId) AS feedbackUrl "
+            + "FROM AgentJob j WHERE j.workspace.id = :workspaceId AND j.id IN :ids")
     List<ReviewRunFactsRow> findReviewRunFacts(
             @Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
@@ -94,7 +96,7 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
         JsonNode getOutput();
 
         @Nullable
-        String getDeliveryCommentId();
+        String getFeedbackUrl();
     }
 
     /**
@@ -517,7 +519,7 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
     Optional<AgentJob> findByIdWithWorkspaceForUpdate(@Param("id") UUID id);
 
     /** Keeps source-use and readiness verdicts, not the uncited workspace inventory, after its lifetime. */
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             UPDATE agent_job j SET evidence_snapshot = jsonb_set(
@@ -834,7 +836,7 @@ public interface AgentJobRepository extends JpaRepository<AgentJob, UUID> {
 
     @WorkspaceAgnostic("Dispatch recovery carries both the tenant id and job id")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @org.springframework.transaction.annotation.Transactional
+    @Transactional
     @Query("UPDATE AgentJob j SET j.deliveryStatus = :status, j.deliveryCommentId = :commentId "
             + "WHERE j.id = :id AND j.workspace.id = :workspaceId")
     int reconcileDispatchDeliveryStatus(

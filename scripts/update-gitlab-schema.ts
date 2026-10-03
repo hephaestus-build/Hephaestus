@@ -88,7 +88,9 @@ Options:
 	return { url, token };
 }
 
-function validateGraphQLSchema(content: string): { valid: boolean; reason?: string } {
+function validateGraphQLSchema(
+	content: string,
+): { valid: true } | { valid: false; reason: string } {
 	if (content.length < MIN_SIZE_BYTES) {
 		return {
 			valid: false,

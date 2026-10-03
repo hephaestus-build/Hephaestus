@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tngtech.archunit.core.domain.JavaAnnotation;
 import com.tngtech.archunit.core.domain.JavaClass;
 import java.lang.annotation.Annotation;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -28,7 +29,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     private static final Map<String, String> FULL_CONTEXT_ASSIGNMENTS = Map.ofEntries(
             assignment("agent.handler.PracticeReviewPipelineIntegrationTest", "workspace-folder"),
             assignment(
-                    "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
+                    "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest", "gitlab-token-lifecycle"),
             assignment("testconfig.BaseIntegrationTest", "base"),
             assignment("agent.mentor.chat.MentorWorkerSplitIntegrationTest", "mentor-worker-split"),
             assignment("notification.AccountDeletionEmailIntegrationTest", "email-capture"),
@@ -58,7 +59,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment(
                     "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
                     "gitlab-event-routing"),
-            assignment("integration.slack.detection.ConversationThreadDetectionIntegrationTest", "slack-ingest"),
+            assignment("integration.slack.conversation.ConversationThreadTriggerIntegrationTest", "slack-ingest"),
             assignment("integration.slack.SlackConsentLifecycleE2EIntegrationTest", "slack-lifecycle"),
             assignment("integration.slack.channel.SlackChannelAdminControllerIntegrationTest", "slack-signed"),
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"));
@@ -142,14 +143,14 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "integration.slack.SlackConsentLifecycleE2EIntegrationTest",
             "integration.slack.channel.SlackChannelAdminControllerIntegrationTest",
             "integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest",
-            "integration.slack.detection.ConversationThreadDetectionIntegrationTest",
+            "integration.slack.conversation.ConversationThreadTriggerIntegrationTest",
             "testconfig.BaseIntegrationTest");
 
     private static final Set<String> DIRTY_CONTEXT_TESTS = Set.of();
 
     private static final Set<String> MOCKITO_BEAN_TESTS = names(
             "agent.mentor.chat.MentorWorkerSplitIntegrationTest",
-            "integration.scm.gitlab.credentials.GitlabTokenLifecycleIntegrationTest",
+            "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
             "integration.slack.SlackConsentLifecycleE2EIntegrationTest");
 
@@ -300,7 +301,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
     }
 
     private static Set<String> names(String... relativeNames) {
-        return java.util.Arrays.stream(relativeNames)
+        return Arrays.stream(relativeNames)
                 .map(name -> "de.tum.cit.aet.hephaestus." + name)
                 .collect(Collectors.toUnmodifiableSet());
     }
@@ -315,18 +316,16 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
 
     private static final class NestedConfigurationFixture {
 
+        @SuppressWarnings("UnusedNestedClass") // ArchUnit reads it as the nested @TestConfiguration under test
         @TestConfiguration
         static class Configuration {}
     }
 
     private static final class TestBeanFixture {
 
+        @SuppressWarnings("UnusedVariable") // ArchUnit reads its @TestBean annotation; Spring never loads the fixture
         @TestBean
         @Nullable
         String dependency;
-
-        static String dependency() {
-            return "fixture";
-        }
     }
 }

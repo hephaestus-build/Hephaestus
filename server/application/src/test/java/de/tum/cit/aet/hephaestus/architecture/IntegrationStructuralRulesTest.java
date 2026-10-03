@@ -4,6 +4,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.GENERATED_GRAPHQL_PACKAGE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClass;
@@ -22,12 +23,13 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 /** Structural fitness functions pinning the integration package layout and vendor-neutral core. */
 class IntegrationStructuralRulesTest extends HephaestusArchitectureTest {
 
-    private static final Set<String> VENDOR_LITERALS = Set.of("Github", "Gitlab", "Slack", "Outline");
+    private static final Set<String> VENDOR_LITERALS = Set.of("GitHub", "GitLab", "Slack", "Outline");
 
     @Test
     void scmDomainDoesNotDependOnVendorAdapters() {
@@ -75,25 +77,34 @@ class IntegrationStructuralRulesTest extends HephaestusArchitectureTest {
     }
 
     @Test
+    void classNamesSpellGitHubAndGitLabAsTheBrandsDo() {
+        // The generated GitLab client keeps the schema's own spelling (GLGitlabSubscription).
+        ArchRule rule = noClasses()
+                .that()
+                .resideOutsideOfPackage(GENERATED_GRAPHQL_PACKAGE)
+                .should()
+                .haveSimpleNameContaining("Github")
+                .orShould()
+                .haveSimpleNameContaining("Gitlab")
+                .because("the brands are spelled GitHub and GitLab; a second spelling splits every search and "
+                        + "rename in two.");
+        rule.check(classes);
+    }
+
+    @Test
     void integrationTopLevelHasOnlyExpectedSubpackages() throws IOException {
         Path integrationDir = locateIntegrationRoot();
         try (Stream<Path> children = Files.list(integrationDir)) {
             Set<String> actual = children.map(p -> p.getFileName().toString()).collect(Collectors.toSet());
-            // {core, scm, slack} are the original Phase-4 trait roots. {identity} is the
-            // OIDC-login vendor-adapter root (ADR 0017): it owns the per-workspace OIDC login
-            // ConnectionStrategy impls + the composite ClientRegistrationRepository, mirroring
-            // integration.slack.connect. It lives here (not in core.auth) so that core.auth never
-            // imports integration.* — that import would invert the bounded-context direction and
-            // re-introduce the core ↔ scm-data-platform cycle.
+            // {identity} owns the OIDC login adapters (ADR 0017). It lives here rather than in core.auth
+            // because core.auth must never import integration.*.
             Set<String> expected = Set.of("core", "scm", "slack", "identity", "outline", "package-info.java");
-            assertThat(actual)
-                    .as("Integration top-level sub-roots: {core, scm, slack, identity, outline} (ADR 0017 OIDC login).")
-                    .isEqualTo(expected);
+            assertThat(actual).isEqualTo(expected);
         }
     }
 
     private static <T> ArchCondition<T> hasNoVendorLiteralIn(String what, Function<? super T, String> identifier) {
-        return new ArchCondition<T>("have no vendor literal (Github/Gitlab/Slack/Outline) in the " + what) {
+        return new ArchCondition<T>("have no vendor literal (GitHub/GitLab/Slack/Outline) in the " + what) {
             @Override
             public void check(T item, ConditionEvents events) {
                 String name = identifier.apply(item);
@@ -106,7 +117,7 @@ class IntegrationStructuralRulesTest extends HephaestusArchitectureTest {
         };
     }
 
-    private static @org.jspecify.annotations.Nullable String findVendorLiteral(String identifier) {
+    private static @Nullable String findVendorLiteral(String identifier) {
         String lowered = identifier.toLowerCase(Locale.ROOT);
         for (String literal : VENDOR_LITERALS) {
             if (lowered.contains(literal.toLowerCase(Locale.ROOT))) {

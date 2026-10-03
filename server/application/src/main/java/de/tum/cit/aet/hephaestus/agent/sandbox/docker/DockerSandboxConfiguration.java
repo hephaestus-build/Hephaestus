@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive.StdinWriteWatc
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
@@ -32,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -51,7 +51,7 @@ import tools.jackson.databind.ObjectMapper;
  * they are only created when the role is active — no component-scanning surprises.
  */
 @Configuration
-@ConditionalOnProperty(name = RuntimeRole.WORKER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWorkerRole
 @ConditionalOnClass(DockerClient.class)
 @EnableConfigurationProperties({
     SandboxProperties.class,
@@ -269,11 +269,10 @@ public class DockerSandboxConfiguration {
     public InteractiveSandboxRegistry interactiveSandboxRegistry(
             InteractiveSandboxProperties properties,
             SandboxContainerManager containerManager,
-            InteractiveSandboxMetrics metrics,
             StdinWriteWatchdog watchdog,
             MeterRegistry meterRegistry,
             SandboxCreator creator) {
-        return new InteractiveSandboxRegistry(properties, containerManager, metrics, watchdog, meterRegistry, creator);
+        return new InteractiveSandboxRegistry(properties, containerManager, watchdog, meterRegistry, creator);
     }
 
     @Bean
@@ -335,8 +334,6 @@ public class DockerSandboxConfiguration {
         log.info("Sandbox executor configured: maxConcurrent={}", properties.maxConcurrentContainers());
         return executor;
     }
-
-    // Internal helpers
 
     /**
      * Load a seccomp profile from the classpath once at startup.

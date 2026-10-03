@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Stream;
@@ -26,6 +27,8 @@ import org.mockito.Mock;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
 
@@ -36,7 +39,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
 
     @Test
     void shouldLoadCurrentCatalogAndGovernanceDecisions() throws IOException {
-        var registry = new ClasspathArtifactSourceCatalogRegistry(objectMapper, java.time.Clock.systemUTC());
+        var registry = new ClasspathArtifactSourceCatalogRegistry(objectMapper, Clock.systemUTC());
 
         assertThat(registry.current().version()).isEqualTo(ClasspathArtifactSourceCatalogRegistry.CURRENT_VERSION);
         assertThat(registry.catalogDigest())
@@ -59,7 +62,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
     @ValueSource(strings = {"1.0.0", "1.1.0"})
     void shouldReadARetiredContractForTheFeedbackRecordedUnderIt(String version) {
         var registry = new ClasspathArtifactSourceCatalogRegistry(
-                objectMapper, Clock.fixed(Instant.parse("2026-09-11T12:00:00Z"), java.time.ZoneOffset.UTC));
+                objectMapper, Clock.fixed(Instant.parse("2026-09-11T12:00:00Z"), ZoneOffset.UTC));
         var previous = new SourceContractVersion(version);
         var source = new SourceKind("scm.repository.tree");
 
@@ -71,7 +74,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
 
     @Test
     void shouldRejectUnknownVersionKindAndArtifactKind() {
-        var registry = new ClasspathArtifactSourceCatalogRegistry(objectMapper, java.time.Clock.systemUTC());
+        var registry = new ClasspathArtifactSourceCatalogRegistry(objectMapper, Clock.systemUTC());
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> registry.requireSource(
@@ -89,7 +92,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
     void shouldRejectUnknownCatalogFields() throws IOException {
         JsonNode catalog =
                 read(ClasspathArtifactSourceCatalogRegistry.CATALOG_RESOURCE).deepCopy();
-        ((tools.jackson.databind.node.ObjectNode) catalog).put("futureMeaning", true);
+        ((ObjectNode) catalog).put("futureMeaning", true);
 
         assertThatIllegalStateException()
                 .isThrownBy(() -> ClasspathArtifactSourceCatalogRegistry.parse(catalog))
@@ -120,7 +123,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
     void shouldRejectEngineeringBaselineWithoutApprovalMetadata() throws IOException {
         JsonNode root = read(ClasspathArtifactSourceCatalogRegistry.USE_DECISIONS_RESOURCE)
                 .deepCopy();
-        ((tools.jackson.databind.node.ObjectNode) root.path("decisions").get(0)).remove("reviewer");
+        ((ObjectNode) root.path("decisions").get(0)).remove("reviewer");
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ClasspathArtifactSourceCatalogRegistry.parseUseDecisions(root))
@@ -160,8 +163,8 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
         var decisions = ClasspathArtifactSourceCatalogRegistry.parseUseDecisions(root);
         var assessment = decisions.get("use-scm-pull-request-core-automated-review");
         var feedback = decisions.get("use-scm-pull-request-core-feedback-delivery");
-        org.junit.jupiter.api.Assertions.assertNotNull(assessment);
-        org.junit.jupiter.api.Assertions.assertNotNull(feedback);
+        assertThat(assessment).isNotNull();
+        assertThat(feedback).isNotNull();
 
         assertThat(assessment.permitsAt(
                         Instant.parse("2026-10-01T12:00:00Z"), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
@@ -180,7 +183,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
         var decisions = ClasspathArtifactSourceCatalogRegistry.parseUseDecisions(
                 read(ClasspathArtifactSourceCatalogRegistry.USE_DECISIONS_RESOURCE));
         var decision = decisions.get("use-docs-document-core-automated-review");
-        org.junit.jupiter.api.Assertions.assertNotNull(decision);
+        assertThat(decision).isNotNull();
         Instant expiry = Instant.parse("2027-10-01T00:00:00Z");
 
         assertThat(decision.permitsAt(expiry.minusMillis(1), SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
@@ -195,7 +198,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
         var decisions = ClasspathArtifactSourceCatalogRegistry.parseUseDecisions(
                 read(ClasspathArtifactSourceCatalogRegistry.USE_DECISIONS_RESOURCE));
         var decision = decisions.get("use-docs-document-core-automated-review");
-        org.junit.jupiter.api.Assertions.assertNotNull(decision);
+        assertThat(decision).isNotNull();
         Instant decided = Instant.parse("2026-10-01T00:00:00Z");
 
         assertThat(decision.permitsAt(decided, SourceUsePurpose.AUTOMATED_PRACTICE_REVIEW))
@@ -226,8 +229,7 @@ class ClasspathArtifactSourceCatalogRegistryTest extends BaseUnitTest {
     void shouldRejectASourceThatLacksADecisionForOnePurpose() throws IOException {
         JsonNode catalogNode =
                 read(ClasspathArtifactSourceCatalogRegistry.CATALOG_RESOURCE).deepCopy();
-        var useDecisionIds = (tools.jackson.databind.node.ArrayNode)
-                catalogNode.path("sources").get(0).path("useDecisionIds");
+        var useDecisionIds = (ArrayNode) catalogNode.path("sources").get(0).path("useDecisionIds");
         String dropped = useDecisionIds.get(useDecisionIds.size() - 1).asString();
         useDecisionIds.remove(useDecisionIds.size() - 1);
         var catalog = ClasspathArtifactSourceCatalogRegistry.parse(catalogNode);

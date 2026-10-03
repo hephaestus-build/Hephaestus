@@ -5,8 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
+import de.tum.cit.aet.hephaestus.agent.documentation.DocumentReviewTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
@@ -14,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.Bear
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.OutlineProperties;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient;
+import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineClientConfig;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineEnvelope;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineCollectionModel;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
@@ -24,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection.Sy
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocument;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
+import de.tum.cit.aet.hephaestus.integration.outline.domain.signal.OutlineDocumentSignalRecorder;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
@@ -37,6 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -67,8 +74,7 @@ class OutlineDocumentSyncFixtureMappingTest extends BaseUnitTest {
     // The exact tolerant policy the running Outline client uses (unknown fields + unknown enum values),
     // so the fixture round-trip exercises production deserialization, not a lax bespoke mapper.
     private static final JsonMapper MAPPER =
-            de.tum.cit.aet.hephaestus.integration.outline.client.OutlineClientConfig.tolerantMapper(
-                    JsonMapper.builder().build());
+            OutlineClientConfig.tolerantMapper(JsonMapper.builder().build());
 
     @Mock
     private ConnectionService connectionService;
@@ -104,13 +110,10 @@ class OutlineDocumentSyncFixtureMappingTest extends BaseUnitTest {
                 properties,
                 mirrorWriter,
                 new OutlineMirrorRetentionService(documentRepository, mirrorWriter, properties),
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.integration.outline.domain.signal.OutlineDocumentSignalRecorder
-                                .class),
+                mock(OutlineDocumentSignalRecorder.class),
                 // No review trigger: this suite is about mirroring, and a node that cannot submit a review
                 // still records every signal — which is exactly the ObjectProvider's absent case.
-                new org.springframework.beans.factory.support.StaticListableBeanFactory()
-                        .getBeanProvider(de.tum.cit.aet.hephaestus.agent.documentation.DocumentReviewTrigger.class));
+                new StaticListableBeanFactory().getBeanProvider(DocumentReviewTrigger.class));
     }
 
     @BeforeEach
@@ -149,8 +152,6 @@ class OutlineDocumentSyncFixtureMappingTest extends BaseUnitTest {
                 .when(collectionRepository.findByWorkspaceIdAndConnectionIdAndCollectionId(
                         WORKSPACE, CONNECTION, COLLECTION_ID))
                 .thenReturn(Optional.of(collection));
-
-        // --- wire the mocked client's return values off the real captured fixtures ---
 
         OutlineEnvelope<List<OutlineCollectionModel>> collectionsList =
                 readFixture("/outline-api/collections.list.json", new TypeReference<>() {});
@@ -231,8 +232,7 @@ class OutlineDocumentSyncFixtureMappingTest extends BaseUnitTest {
 
     private OutlineDocument savedDocument(String documentId) {
         ArgumentCaptor<OutlineDocument> captor = ArgumentCaptor.forClass(OutlineDocument.class);
-        org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.atLeastOnce())
-                .saveAndFlush(captor.capture());
+        verify(documentRepository, atLeastOnce()).saveAndFlush(captor.capture());
         return captor.getAllValues().stream()
                 .filter(d -> documentId.equals(d.getDocumentId()))
                 .reduce((first, second) -> second) // the last save wins (the export path saves once per doc)

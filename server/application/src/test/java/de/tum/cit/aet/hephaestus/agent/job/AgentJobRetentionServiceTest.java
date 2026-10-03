@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -61,7 +62,7 @@ class AgentJobRetentionServiceTest extends BaseUnitTest {
 
             service.runRetention();
 
-            verify(jobRepository, times(1)).stripTerminalPayloads(any(), org.mockito.ArgumentMatchers.eq(BATCH_SIZE));
+            verify(jobRepository, times(1)).stripTerminalPayloads(any(), eq(BATCH_SIZE));
             assertThat(meterRegistry.counter("agent.job.retention.stripped").count())
                     .isEqualTo(37d);
         }
@@ -73,7 +74,7 @@ class AgentJobRetentionServiceTest extends BaseUnitTest {
 
             service.runRetention();
 
-            verify(jobRepository, times(3)).stripTerminalPayloads(any(), org.mockito.ArgumentMatchers.eq(BATCH_SIZE));
+            verify(jobRepository, times(3)).stripTerminalPayloads(any(), eq(BATCH_SIZE));
             assertThat(meterRegistry.counter("agent.job.retention.stripped").count())
                     .isEqualTo(BATCH_SIZE + BATCH_SIZE + 10d);
         }
@@ -95,8 +96,7 @@ class AgentJobRetentionServiceTest extends BaseUnitTest {
 
             service.runRetention();
 
-            verify(jobRepository, times(1))
-                    .deleteUnreferencedTerminalRowsOlderThan(any(), org.mockito.ArgumentMatchers.eq(BATCH_SIZE));
+            verify(jobRepository, times(1)).deleteUnreferencedTerminalRowsOlderThan(any(), eq(BATCH_SIZE));
             assertThat(meterRegistry.counter("agent.job.retention.deleted").count())
                     .isEqualTo(12d);
         }
@@ -110,8 +110,7 @@ class AgentJobRetentionServiceTest extends BaseUnitTest {
 
             service.runRetention();
 
-            verify(jobRepository, times(2))
-                    .deleteUnreferencedTerminalRowsOlderThan(any(), org.mockito.ArgumentMatchers.eq(BATCH_SIZE));
+            verify(jobRepository, times(2)).deleteUnreferencedTerminalRowsOlderThan(any(), eq(BATCH_SIZE));
             assertThat(meterRegistry.counter("agent.job.retention.deleted").count())
                     .isEqualTo(BATCH_SIZE + 5d);
         }

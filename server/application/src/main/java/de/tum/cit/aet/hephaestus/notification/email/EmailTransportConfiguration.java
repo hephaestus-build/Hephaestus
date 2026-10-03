@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.notification.email;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration;
@@ -71,7 +72,7 @@ public class EmailTransportConfiguration {
         ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
         resolver.setPrefix("templates/");
         resolver.setSuffix(".txt");
-        resolver.setResolvablePatterns(java.util.Set.of("email/text/*"));
+        resolver.setResolvablePatterns(Set.of("email/text/*"));
         resolver.setTemplateMode(TemplateMode.TEXT);
         resolver.setCharacterEncoding(StandardCharsets.UTF_8.name());
         resolver.setCheckExistence(true);

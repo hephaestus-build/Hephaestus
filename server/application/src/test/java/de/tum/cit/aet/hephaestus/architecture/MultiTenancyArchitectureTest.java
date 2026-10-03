@@ -1,12 +1,14 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.*;
-import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.*;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
+import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.BASE_PACKAGE;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaModifier;
+import com.tngtech.archunit.core.domain.properties.HasAnnotations;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
@@ -23,6 +25,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -81,8 +84,8 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
      */
     static final String INSTANCE_ADMIN_GATE = "hasAuthority('app_admin')";
 
-    static boolean isInstanceAdminGated(com.tngtech.archunit.core.domain.properties.HasAnnotations<?> element) {
-        return element.tryGetAnnotationOfType(org.springframework.security.access.prepost.PreAuthorize.class)
+    static boolean isInstanceAdminGated(HasAnnotations<?> element) {
+        return element.tryGetAnnotationOfType(PreAuthorize.class)
                 .map(a -> INSTANCE_ADMIN_GATE.equals(a.value().trim()))
                 .orElse(false);
     }
@@ -525,6 +528,9 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         // Control-plane lifecycle: a worker's session closed, so the Git operations
                                         // dispatched to it fail; no workspace is party to the event.
                                         "WorkerDisconnectedEvent",
+                                        // Shared provider reference data, not workspace content. The synchronous
+                                        // transaction listener only carries native controls to an equivalent instance.
+                                        "PersonProviderInstanceRegistered",
                                         "ContextRefreshedEvent", // Spring lifecycle, no workspace needed
                                         "WorkspacesInitializedEvent", // Startup lifecycle, signals all workspaces ready
                                         // core.auth (ADR 0017): authentication is USER/SYSTEM-scoped, never
@@ -579,9 +585,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                 // IssueAgentJobEventListener handles ScmDomainEvent.Issue{Created,Labeled} whose EventContext
                 // carries the originating repository → workspaceId is resolved per-event (mirrors the PR listener)
                 "IssueAgentJobEventListener",
-                // MentorContextInvalidator handles ScmDomainEvent.{PullRequest,Issue,Review}* whose
-                // EventContext carries the originating repository → workspaceId is resolved per-event
-                "MentorContextInvalidator",
                 // GitHubProjectActivityListener handles GitHubProjectEvent payloads whose EventContext
                 // carries scopeId (the originating workspace) — same payload-carries-context contract
                 "GitHubProjectActivityListener");

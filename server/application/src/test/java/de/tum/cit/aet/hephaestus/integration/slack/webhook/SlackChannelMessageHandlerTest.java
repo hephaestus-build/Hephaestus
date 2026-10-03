@@ -29,7 +29,6 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -39,7 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Consumer-side handler tests. A REAL {@link SlackIngestService} is wired over mocked repositories/gates so the
  * fail-closed consent gates, forward-only watermark, participant firewall, tenant threading, and idempotency are
  * exercised end-to-end THROUGH {@link SlackChannelMessageHandler#onMessage}, over a real JSON deserialization of the
- * NATS body — i.e. the exact durable path the Slack events endpoint now publishes onto.
+ * NATS body — i.e. the exact durable path the Slack events endpoint publishes onto.
  */
 class SlackChannelMessageHandlerTest extends BaseUnitTest {
 
@@ -184,7 +183,8 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
     void transientFailureThenSuccess_appliesExactlyOnce_withNoLoss() {
         stubActiveConsentedChannel();
         // First delivery: a transient DB error on insert. The handler must PROPAGATE it so the consumer NAKs and
-        // JetStream redelivers (the scenario the old claim-before-effect path silently lost). Second delivery: success.
+        // JetStream redelivers; a claim recorded before the effect would lose the message here. Second delivery:
+        // success.
         when(messageRepository.insertIfAbsent(eq(WORKSPACE), any(), any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("transient db error"))
                 .thenReturn(1);
@@ -422,7 +422,6 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
                   "text":"","files":[{"id":"F1"}]}}
                 """));
 
-        verify(messageRepository, never())
-                .insertIfAbsent(ArgumentMatchers.anyLong(), any(), any(), any(), any(), any(), any(), any());
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
     }
 }

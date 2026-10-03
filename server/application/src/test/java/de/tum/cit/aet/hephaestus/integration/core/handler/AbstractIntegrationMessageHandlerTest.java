@@ -18,6 +18,7 @@ import io.nats.client.Message;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -149,7 +150,7 @@ class AbstractIntegrationMessageHandlerTest extends BaseUnitTest {
 
     private class TestHandler extends AbstractIntegrationMessageHandler<String> {
 
-        TestHandler(@org.jspecify.annotations.Nullable IntegrationKind kind, String eventType) {
+        TestHandler(@Nullable IntegrationKind kind, String eventType) {
             super(kind, eventType, String.class, deserializer, transactionTemplate);
         }
 

@@ -27,7 +27,7 @@ import tools.jackson.databind.ObjectMapper;
 
 /**
  * Shared raw-JDBC seed helpers for the Slack conversation SPI integration tests
- * ({@code SlackConversationProjectorIntegrationTest}, {@code ConversationThreadDetectionIntegrationTest}).
+ * ({@code SlackConversationProjectorIntegrationTest}, {@code ConversationThreadTriggerIntegrationTest}).
  *
  * <p>Two things are single-sourced here:
  *
@@ -38,7 +38,7 @@ import tools.jackson.databind.ObjectMapper;
  *       production Liquibase migration is proven independently by
  *       {@code SlackConversationSchemaContractIntegrationTest} against the real schema.</li>
  *   <li>{@link #seedChannel}/{@link #seedThread}/{@link #seedMessage} — the raw {@code INSERT}s the projector and
- *       detection scans read over. Superset signatures so both callers share one SQL string per table.</li>
+ *       trigger scans read over. Superset signatures so both callers share one SQL string per table.</li>
  * </ul>
  *
  * <p>The seed helpers are also reused by the real-Liquibase {@code SlackConversationSchemaContractIntegrationTest}

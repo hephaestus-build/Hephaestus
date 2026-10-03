@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -28,20 +29,13 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.Collections;
+import org.hibernate.Hibernate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Integration tests for GitHubIssueCommentProcessor.
- * <p>
- * Tests the processor independently from the webhook handler to verify:
- * - Comment upsert logic (create vs update)
- * - Domain event publishing (CommentCreated, CommentUpdated, CommentDeleted)
- * - Context handling and workspace association
- */
 class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
 
     private static final Long TEST_ORG_ID = 215361191L;
@@ -502,7 +496,7 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
             // Load the issue and initialize its comments collection (simulates
             // real-world scenario where parent is in persistence context)
             Issue loadedIssue = issueRepository.findById(testIssue.getId()).orElseThrow();
-            loadedIssue.getComments().size(); // Force lazy initialization
+            Hibernate.initialize(loadedIssue.getComments());
 
             // Delete should work without TransientObjectException
             // because the processor syncs bidirectional relationship

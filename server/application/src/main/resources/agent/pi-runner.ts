@@ -11,7 +11,6 @@ import {
 	createAgentSession,
 	createCodemodeExtension,
 	DefaultResourceLoader,
-	getAgentDir,
 	defineTool,
 	ModelRuntime,
 	SessionManager,
@@ -363,25 +362,26 @@ const RUNNER_DEBUG_PATH = outputPath(OUTPUT, "runner-debug.json");
 const PRACTICE_COVERAGE_PATH = outputPath(OUTPUT, "practice-coverage.json");
 /** The runner's own record of what this review has recorded so far; read back after a compaction. */
 const NOTES_PATH = `${CWD}/work/notes/review.md`;
-const AGENT_BUDGET_MS = Number(process.env.AGENT_BUDGET_MS);
-if (!Number.isFinite(AGENT_BUDGET_MS) || AGENT_BUDGET_MS <= 0) {
-	throw new Error(
-		`AGENT_BUDGET_MS env var is required and must be a positive number, got: ${process.env.AGENT_BUDGET_MS}`,
-	);
-}
-const AGENT_DIR = process.env.PI_CODING_AGENT_DIR;
-if (!hasText(AGENT_DIR)) {
-	throw new Error("PI_CODING_AGENT_DIR env var is required");
-}
-function positiveIntegerEnv(name: string): number {
-	const value = Number(process.env[name]);
-	if (!Number.isInteger(value) || value <= 0) {
-		throw new Error(
-			`${name} env var is required and must be a positive integer, got: ${process.env[name]}`,
-		);
+/** The server sets every one of these; a missing one stops the runner before it does any work. */
+function requiredEnv(name: string): string {
+	const value = process.env[name];
+	if (!hasText(value)) {
+		throw new Error(`${name} env var is required`);
 	}
 	return value;
 }
+function positiveIntegerEnv(name: string): number {
+	const text = requiredEnv(name);
+	const value = Number(text);
+	if (!Number.isInteger(value) || value <= 0) {
+		throw new Error(`${name} env var must be a positive integer, got: ${text}`);
+	}
+	return value;
+}
+const AGENT_BUDGET_MS = positiveIntegerEnv("AGENT_BUDGET_MS");
+const AGENT_DIR = requiredEnv("PI_CODING_AGENT_DIR");
+const LLM_PROXY_URL = requiredEnv("LLM_PROXY_URL");
+const LLM_PROXY_TOKEN = requiredEnv("LLM_PROXY_TOKEN");
 /** Practices a turn carries at once; a catalog group larger than this is split. */
 const PRACTICES_PER_TURN = hasText(process.env.PI_PRACTICE_BATCH_SIZE)
 	? Number(process.env.PI_PRACTICE_BATCH_SIZE)
@@ -1732,7 +1732,7 @@ interface ReportSummaryDetails {
 	stored: number;
 }
 
-/** Refused leads before the tool answers that the review opens on its first finding and stays quiet. */
+/** Refused leads before the tool answers that the review opens on its first piece of feedback and stays quiet. */
 const MAX_LEAD_REFUSALS = 3;
 
 function buildSummaryTool() {
@@ -1745,7 +1745,7 @@ function buildSummaryTool() {
 		description:
 			"Write how this review opens, in your own words: one or two sentences, at most " +
 			`${LEAD_MAX_LENGTH} characters, no counts, no quotes. One call; a second call replaces the ` +
-			"first. Skip it and the review opens on its first finding.",
+			"first. Skip it and the review opens on its first piece of feedback.",
 		// Shape and documentation only; the bound is applied below, with the reason, like every rule of
 		// the other recording tools.
 		parameters: {
@@ -1766,13 +1766,13 @@ function buildSummaryTool() {
 				);
 			}
 			// A session that cannot land a lead in three tries is spending the composition on it; the
-			// review opens on its first finding, which is a fine opening, and the units are what matter.
+			// review opens on its first piece of feedback, which is a fine opening, and the units are what matter.
 			if (leadRefusals >= MAX_LEAD_REFUSALS) {
 				return {
 					content: [
 						{
 							type: "text",
-							text: "The review opens on its first finding; do not call report_summary again — persist the units with report_feedback.",
+							text: "The review opens on its first piece of feedback; do not call report_summary again — persist the units with report_feedback.",
 						},
 					],
 					details: { stored: 0 },
@@ -1974,9 +1974,13 @@ function leanObservations(observations: readonly AdmittedObservation[]): LeanObs
 
 function persistComposedFeedback(): void {
 	for (const unit of undeliverableUnits(composedFeedback)) {
+		const { channel, practiceSlug, supersedesThreadKey } = unit;
 		console.error(
-			`[pi-runner] composed feedback the server cannot deliver: ${unit.channel}/${unit.practiceSlug} ` +
-				`supersedes '${unit.supersedesThreadKey}', which this envelope does not list as staged`,
+			channel === undefined || practiceSlug === undefined || supersedesThreadKey === undefined
+				? `[pi-runner] composed feedback the server cannot deliver: a SUPERSEDE unit lacks the channel, ` +
+						`practice or thread it replaces: ${JSON.stringify({ channel, practiceSlug, supersedesThreadKey })}`
+				: `[pi-runner] composed feedback the server cannot deliver: ${channel}/${practiceSlug} ` +
+						`supersedes '${supersedesThreadKey}', which this envelope does not list as staged`,
 		);
 	}
 	// The server reads at most 30 units. Keep deliverable feedback ahead of WITHHOLD records.
@@ -2803,11 +2807,11 @@ async function answerText(response: Response): Promise<string> {
 async function postAdmission(): Promise<unknown> {
 	let response: Response;
 	try {
-		response = await fetch(`${process.env.LLM_PROXY_URL}/admit-observations`, {
+		response = await fetch(`${LLM_PROXY_URL}/admit-observations`, {
 			method: "POST",
 			signal: AbortSignal.timeout(ADMISSION_ATTEMPT_TIMEOUT_MS),
 			headers: {
-				authorization: `Bearer ${process.env.LLM_PROXY_TOKEN}`,
+				authorization: `Bearer ${LLM_PROXY_TOKEN}`,
 				"content-type": "application/json",
 				...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
 			},
@@ -3306,7 +3310,7 @@ async function main() {
 	const orchestrator = readFileSync(orchestratorPath, "utf8");
 	const loader = new DefaultResourceLoader({
 		cwd: CWD,
-		agentDir: AGENT_DIR ?? getAgentDir(),
+		agentDir: AGENT_DIR,
 		settingsManager,
 		...SANDBOX_RESOURCE_LOADER_OPTIONS,
 		agentsFilesOverride: () => ({
@@ -3323,8 +3327,7 @@ async function main() {
 	});
 
 	const providerConfig = loadProviderConfig(CWD);
-	const registered = registerHephaestusProvider(modelRuntime, providerConfig);
-	if (!registered || !hasText(providerConfig?.modelId)) {
+	if (!registerHephaestusProvider(modelRuntime, providerConfig)) {
 		throw new Error(
 			"Hephaestus provider is not configured — pi-provider.json and proxy credentials are required",
 		);
@@ -3608,8 +3611,7 @@ async function main() {
 	console.error(
 		`[pi-runner] Measured: ${(measureDurationMs / 1000).toFixed(1)}s, calls=${measureUsage.totalCalls}, ` +
 			`stopped=[${runnerDebug.turns
-				.filter((turn) => turn.stoppedBy !== null)
-				.map((turn) => `${turn.label}: ${turn.stoppedBy}`)
+				.flatMap((turn) => (turn.stoppedBy === null ? [] : [`${turn.label}: ${turn.stoppedBy}`]))
 				.join("; ")}], observations=${reviewState.observations.length}`,
 	);
 
@@ -3744,7 +3746,7 @@ async function run(): Promise<void> {
 		await main();
 	} catch (error) {
 		console.error(
-			`[pi-runner] FATAL: ${errorText(error)}\n${error instanceof Error ? error.stack : ""}`,
+			`[pi-runner] FATAL: ${errorText(error)}\n${error instanceof Error ? (error.stack ?? "") : ""}`,
 		);
 		finalizeOutputQuietly();
 		// Preserve the retryable exit code for admission transport failures.

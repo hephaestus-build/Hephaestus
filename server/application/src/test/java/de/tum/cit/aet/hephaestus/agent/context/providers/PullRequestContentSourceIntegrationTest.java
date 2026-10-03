@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
@@ -94,9 +95,7 @@ class PullRequestContentSourceIntegrationTest extends BaseIntegrationTest {
         persistComment(pr, thread, reviewer, null, "Add a test.\n<!-- hephaestus-diff-note -->", at("12:00"));
 
         List<PullRequestReviewComment> rows = reviewCommentRepository.findRecentHumanByPullRequestIdWithAuthor(
-                pr.getId(),
-                de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection.HEPHAESTUS_MARKER,
-                PageRequest.of(0, 50));
+                pr.getId(), WorkspaceScmProjection.HEPHAESTUS_MARKER, PageRequest.of(0, 50));
 
         assertThat(rows).extracting(PullRequestReviewComment::getBody).containsExactly("done in 3f2a1", "guard this");
         PullRequestReviewComment reply = rows.get(0);

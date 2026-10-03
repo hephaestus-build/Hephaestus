@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -45,6 +46,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -60,7 +62,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
 
 @Tag("unit")
@@ -189,301 +190,61 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         // upsertUser is void - no stubbing needed
     }
 
-    // State Mapping
+    @ParameterizedTest
+    @CsvSource(
+            nullValues = "NULL",
+            value = {
+                "open, opened, OPEN",
+                "close, closed, CLOSED",
+                "merge, merged, MERGED",
+                "open, locked, CLOSED",
+                "open, some_unknown_state, OPEN",
+                "open, NULL, OPEN"
+            })
+    void shouldStoreTheStateGitLabReportsWhenAHookArrives(String action, @Nullable String state, String stored) {
+        when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                .thenReturn(Optional.empty());
+        when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                .thenReturn(Optional.of(createPullRequestEntity()));
 
-    @Nested
-    class StateMapping {
+        processor.process(createEvent(action, state, false), createContext());
 
-        @Test
-        void mapState_opened() {
-            PullRequest pr = createPullRequestEntity();
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty());
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-
-            GitLabMergeRequestEventDTO event = createEvent("open", "opened", false);
-            processor.process(event, createContext());
-
-            verify(pullRequestRepository)
-                    .upsertCore(
-                            eq(RAW_MR_ID),
-                            eq(PROVIDER_ID),
-                            eq(MR_IID),
-                            any(),
-                            any(),
-                            eq("OPEN"),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            eq(REPO_ID),
-                            any(),
-                            any(),
-                            anyBoolean(),
-                            anyBoolean(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-        }
-
-        @Test
-        void mapState_closed() {
-            PullRequest pr = createPullRequestEntity();
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty());
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-
-            GitLabMergeRequestEventDTO event = createEvent("close", "closed", false);
-            processor.process(event, createContext());
-
-            verify(pullRequestRepository)
-                    .upsertCore(
-                            eq(RAW_MR_ID),
-                            eq(PROVIDER_ID),
-                            eq(MR_IID),
-                            any(),
-                            any(),
-                            eq("CLOSED"),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            eq(REPO_ID),
-                            any(),
-                            any(),
-                            anyBoolean(),
-                            anyBoolean(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-        }
-
-        @Test
-        void mapState_merged() {
-            PullRequest pr = createPullRequestEntity();
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty());
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-
-            GitLabMergeRequestEventDTO event = createEvent("merge", "merged", false);
-            processor.process(event, createContext());
-
-            verify(pullRequestRepository)
-                    .upsertCore(
-                            eq(RAW_MR_ID),
-                            eq(PROVIDER_ID),
-                            eq(MR_IID),
-                            any(),
-                            any(),
-                            eq("MERGED"),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            eq(REPO_ID),
-                            any(),
-                            any(),
-                            anyBoolean(),
-                            anyBoolean(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-        }
-
-        @Test
-        void mapState_null() {
-            PullRequest pr = createPullRequestEntity();
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty());
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-
-            GitLabMergeRequestEventDTO event = createEventWithState("open", null);
-            processor.process(event, createContext());
-
-            verify(pullRequestRepository)
-                    .upsertCore(
-                            eq(RAW_MR_ID),
-                            eq(PROVIDER_ID),
-                            eq(MR_IID),
-                            any(),
-                            any(),
-                            eq("OPEN"),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            eq(REPO_ID),
-                            any(),
-                            any(),
-                            anyBoolean(),
-                            anyBoolean(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-        }
-
-        @Test
-        void mapState_unknown() {
-            PullRequest pr = createPullRequestEntity();
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty());
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-
-            GitLabMergeRequestEventDTO event = createEventWithState("open", "some_unknown_state");
-            processor.process(event, createContext());
-
-            verify(pullRequestRepository)
-                    .upsertCore(
-                            eq(RAW_MR_ID),
-                            eq(PROVIDER_ID),
-                            eq(MR_IID),
-                            any(),
-                            any(),
-                            eq("OPEN"),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            eq(REPO_ID),
-                            any(),
-                            any(),
-                            anyBoolean(),
-                            anyBoolean(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-        }
-
-        @Test
-        void mapState_locked() {
-            PullRequest pr = createPullRequestEntity();
-            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.empty());
-            when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
-
-            GitLabMergeRequestEventDTO event = createEventWithState("open", "locked");
-            processor.process(event, createContext());
-
-            verify(pullRequestRepository)
-                    .upsertCore(
-                            eq(RAW_MR_ID),
-                            eq(PROVIDER_ID),
-                            eq(MR_IID),
-                            any(),
-                            any(),
-                            eq("CLOSED"),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            eq(REPO_ID),
-                            any(),
-                            any(),
-                            anyBoolean(),
-                            anyBoolean(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any(),
-                            any());
-        }
+        verify(pullRequestRepository)
+                .upsertCore(
+                        eq(RAW_MR_ID),
+                        eq(PROVIDER_ID),
+                        eq(MR_IID),
+                        any(),
+                        any(),
+                        eq(stored),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        eq(REPO_ID),
+                        any(),
+                        any(),
+                        anyBoolean(),
+                        anyBoolean(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any());
     }
-
-    // Webhook Event Processing
 
     @Nested
     class WebhookProcessing {
@@ -816,7 +577,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
 
             assertThat(result).isNotNull();
 
-            // Verify the review was dismissed and saved
             assertThat(existingReview.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
             assertThat(existingReview.isDismissed()).isTrue();
             verify(reviewRepository).save(existingReview);
@@ -1232,8 +992,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             verify(eventPublisher, never()).publishEvent(any());
         }
     }
-
-    // GraphQL Sync Processing
 
     @Nested
     class SyncProcessing {
@@ -1746,68 +1504,12 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             verify(milestoneRepository, never()).findByNumberAndRepositoryId(anyInt(), anyLong());
         }
 
-        @Test
-        void processFromSyncInvalidGlobalId() {
+        @ParameterizedTest
+        @CsvSource({"invalid-id, 5", "gid://gitlab/MergeRequest/999555, not-a-number"})
+        void shouldSkipTheMergeRequestWhenItsGlobalIdOrIidIsMalformed(String globalId, String iid) {
             var syncData = new GitLabMergeRequestProcessor.SyncMergeRequestData(
-                    "invalid-id",
-                    "5",
-                    "Title",
-                    null,
-                    "opened",
-                    false,
-                    null,
-                    null,
-                    false,
-                    "https://example.com",
-                    null,
-                    null,
-                    null,
-                    null,
-                    0,
-                    0,
-                    0,
-                    0,
-                    "feature/branch",
-                    "main",
-                    null,
-                    null,
-                    null,
-                    false,
-                    0,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    GitLabHeadPipeline.NOT_CAPTURED, // headPipeline
-                    null // closingIssueNumbers
-                    ,
-                    null);
-            PullRequest result = processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
-
-            assertThat(result).isNull();
-        }
-
-        @Test
-        void processFromSyncInvalidIid() {
-            var syncData = new GitLabMergeRequestProcessor.SyncMergeRequestData(
-                    "gid://gitlab/MergeRequest/999555",
-                    "not-a-number",
+                    globalId,
+                    iid,
                     "Title",
                     null,
                     "opened",
@@ -1965,16 +1667,13 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                     null);
             processor.processFromSync(syncData, ProcessingContext.forSync(1L, testRepo));
 
-            // Verify new approval was created (save called for new review)
             // and stale review was dismissed (save called for stale review)
-            verify(reviewRepository, Mockito.atLeast(2)).save(any(PullRequestReview.class));
+            verify(reviewRepository, atLeast(2)).save(any(PullRequestReview.class));
 
             // Verify stale approval was dismissed (not CHANGES_REQUESTED — unapproval is distinct)
             assertThat(staleReview.getState()).isEqualTo(PullRequestReview.State.DISMISSED);
         }
     }
-
-    // Confidential Filtering
 
     @Nested
     class ConfidentialFiltering {
@@ -2024,8 +1723,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
                             any());
         }
     }
-
-    // Detailed Merge Status Mapping
 
     @Nested
     class MergedApprovalDates {
@@ -2117,7 +1814,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             stubSnapshotWrite();
             pr.setMergeable(false);
             pr.setReviewDecision(ReviewDecision.REVIEW_REQUIRED);
-            var seconds = materialVersion.truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+            var seconds = materialVersion.truncatedTo(ChronoUnit.SECONDS);
             assertThat(processor.applyReadiness(
                             testRepo,
                             MR_IID,
@@ -2163,10 +1860,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             assertThat(processor.applyReadiness(
                             testRepo,
                             MR_IID,
-                            facts(
-                                    rows,
-                                    APPROVAL_HEAD,
-                                    materialVersion.truncatedTo(java.time.temporal.ChronoUnit.SECONDS)),
+                            facts(rows, APPROVAL_HEAD, materialVersion.truncatedTo(ChronoUnit.SECONDS)),
                             readAt,
                             ProcessingContext.forSync(1L, testRepo)))
                     .isFalse();
@@ -2269,9 +1963,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             assertMergeStatusMapping(null, null);
         }
 
-        private void assertMergeStatusMapping(
-                @org.jspecify.annotations.Nullable String detailedStatus,
-                @org.jspecify.annotations.Nullable String expectedMapping) {
+        private void assertMergeStatusMapping(@Nullable String detailedStatus, @Nullable String expectedMapping) {
             PullRequest pr = createPullRequestEntity();
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
                     .thenReturn(Optional.empty());
@@ -2337,8 +2029,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         }
     }
 
-    // Approval Review ID Generation
-
     @Nested
     class ApprovalReviewIdGeneration {
 
@@ -2378,8 +2068,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             assertThat(id).isPositive();
         }
     }
-
-    // Helpers
 
     private ProcessingContext createContext() {
         return ProcessingContext.forWebhook(1L, testRepo, "open");
@@ -2438,7 +2126,7 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         return user;
     }
 
-    private GitLabMergeRequestEventDTO createEvent(String action, String state, boolean confidential) {
+    private GitLabMergeRequestEventDTO createEvent(String action, @Nullable String state, boolean confidential) {
         var attrs = new GitLabMergeRequestEventDTO.ObjectAttributes(
                 RAW_MR_ID,
                 MR_IID,
@@ -2465,41 +2153,6 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         return new GitLabMergeRequestEventDTO(
                 "merge_request",
                 confidential ? "confidential_merge_request" : "merge_request",
-                createUser(),
-                createProject(),
-                attrs,
-                List.of(new GitLabWebhookLabel(101L, "feature", "#0075ca")),
-                null,
-                null);
-    }
-
-    private GitLabMergeRequestEventDTO createEventWithState(String action, @Nullable String state) {
-        var attrs = new GitLabMergeRequestEventDTO.ObjectAttributes(
-                RAW_MR_ID,
-                MR_IID,
-                "Add awesome feature",
-                "This MR adds an awesome feature",
-                state,
-                action,
-                "feature/awesome-feature",
-                "main",
-                false,
-                RAW_USER_ID,
-                null,
-                null,
-                "2024-01-15T10:00:00Z",
-                "2024-01-15T10:00:00Z",
-                null,
-                null,
-                "https://gitlab.com/gitlab-org/gitlab/-/merge_requests/5",
-                null,
-                null,
-                null,
-                null,
-                null);
-        return new GitLabMergeRequestEventDTO(
-                "merge_request",
-                "merge_request",
                 createUser(),
                 createProject(),
                 attrs,

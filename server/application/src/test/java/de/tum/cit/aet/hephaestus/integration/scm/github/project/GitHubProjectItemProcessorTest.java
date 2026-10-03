@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,7 +34,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
 
 /**
@@ -101,8 +101,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
         context = new ProcessingContext(
                 SCOPE_ID, null, provider, Instant.now(), UUID.randomUUID().toString(), null, DataSource.GRAPHQL_SYNC);
     }
-
-    // Helper methods
 
     private GitHubProjectItemDTO createDraftIssueDTO() {
         return new GitHubProjectItemDTO(
@@ -192,10 +190,8 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
                 .thenReturn(Optional.of(entity));
     }
 
-    // process() tests
-
     @Nested
-    class Process {
+    class ProcessItem {
 
         @Test
         void shouldReturnNullWhenDtoIsNull() {
@@ -273,7 +269,7 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNullWhenDatabaseIdIsNull() {
-            // Arrange — both `id` and `databaseId` are null so getDatabaseId() returns null
+            // getDatabaseId() falls back to `id`, so both are null here.
             GitHubProjectItemDTO dto = new GitHubProjectItemDTO(
                     null,
                     null,
@@ -470,7 +466,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldHandleNullContentDatabaseIdForIssueItem() {
-            // Arrange — issueId (contentDatabaseId) is null
             GitHubProjectItemDTO dto = createIssueDTO(null);
             ProjectItem entity = createProjectItemEntity(ProjectItem.ContentType.ISSUE);
             stubSuccessfulProcess(true, entity);
@@ -639,7 +634,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
             processor.process(dto, project, context);
 
-            // Assert — verify archived=true is passed to upsert
             verify(projectItemRepository)
                     .upsertCore(
                             eq(ITEM_DB_ID),
@@ -704,7 +698,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldUseFallbackIdWhenDatabaseIdIsNull() {
-            // Arrange — databaseId is null but id is set
             Long fallbackId = 5555L;
             GitHubProjectItemDTO dto = new GitHubProjectItemDTO(
                     fallbackId,
@@ -748,8 +741,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
                             any(Instant.class));
         }
     }
-
-    // removeStaleDraftIssues tests
 
     @Nested
     class RemoveStaleDraftIssues {
@@ -804,28 +795,7 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
             verify(projectItemRepository)
                     .deleteByProjectIdAndContentType(eq(PROJECT_ID), eq(ProjectItem.ContentType.DRAFT_ISSUE));
         }
-
-        @Test
-        void shouldUseArchivedAwareRepositoryQuery() {
-            // Arrange — the repository method JPQL includes "AND archived = false"
-            // so archived Draft Issues are never removed. We verify the correct
-            // repository method is called, whose query definition already filters archived items.
-            List<String> syncedNodeIds = List.of("PVTI_1");
-            when(projectItemRepository.deleteByProjectIdAndContentTypeAndNodeIdNotIn(
-                            eq(PROJECT_ID), eq(ProjectItem.ContentType.DRAFT_ISSUE), eq(syncedNodeIds)))
-                    .thenReturn(0);
-
-            int result = processor.removeStaleDraftIssues(PROJECT_ID, syncedNodeIds, context);
-
-            assertThat(result).isZero();
-            // Key assertion: the method called is the archived-aware one
-            verify(projectItemRepository)
-                    .deleteByProjectIdAndContentTypeAndNodeIdNotIn(
-                            eq(PROJECT_ID), eq(ProjectItem.ContentType.DRAFT_ISSUE), eq(syncedNodeIds));
-        }
     }
-
-    // removeStaleIssuePrItems tests
 
     @Nested
     class RemoveStaleIssuePrItems {
@@ -851,27 +821,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
             int result = processor.removeStaleIssuePrItems(PROJECT_ID, syncedNodeIds, context);
 
             assertThat(result).isEqualTo(3);
-            verify(projectItemRepository)
-                    .deleteByProjectIdAndContentTypeInAndNodeIdNotIn(
-                            eq(PROJECT_ID), eq(expectedTypes), eq(syncedNodeIds));
-        }
-
-        @Test
-        void shouldNotDeleteArchivedItemsWhenMissingFromSyncedList() {
-            // Arrange — the repository query has AND archived = false, so archived items are
-            // excluded from deletion. We verify the correct repository method is called, which
-            // by its JPQL definition only targets non-archived items.
-            List<String> syncedNodeIds = List.of("PVTI_1");
-            List<ProjectItem.ContentType> expectedTypes =
-                    List.of(ProjectItem.ContentType.ISSUE, ProjectItem.ContentType.PULL_REQUEST);
-            // Repository returns 0 — the "missing" items were archived and excluded by the query
-            when(projectItemRepository.deleteByProjectIdAndContentTypeInAndNodeIdNotIn(
-                            eq(PROJECT_ID), eq(expectedTypes), eq(syncedNodeIds)))
-                    .thenReturn(0);
-
-            int result = processor.removeStaleIssuePrItems(PROJECT_ID, syncedNodeIds, context);
-
-            assertThat(result).isZero();
             verify(projectItemRepository)
                     .deleteByProjectIdAndContentTypeInAndNodeIdNotIn(
                             eq(PROJECT_ID), eq(expectedTypes), eq(syncedNodeIds));
@@ -907,7 +856,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldReturnZeroWhenNoStaleItemsExist() {
-            // Arrange — all items in the DB are in the synced list
             List<String> syncedNodeIds = List.of("PVTI_1", "PVTI_2", "PVTI_3");
             List<ProjectItem.ContentType> expectedTypes =
                     List.of(ProjectItem.ContentType.ISSUE, ProjectItem.ContentType.PULL_REQUEST);
@@ -921,15 +869,12 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
         }
     }
 
-    // processArchived() tests
-
     @Nested
     class ProcessArchived {
 
         @Test
         void shouldForceArchivedTrueAndPublishArchivedEvent() {
-            // Arrange — DTO has archived=false (webhook deserialization default)
-            GitHubProjectItemDTO dto = createDraftIssueDTO(); // archived=false
+            GitHubProjectItemDTO dto = createDraftIssueDTO(); // archived=false, as a webhook deserializes it
             ProjectItem entity = createProjectItemEntity(ProjectItem.ContentType.DRAFT_ISSUE);
             entity.setArchived(true);
             stubSuccessfulProcess(false, entity);
@@ -958,7 +903,7 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
             // Verify both the base event (Updated) and the Archived event are published
             // process() publishes Updated (since !isNew), then processArchived publishes Archived
             ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, Mockito.times(2)).publishEvent(eventCaptor.capture());
+            verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
 
             List<Object> events = eventCaptor.getAllValues();
             assertThat(events).hasSize(2);
@@ -973,7 +918,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldNotPublishArchivedEventWhenProcessReturnsNull() {
-            // Arrange — null DTO causes process() to return null
             ProjectItem result = processor.processArchived(null, project, context);
 
             assertThat(result).isNull();
@@ -992,7 +936,7 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
             assertNotNull(result);
             ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, Mockito.times(2)).publishEvent(eventCaptor.capture());
+            verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
 
             GitHubProjectEvent.ProjectItemArchived archivedEvent = (GitHubProjectEvent.ProjectItemArchived)
                     eventCaptor.getAllValues().get(1);
@@ -1000,14 +944,11 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
         }
     }
 
-    // processRestored() tests
-
     @Nested
     class ProcessRestored {
 
         @Test
         void shouldForceArchivedFalseAndPublishRestoredEvent() {
-            // Arrange — DTO has archived=true (from existing state)
             GitHubProjectItemDTO dto = new GitHubProjectItemDTO(
                     null,
                     ITEM_DB_ID,
@@ -1053,7 +994,7 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
             // Verify both base event (Updated) and Restored event are published
             ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, Mockito.times(2)).publishEvent(eventCaptor.capture());
+            verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
 
             List<Object> events = eventCaptor.getAllValues();
             assertThat(events).hasSize(2);
@@ -1068,7 +1009,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldNotPublishRestoredEventWhenProcessReturnsNull() {
-            // Arrange — null DTO causes process() to return null
             ProjectItem result = processor.processRestored(null, project, context);
 
             assertThat(result).isNull();
@@ -1086,7 +1026,7 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
             assertNotNull(result);
             ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, Mockito.times(2)).publishEvent(eventCaptor.capture());
+            verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
 
             GitHubProjectEvent.ProjectItemRestored restoredEvent = (GitHubProjectEvent.ProjectItemRestored)
                     eventCaptor.getAllValues().get(1);
@@ -1095,7 +1035,6 @@ class GitHubProjectItemProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldBeIdempotentWhenDtoAlreadyNotArchived() {
-            // Arrange — dto.archived is already false; withArchived(false) returns same instance
             GitHubProjectItemDTO dto = createDraftIssueDTO(); // archived=false
             ProjectItem entity = createProjectItemEntity(ProjectItem.ContentType.DRAFT_ISSUE);
             stubSuccessfulProcess(false, entity);

@@ -73,7 +73,7 @@ export function WorkListPage({
 					<EmptyDescription>
 						{hasFilter
 							? "Other kinds of work may be recorded. Show all work to see them."
-							: "Pull requests, issues, conversations and documents appear here as they sync from a connected integration — including the ones no practice had anything to say about."}
+							: "Pull requests, issues, conversations and documents appear here as they sync from a connected integration, including the ones no practice had anything to say about."}
 					</EmptyDescription>
 				</EmptyHeader>
 				{hasFilter && (

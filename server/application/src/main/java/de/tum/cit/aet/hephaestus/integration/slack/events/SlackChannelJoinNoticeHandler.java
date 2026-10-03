@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.integration.slack.events;
 
-import de.tum.cit.aet.hephaestus.integration.slack.SlackHephaestusUiLinks;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackConsentBlocks;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
@@ -37,7 +36,6 @@ public class SlackChannelJoinNoticeHandler {
     private final SlackChannelConsentGate consentGate;
     private final SlackParticipantConsentGate participantConsentGate;
     private final SlackMessageService messageService;
-    private final SlackHephaestusUiLinks uiLinks;
     private final SlackChannelConsentService consentService;
 
     public SlackChannelJoinNoticeHandler(
@@ -45,13 +43,11 @@ public class SlackChannelJoinNoticeHandler {
             SlackChannelConsentGate consentGate,
             SlackParticipantConsentGate participantConsentGate,
             SlackMessageService messageService,
-            SlackHephaestusUiLinks uiLinks,
             SlackChannelConsentService consentService) {
         this.workspaceResolver = workspaceResolver;
         this.consentGate = consentGate;
         this.participantConsentGate = participantConsentGate;
         this.messageService = messageService;
-        this.uiLinks = uiLinks;
         this.consentService = consentService;
     }
 
@@ -98,13 +94,12 @@ public class SlackChannelJoinNoticeHandler {
         }
 
         try {
-            String hephaestusUrl = uiLinks.workspaceHomeUrl(workspaceId);
             messageService.sendEphemeralForWorkspace(
                     workspaceId,
                     channelId,
                     joinerUserId,
-                    SlackConsentBlocks.lateJoinNotice(hephaestusUrl),
-                    SlackConsentBlocks.lateJoinFallbackText(hephaestusUrl));
+                    SlackConsentBlocks.lateJoinNotice(),
+                    SlackConsentBlocks.lateJoinFallbackText());
         } catch (SlackSendException e) {
             log.warn(
                     "Slack join consent notice failed to post: workspaceId={}, channelId={}, error={}",

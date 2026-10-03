@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -54,9 +55,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/**
- * Unit tests for {@link GitLabWorkspaceInitializationService}.
- */
 @Tag("unit")
 class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
@@ -225,11 +223,13 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
 
     /** Configures the executor mock to run submitted tasks synchronously. */
     private void executeSubmittedTasksSynchronously() {
-        when(monitoringExecutor.submit(any(Runnable.class))).thenAnswer(invocation -> {
-            Runnable task = invocation.getArgument(0);
-            task.run();
-            return null;
-        });
+        doAnswer(invocation -> {
+                    Runnable task = invocation.getArgument(0);
+                    task.run();
+                    return null;
+                })
+                .when(monitoringExecutor)
+                .execute(any(Runnable.class));
     }
 
     private Repository createRepo(String nameWithOwner) {
@@ -238,42 +238,16 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         return repo;
     }
 
-    /** Sets up mocks for a minimal successful discovery (no webhook, no org). */
-    private void stubMinimalDiscovery(List<Repository> repos) {
-        GitLabSyncResult syncResult = GitLabSyncResult.completed(repos, 1, 0, 0);
-        when(gitLabWebhookServiceProvider.getIfAvailable()).thenReturn(null);
-        when(gitLabSyncServiceHolderProvider.getIfAvailable()).thenReturn(gitLabSyncServiceHolder);
-        when(gitLabSyncServiceHolder.getGroupSyncService()).thenReturn(gitLabGroupSyncService);
-        when(gitLabGroupSyncService.syncGroupProjects(eq(1L), eq("my-group/subgroup"), any()))
-                .thenReturn(syncResult);
-        when(organizationRepository.findByLoginIgnoreCaseAndProviderId("my-group/subgroup", CONNECTED_PROVIDER_ID))
-                .thenReturn(Optional.empty());
-        when(repositoryToMonitorRepository.findByWorkspaceId(1L)).thenReturn(List.of());
-    }
-
     @Nested
     class InitializeGuards {
 
         @Test
-        void shouldSkipNonGitLab() {
-            // Drop the default GitLab Connection mock — this workspace has no GitLab
-            // binding so initialize() must short-circuit before touching any sync service.
+        void shouldSkipWhenTheWorkspaceHasNoGitLabConnection() {
             when(connectionService.findActiveGitLabConfig(anyLong())).thenReturn(Optional.empty());
 
             initService.initialize(workspace);
 
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
-            verifyNoInteractions(gitLabWebhookServiceProvider);
-        }
-
-        @Test
-        void shouldSkipGitHubApp() {
-            // GitHub App workspace = no GitLab Connection at all.
-            when(connectionService.findActiveGitLabConfig(anyLong())).thenReturn(Optional.empty());
-
-            initService.initialize(workspace);
-
-            verifyNoInteractions(gitLabSyncServiceHolderProvider);
+            verifyNoInteractions(gitLabSyncServiceHolderProvider, gitLabWebhookServiceProvider);
         }
 
         @Test
@@ -547,7 +521,6 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
             when(gitLabGroupSyncService.syncGroupProjects(anyLong(), any(), any()))
                     .thenThrow(new RuntimeException("GraphQL timeout"));
 
-            // Should not throw
             initService.initialize(workspace);
 
             verify(repositoryMonitors, never()).monitorAll(any(), any());
@@ -580,7 +553,7 @@ class GitLabWorkspaceInitializationServiceTest extends BaseUnitTest {
         void shouldSubmitToExecutor() {
             initService.initializeAsync(1L);
 
-            verify(monitoringExecutor).submit(any(Runnable.class));
+            verify(monitoringExecutor).execute(any(Runnable.class));
         }
 
         @Test

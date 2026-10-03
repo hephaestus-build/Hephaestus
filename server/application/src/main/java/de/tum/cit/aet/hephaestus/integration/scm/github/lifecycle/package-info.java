@@ -1,14 +1,9 @@
 /**
- * GitHub lifecycle entry-points exposed to the workspace provisioning module.
- *
- * <p>Named interface: {@code lifecycle}. The {@code workspace} module's
- * {@code WorkspaceProvisioningService} + {@code WorkspaceProvisioningAdapter} call into
- * {@code GithubLifecycleListener} for installation create/update/suspend/delete and repo-
- * selection changes — that coupling is real (workspace owns the Workspace aggregate;
- * GitHub owns the install state and the NATS consumer lifecycle), so we expose it
- * explicitly rather than pretending it doesn't exist. The CLOSED nature of
- * {@code integration.scm.github} still blocks reaches into {@code sync/}, {@code common/},
- * {@code app/} etc — only this surface is legal cross-module.
+ * GitHub lifecycle entry points for the workspace module: {@code WorkspaceProvisioningService} and
+ * {@code WorkspaceProvisioningAdapter} call {@code GitHubLifecycleListener} for installation and
+ * repository-selection changes, because the workspace owns the Workspace aggregate while GitHub owns the
+ * installation state and its NATS consumer. The rest of the closed {@code integration.scm.github} module stays
+ * unreachable from outside.
  */
 @org.springframework.modulith.NamedInterface("lifecycle")
 @org.jspecify.annotations.NullMarked

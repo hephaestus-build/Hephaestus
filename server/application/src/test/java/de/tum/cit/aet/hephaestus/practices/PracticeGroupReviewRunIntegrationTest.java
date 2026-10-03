@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.practices.model.Outcome.MET;
 import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_APPLICABLE;
 import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static de.tum.cit.aet.hephaestus.practices.model.Outcome.UNDETERMINED;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -27,6 +28,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -193,8 +195,8 @@ class PracticeGroupReviewRunIntegrationTest extends AbstractPracticeReviewIntegr
                 .jsonPath("$.content[0].reviewId")
                 .isEqualTo(agentJob.getId().toString())
                 .jsonPath("$.content[0].observations[*].id")
-                .value(ids -> org.assertj.core.api.Assertions.assertThat(ids)
-                        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                .value(ids -> assertThat(ids)
+                        .asInstanceOf(InstanceOfAssertFactories.LIST)
                         .containsExactlyInAnyOrder(grouped.toString(), loose.toString()));
     }
 

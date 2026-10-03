@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
+import java.util.Locale;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
@@ -42,7 +43,7 @@ class ClientSessionControllerValidationTest extends BaseUnitTest {
     @Test
     void shouldRejectBodiesWhenAFieldIsOutOfBounds() {
         assertThat(valid(new ClientSessionController.ClientTokenRequestDTO(
-                        ID.toUpperCase(java.util.Locale.ROOT), CALLBACK, SECRET, VERIFIER)))
+                        ID.toUpperCase(Locale.ROOT), CALLBACK, SECRET, VERIFIER)))
                 .isFalse();
         assertThat(valid(new ClientSessionController.ClientTokenRequestDTO(ID, "x".repeat(201), SECRET, VERIFIER)))
                 .isFalse();

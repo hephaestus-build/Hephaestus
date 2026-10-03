@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
@@ -31,7 +32,6 @@ import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -156,7 +156,7 @@ class ConnectionDisconnectErasureIntegrationTest extends AbstractWorkspaceIntegr
     @Test
     void shouldTearDownOutsideTheTransactionAndRollBackWhenPurgeTeardownFails() {
         List<Boolean> transactionActive = new ArrayList<>();
-        ConnectionStrategy provider = Mockito.mock(ConnectionStrategy.class);
+        ConnectionStrategy provider = mock(ConnectionStrategy.class);
         when(provider.kind()).thenReturn(IntegrationKind.GITHUB);
         when(provider.prepareProviderTeardown(any())).thenAnswer(invocation -> {
             transactionActive.add(TransactionSynchronizationManager.isActualTransactionActive());

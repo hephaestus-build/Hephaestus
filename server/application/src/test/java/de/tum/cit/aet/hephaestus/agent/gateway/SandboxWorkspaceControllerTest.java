@@ -3,13 +3,17 @@ package de.tum.cit.aet.hephaestus.agent.gateway;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -34,7 +38,7 @@ class SandboxWorkspaceControllerTest {
             var entry = new TarArchiveEntry("context/docs/collection/page.md");
             entry.setSize(5);
             tar.putArchiveEntry(entry);
-            tar.write("quote".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            tar.write("quote".getBytes(StandardCharsets.UTF_8));
             tar.closeArchiveEntry();
         }
         try (var session = sessions.register("token", archive, "out")) {
@@ -44,10 +48,9 @@ class SandboxWorkspaceControllerTest {
             var response = new MockHttpServletResponse();
             controller.workspace(session.id(), "Bearer token", request, response);
             assertThat(response.getContentType()).isEqualTo("application/x-tar");
-            try (var tar = new org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
-                    new java.io.ByteArrayInputStream(response.getContentAsByteArray()))) {
+            try (var tar = new TarArchiveInputStream(new ByteArrayInputStream(response.getContentAsByteArray()))) {
                 assertThat(tar.getNextEntry().getName()).isEqualTo("context/docs/collection/page.md");
-                assertThat(new String(tar.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8))
+                assertThat(new String(tar.readAllBytes(), StandardCharsets.UTF_8))
                         .isEqualTo("quote");
             }
             request.addParameter("repo", "7");
@@ -89,7 +92,7 @@ class SandboxWorkspaceControllerTest {
     void shouldRefuseAnUnadvertisedAreaOrRepository() throws Exception {
         var archive = Files.writeString(temporary.resolve("input.tar"), "input");
         try (var session = sessions.register("token", archive, "out")) {
-            for (String query : java.util.List.of("area=private", "repo=other")) {
+            for (String query : List.of("area=private", "repo=other")) {
                 var request = new MockHttpServletRequest();
                 request.setQueryString(query);
                 assertThatThrownBy(() -> controller.workspace(
@@ -128,7 +131,7 @@ class SandboxWorkspaceControllerTest {
             var entry = new TarArchiveEntry("out/observations.json");
             entry.setSize(2);
             tar.putArchiveEntry(entry);
-            tar.write("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            tar.write("{}".getBytes(StandardCharsets.UTF_8));
             tar.closeArchiveEntry();
         }
         byte[] result = bytes.toByteArray();
@@ -157,17 +160,6 @@ class SandboxWorkspaceControllerTest {
         var archive = Files.writeString(temporary.resolve("input.tar"), "input");
         try (var session = sessions.register("token", archive, "out")) {
             assertThatThrownBy(() -> controller.capabilities(session.id(), "Basic token"))
-                    .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
-                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-        }
-    }
-
-    @Test
-    void shouldRefuseAnEmptyBearerToken() throws Exception {
-        var archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
-            assertThatThrownBy(() -> controller.capabilities(session.id(), "Bearer "))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
                             e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));

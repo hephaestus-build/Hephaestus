@@ -4,7 +4,7 @@ import { ArrowLeftIcon, type LucideIcon, OctagonXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { getProvidersOptions } from "@/api/@tanstack/react-query.gen";
-import { type BrandIcon, GithubIcon, GitlabIcon } from "@/components/icons/brand";
+import { type BrandIcon, GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
@@ -52,7 +52,7 @@ function ProviderSelectionPage() {
 			name: "GitHub",
 			description:
 				"Install the Hephaestus GitHub App on your organization. Workspaces are created automatically.",
-			icon: GithubIcon,
+			icon: GitHubIcon,
 			to: "/workspaces/new/github",
 		});
 	}
@@ -61,7 +61,7 @@ function ProviderSelectionPage() {
 			id: "gitlab",
 			name: "GitLab",
 			description: "Connect with an access token and select a group to monitor.",
-			icon: GitlabIcon,
+			icon: GitLabIcon,
 			to: "/workspaces/new/gitlab",
 		});
 	}

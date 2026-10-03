@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth.spi;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Cross-module read query: does the account behind a federated identity hold a given role / feature
  * flag? Exposed so callers (e.g. the practices {@code UserRoleChecker} in the notification module) can
@@ -22,8 +24,5 @@ public interface AccountRoleQuery {
      * @param flag           the role / feature-flag key
      * @return true if the active account for that identity holds the flag; false otherwise (incl. errors)
      */
-    boolean hasFeatureFlag(
-            long gitProviderId,
-            @org.jspecify.annotations.Nullable String subject,
-            @org.jspecify.annotations.Nullable String flag);
+    boolean hasFeatureFlag(long gitProviderId, @Nullable String subject, @Nullable String flag);
 }

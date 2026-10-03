@@ -95,7 +95,7 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
     /**
      * The practice author's own sentence for "the thing this judges was not in this work", or null.
      *
-     * <p>Read from the subject check rather than reconstructed from the clause findings: the sentence is
+     * <p>Read from the subject check rather than reconstructed from the clause results: the sentence is
      * the record, and a surface that paraphrased it would drift from the catalogue the moment somebody
      * edited the declaration. Guarded on {@code absent} because a check is also recorded when the
      * subject was found, and that decision is a ready one with nothing to explain.
@@ -170,8 +170,8 @@ class ReviewOutcomeLookupAdapter implements ReviewOutcomeLookup {
                     case "SOURCE_EMPTY" -> "Nothing was captured from " + source + ".";
                     default -> source + " could not be read.";
                 };
-        // Character.toUpperCase rather than String.toUpperCase, which is locale-sensitive and banned by
-        // LocaleSafetyArchTest; a quoted name starts with a quotation mark and is left as it is.
+        // Character.toUpperCase is locale-independent; a quoted name starts with a quotation mark and is
+        // left as it is.
         return Character.toUpperCase(sentence.charAt(0)) + sentence.substring(1);
     }
 }

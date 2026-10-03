@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,7 +61,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .uri("/workspaces/{slug}/onboarding/me/ai-choice", slug)
                 .headers(headers -> headers.setBearerAuth(MEMBER))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(java.util.Map.of("choice", value))
+                .bodyValue(Map.of("choice", value))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -111,7 +112,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .uri("/user/ai-choice")
                 .headers(headers -> headers.setBearerAuth(MEMBER))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(java.util.Map.of("choice", "IN_HOUSE_ONLY"))
+                .bodyValue(Map.of("choice", "IN_HOUSE_ONLY"))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -147,7 +148,7 @@ class WorkspaceOnboardingControllerIntegrationTest extends AbstractWorkspaceInte
                 .uri("/workspaces/{slug}/onboarding/me/ai-choice", workspace.getWorkspaceSlug())
                 .headers(headers -> headers.setBearerAuth(MEMBER))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(java.util.Map.of("choice", "NO_AI"))
+                .bodyValue(Map.of("choice", "NO_AI"))
                 .exchange()
                 .expectStatus()
                 .isForbidden()

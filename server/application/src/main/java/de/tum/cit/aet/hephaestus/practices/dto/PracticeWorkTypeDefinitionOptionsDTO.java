@@ -11,6 +11,10 @@ import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
+/**
+ * @param manualReviewSignal carried beside {@code signals} rather than inside it so that "every entry here is a
+ *     choosable occasion" holds without a reader re-deriving the exception from a signal's spelling
+ */
 @Schema(description = "Review timing, evidence choices, and recommended settings for one type of reviewed work")
 public record PracticeWorkTypeDefinitionOptionsDTO(
         @NonNull ArtifactKind artifactKind,
@@ -20,10 +24,7 @@ public record PracticeWorkTypeDefinitionOptionsDTO(
                 description = "The occasions a practice on this work type can be bound to. A review somebody asks "
                         + "for by hand is not among them — see manualReviewSignal.")
         List<PracticeSignalOptionDTO> signals,
-        /**
-         * Carried beside {@code signals} rather than inside it so that "every entry here is a choosable
-         * occasion" holds without a reader re-deriving the exception from a signal's spelling.
-         */
+
         @Nullable
         @Schema(
                 description = "How a person asks for a review of this work type by hand, or absent where the work "

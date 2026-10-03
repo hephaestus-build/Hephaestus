@@ -20,14 +20,11 @@ export function useReviewPeople(workspaceSlug: string): ReviewPeople {
 	const membersQuery = useQuery({
 		...listMembersOptions({ path: { workspaceSlug }, query: { size: MEMBER_PAGE_SIZE } }),
 	});
-	const options: PersonOption[] = (membersQuery.data ?? [])
-		.filter((member): member is typeof member & { userId: number } => member.userId != null)
-		.map((member) => ({
-			userId: member.userId,
-			label: firstNonBlank(member.userName, member.userLogin) ?? `#${member.userId}`,
-			secondary:
-				hasText(member.userName) && hasText(member.userLogin) ? member.userLogin : undefined,
-		}));
+	const options: PersonOption[] = (membersQuery.data ?? []).map((member) => ({
+		userId: member.userId,
+		label: firstNonBlank(member.userName, member.userLogin) ?? `#${member.userId}`,
+		secondary: hasText(member.userName) && hasText(member.userLogin) ? member.userLogin : undefined,
+	}));
 
 	return {
 		options,

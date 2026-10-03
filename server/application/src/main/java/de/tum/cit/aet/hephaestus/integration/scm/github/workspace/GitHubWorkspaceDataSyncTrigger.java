@@ -11,7 +11,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRequest;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
-import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GithubDataSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncService;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,9 +23,9 @@ import org.springframework.stereotype.Component;
 /**
  * GitHub-side adapter that lets workspace lifecycle code (activation, post-install
  * provisioning) drive a full GraphQL sync without importing
- * {@link GithubDataSyncService} directly.
+ * {@link GitHubDataSyncService} directly.
  *
- * <p>{@link GithubDataSyncService} (and, for the same reason, {@link SyncTargetProvider}) is
+ * <p>{@link GitHubDataSyncService} (and, for the same reason, {@link SyncTargetProvider}) is
  * consumed via {@link ObjectProvider} because there is a known circular reference between the sync
  * service and the workspace activation layer (the sync service injects {@link SyncTargetProvider}
  * which in turn lives in the workspace module). Lazy lookup breaks the cycle without forcing the
@@ -39,14 +39,14 @@ public class GitHubWorkspaceDataSyncTrigger implements WorkspaceDataSyncTrigger 
 
     private static final Logger log = LoggerFactory.getLogger(GitHubWorkspaceDataSyncTrigger.class);
 
-    private final ObjectProvider<GithubDataSyncService> dataSyncServiceProvider;
+    private final ObjectProvider<GitHubDataSyncService> dataSyncServiceProvider;
     private final ObjectProvider<SyncTargetProvider> syncTargetProvider;
     private final ObjectProvider<ConnectionRepository> connectionRepositoryProvider;
     private final ObjectProvider<SyncJobService> syncJobServiceProvider;
     private final AsyncTaskExecutor monitoringExecutor;
 
     public GitHubWorkspaceDataSyncTrigger(
-            ObjectProvider<GithubDataSyncService> dataSyncServiceProvider,
+            ObjectProvider<GitHubDataSyncService> dataSyncServiceProvider,
             ObjectProvider<SyncTargetProvider> syncTargetProvider,
             ObjectProvider<ConnectionRepository> connectionRepositoryProvider,
             ObjectProvider<SyncJobService> syncJobServiceProvider,

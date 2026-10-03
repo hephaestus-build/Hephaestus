@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Tag;
@@ -62,7 +63,7 @@ class GeneratedPathsTest {
 
     @Test
     void shouldBoundPatternsWhenAdminSavesSettings() {
-        assertThatThrownBy(() -> GeneratedPaths.normalize(java.util.Collections.nCopies(101, "a/**")))
+        assertThatThrownBy(() -> GeneratedPaths.normalize(Collections.nCopies(101, "a/**")))
                 .isInstanceOf(InvalidReviewCoverageException.class);
         assertThatThrownBy(() -> GeneratedPaths.normalize(List.of("a".repeat(513))))
                 .isInstanceOf(InvalidReviewCoverageException.class);

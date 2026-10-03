@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Tighten the language guidance for Heph, practice reviews and feedback: use practice terminology and ask for a missing rationale without adding unsupported facts.
+Heph, practice reviews and feedback speak of practices, and ask for a missing rationale instead of supplying one the work does not show.

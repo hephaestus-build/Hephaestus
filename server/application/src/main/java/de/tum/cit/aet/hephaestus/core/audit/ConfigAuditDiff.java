@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import org.jspecify.annotations.Nullable;
@@ -46,7 +47,7 @@ final class ConfigAuditDiff {
         for (String path : allPaths) {
             // A path present on one side only is a change: snapshot shapes evolve, and a field that
             // appeared or vanished is exactly what a reader needs to see.
-            if (!java.util.Objects.equals(beforeLeaves.get(path), afterLeaves.get(path))) {
+            if (!Objects.equals(beforeLeaves.get(path), afterLeaves.get(path))) {
                 changed.add(path);
             }
         }

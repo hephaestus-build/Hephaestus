@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.notification;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,7 +58,7 @@ class AccountDeletionEmailListenerTest extends BaseUnitTest {
         listener.on(EVENT);
 
         ArgumentCaptor<Map<String, Object>> model = ArgumentCaptor.captor();
-        verify(renderer).render(org.mockito.ArgumentMatchers.eq(EmailKind.ACCOUNT_DELETION_SCHEDULED), model.capture());
+        verify(renderer).render(eq(EmailKind.ACCOUNT_DELETION_SCHEDULED), model.capture());
         assertThat(model.getValue()).containsEntry("purgeAfter", "14 September 2026 at 10:00 UTC");
         ArgumentCaptor<EmailMessage> message = ArgumentCaptor.captor();
         verify(gateway).send(message.capture());

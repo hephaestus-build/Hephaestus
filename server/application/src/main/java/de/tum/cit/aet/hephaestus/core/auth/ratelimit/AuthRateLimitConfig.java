@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core.auth.ratelimit;
 
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import io.github.bucket4j.Bucket;
 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy;
 import io.github.bucket4j.distributed.jdbc.PrimaryKeyMapper;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
@@ -108,16 +109,14 @@ public class AuthRateLimitConfig {
         log.warn("Auth rate limiting: in-JVM fallback — limits are PER-REPLICA, NOT shared across the "
                 + "cluster. Acceptable for dev / specs; production must run "
                 + "Postgres-backed (hephaestus.auth.rate-limit.postgres-backed=true with a DataSource).");
-        var store = new ConcurrentHashMap<String, io.github.bucket4j.Bucket>();
+        var store = new ConcurrentHashMap<String, Bucket>();
         return (key, config) -> {
             if (store.size() >= IN_MEMORY_MAX_BUCKETS && !store.containsKey(key)) {
                 store.clear();
             }
             return store.computeIfAbsent(
                     key,
-                    k -> io.github.bucket4j.Bucket.builder()
-                            .addLimit(config.getBandwidths()[0])
-                            .build());
+                    k -> Bucket.builder().addLimit(config.getBandwidths()[0]).build());
         };
     }
 

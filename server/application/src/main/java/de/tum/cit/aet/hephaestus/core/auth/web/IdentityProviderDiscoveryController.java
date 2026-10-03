@@ -9,6 +9,8 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -125,8 +127,8 @@ public class IdentityProviderDiscoveryController {
             return null;
         }
         try {
-            return new java.net.URI(authorizationUri).getHost();
-        } catch (java.net.URISyntaxException e) {
+            return new URI(authorizationUri).getHost();
+        } catch (URISyntaxException e) {
             return null;
         }
     }

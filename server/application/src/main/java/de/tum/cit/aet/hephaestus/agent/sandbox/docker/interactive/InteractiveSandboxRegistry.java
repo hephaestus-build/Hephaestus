@@ -38,7 +38,6 @@ public class InteractiveSandboxRegistry {
     private final InteractiveSandboxProperties properties;
     private final SandboxContainerManager containerManager;
     private final SandboxCreator creator;
-    private final InteractiveSandboxMetrics metrics;
     private final StdinWriteWatchdog watchdog;
 
     private final ConcurrentHashMap<SessionKey, DockerAttachedSandboxAdapter> sessions = new ConcurrentHashMap<>();
@@ -48,14 +47,12 @@ public class InteractiveSandboxRegistry {
     public InteractiveSandboxRegistry(
             InteractiveSandboxProperties properties,
             SandboxContainerManager containerManager,
-            InteractiveSandboxMetrics metrics,
             StdinWriteWatchdog watchdog,
             MeterRegistry meterRegistry,
             SandboxCreator creator) {
         this.properties = properties;
         this.containerManager = containerManager;
         this.creator = creator;
-        this.metrics = metrics;
         this.watchdog = watchdog;
         Gauge.builder(AgentMetrics.MENTOR_SESSION_ACTIVE, sessions, ConcurrentHashMap::size)
                 .description("Currently attached mentor sandbox sessions on this replica")
@@ -100,23 +97,22 @@ public class InteractiveSandboxRegistry {
         if (userResult.get() != null) {
             return userResult.get();
         }
-        AtomicInteger userCount = sessionsPerUser.get(id.userId());
-        if (userCount == null) {
+        if (!sessionsPerUser.containsKey(id.userId())) {
             throw new IllegalStateException("User session reservation was not created");
         }
 
         if (sessions.size() >= properties.maxSessionsTotal()) {
-            decrementUser(id.userId(), userCount);
+            decrementUser(id.userId());
             return RegistrationOutcome.MAX_SESSIONS_TOTAL;
         }
         if (sessions.putIfAbsent(key, sandbox) != null) {
-            decrementUser(id.userId(), userCount);
+            decrementUser(id.userId());
             return RegistrationOutcome.DUPLICATE;
         }
         // Race: concurrent putIfAbsent calls may have pushed total over the cap. Roll back if so.
         if (sessions.size() > properties.maxSessionsTotal()) {
             sessions.remove(key, sandbox);
-            decrementUser(id.userId(), userCount);
+            decrementUser(id.userId());
             return RegistrationOutcome.MAX_SESSIONS_TOTAL;
         }
         watchdog.register(id.sessionId(), sandbox);
@@ -136,16 +132,13 @@ public class InteractiveSandboxRegistry {
         SessionKey key = new SessionKey(id.userId(), id.workspaceId());
         boolean removed = sessions.remove(key, sandbox);
         if (removed) {
-            AtomicInteger userCount = sessionsPerUser.get(id.userId());
-            if (userCount != null) {
-                decrementUser(id.userId(), userCount);
-            }
+            decrementUser(id.userId());
         }
         watchdog.unregister(id.sessionId());
     }
 
     /** Atomic decrement-and-conditional-remove (compute holds the per-key lock). */
-    private void decrementUser(String userId, AtomicInteger userCount) {
+    private void decrementUser(String userId) {
         sessionsPerUser.compute(userId, (u, cur) -> {
             if (cur == null) return null;
             int v = cur.decrementAndGet();

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
+import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchDestination;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchRepository;
@@ -76,7 +77,7 @@ class PracticeFeedbackDispatchRecoveryTest extends BaseUnitTest {
         UUID feedbackId = UUID.randomUUID();
         FeedbackDispatch dispatch = dispatch(FeedbackDispatchDestination.APPROVED_REVIEW_PACKAGE, feedbackId);
         AgentJob job = job();
-        var unit = mock(de.tum.cit.aet.hephaestus.practices.feedback.Feedback.class);
+        var unit = mock(Feedback.class);
         when(unit.getBody()).thenReturn(dispatch.getBody());
         when(dispatches.findRecoverable(any(), anyInt(), any())).thenReturn(List.of(dispatch));
         when(dispatches.findByIdAndWorkspaceId(dispatch.getId(), 7L)).thenReturn(Optional.of(dispatch));
@@ -145,7 +146,7 @@ class PracticeFeedbackDispatchRecoveryTest extends BaseUnitTest {
                 FeedbackDispatchState.SENT,
                 "provider-42");
         AgentJob job = job();
-        var unit = mock(de.tum.cit.aet.hephaestus.practices.feedback.Feedback.class);
+        var unit = mock(Feedback.class);
         when(dispatches.findUnprojectedTerminal(any(), any())).thenReturn(List.of(dispatch));
         when(jobs.findByIdAndWorkspaceId(dispatch.getAgentJobId(), 7L)).thenReturn(Optional.of(job));
         when(feedback.findByIdAndWorkspaceId(feedbackId, 7L)).thenReturn(Optional.of(unit));

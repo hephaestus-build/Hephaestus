@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -130,7 +131,7 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
     void coverageIsReplacedWholesaleAndItsModesBecomeCurrent() {
         writesWorkspace();
         WorkspaceReviewScope selectedEmpty = new WorkspaceReviewScope(
-                ReviewRepositoryMode.SELECTED, ReviewPersonMode.SELECTED, java.util.List.of(), java.util.List.of());
+                ReviewRepositoryMode.SELECTED, ReviewPersonMode.SELECTED, List.of(), List.of());
         when(coverageService.scope(workspace)).thenReturn(WorkspaceReviewScope.ALL, selectedEmpty, selectedEmpty);
 
         PracticeReviewSettingsDTO view = service.updatePracticeReview(
@@ -165,7 +166,7 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
     void removingAndReaddingCoverageCannotMakeEarlierWorkCurrentAgain() {
         writesWorkspace();
         WorkspaceReviewScope selectedEmpty = new WorkspaceReviewScope(
-                ReviewRepositoryMode.SELECTED, ReviewPersonMode.SELECTED, java.util.List.of(), java.util.List.of());
+                ReviewRepositoryMode.SELECTED, ReviewPersonMode.SELECTED, List.of(), List.of());
         when(coverageService.scope(workspace))
                 .thenReturn(
                         WorkspaceReviewScope.ALL,

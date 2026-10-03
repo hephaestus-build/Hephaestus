@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.swagger.v3.core.converter.AnnotatedType;
 import io.swagger.v3.core.converter.ModelConverters;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.models.media.Schema;
 import java.util.List;
 import java.util.Map;
@@ -33,21 +34,21 @@ class JSpecifyRequiredModelConverterTest {
     }
 
     @Test
-    void marksExplicitlyNonNullMembersRequiredIncludingAnnotatedPrimitives() {
+    void marksExplicitlyNonNullMembersRequiredAndKeepsSchemaRequiredPrimitives() {
         Schema<?> schema = resolve(Sample.class).get("Sample");
-        org.junit.jupiter.api.Assertions.assertNotNull(schema);
+        assertThat(schema).isNotNull();
 
-        // Required iff the member is explicitly @NonNull — including an annotated primitive (mirrors
-        // the real GitLabPreflightResponseDTO#valid). @Nullable, unannotated, and *bare* primitive
-        // members stay optional.
-        assertThat(schema.getRequired()).containsExactlyInAnyOrder("nonNull", "annotatedPrimitive", "items", "nested");
+        // Required iff the member is explicitly @NonNull, or declares @Schema(requiredMode = REQUIRED)
+        // as a primitive does (mirrors the real GitLabPreflightResponseDTO#valid). @Nullable,
+        // unannotated, and *bare* primitive members stay optional.
+        assertThat(schema.getRequired()).containsExactlyInAnyOrder("nonNull", "requiredPrimitive", "items", "nested");
     }
 
     @Test
     void resolvesRequiredForNestedRecordReachedAsAJavaType() {
         // Nested types arrive at the converter as a Jackson JavaType, not a Class; this locks that path.
         Schema<?> nested = resolve(Sample.class).get("Nested");
-        org.junit.jupiter.api.Assertions.assertNotNull(nested);
+        assertThat(nested).isNotNull();
 
         assertThat(nested.getRequired()).containsExactly("x");
     }
@@ -55,18 +56,19 @@ class JSpecifyRequiredModelConverterTest {
     @Test
     void walksSuperclassFieldsForPlainClasses() {
         Schema<?> schema = resolve(Child.class).get("Child");
-        org.junit.jupiter.api.Assertions.assertNotNull(schema);
+        assertThat(schema).isNotNull();
 
         assertThat(schema.getRequired()).containsExactlyInAnyOrder("parentNonNull", "childNonNull");
     }
-
-    // --- fixtures -----------------------------------------------------------------------------
 
     record Sample(
             @NonNull String nonNull,
             @Nullable String nullable,
             String bare,
-            @NonNull int annotatedPrimitive,
+
+            @io.swagger.v3.oas.annotations.media.Schema(requiredMode = RequiredMode.REQUIRED)
+            int requiredPrimitive,
+
             int barePrimitive,
             @NonNull List<String> items,
             @NonNull Nested nested) {}

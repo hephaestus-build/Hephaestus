@@ -57,7 +57,7 @@ public class SlackThread {
     @ColumnDefault("0")
     private int messageCount = 0;
 
-    /** Conversation-detection watermark: the Slack {@code ts} through which this thread was last analysed. */
+    /** Conversation review watermark: the Slack {@code ts} through which this thread was last analysed. */
     @Column(name = "last_reviewed_ts", length = 32)
     private @Nullable String lastReviewedTs;
 

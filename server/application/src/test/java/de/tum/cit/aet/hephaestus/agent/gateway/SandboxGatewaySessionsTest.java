@@ -13,15 +13,20 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -43,8 +48,7 @@ class SandboxGatewaySessionsTest {
             try (var download = session.download("area", "chat")) {
                 first = download.input().readAllBytes();
                 assertThat(first.length).isEqualTo(download.bytes());
-                try (var tar = new org.apache.commons.compress.archivers.tar.TarArchiveInputStream(
-                        new ByteArrayInputStream(first))) {
+                try (var tar = new TarArchiveInputStream(new ByteArrayInputStream(first))) {
                     assertThat(tar.getNextEntry().getName()).isEqualTo("context/chat/channel/2026-09.jsonl");
                     assertThat(new String(tar.readAllBytes(), StandardCharsets.UTF_8))
                             .isEqualTo("message");
@@ -84,7 +88,7 @@ class SandboxGatewaySessionsTest {
     void shouldRefuseAbsentAndUnsafeSelectionsWithoutLeavingFiles() throws Exception {
         Path archive = workspaceArchive();
         try (var session = sessions.register("token", archive, "out")) {
-            for (String repository : java.util.List.of("8", "../7", "7/../8", "7%2fsecret")) {
+            for (String repository : List.of("8", "../7", "7/../8", "7%2fsecret")) {
                 assertThatThrownBy(() -> session.download("repo", repository))
                         .isInstanceOfSatisfying(
                                 ResponseStatusException.class,
@@ -95,7 +99,7 @@ class SandboxGatewaySessionsTest {
                 assertThat(paths.toList()).containsExactly(archive);
             }
             try (var download = session.download("repo", "7");
-                    var tar = new org.apache.commons.compress.archivers.tar.TarArchiveInputStream(download.input())) {
+                    var tar = new TarArchiveInputStream(download.input())) {
                 assertThat(tar.getNextEntry().getName()).isEqualTo("repos/7/README.md");
                 assertThat(new String(tar.readAllBytes(), StandardCharsets.UTF_8))
                         .isEqualTo("repository");
@@ -107,8 +111,7 @@ class SandboxGatewaySessionsTest {
     private Path workspaceArchive() throws IOException {
         Path archive = temporary.resolve("workspace.tar");
         try (var tar = new TarArchiveOutputStream(Files.newOutputStream(archive))) {
-            for (var file : java.util.Map.of(
-                            "context/chat/channel/2026-09.jsonl", "message", "repos/7/README.md", "repository")
+            for (var file : Map.of("context/chat/channel/2026-09.jsonl", "message", "repos/7/README.md", "repository")
                     .entrySet()) {
                 byte[] content = file.getValue().getBytes(StandardCharsets.UTF_8);
                 var entry = new TarArchiveEntry(file.getKey());
@@ -170,22 +173,12 @@ class SandboxGatewaySessionsTest {
                         e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
     }
 
-    @Test
-    void shouldRefuseACredentialThatIsNotABearerToken() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"Basic token", "Bearer "})
+    void shouldRefuseACredentialWhenItIsNotANonEmptyBearerToken(String authorization) throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
         try (var session = sessions.register("token", archive, "out")) {
-            assertThatThrownBy(() -> sessions.require(session.id(), "Basic token"))
-                    .isInstanceOfSatisfying(
-                            ResponseStatusException.class,
-                            e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
-        }
-    }
-
-    @Test
-    void shouldRefuseAnEmptyBearerToken() throws Exception {
-        Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
-        try (var session = sessions.register("token", archive, "out")) {
-            assertThatThrownBy(() -> sessions.require(session.id(), "Bearer "))
+            assertThatThrownBy(() -> sessions.require(session.id(), authorization))
                     .isInstanceOfSatisfying(
                             ResponseStatusException.class,
                             e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
@@ -212,7 +205,7 @@ class SandboxGatewaySessionsTest {
     void shouldNotAcceptAnInvalidArchiveAsACompletedResult() throws Exception {
         Path archive = Files.writeString(temporary.resolve("input.tar"), "input");
         try (var session = sessions.register("token", archive, "out")) {
-            assertThatThrownBy(() -> upload(session, new byte[0])).isInstanceOf(java.io.IOException.class);
+            assertThatThrownBy(() -> upload(session, new byte[0])).isInstanceOf(IOException.class);
             assertThatThrownBy(session::result).isInstanceOf(IllegalStateException.class);
 
             upload(session, resultTar());
@@ -252,6 +245,12 @@ class SandboxGatewaySessionsTest {
                         new InputStream() {
                             @Override
                             public int read() throws IOException {
+                                byte[] single = new byte[1];
+                                return read(single, 0, 1) < 0 ? -1 : single[0] & 0xFF;
+                            }
+
+                            @Override
+                            public int read(byte[] buffer, int offset, int length) throws IOException {
                                 reading.countDown();
                                 try {
                                     if (!disconnect.await(5, TimeUnit.SECONDS)) throw new IOException("Read timed out");

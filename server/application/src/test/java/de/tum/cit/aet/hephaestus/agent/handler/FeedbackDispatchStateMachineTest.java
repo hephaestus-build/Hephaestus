@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.Disposition;
+import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -80,8 +83,8 @@ class FeedbackDispatchStateMachineTest extends BaseUnitTest {
     @Test
     void shouldReadStoredPermalinksAndKeepLegacyPlacementsWithoutInventingLinks() {
         var mapper = new ObjectMapper();
-        var dispatch = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch.class);
-        org.mockito.Mockito.when(dispatch.getDeliveredPlacements()).thenReturn(mapper.readTree("""
+        var dispatch = mock(FeedbackDispatch.class);
+        when(dispatch.getDeliveredPlacements()).thenReturn(mapper.readTree("""
             [{"deliveryKey":"key","path":"Same.java","startLine":10,"disposition":"POSTED",
               "externalRef":"opaque:1","externalUrl":"https://gitlab.example.com/a/b/-/merge_requests/1#note_123"},
              {"deliveryKey":"legacy","path":"Same.java","startLine":11,"disposition":"POSTED",

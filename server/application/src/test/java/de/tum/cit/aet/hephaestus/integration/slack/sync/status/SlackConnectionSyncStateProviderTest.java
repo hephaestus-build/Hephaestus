@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.sync.status;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConnectionSyncDetails;
@@ -23,6 +22,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -42,7 +42,7 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
 
     private final SlackRateLimitTracker rateLimitTracker = new SlackRateLimitTracker(new SimpleMeterRegistry());
 
-    private SlackConnectionSyncStateProvider provider = mock(SlackConnectionSyncStateProvider.class);
+    private SlackConnectionSyncStateProvider provider;
 
     private SlackConnectionSyncStateProvider providerWith(String cron) {
         return new SlackConnectionSyncStateProvider(
@@ -52,7 +52,8 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
                 rateLimitTracker);
     }
 
-    private void setUpDefault() {
+    @BeforeEach
+    void setUp() {
         provider = providerWith("0 0 4 * * *");
     }
 
@@ -65,8 +66,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
      */
     @Test
     void describe_webhookRegisteredIsNull_becauseSlackSubscriptionStateIsNotObservable() {
-        setUpDefault();
-
         ConnectionSyncDetails details = provider.describe(REF, CONNECTION_ID);
 
         assertThat(details.webhookRegistered()).isNull();
@@ -81,8 +80,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
      */
     @Test
     void describe_neverThrottled_reportsNoRateLimit() {
-        setUpDefault();
-
         assertThat(provider.describe(REF, CONNECTION_ID).rateLimit()).isNull();
     }
 
@@ -92,7 +89,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
      */
     @Test
     void describe_afterObserved429_reportsThrottledUntilAndNoQuota() {
-        setUpDefault();
         rateLimitTracker.recordThrottle(WS, 60_000L);
 
         var rateLimit = provider.describe(REF, CONNECTION_ID).rateLimit();
@@ -107,7 +103,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
     /** A throttle on a different workspace must not leak into this one's status. */
     @Test
     void describe_throttleOnAnotherWorkspace_isNotReportedHere() {
-        setUpDefault();
         rateLimitTracker.recordThrottle(WS + 1, 60_000L);
 
         assertThat(provider.describe(REF, CONNECTION_ID).rateLimit()).isNull();
@@ -140,7 +135,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
 
     @Test
     void resources_mapsEachMonitoredChannelAndConvertsTheSlackTsWatermark() {
-        setUpDefault();
         Instant syncedAt = Instant.now().minus(Duration.ofHours(2)).truncatedTo(ChronoUnit.SECONDS);
         SlackMonitoredChannel channel = new SlackMonitoredChannel();
         channel.setId(101L);
@@ -173,7 +167,6 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
 
     @Test
     void resources_channelWithoutADisplayName_fallsBackToTheSlackChannelId() {
-        setUpDefault();
         SlackMonitoredChannel channel = new SlackMonitoredChannel();
         channel.setId(102L);
         channel.setWorkspaceId(WS);

@@ -12,6 +12,7 @@ import liquibase.Contexts;
 import liquibase.Liquibase;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
+import liquibase.exception.PreconditionFailedException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -44,7 +45,7 @@ class ObservationAssessmentMigrationTest {
                 ('PRESENT','BAD',NULL,'must not invent severity')
             """);
         assertThatThrownBy(ObservationAssessmentMigrationTest::migrate)
-                .hasRootCauseInstanceOf(liquibase.exception.PreconditionFailedException.class);
+                .hasRootCauseInstanceOf(PreconditionFailedException.class);
         execute("DELETE FROM observation WHERE evidence = 'must not invent severity'");
         migrate();
         try (Connection connection = connect();

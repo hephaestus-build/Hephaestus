@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountContactQuery;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.notification.email.EmailGateway;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,7 +28,7 @@ public class NotificationSubscriptionService {
     private final NotificationSubscriptionRepository subscriptions;
     private final AccountContactQuery contacts;
     private final EmailGateway gateway;
-    private final java.time.Clock clock;
+    private final Clock clock;
 
     public boolean isEnabled(long accountId, NotificationSubscriptionKind kind) {
         return subscriptions
@@ -47,8 +49,7 @@ public class NotificationSubscriptionService {
     }
 
     /** A later opt-in must not revive an older optional request. */
-    public Optional<String> unsubscribeToken(
-            long accountId, NotificationSubscriptionKind kind, java.time.Instant requestedAt) {
+    public Optional<String> unsubscribeToken(long accountId, NotificationSubscriptionKind kind, Instant requestedAt) {
         return subscriptions
                 .findByAccountIdAndKind(accountId, kind)
                 .filter(NotificationSubscription::isEnabled)

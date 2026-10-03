@@ -268,7 +268,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 												return (
 													<Item key={link.connectionId} variant="outline" role="listitem">
 														<ItemMedia variant="icon">
-															<Icon aria-hidden="true" />
+															<Icon />
 														</ItemMedia>
 														<ItemContent>
 															<ItemTitle className="break-words">{link.displayName}</ItemTitle>

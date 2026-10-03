@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceContract;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
@@ -25,11 +26,17 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembershipRepository;
 import java.io.IOException;
+import java.io.Serial;
 import java.io.UncheckedIOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,6 +44,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.commons.io.FileUtils;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
@@ -59,6 +67,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
     private final ReviewRepositoryPreparer repositoryPreparer;
     private final ReviewHistoryContentSource history;
     private final ReviewMemberAiPolicy memberAiPolicy;
+    private final PersonDataCopyRecorder personCopies;
 
     public WorkspaceFolderRenderer(
             WorkspaceScmProjection scmProjection,
@@ -72,10 +81,12 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
             ReviewHistoryContentSource history,
             ReviewMemberAiPolicy memberAiPolicy,
             WorkspaceMembershipRepository memberships,
-            PracticeRepository practices) {
+            PracticeRepository practices,
+            PersonDataCopyRecorder personCopies) {
         this.scmProjection = scmProjection;
         this.memberships = memberships;
         this.practices = practices;
+        this.personCopies = personCopies;
         this.mapper = mapper;
         this.documents = documents;
         this.conversations = conversations;
@@ -101,7 +112,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
     public Set<SourceKind> sourceKinds() {
         return policies.current().sources().stream()
                 .map(ArtifactSourceContract::kind)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -197,7 +208,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
             var permittedRepositories = repositoryPreparer.permittedRepositories(workspace);
             var permittedIds = permittedRepositories.stream()
                     .map(repository -> repository.getId())
-                    .collect(java.util.stream.Collectors.toSet());
+                    .collect(Collectors.toSet());
             for (var repository : repositoryPreparer.monitoredRepositories(workspace)) {
                 if (!permittedIds.contains(repository.getId()))
                     refusals.add(new WorkspaceRefusal(
@@ -242,6 +253,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                                         repo,
                                         SourceAbsenceReason.PROVIDER_FAILURE));
                             } else {
+                                personCopies.recordRepository(id);
                                 files.addDirectory(snapshot.stagingDir());
                                 Path target = root.resolve("repos/" + repo);
                                 copy(snapshot.stagingDir(), target);
@@ -301,6 +313,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
                 for (var membership : memberships.findByWorkspace_Id(workspace)) {
                     if (membership.isHidden()) continue;
                     var person = membership.getUser();
+                    personCopies.recordUser(person.getId());
                     if (!memberAiPolicy.allowsPerson(job, person.getId())) {
                         refusals.add(new WorkspaceRefusal(
                                 WorkspaceRefusal.Target.RECORD,
@@ -376,24 +389,20 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
 
     private static void copy(Path source, Path target) {
         try {
-            Files.walkFileTree(source, new java.nio.file.SimpleFileVisitor<>() {
+            Files.walkFileTree(source, new SimpleFileVisitor<>() {
                 @Override
-                public java.nio.file.FileVisitResult preVisitDirectory(
-                        Path directory, java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
+                public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attributes)
+                        throws IOException {
                     Files.createDirectories(target.resolve(source.relativize(directory)));
-                    return java.nio.file.FileVisitResult.CONTINUE;
+                    return FileVisitResult.CONTINUE;
                 }
 
                 @Override
-                public java.nio.file.FileVisitResult visitFile(
-                        Path file, java.nio.file.attribute.BasicFileAttributes attributes) throws IOException {
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
                     if (!attributes.isRegularFile())
                         throw new IOException("Repository snapshot contains a non-regular file");
-                    Files.copy(
-                            file,
-                            target.resolve(source.relativize(file)),
-                            java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
-                    return java.nio.file.FileVisitResult.CONTINUE;
+                    Files.copy(file, target.resolve(source.relativize(file)), StandardCopyOption.COPY_ATTRIBUTES);
+                    return FileVisitResult.CONTINUE;
                 }
             });
         } catch (IOException exception) {
@@ -537,7 +546,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
 
     /** Per-render accounting is constant time per record and includes Git objects, not just worktree blobs. */
     private static final class BudgetedFiles extends LinkedHashMap<String, Path> {
-        @java.io.Serial
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final HashMap<String, Long> sizes = new HashMap<>();
@@ -581,8 +590,7 @@ public class WorkspaceFolderRenderer implements EvidenceSource {
     }
 
     private static String segment(String input) {
-        String encoded =
-                java.net.URLEncoder.encode(input, StandardCharsets.UTF_8).replace("+", "%20");
+        String encoded = URLEncoder.encode(input, StandardCharsets.UTF_8).replace("+", "%20");
         if (encoded.equals(".")) return "%2E";
         if (encoded.equals("..")) return "%2E%2E";
         return encoded.isEmpty() ? "_" : encoded;

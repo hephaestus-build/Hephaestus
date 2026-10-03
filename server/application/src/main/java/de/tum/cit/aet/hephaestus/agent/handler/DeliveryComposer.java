@@ -106,7 +106,7 @@ class DeliveryComposer {
 
         List<ValidatedObservation> negatives = observations.stream()
                 .filter(DeliveryComposer::isProblem)
-                .sorted(Comparator.comparingInt(f -> severity(f).ordinal()))
+                .sorted(Comparator.comparingInt(f -> severity(f).rank()))
                 .toList();
 
         // WITHHOLD suppresses the summary unless another unit supplies a note for the practice.
@@ -215,7 +215,7 @@ class DeliveryComposer {
             }
         }
 
-        // The notes on the diff are built first, because a finding that could not be placed on a line —
+        // The notes on the diff are built first, because feedback that could not be placed on a line —
         // capped, or its anchor no longer in the diff — has to fall back into the summary rather than
         // vanish between the two surfaces.
         var placed = collectDiffNotes(inlinable, rendering);
@@ -372,10 +372,10 @@ class DeliveryComposer {
     private static final int RECURRING_BUDGET = 200;
 
     /**
-     * The opening sits where a reader trusts the message most, so it is held to a narrower contract than a
-     * finding body: nothing that can restructure the comment around itself, no link, and no verdict on
+     * The opening sits where a reader trusts the comment most, so it is held to a narrower contract than an
+     * observation's body: nothing that can restructure the comment around itself, no link, and no verdict on
      * merging — which the composer is never told and could only invent. A lead reaching for any of them is
-     * dropped whole, and the note opens on its first finding instead.
+     * dropped whole, and the note opens on its first observation instead.
      */
     private static final Pattern LEAD_REJECTED = Pattern.compile(
             "```|~~~|<!--|\\]\\(|\\]\\[|^\\s{0,3}(?:#{1,6}\\s|>|\\||[-+*]\\s|\\d+[.)]\\s|-{3,}|={3,})"
@@ -524,7 +524,7 @@ class DeliveryComposer {
     }
 
     private static void composeObservation(StringBuilder sb, ValidatedObservation f, Rendering rendering) {
-        // A finding about the pull request itself has no line to point at, so it reads as a sentence among
+        // An observation about the pull request itself has no line to point at, so it reads as a sentence among
         // the ones the review wrote. Three bold headers in a row turn an opening paragraph into a form.
         if (extractPrimaryLocation(f) == null) {
             composeArtifactObservation(sb, f, rendering);
@@ -635,7 +635,7 @@ class DeliveryComposer {
         String path = location.contains(":") ? location.substring(0, location.lastIndexOf(':')) : location;
         int dot = path.lastIndexOf('.');
         if (dot < 0 || dot == path.length() - 1) return "";
-        String ext = path.substring(dot + 1).toLowerCase();
+        String ext = path.substring(dot + 1).toLowerCase(Locale.ROOT);
         return EXT_TO_LANG.getOrDefault(ext, "");
     }
 
@@ -830,7 +830,7 @@ class DeliveryComposer {
         }
     }
 
-    record ComposedNotes(Map<ValidatedObservation, ComposedNote> byObservation) {
+    record ComposedNotes(IdentityHashMap<ValidatedObservation, ComposedNote> byObservation) {
         /**
          * Gives each composed unit to the observation it is rendered at: one of its own practice that it cites,
          * and for a line note the one it anchors to. A unit citing anything this delivery does not admit is
@@ -840,7 +840,7 @@ class DeliveryComposer {
                 List<ValidatedObservation> ordered,
                 List<ValidatedObservation> admitted,
                 List<ComposedFeedbackUnit> units) {
-            Map<ValidatedObservation, ComposedNote> byObservation = new IdentityHashMap<>();
+            IdentityHashMap<ValidatedObservation, ComposedNote> byObservation = new IdentityHashMap<>();
             for (ComposedFeedbackUnit unit : units) {
                 if (unit.channel() != FeedbackChannel.IN_CONTEXT
                         || unit.action() == ComposedFeedbackUnit.Action.WITHHOLD) {
@@ -859,7 +859,7 @@ class DeliveryComposer {
                 for (ValidatedObservation f : ordered) {
                     if (!byObservation.containsKey(f)
                             && f.practiceSlug().equals(unit.practiceSlug())
-                            && note.cited().stream().anyMatch(c -> c == f)
+                            && note.cited().stream().anyMatch(c -> same(c, f))
                             && (anchored == null || anchored.equals(f.observationId()))) {
                         byObservation.put(f, note);
                         break;
@@ -884,11 +884,16 @@ class DeliveryComposer {
                 if (match == null) {
                     return null;
                 }
-                if (cited.stream().noneMatch(c -> c == match)) {
+                if (cited.stream().noneMatch(c -> same(c, match))) {
                     cited.add(match);
                 }
             }
             return cited;
+        }
+
+        @SuppressWarnings("ReferenceEquality") // identity: value-equal observations are distinct, as claim() keys them
+        private static boolean same(ValidatedObservation a, ValidatedObservation b) {
+            return a == b;
         }
 
         private static @Nullable UUID idOf(String id) {

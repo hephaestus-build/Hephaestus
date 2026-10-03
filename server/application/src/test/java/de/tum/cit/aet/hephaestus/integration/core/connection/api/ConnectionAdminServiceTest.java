@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
@@ -30,8 +31,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Covers the logic that moved out of the controller — workspace-scoped lookup +
@@ -150,7 +151,7 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
                 "200",
                 new BearerToken("ol-test", null),
                 Map.of("server_url", "https://wiki.example.com"),
-                "alice");
+                42L);
 
         assertThat(result.getId()).isEqualTo(99L);
         assertThat(result.getKind()).isEqualTo(IntegrationKind.OUTLINE);
@@ -165,10 +166,10 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
         assertThat(result.credentials(credentialConverter)).contains(new BearerToken("ol-test", null));
 
         ArgumentCaptor<TransitionRequest> req = ArgumentCaptor.forClass(TransitionRequest.class);
-        Mockito.verify(connectionService).transition(any(Connection.class), req.capture());
+        verify(connectionService).transition(any(Connection.class), req.capture());
         assertThat(req.getValue().next()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(req.getValue().eventType()).isEqualTo("INITIATE");
-        assertThat(req.getValue().actorRef()).isEqualTo("alice");
+        assertThat(req.getValue().actorAccountId()).isEqualTo(42L);
         assertThat(req.getValue().correlationId()).startsWith("initiate-99-");
     }
 
@@ -176,17 +177,11 @@ class ConnectionAdminServiceTest extends BaseUnitTest {
     void createInlineConnection_missingWorkspace_throws() {
         when(workspaceRepository.findById(99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createInlineConnection(
-                        99L, IntegrationKind.OUTLINE, "x", new BearerToken("t", null), Map.of(), "alice"))
+                        99L, IntegrationKind.OUTLINE, "x", new BearerToken("t", null), Map.of(), 42L))
                 .isInstanceOf(EntityNotFoundException.class);
     }
 
     private static void setId(Connection c, long id) {
-        try {
-            var f = Connection.class.getDeclaredField("id");
-            f.setAccessible(true);
-            f.set(c, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(c, "id", id);
     }
 }

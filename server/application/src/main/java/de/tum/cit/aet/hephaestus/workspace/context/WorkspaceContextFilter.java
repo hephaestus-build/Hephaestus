@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -211,9 +212,7 @@ public class WorkspaceContextFilter implements Filter {
             // Pin the verified actor id; a session's display login may belong to a different provider.
             resolveWorkspaceIdentity(workspace, currentUsers, membership.memberUserIds())
                     .ifPresent(user -> CurrentScmIdentityHolder.set(
-                            java.util.Objects.requireNonNull(user.getId()),
-                            user.getLogin(),
-                            membership.memberUserIds()));
+                            Objects.requireNonNull(user.getId()), user.getLogin(), membership.memberUserIds()));
 
             log.debug(
                     "Set workspace context: workspaceSlug={}, workspaceId={}, roles={}",

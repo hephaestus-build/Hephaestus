@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenServic
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHRateLimit;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
@@ -125,8 +126,6 @@ public class GitHubGraphQlClientProvider {
         return clientFactory.withBearerToken(baseClient, token);
     }
 
-    // Rate Limit Tracking (Per-Scope)
-
     /**
      * Extracts rate limit data from the {@code rateLimit} field of a GraphQL response and updates the
      * tracker for the given scope. Call after every GraphQL query execution.
@@ -162,7 +161,7 @@ public class GitHubGraphQlClientProvider {
     }
 
     /** @return the reset instant, or null if unknown */
-    public java.time.@Nullable Instant getRateLimitResetAt(Long scopeId) {
+    public @Nullable Instant getRateLimitResetAt(Long scopeId) {
         return rateLimitTracker.getResetAt(scopeId);
     }
 

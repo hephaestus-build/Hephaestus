@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.audit.spi;
 
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -12,4 +13,6 @@ import org.jspecify.annotations.Nullable;
  * would be silently dropped from the spec.
  */
 public record ConfigAuditActorRefDTO(
-        Long id, @Nullable String displayName, @Nullable String email) {}
+        @NonNull Long id,
+        @Nullable String displayName,
+        @Nullable String email) {}

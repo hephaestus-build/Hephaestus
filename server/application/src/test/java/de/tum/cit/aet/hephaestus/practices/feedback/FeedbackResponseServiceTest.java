@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,12 +60,8 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
         service = new FeedbackResponseService(
                 reactionRepository, feedbackRepository, currentDeveloperLookup, withdrawalRepository);
         workspaceContext = new WorkspaceContext(WORKSPACE_ID, "test-ws", "Test WS", null, null, false, Set.of());
-        org.mockito.Mockito.lenient()
-                .when(currentDeveloperLookup.currentDeveloperIdElseThrow())
-                .thenReturn(CONTRIBUTOR_ID);
-        org.mockito.Mockito.lenient()
-                .when(currentDeveloperLookup.currentDeveloperId())
-                .thenReturn(Optional.of(CONTRIBUTOR_ID));
+        lenient().when(currentDeveloperLookup.currentDeveloperIdElseThrow()).thenReturn(CONTRIBUTOR_ID);
+        lenient().when(currentDeveloperLookup.currentDeveloperId()).thenReturn(Optional.of(CONTRIBUTOR_ID));
     }
 
     private void stubCurrentResponse(
@@ -78,7 +76,7 @@ class FeedbackResponseServiceTest extends BaseUnitTest {
             @Nullable FeedbackResolution resolution,
             @Nullable String comment,
             boolean absentBeforeReplacement) {
-        var projection = org.mockito.Mockito.mock(ReactionRepository.CurrentResponseProjection.class);
+        var projection = mock(ReactionRepository.CurrentResponseProjection.class);
         when(projection.getUsefulness()).thenReturn(usefulness == null ? null : usefulness.name());
         when(projection.getResolution()).thenReturn(resolution == null ? null : resolution.name());
         when(projection.getComment()).thenReturn(comment);

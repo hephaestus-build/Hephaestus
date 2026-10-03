@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.practices;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
@@ -48,7 +51,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
 
     @Test
     void shouldAppendANewStandardRevisionOnceWithoutRewritingHistoricalProvenance() {
-        PracticeRevision historical = org.mockito.Mockito.mock(PracticeRevision.class);
+        PracticeRevision historical = mock(PracticeRevision.class);
         when(historical.getReviewRuleFingerprint()).thenReturn("v4:" + "a".repeat(64));
         when(historical.getRevisionNumber()).thenReturn(4);
         practice.setCurrentRevision(historical);
@@ -58,9 +61,9 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
         PracticeRevision current = service.forReview(practice);
         assertThat(current.getRevisionNumber()).isEqualTo(5);
         assertThat(current.getReviewRuleFingerprint()).startsWith("v5:");
-        assertThat(historical.getReviewRuleFingerprint()).startsWith("v4:");
         assertThat(service.forReview(practice)).isSameAs(current);
-        org.mockito.Mockito.verify(revisionRepository).save(current);
+        verify(revisionRepository).save(current);
+        verify(revisionRepository, never()).save(historical);
     }
 
     @Test
@@ -80,7 +83,7 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void capturesTheDefinitionAsItWasSoAFindingCanCiteIt() {
+    void capturesTheDefinitionAsItWasSoAnObservationCanCiteIt() {
         when(revisionRepository.findFirstByPracticeIdOrderByRevisionNumberDesc(42L))
                 .thenReturn(Optional.empty());
 
@@ -103,12 +106,12 @@ class PracticeRevisionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void editingTheDetectionCriteriaChangesTheFingerprint() {
+    void editingTheCriteriaChangesTheFingerprint() {
         when(revisionRepository.findFirstByPracticeIdOrderByRevisionNumberDesc(42L))
                 .thenReturn(Optional.empty());
         String before = service.append(practice).getReviewRuleFingerprint();
 
-        practice.setCriteria("Changed detector criteria");
+        practice.setCriteria("Changed criteria");
 
         assertThat(service.append(practice).getReviewRuleFingerprint()).isNotEqualTo(before);
     }

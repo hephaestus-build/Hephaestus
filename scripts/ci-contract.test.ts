@@ -15,6 +15,7 @@ import { versionBranch } from "./dispatch-version-pr-ci.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, isRecord } from "./lib/json.ts";
+import { exitStatus } from "./lib/process.ts";
 import { commandsOf, loadTasks } from "./lib/task-graph.ts";
 import { planRelease, releaseOutputs } from "./plan-release.ts";
 import { resolveAliasBase } from "./resolve-alias-base.ts";
@@ -275,7 +276,7 @@ async function runStep(
 		outputs: Object.fromEntries(outputs),
 		// What the shell said, for the assertion to carry. A step's own message is the difference
 		// between a failure somebody can fix and `true !== false` on a machine they do not have.
-		diagnosis: `exit ${run.status}\n${run.stderr.trim()}`.trim(),
+		diagnosis: `exit ${exitStatus(run.status, run.signal)}\n${run.stderr.trim()}`.trim(),
 	};
 }
 
@@ -1129,7 +1130,7 @@ void describe("CI contract", () => {
 		for (const [file, kind] of [
 			["ci-quality-gates.yml", "storybook"],
 			["cd-docs.yml", "docs"],
-		]) {
+		] as const) {
 			const source = await readFile(`.github/workflows/${file}`, "utf8");
 			assert.match(source, /scripts\/publish-preview-comments\.ts/u);
 			assert.ok(source.includes(`kind: "${kind}", path: process.env.PREVIEW_COMMENT_PATH`));
@@ -1842,8 +1843,7 @@ void describe("CI contract", () => {
 		// Parity with the release gate, asserted by the release gate itself: this is the manifest that
 		// would evidence exactly the pre-release subject set, and validateManifest rejects a manifest
 		// whose subjects are not exactly the inventory. So an image the pre-release scans miss, or one
-		// they cover that the release does not, fails here — which is what v0.75.0 needed and did not
-		// have when the upstream half was scanned nowhere before the release (#1741).
+		// they cover that the release does not, fails here.
 		const manifest = {
 			schemaVersion: 1,
 			subjects: scanned.flatMap((subject) =>
@@ -1922,7 +1922,7 @@ void describe("CI contract", () => {
 	});
 
 	void test("performs every release evidence check that does not need a release before the release", async () => {
-		// #1741 pinned *subject* parity: the pre-release scans cover the images the release covers.
+		// The test above pins *subject* parity: the pre-release scans cover the images the release covers.
 		// This is *check* parity, which subject parity does not imply — the vulnerability policy was
 		// only ever one of the things the release gate evaluates. The bundle it judges is produced by
 		// one generator and judged by one verifier, and both run before a release exists, so the only
@@ -2115,10 +2115,9 @@ void describe("CI contract", () => {
 
 		// A demand the run cannot satisfy is not a gate, it is a wall. The preflight evidences every
 		// image on both published platforms — the vulnerability policy's match key includes the
-		// platform, so an arm64-only finding must not reach a release undiscovered (#1743) — and it
-		// can only do that for manifests that exist. So wherever the gate demands a preflight, the
-		// same run's image builds have to publish both. A pull request on that branch published
-		// `linux/amd64` alone and could not, which is what blocked v0.75.1.
+		// platform, so an arm64-only finding must not reach a release undiscovered — and it can only
+		// do that for manifests that exist. So wherever the gate demands a preflight, the same run's
+		// image builds have to publish both.
 		const architectures = String(workflow.getIn([...detection, "outputs", "single-arch"]));
 		const shape =
 			/^\$\{\{ \(github\.event_name == '(?<first>\w+)' \|\| github\.event_name == '(?<second>\w+)'\) && steps\.release_candidate\.outputs\.release-candidate != 'true' \}\}$/u.exec(
@@ -2444,10 +2443,10 @@ void describe("CI contract", () => {
 		).toJS();
 		assert.ok(isRecord(ignore) && Array.isArray(ignore.vulnerabilities));
 		const now = Date.now();
-		for (const entry of ignore.vulnerabilities) {
-			const fault = exceptionFault(entry, now);
-			assert.equal(fault, undefined, `security/trivy-dependency-ignore.yaml entry ${fault}`);
-		}
+		const faults = ignore.vulnerabilities
+			.map((entry: unknown) => exceptionFault(entry, now))
+			.filter((fault) => fault !== undefined);
+		assert.deepEqual(faults, [], "security/trivy-dependency-ignore.yaml entries");
 	});
 
 	void test("rejects a dependency exception that names no subject or outlives the ceiling", () => {
@@ -3048,7 +3047,7 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 		["webapp", "webapp"],
 		["extension", "extension"],
 		["windows", "tooling"],
-	]) {
+	] as const) {
 		assert.equal(
 			workflow.getIn(["jobs", leg, "if"]),
 			leg === "server"
@@ -3274,7 +3273,7 @@ void test("CI does not run CodeQL analysis or retain extraction-only compiler ex
 		assert.doesNotMatch(await readFile(file, "utf8"), /codeqlExtraction/u);
 	}
 	const build = await readFile("server/application/build.gradle.kts", "utf8");
-	assert.match(build, /error\("NullAway", "RequireExplicitNullMarking"\)/u);
+	assert.match(build, /error\(\s*"NullAway",\s*"RequireExplicitNullMarking"[,)]/u);
 	assert.match(build, /"-Werror"/u);
 });
 

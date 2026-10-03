@@ -21,6 +21,7 @@ import io.nats.client.api.RetentionPolicy;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
 import io.nats.client.api.StreamInfo;
+import io.nats.client.api.StreamState;
 import java.time.Duration;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -91,7 +92,7 @@ class JetStreamPublisherTopologyTest {
                 .build();
         StreamInfo info = mock(StreamInfo.class);
         lenient().when(info.getConfiguration()).thenReturn(config);
-        lenient().when(info.getStreamState()).thenReturn(mock(io.nats.client.api.StreamState.class));
+        lenient().when(info.getStreamState()).thenReturn(mock(StreamState.class));
         return info;
     }
 

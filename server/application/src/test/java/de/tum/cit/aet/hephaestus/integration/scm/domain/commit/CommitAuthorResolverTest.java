@@ -17,7 +17,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 
 class CommitAuthorResolverTest extends BaseUnitTest {
@@ -117,7 +116,7 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
             assertThat(result).isEqualTo(42L);
             verify(userRepository).findByEmail("author@example.com");
-            verify(userRepository, never()).findByLogin(ArgumentMatchers.anyString());
+            verify(userRepository, never()).findByLogin(anyString());
         }
 
         @Test
@@ -166,7 +165,7 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
             assertThat(result).isNull();
             // Dotted local-parts are not login-shaped, so Strategy 3 should skip them.
-            verify(userRepository, never()).findByLogin(ArgumentMatchers.anyString());
+            verify(userRepository, never()).findByLogin(anyString());
         }
 
         @Test
@@ -191,7 +190,7 @@ class CommitAuthorResolverTest extends BaseUnitTest {
             Long result = resolver.resolveByEmail("group_319719_bot_abc123@noreply.gitlab.lrz.de", null);
 
             assertThat(result).isNull();
-            verify(userRepository, never()).findByLogin(ArgumentMatchers.anyString());
+            verify(userRepository, never()).findByLogin(anyString());
         }
 
         @Test
@@ -204,7 +203,7 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
             assertThat(result).isEqualTo(55L);
             // Should not proceed to login lookup since email matched
-            verify(userRepository, never()).findByLogin(ArgumentMatchers.anyString());
+            verify(userRepository, never()).findByLogin(anyString());
         }
     }
 

@@ -60,7 +60,7 @@ const explainsTheChange: CuratedPracticeSummary = {
 	automatedReview,
 	groupSlug: "review-ready-work",
 	effectivelyOffered: true,
-	status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
+	status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }),
 };
 
 const groups: CuratedGroup[] = [
@@ -130,7 +130,7 @@ const meta = {
 		practices,
 		summary: {
 			total: groups.length + practices.length,
-			updatesChangingDetection: 1,
+			updatesChangingReview: 1,
 			updatesChangingWordingOnly: 1,
 			updatesChangingPresentation: 0,
 			editedHere: 0,
@@ -250,7 +250,7 @@ export const NothingHasBeenChanged: Story = {
 		groups: groups.map((group) => ({ ...group, status: status() })),
 		summary: {
 			total: groups.length + practices.length,
-			updatesChangingDetection: 0,
+			updatesChangingReview: 0,
 			updatesChangingWordingOnly: 0,
 			updatesChangingPresentation: 0,
 			editedHere: 0,
@@ -346,7 +346,7 @@ export const ExcludingAGroupDoesNotRecountExcludedPractices: Story = {
 		summary: {
 			...meta.args.summary,
 			total: 2,
-			updatesChangingDetection: 0,
+			updatesChangingReview: 0,
 			updatesChangingWordingOnly: 0,
 			noLongerShipped: 0,
 		},
@@ -376,7 +376,7 @@ export const Empty: Story = {
 		practices: [],
 		summary: {
 			total: 0,
-			updatesChangingDetection: 0,
+			updatesChangingReview: 0,
 			updatesChangingWordingOnly: 0,
 			updatesChangingPresentation: 0,
 			editedHere: 0,

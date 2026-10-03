@@ -33,6 +33,6 @@ public record GitLabUserLookup(
 
     /** GitLab's {@code bot} flag in a user object of a response, or {@code null} when absent or unreadable. */
     public static @Nullable Boolean botOf(@Nullable Map<?, ?> user) {
-        return user != null && user.get("bot") instanceof Boolean bot ? bot : null;
+        return (user != null && user.get("bot") instanceof Boolean bot) ? bot : null;
     }
 }

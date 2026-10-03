@@ -21,6 +21,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommen
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.IssueEvidenceRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,7 +38,7 @@ import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Materialises the ISSUE detection context under {@code inputs/context/} — the no-diff counterpart of
+ * Materialises the issue review context under {@code inputs/context/} — the no-diff counterpart of
  * {@link PullRequestContentSource}:
  * <ul>
  *   <li>{@code metadata.json} — issue metadata (state, labels, assignees, milestone, sub-issue rollup)</li>
@@ -158,10 +161,10 @@ public class IssueContentSource implements EvidenceSource, ReviewContextBuilder 
                 return EvidenceContribution.unavailable(selectedKinds, SourceAbsenceReason.NOT_FOUND);
             }
         }
-        Map<String, byte[]> files = new java.util.LinkedHashMap<>();
-        Map<SourceKind, SourceCompleteness> completeness = new java.util.HashMap<>();
-        Map<SourceKind, java.time.Instant> observedAt = new java.util.HashMap<>();
-        Map<SourceKind, SourceContentState> contentStates = new java.util.HashMap<>();
+        Map<String, byte[]> files = new LinkedHashMap<>();
+        Map<SourceKind, SourceCompleteness> completeness = new HashMap<>();
+        Map<SourceKind, Instant> observedAt = new HashMap<>();
+        Map<SourceKind, SourceContentState> contentStates = new HashMap<>();
 
         if (selectedKinds.contains(CORE)) {
             String repoFullName =

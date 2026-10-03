@@ -2,7 +2,7 @@ import { CircleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
-import { HephMark } from "~/components/brand/HephaestusLogo";
+import { HephMark } from "@/components/brand/HephaestusLogo";
 import { ExternalLink } from "~/components/common/ExternalLink";
 import { where } from "~/components/report/comment-location";
 import { PageLink } from "~/components/report/PageLink";

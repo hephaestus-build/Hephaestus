@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -8,7 +9,6 @@ import com.tngtech.archunit.lang.ArchRule;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.TreeSet;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +43,7 @@ class PracticesIntegrationBoundaryTest extends HephaestusArchitectureTest {
      * Every dependency from {@code practices} into an integration package outside {@link #ALLOWED_PACKAGES},
      * as {@code <practices class> -> <integration class>}. What removes each: the {@code User}/
      * {@code UserRepository} entries need a {@code practices.spi} port for "who is the current developer"
-     * (the same shape as {@code UserRoleChecker}); the detection-gate entries need a gate that takes a
+     * (the same shape as {@code UserRoleChecker}); the review-gate entries need a gate that takes a
      * recorded signal and a workspace rather than an entity.
      *
      * <p>ArchUnit reads bytecode, and javac inlines {@code String} constants, so a practices-side use of a
@@ -85,7 +85,7 @@ class PracticesIntegrationBoundaryTest extends HephaestusArchitectureTest {
         Set<String> added = new TreeSet<>(current);
         added.removeAll(FROZEN_VIOLATIONS);
 
-        Assertions.assertThat(added)
+        assertThat(added)
                 .as(
                         "New dependency from practices into integration internals. The contract is reachable "
                                 + "through %s — take a port, do not take an entity.",
@@ -99,7 +99,7 @@ class PracticesIntegrationBoundaryTest extends HephaestusArchitectureTest {
         Set<String> stale = new TreeSet<>(FROZEN_VIOLATIONS);
         stale.removeAll(current);
 
-        Assertions.assertThat(stale)
+        assertThat(stale)
                 .as("These frozen violations are gone — delete them so the list can only ever shrink")
                 .isEmpty();
     }

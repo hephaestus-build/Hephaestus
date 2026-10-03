@@ -33,7 +33,7 @@ import org.jspecify.annotations.Nullable;
 @WorkspaceAgnostic("Consumed at OAuth callback before workspace context is established")
 public class OAuthStateNonce {
 
-    /** The raw nonce produced by {@link HmacOAuthStateService#issue} — base64url, 16 bytes. */
+    /** The raw nonce produced by {@link HmacOAuthStateService#issue} — base64url, 12 random bytes. */
     @Id
     @Column(name = "nonce", length = 32, nullable = false, updatable = false)
     private String nonce;
@@ -54,13 +54,24 @@ public class OAuthStateNonce {
     @Nullable
     private Instant consumedAt;
 
+    @Column(name = "actor_account_id", updatable = false)
+    @Nullable
+    private Long actorAccountId;
+
     protected OAuthStateNonce() {}
 
-    public OAuthStateNonce(String nonce, long workspaceId, String kind, Instant issuedAt) {
+    public OAuthStateNonce(
+            String nonce, long workspaceId, String kind, Instant issuedAt, @Nullable Long actorAccountId) {
         this.nonce = nonce;
         this.workspaceId = workspaceId;
         this.kind = kind;
         this.issuedAt = issuedAt;
+        this.actorAccountId = actorAccountId;
+    }
+
+    @Nullable
+    public Long getActorAccountId() {
+        return actorAccountId;
     }
 
     public String getNonce() {

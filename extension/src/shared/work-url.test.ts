@@ -70,7 +70,6 @@ describe("parseWorkPage", () => {
 		"https://gitlab.example.test/g/p/-/issues/3/diffs",
 		"https://gitlab.example.test/g/p/-/epics/3",
 		"https://gitlab.example.test/g/p/-/merge_requests/3/diffs/extra",
-		// oxlint-disable-next-line no-script-url -- The grammar must refuse one.
 		"javascript:alert(1)",
 		"chrome://extensions",
 		"not a url",

@@ -123,12 +123,12 @@ void test("every pin of one toolchain version moves in a single pull request", (
 		["pnpm", "pnpm toolchain"],
 		["ghcr.io/pnpm/pnpm", "pnpm toolchain"],
 		["@earendil-works/pi-coding-agent", "Pi SDK"],
-	]) {
+	] as const) {
 		const index = rules.findLastIndex(
 			(rule) => Array.isArray(rule.matchDepNames) && rule.matchDepNames.includes(depName),
 		);
 		assert.equal(rules[index]?.groupName, groupName, `${depName} must be grouped as ${groupName}`);
-		assert.equal(rules[index]?.matchUpdateTypes, undefined, `${depName} groups every update type`);
+		assert.equal(rules[index].matchUpdateTypes, undefined, `${depName} groups every update type`);
 		assert.ok(index > lastUngroupedRule, `${depName} must follow the high-risk update rules`);
 	}
 });

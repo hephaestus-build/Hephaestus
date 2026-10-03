@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -20,17 +21,22 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ScmTokenSource;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class ReviewRepositoryPreparerTest extends BaseUnitTest {
     @Mock
@@ -51,6 +57,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
     private ReviewRepositoryPreparer preparer;
     private AgentJob job;
     private Repository repository;
+    private PullRequest pullRequest;
     private static final RepositoryKey KEY = new RepositoryKey(1, 2);
     private static final String HEAD = "a".repeat(40);
 
@@ -61,13 +68,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
                 .when(git.reviewBase(any(), anyString(), anyString()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
         preparer = new ReviewRepositoryPreparer(
-                git,
-                pullRequests,
-                monitors,
-                connections,
-                List.of(tokens),
-                org.mockito.Mockito.mock(
-                        de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository.class));
+                git, pullRequests, monitors, connections, List.of(tokens), mock(RepositoryRepository.class));
         var workspace = new Workspace();
         workspace.setId(1L);
         job = new AgentJob();
@@ -88,15 +89,15 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         provider.setType(IdentityProviderType.GITLAB);
         provider.setServerUrl("https://scm.example");
         repository.setProvider(provider);
-        var pr = new PullRequest();
-        pr.setRepository(repository);
-        pr.setNumber(42);
-        pr.setHeadRefOid(HEAD);
-        when(pullRequests.findByIdWithAuthorAndRepository(3L)).thenReturn(Optional.of(pr));
+        pullRequest = new PullRequest();
+        pullRequest.setRepository(repository);
+        pullRequest.setNumber(42);
+        pullRequest.setHeadRefOid(HEAD);
+        when(pullRequests.findByIdWithAuthorAndRepository(3L)).thenReturn(Optional.of(pullRequest));
     }
 
     private void pinNoBase(String targetBranch) {
-        var metadata = (tools.jackson.databind.node.ObjectNode) java.util.Objects.requireNonNull(job.getMetadata());
+        var metadata = (ObjectNode) Objects.requireNonNull(job.getMetadata());
         metadata.remove("base_ref_oid");
         metadata.put("target_branch", targetBranch);
     }
@@ -191,7 +192,7 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         authorize();
         assertThat(preparer.authorize(job)).isEqualTo(KEY);
         verifyNoInteractions(git);
-        org.mockito.Mockito.verify(tokens, org.mockito.Mockito.never()).accessToken(1);
+        verify(tokens, never()).accessToken(1);
     }
 
     @Test
@@ -201,13 +202,12 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         verifyNoInteractions(git, connections, tokens);
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     void shouldUseTheRecordedGitlabDiffBaseIncludingAnEmptyRange(boolean empty) {
         authorize();
         String base = empty ? HEAD : "c".repeat(40);
-        var mr = pullRequests.findByIdWithAuthorAndRepository(3L).orElseThrow();
-        mr.setBaseRefOid(base);
+        pullRequest.setBaseRefOid(base);
         when(tokens.recordsReviewDiffBase()).thenReturn(true);
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
         when(git.commitExists(KEY, HEAD)).thenReturn(true);
@@ -216,13 +216,12 @@ class ReviewRepositoryPreparerTest extends BaseUnitTest {
         verify(git, never()).reviewBase(any(), anyString(), anyString());
     }
 
-    @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
     void shouldRefuseAStaleRecordedRevisionOrMissingBase(boolean stale) {
         authorize();
-        var mr = pullRequests.findByIdWithAuthorAndRepository(3L).orElseThrow();
-        mr.setBaseRefOid("c".repeat(40));
-        mr.setHeadRefOid(stale ? "d".repeat(40) : HEAD);
+        pullRequest.setBaseRefOid("c".repeat(40));
+        pullRequest.setHeadRefOid(stale ? "d".repeat(40) : HEAD);
         when(tokens.recordsReviewDiffBase()).thenReturn(true);
         when(tokens.accessToken(1)).thenReturn(Optional.of("private-token"));
         when(git.commitExists(KEY, HEAD)).thenReturn(true);

@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.issuecomment.dto.GitLabN
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.user.GitLabUserService;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -402,7 +403,7 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
 
     private Issue.State convertIssueState(@Nullable String state) {
         if (state == null) return Issue.State.OPEN;
-        return switch (state.toLowerCase()) {
+        return switch (state.toLowerCase(Locale.ROOT)) {
             case "opened" -> Issue.State.OPEN;
             case "closed" -> Issue.State.CLOSED;
             default -> Issue.State.OPEN;
@@ -411,7 +412,7 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
 
     private Issue.State convertMrState(@Nullable String state) {
         if (state == null) return Issue.State.OPEN;
-        return switch (state.toLowerCase()) {
+        return switch (state.toLowerCase(Locale.ROOT)) {
             case "opened" -> Issue.State.OPEN;
             case "closed" -> Issue.State.CLOSED;
             case "merged" -> Issue.State.MERGED;

@@ -730,8 +730,8 @@ export function PracticeDefinitionForm(props: PracticeDefinitionFormProps) {
 								<p className="text-sm text-muted-foreground">
 									A practice is reviewed on one occasion: the moments that start a review, and what
 									that review reads. A way of working worth judging differently at a different
-									moment — what is in front of you when the work arrives, what was never resolved by
-									the merge — is a second practice rather than a second occasion.
+									moment, such as what is in front of you when the work arrives or what was never
+									resolved by the merge, is a second practice rather than a second occasion.
 								</p>
 							</div>
 

@@ -30,9 +30,8 @@ class GitHubLiveMilestoneSyncIntegrationTest extends AbstractGitHubLiveSyncInteg
         var milestone =
                 createRepositoryMilestone(repository.fullName(), "IT milestone", "Focused milestone sync coverage");
 
-        repositorySyncService
-                .syncRepository(workspace.getId(), repository.fullName(), githubProvider, null)
-                .orElseThrow();
+        assertThat(repositorySyncService.syncRepository(workspace.getId(), repository.fullName(), githubProvider, null))
+                .isPresent();
         var localRepo =
                 repositoryRepository.findByNameWithOwner(repository.fullName()).orElseThrow();
 

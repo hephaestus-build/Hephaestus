@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
@@ -226,7 +227,7 @@ class InAppFeedbackRouterTest extends BaseUnitTest {
 
     /** {@code count} problems, each on a different piece of work. */
     private static List<Observation> problems(int count, ObservationOrigin origin) {
-        return java.util.stream.IntStream.rangeClosed(1, count)
+        return IntStream.rangeClosed(1, count)
                 .mapToObj(i -> observation(i, origin, Outcome.NOT_MET))
                 .toList();
     }

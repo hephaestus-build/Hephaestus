@@ -40,7 +40,7 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
 
     @Test
     @Transactional
-    void keepsAJobThatIsTheOnlyProvenanceForAStoredFinding() {
+    void keepsAJobThatIsTheOnlyProvenanceForAStoredObservation() {
         var owner = persistUser("retention-owner");
         Workspace workspace =
                 createWorkspace("retention-observation", "Retention", "retention-org", AccountType.ORG, owner);
@@ -57,10 +57,10 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
         AgentJob referenced = oldTerminalJob(workspace);
         AgentJob unreferenced = oldTerminalJob(workspace);
         jobRepository.saveAllAndFlush(List.of(referenced, unreferenced));
-        UUID findingId = UUID.randomUUID();
+        UUID observationId = UUID.randomUUID();
         observationRepository.insertIfAbsent(
-                findingId,
-                "retention-" + findingId,
+                observationId,
+                "retention-" + observationId,
                 referenced.getId(),
                 referenced.getWorkspace().getId(),
                 practice.getId(),
@@ -68,7 +68,7 @@ class AgentJobRetentionObservationIntegrationTest extends AbstractWorkspaceInteg
                 ArtifactKinds.PULL_REQUEST.value(),
                 7L,
                 owner.getId(),
-                "Stored finding",
+                "Stored observation",
                 "NOT_MET",
                 "MAJOR",
                 "{}",

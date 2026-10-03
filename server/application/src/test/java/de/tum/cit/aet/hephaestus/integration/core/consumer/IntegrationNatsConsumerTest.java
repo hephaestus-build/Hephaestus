@@ -158,17 +158,17 @@ class IntegrationNatsConsumerTest {
     void shouldReapDurableWhenInactiveThresholdIsConfigured() {
         var config = IntegrationNatsConsumer.newConsumerConfiguration(
                 new String[] {"github.>"},
-                NatsConsumerPropertiesFixture.withInactiveThreshold(Duration.ofHours(72)),
+                NatsConsumerPropertiesFixture.withInactiveThreshold(Duration.ofDays(3)),
                 "heph-github");
 
-        assertThat(config.getInactiveThreshold()).isEqualTo(Duration.ofHours(72));
+        assertThat(config.getInactiveThreshold()).isEqualTo(Duration.ofDays(3));
     }
 
     @Test
     void shouldLeaveEphemeralLifetimeAloneWhenInactiveThresholdIsConfigured() {
         var config = IntegrationNatsConsumer.newConsumerConfiguration(
                 new String[] {"github.>"},
-                NatsConsumerPropertiesFixture.withInactiveThreshold(Duration.ofHours(72)),
+                NatsConsumerPropertiesFixture.withInactiveThreshold(Duration.ofDays(3)),
                 null);
 
         assertThat(config.getInactiveThreshold()).isNull();

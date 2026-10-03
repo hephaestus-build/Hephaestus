@@ -48,9 +48,9 @@ public final class ConfigurationReadinessEvaluator {
     }
 
     public List<ConfigurationFactDTO> evaluateDeployment() {
-        BooleanSetting serverRole = booleanSetting("hephaestus.runtime.server.enabled", true);
-        BooleanSetting workerRole = booleanSetting("hephaestus.runtime.worker.enabled", true);
-        BooleanSetting webhookRole = booleanSetting("hephaestus.runtime.webhook.enabled", true);
+        BooleanSetting serverRole = booleanSetting(RuntimeRole.SERVER_PROPERTY, true);
+        BooleanSetting workerRole = booleanSetting(RuntimeRole.WORKER_PROPERTY, true);
+        BooleanSetting webhookRole = booleanSetting(RuntimeRole.WEBHOOK_PROPERTY, true);
         boolean server = serverRole.value();
         boolean worker = workerRole.value();
         boolean webhook = webhookRole.value();
@@ -251,8 +251,7 @@ public final class ConfigurationReadinessEvaluator {
 
     public List<ConfigurationFactDTO> evaluateReadiness(boolean hasSignInProvider) {
         List<ConfigurationFactDTO> facts = new ArrayList<>(evaluateDeployment());
-        boolean server =
-                booleanSetting("hephaestus.runtime.server.enabled", true).value();
+        boolean server = booleanSetting(RuntimeRole.SERVER_PROPERTY, true).value();
         add(
                 facts,
                 "auth.login-provider",
@@ -422,7 +421,7 @@ public final class ConfigurationReadinessEvaluator {
             String scheme = uri.getScheme();
             return ("nats".equalsIgnoreCase(scheme) || "tls".equalsIgnoreCase(scheme))
                     && uri.getHost() != null
-                    && (port == -1 || port > 0 && port <= 65535)
+                    && (port == -1 || (port > 0 && port <= 65535))
                     && (uri.getPath().isEmpty() || "/".equals(uri.getPath()))
                     && uri.getQuery() == null
                     && uri.getFragment() == null;

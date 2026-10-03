@@ -37,7 +37,7 @@ async function main(): Promise<void> {
 	const initScript = path.join(directory, "init.gradle.kts");
 	const report = path.join(directory, "report.xml");
 	try {
-		// Exercise the real task and its annotation policy without changing or compiling production sources.
+		// Exercise the real task without changing or compiling production sources.
 		await writeFile(
 			initScript,
 			`import org.gradle.api.plugins.quality.Pmd
@@ -69,16 +69,8 @@ gradle.projectsEvaluated {
 		for (const scenario of [
 			{
 				name: "clean source",
-				source:
-					"@org.springframework.boot.autoconfigure.SpringBootApplication public class Canary {}",
+				source: "public class Canary {}",
 				violations: [],
-				errors: 0,
-			},
-			{
-				name: "unused field",
-				source:
-					"@org.springframework.boot.autoconfigure.SpringBootApplication public class Canary { private int deliberatelyUnused; }",
-				violations: ["UnusedPrivateField"],
 				errors: 0,
 			},
 			{

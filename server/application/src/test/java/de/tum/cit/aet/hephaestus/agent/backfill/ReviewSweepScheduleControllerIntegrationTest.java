@@ -140,7 +140,7 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
         webTestClient
                 .put()
                 .uri(SCHEDULES + "/{id}", workspace.getWorkspaceSlug(), scheduleId)
-                .headers(asAdminAccount())
+                .headers(ReviewSweepScheduleControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(Map.of("cadence", "WEEKLY", "lookbackDays", 7, "enabled", false))
                 .exchange()
@@ -161,7 +161,7 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
         webTestClient
                 .delete()
                 .uri(SCHEDULES + "/{id}", workspace.getWorkspaceSlug(), scheduleId)
-                .headers(asAdminAccount())
+                .headers(ReviewSweepScheduleControllerIntegrationTest::asAdminAccount)
                 .exchange()
                 .expectStatus()
                 .isNoContent()
@@ -175,7 +175,7 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
         webTestClient
                 .delete()
                 .uri(SCHEDULES + "/{id}", workspace.getWorkspaceSlug(), UUID.randomUUID())
-                .headers(asAdminAccount())
+                .headers(ReviewSweepScheduleControllerIntegrationTest::asAdminAccount)
                 .exchange()
                 .expectStatus()
                 .isNotFound()
@@ -186,14 +186,14 @@ class ReviewSweepScheduleControllerIntegrationTest extends AbstractWorkspaceInte
         return webTestClient
                 .post()
                 .uri(SCHEDULES, workspace.getWorkspaceSlug())
-                .headers(asAdminAccount())
+                .headers(ReviewSweepScheduleControllerIntegrationTest::asAdminAccount)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(body)
                 .exchange();
     }
 
-    private static java.util.function.Consumer<HttpHeaders> asAdminAccount() {
-        return headers -> headers.setBearerAuth(ADMIN_ACCOUNT_TOKEN);
+    private static void asAdminAccount(HttpHeaders headers) {
+        headers.setBearerAuth(ADMIN_ACCOUNT_TOKEN);
     }
 
     private static Map<String, Object> body(String artifactKind, String cadence, int lookbackDays) {

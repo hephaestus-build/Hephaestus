@@ -38,7 +38,6 @@ import {
 	type ServerCallbackRequest,
 } from "./pi-mentor-protocol.ts";
 import { loadProviderConfig, reasoningSetting, registerHephaestusProvider } from "./pi-provider.ts";
-import { hasText } from "./pi-text.ts";
 
 /** The Pi SDK module, resolved from `<workspace>/node_modules` by bare specifier at runtime. */
 type PiSdk = typeof PiSdkModule;
@@ -155,8 +154,8 @@ function asJsonRpcId(value: unknown): JsonRpcId | undefined {
 		: undefined;
 }
 
-// LF-only line splitter. JSON.stringify leaves U+2028/U+2029 unescaped (nodejs/node-v0.x-archive
-// #8221) so any splitter that treats Unicode line separators as newlines would corrupt JSON
+// LF-only line splitter. JSON.stringify leaves U+2028/U+2029 unescaped (nodejs/node-v0.x-archive#8221)
+// so any splitter that treats Unicode line separators as newlines would corrupt JSON
 // payloads. We split on 0x0a only (CRLF tolerant); this is what Node `readline` does too, but
 // rolling our own keeps the framing rule trivially auditable and shared with the test fixture.
 function createLineSplitter(onLine: (line: string) => void): (chunk: Buffer) => void {
@@ -401,11 +400,7 @@ async function createPiRuntime(sdk: PiSdk, agentDir: string): Promise<MentorRunt
 		allowModelNetwork: false,
 	});
 	const providerConfig = loadProviderConfig(CWD);
-	if (
-		providerConfig === null ||
-		!hasText(providerConfig.modelId) ||
-		!registerHephaestusProvider(sharedModelRuntime, providerConfig)
-	) {
+	if (!registerHephaestusProvider(sharedModelRuntime, providerConfig)) {
 		throw new Error(
 			"Hephaestus provider is not configured — pi-provider.json and proxy credentials are required",
 		);
@@ -1054,10 +1049,11 @@ async function compactBeforePrompt(rt: MentorRuntime, state: ThreadState) {
 			cause: error,
 		});
 	}
-	if (rt.compactionDue(result.estimatedTokensAfter)) {
-		throw new Error(
-			`This conversation is still too long after shortening it (${result.estimatedTokensAfter} estimated tokens).`,
-		);
+	const after = result.estimatedTokensAfter;
+	if (rt.compactionDue(after)) {
+		// Pi reports an estimate only when it made one.
+		const estimate = after === undefined ? "" : ` (${after} estimated tokens)`;
+		throw new Error(`This conversation is still too long after shortening it${estimate}.`);
 	}
 }
 

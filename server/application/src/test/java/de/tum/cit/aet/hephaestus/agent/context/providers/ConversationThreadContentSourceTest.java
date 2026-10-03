@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.context.providers;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
@@ -23,7 +24,6 @@ import org.mockito.Mock;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Unit tests for the conversation-thread content source. */
 class ConversationThreadContentSourceTest extends BaseUnitTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
@@ -72,7 +72,7 @@ class ConversationThreadContentSourceTest extends BaseUnitTest {
         // Required so a missing thread aborts rather than emitting a hollow positive — mirrors IssueContentSource.
         assertThat(source.required()).isTrue();
         assertThat(files).containsKey("context/conversation_thread.json");
-        String written = new String(files.get("context/conversation_thread.json"));
+        String written = new String(files.get("context/conversation_thread.json"), UTF_8);
         assertThat(written).contains("\"channel\" : \"C0ABC\"").contains("\"messageCount\" : 3");
     }
 

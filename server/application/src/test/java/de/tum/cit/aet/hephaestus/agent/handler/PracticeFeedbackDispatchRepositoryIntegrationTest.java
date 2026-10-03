@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -40,6 +41,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -76,7 +78,7 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
         job.setJobType(AgentJobType.PULL_REQUEST_REVIEW);
         job.setArtifactKind(ArtifactKinds.PULL_REQUEST);
         job.setStatus(AgentJobStatus.COMPLETED);
-        job.setConfigSnapshot(tools.jackson.databind.node.JsonNodeFactory.instance.objectNode());
+        job.setConfigSnapshot(JsonNodeFactory.instance.objectNode());
         jobId = jobRepository.saveAndFlush(job).getId();
     }
 
@@ -334,7 +336,7 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
     }
 
     private int claim(UUID dispatchId, String owner, Instant leaseUntil) {
-        int loaded = java.util.Objects.requireNonNull(jdbcTemplate.queryForObject(
+        int loaded = Objects.requireNonNull(jdbcTemplate.queryForObject(
                 "SELECT attempt_count FROM feedback_dispatch WHERE id = ?", Integer.class, dispatchId));
         return transactions.execute(
                 status -> dispatchRepository.claim(dispatchId, workspace.getId(), owner, leaseUntil, 8, loaded));
@@ -359,7 +361,7 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
     }
 
     private UUID insertDispatch(long workspaceId, UUID owningJobId, String key) {
-        return java.util.Objects.requireNonNull(
+        return Objects.requireNonNull(
                 tryInsertDispatch(workspaceId, owningJobId, key), "the insert this test builds on must land");
     }
 
@@ -370,7 +372,7 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
         job.setJobType(type);
         job.setArtifactKind(kind);
         job.setStatus(AgentJobStatus.COMPLETED);
-        job.setConfigSnapshot(tools.jackson.databind.node.JsonNodeFactory.instance.objectNode());
+        job.setConfigSnapshot(JsonNodeFactory.instance.objectNode());
         return jobRepository.saveAndFlush(job).getId();
     }
 
@@ -384,8 +386,8 @@ class PracticeFeedbackDispatchRepositoryIntegrationTest extends AbstractWorkspac
                         .surface(surface)
                         .stage(DeliveryPolicyStage.EGRESS)
                         .allowed(true)
-                        .checks(tools.jackson.databind.node.JsonNodeFactory.instance.arrayNode())
-                        .facts(tools.jackson.databind.node.JsonNodeFactory.instance.objectNode())
+                        .checks(JsonNodeFactory.instance.arrayNode())
+                        .facts(JsonNodeFactory.instance.objectNode())
                         .build())
                 .getId();
     }

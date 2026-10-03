@@ -8,7 +8,7 @@ import { SyncResourcesTable } from "@/components/admin/integrations/SyncResource
 import { SyncStatusHeader } from "@/components/admin/integrations/SyncStatusHeader";
 import { WorkspaceRepositoriesSettings } from "@/components/admin/integrations/WorkspaceRepositoriesSettings";
 import { WorkspaceScmTokenSettings } from "@/components/admin/integrations/WorkspaceScmTokenSettings";
-import { GithubIcon, GitlabIcon } from "@/components/icons/brand";
+import { GitHubIcon, GitLabIcon } from "@/components/icons/brand";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { buttonVariants } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useScmIntegration } from "@/hooks/use-scm-integration";
 import { workspaceAdminHead } from "@/lib/page-title";
 
-const SCM_ICONS = { GITHUB: GithubIcon, GITLAB: GitlabIcon };
+const SCM_ICONS = { GITHUB: GitHubIcon, GITLAB: GitLabIcon };
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/integrations/scm")({
 	head: workspaceAdminHead("Source control"),

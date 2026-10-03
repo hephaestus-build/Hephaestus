@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaMethod;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
+import com.tngtech.archunit.core.domain.properties.HasAnnotations;
 import de.tum.cit.aet.hephaestus.core.AuditExempt;
 import de.tum.cit.aet.hephaestus.core.AuditLedger;
 import de.tum.cit.aet.hephaestus.core.Audited;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Every admin mutation endpoint must declare whether it is audited: {@link Audited} names the ledger
@@ -155,8 +157,7 @@ class AuditByDefaultArchTest extends HephaestusArchitectureTest {
     static boolean isController(JavaClass clazz) {
         // Meta-annotated too: @WorkspaceScopedController composes @RestController, and every
         // workspace-admin surface uses it.
-        return (clazz.isAnnotatedWith(org.springframework.web.bind.annotation.RestController.class)
-                || clazz.isMetaAnnotatedWith(org.springframework.web.bind.annotation.RestController.class));
+        return (clazz.isAnnotatedWith(RestController.class) || clazz.isMetaAnnotatedWith(RestController.class));
     }
 
     static boolean isMutation(JavaMethod method) {
@@ -177,14 +178,13 @@ class AuditByDefaultArchTest extends HephaestusArchitectureTest {
                 || isInstanceAdminGated(method.getOwner()));
     }
 
-    private static boolean hasWorkspaceAdminGate(
-            com.tngtech.archunit.core.domain.properties.HasAnnotations<?> element) {
+    private static boolean hasWorkspaceAdminGate(HasAnnotations<?> element) {
         return element.getAnnotations().stream()
                 .map(a -> a.getRawType().getSimpleName())
                 .anyMatch(n -> n.equals("RequireAtLeastWorkspaceAdmin") || n.equals("RequireWorkspaceOwner"));
     }
 
-    private static boolean isInstanceAdminGated(com.tngtech.archunit.core.domain.properties.HasAnnotations<?> element) {
+    private static boolean isInstanceAdminGated(HasAnnotations<?> element) {
         // Meta-annotated too, matching isController: a composed @InstanceAdmin annotation would
         // otherwise take its endpoints out of the rule entirely.
         return element.tryGetAnnotationOfType(PreAuthorize.class)

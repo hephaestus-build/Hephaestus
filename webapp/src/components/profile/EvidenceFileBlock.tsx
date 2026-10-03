@@ -9,8 +9,6 @@ import { hasText } from "@/lib/text";
 
 import { type EvidenceLocation, evidenceLineRangeLabel, splitPath } from "./evidence";
 
-const SECRET_SCANNER = "secret-diff-scanner";
-
 const DIFF_SIDES = ["OLD", "NEW"] as const;
 
 /** What the line was and what it became, told apart by the wash the status colours give them. */
@@ -23,7 +21,6 @@ const DIFF_SIDE_TINTS = {
 
 interface EvidenceFileBlockProps {
 	location: EvidenceLocation;
-	detector?: string;
 }
 
 /**
@@ -31,7 +28,7 @@ interface EvidenceFileBlockProps {
  * `object` one points into the runner's own context, which the reader cannot open, so it captions
  * the source's name and no numbers.
  */
-export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps) {
+export function EvidenceFileBlock({ location }: EvidenceFileBlockProps) {
 	const source = evidenceSourceDef(location.sourceKind);
 	const locatedByLine = source.locator === "code";
 	const { directory, fileName } = splitPath(location.path);
@@ -86,7 +83,7 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
 			{location.redacted && (
 				<p className="flex items-start gap-2 border-t p-3 text-sm text-muted-foreground">
 					<ShieldAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-					{redactionSentence(locatedByLine, detector)}
+					{redactionSentence(locatedByLine)}
 				</p>
 			)}
 			{hasSnippet && (
@@ -128,12 +125,7 @@ export function EvidenceFileBlock({ location, detector }: EvidenceFileBlockProps
  * caption above, so the sentence can point at them; an object citation shows the source's name and
  * no numbers at all, so promising a path and a line there would point at nothing on screen.
  */
-function redactionSentence(locatedByLine: boolean, detector?: string): string {
-	if (detector === SECRET_SCANNER) {
-		return locatedByLine
-			? "Not quoted. This looked like a credential, so the text was never stored. The path and line above are where it sits."
-			: "Not quoted. This looked like a credential, so the text was never stored.";
-	}
+function redactionSentence(locatedByLine: boolean): string {
 	return locatedByLine
 		? "Not quoted. The passage was withheld, so only its location was kept."
 		: "Not quoted. The passage was withheld.";

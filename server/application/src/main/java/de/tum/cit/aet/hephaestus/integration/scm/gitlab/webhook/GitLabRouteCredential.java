@@ -105,6 +105,7 @@ public class GitLabRouteCredential {
         }
     }
 
+    @SuppressWarnings("ArrayRecordComponent") // HMAC key bytes; never compared, hashed or printed
     private record SigningKey(String keyId, byte[] secret) {}
 
     private final @Nullable SigningKey current;

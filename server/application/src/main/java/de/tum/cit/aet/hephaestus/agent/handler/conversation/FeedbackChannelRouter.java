@@ -73,7 +73,7 @@ public class FeedbackChannelRouter {
         if (context.recipientRole() != RecipientRole.AUTHOR) {
             return ConversationRoutingDecision.REVIEWER_DEFERRED;
         }
-        if (!(observation.getOutcome().isDecided()) || observation.getOutcome() != Outcome.NOT_MET) {
+        if (!observation.getOutcome().isDecided() || observation.getOutcome() != Outcome.NOT_MET) {
             return ConversationRoutingDecision.NOT_DELIVERABLE;
         }
         if (hasNaturalInlineAnchor(observation)) {

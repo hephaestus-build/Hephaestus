@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -23,7 +24,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 
 /**
  * One due schedule's turn.
@@ -129,7 +129,7 @@ class ReviewSweepCampaignOpenerTest extends BaseUnitTest {
         assertThat(opener().openDueRun(SCHEDULE_ID, NOW)).isEqualTo(ReviewSweepOutcome.SKIPPED_CAMPAIGN_UNDER_WAY);
 
         verify(runRepository, never()).save(any());
-        Mockito.verifyNoInteractions(scopeRepository, costEstimator, configAudit);
+        verifyNoInteractions(scopeRepository, costEstimator, configAudit);
     }
 
     @Test
@@ -166,7 +166,7 @@ class ReviewSweepCampaignOpenerTest extends BaseUnitTest {
         assertThat(opener().openDueRun(SCHEDULE_ID, NOW)).isEqualTo(ReviewSweepOutcome.SKIPPED_SCOPE_TOO_LARGE);
 
         verify(runRepository, never()).save(any());
-        Mockito.verifyNoInteractions(costEstimator);
+        verifyNoInteractions(costEstimator);
     }
 
     @Test

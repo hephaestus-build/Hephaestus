@@ -17,7 +17,7 @@ import org.jspecify.annotations.Nullable;
  * operator surfaces are closed to the body.
  *
  * <p>{@code criteria} is deliberately absent, as it is on the reflective read model: the criteria text
- * is instruction for the detector, and a developer reading it would be reading the rubric they were
+ * is instruction for the review, and a developer reading it would be reading the rubric they were
  * measured with rather than the practice they are learning. Only the developer framing travels —
  * {@code whyItMatters} and {@code whatGoodLooksLike}.
  *

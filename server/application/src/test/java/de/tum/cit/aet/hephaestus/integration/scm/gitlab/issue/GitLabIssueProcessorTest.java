@@ -5,8 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,7 +54,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
 
 @Tag("unit")
@@ -473,7 +474,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
             assertThat(result).isNotNull();
 
             ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, Mockito.times(2)).publishEvent(eventCaptor.capture());
+            verify(eventPublisher, times(2)).publishEvent(eventCaptor.capture());
             assertThat(eventCaptor.getAllValues())
                     .extracting(Object::getClass)
                     .containsExactlyInAnyOrder(ScmDomainEvent.IssueUpdated.class, ScmDomainEvent.IssueReopened.class);
@@ -500,7 +501,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     createUpdateEventWithAddedLabel(new GitLabWebhookLabel(99L, "bug", "#ff0000")), createContext());
 
             ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
-            verify(eventPublisher, Mockito.atLeastOnce()).publishEvent(captor.capture());
+            verify(eventPublisher, atLeastOnce()).publishEvent(captor.capture());
             assertThat(captor.getAllValues()).anyMatch(e -> e instanceof ScmDomainEvent.IssueLabeled);
         }
 
@@ -658,41 +659,12 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                             any());
         }
 
-        @Test
-        void processFromSyncInvalidGlobalId() {
+        @ParameterizedTest
+        @CsvSource({"invalid-id, 5", "gid://gitlab/Issue/422296, not-a-number"})
+        void shouldSkipTheIssueWhenItsGlobalIdOrIidIsMalformed(String globalId, String iid) {
             var syncData = new GitLabIssueProcessor.SyncIssueData(
-                    "invalid-id",
-                    "5",
-                    "Title",
-                    null,
-                    "opened",
-                    false,
-                    "https://example.com",
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    0,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null);
-            Issue result = processor.processFromSync(syncData, testRepo, 1L);
-
-            assertThat(result).isNull();
-        }
-
-        @Test
-        void processFromSyncInvalidIid() {
-            var syncData = new GitLabIssueProcessor.SyncIssueData(
-                    "gid://gitlab/Issue/422296",
-                    "not-a-number",
+                    globalId,
+                    iid,
                     "Title",
                     null,
                     "opened",
@@ -1218,8 +1190,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
         @Test
         void shouldFallBackToProviderScopedLookupForSubgroupOrg() {
             // Subgroup orgs have no own issue_type seed rows: the org-scoped lookup misses and the
-            // provider-scoped fallback (the documented LazyInitializationException workaround) resolves
-            // the shared provider-global row.
+            // provider-scoped fallback resolves the shared provider-global row.
             var organization = new Organization();
             organization.setId(99L);
             testRepo.setOrganization(organization);

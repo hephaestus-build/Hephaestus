@@ -59,7 +59,7 @@ public interface PullRequestReviewRepository extends JpaRepository<PullRequestRe
      * <p>Ordered most-recent-first ({@code submittedAt DESC, id DESC}) so the consumer's
      * {@code MAX_DECISIONS} truncation keeps the LATEST decisions: on a heavily-reviewed PR a
      * superseding final APPROVE must not be dropped, which would manufacture a false "merged past
-     * unresolved request-changes" finding. {@code id} breaks ties on equal/null timestamps.
+     * unresolved request-changes" observation. {@code id} breaks ties on equal/null timestamps.
      */
     @Query("""
         SELECT prr

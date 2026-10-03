@@ -5,8 +5,23 @@ import type { StatusDefs } from "@/components/common/status-def";
 
 import { READERS } from "./feedback-copy";
 
-/** "a study run by X" — a research survey always names the organisation it was published for. */
-export function studyOf(survey: Pick<SurveyInvitation, "researchOrganization">): string {
+interface ResearchSurvey {
+	purpose: "RESEARCH";
+	researchOrganization: string;
+}
+
+/**
+ * Whether a survey is research. The server makes a survey research exactly when it names a research
+ * organisation, so that organisation is the test, and every survey that passes it carries one.
+ */
+export function isResearch<T extends Pick<SurveyInvitation, "purpose" | "researchOrganization">>(
+	survey: T,
+): survey is T & ResearchSurvey {
+	return survey.researchOrganization !== undefined;
+}
+
+/** "a study run by X", naming the organisation a research survey was published for. */
+export function studyOf(survey: Pick<ResearchSurvey, "researchOrganization">): string {
 	return `a study run by ${survey.researchOrganization}`;
 }
 

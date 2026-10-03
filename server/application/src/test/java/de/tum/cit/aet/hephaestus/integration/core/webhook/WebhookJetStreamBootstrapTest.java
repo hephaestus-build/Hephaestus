@@ -26,8 +26,10 @@ import io.nats.client.api.StreamInfo;
 import io.nats.client.api.StreamState;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -91,7 +93,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
         WebhookProperties overridden = WebhookPropertiesFixture.with(new WebhookProperties.Stream(
                 Duration.ofMinutes(10),
                 Duration.ofDays(180),
-                Map.of("slack", Duration.ofHours(72)),
+                Map.of("slack", Duration.ofDays(3)),
                 gibibytes(1),
                 Map.of("github", gibibytes(8)),
                 gibibytes(12),
@@ -110,7 +112,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
                 .filteredOn(config -> "slack".equals(config.getName()))
                 .singleElement()
                 .satisfies(config -> {
-                    assertThat(config.getMaxAge()).isEqualTo(Duration.ofHours(72));
+                    assertThat(config.getMaxAge()).isEqualTo(Duration.ofDays(3));
                     assertThat(config.getMaxBytes()).isEqualTo(GIBIBYTE);
                 });
         assertThat(captor.getAllValues())
@@ -211,7 +213,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
         // moment the update lands.
         StreamInfo info = existing(
                 builder -> builder.maxAge(Duration.ofDays(365)),
-                state(GIBIBYTE / 2, 10, 1, ZonedDateTime.now().minusDays(200)));
+                state(GIBIBYTE / 2, 10, 1, ZonedDateTime.now(ZoneOffset.UTC).minusDays(200)));
         JetStreamManagement jsm = mock(JetStreamManagement.class);
         when(jsm.getStreamInfo(anyString())).thenReturn(info);
 
@@ -225,7 +227,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     void appliesARetentionCutThatReachesNothingStored() throws Exception {
         StreamInfo info = existing(
                 builder -> builder.maxAge(Duration.ofDays(365)),
-                state(GIBIBYTE / 2, 10, 1, ZonedDateTime.now().minusHours(1)));
+                state(GIBIBYTE / 2, 10, 1, ZonedDateTime.now(ZoneOffset.UTC).minusHours(1)));
         JetStreamManagement jsm = mock(JetStreamManagement.class);
         when(jsm.getStreamInfo(anyString())).thenReturn(info);
 
@@ -241,7 +243,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     void treatsAnEmptyStreamAsHavingNothingToExpire() throws Exception {
         StreamInfo info = existing(
                 builder -> builder.maxAge(Duration.ofDays(365)),
-                state(0, 0, 1, ZonedDateTime.now().minusDays(365)));
+                state(0, 0, 1, ZonedDateTime.now(ZoneOffset.UTC).minusDays(365)));
         JetStreamManagement jsm = mock(JetStreamManagement.class);
         when(jsm.getStreamInfo(anyString())).thenReturn(info);
 
@@ -490,8 +492,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     }
 
     /** A live stream at the configured shape and limits, which the argument then perturbs. */
-    private StreamInfo existing(
-            java.util.function.UnaryOperator<StreamConfiguration.Builder> perturb, @Nullable StreamState state) {
+    private StreamInfo existing(UnaryOperator<StreamConfiguration.Builder> perturb, @Nullable StreamState state) {
         StreamConfiguration config = perturb.apply(StreamConfiguration.builder()
                         .name("existing")
                         .subjects("existing.>")
@@ -511,7 +512,7 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     }
 
     private static StreamState state(long bytes, long messages, long firstSequence) {
-        return state(bytes, messages, firstSequence, ZonedDateTime.now());
+        return state(bytes, messages, firstSequence, ZonedDateTime.now(ZoneOffset.UTC));
     }
 
     private static StreamState state(long bytes, long messages, long firstSequence, ZonedDateTime firstTime) {

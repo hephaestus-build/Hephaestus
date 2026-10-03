@@ -1,5 +1,5 @@
 import type { TrendSupport } from "@/api/types.gen";
-import { capitalise } from "@/lib/text";
+import { andList, capitalise } from "@/lib/text";
 
 import { count as counted, spell } from "./feedback-text";
 import { PRACTICE_GROUP_STANDING_DEFS, type StandingScope } from "./practice-group-standing-defs";
@@ -52,9 +52,7 @@ export function formatGroupStandingBasis(counts: StandingCounts): string | undef
 		const { one, many } = PRACTICE_GROUP_STANDING_DEFS[standing].predicate;
 		return counted(count, one, many, digits);
 	});
-	const last = parts.pop();
-	const joined = parts.length > 0 ? `${parts.join(", ")} and ${last}` : last;
-	return `Of ${counted(total, "practice", "practices", digits)}, ${joined}.`;
+	return `Of ${counted(total, "practice", "practices", digits)}, ${andList.format(parts)}.`;
 }
 
 export function formatTrendProvenance(

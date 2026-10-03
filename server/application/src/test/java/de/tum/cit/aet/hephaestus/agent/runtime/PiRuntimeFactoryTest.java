@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.MentorRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeRunnerProfile;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -117,7 +118,7 @@ class PiRuntimeFactoryTest extends BaseUnitTest {
             // resources — recomputable from the plan's own input files, so a replay can verify it.
             // Insertion order mirrors PiRuntimeFactory: sidecars, then prompts.
             var plan = factory.build(spec("openai-completions", "m", false));
-            var scaffolding = new java.util.LinkedHashMap<String, byte[]>();
+            var scaffolding = new LinkedHashMap<String, byte[]>();
             scaffolding.put(SandboxLayout.ORCHESTRATOR_PATH, plan.inputFiles().get(SandboxLayout.ORCHESTRATOR_PATH));
             scaffolding.put(
                     SandboxLayout.RUNNER_SCRIPT_FILENAME, plan.inputFiles().get(SandboxLayout.RUNNER_SCRIPT_FILENAME));

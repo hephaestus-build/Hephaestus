@@ -23,7 +23,11 @@ function ActiveWorkspace() {
 	const { workspaceSlug, chromeWorkspaceSlug, chromeWorkspace, providerType } =
 		useActiveWorkspaceSlug();
 	return (
-		<output>{`${workspaceSlug}|${chromeWorkspaceSlug}|${chromeWorkspace?.workspaceSlug}|${providerType}`}</output>
+		<output>
+			{[workspaceSlug, chromeWorkspaceSlug, chromeWorkspace?.workspaceSlug, providerType]
+				.map(String)
+				.join("|")}
+		</output>
 	);
 }
 

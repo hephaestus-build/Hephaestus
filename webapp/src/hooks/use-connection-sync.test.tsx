@@ -31,7 +31,7 @@ function installSyncHandlers(requests: string[], replacement: Promise<void>) {
 			"*/workspaces/acme/connections/:connectionId/sync/jobs",
 			async ({ params, request }) => {
 				const page = new URL(request.url).searchParams.get("page");
-				requests.push(`${String(params.connectionId)}:${page}`);
+				requests.push(`${String(params.connectionId)}:${String(page)}`);
 				if (params.connectionId === "2") {
 					await replacement;
 				}

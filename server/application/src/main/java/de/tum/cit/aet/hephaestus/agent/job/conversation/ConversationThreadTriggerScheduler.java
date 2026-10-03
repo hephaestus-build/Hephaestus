@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Detects settled Slack conversation threads that are ready for a communication-practice review and enqueues
+ * Finds settled Slack conversation threads that are ready for a communication-practice review and enqueues
  * one {@link AgentJobType#CONVERSATION_REVIEW} job per human participant.
  *
  * <p>Three gates, all deterministic:
@@ -65,7 +65,7 @@ public class ConversationThreadTriggerScheduler {
     private final TransactionTemplate transactionTemplate;
 
     /**
-     * When {@code false} the sweep no-ops, keeping conversation detection dormant in lockstep with
+     * When {@code false} the sweep no-ops, keeping conversation review dormant in lockstep with
      * {@link de.tum.cit.aet.hephaestus.integration.slack.events.SlackIngestService}'s channel-ingest gate.
      */
     private final boolean conversationIngestEnabled;
@@ -85,18 +85,17 @@ public class ConversationThreadTriggerScheduler {
     }
 
     @Scheduled(cron = "0 */5 * * * *")
-    @SchedulerLock(name = "conversation-thread-detection", lockAtMostFor = "PT10M", lockAtLeastFor = "PT30S")
+    @SchedulerLock(name = "conversation-thread-review", lockAtMostFor = "PT10M", lockAtLeastFor = "PT30S")
     public void sweep() {
-        detectNow();
+        sweepNow();
     }
 
     /**
-     * Run detection immediately across every workspace. Exposed (rather than invoked only via the cron) so
-     * integration tests can drive it deterministically.
+     * Runs the sweep immediately across every workspace.
      *
      * @return the number of conversation-review jobs enqueued this run
      */
-    public long detectNow() {
+    public long sweepNow() {
         if (!conversationIngestEnabled) {
             return 0;
         }
@@ -130,7 +129,7 @@ public class ConversationThreadTriggerScheduler {
         }
         if (enqueued > 0) {
             log.info(
-                    "conversation.detect: enqueued {} review job(s) across {} candidate thread(s)",
+                    "conversation.review: enqueued {} review job(s) across {} candidate thread(s)",
                     enqueued,
                     candidates.size());
         }

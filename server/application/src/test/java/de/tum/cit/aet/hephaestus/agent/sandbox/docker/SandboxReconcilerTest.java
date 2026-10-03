@@ -19,6 +19,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -560,7 +561,7 @@ class SandboxReconcilerTest extends BaseUnitTest {
             new DockerAttemptWorkspace(volumes, SESSION, labels);
             ArgumentCaptor<Map<String, String>> written = ArgumentCaptor.captor();
             verify(volumes, atLeastOnce()).createVolume(any(), written.capture());
-            var volumeLabels = new java.util.HashMap<>(written.getValue());
+            var volumeLabels = new HashMap<>(written.getValue());
             volumeLabels.put(SandboxLabels.CREATED_AT, MINUTES_AGO.toString());
             when(volumes.listVolumes(Map.of(
                             SandboxLabels.OWNER, "default", SandboxLabels.KIND, SandboxLabels.KIND_ATTEMPT_WORKSPACE)))

@@ -50,12 +50,8 @@ import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
-import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -209,22 +205,6 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
                 slackMessageService,
                 connectionService,
                 userRepository,
-                new SlackHephaestusUiLinks(
-                        new WorkspaceSummaryQuery() {
-                            @Override
-                            public Optional<WorkspaceSummary> findById(long workspaceId) {
-                                return Optional.of(new WorkspaceSummary(workspaceId, "hephaestus", "Hephaestus"));
-                            }
-
-                            @Override
-                            public Map<Long, WorkspaceSummary> findAllByIds(Collection<Long> workspaceIds) {
-                                Map<Long, WorkspaceSummary> found = new HashMap<>();
-                                workspaceIds.forEach(
-                                        id -> found.put(id, findById(id).orElseThrow()));
-                                return found;
-                            }
-                        },
-                        "https://hephaestus.test"),
                 new TransactionTemplate(transactionManager),
                 event -> {} // activation kick intentionally not asserted here
                 );
@@ -238,7 +218,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("register → activate → forward-only ingest → detect → person opt-out → revoke, asserted at every hop")
+    @DisplayName("register → activate → forward-only ingest → review → person opt-out → revoke, asserted at every hop")
     void fullConsentLifecycleComposes() {
 
         SlackMonitoredChannelDTO registered =
@@ -288,7 +268,7 @@ class SlackConsentLifecycleE2EIntegrationTest extends BaseIntegrationTest {
         UUID u2Fb = u2Conv.feedbackId();
 
         doReturn(2L).when(conversationReviewSubmitter).submitAndSettle(any(), any());
-        scheduler.detectNow();
+        scheduler.sweepNow();
         ArgumentCaptor<ConversationThreadCandidate> captor = ArgumentCaptor.forClass(ConversationThreadCandidate.class);
         verify(conversationReviewSubmitter).submitAndSettle(captor.capture(), any());
         assertThat(captor.getValue().workspaceId()).isEqualTo(workspaceId);

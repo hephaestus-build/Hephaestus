@@ -252,7 +252,7 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
      *   <li>itemsSyncedAt is before the cooldown threshold</li>
      * </ul>
      * <p>
-     * This mirrors the repository sync behavior in {@code GithubDataSyncService.shouldSync()}.
+     * This mirrors the repository sync behavior in {@code GitHubDataSyncService.shouldSync()}.
      *
      * @param ownerId           the organization ID
      * @param cooldownThreshold projects synced after this time are skipped

@@ -67,7 +67,7 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
     @Test
     void resolveIntoCallerPromisePassesPublicAddress() throws Exception {
         Promise<InetSocketAddress> caller = EXEC.newPromise();
-        resolverReturning("1.1.1.1").resolve(UNRESOLVED, caller);
+        assertThat(resolverReturning("1.1.1.1").resolve(UNRESOLVED, caller)).isSameAs(caller);
 
         assertThat(caller.isSuccess()).isTrue();
         assertThat(caller.getNow().getAddress().getHostAddress()).isEqualTo("1.1.1.1");
@@ -76,7 +76,7 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
     @Test
     void resolveAllIntoCallerPromiseGatesInternalAddress() throws Exception {
         Promise<List<InetSocketAddress>> caller = EXEC.newPromise();
-        resolverReturning("10.0.0.9").resolveAll(UNRESOLVED, caller);
+        assertThat(resolverReturning("10.0.0.9").resolveAll(UNRESOLVED, caller)).isSameAs(caller);
 
         assertThat(caller.isSuccess()).isFalse();
         assertThat(caller.cause()).isInstanceOf(UnknownHostException.class);
@@ -86,7 +86,7 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
     void blockedReasonRejectsUnresolvedAndInternal() throws Exception {
         assertThat(SsrfGuardedResolverGroup.blockedReason(InetSocketAddress.createUnresolved("x", 1)))
                 .isNotNull();
-        assertThat(SsrfGuardedResolverGroup.blockedReason(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 1)))
+        assertThat(SsrfGuardedResolverGroup.blockedReason(new InetSocketAddress(InetAddress.getLoopbackAddress(), 1)))
                 .isNotNull();
         assertThat(SsrfGuardedResolverGroup.blockedReason(new InetSocketAddress(InetAddress.getByName("1.1.1.1"), 1)))
                 .isNull();
@@ -101,7 +101,7 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
 
         @Test
         void allowsLoopbackWhenExemptionEnabled() throws Exception {
-            InetSocketAddress loopback = new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 1);
+            InetSocketAddress loopback = new InetSocketAddress(InetAddress.getLoopbackAddress(), 1);
             assertThat(SsrfGuardedResolverGroup.blockedReason(loopback, true)).isNull();
         }
 
@@ -113,7 +113,7 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
 
         @Test
         void resolverPassesLoopbackThroughWhenGuardedResolverIsExempt() throws Exception {
-            InetSocketAddress fixed = new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 443);
+            InetSocketAddress fixed = new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), 443);
             SsrfGuardedResolverGroup.GuardedResolver resolver =
                     new SsrfGuardedResolverGroup.GuardedResolver(EXEC, new StubResolver(fixed), true);
 
@@ -125,7 +125,7 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
 
         @Test
         void resolverStillBlocksLoopbackWhenNotExempt() throws Exception {
-            InetSocketAddress fixed = new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 443);
+            InetSocketAddress fixed = new InetSocketAddress(InetAddress.getLoopbackAddress(), 443);
             SsrfGuardedResolverGroup.GuardedResolver resolver =
                     new SsrfGuardedResolverGroup.GuardedResolver(EXEC, new StubResolver(fixed), false);
 

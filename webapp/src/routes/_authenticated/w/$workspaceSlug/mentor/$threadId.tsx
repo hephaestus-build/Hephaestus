@@ -81,41 +81,21 @@ function ThreadChat({
 	});
 	const readonly = viewing || !preference.data || Boolean(mentorPreferenceReason(preference.data));
 
-	// No `onError`: `Chat` renders `status === "error"` inside the transcript, where the reader
-	// already is, rather than as a toast away from the conversation that failed.
 	const mentorChat = useMentorChat({ threadId, initialMessages: messages });
-
-	const handleMessageEdit = (messageId: string, content: string) => {
-		const idx = mentorChat.messages.findIndex((m) => m.id === messageId);
-		if (idx === -1) {
-			return;
-		}
-		mentorChat.setMessages(mentorChat.messages.slice(0, idx));
-		mentorChat.sendMessage(content);
-	};
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<Chat
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}
-				status={mentorChat.status}
-				warmingUp={mentorChat.warmingUp}
-				errorMessage={mentorChat.error?.message}
+				turn={mentorChat.turn}
 				readonly={readonly}
 				onMessageSubmit={mentorChat.sendMessage}
-				onMessageEdit={readonly ? undefined : handleMessageEdit}
+				onMessageEdit={readonly ? undefined : mentorChat.editMessage}
 				onStop={() => {
 					void mentorChat.stop();
 				}}
-				onReload={
-					readonly
-						? undefined
-						: () => {
-								mentorChat.clearError();
-								mentorChat.retry();
-							}
-				}
+				onReload={readonly ? undefined : mentorChat.retry}
 				onCopy={copyToClipboard}
 				onVote={viewing ? undefined : mentorChat.voteMessage}
 				inputPlaceholder="Continue the conversation…"

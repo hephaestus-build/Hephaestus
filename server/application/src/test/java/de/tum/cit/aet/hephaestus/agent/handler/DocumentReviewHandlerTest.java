@@ -1,17 +1,27 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.DocumentContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
@@ -19,6 +29,7 @@ import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalRevision;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.practices.model.ObservationOrigin;
@@ -69,12 +80,10 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
                         practiceCatalogInjector,
                         new TaskEnvelopeWriter(objectMapper),
                         gitRepositoryManager,
-                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer(),
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.PracticeRevisionService.class,
-                                invocation -> ((de.tum.cit.aet.hephaestus.practices.model.Practice)
-                                                invocation.getArgument(0))
-                                        .getCurrentRevision())),
+                        PreparedJobInputsFixtures.freezer(),
+                        mock(
+                                PracticeRevisionService.class,
+                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision())),
                 new ReviewResultParser(objectMapper),
                 deliveryService);
     }
@@ -94,9 +103,8 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
     void shouldRejectRawOutputThatNeverPassedAdmission() {
         var job = new AgentJob();
         job.setOutput(objectMapper.createObjectNode().put("rawOutput", "unadmitted output"));
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> handler.deliver(job))
-                .isInstanceOf(de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException.class);
-        org.mockito.Mockito.verifyNoInteractions(deliveryService);
+        assertThatThrownBy(() -> handler.deliver(job)).isInstanceOf(JobDeliveryException.class);
+        verifyNoInteractions(deliveryService);
     }
 
     @Test
@@ -108,8 +116,8 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
         output.putObject("feedback").put("admissionDigest", "admitted");
         job.setOutput(output);
         handler.deliver(job);
-        org.mockito.Mockito.verify(deliveryService).requirePublished(job);
-        org.mockito.Mockito.verifyNoMoreInteractions(deliveryService);
+        verify(deliveryService).requirePublished(job);
+        verifyNoMoreInteractions(deliveryService);
     }
 
     @Nested
@@ -181,7 +189,7 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
         }
     }
 
-    private record WrongRequest() implements de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmissionRequest {}
+    private record WrongRequest() implements JobSubmissionRequest {}
 
     @Nested
     class RepoLessExecution {
@@ -216,15 +224,14 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
                     .thenReturn(List.of(practice));
             when(workspaceContextBuilder.prepare(any(), any()))
                     .thenReturn(new PreparedEvidence(
-                            Map.of(SandboxLayout.CONTEXT_PREFIX + "document.md", "# Runbook".getBytes()),
+                            Map.of(SandboxLayout.CONTEXT_PREFIX + "document.md", "# Runbook".getBytes(UTF_8)),
                             mock(JobFolderIndex.class)));
             when(workspaceContextBuilder.prepareAutomatedReviewReadiness(any(), any(), any(), any(), any()))
                     .thenReturn(new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                             List.of(practice), mock(AutomatedReviewReadinessReport.class)));
 
             try (var prepared = handler.prepareInputs(job)) {
-                Map<String, byte[]> files =
-                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(prepared);
+                Map<String, byte[]> files = PreparedJobInputsFixtures.files(prepared);
 
                 assertThat(files).containsKey(SandboxLayout.CONTEXT_PREFIX + "document.md");
                 assertThat(files).containsKey(SandboxLayout.TASK_ENVELOPE_FILENAME);
@@ -263,9 +270,9 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
             assertThatThrownBy(
                             () -> handler.prepareObservations(job, objectMapper.readTree("[{\"practiceSlug\": \"\"}]")))
                     .isInstanceOfSatisfying(
-                            de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException.class,
+                            ObservationsRefusedException.class,
                             e -> assertThat(e.reasonCode()).isEqualTo("no_valid_observations"));
-            org.mockito.Mockito.verifyNoInteractions(deliveryService);
+            verifyNoInteractions(deliveryService);
         }
 
         @Test
@@ -273,15 +280,13 @@ class DocumentReviewHandlerTest extends BaseUnitTest {
             var job = new AgentJob();
             job.setId(UUID.randomUUID());
             var admissible = mock(ReviewOutputService.PreparedObservations.class);
-            when(deliveryService.prepare(org.mockito.ArgumentMatchers.eq(job), any()))
-                    .thenReturn(admissible);
+            when(deliveryService.prepare(eq(job), any())).thenReturn(admissible);
 
             var prepared = handler.prepareObservations(job, objectMapper.readTree(OBSERVATION));
-            org.mockito.Mockito.verify(deliveryService, org.mockito.Mockito.never())
-                    .publish(any(), any());
+            verify(deliveryService, never()).publish(any(), any());
 
             prepared.record(job);
-            org.mockito.Mockito.verify(deliveryService).publish(job, admissible);
+            verify(deliveryService).publish(job, admissible);
         }
     }
 }

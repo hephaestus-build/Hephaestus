@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -46,7 +47,7 @@ class SecurityHeadersIntegrationTest extends RealAuthIntegrationTest {
                 .expectHeader()
                 .value(
                         "Content-Security-Policy",
-                        value -> org.hamcrest.MatcherAssert.assertThat(
+                        value -> MatcherAssert.assertThat(
                                 value,
                                 allOf(
                                         containsString("default-src 'self'"),

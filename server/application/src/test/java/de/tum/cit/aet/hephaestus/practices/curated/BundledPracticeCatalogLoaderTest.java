@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -43,7 +44,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
 
     private final JsonMapper objectMapper = JsonMapper.builder().build();
     private final ClasspathArtifactSourceCatalogRegistry catalogs =
-            new ClasspathArtifactSourceCatalogRegistry(objectMapper, java.time.Clock.systemUTC());
+            new ClasspathArtifactSourceCatalogRegistry(objectMapper, Clock.systemUTC());
     private final BundledPracticeCatalogLoader loader = new BundledPracticeCatalogLoader(
             objectMapper,
             new PracticeDefinitionValidator(catalogs, PracticeSignalOptionsFixture.real()),
@@ -75,7 +76,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                 catalogs,
                 new PracticePreconditionEvaluator(objectMapper),
                 new AutomatedReviewFence(Map.of()),
-                Clock.fixed(now, java.time.ZoneOffset.UTC));
+                Clock.fixed(now, ZoneOffset.UTC));
         for (String partialKind : List.of("", "scm.pull-request.comments", "scm.general-review-comments")) {
             var captures = catalogs.current().sources().stream()
                     .map(source -> new SourceCapture(
@@ -193,7 +194,7 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
                         .as("canonical observation vocabulary in %s", practice.slug())
                         .doesNotContain("INCONCLUSIVE", "NO_REVIEW_OCCASION", "INSUFFICIENT_EVIDENCE"));
         assertThat(loader.catalog().practices())
-                .filteredOn(practice -> java.util.Set.of(
+                .filteredOn(practice -> Set.of(
                                 "describe-what-and-why", "merged-past-unresolved-review-threads",
                                 "records-significant-decisions-with-rationale", "asks-answerable-questions")
                         .contains(practice.slug()))
@@ -407,18 +408,18 @@ class BundledPracticeCatalogLoaderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepDetectorVocabularyOutOfDeveloperCopy() {
-        Pattern detectorVocabulary = Pattern.compile("\\b(?:PRESENT|ABSENT|GOOD|BAD|NOT_APPLICABLE)\\b");
+    void shouldKeepReviewResultLabelsOutOfDeveloperCopy() {
+        Pattern reviewResultLabels = Pattern.compile("\\b(?:PRESENT|ABSENT|GOOD|BAD|NOT_APPLICABLE)\\b");
 
         assertThat(loader.catalog().practices()).allSatisfy(practice -> {
             assertThat(practice.definition().whyItMatters())
                     .as("whyItMatters for '%s'", practice.slug())
                     .isNotNull()
-                    .doesNotContainPattern(detectorVocabulary);
+                    .doesNotContainPattern(reviewResultLabels);
             assertThat(practice.definition().whatGoodLooksLike())
                     .as("whatGoodLooksLike for '%s'", practice.slug())
                     .isNotNull()
-                    .doesNotContainPattern(detectorVocabulary);
+                    .doesNotContainPattern(reviewResultLabels);
         });
     }
 

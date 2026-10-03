@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.*;
-import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.*;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.Nested;
@@ -22,8 +22,6 @@ import org.junit.jupiter.api.Test;
  * @see ArchitectureTestConstants
  */
 class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
-
-    // CONTRIBUTORS MODULE ISOLATION
 
     @Nested
     class ContributorsModuleTests {
@@ -58,8 +56,6 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // ACCOUNT MODULE ISOLATION
 
     @Nested
     class AccountModuleTests {
@@ -99,8 +95,6 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // CORE & SHARED PACKAGE PROTECTION
 
     @Nested
     class CoreSharedPackageTests {
@@ -164,10 +158,6 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
         }
     }
 
-    // ANALYTICS MODULE ISOLATION
-
-    // CONFIG MODULE ISOLATION
-
     @Nested
     class ConfigModuleTests {
 
@@ -190,12 +180,6 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
     }
-
-    // NOTE: Feature module cycle tests removed - they used allowEmptyShould(true)
-    // which means they pass even when there's nothing to check.
-    // The top-level cycle test in ArchitectureTest.noCyclesBetweenModules() is sufficient.
-
-    // WORKSPACE ADAPTER PATTERN VERIFICATION
 
     @Nested
     class WorkspaceCrossCuttingTests {

@@ -39,7 +39,7 @@ public class ReviewGate {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewGate.class);
 
-    private final PracticeReviewReadiness practiceDetectionReadiness;
+    private final PracticeReviewReadiness practiceReviewReadiness;
     private final PracticeRepository practiceRepository;
     private final WorkspaceResolver workspaceResolver;
     private final PracticeSignalOptions signalOptions;
@@ -50,7 +50,7 @@ public class ReviewGate {
     private final ReviewedWorkChanges reviewedWorkChanges;
 
     public ReviewGate(
-            PracticeReviewReadiness practiceDetectionReadiness,
+            PracticeReviewReadiness practiceReviewReadiness,
             PracticeRepository practiceRepository,
             WorkspaceResolver workspaceResolver,
             PracticeSignalOptions signalOptions,
@@ -59,7 +59,7 @@ public class ReviewGate {
             ObservationRepository observations,
             ObservationVisibilityPolicy observationVisibility,
             ReviewedWorkChanges reviewedWorkChanges) {
-        this.practiceDetectionReadiness = practiceDetectionReadiness;
+        this.practiceReviewReadiness = practiceReviewReadiness;
         this.practiceRepository = practiceRepository;
         this.workspaceResolver = workspaceResolver;
         this.signalOptions = signalOptions;
@@ -390,9 +390,9 @@ public class ReviewGate {
             return new GateDecision.Skip("manual trigger disabled for workspace");
         }
 
-        if (!practiceDetectionReadiness.hasRunnableAgent(workspace.getId())) {
+        if (!practiceReviewReadiness.hasRunnableAgent(workspace.getId())) {
             log.debug(
-                    "Practice review gate: SKIP, reason=noRunnableDetectionAgent, subject={}, workspaceId={}",
+                    "Practice review gate: SKIP, reason=noRunnableReviewAgent, subject={}, workspaceId={}",
                     subject,
                     workspace.getId());
             return new GateDecision.Skip("no runnable practice-review agent");
@@ -418,7 +418,7 @@ public class ReviewGate {
                     workspace.getId());
             return new GateDecision.Skip("no practices match this signal and recorded review state");
         }
-        return new GateDecision.Detect(
+        return new GateDecision.Run(
                 workspace,
                 match.admitted(),
                 workspace.getReviewSettings().getRolloutRevision(),

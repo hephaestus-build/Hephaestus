@@ -116,7 +116,6 @@ public class GitHubMilestoneSyncService {
             String cursor = null;
             boolean hasNextPage = true;
             int pageCount = 0;
-            boolean syncCompletedNormally = false;
             int retryAttempt = 0;
 
             while (hasNextPage) {
@@ -215,7 +214,7 @@ public class GitHubMilestoneSyncService {
             }
 
             // Mark sync as completed normally if we exhausted all pages
-            syncCompletedNormally = !hasNextPage;
+            boolean syncCompletedNormally = !hasNextPage;
 
             // Raw nodes received vs milestones.totalCount (totalSynced is post-filter).
             if (reportedTotalCount >= 0) {

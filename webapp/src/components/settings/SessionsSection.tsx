@@ -1,15 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MonitorIcon, PuzzleIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { toast } from "sonner";
 
-import {
-	listSessionsOptions,
-	listSessionsQueryKey,
-	revokeOtherSessionsMutation,
-	revokeSessionMutation,
-} from "@/api/@tanstack/react-query.gen";
 import type { SessionView } from "@/api/types.gen";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { useNow } from "@/components/common/use-now";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -23,20 +17,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { asDate } from "@/lib/dates";
+import { asDate, formatDayTime } from "@/lib/dates";
 import { hasText } from "@/lib/text";
-
-function formatTimestamp(value?: Date): string | undefined {
-	const date = asDate(value);
-	if (!date) {
-		return undefined;
-	}
-	return date.toLocaleString(undefined, {
-		dateStyle: "medium",
-		timeStyle: "short",
-	});
-}
 
 const OS_TOKENS: readonly (readonly [RegExp, string])[] = [
 	[/Windows/u, "Windows"],
@@ -92,57 +76,57 @@ function describeSession(session: SessionView): string {
 	return session.client === "BROWSER_EXTENSION" ? `Browser extension in ${device}` : device;
 }
 
-/**
- * Settings section listing the account's active sessions (ADR 0017 native auth).
- *
- * The current session is badged and cannot be revoked from here; other sessions
- * can be revoked individually or all at once via "Sign out everywhere else".
- */
-export function SessionsSection() {
-	const queryClient = useQueryClient();
+export type SessionsState =
+	| { status: "loading" }
+	| { status: "error"; error: unknown; onRetry: () => void }
+	| {
+			status: "ready";
+			sessions: SessionView[];
+			/** The session being revoked, which shows a spinner and blocks a repeat click. */
+			revokingJti: string | null;
+			revokingOthers: boolean;
+			onRevoke: (jti: string) => void;
+			onRevokeOthers: () => void;
+	  };
 
-	const sessionsQuery = useQuery({ ...listSessionsOptions({}) });
+export interface SessionsSectionProps {
+	state: SessionsState;
+}
 
-	const invalidateSessions = async () =>
-		queryClient.invalidateQueries({ queryKey: listSessionsQueryKey() });
-
-	const revokeOne = useMutation({
-		...revokeSessionMutation(),
-		onSuccess: () => {
-			void invalidateSessions();
-			toast.success("Session revoked");
-		},
-		onError: () => {
-			toast.error("Failed to revoke session. Please try again later.");
-		},
-	});
-
-	const revokeOthers = useMutation({
-		...revokeOtherSessionsMutation(),
-		onSuccess: () => {
-			void invalidateSessions();
-			toast.success("Signed out of all other sessions");
-		},
-		onError: () => {
-			toast.error("Failed to sign out other sessions. Please try again later.");
-		},
-	});
-
-	const sessions: SessionView[] = sessionsQuery.data ?? [];
-	const otherSessionCount = sessions.filter((s) => s.current !== true).length;
+export function SessionsSection({ state }: SessionsSectionProps) {
+	const today = new Date(useNow());
+	const sessions = state.status === "ready" ? state.sessions : [];
+	const otherSessionCount = sessions.filter((s) => !s.current).length;
 
 	let body: ReactNode;
-	if (sessionsQuery.isLoading) {
+	if (state.status === "loading") {
 		body = (
-			<div className="flex justify-center py-6">
-				<Spinner aria-label="Loading sessions" />
+			<div className="space-y-3" role="list" aria-busy="true" aria-label="Loading sessions">
+				{Array.from({ length: 2 }, (_, index) => (
+					<div
+						key={index}
+						role="listitem"
+						className="flex items-center justify-between gap-4 rounded-lg border p-4"
+					>
+						<div className="flex min-w-0 items-center gap-3">
+							<Skeleton className="size-5 shrink-0" />
+							<div className="space-y-1.5">
+								<Skeleton className="h-4 w-40" />
+								<Skeleton className="h-3 w-56" />
+							</div>
+						</div>
+						<Skeleton className="h-7 w-16" />
+					</div>
+				))}
 			</div>
 		);
-	} else if (sessionsQuery.isError) {
+	} else if (state.status === "error") {
 		body = (
-			<p className="text-sm text-destructive" role="alert">
-				Failed to load sessions. Please try refreshing the page.
-			</p>
+			<QueryErrorAlert
+				error={state.error}
+				title="Could not load sessions"
+				onRetry={state.onRetry}
+			/>
 		);
 	} else if (sessions.length === 0) {
 		body = <p className="text-sm text-muted-foreground">No active sessions found.</p>;
@@ -150,17 +134,14 @@ export function SessionsSection() {
 		body = (
 			<div className="space-y-3" role="list">
 				{sessions.map((session) => {
-					const signedInAt = formatTimestamp(session.issuedAt);
-					const expiresAt = formatTimestamp(session.expiresAt);
+					const issuedAt = asDate(session.issuedAt);
+					const expiresAt = asDate(session.expiresAt);
 					const deviceLabel = describeSession(session);
 					const SessionIcon = session.client === "BROWSER_EXTENSION" ? PuzzleIcon : MonitorIcon;
-					// Scope the pending state to the row actually being revoked so a single revoke
-					// doesn't disable/spin every other session's button.
-					const isRevokingThis =
-						revokeOne.isPending && revokeOne.variables.path.jti === session.jti;
+					const isRevokingThis = state.revokingJti === session.jti;
 					return (
 						<div
-							key={session.jti ?? `${session.userAgent}:${session.ip}`}
+							key={session.jti}
 							role="listitem"
 							aria-label={deviceLabel}
 							className="flex items-center justify-between gap-4 rounded-lg border p-4"
@@ -175,13 +156,13 @@ export function SessionsSection() {
 										>
 											{deviceLabel}
 										</span>
-										{session.current === true && <Badge variant="secondary">This device</Badge>}
+										{session.current && <Badge variant="secondary">This device</Badge>}
 									</div>
 									<p className="truncate text-xs text-muted-foreground">
 										{[
 											session.ip,
-											hasText(signedInAt) && `signed in ${signedInAt}`,
-											hasText(expiresAt) && `expires ${expiresAt}`,
+											issuedAt && `signed in ${formatDayTime(issuedAt, today)}`,
+											expiresAt && `expires ${formatDayTime(expiresAt, today)}`,
 										]
 											.filter(Boolean)
 											.join(" · ") || "No session details available"}
@@ -189,7 +170,7 @@ export function SessionsSection() {
 								</div>
 							</div>
 
-							{session.current === true ? (
+							{session.current ? (
 								<Button variant="outline" size="sm" disabled aria-label="Current session">
 									Current
 								</Button>
@@ -200,7 +181,7 @@ export function SessionsSection() {
 									disabled={isRevokingThis || !hasText(session.jti)}
 									onClick={() => {
 										if (hasText(session.jti)) {
-											revokeOne.mutate({ path: { jti: session.jti } });
+											state.onRevoke(session.jti);
 										}
 									}}
 									aria-label="Revoke this session"
@@ -227,17 +208,17 @@ export function SessionsSection() {
 						Devices and browsers currently signed in to your account.
 					</p>
 				</div>
-				{otherSessionCount > 0 && (
+				{state.status === "ready" && otherSessionCount > 0 && (
 					<AlertDialog>
 						<AlertDialogTrigger
 							render={
 								<Button
 									variant="outline"
 									size="sm"
-									disabled={revokeOthers.isPending}
+									disabled={state.revokingOthers}
 									className="mt-1 shrink-0"
 								>
-									{revokeOthers.isPending ? <Spinner className="mr-1.5" /> : null}
+									{state.revokingOthers ? <Spinner className="mr-1.5" /> : null}
 									Sign out {otherSessionCount} other{" "}
 									{otherSessionCount === 1 ? "session" : "sessions"}
 								</Button>
@@ -257,10 +238,7 @@ export function SessionsSection() {
 							</AlertDialogHeader>
 							<AlertDialogFooter>
 								<AlertDialogCancel>Cancel</AlertDialogCancel>
-								<AlertDialogAction
-									onClick={() => revokeOthers.mutate({})}
-									disabled={revokeOthers.isPending}
-								>
+								<AlertDialogAction onClick={state.onRevokeOthers} disabled={state.revokingOthers}>
 									Sign out others
 								</AlertDialogAction>
 							</AlertDialogFooter>

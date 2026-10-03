@@ -18,7 +18,7 @@ public class SlackChannelMessageHandler extends AbstractIntegrationMessageHandle
     /**
      * Message subtypes that still carry user-authored text. {@code file_share} is included because an upload's
      * accompanying comment ("here's the failing trace — is this a race?") is exactly the conversational content the
-     * practice detector needs; the file itself is dropped by construction (only {@code text} is ever persisted),
+     * practice review needs; the file itself is dropped by construction (only {@code text} is ever persisted),
      * and a pure upload with no comment is skipped below.
      */
     public static final Set<String> CONTENT_BEARING_SUBTYPES = Set.of("thread_broadcast", "me_message", "file_share");

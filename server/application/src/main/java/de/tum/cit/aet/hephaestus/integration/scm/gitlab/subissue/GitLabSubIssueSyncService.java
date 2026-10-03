@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResp
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncConstants;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabSyncException;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.graphql.GitLabPageInfo;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -121,7 +122,7 @@ public class GitLabSubIssueSyncService {
                         .variable("first", PAGE_SIZE)
                         .variable("after", cursor)
                         .execute()
-                        .block(java.time.Duration.ofSeconds(30));
+                        .block(Duration.ofSeconds(30));
 
                 var handleResult = responseHandler.handle(response, "sub-issues for " + safeProjectPath, log);
                 if (handleResult.action() == GitLabGraphQlResponseHandler.HandleResult.Action.RETRY) {

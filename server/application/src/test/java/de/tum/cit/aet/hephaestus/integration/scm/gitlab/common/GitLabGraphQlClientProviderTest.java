@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.egress.SilentModeGraphQlClientFactory;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.CircuitBreakerOpenException;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitLabCredentialHealthFilter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.graphql.client.GraphQlClientInterceptor;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.http.HttpHeaders;
 
@@ -51,7 +53,7 @@ class GitLabGraphQlClientProviderTest extends BaseUnitTest {
                 circuitBreaker,
                 rateLimitTracker,
                 clientFactory,
-                mock(de.tum.cit.aet.hephaestus.integration.scm.gitlab.credentials.GitlabCredentialHealthFilter.class));
+                mock(GitLabCredentialHealthFilter.class));
     }
 
     @Nested
@@ -69,7 +71,7 @@ class GitLabGraphQlClientProviderTest extends BaseUnitTest {
                             eq("glpat-test-token"),
                             eq(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE),
                             eq(1L),
-                            any(org.springframework.graphql.client.GraphQlClientInterceptor.class)))
+                            any(GraphQlClientInterceptor.class)))
                     .thenReturn(builtClient);
 
             HttpGraphQlClient result = provider.forScope(1L);
@@ -82,7 +84,7 @@ class GitLabGraphQlClientProviderTest extends BaseUnitTest {
                             eq("glpat-test-token"),
                             eq(GitLabGraphQlClientProvider.SCOPE_ID_ATTRIBUTE),
                             eq(1L),
-                            any(org.springframework.graphql.client.GraphQlClientInterceptor.class));
+                            any(GraphQlClientInterceptor.class));
         }
 
         @Test

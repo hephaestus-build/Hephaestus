@@ -18,9 +18,13 @@ import de.tum.cit.aet.hephaestus.agent.context.EvidencePlan;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndexBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.PullRequestContentSource;
+import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer;
+import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer.PreparedReview;
 import de.tum.cit.aet.hephaestus.agent.handler.ReviewOutputService.PreparedObservations;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ExistingDeliveryLookup;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobSubmission;
@@ -29,31 +33,48 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ObservationsRefusedException;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelopeWriter;
+import de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
+import de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck;
 import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview.State;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.GitRepositoryManager;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey;
+import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeRevisionService;
 import de.tum.cit.aet.hephaestus.practices.PracticeTestEvidence;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
+import de.tum.cit.aet.hephaestus.practices.model.Observation;
 import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
 import de.tum.cit.aet.hephaestus.practices.model.Severity;
+import de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository;
+import de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository;
+import de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -81,7 +102,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     private FeedbackDeliveryService feedbackService;
 
     @Mock
-    private de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository observationRepository;
+    private ObservationRepository observationRepository;
 
     private static final Long WORKSPACE_ID = 99L;
 
@@ -103,39 +124,32 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                         practiceCatalogInjector,
                         taskEnvelopeWriter,
                         gitRepositoryManager,
-                        de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.freezer(),
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.PracticeRevisionService.class,
-                                invocation -> ((de.tum.cit.aet.hephaestus.practices.model.Practice)
-                                                invocation.getArgument(0))
-                                        .getCurrentRevision())),
+                        PreparedJobInputsFixtures.freezer(),
+                        mock(
+                                PracticeRevisionService.class,
+                                invocation -> ((Practice) invocation.getArgument(0)).getCurrentRevision())),
                 resultParser,
-                new de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionResultParser(),
+                new FeedbackCompositionResultParser(),
                 deliveryService,
                 feedbackService,
                 new FeedbackResponseSuppressionFilter(
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.observation.reaction.ReactionRepository.class),
-                        org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
+                        mock(ObservationRepository.class),
+                        mock(ReactionRepository.class),
+                        mock(FeedbackLedgerRecorder.class)),
                 InContextDeliveryGateFixtures.gate(
-                        practiceRepository,
-                        org.mockito.Mockito.mock(
-                                de.tum.cit.aet.hephaestus.practices.observation.ObservationRepository.class),
-                        org.mockito.Mockito.mock(FeedbackLedgerRecorder.class)),
+                        practiceRepository, mock(ObservationRepository.class), mock(FeedbackLedgerRecorder.class)),
                 observationRepository,
                 InContextDeliveryGateFixtures.noRecurrence());
     }
 
     @Test
     void shouldFinishWithoutComposingFeedbackWhenObservationsWereRefused() {
-        var refused = new de.tum.cit.aet.hephaestus.agent.job.AgentJob();
+        var refused = new AgentJob();
         var metadata = objectMapper.createObjectNode();
         metadata.putObject(ObservationAdmissionService.REFUSAL_METADATA_KEY).put("reasonCode", "no_valid_observations");
         refused.setMetadata(metadata);
         assertThatCode(() -> handler.deliver(refused)).doesNotThrowAnyException();
-        org.mockito.Mockito.verifyNoInteractions(feedbackService, observationRepository, deliveryService);
+        verifyNoInteractions(feedbackService, observationRepository, deliveryService);
     }
 
     @Test
@@ -201,11 +215,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     /** Every fixture practice admitted, over a captured change. */
     private ObjectNode admittedPracticeSnapshot() {
         ObjectNode snapshot = EvidenceSnapshotFixtures.snapshot(objectMapper);
-        EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 1)
-                .put("defectDetector", false);
-        EvidenceSnapshotFixtures.admittedPractice(snapshot, "error-handling", 2).put("defectDetector", false);
-        EvidenceSnapshotFixtures.admittedPractice(snapshot, "avoids-insecure-defaults-and-over-broad-permissions", 3)
-                .put("defectDetector", true);
+        EvidenceSnapshotFixtures.admittedPractice(snapshot, "pr-description-quality", 1);
+        EvidenceSnapshotFixtures.admittedPractice(snapshot, "error-handling", 2);
+        EvidenceSnapshotFixtures.admittedPractice(snapshot, "avoids-insecure-defaults-and-over-broad-permissions", 3);
         ObjectNode diff = EvidenceSnapshotFixtures.availableSource(
                 snapshot, "scm.pull-request.diff", "a".repeat(40) + ":" + "b".repeat(40));
         EvidenceSnapshotFixtures.artifact(snapshot, diff, PullRequestContentSource.CHANGE_FILE, CHANGE_SHA);
@@ -256,7 +268,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     }
 
     private PreparedEvidence prepared(Map<String, byte[]> files) {
-        return new PreparedEvidence(files, org.mockito.Mockito.mock(JobFolderIndex.class));
+        return new PreparedEvidence(files, mock(JobFolderIndex.class));
     }
 
     /** Every practice asked is ready, recorded the way the readiness check records it. */
@@ -265,27 +277,24 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         return new JobFolderIndexBuilder.PreparedAutomatedReviewReadiness(
                 practices,
                 new AutomatedReviewReadinessReport(
-                        de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry.CURRENT_VERSION,
+                        ArtifactSourceCatalogRegistry.CURRENT_VERSION,
                         "0".repeat(64),
                         ArtifactKinds.PULL_REQUEST.value(),
                         now,
                         now,
                         practices.stream()
-                                .map(practice ->
-                                        new de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision(
-                                                practice.getSlug(),
+                                .map(practice -> new AutomatedReviewReadinessDecision(
+                                        practice.getSlug(),
+                                        now,
+                                        true,
+                                        List.of(),
+                                        List.of(new SourceReadinessCheck(
+                                                PracticePreconditionClause.DIFF_SOURCE,
+                                                ArtifactSourceCatalogRegistry.CURRENT_VERSION,
+                                                now,
                                                 now,
                                                 true,
-                                                List.of(),
-                                                List.of(new de.tum.cit.aet.hephaestus.evidence.SourceReadinessCheck(
-                                                        de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause
-                                                                .DIFF_SOURCE,
-                                                        de.tum.cit.aet.hephaestus.evidence.ArtifactSourceCatalogRegistry
-                                                                .CURRENT_VERSION,
-                                                        now,
-                                                        now,
-                                                        true,
-                                                        List.of()))))
+                                                List.of()))))
                                 .toList()));
     }
 
@@ -325,19 +334,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                             base.headRefOid(),
                             base.baseRefName(),
                             base.baseRefOid(),
-                            de.tum.cit.aet.hephaestus.integration.scm.domain.signal.ScmSignals.PULL_REQUEST_REVIEWED)
+                            ScmSignals.PULL_REQUEST_REVIEWED)
                     .forSubmittedReview(new ScmEventPayload.ReviewData(
-                            100L,
-                            "Review body",
-                            de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview.State
-                                    .COMMENTED,
-                            false,
-                            null,
-                            200L,
-                            true,
-                            456L,
-                            null,
-                            123L));
+                            100L, "Review body", State.COMMENTED, false, null, 200L, true, 456L, null, 123L));
 
             JobSubmission submission = handler.createSubmission(request);
 
@@ -359,17 +358,14 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
     @Nested
     class PrepareInputs {
 
-        @org.junit.jupiter.params.ParameterizedTest
-        @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+        @ParameterizedTest
+        @ValueSource(booleans = {false, true})
         void shouldStageGeneratedPathPolicyWithUnmodifiedEvidenceForMixedAndGeneratedOnlyChanges(
                 boolean generatedOnly) {
             stubDefaults();
-            var key = new de.tum.cit.aet.hephaestus.integration.scm.domain.workdir.RepositoryKey(WORKSPACE_ID, 123L);
-            var preparer = mock(de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer.class);
-            when(preparer.prepare(any()))
-                    .thenReturn(
-                            new de.tum.cit.aet.hephaestus.agent.context.providers.ReviewRepositoryPreparer
-                                    .PreparedReview(key, "head", "base"));
+            var key = new RepositoryKey(WORKSPACE_ID, 123L);
+            var preparer = mock(ReviewRepositoryPreparer.class);
+            when(preparer.prepare(any())).thenReturn(new PreparedReview(key, "head", "base"));
             byte[] raw = "{\"title\":\"Original evidence\"}".getBytes(StandardCharsets.UTF_8);
             when(workspaceContextBuilder.prepare(
                             any(ContextRequest.PracticeReviewRequest.class), any(EvidencePlan.class)))
@@ -385,10 +381,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                                     : Set.of("generated/client.ts", "src/service.ts"));
             var metadata = sampleJobMetadata();
             metadata.putArray("generated_path_patterns").add("generated/**");
-            var files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
-                    handler.prepareInputs(jobWithMetadata(metadata)));
-            var policy = objectMapper.readTree(
-                    files.get(de.tum.cit.aet.hephaestus.practices.review.GeneratedPathReviewDTO.INPUT_PATH));
+            var files = PreparedJobInputsFixtures.files(handler.prepareInputs(jobWithMetadata(metadata)));
+            var policy = objectMapper.readTree(files.get(GeneratedPathReviewDTO.INPUT_PATH));
             assertThat(policy.path("patterns").get(0).asString()).isEqualTo("generated/**");
             assertThat(policy.path("paths")).hasSize(1);
             assertThat(policy.path("paths").get(0).asString()).isEqualTo("generated/client.ts");
@@ -425,8 +419,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         void stagesTheRequestThatTurnsFeedbackCompositionOn() {
             stubDefaults();
 
-            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
+            Map<String, byte[]> files =
+                    PreparedJobInputsFixtures.files(handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files)
                     .as("a live review composes feedback, so the request must reach the sandbox")
@@ -450,8 +444,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
                     .thenReturn(samplePractices());
 
-            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
+            Map<String, byte[]> files =
+                    PreparedJobInputsFixtures.files(handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files.get("context/metadata.json")).isEqualTo(metadataBytes);
         }
@@ -459,8 +453,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void writesTaskJsonEnvelope() throws Exception {
             stubDefaults();
-            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
+            Map<String, byte[]> files =
+                    PreparedJobInputsFixtures.files(handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files).containsKey("task.json");
             JsonNode envelope = objectMapper.readTree(files.get("task.json"));
@@ -478,8 +472,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void injectsPracticeCatalog() {
             stubDefaults();
-            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
+            Map<String, byte[]> files =
+                    PreparedJobInputsFixtures.files(handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
 
             assertThat(files).containsKey("inputs/practices/index.json");
             assertThat(files).doesNotContainKey("inputs/practices/all-criteria.md");
@@ -491,8 +485,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void doesNotWriteLegacyPromptFile() {
             stubDefaults();
-            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
+            Map<String, byte[]> files =
+                    PreparedJobInputsFixtures.files(handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
             assertThat(files).doesNotContainKey(".prompt");
         }
 
@@ -520,7 +514,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         @Test
         void throwsWhenMetadataMissing() {
             var job = new AgentJob();
-            org.springframework.test.util.ReflectionTestUtils.setField(job, "metadata", null);
+            ReflectionTestUtils.setField(job, "metadata", null);
             assertThatThrownBy(() -> handler.prepareInputs(job))
                     .isInstanceOf(JobPreparationException.class)
                     .hasMessageContaining("no metadata");
@@ -538,8 +532,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             when(practiceRepository.findByWorkspaceIdAndArtifactKind(WORKSPACE_ID, ArtifactKinds.PULL_REQUEST))
                     .thenReturn(samplePractices());
 
-            Map<String, byte[]> files = de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures.files(
-                    handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
+            Map<String, byte[]> files =
+                    PreparedJobInputsFixtures.files(handler.prepareInputs(jobWithMetadata(sampleJobMetadata())));
             var keys = files.keySet().iterator();
             assertThat(keys.next()).isEqualTo("context/metadata.json");
             assertThat(keys.next()).isEqualTo("context/change.json");
@@ -566,12 +560,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                     .record(job);
         }
 
-        private de.tum.cit.aet.hephaestus.practices.model.Observation persisted(
-                AgentJob job,
-                Practice practice,
-                String summary,
-                de.tum.cit.aet.hephaestus.practices.model.Severity severity) {
-            var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
+        private Observation persisted(AgentJob job, Practice practice, String summary, Severity severity) {
+            var observation = mock(Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
             lenient()
                     .when(observation.getEvidence())
@@ -600,8 +590,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 """;
             AgentJob job = jobWithOutput(rawOutput);
 
-            when(deliveryService.prepare(eq(job), any()))
-                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
+            when(deliveryService.prepare(eq(job), any())).thenReturn(mock(PreparedObservations.class));
             admit(job, rawOutput);
             verify(deliveryService).prepare(eq(job), any());
             verifyNoInteractions(feedbackService, observationRepository);
@@ -620,26 +609,20 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             job.setOutput(output);
 
             Practice approvalGated = createPractice("error-handling", "Error Handling", "criteria");
-            approvalGated.setAutonomy(de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy.HUMAN_APPROVAL);
+            approvalGated.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
             Practice automatic = createPractice("describe-what-and-why", "Describe What And Why", "criteria");
-            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
-                    .thenReturn(java.util.List.of(approvalGated, automatic));
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(approvalGated, automatic));
             // Built before the stubbing call: persisted() stubs, and Mockito rejects a stub nested in when().
-            var gated = persisted(
-                    job,
-                    approvalGated,
-                    "Unhandled error path",
-                    de.tum.cit.aet.hephaestus.practices.model.Severity.MAJOR);
-            var auto = persisted(
-                    job, automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            var gated = persisted(job, approvalGated, "Unhandled error path", Severity.MAJOR);
+            var auto = persisted(job, automatic, "No rationale sentence", Severity.MINOR);
             when(observationRepository.findByAgentJobId(
                             job.getId(), job.getWorkspace().getId()))
-                    .thenReturn(java.util.List.of(gated, auto));
+                    .thenReturn(List.of(gated, auto));
 
             handler.deliver(job);
 
-            var proposal = org.mockito.ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
-            verify(feedbackService).recordProposal(org.mockito.ArgumentMatchers.eq(job), proposal.capture());
+            var proposal = ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
+            verify(feedbackService).recordProposal(eq(job), proposal.capture());
             verify(feedbackService, never()).deliverFeedback(any(), any(), any());
 
             assertThat(proposal.getValue().mrNote()).startsWith(lead);
@@ -657,28 +640,21 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             job.setOutput(output);
 
             Practice approvalGated = createPractice("error-handling", "Error Handling", "criteria");
-            approvalGated.setAutonomy(de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy.HUMAN_APPROVAL);
+            approvalGated.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
             Practice automatic = createPractice("describe-what-and-why", "Describe What And Why", "criteria");
-            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
-                    .thenReturn(java.util.List.of(approvalGated, automatic));
-            var gated = persisted(
-                    job,
-                    approvalGated,
-                    "Unhandled error path",
-                    de.tum.cit.aet.hephaestus.practices.model.Severity.MAJOR);
-            var auto = persisted(
-                    job, automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(approvalGated, automatic));
+            var gated = persisted(job, approvalGated, "Unhandled error path", Severity.MAJOR);
+            var auto = persisted(job, automatic, "No rationale sentence", Severity.MINOR);
             when(observationRepository.findByAgentJobId(
                             job.getId(), job.getWorkspace().getId()))
-                    .thenReturn(java.util.List.of(gated, auto));
+                    .thenReturn(List.of(gated, auto));
             composed(job, List.of(gated, auto), withholding(gated));
 
             handler.deliver(job);
 
             verify(feedbackService, never()).recordProposal(any(), any());
-            var content = org.mockito.ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
-            verify(feedbackService)
-                    .deliverFeedback(eq(job), content.capture(), eq(java.util.Set.of("describe-what-and-why")));
+            var content = ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
+            verify(feedbackService).deliverFeedback(eq(job), content.capture(), eq(Set.of("describe-what-and-why")));
             assertThat(content.getValue().mrNote())
                     .contains("No rationale sentence")
                     .doesNotContain("Unhandled error path")
@@ -693,28 +669,22 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         void shouldProposeANoteWhoseUnitCitesAnObservationOfAPracticeNeedingApproval() {
             AgentJob job = composedJob();
             Practice gatedPractice = createPractice("error-handling", "Error Handling", "criteria");
-            gatedPractice.setAutonomy(de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy.HUMAN_APPROVAL);
+            gatedPractice.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
             Practice automatic = createPractice("describe-what-and-why", "Describe What And Why", "criteria");
-            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
-                    .thenReturn(java.util.List.of(gatedPractice, automatic));
-            var auto = persisted(
-                    job, automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
-            var gated = persisted(
-                    job,
-                    gatedPractice,
-                    "Errors reach the caller",
-                    de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(gatedPractice, automatic));
+            var auto = persisted(job, automatic, "No rationale sentence", Severity.MINOR);
+            var gated = persisted(job, gatedPractice, "Errors reach the caller", Severity.MINOR);
             lenient().when(gated.getSeverity()).thenReturn(null);
             lenient().when(gated.getOutcome()).thenReturn(Outcome.MET);
             when(observationRepository.findByAgentJobId(
                             job.getId(), job.getWorkspace().getId()))
-                    .thenReturn(java.util.List.of(auto, gated));
+                    .thenReturn(List.of(auto, gated));
             composed(job, List.of(auto, gated), noteCiting(auto, gated));
 
             handler.deliver(job);
 
             verify(feedbackService, never()).deliverFeedback(any(), any(), any());
-            var proposal = org.mockito.ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
+            var proposal = ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
             verify(feedbackService).recordProposal(eq(job), proposal.capture());
             assertThat(proposal.getValue().contributors())
                     .containsExactlyInAnyOrder("occ-describe-what-and-why", "occ-error-handling");
@@ -724,31 +694,24 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         void shouldSendAutomaticallyWhenTheOnlyObservationNeedingApprovalIsAnUncitedAbstention() {
             AgentJob job = composedJob();
             Practice gatedPractice = createPractice("error-handling", "Error Handling", "criteria");
-            gatedPractice.setAutonomy(de.tum.cit.aet.hephaestus.practices.model.PracticeAutonomy.HUMAN_APPROVAL);
+            gatedPractice.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
             Practice automatic = createPractice("describe-what-and-why", "Describe What And Why", "criteria");
-            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID))
-                    .thenReturn(java.util.List.of(gatedPractice, automatic));
-            var auto = persisted(
-                    job, automatic, "No rationale sentence", de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
-            var abstention = persisted(
-                    job,
-                    gatedPractice,
-                    "No error path changed",
-                    de.tum.cit.aet.hephaestus.practices.model.Severity.MINOR);
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(gatedPractice, automatic));
+            var auto = persisted(job, automatic, "No rationale sentence", Severity.MINOR);
+            var abstention = persisted(job, gatedPractice, "No error path changed", Severity.MINOR);
             lenient().when(abstention.getSeverity()).thenReturn(null);
             lenient().when(abstention.getOutcome()).thenReturn(Outcome.NOT_APPLICABLE);
 
             when(observationRepository.findByAgentJobId(
                             job.getId(), job.getWorkspace().getId()))
-                    .thenReturn(java.util.List.of(auto, abstention));
+                    .thenReturn(List.of(auto, abstention));
             composed(job, List.of(auto, abstention), noteCiting(auto));
 
             handler.deliver(job);
 
             verify(feedbackService, never()).recordProposal(any(), any());
-            var content = org.mockito.ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
-            verify(feedbackService)
-                    .deliverFeedback(eq(job), content.capture(), eq(java.util.Set.of("describe-what-and-why")));
+            var content = ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
+            verify(feedbackService).deliverFeedback(eq(job), content.capture(), eq(Set.of("describe-what-and-why")));
             assertThat(content.getValue().mrNote()).contains("Say why the change is needed");
             assertThat(content.getValue().contributors()).containsExactly("occ-describe-what-and-why");
         }
@@ -765,10 +728,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
         }
 
         /** Stages the admitted observations under their persisted ids, as admission hands them to the runner. */
-        private void composed(
-                AgentJob job, List<de.tum.cit.aet.hephaestus.practices.model.Observation> admitted, String... units) {
-            ObjectNode feedback = (ObjectNode)
-                    java.util.Objects.requireNonNull(job.getOutput()).get("feedback");
+        private void composed(AgentJob job, List<Observation> admitted, String... units) {
+            ObjectNode feedback =
+                    (ObjectNode) Objects.requireNonNull(job.getOutput()).get("feedback");
             var staged = feedback.putArray("observations");
             for (var observation : admitted) {
                 staged.addObject()
@@ -780,22 +742,22 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             feedback.set("units", objectMapper.readTree("[" + String.join(",", units) + "]"));
         }
 
-        private static String withholding(de.tum.cit.aet.hephaestus.practices.model.Observation observation) {
+        private static String withholding(Observation observation) {
             return """
                     {"channel":"IN_CONTEXT","action":"WITHHOLD","practiceSlug":"%s","basedOn":["%s"],
                      "withholdReason":"ALREADY_SAID"}""".formatted(observation.getPractice().getSlug(), observation.getId());
         }
 
         /** A note of the first observation's practice, based on every observation given. */
-        private static String noteCiting(de.tum.cit.aet.hephaestus.practices.model.Observation... cited) {
+        private static String noteCiting(Observation... cited) {
             return """
                     {"channel":"IN_CONTEXT","action":"NEW","practiceSlug":"%s","basedOn":[%s],
                      "title":"Say why the change is needed","nextStep":"Add one sentence of motivation",
                      "placement":{"kind":"ARTIFACT"}}""".formatted(
                             cited[0].getPractice().getSlug(),
-                            java.util.Arrays.stream(cited)
+                            Arrays.stream(cited)
                                     .map(observation -> "\"" + observation.getId() + "\"")
-                                    .collect(java.util.stream.Collectors.joining(",")));
+                                    .collect(Collectors.joining(",")));
         }
 
         /** A job past admission, carrying the coverage ledger its run wrote. */
@@ -812,10 +774,9 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             return job;
         }
 
-        private de.tum.cit.aet.hephaestus.practices.model.Observation observed(
-                AgentJob job, Practice practice, Outcome outcome) {
-            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(java.util.List.of(practice));
-            var observation = org.mockito.Mockito.mock(de.tum.cit.aet.hephaestus.practices.model.Observation.class);
+        private Observation observed(AgentJob job, Practice practice, Outcome outcome) {
+            when(practiceRepository.findByWorkspaceId(WORKSPACE_ID)).thenReturn(List.of(practice));
+            var observation = mock(Observation.class);
             lenient().when(observation.getPractice()).thenReturn(practice);
             lenient()
                     .when(observation.getEvidence())
@@ -830,7 +791,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             lenient().when(observation.getRecurrenceKey()).thenReturn("rk-" + practice.getSlug());
             when(observationRepository.findByAgentJobId(
                             job.getId(), job.getWorkspace().getId()))
-                    .thenReturn(java.util.List.of(observation));
+                    .thenReturn(List.of(observation));
             return observation;
         }
 
@@ -843,8 +804,8 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
 
             handler.deliver(job);
 
-            var content = org.mockito.ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
-            verify(feedbackService).deliverFeedback(eq(job), content.capture(), eq(java.util.Set.of()));
+            var content = ArgumentCaptor.forClass(ReviewResultParser.DeliveryContent.class);
+            verify(feedbackService).deliverFeedback(eq(job), content.capture(), eq(Set.of()));
             assertThat(content.getValue().mrNote()).isNull();
             assertThat(content.getValue().withheld())
                     .extracting(ReviewResultParser.WithheldObservation::occurrenceKey)
@@ -899,8 +860,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
                 """;
             AgentJob job = jobWithOutput(rawOutput);
             ArgumentCaptor<List<ReviewResultParser.ValidatedObservation>> captor = ArgumentCaptor.forClass(List.class);
-            when(deliveryService.prepare(eq(job), captor.capture()))
-                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
+            when(deliveryService.prepare(eq(job), captor.capture())).thenReturn(mock(PreparedObservations.class));
 
             admit(job, rawOutput);
 
@@ -931,8 +891,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             ObjectNode output = objectMapper.createObjectNode();
             output.put("rawOutput", NOTHING_DECIDED);
             job.setOutput(output);
-            when(deliveryService.prepare(eq(job), any()))
-                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
+            when(deliveryService.prepare(eq(job), any())).thenReturn(mock(PreparedObservations.class));
 
             admit(job, NOTHING_DECIDED);
 
@@ -969,8 +928,7 @@ class PullRequestReviewHandlerTest extends BaseUnitTest {
             output.put("rawOutput", rawOutput);
             job.setOutput(output);
             ArgumentCaptor<List<ReviewResultParser.ValidatedObservation>> captor = ArgumentCaptor.forClass(List.class);
-            when(deliveryService.prepare(eq(job), captor.capture()))
-                    .thenReturn(org.mockito.Mockito.mock(PreparedObservations.class));
+            when(deliveryService.prepare(eq(job), captor.capture())).thenReturn(mock(PreparedObservations.class));
 
             admit(job, rawOutput);
 

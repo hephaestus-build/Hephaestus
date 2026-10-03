@@ -53,6 +53,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -320,7 +321,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
 
         upsertPullRequest();
         assertThat(gateLoadedPullRequest().getDeletedAt()).isNull();
-        var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
+        var decision = new GateDecision.Run(workspace, List.of(), 1, TriggerMode.AUTO);
         when(reviewGate.evaluateQueued(
                         any(), eq(workspace.getId()), eq(ScmSignals.PULL_REQUEST_OPENED), any(), eq(false)))
                 .thenReturn(decision);
@@ -361,7 +362,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
                 workspaceResolver,
                 signalRecorder,
                 issueEvidenceRevision,
-                java.util.Objects.requireNonNull(transactionTemplate.getTransactionManager()));
+                Objects.requireNonNull(transactionTemplate.getTransactionManager()));
         tombstoneIssue();
 
         transactionTemplate.executeWithoutResult(status -> listener.onIssueCreated(event));
@@ -374,7 +375,7 @@ class UpstreamDeletedWorkReadScopeIntegrationTest extends AbstractWorkspaceInteg
 
         upsertIssue();
         assertThat(gateLoadedIssue().getDeletedAt()).isNull();
-        var decision = new GateDecision.Detect(workspace, List.of(), 1, TriggerMode.AUTO);
+        var decision = new GateDecision.Run(workspace, List.of(), 1, TriggerMode.AUTO);
         when(reviewGate.evaluateIssue(any(), anyLong(), eq(ScmSignals.ISSUE_OPENED), eq(TriggerMode.AUTO)))
                 .thenReturn(decision);
         resubmit(

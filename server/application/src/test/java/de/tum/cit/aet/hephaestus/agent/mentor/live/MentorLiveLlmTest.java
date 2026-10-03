@@ -20,8 +20,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -38,6 +38,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.util.FileSystemUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -98,7 +99,7 @@ class MentorLiveLlmTest {
 
     private StdioAttachedSandbox activeSandbox() {
         StdioAttachedSandbox current = sandbox;
-        org.junit.jupiter.api.Assertions.assertNotNull(current);
+        assertThat(current).isNotNull();
         return current;
     }
 
@@ -228,7 +229,7 @@ class MentorLiveLlmTest {
                 driver, threadId, "What number did I ask you to remember? Reply with only the digits.");
         System.out.printf("[multi-turn] turn 2 (%d chars): %s%n", t2Text.length(), trim(t2Text, 200));
         // Accept either the numeric or spelled-out form so the assertion is model-agnostic.
-        String t2Lower = t2Text.toLowerCase();
+        String t2Lower = t2Text.toLowerCase(Locale.ROOT);
         assertThat(t2Lower)
                 .as("turn 2 must recall the planted number — if this fails, the Pi SDK's session-bound "
                         + "agent._state.messages is not being fed through between turns on the same warm "
@@ -248,7 +249,7 @@ class MentorLiveLlmTest {
         //
         // The chain: build a list one item per turn. Turn 5 asks for the full list. This
         // requires the LLM to have seen every prior assistant message AND its own prior
-        // answers — exactly the failure mode the screenshot showed.
+        // answers.
         LiveLlmCredentials creds = LiveLlmCredentials.fromEnv();
         UUID threadId = UUID.randomUUID();
         workspaceDir = stageWorkspace(creds);
@@ -280,7 +281,7 @@ class MentorLiveLlmTest {
                 "List every fruit I have added so far, in the order I added them. "
                         + "Reply with just the fruit names separated by commas. No commentary.");
         System.out.printf("[5-turn] turn 5 summary (%d chars): %s%n", summary.length(), trim(summary, 200));
-        String lower = summary.toLowerCase();
+        String lower = summary.toLowerCase(Locale.ROOT);
         for (String fruit : fruits) {
             assertThat(lower)
                     .as(
@@ -307,7 +308,7 @@ class MentorLiveLlmTest {
                 new RunnerDriver(activeSandbox()),
                 threadId,
                 "What framework am I using? Reply with only the framework name.");
-        assertThat(followUp.toLowerCase())
+        assertThat(followUp.toLowerCase(Locale.ROOT))
                 .as("Pi SDK rehydrated agent state from injected .sessions/<id>.jsonl")
                 .contains("spring");
     }
@@ -361,7 +362,7 @@ class MentorLiveLlmTest {
                 .map(UIMessageChunk.ToolInputStart.class::cast)
                 .toList();
         assertThat(toolStarts)
-                .as("agent must invoke fetch_context to answer the question")
+                .as("Heph must invoke fetch_context to answer the question")
                 .isNotEmpty();
 
         List<String> toolNames =
@@ -378,7 +379,7 @@ class MentorLiveLlmTest {
                 .as("at least one tool call completed with output")
                 .isNotEmpty();
 
-        // Agent's text response should reference the planted content.
+        // Heph's reply should reference the planted content.
         String text = chunks.stream()
                 .filter(UIMessageChunk.TextDelta.class::isInstance)
                 .map(UIMessageChunk.TextDelta.class::cast)
@@ -386,7 +387,7 @@ class MentorLiveLlmTest {
                 .reduce("", String::concat);
         System.out.printf("[tool-use] LLM response (%d chars): %s%n", text.length(), trim(text, 300));
         assertThat(text)
-                .as("agent must answer from recent_authored_work.json")
+                .as("Heph must answer from recent_authored_work.json")
                 .contains("12")
                 .containsIgnoringCase("Slack mentor onboarding");
     }
@@ -463,15 +464,10 @@ class MentorLiveLlmTest {
     }
 
     private static void deleteRecursive(Path root) {
-        if (root == null || !Files.exists(root)) return;
-        try (var stream = Files.walk(root)) {
-            stream.sorted(Comparator.reverseOrder()).forEach(p -> {
-                try {
-                    Files.deleteIfExists(p);
-                } catch (IOException ignored) {
-                }
-            });
+        try {
+            FileSystemUtils.deleteRecursively(root);
         } catch (IOException ignored) {
+            // A leftover temp directory does not affect the next test, which stages its own.
         }
     }
 
@@ -508,8 +504,6 @@ class MentorLiveLlmTest {
             unsubscribe.dispose();
         }
     }
-
-    // Workspace + process plumbing
 
     private Path stageWorkspace(LiveLlmCredentials creds) throws IOException {
         Path tmp = Files.createTempDirectory("hephaestus-mentor-live-");
@@ -563,7 +557,7 @@ class MentorLiveLlmTest {
         // pi-provider.json — the single non-secret provider spec both runners read via the shared
         // pi-provider.ts helper. Written at the workspace root (mirrors PiRuntimeFactory.build()).
         byte[] providerConfigBytes = MAPPER.writerWithDefaultPrettyPrinter()
-                .writeValueAsBytes(java.util.Map.of(
+                .writeValueAsBytes(Map.of(
                         "apiProtocol",
                         spec.apiProtocol(),
                         "modelId",
@@ -582,7 +576,7 @@ class MentorLiveLlmTest {
     private StdioAttachedSandbox spawnRunner(LiveLlmCredentials creds, Path workspace) throws IOException {
         ProcessBuilder pb = new ProcessBuilder();
         Map<String, String> env = pb.environment();
-        env.putAll(creds.asProcessEnv()); // OPENAI_API_KEY + OPENAI_BASE_URL (legacy back-compat)
+        env.putAll(creds.asProcessEnv());
         env.put("AGENT_BUDGET_MS", Long.toString(TURN_TIMEOUT.toMillis()));
         // The runner reads LLM_PROXY_URL / LLM_PROXY_TOKEN — the same env vars the sandbox adapter sets
         // in production (via NetworkPolicy). No real proxy sits in front of this live test, so these point

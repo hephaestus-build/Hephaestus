@@ -12,7 +12,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { asDate } from "@/lib/dates";
+import { asDate, formatDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider/provider-labels";
 
 export interface AdminWorkspacesTableProps {
@@ -39,8 +39,9 @@ function statusVariant(status: WorkspaceStatus): "secondary" | "destructive" {
 	return status === "ACTIVE" ? "secondary" : "destructive";
 }
 
-function formatDate(value: AdminWorkspaceView["createdAt"]): string {
-	return asDate(value)?.toLocaleDateString() ?? "–";
+function formatCreatedAt(value: AdminWorkspaceView["createdAt"]): string {
+	const date = asDate(value);
+	return date ? formatDate(date) : "–";
 }
 
 const SKELETON_COLUMNS = ["w-28", "w-24", "w-16", "w-14", "w-20", "w-8", "w-20", null];
@@ -125,7 +126,7 @@ export function AdminWorkspacesTable({
 							{ws.memberCount}
 						</TableCell>
 						<TableCell className="text-sm whitespace-nowrap text-muted-foreground">
-							{formatDate(ws.createdAt)}
+							{formatCreatedAt(ws.createdAt)}
 						</TableCell>
 						<TableCell className="text-right">
 							<Button

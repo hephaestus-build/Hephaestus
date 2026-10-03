@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
 import de.tum.cit.aet.hephaestus.integration.scm.github.organization.dto.GitHubOrganizationEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -142,7 +143,7 @@ public class GitHubOrganizationMessageHandler extends AbstractIntegrationMessage
         if (roleString == null) {
             return OrganizationMemberRole.MEMBER;
         }
-        return switch (roleString.toUpperCase()) {
+        return switch (roleString.toUpperCase(Locale.ROOT)) {
             case "ADMIN" -> OrganizationMemberRole.ADMIN;
             default -> OrganizationMemberRole.MEMBER;
         };

@@ -41,7 +41,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class ActivityEventListener {
 
     private final ActivityEventService activityEventService;
-    private final ActivityEventRepository activityEventRepository;
     private final PullRequestReviewThreadRepository reviewThreadRepository;
     private final UserRepository userRepository;
     private final RepositoryRepository repositoryRepository;
@@ -308,7 +307,6 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    /** Handle label added to pull request. */
     @Async
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -337,7 +335,6 @@ public class ActivityEventListener {
                         pr.id()));
     }
 
-    /** Handle label removed from pull request. */
     @Async
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -631,7 +628,6 @@ public class ActivityEventListener {
                         commentData.id()));
     }
 
-    /** Handle review comment edited events. */
     @Async
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -1088,8 +1084,6 @@ public class ActivityEventListener {
         return ActivityEventType.REVIEW_COMMENTED;
     }
 
-    // Commit Events
-
     /**
      * Handle commit created events.
      *
@@ -1147,7 +1141,7 @@ public class ActivityEventListener {
         }
         String correlationId = event.context() != null ? event.context().correlationId() : null;
         try {
-            int updated = activityEventRepository.backfillCommitActors(repositoryId);
+            int updated = activityEventService.backfillCommitActors(repositoryId);
             log.info(
                     "Backfilled {} COMMIT_CREATED activity events: repoId={}, correlationId={}",
                     updated,
@@ -1327,8 +1321,6 @@ public class ActivityEventListener {
                         ActivityTargetType.DISCUSSION,
                         discussionId));
     }
-
-    // Discussion Comment Events
 
     /**
      * Handle discussion comment created events.

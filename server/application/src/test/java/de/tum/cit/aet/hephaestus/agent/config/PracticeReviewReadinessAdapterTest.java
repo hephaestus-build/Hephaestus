@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -33,20 +34,20 @@ class PracticeReviewReadinessAdapterTest extends BaseUnitTest {
 
     @Test
     void unboundPracticeIsNotRunnable() {
-        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of());
+        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of());
         assertThat(checker.hasRunnableAgent(1L)).isFalse();
     }
 
     @Test
     void disabledBindingIsNotRunnable() {
-        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(binding(false)));
+        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(binding(false)));
         assertThat(checker.hasRunnableAgent(1L)).isFalse();
     }
 
     @Test
     void enabledBindingWithRevokedModelIsNotRunnable() {
         WorkspaceAgentBinding b = binding(true);
-        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(b));
+        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(b));
         when(resolver.isAvailable(b)).thenReturn(false);
         assertThat(checker.hasRunnableAgent(1L)).isFalse();
     }
@@ -54,7 +55,7 @@ class PracticeReviewReadinessAdapterTest extends BaseUnitTest {
     @Test
     void enabledBindingWithAvailableModelIsRunnable() {
         WorkspaceAgentBinding b = binding(true);
-        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(b));
+        when(bindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(b));
         when(resolver.isAvailable(b)).thenReturn(true);
         assertThat(checker.hasRunnableAgent(1L)).isTrue();
     }

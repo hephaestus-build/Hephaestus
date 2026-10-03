@@ -109,7 +109,8 @@ class UIMessageChunkSerializationTest extends BaseUnitTest {
                 // {type, id?, data: unknown, transient?: boolean}. status is transient (banner only);
                 // observation is permanent (linked chip in message history).
                 new Object[] {
-                    UIMessageChunk.DataMentorStatus.of("warming-up", "container-cold"),
+                    UIMessageChunk.DataMentorStatus.of(
+                            UIMessageChunk.DataMentorStatus.State.WARMING_UP, "container-cold"),
                     "{\"type\":\"data-mentor-status\",\"id\":\"mentor-status\","
                             + "\"data\":{\"state\":\"warming-up\",\"reason\":\"container-cold\"},\"transient\":true}",
                 },
@@ -123,7 +124,7 @@ class UIMessageChunkSerializationTest extends BaseUnitTest {
                             + "\",\"text\":\"Say why.\"}}",
                 },
                 new Object[] {
-                    new UIMessageChunk.Error("container died mid-turn"),
+                    new UIMessageChunk.TurnError("container died mid-turn"),
                     "{\"type\":\"error\",\"errorText\":\"container died mid-turn\"}",
                 });
     }

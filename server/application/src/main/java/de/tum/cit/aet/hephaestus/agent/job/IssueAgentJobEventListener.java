@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.IssueReviewSubmissionRequest;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.integration.core.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
@@ -25,10 +26,11 @@ import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import java.util.Collections;
+import java.util.Set;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -50,7 +52,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 // Ledger rows this listener writes are only ever drained by the server-role PendingSignalReaper and
 // IssueUpdateCoalescer; recording one anywhere else would queue work nothing consumes.
 @ConditionalOnServerRole
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 public class IssueAgentJobEventListener {
 
     private static final Logger log = LoggerFactory.getLogger(IssueAgentJobEventListener.class);
@@ -104,7 +106,7 @@ public class IssueAgentJobEventListener {
             return;
         }
         if (event.issue().state() == Issue.State.CLOSED
-                && !Collections.disjoint(event.changedFields(), java.util.Set.of("title", "body"))) {
+                && !Collections.disjoint(event.changedFields(), Set.of("title", "body"))) {
             for (Long pullRequestId : pullRequestRepository.findMergedClosingPullRequestIdsByIssueId(
                     event.issue().id())) {
                 var pullRequest = pullRequestRepository
@@ -235,7 +237,7 @@ public class IssueAgentJobEventListener {
                         skip.reason());
                 signalRecorder.markRefused(key, skip.resolvedSignalReason());
             }
-            case GateDecision.Detect detect -> submitJob(issue, detect, key);
+            case GateDecision.Run run -> submitJob(issue, run, key);
         }
     }
 
@@ -252,7 +254,7 @@ public class IssueAgentJobEventListener {
         return ScmSignals.issueKey(workspaceId, signal, issueData).orElse(null);
     }
 
-    private void submitJob(Issue issue, GateDecision.Detect detect, SignalKey signalKey) {
+    private void submitJob(Issue issue, GateDecision.Run run, SignalKey signalKey) {
         IssueReviewSubmissionRequest request = new IssueReviewSubmissionRequest(
                 issue.getId(),
                 issue.getNumber(),
@@ -268,12 +270,12 @@ public class IssueAgentJobEventListener {
                 null,
                 issue.getReviewSnapshotId());
         agentJobService
-                .submit(detect.workspace().getId(), AgentJobType.ISSUE_REVIEW, request, signalKey, detect)
+                .submit(run.workspace().getId(), AgentJobType.ISSUE_REVIEW, request, signalKey, run)
                 .ifPresent(job -> log.info(
                         "Submitted issue review job: issueId={}, signal={}, workspaceId={}, jobId={}",
                         issue.getId(),
                         signalKey.signalName(),
-                        detect.workspace().getId(),
+                        run.workspace().getId(),
                         job.getId()));
     }
 }

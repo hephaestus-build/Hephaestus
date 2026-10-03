@@ -33,8 +33,9 @@ import {
 	ItemMedia,
 	ItemTitle,
 } from "@/components/ui/item";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
-import { asDate } from "@/lib/dates";
+import { asDate, formatDate } from "@/lib/dates";
 import { getProviderLabel } from "@/lib/provider/provider-labels";
 import { firstNonBlank, hasText } from "@/lib/text";
 
@@ -52,33 +53,14 @@ const LINK_ONLY_RATIONALE: Record<string, string> = {
 	OUTLINE: "Connect Outline so the documents you write there are recognised as your work.",
 };
 
-function formatLastLogin(lastLoginAt?: Date): string | undefined {
-	const date = asDate(lastLoginAt);
-	if (!date) {
-		return undefined;
-	}
-	return date.toLocaleDateString(undefined, {
-		year: "numeric",
-		month: "short",
-		day: "numeric",
-	});
-}
-
 export interface LinkedAccountsSectionProps {
-	/** Identities already federated to this account. */
 	identities: IdentityView[];
-	/** Sign-in providers available to link (offered when not already linked). */
 	providers: IdentityProviderView[];
 	/**
 	 * Start the link flow for a provider. Re-runs sign-in with that provider and
 	 * attaches the resulting identity to the current account (top-level redirect).
 	 */
 	onLink: (registrationId: string) => void;
-	/**
-	 * Disconnect a linked identity. Disabled for the account's only remaining sign-in
-	 * method — removing the last identity would lock the user out, so they delete the
-	 * account instead.
-	 */
 	onUnlink: (identityId: number) => void;
 	/** Id of the identity currently being disconnected — shows a spinner and blocks repeat clicks. */
 	unlinkingId?: number | null;
@@ -86,7 +68,6 @@ export interface LinkedAccountsSectionProps {
 	isError?: boolean;
 	/** The thrown query error behind `isError`. */
 	error?: unknown;
-	/** Refetch the identities/providers after a failure. */
 	onRetry?: () => void;
 }
 
@@ -121,9 +102,22 @@ export function LinkedAccountsSection({
 	if (isLoading) {
 		return (
 			<LinkedAccountsFrame headingRef={headingRef}>
-				<div className="flex justify-center py-6">
-					<Spinner aria-label="Loading connected accounts" />
-				</div>
+				<ItemGroup aria-busy="true" aria-label="Loading connected accounts">
+					{Array.from({ length: 2 }, (_, index) => (
+						<Item key={index} variant="outline" role="listitem">
+							<ItemMedia variant="icon">
+								<Skeleton className="size-4" />
+							</ItemMedia>
+							<ItemContent>
+								<Skeleton className="h-4 w-32" />
+								<Skeleton className="h-4 w-44" />
+							</ItemContent>
+							<ItemActions>
+								<Skeleton className="h-8 w-28" />
+							</ItemActions>
+						</Item>
+					))}
+				</ItemGroup>
 			</LinkedAccountsFrame>
 		);
 	}
@@ -140,9 +134,7 @@ export function LinkedAccountsSection({
 	}
 
 	const linkedProviderTypes = new Set(
-		identities
-			.map((identity) => identity.providerType?.toUpperCase())
-			.filter((type): type is string => Boolean(type)),
+		identities.map((identity) => identity.providerType.toUpperCase()),
 	);
 
 	// Providers the account can still link: not already represented among the linked identities
@@ -169,7 +161,6 @@ export function LinkedAccountsSection({
 		(provider) => !LINK_ONLY_PROVIDER_TYPES.has(provider.providerType?.toUpperCase() ?? ""),
 	);
 
-	// Lockout guard: the account's only remaining sign-in method cannot be removed.
 	const isOnlyIdentity = identities.length <= 1;
 
 	return (
@@ -189,20 +180,15 @@ export function LinkedAccountsSection({
 			) : (
 				<ItemGroup>
 					{identities.map((identity) => {
-						const identityId = identity.id;
 						const Icon = getProviderIcon(identity.providerType);
 						const name =
 							firstNonBlank(identity.displayName, identity.username, identity.subject) ?? "Account";
-						const lastLogin = formatLastLogin(identity.lastLoginAt);
+						const lastLogin = asDate(identity.lastLoginAt);
 
 						return (
-							<Item
-								key={identityId ?? `${identity.providerType}:${identity.subject}`}
-								variant="outline"
-								role="listitem"
-							>
+							<Item key={identity.id} variant="outline" role="listitem">
 								<ItemMedia variant="icon">
-									<Icon aria-hidden="true" />
+									<Icon />
 								</ItemMedia>
 								<ItemContent>
 									<ItemTitle>
@@ -213,22 +199,20 @@ export function LinkedAccountsSection({
 											</Badge>
 										)}
 									</ItemTitle>
-									{hasText(lastLogin) && (
-										<ItemDescription>Last sign-in {lastLogin}</ItemDescription>
+									{lastLogin && (
+										<ItemDescription>Last sign-in {formatDate(lastLogin)}</ItemDescription>
 									)}
 								</ItemContent>
-								{identityId != null && (
-									<ItemActions>
-										<UnlinkControl
-											identityId={identityId}
-											name={name}
-											providerType={identity.providerType}
-											isOnlyIdentity={isOnlyIdentity}
-											isUnlinking={unlinkingId === identityId}
-											onConfirm={() => onUnlink(identityId)}
-										/>
-									</ItemActions>
-								)}
+								<ItemActions>
+									<UnlinkControl
+										identityId={identity.id}
+										name={name}
+										providerType={identity.providerType}
+										isOnlyIdentity={isOnlyIdentity}
+										isUnlinking={unlinkingId === identity.id}
+										onConfirm={() => onUnlink(identity.id)}
+									/>
+								</ItemActions>
 							</Item>
 						);
 					})}
@@ -246,7 +230,7 @@ export function LinkedAccountsSection({
 						return (
 							<Item key={registrationId} variant="outline" role="listitem">
 								<ItemMedia variant="icon">
-									<Icon aria-hidden="true" />
+									<Icon />
 								</ItemMedia>
 								<ItemContent>
 									<ItemTitle>{label} is not connected</ItemTitle>
@@ -259,7 +243,7 @@ export function LinkedAccountsSection({
 										onClick={() => onLink(registrationId)}
 										aria-label={`Connect ${label}`}
 									>
-										<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
+										<Icon className="mr-1.5 size-3.5" />
 										Connect
 									</Button>
 								</ItemActions>
@@ -294,7 +278,7 @@ export function LinkedAccountsSection({
 									disabled={!hasText(provider.registrationId)}
 									aria-label={`Connect ${label}`}
 								>
-									<Icon className="mr-1.5 size-3.5" aria-hidden="true" />
+									<Icon className="mr-1.5 size-3.5" />
 									Connect {label}
 								</Button>
 							);
@@ -355,10 +339,9 @@ interface UnlinkControlProps {
 }
 
 /**
- * The per-identity disconnect control. For the account's only remaining identity it renders an
- * always-visible muted hint explaining the lockout guard (the action is intentionally absent —
- * removing it is done by deleting the account); otherwise a confirmation dialog gates the
- * (reversible) disconnect.
+ * The account's only identity cannot be disconnected, since that would lock the account out, so it
+ * gets a sentence saying why in place of the control; a disabled button's reason would be unreachable
+ * by keyboard.
  */
 function UnlinkControl({
 	identityId,
@@ -369,15 +352,12 @@ function UnlinkControl({
 	onConfirm,
 }: UnlinkControlProps) {
 	if (isOnlyIdentity) {
-		// The only sign-in method can't be removed (lockout guard). An always-visible sentence
-		// states why — accessible to screen-reader/keyboard users, unlike a disabled button's
-		// native title. Removing it is done by deleting the account in the Danger Zone.
 		return (
 			<p
 				id={`lockout-hint-${identityId}`}
 				className="max-w-3xs shrink-0 text-xs text-muted-foreground"
 			>
-				Your only sign-in method — delete your account in the Danger Zone to remove it.
+				Your only sign-in method. Delete your account in the Danger Zone to remove it.
 			</p>
 		);
 	}
@@ -399,7 +379,7 @@ function UnlinkControl({
 						className="shrink-0 hover:text-destructive"
 					>
 						{isUnlinking ? (
-							<Spinner className="mr-1.5 size-3.5" aria-hidden="true" />
+							<Spinner className="mr-1.5 size-3.5" />
 						) : (
 							<Unlink className="mr-1.5 size-3.5" aria-hidden="true" />
 						)}

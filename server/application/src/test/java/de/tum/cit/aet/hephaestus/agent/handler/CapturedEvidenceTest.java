@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.PracticePreconditionClause;
 import de.tum.cit.aet.hephaestus.practices.model.ArtifactKinds;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -72,7 +73,7 @@ class CapturedEvidenceTest extends BaseUnitTest {
                                         "e".repeat(64),
                                         41))),
                         new SourceCapture(
-                                new de.tum.cit.aet.hephaestus.evidence.SourceKind("scm.pull-request.comments"),
+                                new SourceKind("scm.pull-request.comments"),
                                 new SourceCaptureState.Unavailable(SourceAbsenceReason.NOT_FOUND),
                                 List.of())));
         ObjectNode snapshot = mapper.createObjectNode();

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.FilterChain;
@@ -100,7 +101,7 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
     }
 
     private void assertCounter(String provider, String reason, double expected) {
-        io.micrometer.core.instrument.Counter counter = meters.find("webhook.rejected")
+        Counter counter = meters.find("webhook.rejected")
                 .tag("provider", provider)
                 .tag("reason", reason)
                 .counter();
@@ -112,7 +113,6 @@ class WebhookPayloadSizeFilterTest extends BaseUnitTest {
 
     @Test
     void rejectsOversizedSlackWebhookPostWith413() throws Exception {
-        // Slack Events API now uses the unified /webhooks/slack path and is tagged provider=slack.
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/webhooks/slack");
         request.setContentType("application/json");
         request.setContent(new byte[2048]);

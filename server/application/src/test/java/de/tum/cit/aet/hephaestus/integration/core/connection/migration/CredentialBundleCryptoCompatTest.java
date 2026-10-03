@@ -17,6 +17,7 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Pins the legacy-{@code EncryptedStringConverter} → {@link CredentialBundleConverter}
@@ -72,7 +73,7 @@ class CredentialBundleCryptoCompatTest extends BaseUnitTest {
             // — hardcoding a literal would drift from the discriminator on the sealed type.
             String bundleJson;
             try {
-                bundleJson = tools.jackson.databind.json.JsonMapper.builder()
+                bundleJson = JsonMapper.builder()
                         .findAndAddModules()
                         .build()
                         .writeValueAsString(new ApiCredentialProvider.BearerToken("ghp_xyz", null));
@@ -109,7 +110,7 @@ class CredentialBundleCryptoCompatTest extends BaseUnitTest {
             String bundleJson;
             byte[] blob;
             try {
-                bundleJson = tools.jackson.databind.json.JsonMapper.builder()
+                bundleJson = JsonMapper.builder()
                         .findAndAddModules()
                         .build()
                         .writeValueAsString(new ApiCredentialProvider.BearerToken("x", null));

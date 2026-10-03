@@ -14,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import org.jspecify.annotations.Nullable;
@@ -110,7 +111,7 @@ public class LoginProviderService {
      * flow, and the row's type drives the link-only gate.
      */
     @Transactional(readOnly = true)
-    public java.util.Optional<LoginProvider> findEnabled(String registrationId) {
+    public Optional<LoginProvider> findEnabled(String registrationId) {
         return repository
                 .findByRegistrationId(registrationId)
                 .filter(LoginProvider::isEnabled)
@@ -236,8 +237,7 @@ public class LoginProviderService {
     /**
      * A seed slot is <em>silence</em> (both credential halves blank — "this deployment has no wiki") or a
      * <em>promise</em> (credentials present). A promise that cannot be kept — a half-filled credential, an
-     * unusable base URL — is an operator mistake that used to vanish into a single WARN, leaving the admin
-     * with no provider and no reason why. It is now reported at ERROR with the exact knob to fix.
+     * unusable base URL — is an operator mistake, reported at ERROR with the exact knob to fix.
      *
      * <p>Deliberately non-fatal: this listener runs on {@link ApplicationReadyEvent}, and an exception here
      * aborts startup. One misconfigured optional integration must not take the whole app down — so we shout,
@@ -421,7 +421,7 @@ public class LoginProviderService {
         String trimmed = scopes.trim();
         if (type == LoginProvider.ProviderType.GITLAB || type == LoginProvider.ProviderType.OUTLINE) {
             String replacement = type == LoginProvider.ProviderType.GITLAB ? "'read_user'" : "'read'";
-            for (String scope : trimmed.split("\\s+")) {
+            for (String scope : trimmed.split("\\s+", -1)) {
                 if (scope.equalsIgnoreCase("openid")) {
                     throw new ResponseStatusException(
                             HttpStatus.UNPROCESSABLE_CONTENT,

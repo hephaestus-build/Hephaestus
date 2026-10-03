@@ -43,8 +43,8 @@ public interface ReviewRunLookup {
     /**
      * @param target the work the run reviewed, as {@link #findTargets} names it
      * @param practicesEvaluated how many practices the run measured, or null when it wrote no coverage ledger
-     * @param feedbackUrl the run's summary comment on the work's own page, or null when it posted none or its
-     *     provider cannot address one
+     * @param feedbackUrl the run's summary comment on the work's own page, or null when it posted none or the
+     *     provider returned no address on that work
      */
     record ReviewRunFacts(
             Target target,

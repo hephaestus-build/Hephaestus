@@ -3,10 +3,7 @@ import type { ReviewFeedbackCounts, ReviewObservation } from "@/api/types.gen";
 import type { StatusDef } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { OBSERVATION_ORIGIN_DEFS } from "@/components/practice-vocabulary/observation-origin-defs";
-import {
-	type ObservationResultFacts,
-	observationResult,
-} from "@/components/practice-vocabulary/observation-result";
+import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { hasText } from "@/lib/text";
 
@@ -15,12 +12,12 @@ import { feedbackSlots, type OutcomeSlot } from "./review-outcomes";
 export function ObservationResultBadge({
 	observation,
 }: {
-	observation: ObservationResultFacts & Pick<ReviewObservation, "severity">;
+	observation: Pick<ReviewObservation, "outcome" | "severity">;
 }) {
 	const severity = observationSeverity(observation);
 	return (
 		<span className="flex flex-wrap items-center gap-1.5">
-			<StatusBadge def={observationResult(observation)} />
+			<StatusBadge def={OUTCOME_DEFS[observation.outcome]} />
 			{severity && <StatusBadge def={severity} />}
 		</span>
 	);
@@ -31,7 +28,7 @@ export function ObservationResultBadge({
  * a cost for something that cost nothing.
  */
 export function observationSeverity(
-	observation: ObservationResultFacts & Pick<ReviewObservation, "severity">,
+	observation: Pick<ReviewObservation, "outcome" | "severity">,
 ): StatusDef | undefined {
 	return observation.outcome === "NOT_MET" && observation.severity
 		? SEVERITY_DEFS[observation.severity]

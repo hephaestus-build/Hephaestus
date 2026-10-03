@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WorkspaceProvisioningHook;
 import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubAppTokenService;
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GithubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.workspace.RepositorySelection;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceScopeFilter;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +54,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
     private static final Logger log = LoggerFactory.getLogger(GitHubInstallationReconciler.class);
 
     private final GitHubAppTokenService gitHubAppTokenService;
-    private final GithubLifecycleListener githubLifecycleListener;
+    private final GitHubLifecycleListener githubLifecycleListener;
     private final WorkspaceRepository workspaceRepository;
     private final WorkspaceService workspaceService;
     private final WorkspaceRepositoryMonitorService workspaceRepositoryMonitorService;
@@ -62,7 +63,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
 
     public GitHubInstallationReconciler(
             GitHubAppTokenService gitHubAppTokenService,
-            GithubLifecycleListener githubLifecycleListener,
+            GitHubLifecycleListener githubLifecycleListener,
             WorkspaceRepository workspaceRepository,
             WorkspaceService workspaceService,
             WorkspaceRepositoryMonitorService workspaceRepositoryMonitorService,
@@ -221,7 +222,7 @@ public class GitHubInstallationReconciler implements WorkspaceProvisioningHook {
         if (selection == null) {
             return null;
         }
-        return switch (selection.toLowerCase()) {
+        return switch (selection.toLowerCase(Locale.ROOT)) {
             case "all" -> RepositorySelection.ALL;
             case "selected" -> RepositorySelection.SELECTED;
             default -> null;

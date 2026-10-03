@@ -57,8 +57,7 @@ class IdentityLinkAuthenticationTest extends BaseUnitTest {
                 new AuthEventLogger(mock(AuthEventWriter.class)),
                 new AuthMetrics(new SimpleMeterRegistry()),
                 Clock.fixed(NOW, ZoneOffset.UTC));
-        identityLinkAuthentication =
-                new IdentityLinkAuthentication(bearerTokenResolver, jwtDecoder, converter::convert, policy);
+        identityLinkAuthentication = new IdentityLinkAuthentication(bearerTokenResolver, jwtDecoder, converter, policy);
     }
 
     private void presenting(@Nullable Jwt jwt) {

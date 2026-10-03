@@ -23,6 +23,7 @@ import {
 	openProfileReviewRun,
 	profileReviewRuns,
 } from "@/stories/profile-review-runs-story-mock-data";
+import { STORY_NOW } from "@/stories/story-clock";
 import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
@@ -104,7 +105,7 @@ beforeEach(() => {
 });
 
 /** The open review's row link, named for its work and its time. */
-const openReviewRowName = `Open review of ${openProfileReviewRun.reviewedWork.label}, ${formatDayTime(openProfileReviewRun.reviewedAt)}`;
+const openReviewRowName = `Open review of ${openProfileReviewRun.reviewedWork.label}, ${formatDayTime(openProfileReviewRun.reviewedAt, new Date(STORY_NOW))}`;
 
 async function renderProfile(path = PAGE) {
 	const { router } = renderRouteAtWithRouter(path);
@@ -414,7 +415,7 @@ describe("practice profile route", () => {
 				expect(listReads).toBe(2);
 			}, SETTLE_WAIT);
 
-			// A finished review's activity no longer polls.
+			// A finished review's activity stops polling.
 			await vi.advanceTimersByTimeAsync(3 * ACTIVE_REVIEW_POLL_MS);
 			expect(activityReads).toBe(2);
 			expect(new Set(tracedReviewIds)).toStrictEqual(new Set([openProfileReviewRun.reviewId]));

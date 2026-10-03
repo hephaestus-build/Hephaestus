@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.InlineFeedbackChannel.DeliveredSignal;
@@ -12,8 +13,10 @@ import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackSuppressionReason;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -51,7 +54,7 @@ class FeedbackDispatchStateMachine {
 
     List<DeliveredSignal> mergeSignals(List<DeliveredSignal> persisted, List<DeliveredSignal> latest) {
         var merged = new LinkedHashMap<String, DeliveredSignal>();
-        var unkeyed = new java.util.ArrayList<DeliveredSignal>();
+        var unkeyed = new ArrayList<DeliveredSignal>();
         for (DeliveredSignal signal : persisted) {
             if (signal.deliveryKey() == null) unkeyed.add(signal);
             else merged.merge(signal.deliveryKey(), signal, FeedbackDispatchStateMachine::strongerSignal);
@@ -251,7 +254,7 @@ class FeedbackDispatchStateMachine {
         if (latest.externalRef() == null && persisted.externalRef() != null) return persisted;
         if (latest.externalUrl() == null
                 && persisted.externalUrl() != null
-                && java.util.Objects.equals(latest.externalRef(), persisted.externalRef())) {
+                && Objects.equals(latest.externalRef(), persisted.externalRef())) {
             return new DeliveredSignal(
                     latest.deliveryKey(),
                     latest.anchor(),
@@ -277,8 +280,7 @@ class FeedbackDispatchStateMachine {
     }
 
     private record StoredPlacement(
-            @com.fasterxml.jackson.annotation.JsonAlias("recurrenceKey") @Nullable
-            String deliveryKey,
+            @JsonAlias("recurrenceKey") @Nullable String deliveryKey,
 
             String path,
             int startLine,

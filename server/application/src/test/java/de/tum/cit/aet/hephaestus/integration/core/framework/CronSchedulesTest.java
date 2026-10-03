@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -51,6 +52,6 @@ class CronSchedulesTest extends BaseUnitTest {
 
     @Test
     void nextRun_validCron_isInTheFuture() {
-        assertThat(CronSchedules.nextRun("0 0 3 * * *")).isAfter(java.time.Instant.now());
+        assertThat(CronSchedules.nextRun("0 0 3 * * *")).isAfter(Instant.now());
     }
 }

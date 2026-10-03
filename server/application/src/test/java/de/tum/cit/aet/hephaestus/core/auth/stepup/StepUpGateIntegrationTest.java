@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -201,10 +202,7 @@ class StepUpGateIntegrationTest extends RealAuthIntegrationTest {
 
     private String tokenFor(Account account, @Nullable Instant authTime) {
         return jwtIssuer
-                .issue(
-                        java.util.Objects.requireNonNull(account.getId()),
-                        TokenConstraints.session(null, authTime),
-                        null)
+                .issue(Objects.requireNonNull(account.getId()), TokenConstraints.session(null, authTime), null)
                 .value();
     }
 

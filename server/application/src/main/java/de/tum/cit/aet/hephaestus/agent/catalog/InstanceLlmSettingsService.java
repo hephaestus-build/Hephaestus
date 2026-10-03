@@ -50,7 +50,7 @@ public class InstanceLlmSettingsService {
         }
 
         settings.setUpdatedAt(Instant.now());
-        settings.setUpdatedBy(SecurityUtils.getCurrentUserLogin().orElse(null));
+        settings.setUpdatedByAccountId(SecurityUtils.getCurrentAccountId().orElse(null));
         InstanceLlmSettings saved = settingsRepository.save(settings);
 
         LlmSettingsAudit llmSettingsAudit = llmSettingsAuditProvider.getIfAvailable();

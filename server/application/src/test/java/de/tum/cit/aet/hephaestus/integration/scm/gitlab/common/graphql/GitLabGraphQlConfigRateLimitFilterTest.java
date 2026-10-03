@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.net.URI;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -49,7 +50,7 @@ class GitLabGraphQlConfigRateLimitFilterTest extends BaseUnitTest {
 
     @Test
     void shouldRecordRateLimitForScopeWhenResponseCarriesHeaders() {
-        Instant resetAt = Instant.now().plusSeconds(60).truncatedTo(java.time.temporal.ChronoUnit.SECONDS);
+        Instant resetAt = Instant.now().plusSeconds(60).truncatedTo(ChronoUnit.SECONDS);
         ClientRequest request = requestForScope(7L);
         ClientResponse response = responseWithRateLimitHeaders(80, 100, resetAt, 5);
 

@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.repository.dto.GitLabProjectEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.workspace.GitLabRouteAdmission;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -225,8 +226,8 @@ public class GitLabProjectEventMessageHandler extends AbstractIntegrationMessage
     /**
      * Extracts the parent group path from a project's path_with_namespace.
      */
-    @org.jspecify.annotations.Nullable
-    private static String extractGroupPath(@org.jspecify.annotations.Nullable String pathWithNamespace) {
+    @Nullable
+    private static String extractGroupPath(@Nullable String pathWithNamespace) {
         if (pathWithNamespace == null || pathWithNamespace.isBlank()) {
             return null;
         }

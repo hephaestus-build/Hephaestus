@@ -12,8 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
@@ -27,8 +25,7 @@ import tools.jackson.databind.node.ObjectNode;
  * <p>The provider does NOT decide whether a piece of data is relevant — the agent does, given the
  * full week/last-week numbers and a small set of pre-generated insight strings.
  *
- * <p>Cache key: {@code workspaceId + ":" + developerId} (1-D as specified by the plan; the
- * data is per-user per-workspace).
+ * <p>Personal context is read for each turn, not retained in a formatted-content cache.
  */
 @Component
 @RequiredArgsConstructor
@@ -40,12 +37,9 @@ public class UserContentSource implements ContentSource {
     /** Open-PR threshold above which we surface "you have a lot of open PRs" advice. */
     private static final int OPEN_PR_WARNING_THRESHOLD = 3;
 
-    private static final String CACHE_NAME = "mentor_user_context";
-
     private final UserRepository userRepository;
     private final MentorContextQueryRepository queryRepository;
     private final ObjectMapper objectMapper;
-    private final CacheManager cacheManager;
 
     @Override
     public boolean supports(ContextRequest request) {
@@ -64,14 +58,7 @@ public class UserContentSource implements ContentSource {
     @Transactional(readOnly = true)
     public void contribute(ContextRequest request, Map<String, byte[]> files) {
         MentorChatRequest req = (MentorChatRequest) request;
-        String key = req.workspaceId() + ":" + req.developerId();
-        Cache cache = cacheManager.getCache(CACHE_NAME);
-        // Atomic compute-if-absent — closes the get/build/put race: an invalidation event
-        // landing between a separate get-miss and put would otherwise repopulate the cache with
-        // stale data for the full TTL. Caffeine's loader is key-locked.
-        ObjectNode payload = (cache != null)
-                ? cache.get(key, () -> buildPayload(req.workspaceId(), req.developerId()))
-                : buildPayload(req.workspaceId(), req.developerId());
+        ObjectNode payload = buildPayload(req.workspaceId(), req.developerId());
         try {
             files.put(OUTPUT_KEY, objectMapper.writeValueAsBytes(payload));
         } catch (JacksonException e) {
@@ -80,7 +67,7 @@ public class UserContentSource implements ContentSource {
         }
     }
 
-    /** Pure function of (workspaceId, developerId). Callers cache through {@link CacheManager}. */
+    /** Reads the current bounded context; formatted personal copies are not retained between turns. */
     public ObjectNode buildPayload(Long workspaceId, Long developerId) {
         User user = userRepository
                 .findById(developerId)

@@ -1,13 +1,18 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
@@ -36,11 +41,15 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
     private ReviewableArtifactOwnershipRepository ownership;
 
     private final JsonMapper mapper = JsonMapper.builder().build();
+
+    @Mock
+    private PersonProcessingSuppression suppression;
+
     private ReviewMemberAiPolicy policy;
 
     @BeforeEach
     void setUp() {
-        policy = new ReviewMemberAiPolicy(routing, mapper, preferences, issues, ownership);
+        policy = new ReviewMemberAiPolicy(routing, mapper, preferences, issues, ownership, suppression);
     }
 
     @Test
@@ -147,5 +156,16 @@ class ReviewMemberAiPolicyTest extends BaseUnitTest {
 
         assertThat(policy.allowsResult(job)).isFalse();
         verify(routing).allows(eq(1L), eq(20L), any());
+    }
+
+    @Test
+    void shouldStopRepositorylessReviewWhenTheExactNativeSourceIsSuppressed() {
+        var metadata = mapper.createObjectNode().put("slack_thread_id", 9L);
+        when(suppression.isArtifactSuppressed(1L, "chat.conversation_thread", 9L))
+                .thenReturn(true);
+        assertThat(policy.isProcessingSuppressed(1L, AgentJobType.CONVERSATION_REVIEW, metadata))
+                .isTrue();
+        assertThat(policy.permitsReview(1L, AgentJobType.CONVERSATION_REVIEW, metadata))
+                .isFalse();
     }
 }

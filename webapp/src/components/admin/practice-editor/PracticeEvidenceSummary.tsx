@@ -31,7 +31,7 @@ const VALIDATION_DEFS: Record<
 > = {
 	AUTHOR_DECLARED: {
 		sentence:
-			"Nobody has measured how often this practice is right. Its author described what it checks; that description has not been tested against real work. This is why a practice starts by asking you to approve each piece of feedback.",
+			"Nobody has measured how often this practice is right. Its author described what it checks, but that description has not been tested against real work. This is why a practice starts by asking you to approve each piece of feedback.",
 		variant: "outline",
 	},
 };

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiChoice;
@@ -29,9 +30,11 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
     private final MemberAiPreferences preferences;
     private final LlmModelResolver models;
     private final WorkspaceRepository workspaces;
+    private final PersonProcessingSuppression suppression;
 
     @Transactional(readOnly = true)
     public Optional<WorkspaceAgentBinding> binding(long workspaceId, AgentPurpose purpose, @Nullable Long developerId) {
+        if (developerId != null && suppression.isUserSuppressed(developerId)) return Optional.empty();
         var decision = preferences.forDeveloper(workspaceId, developerId);
         if (!decision.permitsAi()) return Optional.empty();
         var choice = decision.choice();
@@ -47,6 +50,7 @@ public class MemberAiRoutingAdapter implements WorkspaceAiAvailability {
 
     @Transactional(readOnly = true)
     public boolean allows(long workspaceId, @Nullable Long developerId, LlmModelResolver.ConnectionRef model) {
+        if (developerId != null && suppression.isUserSuppressed(developerId)) return false;
         var decision = preferences.forDeveloper(workspaceId, developerId);
         if (!decision.permitsAi()) return false;
         if (model.workspaceId() == null || model.workspaceId() != workspaceId) return false;

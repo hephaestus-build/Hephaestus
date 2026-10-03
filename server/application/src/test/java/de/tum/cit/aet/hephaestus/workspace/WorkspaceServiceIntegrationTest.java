@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationLifecycleListener.AccountKind;
@@ -24,9 +23,6 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
-
-    @Autowired
-    private WorkspaceMembershipRepository workspaceMembershipRepository;
 
     @Autowired
     private ConnectionService connectionService;
@@ -115,9 +111,6 @@ class WorkspaceServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .orElseThrow();
         assertThat(membership.getRole()).isEqualTo(WorkspaceMembership.WorkspaceRole.OWNER);
     }
-
-    @Autowired
-    private ConnectionRepository connectionRepository;
 
     @Test
     void workspaceLifecycleTransitions() {

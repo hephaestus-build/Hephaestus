@@ -12,10 +12,12 @@ import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderRepository;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.DefaultOAuth2User;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
@@ -125,6 +127,36 @@ class AccountProvisioningIntegrationTest extends RealAuthIntegrationTest {
         // Idempotent: still exactly one identity link for the account.
         assertThat(identityLinkRepository.findActiveByAccountId(persistedId(firstLogin.getId())))
                 .hasSize(1);
+    }
+
+    @Test
+    void deletingAccountCannotAttachANewNativeIdentityOrUpdateAnExistingLink() {
+        seedProvider("github-deleting", LoginProvider.ProviderType.GITHUB);
+        Account account = service.resolveOrProvision(
+                        "github-deleting",
+                        "original-native-subject",
+                        principal("original-native-subject", "contact@example.test", true, "display"),
+                        AuthIntentCookie.Intent.login(null, null))
+                .account();
+        long accountId = persistedId(account.getId());
+        account.setStatus(Account.Status.DELETING);
+        accountRepository.saveAndFlush(account);
+
+        Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github-deleting",
+                        "new-native-subject",
+                        principal("new-native-subject", "contact@example.test", true, "display"),
+                        AuthIntentCookie.Intent.link(accountId, null)))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        Assertions.assertThatThrownBy(() -> service.resolveOrProvision(
+                        "github-deleting",
+                        "original-native-subject",
+                        principal("original-native-subject", "contact@example.test", true, "display"),
+                        AuthIntentCookie.Intent.login(null, null)))
+                .isInstanceOf(OAuth2AuthenticationException.class);
+        assertThat(identityLinkRepository.findActiveByAccountId(accountId))
+                .extracting(IdentityLink::getSubject)
+                .containsExactly("original-native-subject");
     }
 
     private void seedProvider(String registrationId, LoginProvider.ProviderType type) {

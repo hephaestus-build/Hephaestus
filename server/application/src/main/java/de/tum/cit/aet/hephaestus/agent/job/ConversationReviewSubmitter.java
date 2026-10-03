@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewGate;
 import de.tum.cit.aet.hephaestus.practices.review.TriggerMode;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,22 +91,18 @@ public class ConversationReviewSubmitter implements PendingSignalResubmitter {
             }
             try {
                 GateDecision decision = reviewGate.evaluateSignal(
-                        workspace,
-                        key.signalName(),
-                        TriggerMode.AUTO,
-                        new ReviewSubject(participant, true),
-                        java.util.Map.of());
+                        workspace, key.signalName(), TriggerMode.AUTO, new ReviewSubject(participant, true), Map.of());
                 if (decision instanceof GateDecision.Skip skip) {
                     if (firstRefusal == null) firstRefusal = skip.resolvedSignalReason();
                     continue;
                 }
-                GateDecision.Detect detect = (GateDecision.Detect) decision;
+                GateDecision.Run run = (GateDecision.Run) decision;
                 SubmissionOutcome outcome = agentJobService.submitWithOutcome(
                         candidate.workspaceId(),
                         AgentJobType.CONVERSATION_REVIEW,
                         requestFor(candidate, participant),
                         null,
-                        detect);
+                        run);
                 if (outcome.job() != null) {
                     started++;
                     if (firstJobId == null) {
@@ -116,7 +113,7 @@ public class ConversationReviewSubmitter implements PendingSignalResubmitter {
                 }
             } catch (RuntimeException e) {
                 log.warn(
-                        "conversation.detect: enqueue failed for threadId={}, participant={}: {}",
+                        "conversation.review: enqueue failed for threadId={}, participant={}: {}",
                         candidate.threadId(),
                         participant,
                         e.toString());

@@ -1,7 +1,20 @@
 package de.tum.cit.aet.hephaestus.mentor;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +24,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -133,27 +147,27 @@ public class ChatMessage {
      * therefore has to supply the initial zero that satisfies NOT NULL, and keeps the schema Hibernate
      * generates for the test tier in step with Liquibase.
      */
-    @org.hibernate.annotations.ColumnDefault("0")
+    @ColumnDefault("0")
     @Column(name = "llm_total_calls", nullable = false, insertable = false, updatable = false)
     private int llmTotalCalls;
 
-    @org.hibernate.annotations.ColumnDefault("0")
+    @ColumnDefault("0")
     @Column(name = "llm_total_input_tokens", nullable = false, insertable = false, updatable = false)
     private long llmTotalInputTokens;
 
-    @org.hibernate.annotations.ColumnDefault("0")
+    @ColumnDefault("0")
     @Column(name = "llm_total_output_tokens", nullable = false, insertable = false, updatable = false)
     private long llmTotalOutputTokens;
 
-    @org.hibernate.annotations.ColumnDefault("0")
+    @ColumnDefault("0")
     @Column(name = "llm_total_reasoning_tokens", nullable = false, insertable = false, updatable = false)
     private long llmTotalReasoningTokens;
 
-    @org.hibernate.annotations.ColumnDefault("0")
+    @ColumnDefault("0")
     @Column(name = "llm_cache_read_tokens", nullable = false, insertable = false, updatable = false)
     private long llmCacheReadTokens;
 
-    @org.hibernate.annotations.ColumnDefault("0")
+    @ColumnDefault("0")
     @Column(name = "llm_cache_write_tokens", nullable = false, insertable = false, updatable = false)
     private long llmCacheWriteTokens;
 
@@ -163,8 +177,8 @@ public class ChatMessage {
      * {@code OptimisticLockingFailureException}; the first writer's outcome survives.
      * {@code accumulateLlmUsage} deliberately leaves it alone — see that query.
      */
-    @org.hibernate.annotations.ColumnDefault("0")
-    @jakarta.persistence.Version
+    @ColumnDefault("0")
+    @Version
     @Column(nullable = false)
     private Long version;
 

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackCon
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.UpdateOutcome;
+import java.io.Serial;
 import java.time.Duration;
 import java.util.EnumMap;
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -106,17 +108,6 @@ class PullRequestCommentPoster {
     private static final Pattern INVISIBLE_CHARS =
             Pattern.compile("[\\u200B\\u200C\\u200E\\u200F\\u061C\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]");
 
-    /**
-     * Matches GitLab slash commands at the start of a line (e.g., /approve, /merge, /close).
-     * These are interpreted as actions by GitLab when posted in MR notes.
-     * Escaped by wrapping in backticks (inline code) so they render as plain text.
-     */
-    private static final Pattern GITLAB_SLASH_COMMAND = Pattern.compile(
-            "^(\\s*/(?:approve|merge|close|reopen|assign|unassign|label|unlabel|lock|unlock|"
-                    + "milestone|estimate|spend|award|subscribe|unsubscribe|todo|done|wip|draft|ready|"
-                    + "due|remove_due_date|weight|epic|copy_metadata|move|confidential|shrug|tableflip)\\b)",
-            Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
-
     /** Matches markdown autolinks: &lt;https://...&gt; — protected from HTML tag stripping. */
     private static final Pattern AUTOLINK = Pattern.compile("<(https?://[^>\\s]+)>");
 
@@ -192,7 +183,7 @@ class PullRequestCommentPoster {
 
     /** The channel proved its create request was never sent, so the dispatch may release its write fence. */
     static final class SummaryNotSentException extends JobDeliveryException {
-        @java.io.Serial
+        @Serial
         private static final long serialVersionUID = 1L;
 
         SummaryNotSentException(String message, Throwable cause) {
@@ -208,7 +199,7 @@ class PullRequestCommentPoster {
      * {@code TRANSIENT}, so the caller tries again rather than reporting the comment as changed.
      */
     UpdateOutcome editSummary(
-            AgentJob job, String externalId, String formattedBody, java.util.@Nullable UUID approvedFeedbackId) {
+            AgentJob job, String externalId, String formattedBody, @Nullable UUID approvedFeedbackId) {
         try {
             JsonNode metadata = job.getMetadata();
             String marker =
@@ -330,7 +321,7 @@ class PullRequestCommentPoster {
         return SUMMARY_MARKER_PREFIX + job.getId() + " -->";
     }
 
-    static String approvedFeedbackMarker(java.util.UUID feedbackId) {
+    static String approvedFeedbackMarker(UUID feedbackId) {
         return "<!-- hephaestus:approved-feedback:" + feedbackId + " -->";
     }
 
@@ -379,7 +370,6 @@ class PullRequestCommentPoster {
         result = UNSAFE_MARKDOWN_LINK.matcher(result).replaceAll("$1");
         result = AT_MENTION.matcher(result).replaceAll("`@$1`");
         result = APPROVAL_LANGUAGE.matcher(result).replaceAll("");
-        result = GITLAB_SLASH_COMMAND.matcher(result).replaceAll("`$1`");
         result = EXCESSIVE_NEWLINES.matcher(result).replaceAll("\n\n");
 
         result = result.strip();

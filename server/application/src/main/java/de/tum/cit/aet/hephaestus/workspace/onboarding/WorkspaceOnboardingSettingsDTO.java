@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -11,7 +13,7 @@ import org.jspecify.annotations.NonNull;
  * the setup page is enabled and never clears it.
  */
 public record WorkspaceOnboardingSettingsDTO(
-        @NonNull boolean enabled,
-        @NonNull boolean aiChoiceRequired,
-        @NonNull long revision,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean enabled,
+        @Schema(requiredMode = RequiredMode.REQUIRED) boolean aiChoiceRequired,
+        @Schema(requiredMode = RequiredMode.REQUIRED) long revision,
         @NonNull @NotNull @Size(max = 20) List<@NotNull @Positive Long> requiredConnectionIds) {}

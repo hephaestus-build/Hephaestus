@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.workspace.onboarding;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.Objects;
 import java.util.stream.IntStream;
 import liquibase.Contexts;
 import liquibase.LabelExpression;
@@ -149,7 +151,7 @@ class WorkspaceOnboardingMigrationTest {
         try (var statement = connection.createStatement();
                 var rows = statement.executeQuery(sql)) {
             assertThat(rows.next()).isTrue();
-            return java.util.Objects.requireNonNull(rows.getString(1));
+            return Objects.requireNonNull(rows.getString(1));
         }
     }
 }

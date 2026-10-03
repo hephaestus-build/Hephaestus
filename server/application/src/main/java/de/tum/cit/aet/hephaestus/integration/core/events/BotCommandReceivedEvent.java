@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.events;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Published when a bot command (e.g. {@code /hephaestus review}) is detected on a
@@ -42,5 +43,5 @@ public record BotCommandReceivedEvent(
         String noteAuthor,
         long providerId,
         long authorNativeId,
-        @org.jspecify.annotations.Nullable Long commentId,
-        @org.jspecify.annotations.Nullable Long scopeId) {}
+        @Nullable Long commentId,
+        @Nullable Long scopeId) {}

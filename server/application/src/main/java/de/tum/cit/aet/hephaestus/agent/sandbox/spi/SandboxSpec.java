@@ -22,6 +22,7 @@ import org.jspecify.annotations.Nullable;
  * @param networkPolicy network access and LLM proxy configuration
  * @param resourceLimits CPU, memory, PID, and timeout constraints
  * @param inputFiles files to inject into /workspace (relative path → content)
+ * @param inputFilesOnDisk inputs staged by host path and streamed into the container, never read into this process
  * @param outputPath container path to collect results from after execution
  */
 public record SandboxSpec(
@@ -33,7 +34,6 @@ public record SandboxSpec(
         ResourceLimits resourceLimits,
         @Nullable SecurityProfile securityProfile,
         Map<String, byte[]> inputFiles,
-        /** Inputs staged by host path and streamed into the container, never read into this process. */
         Map<String, Path> inputFilesOnDisk,
         List<EvidenceDirectory> inputDirectories,
         String outputPath) {

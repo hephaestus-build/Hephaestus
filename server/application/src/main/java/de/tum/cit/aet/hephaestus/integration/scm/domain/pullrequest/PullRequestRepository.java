@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
+import org.hibernate.jpa.HibernateHints;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -96,7 +97,7 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     Optional<PullRequest> findByIdWithAuthorAndRepository(@Param("id") Long id);
 
     /**
-     * Finds a pull request by ID with all associations needed by the practice review detection gate.
+     * Finds a pull request by ID with all associations needed by the practice review gate.
      * <p>
      * Eagerly fetches labels, assignees, repository, author, and mergedBy in a single query.
      * The gate requires labels, assignees (step 6: assignee gate),
@@ -205,7 +206,7 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
      * block so the stream closes and releases its connection, and the caller must be annotated
      * {@code @Transactional(readOnly = true)} for streaming to work.
      */
-    @QueryHints(@QueryHint(name = org.hibernate.jpa.HibernateHints.HINT_FETCH_SIZE, value = "50"))
+    @QueryHints(@QueryHint(name = HibernateHints.HINT_FETCH_SIZE, value = "50"))
     Stream<PullRequest> streamAllByRepository_Id(Long repositoryId);
 
     /**

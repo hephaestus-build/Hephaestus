@@ -34,7 +34,7 @@ import tools.jackson.databind.JsonNode;
     @JsonSubTypes.Type(value = UIMessageChunk.ToolInputAvailable.class, name = "tool-input-available"),
     @JsonSubTypes.Type(value = UIMessageChunk.ToolOutputAvailable.class, name = "tool-output-available"),
     @JsonSubTypes.Type(value = UIMessageChunk.ToolOutputError.class, name = "tool-output-error"),
-    @JsonSubTypes.Type(value = UIMessageChunk.Error.class, name = "error"),
+    @JsonSubTypes.Type(value = UIMessageChunk.TurnError.class, name = "error"),
     @JsonSubTypes.Type(value = UIMessageChunk.DataMentorStatus.class, name = "data-mentor-status"),
     @JsonSubTypes.Type(value = UIMessageChunk.DataObservation.class, name = "data-observation"),
 })
@@ -185,8 +185,11 @@ public sealed interface UIMessageChunk {
     /** Pi tool execution: tool failed; {@code errorText} surfaces to the client UI. */
     record ToolOutputError(String toolCallId, String errorText) implements UIMessageChunk {}
 
-    /** Fatal error during the turn; emitter completes after this chunk. */
-    record Error(String errorText) implements UIMessageChunk {}
+    /**
+     * Fatal error during the turn; emitter completes after this chunk. The AI SDK calls it {@code error}, which
+     * is its type id above; the Java name avoids shadowing {@code java.lang.Error}.
+     */
+    record TurnError(String errorText) implements UIMessageChunk {}
 
     /**
      * Hephaestus-specific data part — cold-start banner, container warming etc. Matches the
@@ -202,10 +205,28 @@ public sealed interface UIMessageChunk {
         /** Stable id so subsequent status emits dedupe client-side instead of accumulating. */
         public static final String STATUS_PART_ID = "mentor-status";
 
-        public record DataMentorStatusPayload(
-                String state, @Nullable String reason) {}
+        /** What the mentor is doing instead of answering; the webapp matches these wire strings. */
+        public enum State {
+            WARMING_UP("warming-up"),
+            BUSY("busy"),
+            CONFLICT("conflict");
 
-        public static DataMentorStatus of(String state, @Nullable String reason) {
+            private final String wire;
+
+            State(String wire) {
+                this.wire = wire;
+            }
+
+            @JsonValue
+            public String wire() {
+                return wire;
+            }
+        }
+
+        public record DataMentorStatusPayload(
+                State state, @Nullable String reason) {}
+
+        public static DataMentorStatus of(State state, @Nullable String reason) {
             return new DataMentorStatus(STATUS_PART_ID, new DataMentorStatusPayload(state, reason), Boolean.TRUE);
         }
     }

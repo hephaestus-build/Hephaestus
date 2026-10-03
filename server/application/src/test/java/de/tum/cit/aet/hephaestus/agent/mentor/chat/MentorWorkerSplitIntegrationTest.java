@@ -2,8 +2,16 @@ package de.tum.cit.aet.hephaestus.agent.mentor.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.github.dockerjava.api.DockerClient;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
@@ -12,22 +20,41 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
-import de.tum.cit.aet.hephaestus.agent.usage.*;
+import de.tum.cit.aet.hephaestus.agent.usage.AdmittedLlmModel;
+import de.tum.cit.aet.hephaestus.agent.usage.FundingSource;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
+import de.tum.cit.aet.hephaestus.agent.usage.PricingState;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerSessionRegistry;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
+import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.slack.mentor.SlackStreamingMentorChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackMessageService;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessage;
 import de.tum.cit.aet.hephaestus.mentor.ChatMessageRepository;
 import de.tum.cit.aet.hephaestus.mentor.ChatThreadRepository;
-import de.tum.cit.aet.hephaestus.testconfig.*;
-import de.tum.cit.aet.hephaestus.workspace.*;
+import de.tum.cit.aet.hephaestus.testconfig.StubMentorChatStarter;
+import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
+import de.tum.cit.aet.hephaestus.testconfig.TestMentorWorker;
+import de.tum.cit.aet.hephaestus.testconfig.WithMentorUser;
+import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
+import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.*;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -168,13 +195,13 @@ class MentorWorkerSplitIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @WithMentorUser
     void noSpareCapacityReturnsRetryableBusyThroughTheWebStream() throws Exception {
         try (var worker = worker()) {
-            worker.send(new de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport(1, 2, 0, 2, 1, 0));
+            worker.send(new CapacityReport(1, 2, 0, 2, 1, 0));
             await().atMost(Duration.ofSeconds(5))
                     .until(() -> workers.sessions().stream()
                             .allMatch(session -> session.lastCapacity() != null
                                     && session.lastCapacity().spareMentor() == 0));
             assertThat(webTurn(UUID.randomUUID()))
-                    .contains("Heph is busy. Please try again.")
+                    .contains("\"state\":\"busy\"")
                     .doesNotContain("\"type\":\"finish\"");
             assertThat(worker.sandboxes).isEmpty();
         }
@@ -203,15 +230,14 @@ class MentorWorkerSplitIntegrationTest extends AbstractWorkspaceIntegrationTest 
                             "user",
                             "parts",
                             List.of(Map.of("type", "text", "text", "Wait while I drain the worker"))));
-            var request = java.net.http.HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/workspaces/"
+            var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/workspaces/"
                             + workspace.getWorkspaceSlug() + "/mentor/chat"))
                     .header("Authorization", "Bearer " + TestAuthUtils.getCurrentUserToken())
                     .header("Content-Type", "application/json")
                     .header("Accept", "text/event-stream")
-                    .POST(java.net.http.HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(requestBody)))
+                    .POST(BodyPublishers.ofString(mapper.writeValueAsString(requestBody)))
                     .build();
-            var response = java.net.http.HttpClient.newHttpClient()
-                    .sendAsync(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            var response = HttpClient.newHttpClient().sendAsync(request, BodyHandlers.ofString());
             await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
                 if (response.isDone()) {
                     assertThat(response.get().body())
@@ -221,7 +247,7 @@ class MentorWorkerSplitIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 assertThat(owning.sandboxes.getFirst().promptReceived).isTrue();
             });
             owning.drain();
-            var terminal = response.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            var terminal = response.get(15, TimeUnit.SECONDS);
             assertThat(terminal.statusCode()).isEqualTo(200);
             assertThat(terminal.body())
                     .contains("lost in transit")

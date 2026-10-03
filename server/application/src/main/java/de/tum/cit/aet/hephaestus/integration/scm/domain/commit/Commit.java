@@ -372,12 +372,12 @@ public class Commit {
         }
     }
 
+    // Proxy-aware, like BaseGitServiceEntity#equals.
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Commit that = (Commit) o;
-        return id != null && id.equals(that.id);
+        if (!(o instanceof Commit that)) return false;
+        return id != null && id.equals(that.getId());
     }
 
     @Override

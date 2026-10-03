@@ -42,7 +42,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * An immutable, append-only snapshot of a {@link Practice}: SCD-2 over the whole definition, not only
  * over {@code criteria}. {@code Observation.practiceRevision} pins each observation to the revision the
- * detector saw, and an observation written before versioning pins {@code null}.
+ * review used, and an observation written before versioning pins {@code null}.
  *
  * <p><strong>The snapshot must stay complete.</strong> Every field a review reads off a practice is
  * copied here by the constructor; a field added to {@link Practice} and not added here reproduces a

@@ -5,6 +5,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -17,4 +18,8 @@ public interface InstanceLlmSettingsRepository extends JpaRepository<InstanceLlm
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM InstanceLlmSettings s WHERE s.id = :id")
     Optional<InstanceLlmSettings> findByIdForUpdate(@Param("id") Short id);
+
+    @Modifying
+    @Query("UPDATE InstanceLlmSettings s SET s.updatedByAccountId=NULL WHERE s.updatedByAccountId=:accountId")
+    int clearPersonAttribution(@Param("accountId") long accountId);
 }

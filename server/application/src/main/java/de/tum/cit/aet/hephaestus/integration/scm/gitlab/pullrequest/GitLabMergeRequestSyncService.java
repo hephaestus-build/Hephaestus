@@ -252,8 +252,6 @@ public class GitLabMergeRequestSyncService {
         return result;
     }
 
-    // Intermediate extraction records
-
     private record ScalarFields(
             @Nullable String globalId,
             @Nullable String iid,
@@ -292,8 +290,6 @@ public class GitLabMergeRequestSyncService {
             @Nullable Boolean bot) {
         static final UserFields EMPTY = new UserFields(null, null, null, null, null, null, null);
     }
-
-    // Historical backfill
 
     /**
      * Backfills historical merge requests using {@code CREATED_DESC} ordering.
@@ -561,8 +557,6 @@ public class GitLabMergeRequestSyncService {
         }
     }
 
-    // Scalar field extraction
-
     @SuppressWarnings("unchecked")
     private static ScalarFields extractScalarFields(
             ClientGraphQlResponse response, String nodePath, Map<String, Object> node) {
@@ -631,8 +625,6 @@ public class GitLabMergeRequestSyncService {
                 mergeCommitSha);
     }
 
-    // Diff stats extraction
-
     @SuppressWarnings("unchecked")
     private static DiffStats extractDiffStats(Map<String, Object> node) {
         Map<String, Object> diffStats = (Map<String, Object>) node.get("diffStatsSummary");
@@ -644,8 +636,6 @@ public class GitLabMergeRequestSyncService {
         int fileCount = diffStats.get("fileCount") != null ? ((Number) diffStats.get("fileCount")).intValue() : 0;
         return new DiffStats(additions, deletions, fileCount);
     }
-
-    // Milestone extraction
 
     @SuppressWarnings("unchecked")
     @Nullable
@@ -683,8 +673,6 @@ public class GitLabMergeRequestSyncService {
                 GitLabUserLookup.botOf(userMap));
     }
 
-    // Labels extraction with overflow detection
-
     @SuppressWarnings("unchecked")
     @Nullable
     private List<GitLabMergeRequestProcessor.SyncLabelData> extractLabels(
@@ -715,8 +703,6 @@ public class GitLabMergeRequestSyncService {
         return syncLabels;
     }
 
-    // Assignees extraction with overflow detection
-
     @SuppressWarnings("unchecked")
     @Nullable
     private List<GitLabMergeRequestProcessor.SyncUserData> extractAssignees(
@@ -745,8 +731,6 @@ public class GitLabMergeRequestSyncService {
 
         return syncAssignees;
     }
-
-    // Reviewers extraction with overflow detection
 
     @SuppressWarnings("unchecked")
     @Nullable
@@ -779,8 +763,6 @@ public class GitLabMergeRequestSyncService {
 
         return syncReviewers;
     }
-
-    // Approvers extraction with overflow detection
 
     @SuppressWarnings("unchecked")
     @Nullable

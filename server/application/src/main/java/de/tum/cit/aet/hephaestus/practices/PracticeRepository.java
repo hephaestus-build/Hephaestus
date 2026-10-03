@@ -8,6 +8,7 @@ import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
         "Workspace reads use workspaceId; global ID scans serve startup repair; PK-only DML serves delete/save")
 public interface PracticeRepository extends JpaRepository<Practice, Long> {
     /**
-     * Every practice of the workspace, at any autonomy — including {@code OFF}, so the detection gate can tell
+     * Every practice of the workspace, at any autonomy — including {@code OFF}, so the review gate can tell
      * "nothing is bound to this signal" apart from "something is bound and turned off".
      */
     @EntityGraph(attributePaths = {"group", "currentRevision"})
@@ -78,7 +79,7 @@ public interface PracticeRepository extends JpaRepository<Practice, Long> {
           AND fo.feedback.workspaceId = :workspaceId
         """)
     List<Practice> findContributingPractices(
-            @Param("workspaceId") Long workspaceId, @Param("feedbackId") java.util.UUID feedbackId);
+            @Param("workspaceId") Long workspaceId, @Param("feedbackId") UUID feedbackId);
 
     List<Practice> findByWorkspaceIdAndGroupIdOrderByDisplayOrderAscNameAsc(Long workspaceId, Long groupId);
 

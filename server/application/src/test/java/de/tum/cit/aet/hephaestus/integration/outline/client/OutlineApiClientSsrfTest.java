@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -15,7 +16,7 @@ class OutlineApiClientSsrfTest extends BaseUnitTest {
             CircuitBreaker.ofDefaults("outlineRestApi"),
             Retry.ofDefaults("outlineRestApi"),
             WebClient.builder().build(),
-            new OutlineOriginPolicy(java.util.Set.of()));
+            new OutlineOriginPolicy(Set.of()));
 
     @Test
     void validateToken_rejectsBlankServerUrl() {

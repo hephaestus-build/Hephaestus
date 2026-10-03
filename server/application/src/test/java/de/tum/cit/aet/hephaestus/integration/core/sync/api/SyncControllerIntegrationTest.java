@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
@@ -36,7 +40,6 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
@@ -85,12 +88,12 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void setUp() {
         githubSyncStateProvider = syncDriver.stateProvider();
         githubSyncRunner = syncDriver.runner();
-        Mockito.reset(githubSyncStateProvider, githubSyncRunner);
-        Mockito.when(githubSyncStateProvider.kind()).thenReturn(IntegrationKind.GITHUB);
-        Mockito.when(githubSyncStateProvider.describe(any(), anyLong())).thenReturn(ConnectionSyncDetails.empty());
-        Mockito.when(githubSyncStateProvider.resources(any(), anyLong())).thenReturn(List.of());
-        Mockito.when(githubSyncRunner.kind()).thenReturn(IntegrationKind.GITHUB);
-        Mockito.doNothing().when(githubSyncRunner).reconcile(any(), any(), any());
+        reset(githubSyncStateProvider, githubSyncRunner);
+        when(githubSyncStateProvider.kind()).thenReturn(IntegrationKind.GITHUB);
+        when(githubSyncStateProvider.describe(any(), anyLong())).thenReturn(ConnectionSyncDetails.empty());
+        when(githubSyncStateProvider.resources(any(), anyLong())).thenReturn(List.of());
+        when(githubSyncRunner.kind()).thenReturn(IntegrationKind.GITHUB);
+        doNothing().when(githubSyncRunner).reconcile(any(), any(), any());
 
         User owner = persistUser("sync-owner-" + System.nanoTime());
         workspace = createWorkspace(
@@ -190,7 +193,7 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         String adminToken = TestAuthUtils.getCurrentUserToken();
         CountDownLatch runnerStarted = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        Mockito.doAnswer(invocation -> {
+        doAnswer(invocation -> {
                     runnerStarted.countDown();
                     try {
                         release.await(5, TimeUnit.SECONDS);
@@ -236,11 +239,11 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @DisplayName("a BACKFILL requested while a RECONCILIATION is running is a type conflict → 409, not a 200-absorb")
     void trigger_backfillWhileReconciliationRunning_returns409NotAbsorb() throws InterruptedException {
         ensureAdminMembership(workspace);
-        Mockito.when(githubSyncRunner.supportsBackfill()).thenReturn(true);
+        when(githubSyncRunner.supportsBackfill()).thenReturn(true);
         String adminToken = TestAuthUtils.getCurrentUserToken();
         CountDownLatch runnerStarted = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        Mockito.doAnswer(invocation -> {
+        doAnswer(invocation -> {
                     runnerStarted.countDown();
                     try {
                         release.await(5, TimeUnit.SECONDS);
@@ -303,7 +306,7 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         ensureAdminMembership(workspace);
         String adminToken = TestAuthUtils.getCurrentUserToken();
         CountDownLatch runnerStarted = new CountDownLatch(1);
-        Mockito.doAnswer(invocation -> {
+        doAnswer(invocation -> {
                     runnerStarted.countDown();
                     SyncJobHandle handle = invocation.getArgument(1);
                     long deadline = System.currentTimeMillis() + 5000;
@@ -524,8 +527,6 @@ class SyncControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
         assertThat(syncJobRepository.findById(otherJob.getId()).orElseThrow().isCancelRequested())
                 .isFalse();
     }
-
-    // --- helpers ---
 
     private WebTestClient.ResponseSpec statusRequest() {
         return webTestClient

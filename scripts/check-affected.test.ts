@@ -1,12 +1,16 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
+import { parse } from "jsonc-parser";
+
 import { changedPaths, commandsFor, parseBase, scopesFor } from "./check-affected.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { asArray, asRecord, asString, at } from "./lib/json.ts";
 
 await test("accepts only the documented arguments", () => {
 	assert.equal(parseBase([]), "origin/main");
@@ -21,23 +25,100 @@ await test("selects ordinary workspace changes", () => {
 	assert.deepEqual(scopesFor(["server/application/src/main/java/A.java"]), ["server"]);
 });
 
+const repository = path.resolve(import.meta.dirname, "..");
+const webappRoot = path.join(repository, "webapp") + path.sep;
+
+const extensionPaths = Object.entries(
+	asRecord(
+		at(
+			parse(readFileSync(path.join(repository, "extension/tsconfig.json"), "utf8")),
+			["compilerOptions", "paths"],
+			"extension/tsconfig.json",
+		),
+		"extension/tsconfig.json compilerOptions.paths",
+	),
+).map(([alias, targets]) => ({
+	prefix: alias.replace(/\*$/u, ""),
+	target: path.resolve(
+		repository,
+		"extension",
+		asString(asArray(targets, alias)[0], alias).replace(/\*$/u, ""),
+	),
+}));
+
+const importSpecifier =
+	/\b(?:import|export)\s+(?<typeOnly>type\s+)?[^;"'`]*?\bfrom\s*["'](?<from>[^"']+)["']|\bimport\s*\(?\s*["'](?<bare>[^"']+)["']/gu;
+
+function resolveImport(importer: string, specifier: string): string | undefined {
+	const request = specifier.replace(/\?.*$/u, "");
+	const alias = extensionPaths.find(({ prefix }) => request.startsWith(prefix));
+	const base = request.startsWith(".")
+		? path.resolve(path.dirname(importer), request)
+		: alias && path.join(alias.target, request.slice(alias.prefix.length));
+	if (base === undefined) {
+		return undefined;
+	}
+	return ["", ".ts", ".tsx", "/index.ts", "/index.tsx"]
+		.map((suffix) => base + suffix)
+		.find((candidate) => existsSync(candidate) && statSync(candidate).isFile());
+}
+
+/**
+ * The webapp files the extension bundles or type-checks, resolved through its `paths`. A module
+ * reached only by `import type` is never bundled, so of its own imports only the type-only ones
+ * reach the extension.
+ */
+function webappFilesTheExtensionImports(): string[] {
+	const queue = ["extension/src", "extension/.storybook"].flatMap((directory) =>
+		readdirSync(path.join(repository, directory), { recursive: true, encoding: "utf8" })
+			.filter((file) => /\.tsx?$/u.test(file))
+			.map((file) => ({ file: path.join(repository, directory, file), typesOnly: false })),
+	);
+	const bundled = new Set<string>();
+	const typed = new Set<string>();
+	for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
+		for (const { groups } of readFileSync(next.file, "utf8").matchAll(importSpecifier)) {
+			const typesOnly = groups?.typeOnly !== undefined;
+			if (next.typesOnly && !typesOnly) {
+				continue;
+			}
+			const target = resolveImport(next.file, groups?.from ?? groups?.bare ?? "");
+			const seen = typesOnly ? typed : bundled;
+			if (target === undefined || !target.startsWith(webappRoot) || seen.has(target)) {
+				continue;
+			}
+			seen.add(target);
+			if (/\.tsx?$/u.test(target)) {
+				queue.push({ file: target, typesOnly });
+			}
+		}
+	}
+	return [...new Set([...bundled, ...typed])]
+		.map((file) => path.relative(repository, file).split(path.sep).join(path.posix.sep))
+		.toSorted();
+}
+
+const extensionInputs = [
+	...webappFilesTheExtensionImports(),
+	// The stylesheet `.oxfmtrc.json` sorts every tree's Tailwind classes by.
+	"webapp/src/styles.css",
+];
+
+await test("finds the webapp files the extension imports", () => {
+	for (const file of [
+		"webapp/brand/hephaestus-mark.svg",
+		"webapp/src/components/ui/spinner.tsx",
+		"webapp/src/components/common/FacetMultiSelect.tsx",
+	]) {
+		assert.ok(extensionInputs.includes(file), file);
+	}
+	assert.ok(!extensionInputs.includes("webapp/src/components/ui/button.tsx"));
+});
+
 await test("selects the Chrome extension, and the webapp inputs it imports", () => {
 	assert.deepEqual(scopesFor(["extension/src/entrypoints/background.ts"]), ["extension"]);
 	assert.deepEqual(scopesFor(["extension/wxt.config.ts", "extension/e2e/seed.sql"]), ["extension"]);
-	assert.deepEqual(scopesFor(["webapp/src/components/practice-vocabulary/outcome-defs.ts"]), [
-		"extension",
-		"webapp",
-	]);
-	for (const file of [
-		"webapp/brand/hephaestus-mark.svg",
-		"webapp/src/components/icons/brand.tsx",
-		"webapp/src/lib/artifact-kind-slugs.ts",
-		"webapp/src/lib/artifact-kinds.ts",
-		"webapp/src/components/common/status-def.ts",
-		"webapp/src/components/common/FacetMultiSelect.tsx",
-		"webapp/src/lib/sign-in-providers.ts",
-		"webapp/src/styles.css",
-	]) {
+	for (const file of extensionInputs) {
 		assert.deepEqual(scopesFor([file]), ["extension", "webapp"], file);
 	}
 	for (const file of [
@@ -64,16 +145,8 @@ const asPattern = (glob: string) =>
 await test("the CI extension filters select every webapp input the extension imports", async () => {
 	const workflow = await readFile(".github/workflows/cicd.yml", "utf8");
 	const inputs = [
-		"webapp/src/components/practice-vocabulary/trace-outcome-defs.ts",
-		"webapp/brand/hephaestus-mark.svg",
-		"webapp/src/components/icons/brand.tsx",
-		"webapp/src/lib/artifact-kind-slugs.ts",
-		"webapp/src/lib/artifact-kinds.ts",
-		"webapp/src/components/common/status-def.ts",
-		"webapp/src/components/common/FacetMultiSelect.tsx",
-		"webapp/src/lib/sign-in-providers.ts",
+		...extensionInputs,
 		"webapp/src/styles/theme-tokens.css",
-		"webapp/src/styles.css",
 		"webapp/tools/oxlint/rules/a.ts",
 	];
 	for (const name of ["extension", "extension-e2e"]) {
@@ -104,6 +177,38 @@ await test("the CI extension filters select every webapp input the extension imp
 				`check-affected must map ${glob} to the extension scope`,
 			);
 		}
+	}
+});
+
+/** Server files the webapp's tests read, with a template variable standing for any file name. */
+const serverInputsOfTheWebapp = readdirSync(path.join(repository, "webapp/src"), {
+	recursive: true,
+	encoding: "utf8",
+})
+	.filter((file) => /\.test\.tsx?$/u.test(file))
+	.flatMap((file) =>
+		[
+			...readFileSync(path.join(repository, "webapp/src", file), "utf8").matchAll(
+				/["`]\.\.\/(?<target>server\/[^"`]+)["`]/gu,
+			),
+		].map(({ groups }) => (groups?.target ?? "").replaceAll(/\$\{[^}]+\}/gu, "1.0.0")),
+	);
+
+await test("selects the webapp for the server resources its tests read", async () => {
+	assert.ok(serverInputsOfTheWebapp.length > 0, "the webapp's tests read server resources");
+	const workflow = await readFile(".github/workflows/cicd.yml", "utf8");
+	const filter = /^ {12}webapp:\n(?<entries>(?: {14}(?:- '[^']+'|#[^\n]*)\n)+)/mu.exec(workflow)
+		?.groups?.entries;
+	assert.ok(filter !== undefined, "cicd.yml has a webapp filter");
+	const globs = [...filter.matchAll(/- '(?<glob>[^']+)'/gu)].map(
+		({ groups }) => groups?.glob ?? "",
+	);
+	for (const file of serverInputsOfTheWebapp) {
+		assert.deepEqual(scopesFor([file]), ["server", "webapp"], file);
+		assert.ok(
+			globs.some((glob) => asPattern(glob).test(file)),
+			`the webapp filter must select ${file}`,
+		);
 	}
 });
 

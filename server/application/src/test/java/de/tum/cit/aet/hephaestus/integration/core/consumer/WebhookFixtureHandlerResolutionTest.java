@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.integration.core.handler.AbstractIntegrationMessageHandler;
 import de.tum.cit.aet.hephaestus.integration.core.handler.IntegrationMessageHandler;
@@ -9,10 +10,10 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineSubjectParser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
-import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GithubSubjectKeyDeriver;
-import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GithubSubjectParser;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectKeyDeriver;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitlabSubjectParser;
+import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GitHubSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.github.webhook.GitHubSubjectParser;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook.GitLabSubjectParser;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackSubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackSubjectParser;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -25,14 +26,18 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.classreading.MetadataReader;
 import org.springframework.core.type.filter.AssignableTypeFilter;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -64,16 +69,14 @@ import tools.jackson.databind.ObjectMapper;
  * the <em>partial</em> case: an event handled on one tier but silently dropped on another (exactly
  * {@code team}: {@code organization.team} handled, {@code repository.team} was not).
  *
- * <p><b>All four integrations are covered.</b> GitHub keeps the original {@link #resolutionFailures}
+ * <p><b>All four integrations are covered.</b> GitHub uses the {@link #resolutionFailures}
  * helper (its {@code X-GitHub-Event} is sourced from the fixture filename, and some filenames encode a
  * payload variant rather than a bare event token, so the claimed-token skip is the right fit there).
  * GitLab, Slack, and Outline read their event token straight from the payload
  * ({@code object_kind}/{@code event_name}, the bolt {@code event.type}, the dotted {@code event}
  * respectively), so they run through the stricter {@link #assertFixturesResolveOrAllowlisted} helper:
  * every committed fixture must EITHER resolve a registered handler OR appear on an explicit, justified
- * allowlist. That closes the last hole the claimed-token skip leaves open — an event handled on
- * <em>no</em> tier is no longer silently skipped; it must be either handled or consciously allowlisted,
- * so a newly-committed fixture for an unhandled event fails the build until someone decides.
+ * allowlist, so a fixture for an event handled on <em>no</em> tier fails the build until someone decides.
  */
 class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
 
@@ -82,13 +85,13 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
     private static final String GITHUB_HANDLER_PACKAGE = "de.tum.cit.aet.hephaestus.integration.scm.github";
     private static final Path GITHUB_FIXTURE_DIR = Paths.get("src/test/resources/github");
 
-    private static final GithubSubjectKeyDeriver GITHUB_DERIVER = new GithubSubjectKeyDeriver();
-    private static final GithubSubjectParser GITHUB_PARSER = new GithubSubjectParser();
+    private static final GitHubSubjectKeyDeriver GITHUB_DERIVER = new GitHubSubjectKeyDeriver();
+    private static final GitHubSubjectParser GITHUB_PARSER = new GitHubSubjectParser();
 
     private static final String GITLAB_HANDLER_PACKAGE = "de.tum.cit.aet.hephaestus.integration.scm.gitlab";
     private static final Path GITLAB_FIXTURE_DIR = Paths.get("src/test/resources/gitlab");
-    private static final GitlabSubjectKeyDeriver GITLAB_DERIVER = new GitlabSubjectKeyDeriver();
-    private static final GitlabSubjectParser GITLAB_PARSER = new GitlabSubjectParser();
+    private static final GitLabSubjectKeyDeriver GITLAB_DERIVER = new GitLabSubjectKeyDeriver();
+    private static final GitLabSubjectParser GITLAB_PARSER = new GitLabSubjectParser();
 
     private static final String SLACK_HANDLER_PACKAGE = "de.tum.cit.aet.hephaestus.integration.slack";
     private static final Path SLACK_FIXTURE_DIR = Paths.get("src/test/resources/slack");
@@ -200,8 +203,8 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                 .contains(new EventTypeKey(IntegrationKind.SLACK, "message"))
                 .contains(new EventTypeKey(IntegrationKind.SLACK, "message_im"));
 
-        // No Slack webhook fixtures are committed today, so this block is vacuous now but becomes active
-        // the instant a Slack fixture lands: a fixture for a bolt event with no handler will fail the
+        // Vacuous while no Slack webhook fixture is committed, and active the instant one lands: a fixture for a bolt
+        // event with no handler will fail the
         // build unless it is handled or explicitly allowlisted, mirroring the SCM/Outline invariant.
         assertFixturesResolveOrAllowlisted(
                 "Slack",
@@ -229,8 +232,6 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
                 payload -> OUTLINE_PARSER.parse(OUTLINE_DERIVER.deriveSubject(payload, Map.of())),
                 OUTLINE_ACK_DROP_ALLOWLIST);
     }
-
-    // --- pipeline ---
 
     /** Payload-driven kinds derive their event token from the body, so no header/filename is needed. */
     @FunctionalInterface
@@ -334,7 +335,7 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
             Path fixtureDir,
             Set<EventTypeKey> registeredKeys,
             Set<String> claimedEventTokens,
-            java.util.function.Function<Path, String> eventTokenOf,
+            Function<Path, String> eventTokenOf,
             KeyForFixture keyForFixture)
             throws IOException {
         List<String> failures = new ArrayList<>();
@@ -378,8 +379,6 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
         return dot < 0 ? name : name.substring(0, dot);
     }
 
-    // --- registry ground truth (no Spring context) ---
-
     private static Set<EventTypeKey> registeredKeys(String packageToScan) {
         // Ground truth = the set of handler classes on the classpath, NOT the beans that would be wired
         // in a given profile. GitLab/Slack/Outline handlers are @ConditionalOnProperty/@ConditionalOnServerRole
@@ -389,14 +388,13 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
         var typeFilter = new AssignableTypeFilter(IntegrationMessageHandler.class);
         var provider = new ClassPathScanningCandidateComponentProvider(false) {
             @Override
-            protected boolean isCandidateComponent(org.springframework.core.type.classreading.MetadataReader mr)
-                    throws IOException {
+            protected boolean isCandidateComponent(MetadataReader mr) throws IOException {
                 return typeFilter.match(mr, getMetadataReaderFactory());
             }
         };
         provider.addIncludeFilter(typeFilter);
 
-        Set<EventTypeKey> keys = new java.util.HashSet<>();
+        Set<EventTypeKey> keys = new HashSet<>();
         List<String> introspectionFailures = new ArrayList<>();
         for (var candidate : provider.findCandidateComponents(packageToScan)) {
             String className = candidate.getBeanClassName();
@@ -439,7 +437,7 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
      * harmless for the handlers that merely stash it, and enough to survive the constructor.
      */
     private static IntegrationMessageHandler instantiateForKey(Class<?> clazz) throws ReflectiveOperationException {
-        Constructor<?> ctor = java.util.Arrays.stream(clazz.getDeclaredConstructors())
+        Constructor<?> ctor = Arrays.stream(clazz.getDeclaredConstructors())
                 .max(Comparator.comparingInt(Constructor::getParameterCount))
                 .orElseThrow(() -> new NoSuchMethodException("no constructor on " + clazz.getName()));
         ctor.setAccessible(true);
@@ -447,8 +445,7 @@ class WebhookFixtureHandlerResolutionTest extends BaseUnitTest {
         Object[] args = new Object[ctor.getParameterCount()];
         for (int i = 0; i < paramTypes.length; i++) {
             if (TransactionTemplate.class.equals(paramTypes[i])) {
-                args[i] = new TransactionTemplate(
-                        org.mockito.Mockito.mock(org.springframework.transaction.PlatformTransactionManager.class));
+                args[i] = new TransactionTemplate(mock(PlatformTransactionManager.class));
             }
         }
         return (IntegrationMessageHandler) ctor.newInstance(args);

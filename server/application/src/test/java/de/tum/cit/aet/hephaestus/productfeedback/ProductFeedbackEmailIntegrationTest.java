@@ -12,12 +12,15 @@ import de.tum.cit.aet.hephaestus.notification.email.CapturingMailTestConfigurati
 import de.tum.cit.aet.hephaestus.notification.preferences.NotificationSubscriptionService;
 import de.tum.cit.aet.hephaestus.notification.preferences.UpdateNotificationPreferencesDTO;
 import de.tum.cit.aet.hephaestus.productfeedback.FeedbackDTOs.FeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import java.io.ByteArrayOutputStream;
 import java.net.ConnectException;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -111,9 +114,9 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
                     .singleElement()
                     .asString()
                     .contains("/notifications/unsubscribe/");
-            var bytes = new java.io.ByteArrayOutputStream();
+            var bytes = new ByteArrayOutputStream();
             message.writeTo(bytes);
-            assertThat(bytes.toString(java.nio.charset.StandardCharsets.UTF_8))
+            assertThat(bytes.toString(StandardCharsets.UTF_8))
                     .contains("/admin/feedback")
                     .doesNotContain("private-feedback-content");
         }
@@ -210,12 +213,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
 
         new TransactionTemplate(transactionManager)
                 .executeWithoutResult(status -> events.publishEvent(new ProductFeedbackEmailRequested(
-                        item.getId(),
-                        Objects.requireNonNull(admin.getId()),
-                        Instant.EPOCH,
-                        Instant.EPOCH,
-                        de.tum.cit.aet.hephaestus.productfeedback.notification.ProductFeedbackSubmittedEvent.Kind
-                                .BUG)));
+                        item.getId(), Objects.requireNonNull(admin.getId()), Instant.EPOCH, Instant.EPOCH, Kind.BUG)));
 
         assertThat(mail.sent()).isEmpty();
         assertThat(publications(item.getId())).isEmpty();
@@ -288,7 +286,7 @@ class ProductFeedbackEmailIntegrationTest extends BaseIntegrationTest {
             settings.updateSilentMode(
                     engaged,
                     engaged ? "notification test" : null,
-                    "notification-test",
+                    null,
                     EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
         }
     }

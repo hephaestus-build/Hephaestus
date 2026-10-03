@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMannequi
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHOrganization;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHUser;
 import java.time.Instant;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -281,7 +282,7 @@ public record GitHubUserDTO(
         if (gitHubType == null) {
             return User.Type.USER;
         }
-        return switch (gitHubType.toLowerCase()) {
+        return switch (gitHubType.toLowerCase(Locale.ROOT)) {
             case "bot" -> User.Type.BOT;
             case "organization" -> User.Type.ORGANIZATION;
             default -> User.Type.USER;

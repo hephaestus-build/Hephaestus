@@ -143,10 +143,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             String title,
             String outcome,
             @Nullable String severity,
-            float confidence,
             String artifactKind,
             Long artifactId,
-            Instant detectedAt) {
+            Instant observedAt) {
         UUID id = UUID.randomUUID();
         observationRepository.insertIfAbsent(
                 id,
@@ -164,7 +163,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 DIFF_EVIDENCE_JSON,
                 "Test reasoning for " + title,
                 null,
-                detectedAt,
+                observedAt,
                 "LIVE");
         return id;
     }
@@ -223,15 +222,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         Long accountId = Objects.requireNonNull(
                 persistInstanceAdmin("Observation view operator").getId());
         UUID own = insertObservation(
-                practiceA,
-                developer,
-                "Missing context",
-                "NOT_MET",
-                "MINOR",
-                0.9f,
-                "scm.pull_request",
-                1L,
-                Instant.now());
+                practiceA, developer, "Missing context", "NOT_MET", "MINOR", "scm.pull_request", 1L, Instant.now());
         deliverFeedbackFor(own, "Explain the motivation.", Instant.now());
         var self = webTestClient
                 .get()
@@ -270,7 +261,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 "Other person's feedback",
                 "NOT_MET",
                 "MINOR",
-                0.9f,
                 "scm.pull_request",
                 2L,
                 Instant.now());
@@ -287,8 +277,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                 .expectBody(Void.class);
     }
 
-    // GET /practices/observations
-
     @Nested
     class ListObservations {
 
@@ -297,20 +285,18 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldReturnOnlyOwnExactWorkWhenFilteringByKindAndId(String kind, String sort) {
             Instant now = Instant.now();
-            UUID latest =
-                    insertObservation(practiceA, developer, "Exact work", "NOT_MET", "MAJOR", 0.9f, kind, 741L, now);
+            UUID latest = insertObservation(practiceA, developer, "Exact work", "NOT_MET", "MAJOR", kind, 741L, now);
             UUID older = insertObservation(
-                    practiceB, developer, "Same work older", "NOT_MET", "MAJOR", 0.9f, kind, 741L, now.minusSeconds(5));
-            insertObservation(practiceA, developer, "Different ID", "NOT_MET", "MAJOR", 0.9f, kind, 742L, now);
+                    practiceB, developer, "Same work older", "NOT_MET", "MAJOR", kind, 741L, now.minusSeconds(5));
+            insertObservation(practiceA, developer, "Different ID", "NOT_MET", "MAJOR", kind, 742L, now);
             String otherKind = kind.equals("scm.issue") ? "scm.pull_request" : "scm.issue";
-            insertObservation(practiceA, developer, "Different kind", "NOT_MET", "MAJOR", 0.9f, otherKind, 741L, now);
+            insertObservation(practiceA, developer, "Different kind", "NOT_MET", "MAJOR", otherKind, 741L, now);
             insertObservation(
                     practiceA,
                     persistUser("another-work-author"),
                     "Other developer",
                     "NOT_MET",
                     "MAJOR",
-                    0.9f,
                     kind,
                     741L,
                     now);
@@ -395,12 +381,12 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldReturnOnlyOwnObservations() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "My observation", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "My observation", "MET", "INFO", "scm.pull_request", 1L, now);
 
             // Other user's observation should NOT appear
             User otherUser = persistUser("other-user");
             insertObservation(
-                    practiceA, otherUser, "Other observation", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+                    practiceA, otherUser, "Other observation", "NOT_MET", "MAJOR", "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -422,9 +408,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByPracticeSlug() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Practice A", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertObservation(
-                    practiceB, developer, "Practice B", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, developer, "Practice A", "MET", "INFO", "scm.pull_request", 1L, now);
+            insertObservation(practiceB, developer, "Practice B", "NOT_MET", "MAJOR", "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -455,9 +440,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             practiceRepository.save(practiceA);
 
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "In group", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "In group", "MET", "INFO", "scm.pull_request", 1L, now);
             // practiceB has NO group — the LEFT JOIN must keep it visible when no filter is set.
-            insertObservation(practiceB, developer, "No group", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceB, developer, "No group", "NOT_MET", "MAJOR", "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -489,9 +474,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("filters by artifact kind so a single integration's events can be shown")
         void shouldFilterByArtifactKinds() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "From a PR", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "From a PR", "MET", "INFO", "scm.pull_request", 1L, now);
             insertObservation(
-                    practiceA, developer, "From Slack", "NOT_MET", "MINOR", 0.8f, "chat.conversation_thread", 2L, now);
+                    practiceA, developer, "From Slack", "NOT_MET", "MINOR", "chat.conversation_thread", 2L, now);
 
             webTestClient
                     .get()
@@ -512,15 +497,14 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("filters gaps by severity while keeping strengths visible")
         void shouldFilterBySeverities() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Major gap", "NOT_MET", "MAJOR", 0.9f, "scm.pull_request", 1L, now);
-            insertObservation(practiceA, developer, "Minor nit", "NOT_MET", "MINOR", 0.9f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, developer, "Major gap", "NOT_MET", "MAJOR", "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Minor nit", "NOT_MET", "MINOR", "scm.pull_request", 2L, now);
             insertObservation(
                     practiceA,
                     developer,
                     "Recent strength",
                     "MET",
                     null,
-                    0.9f,
                     "scm.pull_request",
                     3L,
                     now.minus(1, ChronoUnit.DAYS));
@@ -546,15 +530,13 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("sorts most-severe-first when sort=SEVERITY, ties broken newest-first")
         void shouldSortBySeverity() {
             Instant now = Instant.now();
-            insertObservation(
-                    practiceA, developer, "Newest minor", "NOT_MET", "MINOR", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Newest minor", "NOT_MET", "MINOR", "scm.pull_request", 1L, now);
             insertObservation(
                     practiceA,
                     developer,
                     "Older critical",
                     "NOT_MET",
                     "CRITICAL",
-                    0.9f,
                     "scm.pull_request",
                     2L,
                     now.minus(3, ChronoUnit.DAYS));
@@ -564,7 +546,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "Strength without severity",
                     "MET",
                     null,
-                    0.9f,
                     "scm.pull_request",
                     3L,
                     now.minus(1, ChronoUnit.DAYS));
@@ -590,10 +571,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("reverses the severity order with direction=ASC (strengths lead)")
         void shouldSortBySeverityAscending() {
             Instant now = Instant.now();
-            insertObservation(
-                    practiceA, developer, "Critical gap", "NOT_MET", "CRITICAL", 0.9f, "scm.pull_request", 1L, now);
-            insertObservation(practiceA, developer, "Minor nit", "NOT_MET", "MINOR", 0.9f, "scm.pull_request", 2L, now);
-            insertObservation(practiceA, developer, "Strength", "MET", null, 0.9f, "scm.pull_request", 3L, now);
+            insertObservation(practiceA, developer, "Critical gap", "NOT_MET", "CRITICAL", "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Minor nit", "NOT_MET", "MINOR", "scm.pull_request", 2L, now);
+            insertObservation(practiceA, developer, "Strength", "MET", null, "scm.pull_request", 3L, now);
 
             webTestClient
                     .get()
@@ -616,9 +596,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @DisplayName("drops NOT_APPLICABLE rows when displayableOnly is set")
         void shouldDropNotApplicableWhenDisplayableOnly() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Observed", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Observed", "MET", "INFO", "scm.pull_request", 1L, now);
             insertObservation(
-                    practiceA, developer, "Did not apply", "NOT_APPLICABLE", null, 0.9f, "scm.pull_request", 2L, now);
+                    practiceA, developer, "Did not apply", "NOT_APPLICABLE", null, "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -638,8 +618,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByObservation() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Good", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertObservation(practiceA, developer, "Bad", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, developer, "Good", "MET", "INFO", "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Bad", "NOT_MET", "MAJOR", "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -659,9 +639,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldFilterByPracticeSlugAndObservation() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "A pos", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
-            insertObservation(practiceA, developer, "A neg", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
-            insertObservation(practiceB, developer, "B neg", "NOT_MET", "MINOR", 0.7f, "scm.pull_request", 3L, now);
+            insertObservation(practiceA, developer, "A pos", "MET", "INFO", "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "A neg", "NOT_MET", "MAJOR", "scm.pull_request", 2L, now);
+            insertObservation(practiceB, developer, "B neg", "NOT_MET", "MINOR", "scm.pull_request", 3L, now);
 
             webTestClient
                     .get()
@@ -696,7 +676,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                         "Observation " + i,
                         "MET",
                         "INFO",
-                        0.9f,
                         "scm.pull_request",
                         (long) (i + 1),
                         base.minus(i, ChronoUnit.HOURS));
@@ -751,8 +730,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldReturnCorrectShapeWithoutInternalFields() {
             Instant now = Instant.now();
-            insertObservation(
-                    practiceA, developer, "Shape check", "NOT_MET", "MAJOR", 0.85f, "scm.pull_request", 42L, now);
+            insertObservation(practiceA, developer, "Shape check", "NOT_MET", "MAJOR", "scm.pull_request", 42L, now);
 
             webTestClient
                     .get()
@@ -807,8 +785,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
 
         @Test
         @WithUser
-        @DisplayName("orders observations by detected_at descending")
-        void shouldOrderByDetectedAtDesc() {
+        @DisplayName("orders observations by observed_at descending")
+        void shouldOrderByObservedAtDesc() {
             Instant now = Instant.now();
             insertObservation(
                     practiceA,
@@ -816,18 +794,16 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "Oldest",
                     "MET",
                     "INFO",
-                    0.9f,
                     "scm.pull_request",
                     1L,
                     now.minus(2, ChronoUnit.HOURS));
-            insertObservation(practiceA, developer, "Newest", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, developer, "Newest", "NOT_MET", "MAJOR", "scm.pull_request", 2L, now);
             insertObservation(
                     practiceA,
                     developer,
                     "Middle",
                     "MET",
                     "INFO",
-                    0.7f,
                     "scm.pull_request",
                     3L,
                     now.minus(1, ChronoUnit.HOURS));
@@ -852,10 +828,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldNotReturnObservationsFromDifferentWorkspace() {
             Instant now = Instant.now();
-            insertObservation(
-                    practiceA, developer, "My WS observation", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "My WS observation", "MET", "INFO", "scm.pull_request", 1L, now);
 
-            // Create a second workspace with its own practice and observation
             User otherOwner = persistUser("other-ws-owner");
             Workspace otherWorkspace =
                     createWorkspace("other-ws", "Other WS", "other-org", AccountType.ORG, otherOwner);
@@ -912,7 +886,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     .isEqualTo("My WS observation")
                     .jsonPath("$.totalElements")
                     .isEqualTo(1);
-            for (String sort : java.util.List.of("DATE", "SEVERITY")) {
+            for (String sort : List.of("DATE", "SEVERITY")) {
                 webTestClient
                         .get()
                         .uri(
@@ -931,8 +905,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
             }
         }
     }
-
-    // GET /practices/observations/summary
 
     @Nested
     class GetSummary {
@@ -957,26 +929,23 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturnCorrectCountsAndFields() {
             Instant now = Instant.now();
             Instant oldest = now.minus(2, ChronoUnit.HOURS);
-            insertObservation(practiceA, developer, "A pos 1", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "A pos 1", "MET", "INFO", "scm.pull_request", 1L, now);
             insertObservation(
                     practiceA,
                     developer,
                     "A pos 2",
                     "MET",
                     "INFO",
-                    0.8f,
                     "scm.pull_request",
                     2L,
                     now.minus(1, ChronoUnit.HOURS));
-            insertObservation(
-                    practiceA, developer, "A neg 1", "NOT_MET", "MAJOR", 0.7f, "scm.pull_request", 3L, oldest);
+            insertObservation(practiceA, developer, "A neg 1", "NOT_MET", "MAJOR", "scm.pull_request", 3L, oldest);
             insertObservation(
                     practiceB,
                     developer,
                     "B neg 1",
                     "NOT_MET",
                     "MINOR",
-                    0.6f,
                     "scm.pull_request",
                     4L,
                     now.minus(3, ChronoUnit.HOURS));
@@ -1033,10 +1002,10 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @WithUser
         void shouldExcludeOtherUsersObservations() {
             Instant now = Instant.now();
-            insertObservation(practiceA, developer, "Mine", "MET", "INFO", 0.9f, "scm.pull_request", 1L, now);
+            insertObservation(practiceA, developer, "Mine", "MET", "INFO", "scm.pull_request", 1L, now);
 
             User otherUser = persistUser("someone-else");
-            insertObservation(practiceA, otherUser, "Theirs", "NOT_MET", "MAJOR", 0.8f, "scm.pull_request", 2L, now);
+            insertObservation(practiceA, otherUser, "Theirs", "NOT_MET", "MAJOR", "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -1055,8 +1024,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         }
     }
 
-    // GET /practices/observations/{observationId}
-
     @Nested
     class GetObservationDetail {
 
@@ -1065,15 +1032,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturnDetailForOwnObservation() {
             Instant now = Instant.now();
             UUID observationId = insertObservation(
-                    practiceA,
-                    developer,
-                    "Detailed observation",
-                    "NOT_MET",
-                    "MAJOR",
-                    0.85f,
-                    "scm.pull_request",
-                    42L,
-                    now);
+                    practiceA, developer, "Detailed observation", "NOT_MET", "MAJOR", "scm.pull_request", 42L, now);
             // Advice lives on the delivered Feedback, not the observation (ADR 0021): the detail view sources
             // guidance from here.
             Feedback feedback =
@@ -1126,15 +1085,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturnTheNextStepAndTheResponseWhenTheDeveloperAnswered() {
             Instant now = Instant.now();
             UUID observationId = insertObservation(
-                    practiceA,
-                    developer,
-                    "Detailed observation",
-                    "NOT_MET",
-                    "MAJOR",
-                    0.85f,
-                    "scm.pull_request",
-                    42L,
-                    now);
+                    practiceA, developer, "Detailed observation", "NOT_MET", "MAJOR", "scm.pull_request", 42L, now);
             Feedback feedback =
                     deliverFeedbackFor(observationId, "Split this PR so each change reviews on its own.", now);
             composeNextStep(observationId, "Split the retry out into its own pull request.");
@@ -1175,15 +1126,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldAnswerAboutTheNewestDeliveredFeedbackWhenTwoCarriedTheObservation() {
             Instant now = Instant.now();
             UUID observationId = insertObservation(
-                    practiceA,
-                    developer,
-                    "Detailed observation",
-                    "NOT_MET",
-                    "MAJOR",
-                    0.85f,
-                    "scm.pull_request",
-                    42L,
-                    now);
+                    practiceA, developer, "Detailed observation", "NOT_MET", "MAJOR", "scm.pull_request", 42L, now);
             deliverFeedbackFor(observationId, "The first note the run posted.", now.minus(1, ChronoUnit.HOURS), 0);
             Feedback newest = deliverFeedbackFor(observationId, "The note that replaced it.", now, 1);
 
@@ -1208,15 +1151,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldAnswerAboutTheFeedbackWhoseTextItShowsWhenNewerFeedbackIsBound() {
             Instant now = Instant.now();
             UUID observationId = insertObservation(
-                    practiceA,
-                    developer,
-                    "Detailed observation",
-                    "NOT_MET",
-                    "MAJOR",
-                    0.85f,
-                    "scm.pull_request",
-                    42L,
-                    now);
+                    practiceA, developer, "Detailed observation", "NOT_MET", "MAJOR", "scm.pull_request", 42L, now);
             Feedback onTheWork = deliverFeedbackFor(
                     observationId,
                     "Split this PR so each change reviews on its own.",
@@ -1257,7 +1192,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "Detailed observation",
                     "NOT_MET",
                     "MAJOR",
-                    0.85f,
                     "scm.pull_request",
                     42L,
                     Instant.now());
@@ -1354,7 +1288,7 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturn404ForOtherUserObservation() {
             User otherUser = persistUser("other-developer");
             UUID otherId = insertObservation(
-                    practiceA, otherUser, "Not mine", "MET", "INFO", 0.9f, "scm.pull_request", 1L, Instant.now());
+                    practiceA, otherUser, "Not mine", "MET", "INFO", "scm.pull_request", 1L, Instant.now());
 
             webTestClient
                     .get()
@@ -1476,19 +1410,9 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         @Test
         @WithUser
         void shouldReturn404ForObservationInDifferentWorkspace() {
-            // Create observation in current workspace
             UUID observationId = insertObservation(
-                    practiceA,
-                    developer,
-                    "WS1 observation",
-                    "MET",
-                    "INFO",
-                    0.9f,
-                    "scm.pull_request",
-                    1L,
-                    Instant.now());
+                    practiceA, developer, "WS1 observation", "MET", "INFO", "scm.pull_request", 1L, Instant.now());
 
-            // Create a different workspace
             User otherOwner = persistUser("ws2-owner");
             Workspace otherWorkspace =
                     createWorkspace("other-ws2", "Other WS2", "other-org2", AccountType.ORG, otherOwner);
@@ -1506,8 +1430,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         }
     }
 
-    // GET /practices/standings
-
     @Nested
     class GetStandings {
 
@@ -1517,9 +1439,8 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
         void shouldReturnPracticeStandings() {
             Instant now = Instant.now();
             insertObservation(
-                    practiceA, developer, "Thin PR description", "NOT_MET", "MAJOR", 0.9f, "scm.pull_request", 1L, now);
-            insertObservation(
-                    practiceB, developer, "Thorough review", "MET", "INFO", 0.9f, "scm.pull_request", 2L, now);
+                    practiceA, developer, "Thin PR description", "NOT_MET", "MAJOR", "scm.pull_request", 1L, now);
+            insertObservation(practiceB, developer, "Thorough review", "MET", "INFO", "scm.pull_request", 2L, now);
 
             webTestClient
                     .get()
@@ -1561,7 +1482,6 @@ class ObservationControllerIntegrationTest extends AbstractWorkspaceIntegrationT
                     "Thin PR description",
                     "NOT_MET",
                     "MAJOR",
-                    0.9f,
                     "scm.pull_request",
                     1L,
                     Instant.now());

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.outline.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -110,7 +111,7 @@ class OutlineIdentityResolverTest extends BaseUnitTest {
                 .isEmpty();
         assertThat(resolver.resolveMemberId(WORKSPACE_ID, "", TEAM_ID, SUBJECT)).isEmpty();
         verifyNoInteractions(gitProviderRegistry);
-        verify(accountIdentityQuery, org.mockito.Mockito.never()).resolveAccountId(any(), any(), any());
+        verify(accountIdentityQuery, never()).resolveAccountId(any(), any(), any());
     }
 
     @Test

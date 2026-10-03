@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -132,7 +133,7 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                 new NetworkPolicy(false, null, "token"),
                 ResourceLimits.DEFAULT,
                 SecurityProfile.DEFAULT,
-                Map.of("task.json", "{}".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                Map.of("task.json", "{}".getBytes(StandardCharsets.UTF_8)),
                 onDisk,
                 "/workspace/out");
     }
@@ -144,8 +145,7 @@ class DockerGatewayTransportTest extends BaseUnitTest {
 
         var result = adapter.execute(spec(Map.of("inputs/sources/scm/repo/Source.java", source)));
 
-        assertThat(result.outputFiles().get("observations.json"))
-                .isEqualTo("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(result.outputFiles().get("observations.json")).isEqualTo("{}".getBytes(StandardCharsets.UTF_8));
         assertThat(created).hasSize(2);
         var initializer = created.getFirst();
         var runtime = created.getLast();
@@ -183,7 +183,7 @@ class DockerGatewayTransportTest extends BaseUnitTest {
             var entry = new TarArchiveEntry("out/observations.json");
             entry.setSize(2);
             tar.putArchiveEntry(entry);
-            tar.write("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            tar.write("{}".getBytes(StandardCharsets.UTF_8));
             tar.closeArchiveEntry();
         }
         return bytes.toByteArray();

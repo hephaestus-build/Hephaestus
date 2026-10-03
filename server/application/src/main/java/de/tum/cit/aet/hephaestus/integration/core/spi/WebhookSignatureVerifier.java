@@ -9,6 +9,7 @@ public interface WebhookSignatureVerifier {
     VerificationResult verify(WebhookRequest request);
 
     /** Body + headers. Workspace context is resolved by the verifier itself when needed. */
+    @SuppressWarnings("ArrayRecordComponent") // raw webhook body; never compared, hashed or printed
     record WebhookRequest(byte[] body, Map<String, String> headers) {}
 
     sealed interface VerificationResult
@@ -35,6 +36,7 @@ public interface WebhookSignatureVerifier {
          * published to NATS. Used for Slack {@code url_verification} and Asana's
          * X-Hook-Secret echo.
          */
+        @SuppressWarnings("ArrayRecordComponent") // response bytes written verbatim; never compared, hashed or printed
         record RespondImmediately(int statusCode, String contentType, byte[] body, Map<String, String> headers)
                 implements VerificationResult {
             public RespondImmediately(int statusCode, String contentType, byte[] body) {

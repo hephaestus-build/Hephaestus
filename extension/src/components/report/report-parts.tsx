@@ -1,8 +1,8 @@
 import { type ReactNode, useState } from "react";
 
 import { cn } from "cn";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "~/components/common/Button";
-import { Skeleton } from "~/components/common/Skeleton";
 
 /**
  * The report's second level, as in the provider's merge request reports: indented to line up with the

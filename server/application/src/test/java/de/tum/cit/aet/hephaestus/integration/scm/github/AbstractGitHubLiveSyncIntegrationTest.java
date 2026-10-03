@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterAll;
@@ -166,7 +167,7 @@ public abstract class AbstractGitHubLiveSyncIntegrationTest extends BaseGitHubLi
     }
 
     private String generateWorkspaceSlug() {
-        String lowerCase = githubOrganization().toLowerCase();
+        String lowerCase = githubOrganization().toLowerCase(Locale.ROOT);
         String normalized = lowerCase.replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
         if (normalized.isBlank()) {
             normalized = "workspace-" + Long.toString(System.currentTimeMillis(), 36);
@@ -208,7 +209,7 @@ public abstract class AbstractGitHubLiveSyncIntegrationTest extends BaseGitHubLi
     protected GitHubTestFixtureService.CreatedLabel createRepositoryLabel(
             String repositoryNodeId, String prefix, String color, String description) {
         String uniqueSuffix = Long.toString(Instant.now().toEpochMilli(), 36);
-        String labelName = (prefix + "-" + uniqueSuffix).toLowerCase();
+        String labelName = (prefix + "-" + uniqueSuffix).toLowerCase(Locale.ROOT);
         return fixtureService.createLabel(repositoryNodeId, labelName, color, description);
     }
 

@@ -1,9 +1,9 @@
 import { LogOutIcon } from "lucide-react";
 
 import { cn } from "cn";
+import { Spinner } from "@/components/ui/spinner";
 import { Button } from "~/components/common/Button";
 import { formatDateTime } from "~/components/common/format";
-import { Spinner } from "~/components/common/Spinner";
 import type { AccountSummary as Account } from "~/shared/rpc";
 
 export interface AccountSummaryProps {

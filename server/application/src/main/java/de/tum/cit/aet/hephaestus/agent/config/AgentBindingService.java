@@ -99,9 +99,9 @@ public class AgentBindingService {
     public void deleteBinding(WorkspaceContext workspaceContext, AgentPurpose purpose, DataHandlingTier tier) {
         Long workspaceId = workspaceContext.id();
         // Taken for the row lock and the 404 only; nothing below writes the workspace row.
-        workspaceRepository
-                .findByIdForUpdate(workspaceId)
-                .orElseThrow(() -> new EntityNotFoundException("Workspace", workspaceContext.slug()));
+        if (workspaceRepository.findByIdForUpdate(workspaceId).isEmpty()) {
+            throw new EntityNotFoundException("Workspace", workspaceContext.slug());
+        }
         bindingRepository
                 .findByWorkspaceIdAndPurposeAndDataHandlingTier(workspaceId, purpose, tier)
                 .ifPresent(binding -> {

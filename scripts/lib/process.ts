@@ -2,7 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-// oxlint-disable-next-line typescript/strict-void-return -- the rule reads the callback overload; tsc resolves the CustomPromisify one to { stdout, stderr }.
+// oxlint-disable-next-line typescript/strict-void-return -- Node types `execFile`'s promise form through `util.promisify.custom`, which tsc resolves to `{ stdout, stderr }` and the rule does not read.
 const execFileAsync = promisify(execFile);
 
 /**
@@ -13,6 +13,14 @@ const execFileAsync = promisify(execFile);
  * runaway process is its own failure.
  */
 export const CAPTURE_LIMIT_BYTES = 256 * 1024 * 1024;
+
+/** How a child process ended: Node reports the signal that stopped it, or else its exit code. */
+export function exitStatus(code: number | null, signal: NodeJS.Signals | null): string {
+	if (signal !== null) {
+		return signal;
+	}
+	return code === null ? "no exit status" : `code ${code}`;
+}
 
 export interface RunOptions {
 	cwd?: string;
@@ -40,7 +48,7 @@ export async function run(
 		if (code === 0) {
 			exited.resolve(undefined);
 		} else {
-			exited.reject(new Error(`${command} exited with ${signal ?? `code ${code}`}`));
+			exited.reject(new Error(`${command} exited with ${exitStatus(code, signal)}`));
 		}
 	});
 	await exited.promise;

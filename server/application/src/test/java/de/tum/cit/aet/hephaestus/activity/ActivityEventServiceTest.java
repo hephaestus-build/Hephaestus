@@ -1,18 +1,30 @@
 package de.tum.cit.aet.hephaestus.activity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 
 class ActivityEventServiceTest extends BaseUnitTest {
 
@@ -25,10 +37,35 @@ class ActivityEventServiceTest extends BaseUnitTest {
     private MeterRegistry meterRegistry;
     private ActivityEventService service;
 
+    private final PersonDataWriteFence writeFence = Mockito.mock(PersonDataWriteFence.class);
+
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        service = new ActivityEventService(eventRepository, workspaceRepository, meterRegistry);
+        Mockito.lenient()
+                .when(writeFence.holdForUserWrite(ArgumentMatchers.anyLong()))
+                .thenReturn(true);
+        service = new ActivityEventService(eventRepository, workspaceRepository, meterRegistry, writeFence);
+    }
+
+    @Test
+    void backfillAdmitsTheWholeBatchBeforeUpdatingOnlyPermittedAuthors() {
+        when(eventRepository.unresolvedCommitAuthors(200L)).thenReturn(List.of(42L, 84L));
+        when(writeFence.holdForUserWrites(List.of(42L, 84L))).thenReturn(List.of(84L));
+        when(eventRepository.backfillCommitActors(200L, List.of(84L))).thenReturn(3);
+        assertThat(service.backfillCommitActors(200L)).isEqualTo(3);
+        var order = inOrder(writeFence, eventRepository);
+        order.verify(eventRepository).unresolvedCommitAuthors(200L);
+        order.verify(writeFence).holdForUserWrites(List.of(42L, 84L));
+        order.verify(eventRepository).backfillCommitActors(200L, List.of(84L));
+    }
+
+    @Test
+    void backfillDoesNotUpdateAnEntirelySuppressedBatch() {
+        when(eventRepository.unresolvedCommitAuthors(200L)).thenReturn(List.of(42L));
+        when(writeFence.holdForUserWrites(List.of(42L))).thenReturn(List.of());
+        assertThat(service.backfillCommitActors(200L)).isZero();
+        verify(eventRepository, never()).backfillCommitActors(anyLong(), anyList());
     }
 
     @Test

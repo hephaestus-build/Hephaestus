@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.outline.domain;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -18,6 +19,25 @@ import org.springframework.transaction.annotation.Transactional;
  * predicate the tenancy {@code StatementInspector} requires.
  */
 public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument, Long> {
+    /** AI readers exclude controlled native creator, editor and collaborator identities. Mirror writes do not. */
+    String PERSON_PROJECTION_GUARD = """
+            AND NOT EXISTS (SELECT 1 FROM PersonSuppression s, IdentityProvider p, Connection c
+              WHERE s.providerId=p.id AND c.id=d.connectionId AND c.workspace.id=:workspaceId
+                AND p.type=de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.OUTLINE
+                AND p.serverUrl=FUNCTION('jsonb_extract_path_text',c.config,'serverUrl') AND s.teamKey=''
+                AND (s.subject=d.createdBySubject OR s.subject=d.updatedBySubject
+                  OR FUNCTION('jsonb_exists',d.collaboratorSubjects,s.subject)=TRUE))
+            """;
+
+    String PERSON_PROJECTION_SQL_GUARD = """
+            AND NOT EXISTS (SELECT 1 FROM person_suppression s
+              JOIN identity_provider p ON p.id=s.provider_id
+              JOIN connection c ON c.id=d.connection_id AND c.workspace_id=:workspaceId
+              WHERE p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl' AND s.team_key=''
+                AND (s.subject=d.created_by_subject OR s.subject=d.updated_by_subject
+                  OR jsonb_exists(d.collaborator_subjects,s.subject)))
+            """;
+
     long deleteByWorkspaceId(Long workspaceId);
 
     /** Live (non-tombstoned) mirrored documents in the workspace — the admin status figure. */
@@ -78,6 +98,7 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
 
     /** A bounded page of the workspace's mirrored documents: live rows first, most-recently-updated first within each group. */
     @Query("SELECT d FROM OutlineDocument d WHERE d.workspaceId = :workspaceId "
+            + PERSON_PROJECTION_GUARD
             + "ORDER BY d.deletedAt ASC NULLS FIRST, d.outlineUpdatedAt DESC NULLS LAST, d.id ASC")
     List<OutlineDocument> findForProjection(@Param("workspaceId") long workspaceId, Pageable pageable);
 
@@ -86,9 +107,14 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
      * or a URL's trailing segment both resolve.
      */
     @Query("SELECT d FROM OutlineDocument d WHERE d.workspaceId = :workspaceId "
-            + "AND (d.documentId IN :refs OR d.slug IN :refs)")
+            + "AND (d.documentId IN :refs OR d.slug IN :refs) " + PERSON_PROJECTION_GUARD)
     List<OutlineDocument> findByWorkspaceIdAndReferenceIn(
             @Param("workspaceId") long workspaceId, @Param("refs") Collection<String> refs);
+
+    @Query("SELECT d FROM OutlineDocument d WHERE d.workspaceId=:workspaceId AND d.id=:documentId "
+            + PERSON_PROJECTION_GUARD)
+    Optional<OutlineDocument> findByWorkspaceIdAndIdForProjection(
+            @Param("workspaceId") long workspaceId, @Param("documentId") long documentId);
 
     /**
      * The character bound the searchable tsvector is built over. Postgres refuses a tsvector over 1 MB and
@@ -113,7 +139,8 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
      * {@code left(...)} bound is a correctness guard and not an optimisation.
      */
     @Query(
-            value = "SELECT * FROM outline_document WHERE workspace_id = :workspaceId "
+            value = "SELECT d.* FROM outline_document d WHERE d.workspace_id = :workspaceId "
+                    + PERSON_PROJECTION_SQL_GUARD
                     + "AND deleted_at IS NULL AND body_markdown IS NOT NULL "
                     + "AND to_tsvector('simple', coalesce(title, '') || ' ' || left(coalesce(body_markdown, ''), 900000)) "
                     + "@@ websearch_to_tsquery('simple', :query) "
@@ -202,4 +229,36 @@ public interface OutlineDocumentRepository extends JpaRepository<OutlineDocument
         @Nullable
         String getCollectionName();
     }
+
+    interface PersonSourceIdentityRow {
+        long getProviderId();
+
+        String getSubject();
+    }
+
+    @WorkspaceAgnostic("Instance-admin person selection pins an exact provider and native identity across workspaces")
+    @Query(value = """
+        SELECT DISTINCT d.id
+                FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
+                JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+                CROSS JOIN LATERAL (
+                    SELECT d.created_by_subject AS subject UNION SELECT d.updated_by_subject
+                    UNION SELECT jsonb_array_elements_text(COALESCE(d.collaborator_subjects,'[]'::jsonb))
+                ) authors
+                 WHERE p.id=:providerId AND authors.subject=:subject
+        """, nativeQuery = true)
+    List<Long> findPersonSourceIds(@Param("providerId") long providerId, @Param("subject") String subject);
+
+    @Query(value = """
+        SELECT DISTINCT p.id AS providerId,authors.subject AS subject
+                FROM outline_document d JOIN connection c ON c.id=d.connection_id AND c.workspace_id=d.workspace_id
+                JOIN identity_provider p ON p.type='OUTLINE' AND p.server_url=c.config->>'serverUrl'
+                CROSS JOIN LATERAL (
+                    SELECT d.created_by_subject AS subject UNION SELECT d.updated_by_subject
+                    UNION SELECT jsonb_array_elements_text(COALESCE(d.collaborator_subjects,'[]'::jsonb))
+                ) authors
+                 WHERE d.workspace_id=:workspaceId AND d.id=:artifactId AND authors.subject IS NOT NULL AND authors.subject<>''
+        """, nativeQuery = true)
+    List<PersonSourceIdentityRow> findPersonSourceIdentities(
+            @Param("workspaceId") long workspaceId, @Param("artifactId") long artifactId);
 }

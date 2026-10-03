@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.practices.GroupDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 public record EffectiveCatalog(
         List<CatalogEntry<GroupDefinition>> groups,
@@ -68,7 +69,7 @@ public record EffectiveCatalog(
                 total - installableGroups().size() - installablePractices().size();
         return new CatalogSummary(
                 total,
-                count(CatalogEntryState.UPDATE_WAITING, CatalogChangeKind.DETECTION),
+                count(CatalogEntryState.UPDATE_WAITING, CatalogChangeKind.REVIEW),
                 count(CatalogEntryState.UPDATE_WAITING, CatalogChangeKind.WORDING),
                 count(CatalogEntryState.UPDATE_WAITING, CatalogChangeKind.PRESENTATION),
                 (int) entries()
@@ -89,13 +90,13 @@ public record EffectiveCatalog(
                 .count();
     }
 
-    private java.util.stream.Stream<CatalogEntry<?>> entries() {
-        return java.util.stream.Stream.concat(groups.stream(), practices.stream());
+    private Stream<CatalogEntry<?>> entries() {
+        return Stream.concat(groups.stream(), practices.stream());
     }
 
     public record CatalogSummary(
             int total,
-            int updatesChangingDetection,
+            int updatesChangingReview,
             int updatesChangingWordingOnly,
             int updatesChangingPresentation,
             int editedHere,
@@ -103,7 +104,7 @@ public record EffectiveCatalog(
             int notOffered,
             int noLongerShipped) {
         public int updatesWaiting() {
-            return updatesChangingDetection + updatesChangingWordingOnly + updatesChangingPresentation;
+            return updatesChangingReview + updatesChangingWordingOnly + updatesChangingPresentation;
         }
     }
 }

@@ -174,7 +174,6 @@ describe("the subject of a read", () => {
 	});
 
 	it.each([
-		// oxlint-disable-next-line no-script-url -- The schema must refuse one.
 		{ type: "get-context", subject: { kind: "list-row", url: "javascript:alert(1)" } },
 		{ type: "get-context", subject: { kind: "list-row", url: "chrome-extension://x/inline.html" } },
 		{ type: "get-context", subject: { kind: "list-row" } },

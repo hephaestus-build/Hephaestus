@@ -4,7 +4,6 @@ import javax.sql.DataSource;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.provider.jdbctemplate.JdbcTemplateLockProvider;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,7 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * depend on JVM clock skew between pods.
  */
 @Configuration(proxyBeanMethods = false)
-@ConditionalOnProperty(name = RuntimeRole.SERVER_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnServerRole
 @EnableSchedulerLock(defaultLockAtMostFor = "PT30M")
 public class ShedLockConfig {
 

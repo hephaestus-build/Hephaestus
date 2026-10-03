@@ -3,8 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,7 +26,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 
 class SandboxNetworkManagerTest extends BaseUnitTest {
 
@@ -100,14 +102,14 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
             String networkName = "hephaestus-sandbox-default--" + JOB_ID;
             when(networkOps.listNetworksByName(networkName))
                     .thenReturn(List.of(new DockerOperations.NetworkInfo("stale-net", networkName, null, Map.of())));
-            Mockito.doThrow(new SandboxInfrastructureException("network has active endpoints"))
+            doThrow(new SandboxInfrastructureException("network has active endpoints"))
                     .when(networkOps)
                     .removeNetwork("stale-net");
 
             assertThatThrownBy(() -> manager.createJobNetwork(JOB_ID, false, Map.of()))
                     .isInstanceOf(SandboxInfrastructureException.class);
 
-            verify(networkOps, Mockito.never()).createNetwork(anyString(), Mockito.anyBoolean(), any());
+            verify(networkOps, never()).createNetwork(anyString(), anyBoolean(), any());
         }
 
         @Test
@@ -123,8 +125,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
             assertThatThrownBy(() -> manager.createJobNetwork(JOB_ID, false, Map.of()))
                     .isInstanceOf(SandboxInfrastructureException.class);
 
-            verify(networkOps, Mockito.never()).disconnectFromNetwork(anyString(), anyString());
-            verify(networkOps, Mockito.never()).removeNetwork(anyString());
+            verify(networkOps, never()).disconnectFromNetwork(anyString(), anyString());
+            verify(networkOps, never()).removeNetwork(anyString());
         }
 
         @Test
@@ -142,8 +144,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
             assertThatThrownBy(() -> manager.createJobNetwork(JOB_ID, false, Map.of()))
                     .isInstanceOf(SandboxInfrastructureException.class);
 
-            verify(networkOps, Mockito.never()).disconnectFromNetwork(anyString(), anyString());
-            verify(networkOps, Mockito.never()).removeNetwork(anyString());
+            verify(networkOps, never()).disconnectFromNetwork(anyString(), anyString());
+            verify(networkOps, never()).removeNetwork(anyString());
         }
 
         @Test
@@ -157,8 +159,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
                     .isInstanceOf(SandboxInfrastructureException.class)
                     .hasMessageContaining("cannot be identified");
 
-            verify(networkOps, Mockito.never()).disconnectFromNetwork(anyString(), anyString());
-            verify(networkOps, Mockito.never()).removeNetwork(anyString());
+            verify(networkOps, never()).disconnectFromNetwork(anyString(), anyString());
+            verify(networkOps, never()).removeNetwork(anyString());
         }
 
         @Test
@@ -188,7 +190,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
             assertThat(manager.createJobNetwork(JOB_ID, false, Map.of())).isEqualTo(NETWORK_ID);
 
-            verify(networkOps, Mockito.never()).removeNetwork(anyString());
+            verify(networkOps, never()).removeNetwork(anyString());
         }
 
         @Test
@@ -238,7 +240,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
             assertThat(mgr.connectAppServer(NETWORK_ID)).isNull();
 
-            verify(networkOps, Mockito.never()).connectToNetwork(anyString(), anyString());
+            verify(networkOps, never()).connectToNetwork(anyString(), anyString());
         }
     }
 
@@ -263,7 +265,7 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
             mgr.disconnectAppServer(NETWORK_ID);
 
-            verify(networkOps, Mockito.never()).disconnectFromNetwork(anyString(), anyString());
+            verify(networkOps, never()).disconnectFromNetwork(anyString(), anyString());
         }
     }
 
@@ -304,8 +306,8 @@ class SandboxNetworkManagerTest extends BaseUnitTest {
 
             assertThat(manager.removeUnlessInUse(NETWORK_ID, "n")).isFalse();
 
-            verify(networkOps, Mockito.never()).disconnectFromNetwork(anyString(), anyString());
-            verify(networkOps, Mockito.never()).removeNetwork(anyString());
+            verify(networkOps, never()).disconnectFromNetwork(anyString(), anyString());
+            verify(networkOps, never()).removeNetwork(anyString());
         }
     }
 

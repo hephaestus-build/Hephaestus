@@ -8,7 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GithubLifecycleListener;
+import de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepositoryMonitorService;
@@ -36,7 +36,7 @@ class GitHubWorkspaceProvisioningAdapterDeletionTest extends BaseUnitTest {
     private static final long INSTALLATION_ID = 5001L;
 
     @Mock
-    private GithubLifecycleListener githubLifecycleListener;
+    private GitHubLifecycleListener githubLifecycleListener;
 
     @Mock
     private WorkspaceRepositoryMonitorService repositoryMonitorService;

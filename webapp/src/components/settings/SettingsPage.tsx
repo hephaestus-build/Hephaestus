@@ -23,7 +23,7 @@ import {
 	ResearchParticipationSection,
 	type ResearchParticipationSectionProps,
 } from "./ResearchParticipationSection";
-import { SessionsSection } from "./SessionsSection";
+import { SessionsSection, type SessionsSectionProps } from "./SessionsSection";
 import {
 	SlackPreferencesSection,
 	type SlackPreferencesSectionProps,
@@ -38,6 +38,7 @@ export interface SettingsPageProps {
 	linkedAccountsProps: LinkedAccountsSectionProps;
 	slackPreferencesProps: SlackPreferencesSectionProps;
 	showSlackPreferencesSection?: boolean;
+	sessionsProps: SessionsSectionProps;
 	onAccountDeleted: () => void | Promise<void>;
 	isLoading?: boolean;
 	settingsError?: boolean;
@@ -53,6 +54,7 @@ export function SettingsPage({
 	linkedAccountsProps,
 	slackPreferencesProps,
 	showSlackPreferencesSection = true,
+	sessionsProps,
 	onAccountDeleted,
 	isLoading = false,
 	settingsError = false,
@@ -134,7 +136,7 @@ export function SettingsPage({
 				)}
 
 				<Separator />
-				<SessionsSection />
+				<SessionsSection {...sessionsProps} />
 
 				{optionalIntegrationsAvailable && (
 					<>

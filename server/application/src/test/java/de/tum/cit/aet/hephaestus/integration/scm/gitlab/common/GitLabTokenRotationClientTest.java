@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -20,7 +21,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -32,9 +32,6 @@ import org.springframework.web.reactive.function.client.WebClient.ResponseSpec;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import reactor.core.publisher.Mono;
 
-/**
- * Unit tests for {@link GitLabTokenRotationClient}.
- */
 @Tag("unit")
 class GitLabTokenRotationClientTest extends BaseUnitTest {
 
@@ -74,9 +71,9 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString());
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            doReturn(uriSpec).when(mockWebClient).get();
+            doReturn(headersSpec).when(uriSpec).uri(anyString());
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("id", 123, "name", "my-token", "expires_at", "2026-06-01")));
@@ -96,9 +93,9 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString());
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            doReturn(uriSpec).when(mockWebClient).get();
+            doReturn(headersSpec).when(uriSpec).uri(anyString());
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
             when(headersSpec.retrieve()).thenReturn(responseSpec);
 
             // expires_at can be null for non-expiring tokens
@@ -121,9 +118,9 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
             RequestHeadersUriSpec<?> uriSpec = mock(RequestHeadersUriSpec.class);
             RequestHeadersSpec<?> headersSpec = mock(RequestHeadersSpec.class);
 
-            org.mockito.Mockito.doReturn(uriSpec).when(mockWebClient).get();
-            org.mockito.Mockito.doReturn(headersSpec).when(uriSpec).uri(anyString());
-            org.mockito.Mockito.doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
+            doReturn(uriSpec).when(mockWebClient).get();
+            doReturn(headersSpec).when(uriSpec).uri(anyString());
+            doReturn(headersSpec).when(headersSpec).header(anyString(), anyString());
             when(headersSpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             401, "Unauthorized", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));
@@ -145,9 +142,9 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
             when(mockWebClient.post()).thenReturn(bodyUriSpec);
-            Mockito.doReturn(bodySpec).when(bodyUriSpec).uri(anyString());
-            Mockito.doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
-            Mockito.doReturn(bodySpec).when(bodySpec).bodyValue(any());
+            doReturn(bodySpec).when(bodyUriSpec).uri(anyString());
+            doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
+            doReturn(bodySpec).when(bodySpec).bodyValue(any());
             when(bodySpec.retrieve()).thenReturn(responseSpec);
             when(responseSpec.bodyToMono(any(ParameterizedTypeReference.class)))
                     .thenReturn(Mono.just(Map.of("token", "glpat-new-rotated-token", "expires_at", "2026-09-01")));
@@ -167,9 +164,9 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
             ResponseSpec responseSpec = mock(ResponseSpec.class);
 
             when(mockWebClient.post()).thenReturn(bodyUriSpec);
-            Mockito.doReturn(bodySpec).when(bodyUriSpec).uri(anyString());
-            Mockito.doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
-            Mockito.doReturn(bodySpec).when(bodySpec).bodyValue(any());
+            doReturn(bodySpec).when(bodyUriSpec).uri(anyString());
+            doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
+            doReturn(bodySpec).when(bodySpec).bodyValue(any());
             when(bodySpec.retrieve()).thenReturn(responseSpec);
 
             Map<String, Object> responseMap = new HashMap<>();
@@ -192,9 +189,9 @@ class GitLabTokenRotationClientTest extends BaseUnitTest {
             RequestBodySpec bodySpec = mock(RequestBodySpec.class);
 
             when(mockWebClient.post()).thenReturn(bodyUriSpec);
-            Mockito.doReturn(bodySpec).when(bodyUriSpec).uri(anyString());
-            Mockito.doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
-            Mockito.doReturn(bodySpec).when(bodySpec).bodyValue(any());
+            doReturn(bodySpec).when(bodyUriSpec).uri(anyString());
+            doReturn(bodySpec).when(bodySpec).header(anyString(), anyString());
+            doReturn(bodySpec).when(bodySpec).bodyValue(any());
             when(bodySpec.retrieve())
                     .thenThrow(WebClientResponseException.create(
                             403, "Forbidden", HttpHeaders.EMPTY, new byte[0], StandardCharsets.UTF_8));

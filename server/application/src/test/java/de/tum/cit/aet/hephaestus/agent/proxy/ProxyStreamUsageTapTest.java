@@ -80,7 +80,7 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
             feed(tap, "data: {\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":4}}\n");
 
             var observed = tap.observed();
-            org.junit.jupiter.api.Assertions.assertNotNull(observed);
+            assertThat(observed).isNotNull();
             assertThat(observed.billableInputTokens()).isEqualTo(9);
             assertThat(observed.outputTokens()).isEqualTo(4);
         }

@@ -26,7 +26,7 @@ const catalog = {
 	customOrder: false,
 	summary: {
 		total: 5,
-		updatesChangingDetection: 0,
+		updatesChangingReview: 0,
 		updatesChangingWordingOnly: 0,
 		updatesChangingPresentation: 0,
 		editedHere: 0,

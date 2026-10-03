@@ -27,9 +27,9 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.Team;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.team.TeamRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.github.connect.GithubConnectionStrategy;
+import de.tum.cit.aet.hephaestus.integration.scm.github.connect.GitHubConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.scm.github.workspace.GitHubWorkspaceProvisioningAdapter;
-import de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitlabConnectionStrategy;
+import de.tum.cit.aet.hephaestus.integration.scm.gitlab.connect.GitLabConnectionStrategy;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThread;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
@@ -98,10 +98,10 @@ class ScmWorkspaceErasureIntegrationTest extends BaseIntegrationTest {
     private ScmWorkspacePurgeAdapter scmWorkspacePurgeAdapter;
 
     @Autowired
-    private GithubConnectionStrategy githubConnectionStrategy;
+    private GitHubConnectionStrategy githubConnectionStrategy;
 
     @Autowired
-    private GitlabConnectionStrategy gitlabConnectionStrategy;
+    private GitLabConnectionStrategy gitlabConnectionStrategy;
 
     @Autowired
     private OrganizationRepository organizationRepository;

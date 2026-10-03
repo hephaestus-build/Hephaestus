@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
@@ -317,7 +319,7 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
                     .isOk()
                     .expectBody(Void.class);
 
-            org.assertj.core.api.Assertions.assertThat(signalRepository.findForArtifact(
+            assertThat(signalRepository.findForArtifact(
                             workspace.getId(), ArtifactKinds.PULL_REQUEST.value(), pullRequestId))
                     .hasSize(1);
         }
@@ -344,7 +346,7 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
             monitor.setWorkspace(asking);
             monitor.setNameWithOwner("request-org/request-repo");
             repositoryToMonitorRepository.save(monitor);
-            org.assertj.core.api.Assertions.assertThat(workspace.getId()).isLessThan(asking.getId());
+            assertThat(workspace.getId()).isLessThan(asking.getId());
         }
 
         @Test
@@ -390,8 +392,6 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
                     .exchange();
         }
     }
-
-    // Fixtures
 
     /**
      * Everything a workspace needs to start a requested review — practices on, a practice bound to the
@@ -468,8 +468,7 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
                 .isOk()
                 .expectBody()
                 .jsonPath("$.reason")
-                .value(reason -> org.assertj.core.api.Assertions.assertThat(reason)
-                        .isNotIn("REQUEST_COOLDOWN_ACTIVE", "REQUESTER_QUOTA_EXHAUSTED"));
+                .value(reason -> assertThat(reason).isNotIn("REQUEST_COOLDOWN_ACTIVE", "REQUESTER_QUOTA_EXHAUSTED"));
     }
 
     private WebTestClient.ResponseSpec post(String kind, long artifactId) {
@@ -503,7 +502,7 @@ class PracticeReviewRequestControllerIntegrationTest extends AbstractWorkspaceIn
     private long persistPullRequest(Repository repository, User prAuthor, int number) {
         Instant now = Instant.now();
         Long providerId = repository.getProvider().getId();
-        org.junit.jupiter.api.Assertions.assertNotNull(providerId);
+        assertThat(providerId).isNotNull();
         pullRequestRepository.upsertCore(
                 9200L + number,
                 providerId,

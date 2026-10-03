@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHIssueTyp
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -329,7 +330,7 @@ public class GitHubIssueTypeSyncService {
             return IssueType.Color.GRAY;
         }
         try {
-            return IssueType.Color.valueOf(colorString.toUpperCase());
+            return IssueType.Color.valueOf(colorString.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             log.warn("Unknown issue type color, using GRAY as fallback: color={}", colorString);
             return IssueType.Color.GRAY;

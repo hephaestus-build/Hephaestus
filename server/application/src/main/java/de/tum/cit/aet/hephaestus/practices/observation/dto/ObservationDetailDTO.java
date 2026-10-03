@@ -21,8 +21,8 @@ import org.jspecify.annotations.Nullable;
  * the observation detail endpoint and per observation by the review-run feed, so a feed row never needs a
  * second request to open.
  *
- * <p>Intentionally omits internal fields: {@code agentJobId}, {@code occurrenceKey},
- * and raw {@code aboutUserId}.
+ * <p>Intentionally omits internal fields: {@code Observation.agentJobId}, {@code Observation.occurrenceKey},
+ * and the raw {@code Observation.aboutUserId}.
  */
 @Schema(description = "Full practice observation detail including delivered feedback and evidence")
 public record ObservationDetailDTO(

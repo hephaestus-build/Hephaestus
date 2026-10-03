@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.integration.slack.conversation;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationThreadProjection;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonCopyIdentity;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyRecorder;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadRepository;
@@ -8,9 +10,12 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
@@ -37,14 +42,17 @@ public class SlackConversationProjector implements ConversationThreadProjection 
 
     private final SlackMessageRepository messageRepository;
     private final ObjectMapper objectMapper;
+    private final PersonDataCopyRecorder personCopies;
 
     public SlackConversationProjector(
             SlackThreadRepository threadRepository,
             SlackMessageRepository messageRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PersonDataCopyRecorder personCopies) {
         this.threadRepository = threadRepository;
         this.messageRepository = messageRepository;
         this.objectMapper = objectMapper;
+        this.personCopies = personCopies;
     }
 
     @Override
@@ -53,10 +61,11 @@ public class SlackConversationProjector implements ConversationThreadProjection 
     }
 
     @Override
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public void forEachWorkspaceMessage(long workspaceId, java.util.function.Consumer<ObjectNode> consumer) {
+    @Transactional(readOnly = true)
+    public void forEachWorkspaceMessage(long workspaceId, Consumer<ObjectNode> consumer) {
         try (var messages = messageRepository.streamWorkspaceMessages(workspaceId)) {
             messages.forEach(message -> {
+                recordNative(message.getAuthorSlackUserId(), message.getSlackTeamId());
                 ObjectNode record = objectMapper.createObjectNode();
                 record.put("id", message.getId());
                 record.put("channel", message.getSlackChannelId());
@@ -109,18 +118,19 @@ public class SlackConversationProjector implements ConversationThreadProjection 
                 conv.put("channelName", key.channelName());
             }
             conv.put("threadTs", key.threadTs());
-            conv.put("messageCount", key.messageCount());
             ArrayNode messages = conv.putArray("messages");
-            appendThreadMessages(workspaceId, key, messages);
+            boolean truncated = appendThreadMessages(workspaceId, key, messages);
+            conv.put("messageCount", messages.size());
+            conv.put("truncated", truncated);
         }
         root.put("totalThreads", conversations.size());
         return root;
     }
 
     /**
-     * Build the ordered-turns payload for a SINGLE settled thread (conversation detection). Unlike
+     * Build the ordered-turns payload for a SINGLE settled thread under conversation review. Unlike
      * {@link #buildPayload} this is keyed on the thread itself — there is no participant firewall, because the
-     * detection job judges the thread as a work artifact, not a per-audience mentor view. Reuses the quarantine
+     * review judges the thread as reviewed work, not a per-audience mentor view. Reuses the quarantine
      * envelope and the consent/tombstone/workspace-gated message fetch of {@link #appendThreadMessages}. Pure
      * read; the content source wraps the result under {@code conversation_thread.json}.
      *
@@ -191,16 +201,22 @@ public class SlackConversationProjector implements ConversationThreadProjection 
      * Non-tombstoned messages of one thread (root {@code slack_ts = thread_ts} + replies
      * {@code slack_thread_ts = thread_ts}), oldest first. Workspace-pinned and gated on the channel's consent
      * being {@code ACTIVE}, via {@link de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository#findThreadMessages}. The consent predicate lives on
-     * the message read itself (not only on the thread scan) so the detection path — which enters via
+     * the message read itself (not only on the thread scan) so the review path — which enters via
      * {@link #buildThreadPayload} without a prior consent-filtered thread scan — cannot leak messages from a
      * channel paused or revoked between enqueue and execution: a non-ACTIVE channel yields zero messages,
      * atomically with the read.
      */
+    private void recordNative(@Nullable String subject, String teamId) {
+        if (subject != null && !subject.isBlank())
+            personCopies.recordIdentity(new PersonCopyIdentity("SLACK", "https://slack.com", subject, teamId));
+    }
+
     private boolean appendThreadMessages(long workspaceId, ThreadKey key, ArrayNode messages) {
-        List<SlackThreadMessageRow> rows = messageRepository.findThreadMessages(
-                workspaceId, key.channelId(), key.threadTs(), org.springframework.data.domain.Pageable.unpaged());
+        List<SlackThreadMessageRow> rows =
+                messageRepository.findThreadMessages(workspaceId, key.channelId(), key.threadTs(), Pageable.unpaged());
         for (int index = 0; index < rows.size(); index++) {
             SlackThreadMessageRow row = rows.get(index);
+            recordNative(row.authorSlackUserId(), row.slackTeamId());
             ObjectNode node = messages.addObject();
             node.put("ts", row.slackTs());
             node.put("author", row.authorSlackUserId());

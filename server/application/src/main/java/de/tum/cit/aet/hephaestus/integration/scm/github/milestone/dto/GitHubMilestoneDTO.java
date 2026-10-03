@@ -8,6 +8,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMilestone;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHMilestoneState;
 import java.time.Instant;
+import java.util.Locale;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -59,6 +60,6 @@ public record GitHubMilestoneDTO(
         if (state == null) {
             return null; // Let processor handle missing state with appropriate logging
         }
-        return state.name().toLowerCase();
+        return state.name().toLowerCase(Locale.ROOT);
     }
 }

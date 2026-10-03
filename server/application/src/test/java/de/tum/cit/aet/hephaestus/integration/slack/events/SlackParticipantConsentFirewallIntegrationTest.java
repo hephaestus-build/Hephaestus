@@ -6,6 +6,13 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMessageRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
@@ -18,7 +25,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,6 +69,12 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
     private WorkspaceRepository workspaceRepository;
 
     @Autowired
+    private ConnectionRepository connectionRepository;
+
+    @Autowired
+    private IdentityProviderRepository identityProviderRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     private SlackWorkspaceResolver workspaceResolver;
@@ -83,7 +99,7 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
         channel.setConsentState(ConsentState.ACTIVE);
         // Announced well before every test message ts (100.1 / 200.1 / 300.1), so the forward-only ingest invariant
         // (ts > consent_announced_at) is satisfied and only the person firewall differentiates the two authors.
-        channel.setConsentAnnouncedAt(java.time.Instant.ofEpochSecond(1));
+        channel.setConsentAnnouncedAt(Instant.ofEpochSecond(1));
         monitoredChannelRepository.save(channel);
 
         // The two resolvers are pure lookups — mocked so the test exercises the REAL gates + REAL persistence.
@@ -165,5 +181,33 @@ class SlackParticipantConsentFirewallIntegrationTest extends BaseIntegrationTest
                 workspaceId,
                 OPTED_OUT_USER);
         assertThat(researchOptedOut).isTrue();
+    }
+
+    @Test
+    void permanentErasureControl_survivesConsentOptIn_andDoesNotSuppressAnotherTeamOrPerson() {
+        Workspace workspace = workspaceRepository.findById(workspaceId).orElseThrow();
+        connectionRepository.saveAndFlush(new Connection(
+                workspace, IntegrationKind.SLACK, TEAM, new ConnectionConfig.SlackConfig(TEAM, null, null, Set.of())));
+        IdentityProvider provider = identityProviderRepository.saveAndFlush(
+                new IdentityProvider(IdentityProviderType.SLACK, "https://slack.com"));
+        UUID suppressionId = UUID.randomUUID();
+        jdbcTemplate.update(
+                "INSERT INTO person_suppression(id,provider_id,subject,team_key) VALUES (?,?,?,?)",
+                suppressionId,
+                provider.getId(),
+                OPTED_OUT_USER,
+                TEAM);
+        participantConsentRepository.optInToIngestion(workspaceId, OPTED_OUT_USER, "SLACK_APP_HOME");
+
+        ingestService.ingestChannelMessage(TEAM, CHANNEL, "100.1", null, OPTED_OUT_USER, "must stay absent");
+        ingestService.ingestChannelMessage(TEAM, CHANNEL, "200.1", null, ALLOWED_USER, "unrelated person");
+
+        assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "100.1"))
+                .isFalse();
+        assertThat(messageRepository.existsByWorkspaceIdAndSlackChannelIdAndSlackTs(workspaceId, CHANNEL, "200.1"))
+                .isTrue();
+        jdbcTemplate.update("UPDATE person_suppression SET team_key=? WHERE id=?", "T-OTHER", suppressionId);
+        assertThat(participantConsentRepository.isPersonProcessingSuppressed(workspaceId, OPTED_OUT_USER))
+                .isFalse();
     }
 }

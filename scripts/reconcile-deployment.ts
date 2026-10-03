@@ -268,8 +268,10 @@ export function commitLockEnvironment(
 	images: Readonly<Record<string, string>>,
 ): string {
 	const lines = [`IMAGE_TAG=${commit}`, `HEPHAESTUS_RELEASE_COMMIT=${commit}`];
-	for (const key of Object.keys(images).toSorted()) {
-		lines.push(`${key}=${images[key]}`);
+	for (const [key, image] of Object.entries(images).toSorted(([left], [right]) =>
+		left < right ? -1 : 1,
+	)) {
+		lines.push(`${key}=${image}`);
 	}
 	return `${lines.join("\n")}\n`;
 }

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.discussion;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -36,18 +37,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Integration tests for GitHubDiscussionProcessor.
- * <p>
- * Tests the processor independently from the webhook handler to verify:
- * - Discussion upsert logic (create vs update)
- * - Domain event publishing (Created, Updated, Closed, Reopened, Answered, Deleted)
- * - Context handling and workspace association
- * - Author user association and creation
- * - Label and category associations
- * - Stale-data protection
- * - Edge cases in DTO processing including the critical getDatabaseId() fallback
- */
 class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
     // IDs from the actual GitHub webhook fixtures
@@ -196,7 +185,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUseDatabaseIdWhenPresent() {
-            // Given - GraphQL style DTO with databaseId
             Long databaseId = 123456789L;
             GitHubDiscussionDTO dto = new GitHubDiscussionDTO(
                     null, // id (null for GraphQL)
@@ -224,7 +212,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
             Discussion result = processor.process(dto, createContext());
 
-            // Then - should use databaseId
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(databaseId);
             assertThat(discussionRepository.findByRepositoryIdAndNumber(testRepository.getId(), 27))
@@ -233,7 +220,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldFallbackToIdWhenDatabaseIdNull() {
-            // Given - Webhook style DTO with only id
             Long webhookId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO dto = new GitHubDiscussionDTO(
                     webhookId, // id (this is the database ID in webhooks)
@@ -264,7 +250,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
             Discussion result = processor.process(dto, createContext());
 
-            // Then - should use id as fallback
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(webhookId);
             assertThat(discussionRepository.findByRepositoryIdAndNumber(testRepository.getId(), 27))
@@ -273,7 +258,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldReturnNullWhenBothIdsNull() {
-            // Given - malformed DTO with no IDs
             GitHubDiscussionDTO dto = new GitHubDiscussionDTO(
                     null, // id
                     null, // databaseId
@@ -321,7 +305,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
             Discussion result = processor.process(dto, createContext());
 
-            // Then - verify discussion created
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(discussionId);
             assertThat(result.getNumber()).isEqualTo(27);
@@ -345,7 +328,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCreateAuthorIfNotExists() {
-            // Given - no user exists
             assertThat(userRepository.findByNativeIdAndProviderId(FIXTURE_AUTHOR_ID, providerId()))
                     .isEmpty();
 
@@ -364,7 +346,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldReuseExistingAuthor() {
-            // Given - create user first
             User existingUser = new User();
             existingUser.setNativeId(FIXTURE_AUTHOR_ID);
             existingUser.setLogin(FIXTURE_AUTHOR_LOGIN);
@@ -380,7 +361,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
             Discussion result = processor.process(dto, createContext());
             assertNotNull(result);
 
-            // Then - should reuse existing user, not create new
             assertNotNull(result.getAuthor());
             assertThat(result.getAuthor().getNativeId()).isEqualTo(FIXTURE_AUTHOR_ID);
             assertThat(userRepository.count()).isEqualTo(userCountBefore);
@@ -586,7 +566,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateExistingDiscussionAndPublishUpdatedEvent() {
-            // Given - create existing discussion
             Long discussionId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO initialDto = new GitHubDiscussionDTO(
                     discussionId,
@@ -643,7 +622,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
             Discussion result = processor.process(updateDto, createContext());
             assertNotNull(result);
 
-            // Then - verify discussion updated
             assertThat(result.getTitle()).isEqualTo("New Title");
             assertThat(result.getBody()).isEqualTo("New body");
 
@@ -658,7 +636,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldNotPublishUpdatedEventWhenNoFieldsChanged() {
-            // Given - create existing discussion
             Long discussionId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO dto = new GitHubDiscussionDTO(
                     discussionId,
@@ -714,7 +691,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.process(sameDto, createContext());
 
-            // Then - no Updated event (empty changedFields means no event published)
             assertThat(eventListener.ofType(ScmDomainEvent.DiscussionUpdated.class))
                     .isEmpty();
         }
@@ -725,20 +701,17 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
             Long discussionId = 111222333L;
             GitHubDiscussionDTO dto = createBasicDiscussionDto(discussionId, 10);
 
-            // When - process twice
             processor.process(dto, createContext());
             long countAfterFirst = discussionRepository.count();
 
             eventListener.clear();
             processor.process(dto, createContext());
 
-            // Then - only one discussion exists
             assertThat(discussionRepository.count()).isEqualTo(countAfterFirst);
         }
 
         @Test
         void shouldSkipStaleUpdate() {
-            // Given - create discussion with a future updatedAt
             Long discussionId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO initialDto = new GitHubDiscussionDTO(
                     discussionId,
@@ -794,7 +767,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
             Discussion result = processor.process(staleDto, createContext());
 
-            // Then - should return existing without updating
             assertNotNull(result);
             assertThat(result.getTitle()).isEqualTo("Original Title");
 
@@ -808,7 +780,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldTrackLabelsChangedInUpdatedEvent() {
-            // Given - create discussion without labels
             Long discussionId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO initialDto = new GitHubDiscussionDTO(
                     discussionId,
@@ -867,7 +838,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.process(updateDto, createContext());
 
-            // Then - Updated event should contain "labels" in changedFields
             assertThat(eventListener.ofType(ScmDomainEvent.DiscussionUpdated.class))
                     .hasSize(1)
                     .first()
@@ -878,7 +848,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateCategoryWhenChanged() {
-            // Given - create discussion without category
             Long discussionId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO initialDto = new GitHubDiscussionDTO(
                     discussionId,
@@ -1006,7 +975,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void processReopenedShouldPublishReopenedEvent() {
-            // Given - create closed discussion first
             Long discussionId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO closedDto = new GitHubDiscussionDTO(
                     discussionId,
@@ -1138,7 +1106,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void processDeletedShouldDeleteDiscussion() {
-            // Given - create discussion
             Long discussionId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO createDto = createBasicDiscussionDto(discussionId, 27);
             Discussion created = processor.process(createDto, createContext());
@@ -1160,14 +1127,12 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void processDeletedShouldHandleNonExistentGracefully() {
-            // Given - discussion doesn't exist
             Long nonExistentId = 999999999L;
             assertThat(discussionRepository.findByRepositoryIdAndNumber(testRepository.getId(), 99))
                     .isEmpty();
 
             GitHubDiscussionDTO dto = createBasicDiscussionDto(nonExistentId, 99);
 
-            // When/Then - should not throw
             assertThatCode(() -> processor.processDeleted(dto, createContext())).doesNotThrowAnyException();
         }
 
@@ -1197,13 +1162,12 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     null);
 
-            // When/Then - should not throw (falls through to findByRepositoryIdAndNumber)
+            // Falls through to findByRepositoryIdAndNumber.
             assertThatCode(() -> processor.processDeleted(dto, createContext())).doesNotThrowAnyException();
         }
 
         @Test
         void processDeletedShouldFallbackToRepositoryAndNumber() {
-            // Given - create discussion with a known ID
             Long discussionId = FIXTURE_DISCUSSION_ID;
             GitHubDiscussionDTO createDto = createBasicDiscussionDto(discussionId, 27);
             Discussion created = processor.process(createDto, createContext());
@@ -1242,7 +1206,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.processDeleted(deleteDto, createContext());
 
-            // Then - discussion should be deleted via the fallback path
             assertThat(discussionRepository.findByRepositoryIdAndNumber(testRepository.getId(), 27))
                     .isEmpty();
 
@@ -1263,7 +1226,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldHandleNullDtoIds() {
-            // When - DTO with null IDs (getDatabaseId() will return null)
             GitHubDiscussionDTO nullIdDto = new GitHubDiscussionDTO(
                     null, null, null, 0, null, null, null, null, null, false, null, 0, 0, null, null, null, null, null,
                     null, null, null, null);
@@ -1303,7 +1265,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
             Discussion result = processor.process(dto, createContext());
             assertNotNull(result);
 
-            // Then - isClosed() returns false for anything other than "closed", so state = OPEN
             assertThat(result.getState()).isEqualTo(Discussion.State.OPEN);
         }
 
@@ -1370,7 +1331,6 @@ class GitHubDiscussionProcessorIntegrationTest extends BaseIntegrationTest {
             Discussion result = processor.process(dto, createContext());
             assertNotNull(result);
 
-            // Then - unknown lock reason returns null per convertLockReason
             assertThat(result.isLocked()).isTrue();
             assertThat(result.getActiveLockReason()).isNull();
         }

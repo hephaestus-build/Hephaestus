@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
@@ -232,7 +233,7 @@ public class GitLabMilestoneProcessor extends BaseGitLabProcessor {
         if (state == null) {
             return Milestone.State.OPEN;
         }
-        return switch (state.toLowerCase()) {
+        return switch (state.toLowerCase(Locale.ROOT)) {
             case "active" -> Milestone.State.OPEN;
             case "closed" -> Milestone.State.CLOSED;
             default -> {

@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -41,7 +42,7 @@ class CommitMetadataEnrichmentServiceQueryTest extends BaseUnitTest {
     @ParameterizedTest(name = "{0} commits in one batch")
     @ValueSource(ints = {1, 2, 50})
     void assembledBatchQueryIsValidAgainstTheCheckedInGitHubSchema(int commits) {
-        List<String> shas = java.util.stream.IntStream.range(0, commits)
+        List<String> shas = IntStream.range(0, commits)
                 .mapToObj(i -> String.format("%040x", i))
                 .toList();
 

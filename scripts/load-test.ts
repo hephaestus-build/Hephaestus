@@ -5,7 +5,7 @@ import path from "node:path";
 
 import { isSet } from "./lib/env.ts";
 import { asRecord, asString, asStringArray, parseJson } from "./lib/json.ts";
-import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { CAPTURE_LIMIT_BYTES, exitStatus } from "./lib/process.ts";
 
 export const k6Image =
 	"grafana/k6:1.2.3@sha256:4f82892217f3110cb233e2b2622bcc97fabc70f14bd241fbfbfe7305105c68aa";
@@ -136,7 +136,9 @@ async function checkScenarios(root: string) {
 				"/tests/scenarios.test.js",
 			]);
 			if (result.status !== expected) {
-				throw new Error(`${name}: expected exit ${expected}, got ${result.status}`);
+				throw new Error(
+					`${name}: expected exit ${expected}, got ${exitStatus(result.status, result.signal)}`,
+				);
 			}
 			if (name !== "unfinished") {
 				continue;

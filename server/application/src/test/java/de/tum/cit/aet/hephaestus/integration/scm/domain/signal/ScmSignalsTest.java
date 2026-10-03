@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.events.RepositoryRef;
 import de.tum.cit.aet.hephaestus.integration.core.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.core.signal.RevisionScheme;
 import de.tum.cit.aet.hephaestus.integration.core.signal.SignalKey;
+import de.tum.cit.aet.hephaestus.integration.core.signal.SignalName;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -327,7 +328,7 @@ class ScmSignalsTest extends BaseUnitTest {
 
     @Test
     void shouldGiveEveryDeclaredSignalARevisionScheme() {
-        for (var signal : new de.tum.cit.aet.hephaestus.integration.core.signal.SignalName[] {
+        for (var signal : new SignalName[] {
             ScmSignals.PULL_REQUEST_OPENED,
             ScmSignals.PULL_REQUEST_READY,
             ScmSignals.PULL_REQUEST_SYNCHRONIZED,

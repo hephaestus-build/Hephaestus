@@ -7,6 +7,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,7 +55,7 @@ public class WorkspaceSlugService {
         if (slug == null) {
             return null;
         }
-        String normalized = slug.trim().toLowerCase();
+        String normalized = slug.trim().toLowerCase(Locale.ROOT);
         normalized = normalized
                 .replace('_', '-')
                 .replaceAll("\\s+", "-")

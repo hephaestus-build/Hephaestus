@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -101,7 +102,7 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
     }
 
     private static UIMessageChunk.DataObservation feedback(String text) {
-        return UIMessageChunk.DataObservation.of(java.util.UUID.randomUUID(), text);
+        return UIMessageChunk.DataObservation.of(UUID.randomUUID(), text);
     }
 
     @Test
@@ -497,7 +498,7 @@ class SlackStreamingMentorChannelTest extends BaseUnitTest {
         assertThat(flushing.await(4, TimeUnit.SECONDS)).isTrue();
         channel.send(delta("tail"));
 
-        var outcome = new java.util.concurrent.CompletableFuture<MentorChannel.DeliveryOutcome>();
+        var outcome = new CompletableFuture<MentorChannel.DeliveryOutcome>();
         Thread finisher = Thread.ofVirtual().start(() -> outcome.complete(channel.completeWithDone()));
         // The terminal write is queued behind the stuck flush once both shutdown waits have elapsed.
         waitUntil(() -> finisher.getState() == Thread.State.WAITING, 4000);

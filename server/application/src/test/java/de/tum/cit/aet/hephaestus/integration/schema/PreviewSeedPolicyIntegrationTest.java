@@ -57,7 +57,7 @@ class PreviewSeedPolicyIntegrationTest {
     void shouldClearEveryColumnOfTheSchemaThatCanHoldAStagingSecret() {
         Map<String, String> updates = new HashMap<>();
         Set<String> emptied = new HashSet<>();
-        for (String statement : read(POLICY).split(";")) {
+        for (String statement : read(POLICY).split(";", -1)) {
             Matcher updated = UPDATED_TABLE.matcher(statement);
             if (updated.find()) {
                 updates.merge(updated.group(1), statement, String::concat);

@@ -18,9 +18,10 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobRequest;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
-import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GithubDataSyncService;
+import de.tum.cit.aet.hephaestus.integration.scm.github.sync.GitHubDataSyncService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -32,7 +33,7 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
 
     @Test
     void singleTargetSyncRunsInsideLifecycleJobForActiveConnection() {
-        var dataSyncService = mock(GithubDataSyncService.class);
+        var dataSyncService = mock(GitHubDataSyncService.class);
         var targetProvider = mock(SyncTargetProvider.class);
         var connectionRepository = mock(ConnectionRepository.class);
         var syncJobService = mock(SyncJobService.class);
@@ -47,7 +48,7 @@ class GitHubWorkspaceDataSyncTriggerTest extends BaseUnitTest {
                 .thenReturn(Optional.of(connection));
         when(connection.getId()).thenReturn(99L);
         doAnswer(invocation -> {
-                    java.util.function.Consumer<SyncJobHandle> body = invocation.getArgument(1);
+                    Consumer<SyncJobHandle> body = invocation.getArgument(1);
                     body.accept(null);
                     return null;
                 })

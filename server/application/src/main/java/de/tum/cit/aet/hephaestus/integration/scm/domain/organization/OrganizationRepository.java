@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
  * exist on github.com and a group {@code hephaestustest} can simultaneously exist on
  * gitlab.lrz.de. The bare {@code findByLoginIgnoreCase(login)} method is intentionally
  * absent — every lookup must provider-scope (by id or by type+server) to avoid
- * {@code NonUniqueResultException} (pass-14 finding §1, ADR-0012).
+ * {@code NonUniqueResultException} (ADR 0012).
  */
 public interface OrganizationRepository extends JpaRepository<Organization, Long> {
     Optional<Organization> findByNativeIdAndProviderId(Long nativeId, Long providerId);

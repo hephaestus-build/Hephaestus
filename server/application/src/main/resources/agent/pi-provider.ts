@@ -119,11 +119,15 @@ export function loadProviderConfig(cwd = DEFAULT_WORKSPACE_ROOT): ProviderConfig
 	}
 }
 
+/** A provider config complete enough to register: it names the protocol and the model. */
+export type RegisteredProviderConfig = ProviderConfig & { apiProtocol: string; modelId: string };
+
+/** True once the provider is registered, which needs a complete config and the proxy credentials. */
 export function registerHephaestusProvider(
 	modelRuntime: Pick<ModelRuntime, "registerProvider">,
 	config: ProviderConfig | null,
 	env: Record<string, string | undefined> = process.env,
-): boolean {
+): config is RegisteredProviderConfig {
 	const baseUrl = env.LLM_PROXY_URL;
 	if (
 		config === null ||

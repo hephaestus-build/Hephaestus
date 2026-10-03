@@ -166,7 +166,7 @@ public final class ScopeConsumer {
         }
         if (thread != null) {
             thread.interrupt();
-            if (thread != Thread.currentThread()) {
+            if (!isCurrentThread(thread)) {
                 try {
                     thread.join(STOP_TIMEOUT_MILLIS);
                 } catch (InterruptedException e) {
@@ -181,6 +181,11 @@ public final class ScopeConsumer {
         processorThread = null;
         drainAndNakQueue();
         log.debug("Stopped ScopeConsumer: consumerName={}, scopeId={}", consumerName, scopeId);
+    }
+
+    @SuppressWarnings("ReferenceEquality") // thread identity: the dispatch thread must not join itself
+    private static boolean isCurrentThread(Thread thread) {
+        return thread == Thread.currentThread();
     }
 
     /**

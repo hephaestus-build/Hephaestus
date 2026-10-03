@@ -37,8 +37,6 @@ class MentorAccessIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** Signs in as the user with login {@code mentor}; carries no authority. */
     private static final String MEMBER = "mock-jwt-token-for-mentor-user";
-    /** Signs in as the user with login {@code admin}, the owner {@link #ensureOwnerMembership} creates. */
-    private static final String OWNER = "mock-jwt-token-for-admin-user";
 
     @Autowired
     private WebTestClient client;

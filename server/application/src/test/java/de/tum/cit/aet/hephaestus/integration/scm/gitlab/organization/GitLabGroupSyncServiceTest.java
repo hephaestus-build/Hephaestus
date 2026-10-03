@@ -39,6 +39,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import reactor.core.publisher.Mono;
 
@@ -78,7 +79,6 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
                 .when(gitProviderRepository.findByTypeAndServerUrl(IdentityProviderType.GITLAB, "https://gitlab.com"))
                 .thenReturn(Optional.of(gitLabProvider));
 
-        // Default: responseHandler.handle() returns CONTINUE (valid response)
         lenient()
                 .when(responseHandler.handle(any(), anyString(), any()))
                 .thenReturn(new HandleResult(HandleResult.Action.CONTINUE, null));
@@ -211,7 +211,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             when(resp.field("group")).thenReturn(groupField);
 
             HttpGraphQlClient client = mockClient();
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(resp));
@@ -442,7 +442,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             when(responseHandler.handle(eq(invalidResp), anyString(), any()))
                     .thenReturn(new HandleResult(HandleResult.Action.ABORT, null));
 
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(invalidResp));
@@ -455,11 +455,8 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             assertThat(result.status()).isEqualTo(GitLabSyncResult.Status.ABORTED_ERROR);
         }
 
-        // Reconciliation Tests (GitLab #33419 workaround)
-
         @Test
         void reconciliation_recoversDroppedDirectProjects() {
-            // Subgroup query returns only proj-a (simulates bug dropping proj-b)
             var projA = createMinimalProject("gid://gitlab/Project/10", "my-org/proj-a", "proj-a");
             var projB = createMinimalProject("gid://gitlab/Project/20", "my-org/proj-b", "proj-b");
 
@@ -732,7 +729,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             when(responseHandler.handle(eq(invalidResp), anyString(), any()))
                     .thenReturn(new HandleResult(HandleResult.Action.ABORT, null));
 
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(invalidResp));
@@ -746,8 +743,6 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             assertThat(result.synced()).isEmpty();
             assertThat(result.projectsReconciled()).isZero();
         }
-
-        // SyncGroupProjects Helpers
 
         private static Repository createTestRepository(long nativeId) {
             Repository repo = new Repository();
@@ -820,7 +815,7 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
 
         private void mockSequentialExecute(
                 HttpGraphQlClient client, ClientGraphQlResponse first, ClientGraphQlResponse... rest) {
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
 
@@ -832,8 +827,6 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
             }
         }
     }
-
-    // Helpers
 
     private HttpGraphQlClient mockClient() {
         HttpGraphQlClient client = mock(HttpGraphQlClient.class);
@@ -851,15 +844,15 @@ class GitLabGroupSyncServiceTest extends BaseUnitTest {
         when(groupField.toEntity(GitLabGroupResponse.class)).thenReturn(groupResponse);
         when(response.field("group")).thenReturn(groupField);
 
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
         when(requestSpec.execute()).thenReturn(Mono.just(response));
     }
 
     @SuppressWarnings("unchecked")
-    private HttpGraphQlClient.RequestSpec mockRequestSpec(HttpGraphQlClient client, ClientGraphQlResponse response) {
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+    private GraphQlClient.RequestSpec mockRequestSpec(HttpGraphQlClient client, ClientGraphQlResponse response) {
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
         when(requestSpec.execute()).thenReturn(Mono.just(response));

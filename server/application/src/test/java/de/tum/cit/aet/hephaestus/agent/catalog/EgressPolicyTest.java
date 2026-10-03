@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -34,14 +35,14 @@ class EgressPolicyTest extends BaseUnitTest {
     }
 
     private void stubNoSettingsRow() {
-        lenient().when(settingsRepository.findById((short) 1)).thenReturn(java.util.Optional.empty());
+        lenient().when(settingsRepository.findById((short) 1)).thenReturn(Optional.empty());
     }
 
     private void stubAllowlist(String allowlist) {
         InstanceLlmSettings settings = new InstanceLlmSettings();
         settings.setId((short) 1);
         settings.setAllowedEgressHosts(allowlist);
-        when(settingsRepository.findById((short) 1)).thenReturn(java.util.Optional.of(settings));
+        when(settingsRepository.findById((short) 1)).thenReturn(Optional.of(settings));
     }
 
     @Nested

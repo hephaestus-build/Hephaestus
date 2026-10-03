@@ -23,11 +23,13 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,7 +92,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
     }
 
     private static void assertCookieCleared(MockHttpServletResponse response) {
-        jakarta.servlet.http.Cookie cookie = response.getCookie("__Host-HEPHAESTUS_AT");
+        Cookie cookie = response.getCookie("__Host-HEPHAESTUS_AT");
         assertThat(cookie)
                 .as("session-ending path must clear the access cookie")
                 .isNotNull();
@@ -140,7 +142,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
     void shouldEndTheFamilyWhenARevokedJtiBelongsToAClientSession() {
         UUID oldJti = UUID.randomUUID();
         UUID sid = UUID.randomUUID();
-        when(issuedJwtRepository.findSessionIdOwnedBy(oldJti, ACCOUNT_ID)).thenReturn(java.util.Optional.of(sid));
+        when(issuedJwtRepository.findSessionIdOwnedBy(oldJti, ACCOUNT_ID)).thenReturn(Optional.of(sid));
 
         service.revokeSession(ACCOUNT_ID, oldJti);
 

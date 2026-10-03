@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -19,7 +20,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 
 /**
  * Unit tests for {@link ProcessingContextFactory}.
@@ -111,7 +111,6 @@ class ProcessingContextFactoryTest {
 
             factory.forWebhookEvent(event);
 
-            // Assert - filter should be checked, but repository should NOT be queried
             verify(repositoryScopeFilter).isRepositoryAllowed(repoFullName);
             verifyNoInteractions(repositoryRepository);
         }
@@ -208,9 +207,7 @@ class ProcessingContextFactoryTest {
 
             assertThat(result).isPresent();
             assertThat(result.get().scopeId()).isEqualTo(expectedScopeId);
-            // Should NOT try org lookup for personal repos
-            verify(scopeIdResolver, never()).findScopeIdByOrgLogin(ArgumentMatchers.any());
-            // Should use repository-based lookup
+            verify(scopeIdResolver, never()).findScopeIdByOrgLogin(any());
             verify(scopeIdResolver).findScopeIdByRepositoryName(repoFullName);
         }
 
@@ -227,18 +224,14 @@ class ProcessingContextFactoryTest {
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
             when(repositoryRepository.findByNameWithOwnerWithOrganization(repoFullName))
                     .thenReturn(Optional.of(repository));
-            // Org lookup fails
             when(scopeIdResolver.findScopeIdByOrgLogin(orgLogin)).thenReturn(Optional.empty());
-            // Fallback to repo lookup succeeds
             when(scopeIdResolver.findScopeIdByRepositoryName(repoFullName)).thenReturn(Optional.of(expectedScopeId));
 
             Optional<ProcessingContext> result = factory.forWebhookEvent(event);
 
             assertThat(result).isPresent();
             assertThat(result.get().scopeId()).isEqualTo(expectedScopeId);
-            // Should try org lookup first
             verify(scopeIdResolver).findScopeIdByOrgLogin(orgLogin);
-            // Then fall back to repo lookup
             verify(scopeIdResolver).findScopeIdByRepositoryName(repoFullName);
         }
 

@@ -124,7 +124,7 @@ class GitHubDeletionSweepDocumentDecodingTest extends BaseUnitTest {
         assertThat(matcher.find()).as("document has no nodes { ... } selection").isTrue();
 
         Set<String> fields = new LinkedHashSet<>();
-        for (String line : matcher.group(1).split("\\s+")) {
+        for (String line : matcher.group(1).split("\\s+", -1)) {
             if (!line.isBlank()) {
                 fields.add(line.trim());
             }

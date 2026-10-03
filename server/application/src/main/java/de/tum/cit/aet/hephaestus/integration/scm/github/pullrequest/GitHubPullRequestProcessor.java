@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -532,7 +533,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                     "PR state is null, defaulting to OPEN. This may indicate missing data in webhook or GraphQL response.");
             return Issue.State.OPEN;
         }
-        return switch (state.toUpperCase()) {
+        return switch (state.toUpperCase(Locale.ROOT)) {
             case "OPEN" -> Issue.State.OPEN;
             case "CLOSED" -> Issue.State.CLOSED;
             case "MERGED" -> Issue.State.MERGED;

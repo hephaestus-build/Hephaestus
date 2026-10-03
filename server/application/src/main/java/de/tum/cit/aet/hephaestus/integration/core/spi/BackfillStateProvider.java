@@ -82,9 +82,7 @@ public interface BackfillStateProvider {
      * @param resolvedNameWithOwner the repository's current {@code owner/name} as the provider reports it
      */
     default void reconcileSyncTargetIdentity(
-            Long syncTargetId,
-            @org.jspecify.annotations.Nullable Long resolvedNativeId,
-            @org.jspecify.annotations.Nullable String resolvedNameWithOwner) {
+            Long syncTargetId, @Nullable Long resolvedNativeId, @Nullable String resolvedNameWithOwner) {
         // Default no-op: providers/tests that don't track a stable monitor identity keep prior behavior.
     }
 
@@ -102,9 +100,7 @@ public interface BackfillStateProvider {
      * @param nativeId          the provider's stable numeric repository id from the webhook payload
      * @param newNameWithOwner  the repository's new {@code owner/name} as the payload reports it
      */
-    default void reconcileSyncTargetsForRepository(
-            @org.jspecify.annotations.Nullable Long nativeId,
-            @org.jspecify.annotations.Nullable String newNameWithOwner) {
+    default void reconcileSyncTargetsForRepository(@Nullable Long nativeId, @Nullable String newNameWithOwner) {
         // Default no-op: see reconcileSyncTargetIdentity.
     }
 

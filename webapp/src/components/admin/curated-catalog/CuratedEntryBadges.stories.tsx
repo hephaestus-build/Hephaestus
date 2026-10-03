@@ -26,7 +26,7 @@ type Story = StoryObj<typeof meta>;
 export const Customized: Story = { args: { status: status({ state: "EDITED_HERE" }) } };
 
 export const UpdateChangesReviewBehavior: Story = {
-	args: { status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }) },
+	args: { status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }) },
 };
 
 export const UpdateWordingOnly: Story = {

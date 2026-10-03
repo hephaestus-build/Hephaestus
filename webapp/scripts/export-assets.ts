@@ -334,7 +334,7 @@ async function waitForStorybook(storybook: Storybook, storyIds: readonly string[
 		}
 		if (!running(storybook.process)) {
 			throw new Error(
-				`Storybook exited (${storybook.process.exitCode ?? storybook.process.signalCode}) before it was ready.`,
+				`Storybook exited (${storybook.process.exitCode ?? storybook.process.signalCode ?? "no status"}) before it was ready.`,
 			);
 		}
 		const response = await fetch(`${storybook.url}/index.json`, {

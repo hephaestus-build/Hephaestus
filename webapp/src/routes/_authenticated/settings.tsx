@@ -18,6 +18,10 @@ import {
 	listIdentityProvidersOptions,
 	listLinkedIdentitiesOptions,
 	listLinkedIdentitiesQueryKey,
+	listSessionsOptions,
+	listSessionsQueryKey,
+	revokeOtherSessionsMutation,
+	revokeSessionMutation,
 	unlinkIdentityMutation,
 	updateAccountAiChoiceMutation,
 	updateResearchConsentMutation,
@@ -34,6 +38,7 @@ import type {
 } from "@/api/types.gen";
 import type { EmailPreferencesSectionProps } from "@/components/settings/EmailPreferencesSection";
 import type { LinkedAccountsSectionProps } from "@/components/settings/LinkedAccountsSection";
+import type { SessionsSectionProps } from "@/components/settings/SessionsSection";
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
 import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
@@ -294,7 +299,7 @@ function RouteComponent() {
 		(provider) => provider.providerType?.toUpperCase() === "SLACK",
 	);
 	const slackIdentity = linkedIdentitiesQuery.data?.find(
-		(identity) => identity.providerType?.toUpperCase() === "SLACK",
+		(identity) => identity.providerType.toUpperCase() === "SLACK",
 	);
 	const slackAvailable = hasText(slackProvider?.registrationId) || slackIdentity !== undefined;
 
@@ -332,6 +337,49 @@ function RouteComponent() {
 			void slackPreferencesQuery.refetch();
 		},
 	};
+
+	const sessionsQuery = useQuery(listSessionsOptions({}));
+	const invalidateSessions = async () =>
+		queryClient.invalidateQueries({ queryKey: listSessionsQueryKey() });
+	const revokeSession = useMutation({
+		...revokeSessionMutation(),
+		onSuccess: () => {
+			void invalidateSessions();
+			toast.success("Session revoked");
+		},
+		onError: () => {
+			toast.error("Failed to revoke session. Please try again later.");
+		},
+	});
+	const revokeOtherSessions = useMutation({
+		...revokeOtherSessionsMutation(),
+		onSuccess: () => {
+			void invalidateSessions();
+			toast.success("Signed out of all other sessions");
+		},
+		onError: () => {
+			toast.error("Failed to sign out other sessions. Please try again later.");
+		},
+	});
+	let sessionsState: SessionsSectionProps["state"] = { status: "loading" };
+	if (sessionsQuery.isError) {
+		sessionsState = {
+			status: "error",
+			error: sessionsQuery.error,
+			onRetry: () => {
+				void sessionsQuery.refetch();
+			},
+		};
+	} else if (sessionsQuery.data !== undefined) {
+		sessionsState = {
+			status: "ready",
+			sessions: sessionsQuery.data,
+			revokingJti: revokeSession.isPending ? revokeSession.variables.path.jti : null,
+			revokingOthers: revokeOtherSessions.isPending,
+			onRevoke: (jti) => revokeSession.mutate({ path: { jti } }),
+			onRevokeOthers: () => revokeOtherSessions.mutate({}),
+		};
+	}
 
 	return (
 		<SettingsPage
@@ -380,6 +428,7 @@ function RouteComponent() {
 			linkedAccountsProps={linkedAccountsProps}
 			showSlackPreferencesSection={slackAvailable}
 			slackPreferencesProps={slackPreferencesProps}
+			sessionsProps={{ state: sessionsState }}
 			onAccountDeleted={handleAccountDeleted}
 		/>
 	);

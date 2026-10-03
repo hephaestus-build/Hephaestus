@@ -109,10 +109,12 @@ export function SilentModeCard({
 					) : (
 						<Badge variant="success">Released</Badge>
 					)}
-					{hasText(settings.silentModeChangedBy) || settings.silentModeChangedAt ? (
+					{settings.silentModeChangedByAccountId != null || settings.silentModeChangedAt ? (
 						<span className="text-sm text-muted-foreground">
 							{engaged ? "engaged" : "last changed"}
-							{hasText(settings.silentModeChangedBy) ? ` by ${settings.silentModeChangedBy}` : ""}
+							{settings.silentModeChangedByAccountId == null
+								? ""
+								: ` by account #${settings.silentModeChangedByAccountId}`}
 							{settings.silentModeChangedAt ? (
 								<>
 									{" "}

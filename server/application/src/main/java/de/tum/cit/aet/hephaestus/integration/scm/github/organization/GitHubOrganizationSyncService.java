@@ -253,7 +253,6 @@ public class GitHubOrganizationSyncService {
         String cursor = pageInfo != null ? pageInfo.getEndCursor() : null;
         int pageCount = 0;
         int latestTotalCount = membersConnection.getTotalCount();
-        boolean syncCompletedNormally = false;
         int retryAttempt = 0;
 
         // Paginate through all remaining members if there are more pages
@@ -368,7 +367,7 @@ public class GitHubOrganizationSyncService {
         }
 
         // Mark sync as completed normally if we exhausted all pages (pageInfo.hasNextPage is false)
-        syncCompletedNormally = pageInfo == null || !Boolean.TRUE.equals(pageInfo.getHasNextPage());
+        boolean syncCompletedNormally = pageInfo == null || !Boolean.TRUE.equals(pageInfo.getHasNextPage());
 
         // Raw edges received vs members.totalCount (allMembers is post-dedup).
         if (latestTotalCount >= 0) {

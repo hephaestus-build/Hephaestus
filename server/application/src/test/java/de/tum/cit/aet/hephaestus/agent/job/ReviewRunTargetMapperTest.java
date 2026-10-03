@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -31,7 +32,7 @@ class ReviewRunTargetMapperTest extends BaseUnitTest {
         AgentJob job = new AgentJob();
         job.setJobType(jobType);
         job.setIntegrationKind(integrationKind);
-        org.springframework.test.util.ReflectionTestUtils.setField(job, "metadata", metadata);
+        ReflectionTestUtils.setField(job, "metadata", metadata);
 
         assertThat(ReviewRunTargetMapper.from(job)).isEqualTo(expected);
     }

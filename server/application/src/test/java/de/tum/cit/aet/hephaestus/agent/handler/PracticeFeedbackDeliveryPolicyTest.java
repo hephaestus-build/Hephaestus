@@ -1,15 +1,20 @@
 package de.tum.cit.aet.hephaestus.agent.handler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.conversation.ConversationSourceLiveness;
 import de.tum.cit.aet.hephaestus.agent.documentation.DocumentProjection;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountPreferencesQuery;
 import de.tum.cit.aet.hephaestus.core.settings.spi.SilentModeQuery;
 import de.tum.cit.aet.hephaestus.integration.core.signal.ArtifactKind;
@@ -43,8 +48,12 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewPersonMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewRepositoryMode;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -52,29 +61,24 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
-    @org.junit.jupiter.api.BeforeEach
+    @BeforeEach
     void allowMemberAiForUnrelatedScenarios() {
-        org.mockito.Mockito.lenient()
-                .when(memberAiPolicy.permitsReview(
-                        org.mockito.ArgumentMatchers.anyLong(),
-                        org.mockito.ArgumentMatchers.any(),
-                        org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
-        org.mockito.Mockito.lenient()
-                .when(memberAiPolicy.allowsResult(org.mockito.ArgumentMatchers.any()))
-                .thenReturn(true);
+        lenient().when(memberAiPolicy.permitsReview(anyLong(), any(), any())).thenReturn(true);
+        lenient().when(memberAiPolicy.allowsResult(any())).thenReturn(true);
     }
 
-    @org.mockito.Mock
-    private de.tum.cit.aet.hephaestus.agent.job.ReviewMemberAiPolicy memberAiPolicy;
+    @Mock
+    private ReviewMemberAiPolicy memberAiPolicy;
 
     @Test
     void shouldRefuseIssueFeedbackWhenTheReviewedSnapshotChangedBeforeEgress() {
         AgentJob job = pullRequestJob();
         job.setArtifactKind(ArtifactKind.of("scm.issue"));
-        var metadata = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+        var metadata = JsonMapper.builder().build().createObjectNode();
         metadata.put("issue_id", PULL_REQUEST_ID);
         metadata.put("issue_number", 17);
         metadata.put("repository_id", REPOSITORY_ID);
@@ -96,7 +100,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                 .thenReturn(coverage(true));
         when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(AUTHOR_ID)).thenReturn(true);
 
-        var decision = policy().evaluateIssue(job, DeliveryPolicyStage.EGRESS, null, java.util.Set.of());
+        var decision = policy().evaluateIssue(job, DeliveryPolicyStage.EGRESS, null, Set.of());
 
         assertThat(decision.refusal()).isEqualTo(FeedbackSuppressionReason.ISSUE_SNAPSHOT_CHANGED);
     }
@@ -218,7 +222,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                         null,
                         DeliveryPolicySurface.CONVERSATION,
                         AUTHOR_ID,
-                        java.util.Set.of());
+                        Set.of());
 
         assertThat(conversation.allowed()).isFalse();
         assertThat(conversation.refusal()).isEqualTo(FeedbackSuppressionReason.INSTANCE_SILENCED);
@@ -250,8 +254,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
 
     @Test
     void artifactCompositionMustUseTheTypedEntryPoint() {
-        assertThat(org.assertj.core.api.Assertions.catchThrowable(
-                        () -> policy().allowsComposition(conversationJob(), DeliveryPolicySurface.ARTIFACT)))
+        assertThatThrownBy(() -> policy().allowsComposition(conversationJob(), DeliveryPolicySurface.ARTIFACT))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -277,8 +280,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("review-quality");
         practice.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
-        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, java.util.Set.of("review-quality")))
-                .thenReturn(java.util.List.of(practice));
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, Set.of("review-quality")))
+                .thenReturn(List.of(practice));
         when(approvalRepository.findByFeedbackIdAndWorkspaceId(feedbackId, WORKSPACE_ID))
                 .thenReturn(Optional.of(FeedbackApproval.builder()
                         .feedbackId(feedbackId)
@@ -286,8 +289,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                         .decision(FeedbackApprovalDecision.APPROVED)
                         .build()));
 
-        var decision = policy().evaluatePullRequest(
-                        job, DeliveryPolicyStage.EGRESS, feedbackId, java.util.Set.of("review-quality"));
+        var decision =
+                policy().evaluatePullRequest(job, DeliveryPolicyStage.EGRESS, feedbackId, Set.of("review-quality"));
 
         assertThat(decision.allowed()).isTrue();
         assertThat(recordedEvaluation().result().checks()).anySatisfy(check -> {
@@ -303,8 +306,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("review-quality");
         practice.setAutonomy(PracticeAutonomy.HUMAN_APPROVAL);
-        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, java.util.Set.of("review-quality")))
-                .thenReturn(java.util.List.of(practice));
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, Set.of("review-quality")))
+                .thenReturn(List.of(practice));
 
         var decision = policy().evaluateForRecipient(
                         job,
@@ -312,7 +315,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                         feedbackId,
                         DeliveryPolicySurface.CONVERSATION,
                         AUTHOR_ID,
-                        java.util.Set.of("review-quality"));
+                        Set.of("review-quality"));
 
         assertThat(decision.allowed()).isFalse();
         assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.PRACTICE_REQUIRES_APPROVAL);
@@ -326,8 +329,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("review-quality");
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
-        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, java.util.Set.of("review-quality")))
-                .thenReturn(java.util.List.of(practice));
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, Set.of("review-quality")))
+                .thenReturn(List.of(practice));
 
         var decision = policy().evaluateForRecipient(
                         job,
@@ -335,7 +338,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                         feedbackId,
                         DeliveryPolicySurface.CONVERSATION,
                         AUTHOR_ID,
-                        java.util.Set.of("review-quality"));
+                        Set.of("review-quality"));
 
         assertThat(decision.allowed()).isFalse();
         assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.STALE_ROLLOUT_REVISION);
@@ -388,8 +391,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("merge-retrospective");
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
-        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, java.util.Set.of("merge-retrospective")))
-                .thenReturn(java.util.List.of(practice));
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, Set.of("merge-retrospective")))
+                .thenReturn(List.of(practice));
 
         assertThat(policy().evaluatePullRequest(job).allowed()).isFalse();
         assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.ARTIFACT_MERGED);
@@ -399,7 +402,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                                 UUID.randomUUID(),
                                 DeliveryPolicySurface.IN_APP,
                                 AUTHOR_ID,
-                                java.util.Set.of("merge-retrospective"))
+                                Set.of("merge-retrospective"))
                         .allowed())
                 .isTrue();
     }
@@ -407,8 +410,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     @Test
     void reviewerFeedbackUsesTheReviewerForCoverageAndConsent() {
         AgentJob job = pullRequestJob();
-        var metadata = org.junit.jupiter.api.Assertions.assertInstanceOf(
-                tools.jackson.databind.node.ObjectNode.class, job.getMetadata());
+        var metadata = assertInstanceOf(ObjectNode.class, job.getMetadata());
         metadata.put("subject_role", "REVIEWER");
         metadata.put("review_id", REVIEW_ID);
         metadata.put("about_user_id", REVIEWER_ID);
@@ -423,7 +425,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
 
         assertThat(decision.allowed()).isFalse();
         assertThat(recordedRefusal()).isEqualTo(FeedbackSuppressionReason.RECIPIENT_OPTED_OUT);
-        org.mockito.Mockito.verify(coverageService)
+        verify(coverageService)
                 .assess(any(), eq("owner/repo"), eq("main"), eq(new ReviewSubject(REVIEWER_ID, true)), eq(true));
 
         when(accountPreferencesQuery.practiceFeedbackDeliveryEnabled(REVIEWER_ID))
@@ -431,8 +433,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("review-quality");
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
-        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, java.util.Set.of("review-quality")))
-                .thenReturn(java.util.List.of(practice));
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, Set.of("review-quality")))
+                .thenReturn(List.of(practice));
 
         assertThat(policy().evaluateForRecipient(
                                 job,
@@ -440,7 +442,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                                 UUID.randomUUID(),
                                 DeliveryPolicySurface.CONVERSATION,
                                 REVIEWER_ID,
-                                java.util.Set.of("review-quality"))
+                                Set.of("review-quality"))
                         .allowed())
                 .isTrue();
         assertThat(policy().evaluateForRecipient(
@@ -449,7 +451,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
                                 UUID.randomUUID(),
                                 DeliveryPolicySurface.CONVERSATION,
                                 AUTHOR_ID,
-                                java.util.Set.of("review-quality"))
+                                Set.of("review-quality"))
                         .refusal())
                 .isEqualTo(FeedbackSuppressionReason.ARTIFACT_GONE);
     }
@@ -461,7 +463,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     private DeliveryPolicyEvaluationCommand recordedEvaluation() {
         ArgumentCaptor<DeliveryPolicyEvaluationCommand> recorded =
                 ArgumentCaptor.forClass(DeliveryPolicyEvaluationCommand.class);
-        org.mockito.Mockito.verify(evaluationRecorder).record(recorded.capture());
+        verify(evaluationRecorder).record(recorded.capture());
         return recorded.getValue();
     }
 
@@ -477,7 +479,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         job.setWorkspace(workspace);
         job.setArtifactKind(ArtifactKind.of("chat.conversation_thread"));
         job.setPracticeRolloutRevision(workspace.getReviewSettings().getRolloutRevision());
-        var metadata = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+        var metadata = JsonMapper.builder().build().createObjectNode();
         metadata.put("about_user_id", AUTHOR_ID);
         metadata.put("slack_thread_id", 50L);
         metadata.put("slack_channel_id", "C123");
@@ -505,7 +507,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     private AgentJob pullRequestJob() {
         AgentJob job = conversationJob();
         job.setArtifactKind(ArtifactKind.of("scm.pull_request"));
-        var metadata = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+        var metadata = JsonMapper.builder().build().createObjectNode();
         metadata.put("pull_request_id", PULL_REQUEST_ID);
         metadata.put("repository_id", REPOSITORY_ID);
         metadata.put("repository_full_name", "owner/repo");
@@ -520,8 +522,7 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         job.setArtifactKind(ArtifactKind.of(artifactKind));
         PullRequest pullRequest = openPullRequest();
         if ("scm.issue".equals(artifactKind)) {
-            var metadata =
-                    tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+            var metadata = JsonMapper.builder().build().createObjectNode();
             metadata.put("issue_id", PULL_REQUEST_ID);
             metadata.put("issue_number", 17);
             metadata.put("repository_id", REPOSITORY_ID);
@@ -620,10 +621,9 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         var job = pullRequestJob();
         job.setArtifactKind(ArtifactKind.of(artifactKind));
         var artifact = openPullRequest();
-        if (deleted) artifact.setDeletedAt(java.time.Instant.now());
+        if (deleted) artifact.setDeletedAt(Instant.now());
         if ("scm.issue".equals(artifactKind)) {
-            var metadata =
-                    tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+            var metadata = JsonMapper.builder().build().createObjectNode();
             metadata.put("issue_id", PULL_REQUEST_ID);
             metadata.put("issue_number", 17);
             metadata.put("repository_id", REPOSITORY_ID);
@@ -652,15 +652,15 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         Practice practice = new Practice();
         practice.setSlug("review-quality");
         practice.setAutonomy(PracticeAutonomy.AUTOMATIC);
-        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, java.util.Set.of("review-quality")))
-                .thenReturn(java.util.List.of(practice));
+        when(practiceRepository.findByWorkspaceIdAndSlugIn(WORKSPACE_ID, Set.of("review-quality")))
+                .thenReturn(List.of(practice));
         var decision = policy().evaluateForRecipient(
                         job,
                         DeliveryPolicyStage.EGRESS,
                         UUID.randomUUID(),
                         DeliveryPolicySurface.CONVERSATION,
                         recipientId,
-                        java.util.Set.of("review-quality"));
+                        Set.of("review-quality"));
         assertThat(decision.allowed()).isEqualTo(allowed);
         if (!allowed) assertThat(decision.refusal()).isEqualTo(FeedbackSuppressionReason.ARTIFACT_GONE);
     }
@@ -673,8 +673,8 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
         var job = conversationJob();
         when(conversationSourceLiveness.isDeliverableThread(WORKSPACE_ID, 50L, "C123", "123.456", AUTHOR_ID))
                 .thenReturn(false);
-        var decision = policy().evaluateForRecipient(
-                        job, DeliveryPolicyStage.COMPOSITION, null, surface, AUTHOR_ID, java.util.Set.of());
+        var decision =
+                policy().evaluateForRecipient(job, DeliveryPolicyStage.COMPOSITION, null, surface, AUTHOR_ID, Set.of());
         assertThat(decision.allowed()).isFalse();
         assertThat(decision.refusal()).isEqualTo(FeedbackSuppressionReason.ARTIFACT_GONE);
     }
@@ -686,21 +686,21 @@ class PracticeFeedbackDeliveryPolicyTest extends BaseUnitTest {
     void shouldRefuseDeletedDocumentAndAllowResurrection(DeliveryPolicySurface surface) {
         var job = conversationJob();
         job.setArtifactKind(ArtifactKind.of("docs.document"));
-        var metadata = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
+        var metadata = JsonMapper.builder().build().createObjectNode();
         metadata.put("about_user_id", AUTHOR_ID);
         metadata.put("docs_document_id", 51L);
         job.setMetadata(metadata);
         when(documentProjection.documentById(WORKSPACE_ID, 51L))
                 .thenReturn(Optional.of(DocumentProjection.ProjectedDocument.withoutAuthors(
                         "collection", "document", "Title", null, true)));
-        var decision = policy().evaluateForRecipient(
-                        job, DeliveryPolicyStage.COMPOSITION, null, surface, AUTHOR_ID, java.util.Set.of());
+        var decision =
+                policy().evaluateForRecipient(job, DeliveryPolicyStage.COMPOSITION, null, surface, AUTHOR_ID, Set.of());
         assertThat(decision.refusal()).isEqualTo(FeedbackSuppressionReason.ARTIFACT_GONE);
         when(documentProjection.documentById(WORKSPACE_ID, 51L))
                 .thenReturn(Optional.of(DocumentProjection.ProjectedDocument.withoutAuthors(
                         "collection", "document", "Title", "Body", false)));
         assertThat(policy().evaluateForRecipient(
-                                job, DeliveryPolicyStage.COMPOSITION, null, surface, AUTHOR_ID, java.util.Set.of())
+                                job, DeliveryPolicyStage.COMPOSITION, null, surface, AUTHOR_ID, Set.of())
                         .allowed())
                 .isTrue();
     }

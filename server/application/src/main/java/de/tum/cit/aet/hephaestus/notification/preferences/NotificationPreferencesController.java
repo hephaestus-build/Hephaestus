@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
@@ -18,7 +19,12 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestController
@@ -79,7 +85,7 @@ public class NotificationPreferencesController {
             description = "If-Match is required",
             content = @Content(schema = @Schema(implementation = ProblemDetail.class)))
     public ResponseEntity<NotificationPreferencesDTO> update(
-            @jakarta.validation.Valid @RequestBody UpdateNotificationPreferencesDTO request,
+            @Valid @RequestBody UpdateNotificationPreferencesDTO request,
             @Parameter(required = true, description = "Current preferences ETag")
                     @RequestHeader(value = "If-Match", required = false)
                     @Nullable

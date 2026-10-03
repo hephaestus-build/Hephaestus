@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -67,9 +68,9 @@ public class AccountWebController {
     public record LinkedProviderDTO(String type, @Nullable String serverUrl) {}
 
     public record IdentityViewDTO(
-            Long id,
-            String providerType,
-            String subject,
+            @NonNull Long id,
+            @NonNull String providerType,
+            @NonNull String subject,
             @Nullable String username,
             @Nullable String displayName,
             @Nullable String avatarUrl,

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -15,7 +16,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 class AuthIntentCookieTest extends BaseUnitTest {
 
-    private static final byte[] KEY = "0123456789abcdef0123456789abcdef".getBytes();
+    private static final byte[] KEY = "0123456789abcdef0123456789abcdef".getBytes(UTF_8);
     private static final Instant T0 = Instant.parse("2026-06-01T00:00:00Z");
 
     private static AuthIntentCookie at(Instant when) {

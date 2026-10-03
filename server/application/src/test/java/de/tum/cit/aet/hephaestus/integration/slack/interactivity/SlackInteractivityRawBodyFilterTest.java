@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,7 @@ class SlackInteractivityRawBodyFilterTest extends BaseUnitTest {
 
         new SlackInteractivityRawBodyFilter().doFilter(request, response, new MockFilterChain() {
             @Override
-            public void doFilter(ServletRequest request, ServletResponse response) throws java.io.IOException {
+            public void doFilter(ServletRequest request, ServletResponse response) throws IOException {
                 request.getParameterMap();
                 cachedBody.set((byte[]) request.getAttribute(SlackInteractivityRawBodyFilter.RAW_BODY_ATTRIBUTE));
                 streamBody.set(request.getInputStream().readAllBytes());

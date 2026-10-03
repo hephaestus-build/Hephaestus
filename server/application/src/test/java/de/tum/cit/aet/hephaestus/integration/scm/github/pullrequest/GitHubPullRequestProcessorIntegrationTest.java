@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -55,18 +55,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/**
- * Integration tests for GitHubPullRequestProcessor.
- * <p>
- * Tests the processor independently from the webhook handler to verify:
- * - Pull request upsert logic (create vs update)
- * - Domain event publishing (Created, Updated, Closed, Labeled, etc.)
- * - PR-specific events (Merged, Ready, Drafted, Synchronized)
- * - Context handling and workspace association
- * - Author user association and creation
- * - Label and milestone associations
- * - Edge cases in DTO processing including the critical getDatabaseId() fallback
- */
 class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
     // IDs from the actual GitHub webhook fixtures
@@ -130,7 +118,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
     }
 
     private void setupTestData() {
-        // Create GitHub provider
         githubProvider = gitProviderRepository
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
                 .orElseGet(() -> gitProviderRepository.save(
@@ -163,7 +150,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         testRepository.setProvider(githubProvider);
         testRepository = repositoryRepository.save(testRepository);
 
-        // Create workspace
         testWorkspace = new Workspace();
         testWorkspace.setWorkspaceSlug("hephaestus-test");
         testWorkspace.setDisplayName("Hephaestus Test");
@@ -241,14 +227,11 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                 );
     }
 
-    // Critical: getDatabaseId() Fallback Tests
-
     @Nested
     class GetDatabaseIdFallback {
 
         @Test
         void shouldUseDatabaseIdWhenPresent() {
-            // Given - GraphQL style DTO with databaseId
             Long databaseId = 123456789L;
             GitHubPullRequestDTO dto = new GitHubPullRequestDTO(
                     999L, // id (node id as number, but databaseId is what matters)
@@ -295,7 +278,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
             PullRequest result = processor.process(dto, createContext());
 
-            // Then - should use databaseId as native_id
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(databaseId);
             assertThat(pullRequestRepository.findByRepositoryIdAndNumber(testRepository.getId(), 1))
@@ -304,7 +286,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldFallbackToIdWhenDatabaseIdNull() {
-            // Given - Webhook style DTO with only id
             Long webhookId = FIXTURE_PR_ID;
             GitHubPullRequestDTO dto = new GitHubPullRequestDTO(
                     webhookId, // id (this is the database ID in webhooks)
@@ -349,12 +330,10 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null // requestedTeams
                     );
 
-            // Verify the fallback works
             assertThat(dto.getDatabaseId()).isEqualTo(webhookId);
 
             PullRequest result = processor.process(dto, createContext());
 
-            // Then - should use id as fallback for native_id
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(webhookId);
             assertThat(pullRequestRepository.findByRepositoryIdAndNumber(testRepository.getId(), 26))
@@ -363,7 +342,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldReturnNullWhenBothIdsNull() {
-            // Given - malformed DTO with no IDs
             GitHubPullRequestDTO dto = new GitHubPullRequestDTO(
                     null, // id
                     null, // databaseId
@@ -407,7 +385,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null // requestedTeams
                     );
 
-            // Verify fallback returns null
             assertThat(dto.getDatabaseId()).isNull();
 
             PullRequest result = processor.process(dto, createContext());
@@ -418,14 +395,11 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Issue Type Promotion Tests
-
     @Nested
     class IssueTypePromotion {
 
         @Test
         void shouldPromoteIssueToPullRequestWhenPREventArrives() {
-            // Arrange - insert an entity with issue_type='ISSUE' using the Issue upsert
             Long entityId = FIXTURE_PR_ID;
             int number = 26;
             Instant now = Instant.now();
@@ -461,11 +435,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(pullRequestRepository.findByRepositoryIdAndNumber(testRepository.getId(), number))
                     .isEmpty();
 
-            // Act - process as a pull request
             GitHubPullRequestDTO dto = createBasicPullRequestDto(entityId, number);
             PullRequest result = processor.process(dto, createContext());
 
-            // Assert - should succeed (no IllegalStateException) and return a valid PR
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(entityId);
             assertThat(result.getNumber()).isEqualTo(number);
@@ -480,8 +452,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     .hasSize(1);
         }
     }
-
-    // Process (Create/Update) Tests
 
     @Nested
     class ProcessMethodCreate {
@@ -706,7 +676,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
             assertThat(result.isMerged()).isFalse();
             assertThat(result.requireRepository().getNativeId()).isEqualTo(FIXTURE_REPO_ID);
 
-            // Verify Created event
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestCreated.class))
                     .hasSize(1);
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestUpdated.class))
@@ -858,14 +827,11 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Process Closed Tests
-
     @Nested
     class ProcessClosed {
 
         @Test
         void shouldPublishClosedEventWhenPRClosedWithoutMerge() {
-            // Given - create PR first
             processor.process(createBasicPullRequestDto(FIXTURE_PR_ID, 26), createContext());
             eventListener.clear();
 
@@ -925,7 +891,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldPublishMergedEventWhenPRIsMerged() {
-            // Given - create PR first
             processor.process(createBasicPullRequestDto(FIXTURE_PR_ID, 26), createContext());
             eventListener.clear();
 
@@ -985,14 +950,11 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Process Ready For Review Tests
-
     @Nested
     class ProcessReadyForReview {
 
         @Test
         void shouldPublishPullRequestReadyEvent() {
-            // Given - create draft PR first
             GitHubPullRequestDTO draftDto = new GitHubPullRequestDTO(
                     FIXTURE_PR_ID,
                     null,
@@ -1090,14 +1052,11 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Process Converted To Draft Tests
-
     @Nested
     class ProcessConvertedToDraft {
 
         @Test
         void shouldPublishPullRequestDraftedEvent() {
-            // Given - create PR first
             processor.process(createBasicPullRequestDto(FIXTURE_PR_ID, 26), createContext());
             eventListener.clear();
 
@@ -1153,14 +1112,11 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Process Synchronize Tests
-
     @Nested
     class ProcessSynchronize {
 
         @Test
         void shouldPublishPullRequestSynchronizedEvent() {
-            // Given - create PR first
             processor.process(createBasicPullRequestDto(FIXTURE_PR_ID, 26), createContext());
             eventListener.clear();
 
@@ -1238,14 +1194,11 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
         }
     }
 
-    // Process Labeled/Unlabeled Tests
-
     @Nested
     class ProcessLabelEvents {
 
         @Test
         void shouldPublishLabeledEvent() {
-            // Given - create PR first
             processor.process(createBasicPullRequestDto(FIXTURE_PR_ID, 26), createContext());
             eventListener.clear();
 
@@ -1304,7 +1257,6 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldPublishUnlabeledEvent() {
-            // Given - create PR with label first
             Long labelId = 9568029313L;
             GitHubLabelDTO labelDto =
                     new GitHubLabelDTO(labelId, "LA_node", "enhancement", "Enhancement", "0e8a16", null, null);

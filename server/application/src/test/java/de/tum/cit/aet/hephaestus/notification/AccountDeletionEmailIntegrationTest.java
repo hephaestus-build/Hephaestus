@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.notification.email.EmailRateLimitProperties;
 import de.tum.cit.aet.hephaestus.notification.email.EmailRateLimiter;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import jakarta.mail.Message;
+import jakarta.mail.MessagingException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import java.net.ConnectException;
@@ -378,7 +379,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
             instanceSettingsService.updateSilentMode(
                     engaged,
                     engaged ? "notification test" : null,
-                    "notification-test",
+                    null,
                     EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
         }
     }
@@ -400,7 +401,7 @@ class AccountDeletionEmailIntegrationTest extends BaseIntegrationTest {
     private static String recipient(MimeMessage message) {
         try {
             return ((InternetAddress) message.getRecipients(Message.RecipientType.TO)[0]).getAddress();
-        } catch (jakarta.mail.MessagingException e) {
+        } catch (MessagingException e) {
             throw new IllegalStateException(e);
         }
     }

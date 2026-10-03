@@ -25,6 +25,9 @@ import org.springframework.web.server.ResponseStatusException;
  * <p>Every optional component is a nullable wrapper; the compact constructor supplies the ordering
  * defaults and {@link QueryFilterSupport} the paging ones, and states why neither can come from a
  * {@code defaultValue} on {@code @RequestParam}.
+ *
+ * @param artifactKinds bare strings, not {@link ArtifactKind}s — {@link QueryFilterSupport#artifactKind} has the
+ *     reason, and parses them in {@link #toQuery()}, where a malformed value becomes a 400
  */
 public record ObservationFeedFilterParams(
         @Parameter(description = "Filter by practice slug") @RequestParam(required = false) @Nullable
@@ -37,10 +40,7 @@ public record ObservationFeedFilterParams(
 
         @Parameter(description = "Filter by review outcome") @RequestParam(required = false) @Nullable
         Outcome outcome,
-        /**
-         * Bare strings, not {@link ArtifactKind}s — {@link QueryFilterSupport#artifactKind} has the reason,
-         * and parses them in {@link #toQuery()}, where a malformed value becomes a 400.
-         */
+
         @Parameter(
                 description = "Only observations on these kinds of reviewed work, e.g. scm.pull_request (repeatable)")
         @RequestParam(required = false)

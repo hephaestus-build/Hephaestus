@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationState;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +30,7 @@ class WorkspaceOnboardingLinks {
             long workspaceId, long accountId, List<Long> required) {
         var links = identities.activeLinksForAccount(accountId);
         var enabledProviders = providers.enabledProviders();
-        var result = new java.util.ArrayList<WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO>();
+        var result = new ArrayList<WorkspaceOnboardingDTO.WorkspaceOnboardingLinkDTO>();
         for (var connection : connections.findByWorkspaceId(workspaceId)) {
             if (connection.getKind() != IntegrationKind.SLACK && connection.getKind() != IntegrationKind.OUTLINE)
                 continue;

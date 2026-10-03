@@ -108,8 +108,8 @@ explains why a baseline is needed before changing the build.
 PMD must analyze every selected source successfully: a report containing processing or configuration
 errors fails the task, even when it contains no rule violations. `vp run gate:pmd-canary` proves this
 with clean, rule-violating and unparseable sources in a temporary directory. It checks the production
-task's source coverage and annotation policy without editing or compiling the application's source
-files. CI runs it when its implementation or PMD wiring changes.
+task's source coverage without editing or compiling the application's source files. CI runs it when
+its implementation or PMD wiring changes.
 
 The facts the graph relies on are gates of their own: `gate:runner-contract` proves how `vp run`
 executes commands, and `gate:lint-contract` proves every house rule, type-aware diagnostics and the

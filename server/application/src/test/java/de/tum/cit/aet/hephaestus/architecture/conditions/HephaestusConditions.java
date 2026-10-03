@@ -7,6 +7,7 @@ import com.tngtech.archunit.core.domain.JavaModifier;
 import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import jakarta.validation.constraints.NotNull;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -405,8 +406,6 @@ public final class HephaestusConditions {
         };
     }
 
-    // FIELD CONDITIONS
-
     /**
      * Condition that checks if a field's owner has a specific annotation.
      *
@@ -441,7 +440,7 @@ public final class HephaestusConditions {
                     return;
                 }
 
-                boolean hasNotNullAnnotation = field.isAnnotatedWith(jakarta.validation.constraints.NotNull.class)
+                boolean hasNotNullAnnotation = field.isAnnotatedWith(NotNull.class)
                         || field.isAnnotatedWith("org.jetbrains.annotations.NotNull");
 
                 boolean hasNonNullableJoinColumn = field.getAnnotations().stream()
@@ -533,8 +532,6 @@ public final class HephaestusConditions {
     public static Predicate<JavaMethod> isBusinessMethod() {
         return method -> !isSyntheticMethod(method) && !isBoilerplateMethod(method);
     }
-
-    // WORKSPACE/TENANT CONDITIONS
 
     /**
      * Condition that checks if a class has workspace-related dependencies.

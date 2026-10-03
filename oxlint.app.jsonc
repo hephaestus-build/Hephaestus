@@ -1,7 +1,8 @@
 {
 	"$schema": "./node_modules/oxlint/configuration_schema.json",
-	// Shared application policy for the React Compiler, Vitest and Storybook. The webapp and
-	// extension extend this; docs use the React layer without the application/test assumptions.
+	// Shared application policy — the React Compiler, Vitest, Storybook, and what the two app trees
+	// decide alike. The webapp and extension extend this; docs use the React layer without the
+	// application/test assumptions.
 	"extends": ["./.oxlintrc.json", "./oxlint.react.jsonc"],
 	"plugins": ["vitest"],
 	"rules": {
@@ -24,6 +25,16 @@
 		// The React Compiler memoises a Provider's value object like any other; the `useMemo` the rule
 		// asks for is the one the import ban above removes.
 		"react/jsx-no-constructed-context-values": "off",
+		// Cyclomatic complexity counts every `&&`, `??` and `?.` in JSX, so at the default 20 it grades
+		// how many optional props a page has. Forty is the line between that and a function doing
+		// several components' work.
+		"complexity": ["error", { "max": 40 }],
+		// `webapp/AGENTS.md` § File naming: a file that exports a component is PascalCase.
+		"unicorn/filename-case": ["error", { "cases": { "kebabCase": true, "pascalCase": true } }],
+		// Maps a role to a tag without asking whether the tag's other semantics fit — `<output>` for
+		// `status` carries a form association, `<li>` for `listitem` is only valid inside a list,
+		// `<fieldset>` for `group` is a form control group, `<img>` cannot replace an inline SVG.
+		"jsx-a11y/prefer-tag-over-role": "off",
 		// -- Tests -----------------------------------------------------------------------------------
 		"vitest/prefer-called-once": "error",
 		"vitest/prefer-called-with": "error",
@@ -121,6 +132,11 @@
 				"hephaestus/no-within-canvas-element": "error",
 				"hephaestus/typed-story-meta": "error",
 			},
+		},
+		{
+			// Playwright names its fixture callback `use`, which the React plugin reads as the hook.
+			"files": ["e2e/**"],
+			"rules": { "react-hooks/rules-of-hooks": "off" },
 		},
 	],
 }

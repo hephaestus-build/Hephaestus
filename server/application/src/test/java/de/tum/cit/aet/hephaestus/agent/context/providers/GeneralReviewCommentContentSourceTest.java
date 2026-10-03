@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -212,7 +213,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
         for (int i = 0; i < total; i++) {
             comments.add(comment("reviewer-" + i, "comment-" + i, base.plusSeconds(i)));
         }
-        java.util.Collections.reverse(comments);
+        Collections.reverse(comments);
         when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
                 .thenReturn(comments);
 
@@ -286,7 +287,7 @@ class GeneralReviewCommentContentSourceTest extends BaseUnitTest {
     @Test
     void contribute_diffNotePostedAsAConversationComment_isExcluded() throws Exception {
         // A diff note whose line falls outside the hunk is posted as a conversation comment and keeps the
-        // diff-note marker; staged, it would read as an unanswered automated finding.
+        // diff-note marker; staged, it would read as unanswered automated feedback.
         when(issueCommentRepository.findRecentHumanByIssueIdWithAuthor(any(), any(), any()))
                 .thenReturn(List.of(
                         comment(

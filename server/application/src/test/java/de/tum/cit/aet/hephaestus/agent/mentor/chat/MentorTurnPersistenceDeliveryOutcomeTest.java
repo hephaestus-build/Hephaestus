@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -111,7 +112,7 @@ class MentorTurnPersistenceDeliveryOutcomeTest extends BaseUnitTest {
         assistant.setThread(thread);
         // A link stored before links carried their feedback, beside one that showed it: only the second counts.
         assistant.setParts(parts(link(UUID.randomUUID(), null), link(observationId, "Name the trade-off.")));
-        when(chatMessageRepository.findById(assistantId)).thenReturn(java.util.Optional.of(assistant));
+        when(chatMessageRepository.findById(assistantId)).thenReturn(Optional.of(assistant));
         return new Fixture(cookie(assistantId), assistant, observationId);
     }
 
@@ -141,7 +142,8 @@ class MentorTurnPersistenceDeliveryOutcomeTest extends BaseUnitTest {
                 assistantId,
                 Instant.now(),
                 "model",
-                mock(LlmPriceSnapshot.class));
+                mock(LlmPriceSnapshot.class),
+                "test-session-version");
     }
 
     private record Fixture(

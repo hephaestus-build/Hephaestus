@@ -2,11 +2,14 @@ package de.tum.cit.aet.hephaestus.core.auth.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthPropertiesFixture;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInParameters;
+import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProvider;
 import de.tum.cit.aet.hephaestus.core.auth.provider.LoginProviderService;
 import de.tum.cit.aet.hephaestus.core.auth.stepup.StepUpRequiredException;
@@ -15,11 +18,16 @@ import jakarta.servlet.http.Cookie;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.servlet.view.RedirectView;
@@ -43,7 +51,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         loginProviderService = mock(LoginProviderService.class);
-        org.mockito.Mockito.lenient()
+        lenient()
                 .when(loginProviderService.findEnabled(any()))
                 .thenReturn(Optional.of(providerRow("github", LoginProvider.ProviderType.GITHUB)));
         identityLinkAuthentication = mock(IdentityLinkAuthentication.class);
@@ -58,8 +66,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
                 loginProviderService,
                 authIntentCookie,
                 identityLinkAuthentication,
-                new de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry(
-                        AuthPropertiesFixture.withBrowserExtensionIds(java.util.List.of(EXTENSION_ID))),
+                new InstalledClientRegistry(AuthPropertiesFixture.withBrowserExtensionIds(List.of(EXTENSION_ID))),
                 AuthPropertiesFixture.withApiBasePath(apiBasePath));
     }
 
@@ -110,7 +117,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
     @Test
     void link_withStaleSignIn_asksToConfirmAccessAndWritesNoIntent() {
         when(identityLinkAuthentication.resolveAuthenticatedAccountId(any()))
-                .thenThrow(new StepUpRequiredException(java.time.Duration.ofMinutes(5)));
+                .thenThrow(new StepUpRequiredException(Duration.ofMinutes(5)));
         MockHttpServletResponse res = new MockHttpServletResponse();
         String onboarding = "/w/intro/onboarding?returnTo=%2Fw%2Fintro%2Factivity&step=accounts";
 
@@ -130,7 +137,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
     @Test
     void link_withStaleSignIn_dropsADestinationOffThisSite() {
         when(identityLinkAuthentication.resolveAuthenticatedAccountId(any()))
-                .thenThrow(new StepUpRequiredException(java.time.Duration.ofMinutes(5)));
+                .thenThrow(new StepUpRequiredException(Duration.ofMinutes(5)));
 
         RedirectView view = controller.begin(
                 "github",
@@ -154,29 +161,20 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
         assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
     }
 
-    @Test
-    void slackLoginMode_rejectedBecauseSlackIsLinkOnly() {
-        // Link-only is classified by the login_provider row's TYPE, not by URL sniffing.
-        when(loginProviderService.findEnabled("slack"))
-                .thenReturn(Optional.of(providerRow("slack", LoginProvider.ProviderType.SLACK)));
+    /**
+     * Link-only is classified by the login_provider row's TYPE: a self-hosted Outline's authorization URL is
+     * indistinguishable from a GitLab's by shape.
+     */
+    @ParameterizedTest
+    @EnumSource(
+            value = LoginProvider.ProviderType.class,
+            names = {"SLACK", "OUTLINE"})
+    void shouldRejectLoginModeWhenTheProviderIsLinkOnly(LoginProvider.ProviderType type) {
+        String slug = type.name().toLowerCase(Locale.ROOT);
+        when(loginProviderService.findEnabled(slug)).thenReturn(Optional.of(providerRow(slug, type)));
         MockHttpServletResponse res = new MockHttpServletResponse();
 
-        RedirectView view = controller.begin("slack", null, "/settings", "login", new MockHttpServletRequest(), res);
-
-        assertThat(view.getUrl()).isEqualTo("/auth/error?code=link_requires_auth");
-        assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
-        verifyNoInteractions(identityLinkAuthentication);
-    }
-
-    @Test
-    void outlineLoginMode_rejectedBecauseOutlineIsLinkOnly() {
-        // A self-hosted Outline's authorization URL is indistinguishable from a GitLab's by shape —
-        // only the row's TYPE can classify it. LOGIN mode must be rejected before any redirect.
-        when(loginProviderService.findEnabled("outline"))
-                .thenReturn(Optional.of(providerRow("outline", LoginProvider.ProviderType.OUTLINE)));
-        MockHttpServletResponse res = new MockHttpServletResponse();
-
-        RedirectView view = controller.begin("outline", null, "/settings", "login", new MockHttpServletRequest(), res);
+        RedirectView view = controller.begin(slug, null, "/settings", "login", new MockHttpServletRequest(), res);
 
         assertThat(view.getUrl()).isEqualTo("/auth/error?code=link_requires_auth");
         assertThat(res.getCookie(AuthIntentCookie.COOKIE_NAME)).isNull();
@@ -207,7 +205,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
 
         assertThat(view.getUrl()).isEqualTo("/oauth2/authorization/github");
         AuthIntentCookie.Intent intent = readIntent(res);
-        org.junit.jupiter.api.Assertions.assertNotNull(intent);
+        assertThat(intent).isNotNull();
         assertThat(intent.mode()).isEqualTo(AuthIntentCookie.Intent.Mode.LOGIN);
         verifyNoInteractions(identityLinkAuthentication);
     }
@@ -232,10 +230,7 @@ class AuthBeginControllerLinkTest extends BaseUnitTest {
             @Nullable String state,
             MockHttpServletResponse res) {
         return controller.beginClient(
-                provider,
-                new de.tum.cit.aet.hephaestus.core.auth.clientsession.ClientSignInParameters(
-                        clientId, redirectUri, challenge, method, state),
-                res);
+                provider, new ClientSignInParameters(clientId, redirectUri, challenge, method, state), res);
     }
 
     @Test

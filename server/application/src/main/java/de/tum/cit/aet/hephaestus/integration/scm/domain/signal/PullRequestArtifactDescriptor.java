@@ -120,7 +120,7 @@ public class PullRequestArtifactDescriptor implements ArtifactDescriptor {
 
     @Override
     public Set<FeedbackLane> lanes() {
-        // A pull request carries a diff, so a finding about it can be anchored to a position in one.
+        // A pull request carries a diff, so feedback about it can be anchored to a position in one.
         return Set.of(FeedbackLane.IN_CONTEXT_SUMMARY, FeedbackLane.IN_CONTEXT_INLINE);
     }
 

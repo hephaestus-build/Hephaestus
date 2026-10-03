@@ -24,3 +24,13 @@ export const hoursBefore = (hours: number): Date => new Date(STORY_NOW - hours *
 export const daysBefore = (days: number): Date => new Date(STORY_NOW - days * DAY_MS);
 
 export const daysAfter = (days: number): Date => new Date(STORY_NOW + days * DAY_MS);
+
+const STORY_YEAR = new Date(STORY_NOW).getFullYear();
+
+/**
+ * A local time on a fixed day of the story clock's year, from `MM-DDTHH:mm`. A dated narrative
+ * reads its days without a year only while they share the reader's year, so a fixed year would
+ * change every rendered date the January after it.
+ */
+export const inStoryYear = (monthDayTime: string): Date =>
+	new Date(`${STORY_YEAR}-${monthDayTime}`);

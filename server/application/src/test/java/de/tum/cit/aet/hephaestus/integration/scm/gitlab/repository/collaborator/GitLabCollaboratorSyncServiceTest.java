@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.collaborator.RepositoryCollaboratorRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlResponseHandler;
@@ -35,7 +34,6 @@ class GitLabCollaboratorSyncServiceTest extends BaseUnitTest {
     @Test
     void shouldLeaveASharedProjectsCollaboratorsToTheWorkspaceThatOwnsIt() {
         var service = new GitLabCollaboratorSyncService(
-                mock(RepositoryRepository.class),
                 collaboratorRepository,
                 graphQlClientProvider,
                 mock(GitLabGraphQlResponseHandler.class),

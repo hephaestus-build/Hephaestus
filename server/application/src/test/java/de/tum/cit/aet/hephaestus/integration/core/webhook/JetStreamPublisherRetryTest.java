@@ -16,6 +16,7 @@ import io.github.resilience4j.retry.RetryConfig;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.JetStream;
 import io.nats.client.PublishOptions;
+import io.nats.client.api.PublishAck;
 import io.nats.client.impl.Headers;
 import java.io.IOException;
 import java.time.Duration;
@@ -39,7 +40,7 @@ class JetStreamPublisherRetryTest extends BaseUnitTest {
     void exhaustsRetriesThenThrowsPublishFailedException() throws Exception {
         JetStream jetStream = mock(JetStream.class);
         // Each retry attempt fails synchronously through the async future.
-        CompletableFuture<io.nats.client.api.PublishAck> failed =
+        CompletableFuture<PublishAck> failed =
                 CompletableFuture.failedFuture(new IOException("upstream NATS broker error"));
         when(jetStream.publishAsync(
                         any(String.class), any(Headers.class), any(byte[].class), any(PublishOptions.class)))

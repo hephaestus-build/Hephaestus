@@ -28,6 +28,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.NestedExceptionUtils;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
 import org.springframework.graphql.client.HttpGraphQlClient;
@@ -616,7 +617,7 @@ public class GitLabDeletionSweepService {
                         context,
                         page,
                         e.toString(),
-                        rootCauseOf(e).toString());
+                        NestedExceptionUtils.getMostSpecificCause(e).toString());
                 return UpstreamListing.incomplete("decodeFailed");
             }
 
@@ -700,14 +701,5 @@ public class GitLabDeletionSweepService {
 
     private static boolean isCancelled(@Nullable SyncExecutionHandle handle) {
         return handle != null && handle.isCancellationRequested();
-    }
-
-    /** Unwraps to the innermost cause, guarding against a self-referential cause chain. */
-    private static Throwable rootCauseOf(Throwable throwable) {
-        Throwable cause = throwable;
-        while (cause.getCause() != null && cause.getCause() != cause) {
-            cause = cause.getCause();
-        }
-        return cause;
     }
 }

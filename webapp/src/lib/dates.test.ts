@@ -1,6 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { asDate, formatDayRange, formatWeekdayDay, type Wire } from "./dates";
+import {
+	asDate,
+	formatCalendarDate,
+	formatDayRange,
+	formatDayTime,
+	formatWeekdayDay,
+	type Wire,
+} from "./dates";
 
 describe("asDate", () => {
 	// The instant, not merely the type: `toBeInstanceOf(Date)` is satisfied by `new Date(0)`.
@@ -8,7 +15,7 @@ describe("asDate", () => {
 		expect(asDate("2026-07-24T10:30:00.000Z")?.toISOString()).toBe("2026-07-24T10:30:00.000Z");
 	});
 
-	it("passes a real Date through untouched, which is what the SDK now returns", () => {
+	it("passes a real Date through untouched, as the generated client returns it", () => {
 		const date = new Date("2026-07-24T10:30:00.000Z");
 		expect(asDate(date)).toBe(date);
 	});
@@ -83,6 +90,18 @@ describe("formatWeekdayDay", () => {
 	});
 });
 
+describe("formatDayTime", () => {
+	const today = new Date(2026, 8, 27, 15, 0);
+
+	it("leaves out the current year", () => {
+		expect(formatDayTime(new Date(2026, 8, 9, 14, 10), today)).toBe("9 September, 2:10 pm");
+	});
+
+	it("writes the year of a moment in another one", () => {
+		expect(formatDayTime(new Date(2027, 0, 4, 9, 5), today)).toBe("4 January 2027, 9:05 am");
+	});
+});
+
 describe("formatDayRange", () => {
 	it.each([
 		[new Date(2026, 8, 27), new Date(2026, 8, 27), "27 September 2026"],
@@ -91,5 +110,20 @@ describe("formatDayRange", () => {
 		[new Date(2025, 8, 28), new Date(2026, 8, 27), "28 September 2025 – 27 September 2026"],
 	])("writes %s to %s once per shared month and year", (from, to, expected) => {
 		expect(formatDayRange(from, to)).toBe(expected);
+	});
+});
+
+describe("formatCalendarDate", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("writes the wire's day west of UTC, where its midnight is still the day before", () => {
+		vi.stubEnv("TZ", "America/Los_Angeles");
+		const wireDate = new Date("2026-09-09T00:00:00.000Z");
+		// Node rereads TZ when it is assigned; without that, this test would pass vacuously in UTC.
+		expect(wireDate.getDate()).toBe(8);
+
+		expect(formatCalendarDate(wireDate)).toBe("9 September 2026");
 	});
 });

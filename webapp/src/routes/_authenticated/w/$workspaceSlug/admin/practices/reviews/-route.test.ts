@@ -106,15 +106,6 @@ describe("practice review routes", () => {
 		}
 	});
 
-	/**
-	 * Review activity's list lives here now, for admins only, and its old address is gone rather than
-	 * redirected: only the app linked to it.
-	 */
-	it("no longer resolves the retired review activity address", async () => {
-		renderRouteAtWithRouter("/w/acme/reviews");
-		await screen.findByRole("heading", { name: "Page Not Found" }, ROUTE_RENDER_WAIT);
-	});
-
 	/** A practice level counts over the overview's range, so opening one keeps it. */
 	it("keeps the chosen range on a practice level opened from the overview", async () => {
 		renderRouteAtWithRouter(`${REVIEWS}?range=90d`);

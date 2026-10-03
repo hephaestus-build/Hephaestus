@@ -2,7 +2,10 @@ package de.tum.cit.aet.hephaestus.agent.context;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
@@ -62,7 +65,7 @@ class HistoricalGitEvidenceTest extends BaseUnitTest {
                 new FabricLayout(temporary.resolve("fabric").toString()));
         manager.ensureRepository(KEY, source.toUri().toString(), null);
         snapshot = manager.readTreeSnapshot(KEY, head);
-        org.mockito.Mockito.lenient()
+        lenient()
                 .when(files.repositoryForVerification(job, "head-digest", "refs-digest"))
                 .thenReturn(snapshot.stagingDir());
     }
@@ -113,11 +116,9 @@ class HistoricalGitEvidenceTest extends BaseUnitTest {
         var outside = new HistoricalGitEvidence.Citation(unreachable, "three.java", "never captured", 1, 1);
         var result =
                 verifier.verifyAllAt(job, "repos/42/", "head-digest", "refs-digest", head, List.of(earlier, outside));
-        assertThat(java.util.Objects.requireNonNull(result.get(earlier)).matches())
-                .isTrue();
+        assertThat(Objects.requireNonNull(result.get(earlier)).matches()).isTrue();
         assertThat(result.get(outside)).isEqualTo(JobEvidenceFiles.QuoteMatch.absent());
-        org.mockito.Mockito.verify(files, org.mockito.Mockito.never())
-                .repositoryForVerification(job, "head-digest", "refs-digest");
+        verify(files, never()).repositoryForVerification(job, "head-digest", "refs-digest");
     }
 
     private static String commit(Git git, String message) throws Exception {

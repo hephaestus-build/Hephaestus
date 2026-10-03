@@ -19,7 +19,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlSync
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -371,12 +370,12 @@ class CommitAuthorEnrichmentServiceTest extends BaseUnitTest {
                     ArgumentCaptor.forClass(ScmDomainEvent.CommitAuthorsReconciled.class);
             verify(eventPublisher).publishEvent(captor.capture());
             ScmDomainEvent.CommitAuthorsReconciled event = captor.getValue();
-            Assertions.assertThat(event.repositoryId()).isEqualTo(1L);
-            Assertions.assertThat(event.context().providerType()).isEqualTo(IdentityProviderType.GITHUB);
-            Assertions.assertThat(event.context().scopeId()).isEqualTo(7L);
-            Assertions.assertThat(event.context().repository()).isNotNull();
-            Assertions.assertThat(event.context().repository().id()).isEqualTo(1L);
-            Assertions.assertThat(event.context().repository().nameWithOwner()).isEqualTo("owner/repo");
+            assertThat(event.repositoryId()).isEqualTo(1L);
+            assertThat(event.context().providerType()).isEqualTo(IdentityProviderType.GITHUB);
+            assertThat(event.context().scopeId()).isEqualTo(7L);
+            assertThat(event.context().repository()).isNotNull();
+            assertThat(event.context().repository().id()).isEqualTo(1L);
+            assertThat(event.context().repository().nameWithOwner()).isEqualTo("owner/repo");
         }
 
         @Test

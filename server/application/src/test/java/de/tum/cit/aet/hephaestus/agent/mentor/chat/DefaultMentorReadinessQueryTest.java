@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
         binding.setId(10L);
         binding.setPurpose(AgentPurpose.MENTOR);
         binding.setEnabled(true);
-        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(binding));
+        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(binding));
         when(llmModelResolver.isAvailable(binding)).thenReturn(true);
 
         assertThat(query.isReady(1L)).isTrue();
@@ -51,7 +52,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
 
     @Test
     void shouldNotReportReadyWhenMentorIsUnconfigured() {
-        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of());
+        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of());
         assertThat(query.isReady(1L)).isFalse();
     }
 
@@ -61,7 +62,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
         binding.setId(10L);
         binding.setPurpose(AgentPurpose.MENTOR);
         binding.setEnabled(true);
-        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(binding));
+        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(binding));
         when(llmModelResolver.isAvailable(binding)).thenReturn(false);
 
         assertThat(query.isReady(1L)).isFalse();
@@ -73,7 +74,7 @@ class DefaultMentorReadinessQueryTest extends BaseUnitTest {
         disabled.setId(10L);
         disabled.setPurpose(AgentPurpose.MENTOR);
         disabled.setEnabled(false);
-        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(java.util.List.of(disabled));
+        when(agentBindingRepository.findByWorkspaceIdWithModels(1L)).thenReturn(List.of(disabled));
 
         assertThat(query.isReady(1L)).isFalse();
     }

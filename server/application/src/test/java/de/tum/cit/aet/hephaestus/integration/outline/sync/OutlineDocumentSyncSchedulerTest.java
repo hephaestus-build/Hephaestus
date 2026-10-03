@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.outline.sync;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -27,6 +29,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -71,8 +74,8 @@ class OutlineDocumentSyncSchedulerTest extends BaseUnitTest {
     }
 
     private void lenientStub() {
-        org.mockito.Mockito.lenient().when(connection1.getId()).thenReturn(CONNECTION_1);
-        org.mockito.Mockito.lenient().when(connection2.getId()).thenReturn(CONNECTION_2);
+        lenient().when(connection1.getId()).thenReturn(CONNECTION_1);
+        lenient().when(connection2.getId()).thenReturn(CONNECTION_2);
     }
 
     private void runJobsSynchronously() {
@@ -105,10 +108,8 @@ class OutlineDocumentSyncSchedulerTest extends BaseUnitTest {
                         SyncJobRequest::type,
                         SyncJobRequest::trigger)
                 .containsExactlyInAnyOrder(
-                        org.assertj.core.groups.Tuple.tuple(
-                                WORKSPACE_1, CONNECTION_1, SyncJobType.RECONCILIATION, SyncJobTrigger.SCHEDULED),
-                        org.assertj.core.groups.Tuple.tuple(
-                                WORKSPACE_2, CONNECTION_2, SyncJobType.RECONCILIATION, SyncJobTrigger.SCHEDULED));
+                        Tuple.tuple(WORKSPACE_1, CONNECTION_1, SyncJobType.RECONCILIATION, SyncJobTrigger.SCHEDULED),
+                        Tuple.tuple(WORKSPACE_2, CONNECTION_2, SyncJobType.RECONCILIATION, SyncJobTrigger.SCHEDULED));
         verify(syncService).syncWorkspace(WORKSPACE_1, jobHandle, SyncJobType.RECONCILIATION);
         verify(syncService).syncWorkspace(WORKSPACE_2, jobHandle, SyncJobType.RECONCILIATION);
     }
@@ -180,7 +181,7 @@ class OutlineDocumentSyncSchedulerTest extends BaseUnitTest {
         scheduler.catchUp();
 
         verify(syncJobService, never()).run(any(), any());
-        verify(syncService, never()).syncPendingCollections(org.mockito.ArgumentMatchers.anyLong(), any());
+        verify(syncService, never()).syncPendingCollections(anyLong(), any());
     }
 
     @Test

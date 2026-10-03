@@ -1,11 +1,10 @@
 package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.Map;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Active only on the webhook runtime role.
  */
 @RestController
-@ConditionalOnProperty(name = RuntimeRole.WEBHOOK_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWebhookRole
 public class WebhookController {
 
     private final WebhookIngestPipeline pipeline;

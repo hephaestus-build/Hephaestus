@@ -3,7 +3,7 @@ import type { ConnectionDetail } from "@/api/types.gen";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { asDate } from "@/lib/dates";
+import { asDate, formatCalendarDate } from "@/lib/dates";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
@@ -44,7 +44,7 @@ export function WorkspaceScmTokenSettings({
 		expiryDescription = "Token has no expiry";
 	}
 	if (expiresAt) {
-		expiryDescription = `Token expires on ${expiresAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}`;
+		expiryDescription = `Token expires on ${formatCalendarDate(expiresAt)}`;
 	}
 	if (tokenMetadataError != null) {
 		expiryDescription = "Token expiry could not be loaded.";

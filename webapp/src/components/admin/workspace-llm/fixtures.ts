@@ -1,4 +1,4 @@
-import type { AgentJob, AvailableLlmModel, PracticeReviewSettings } from "@/api/types.gen";
+import type { AgentJob, AvailableLlmModel } from "@/api/types.gen";
 import { minutesAfter } from "@/stories/story-clock";
 
 export const mockAvailableModels: AvailableLlmModel[] = [
@@ -31,33 +31,6 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 		reasoningEffort: "MEDIUM",
 	},
 ];
-
-export const mockPracticeReviewSettings: PracticeReviewSettings = {
-	generatedPaths: {},
-	etag: '"0"',
-	revision: 0,
-	cooldownMinutes: 30,
-	deliveryStatus: "ACTIVE",
-	reviewScope: {
-		repositoryMode: "ALL_MONITORED",
-		personMode: "ALL_ELIGIBLE",
-		repositories: [],
-		personUserIds: [],
-	},
-	coverageSummary: {
-		monitoredRepositories: 3,
-		coveredRepositories: 3,
-		eligiblePeople: 8,
-		coveredPeople: 8,
-		recentReviewVolume: 42,
-		estimateWindowDays: 30,
-	},
-	deliverToMerged: false,
-	cooldownMinutesOverride: 30,
-	deliverToMergedOverride: undefined,
-	defaultAutonomy: "HUMAN_APPROVAL",
-	defaultAutonomyOverride: undefined,
-};
 
 const pullRequestTarget: AgentJob["target"] = {
 	type: "scm.pull_request",

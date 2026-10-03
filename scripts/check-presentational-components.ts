@@ -51,7 +51,6 @@ const ALLOWLIST = {
 		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.tsx",
 		"webapp/src/components/admin/integrations/slack-channels/ChannelHistorySheet.tsx",
 		"webapp/src/components/settings/DangerZoneSection.tsx",
-		"webapp/src/components/settings/SessionsSection.tsx",
 		"webapp/src/components/create-workspace/ConnectGitLabStep.tsx",
 	],
 	storyMocks: [
@@ -60,7 +59,6 @@ const ALLOWLIST = {
 		"webapp/src/components/admin/audit/ConfigAuditPanel.stories.tsx",
 		"webapp/src/components/admin/integrations/outline/AddCollectionDialog.stories.tsx",
 		"webapp/src/components/admin/integrations/slack-channels/ChannelHistorySheet.stories.tsx",
-		"webapp/src/components/settings/SessionsSection.stories.tsx",
 	],
 };
 

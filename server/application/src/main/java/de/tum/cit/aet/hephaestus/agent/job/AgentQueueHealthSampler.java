@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -12,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -27,7 +28,7 @@ import org.springframework.stereotype.Component;
  */
 @ConditionalOnServerRole
 @Component
-@ConditionalOnProperty(prefix = "hephaestus.agent", name = "enabled", havingValue = "true")
+@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @WorkspaceAgnostic("Fleet-wide queue health; not workspace-scoped")
 public class AgentQueueHealthSampler {
 
@@ -75,7 +76,7 @@ public class AgentQueueHealthSampler {
             running.set(snapshot.getRunning());
             Instant oldest = snapshot.getOldestAvailableAt();
             oldestAgeSeconds.set(
-                    oldest != null ? Math.max(0, Duration.between(oldest, now).getSeconds()) : 0L);
+                    oldest != null ? Math.max(0, Duration.between(oldest, now).toSeconds()) : 0L);
         } catch (Exception e) {
             // Keep the last-good gauge values: a DB blip must not read as "queue is empty".
             samplerFailures.increment();

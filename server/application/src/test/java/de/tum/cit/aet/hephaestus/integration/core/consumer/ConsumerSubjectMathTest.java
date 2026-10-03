@@ -130,8 +130,7 @@ class ConsumerSubjectMathTest extends BaseUnitTest {
 
         @Test
         void rejectsBlankSubscriptionId() {
-            org.assertj.core.api.Assertions.assertThatThrownBy(
-                            () -> ConsumerSubjectMath.subscriptionFilter("outline", "  "))
+            assertThatThrownBy(() -> ConsumerSubjectMath.subscriptionFilter("outline", "  "))
                     .isInstanceOf(IllegalArgumentException.class);
         }
 

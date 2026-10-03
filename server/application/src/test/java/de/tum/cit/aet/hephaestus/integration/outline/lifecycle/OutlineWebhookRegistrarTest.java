@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -37,7 +39,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
@@ -74,7 +75,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     private static <T> ObjectProvider<T> providerOf(@Nullable T bean) {
         ObjectProvider<T> provider = mock(ObjectProvider.class);
         if (bean != null) {
-            Mockito.lenient()
+            lenient()
                     .doAnswer(inv -> {
                         inv.<Consumer<T>>getArgument(0).accept(bean);
                         return null;
@@ -294,7 +295,7 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         verifyNoInteractions(natsConsumer);
     }
 
-    // --- absent NATS-consumer ObjectProvider bean: every reconcile-triggering call site must not NPE ---
+    // Without the NATS-consumer bean, every reconcile-triggering call site must still succeed.
 
     /** The four call sites whose scope-consumer reconcile must tolerate a missing {@code IntegrationNatsConsumer} bean. */
     private enum NoNatsConsumerBeanCase {
@@ -346,6 +347,6 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     }
 
     private static long anyLongMatcher() {
-        return org.mockito.ArgumentMatchers.anyLong();
+        return anyLong();
     }
 }

@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.gitlab.webhook;
 
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.WebhookIngestPipeline;
@@ -12,7 +12,6 @@ import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>Active only on the webhook runtime role.
  */
 @RestController
-@ConditionalOnProperty(name = RuntimeRole.WEBHOOK_PROPERTY, havingValue = "true", matchIfMissing = true)
+@ConditionalOnWebhookRole
 public class GitLabConnectionWebhookController {
 
     public static final String PATH_PREFIX = "/webhooks/gitlab/connections/";
@@ -38,10 +37,10 @@ public class GitLabConnectionWebhookController {
 
     private final WebhookIngestPipeline pipeline;
     private final GitLabRouteCredential credential;
-    private final GitlabSubjectKeyDeriver deriver;
+    private final GitLabSubjectKeyDeriver deriver;
 
     public GitLabConnectionWebhookController(
-            WebhookIngestPipeline pipeline, GitLabRouteCredential credential, GitlabSubjectKeyDeriver deriver) {
+            WebhookIngestPipeline pipeline, GitLabRouteCredential credential, GitLabSubjectKeyDeriver deriver) {
         this.pipeline = pipeline;
         this.credential = credential;
         this.deriver = deriver;

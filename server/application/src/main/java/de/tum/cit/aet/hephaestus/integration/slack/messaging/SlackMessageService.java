@@ -17,6 +17,7 @@ import com.slack.api.methods.response.conversations.ConversationsListResponse;
 import com.slack.api.methods.response.views.ViewsPublishResponse;
 import com.slack.api.model.Conversation;
 import com.slack.api.model.ConversationType;
+import com.slack.api.model.Message;
 import com.slack.api.model.assistant.SuggestedPrompt;
 import com.slack.api.model.block.LayoutBlock;
 import com.slack.api.model.view.View;
@@ -260,7 +261,7 @@ public class SlackMessageService {
         }
     }
 
-    /** Finalize a stream, optionally attaching terminal blocks (finding chips / actions). */
+    /** Finalize a stream, optionally attaching terminal blocks (observation chips / actions). */
     public void stopStream(long workspaceId, String channel, String ts, List<LayoutBlock> blocks) {
         if (!egressGuard.deliveryAllowed("slack.write")) {
             throw new SlackSendException(workspaceId, channel, "silent_mode_engaged");
@@ -521,8 +522,7 @@ public class SlackMessageService {
                 throw new SlackSendException(
                         workspaceId, channelId, response.getError() == null ? "unknown" : response.getError());
             }
-            List<com.slack.api.model.Message> messages =
-                    response.getMessages() == null ? List.of() : response.getMessages();
+            List<Message> messages = response.getMessages() == null ? List.of() : response.getMessages();
             String nextCursor = response.getResponseMetadata() == null
                     ? null
                     : response.getResponseMetadata().getNextCursor();
@@ -555,8 +555,7 @@ public class SlackMessageService {
                 throw new SlackSendException(
                         workspaceId, channelId, response.getError() == null ? "unknown" : response.getError());
             }
-            List<com.slack.api.model.Message> messages =
-                    response.getMessages() == null ? List.of() : response.getMessages();
+            List<Message> messages = response.getMessages() == null ? List.of() : response.getMessages();
             String nextCursor = response.getResponseMetadata() == null
                     ? null
                     : response.getResponseMetadata().getNextCursor();
@@ -568,8 +567,7 @@ public class SlackMessageService {
 
     /** One page of channel history/replies: the raw SDK messages plus the pagination cursor (null when exhausted). */
     public record HistoryPage(
-            List<com.slack.api.model.Message> messages,
-            @Nullable String nextCursor) {}
+            List<Message> messages, @Nullable String nextCursor) {}
 
     public void joinPublicChannel(long workspaceId, String channelId) {
         if (!egressGuard.deliveryAllowed("slack.write")) {

@@ -49,6 +49,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.springframework.graphql.client.ClientGraphQlResponse;
 import org.springframework.graphql.client.ClientResponseField;
+import org.springframework.graphql.client.GraphQlClient;
 import org.springframework.graphql.client.HttpGraphQlClient;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
@@ -203,11 +204,9 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
             assertThat(result).isEqualTo(2);
 
-            // Verify upserts with correct user IDs (not anyLong)
             verify(organizationMembershipRepository).upsertMembership(42L, 1010L, OrganizationMemberRole.MEMBER);
             verify(organizationMembershipRepository).upsertMembership(42L, 1020L, OrganizationMemberRole.ADMIN);
 
-            // Verify native SQL upsert was used (not JPA save)
             verify(userRepository, times(2))
                     .upsertUser(
                             anyLong(),
@@ -223,18 +222,14 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
                             any());
             verify(userRepository, never()).save(any(User.class));
 
-            // Verify login conflict resolution
             verify(userRepository).freeLoginConflicts("alice", 10L, TEST_PROVIDER_ID);
             verify(userRepository).freeLoginConflicts("bob", 20L, TEST_PROVIDER_ID);
 
-            // Verify circuit breaker + rate limit per page
             verify(graphQlClientProvider).acquirePermission();
             verify(graphQlClientProvider).waitIfRateLimitLow(SCOPE_ID);
 
-            // Verify success recorded
             verify(graphQlClientProvider).recordSuccess();
 
-            // Verify listener event
             ArgumentCaptor<OrganizationSyncedEvent> eventCaptor =
                     ArgumentCaptor.forClass(OrganizationSyncedEvent.class);
             verify(organizationMembershipListener).onOrganizationMembershipsSynced(eventCaptor.capture());
@@ -286,7 +281,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         @Test
         void listsTheGroupsDirectInheritedAndInvitedGroupsMembers() {
             HttpGraphQlClient client = mockClient();
-            HttpGraphQlClient.RequestSpec request = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec request = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(request);
             when(request.variable(anyString(), any())).thenReturn(request);
             ClientGraphQlResponse page = mockMembersPage(List.of(), LAST_PAGE);
@@ -385,7 +380,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             when(responseHandler.handle(eq(invalidResp), anyString(), any()))
                     .thenReturn(new HandleResult(HandleResult.Action.ABORT, null));
 
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(invalidResp));
@@ -467,7 +462,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
             ClientGraphQlResponse page1 = mockMembersPage(List.of(member), new GitLabPageInfo(true, "cursor1"));
 
             HttpGraphQlClient client = mockClient();
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.just(page1));
@@ -501,7 +496,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         @Test
         void graphQlException_returnsNegative() {
             HttpGraphQlClient client = mockClient();
-            HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+            GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
             when(client.documentName(anyString())).thenReturn(requestSpec);
             when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
             when(requestSpec.execute()).thenReturn(Mono.error(new RuntimeException("network error")));
@@ -593,13 +588,10 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
             assertThat(userId).isEqualTo(1042L);
 
-            // Verify advisory lock acquired
             verify(userRepository).tryAcquireLoginLock("alice", TEST_PROVIDER_ID);
 
-            // Verify login conflicts freed
             verify(userRepository).freeLoginConflicts("alice", 42L, TEST_PROVIDER_ID);
 
-            // Verify native SQL upsert (not JPA save)
             verify(userRepository)
                     .upsertUser(
                             42L,
@@ -776,8 +768,6 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
         }
     }
 
-    // Helpers
-
     private GitLabGroupMemberResponse createMember(String gid, String username, String name, int accessLevel) {
         return new GitLabGroupMemberResponse(
                 new GitLabMemberUser(gid, username, name, null, "https://gitlab.com/" + username, null),
@@ -823,7 +813,7 @@ class GitLabGroupMemberSyncServiceTest extends BaseUnitTest {
 
     private void mockSequentialExecute(
             HttpGraphQlClient client, ClientGraphQlResponse first, ClientGraphQlResponse... rest) {
-        HttpGraphQlClient.RequestSpec requestSpec = mock(HttpGraphQlClient.RequestSpec.class);
+        GraphQlClient.RequestSpec requestSpec = mock(GraphQlClient.RequestSpec.class);
         when(client.documentName(anyString())).thenReturn(requestSpec);
         when(requestSpec.variable(anyString(), any())).thenReturn(requestSpec);
 

@@ -77,7 +77,7 @@ function mockCatalog(overrides: Record<string, unknown> = {}) {
 		customOrder: false,
 		summary: {
 			total: 2,
-			updatesChangingDetection: 1,
+			updatesChangingReview: 1,
 			updatesChangingWordingOnly: 0,
 			updatesChangingPresentation: 0,
 			editedHere: 1,
@@ -95,7 +95,7 @@ function mockCatalog(overrides: Record<string, unknown> = {}) {
 				groupSlug: "packaging",
 				position: 0,
 				effectivelyOffered: true,
-				status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
+				status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }),
 			},
 		],
 		...overrides,
@@ -163,7 +163,7 @@ describe("instance catalog routes", () => {
 					etag: "structure-2",
 					summary: {
 						total: 2,
-						updatesChangingDetection: 0,
+						updatesChangingReview: 0,
 						updatesChangingWordingOnly: 0,
 						updatesChangingPresentation: 0,
 						editedHere: 0,
@@ -494,7 +494,7 @@ describe("instance catalog routes", () => {
 					slug: "describe-what-and-why",
 					definition: practiceDefinition,
 					shipped: { ...practiceDefinition, criteria: "The definition Hephaestus ships now" },
-					status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
+					status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }),
 				}),
 			),
 			http.get("*/admin/practice-catalog/practices/:slug/release", () =>
@@ -517,7 +517,7 @@ describe("instance catalog routes", () => {
 					slug: "describe-what-and-why",
 					definition: practiceDefinition,
 					shipped: { ...practiceDefinition, criteria: "Hephaestus criteria" },
-					status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
+					status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }),
 				}),
 			),
 			http.get("*/admin/practice-catalog/practices/:slug/release", () =>
@@ -603,7 +603,7 @@ describe("instance catalog routes", () => {
 					slug: "describe-what-and-why",
 					definition: practiceDefinition,
 					shipped: { ...practiceDefinition, criteria: "The definition Hephaestus ships now" },
-					status: status({ state: "UPDATE_WAITING", changeKind: "DETECTION" }),
+					status: status({ state: "UPDATE_WAITING", changeKind: "REVIEW" }),
 				}),
 			),
 			http.get("*/admin/practice-catalog/practices/:slug/release", () =>

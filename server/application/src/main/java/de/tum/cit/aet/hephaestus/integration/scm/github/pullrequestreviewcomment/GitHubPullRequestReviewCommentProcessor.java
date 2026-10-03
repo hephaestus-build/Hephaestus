@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPu
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.dto.GitHubPullRequestReviewCommentEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.NonNull;
@@ -435,7 +436,7 @@ public class GitHubPullRequestReviewCommentProcessor {
             log.debug("Author association is null, using NONE");
             return AuthorAssociation.NONE;
         }
-        return switch (value.toUpperCase()) {
+        return switch (value.toUpperCase(Locale.ROOT)) {
             case "COLLABORATOR" -> AuthorAssociation.COLLABORATOR;
             case "CONTRIBUTOR" -> AuthorAssociation.CONTRIBUTOR;
             case "FIRST_TIMER" -> AuthorAssociation.FIRST_TIMER;
@@ -459,7 +460,7 @@ public class GitHubPullRequestReviewCommentProcessor {
             log.debug("Comment side is null, using RIGHT as default");
             return PullRequestReviewComment.Side.RIGHT;
         }
-        return switch (value.toUpperCase()) {
+        return switch (value.toUpperCase(Locale.ROOT)) {
             case "LEFT" -> PullRequestReviewComment.Side.LEFT;
             case "RIGHT" -> PullRequestReviewComment.Side.RIGHT;
             default -> {
@@ -573,7 +574,7 @@ public class GitHubPullRequestReviewCommentProcessor {
                     + "This may indicate missing data in webhook payload.");
             return Issue.State.OPEN;
         }
-        return switch (state.toUpperCase()) {
+        return switch (state.toUpperCase(Locale.ROOT)) {
             case "OPEN" -> Issue.State.OPEN;
             case "CLOSED" -> Issue.State.CLOSED;
             case "MERGED" -> Issue.State.MERGED;

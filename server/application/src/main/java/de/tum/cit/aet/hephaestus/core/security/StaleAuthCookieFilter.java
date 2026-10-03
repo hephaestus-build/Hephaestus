@@ -37,7 +37,7 @@ public class StaleAuthCookieFilter extends OncePerRequestFilter {
             try {
                 localDecoder.decode(token);
             } catch (JwtException invalid) {
-                request.setAttribute(COOKIE_INVALID_ATTRIBUTE, Boolean.TRUE);
+                request.setAttribute(COOKIE_INVALID_ATTRIBUTE, true);
             }
         }
         chain.doFilter(request, response);

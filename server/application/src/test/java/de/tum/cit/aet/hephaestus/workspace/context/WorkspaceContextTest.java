@@ -1,6 +1,11 @@
 package de.tum.cit.aet.hephaestus.workspace.context;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -22,8 +27,7 @@ class WorkspaceContextTest {
 
         Set<WorkspaceRole> roles = Set.of(WorkspaceRole.OWNER, WorkspaceRole.ADMIN);
 
-        // Act — installationId is now passed in by the caller (resolved from the active
-        // GitHub App Connection); the record no longer pulls it from Workspace.
+        // The caller resolves installationId from the active GitHub App Connection.
         WorkspaceContext context = WorkspaceContext.fromWorkspace(workspace, roles, 123L);
 
         assertEquals(42L, context.id());
@@ -81,7 +85,6 @@ class WorkspaceContextTest {
         workspace.setDisplayName("Test");
         workspace.setAccountType(AccountType.USER);
 
-        // Act — null installationId is the legitimate "no App connection" path.
         WorkspaceContext context = WorkspaceContext.fromWorkspace(workspace, Set.of(), null);
 
         assertNull(context.installationId());
@@ -104,10 +107,8 @@ class WorkspaceContextTest {
         Set<WorkspaceRole> roles = Set.of(WorkspaceRole.OWNER);
         WorkspaceContext context = new WorkspaceContext(1L, "test", "Test", AccountType.ORG, 100L, false, roles);
 
-        // Act - Try to get roles and verify they're the same set
         Set<WorkspaceRole> retrievedRoles = context.roles();
 
-        // Assert - Record properties should be accessible
         assertEquals(1L, context.id());
         assertEquals("test", context.slug());
         assertEquals("Test", context.displayName());

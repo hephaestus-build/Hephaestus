@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.config;
 
+import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
@@ -14,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class CacheConfig {
 
-    private static final Duration LONG_TTL = Duration.ofSeconds(3600);
+    private static final Duration LONG_TTL = Duration.ofHours(1);
 
     private static final Duration MENTOR_CONTEXT_TTL = Duration.ofMinutes(5);
 
@@ -32,10 +33,7 @@ public class CacheConfig {
             // avoid a config→core.auth internal-type dependency; the decoder owns the canonical const).
             new CacheSpec("auth_jwt_revoked", AUTH_JWT_REVOKED_TTL, AUTH_JWT_REVOKED_MAX),
             new CacheSpec("contributors", LONG_TTL, LONG_MAX),
-            new CacheSpec("mentor_authored_work_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
             new CacheSpec("mentor_practice_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
-            new CacheSpec("mentor_user_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
-            new CacheSpec("mentor_workspace_context", MENTOR_CONTEXT_TTL, MENTOR_MAX),
             new CacheSpec("pullRequestTemplates", LONG_TTL, LONG_MAX));
 
     @Bean
@@ -50,7 +48,7 @@ public class CacheConfig {
     }
 
     private static CaffeineCache buildCache(CacheSpec spec, MeterRegistry meterRegistry) {
-        com.github.benmanes.caffeine.cache.Cache<Object, Object> cache = Caffeine.newBuilder()
+        Cache<Object, Object> cache = Caffeine.newBuilder()
                 .expireAfterWrite(spec.ttl())
                 .maximumSize(spec.maxSize())
                 .recordStats()

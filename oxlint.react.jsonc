@@ -73,6 +73,14 @@
 		// `const [x] = useState(() => …)` is React's own spelling for a value computed once; the rule
 		// reads the missing setter as a mistake.
 		"react/hook-use-state": "off",
+		// An index key moves state to the wrong row when a list reorders; what it reports here is
+		// skeleton placeholders, table heads and the segments of one sentence, which never reorder
+		// and have no identity of their own to key on.
+		"react/no-array-index-key": "off",
+		// Fast Refresh falls back to a full reload for a module that also exports a non-component,
+		// which is a development-server inconvenience; a TanStack Router file exports its `Route`
+		// beside its component by design.
+		"react/only-export-components": "off",
 		"jsx-a11y/anchor-ambiguous-text": "error",
 	},
 }

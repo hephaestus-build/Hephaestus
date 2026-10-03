@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.LoggingUtils;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Locale;
 import org.hibernate.cfg.AvailableSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,12 +43,12 @@ public class TenancyConfiguration {
                                 "table",
                                 table,
                                 "mode",
-                                mode.name().toLowerCase())
+                                mode.name().toLowerCase(Locale.ROOT))
                         .increment();
             }
             log.warn(
                     "Tenancy violation ({}): scoped tables {} queried without workspace_id predicate. SQL: {}",
-                    mode.name().toLowerCase(),
+                    mode.name().toLowerCase(Locale.ROOT),
                     unguardedTables,
                     LoggingUtils.truncate(sql, 200));
             if (mode == TenancyEnforcement.THROW) {

@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.context;
 
+import static org.mockito.Mockito.mock;
+
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
@@ -11,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.apache.commons.io.FileUtils;
 import org.jspecify.annotations.Nullable;
+import org.mockito.Mockito;
 
 /** Disk fixtures for unit callers; production only freezes folders through JobEvidenceFiles. */
 public final class PreparedJobInputsFixtures {
@@ -50,17 +53,27 @@ public final class PreparedJobInputsFixtures {
     }
 
     public static PreparedJobInputs prepare(JobEvidenceFiles files, AgentJob job, PreparedJobInputs inputs) {
-        return files.prepare(
-                job,
-                new PreparedEvidence(
-                        Map.of(), inputs.filesOnDisk(), inputs.cleanups(), inputs.folderIndex(), inputs.directories()),
-                inputs.automatedReviewReadinessReport());
+        files.beginPersonCapture(job);
+        try {
+            return files.prepare(
+                    job,
+                    new PreparedEvidence(
+                            Map.of(),
+                            inputs.filesOnDisk(),
+                            inputs.cleanups(),
+                            inputs.folderIndex(),
+                            inputs.directories()),
+                    inputs.automatedReviewReadinessReport());
+        } catch (RuntimeException exception) {
+            files.abortPersonCapture(job);
+            throw exception;
+        }
     }
 
     public static JobEvidenceFiles freezer() {
-        return org.mockito.Mockito.mock(JobEvidenceFiles.class, call -> {
+        return mock(JobEvidenceFiles.class, call -> {
             if (call.getMethod().getName().equals("prepare")) return inputs(call.getArgument(1), call.getArgument(2));
-            return org.mockito.Mockito.RETURNS_DEFAULTS.answer(call);
+            return Mockito.RETURNS_DEFAULTS.answer(call);
         });
     }
 }

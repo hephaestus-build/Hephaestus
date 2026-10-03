@@ -12,15 +12,12 @@ import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
- * Guardrail for the workspace ABI context prefix. Scans the bundled Pi runtime resources
- * (orchestrator + runner) for any legacy {@code .context/} reference that would violate the
- * rolling-deploy contract documented in {@code docs/developer/agent/workspace-abi.mdx}; the
- * canonical prefix is {@code context/}.
+ * The job folder mounts its inputs under {@code context/} ({@code docs/contributor/agent/workspace-abi.mdx}),
+ * so a hidden {@code .context/} path in the bundled Pi runtime resources would read nothing.
  */
 class SandboxLayoutPathsTest extends HephaestusArchitectureTest {
 
-    /** Matches references to the legacy {@code .context/} prefix that are NOT {@code context/}. */
-    private static final Pattern LEGACY_CONTEXT_PREFIX = Pattern.compile("(?<![A-Za-z0-9_/.])\\.context/");
+    private static final Pattern HIDDEN_CONTEXT_PREFIX = Pattern.compile("(?<![A-Za-z0-9_/.])\\.context/");
 
     @Test
     void agentResourcesAreOnContextTarget() throws IOException {
@@ -31,8 +28,8 @@ class SandboxLayoutPathsTest extends HephaestusArchitectureTest {
             stream.filter(Files::isRegularFile).forEach(p -> {
                 try {
                     String body = Files.readString(p, StandardCharsets.UTF_8);
-                    assertThat(LEGACY_CONTEXT_PREFIX.matcher(body).find())
-                            .as("Legacy '.context/' prefix found in %s", p)
+                    assertThat(HIDDEN_CONTEXT_PREFIX.matcher(body).find())
+                            .as("'.context/' path in %s", p)
                             .isFalse();
                 } catch (IOException e) {
                     throw new RuntimeException(e);

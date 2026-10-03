@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.live;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import de.tum.cit.aet.hephaestus.agent.mentor.MentorRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiPlanSpec;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
@@ -11,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -24,10 +25,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.LongStream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.util.FileSystemUtils;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -58,7 +62,7 @@ class MentorSandboxStressTest {
     private static final Path RUNNER =
             Path.of("src", "main", "resources", "agent", "pi-mentor-runner.ts").toAbsolutePath();
     /** Per-session deadline: cold-start + handshake + prompt + settlement against live LLM. */
-    private static final Duration SESSION_BUDGET = Duration.ofSeconds(120);
+    private static final Duration SESSION_BUDGET = Duration.ofMinutes(2);
 
     private final List<Path> stagedWorkspaces = new CopyOnWriteArrayList<>();
     private final List<StdioAttachedSandbox> sandboxes = new CopyOnWriteArrayList<>();
@@ -77,14 +81,10 @@ class MentorSandboxStressTest {
         }
         sandboxes.clear();
         for (Path ws : stagedWorkspaces) {
-            try (var stream = Files.walk(ws)) {
-                stream.sorted(Comparator.reverseOrder()).forEach(p -> {
-                    try {
-                        Files.deleteIfExists(p);
-                    } catch (IOException ignored) {
-                    }
-                });
+            try {
+                FileSystemUtils.deleteRecursively(ws);
             } catch (IOException ignored) {
+                // A leftover temp directory does not affect the next test, which stages its own.
             }
         }
         stagedWorkspaces.clear();
@@ -98,8 +98,8 @@ class MentorSandboxStressTest {
      * {@code AgentSessionRuntime} via {@code switchSession}, not separate containers.
      *
      * <p>The interesting number is the <b>per-session marginal RSS</b>: how much extra memory each
-     * extra thread costs once the Pi SDK is loaded. The single-session test gives the floor
-     * (~150 MB); this test gives the slope.
+     * extra thread costs once the Pi SDK is loaded. The single-session test gives the floor; this
+     * test gives the slope.
      *
      * <p>Run: {@code N=3 K=5 ./gradlew :application:liveTest --tests MentorSandboxStressTest.multiSessionPerRunner}.
      */
@@ -139,7 +139,7 @@ class MentorSandboxStressTest {
             }
             // Hard regression budgets for multi-session: peak RSS per runner + marginal RSS per
             // extra session. The marginal slope is the headline architectural invariant — if it
-            // ever exceeds ~2 MB the per-thread state has bloated and the per-user-container
+            // ever exceeds its budget the per-thread state has bloated and the per-user-container
             // model stops scaling. Both override via env.
             long peakRssBudgetKb = Long.parseLong(System.getenv().getOrDefault("PEAK_RSS_BUDGET_KB", "240000"));
             long marginalBudgetKb = Long.parseLong(System.getenv().getOrDefault("MARGINAL_RSS_BUDGET_KB", "2048"));
@@ -155,11 +155,8 @@ class MentorSandboxStressTest {
                         + " KB (override via PEAK_RSS_BUDGET_KB)");
             }
             if (k > 1) {
-                // Clamp negative deltas at 0 — a runner whose RSS DROPPED between the floor and
-                // the K-opens sample (V8 freed memory, jemalloc decay timing) is not a
-                // regression. Only growth is. The previous Math.abs() variant treated benign GC
-                // timing as a "regression" with no actionable signal; this asserts only the
-                // direction we care about.
+                // Clamp negative deltas at 0: a runner whose RSS dropped between the floor and the
+                // K-opens sample (V8 freed memory, jemalloc decay timing) has not regressed.
                 long maxMarginalGrowthKb = runners.stream()
                         .filter(r -> r.rssAfterOpenKb > 0 && r.rssOneSessionFloorKb > 0)
                         .mapToLong(r -> Math.max(0L, (r.rssAfterOpenKb - r.rssOneSessionFloorKb) / (k - 1)))
@@ -213,8 +210,8 @@ class MentorSandboxStressTest {
                 throw new AssertionError("stress test failed: " + failed + "/" + n + " sessions errored");
             }
             // Hard regression budgets. Without these the test is a printf with a liveness check —
-            // a 10× RSS bloat or 5× cold-start regression would still pass green. Budgets are
-            // generous (≥40% headroom over measured steady-state) so they don't flake on
+            // an RSS bloat or a cold-start regression would still pass green. Budgets leave
+            // headroom over steady state so they don't flake on
             // shared CI hardware. Override via env for soak runs.
             long peakRssBudgetKb = Long.parseLong(System.getenv().getOrDefault("PEAK_RSS_BUDGET_KB", "240000"));
             long coldStartBudgetMs = Long.parseLong(System.getenv().getOrDefault("COLD_START_BUDGET_MS", "5000"));
@@ -264,6 +261,8 @@ class MentorSandboxStressTest {
                         long[] sample = readProcStatus(session.runnerPid);
                         session.samples.add(sample);
                     } catch (IOException ignored) {
+                        // The runner can exit between the liveness check and the /proc read; that sample is
+                        // simply missing, and a periodic task that threw would stop sampling altogether.
                     }
                 },
                 0,
@@ -334,6 +333,8 @@ class MentorSandboxStressTest {
                     try {
                         r.samples.add(readProcStatus(r.runnerPid));
                     } catch (IOException ignored) {
+                        // The runner can exit between the liveness check and the /proc read; that sample is
+                        // simply missing, and a periodic task that threw would stop sampling altogether.
                     }
                 },
                 0,
@@ -403,12 +404,11 @@ class MentorSandboxStressTest {
                         "In one sentence: what is dependency injection? (thread #" + (i + 1) + "/" + r.k + ")",
                         Duration.ofSeconds(10));
                 var turnComplete = turnCompletes.get(tid);
-                org.junit.jupiter.api.Assertions.assertNotNull(turnComplete);
+                assertNotNull(turnComplete);
                 turnComplete.get(SESSION_BUDGET.toSeconds(), TimeUnit.SECONDS);
                 long turnMs = (System.nanoTime() - promptStart) / 1_000_000;
                 r.perTurnMs.add(turnMs);
             }
-            r.allTurnsDoneNanos = System.nanoTime();
             r.rssAfterAllTurnsKb = currentRss(r.runnerPid);
         } finally {
             sampleFuture.cancel(false);
@@ -633,9 +633,9 @@ class MentorSandboxStressTest {
         long threads = -1L;
         for (String line : Files.readAllLines(status)) {
             if (line.startsWith("VmRSS:")) {
-                rssKb = Long.parseLong(line.split("\\s+")[1]);
+                rssKb = Long.parseLong(line.split("\\s+", -1)[1]);
             } else if (line.startsWith("Threads:")) {
-                threads = Long.parseLong(line.split("\\s+")[1]);
+                threads = Long.parseLong(line.split("\\s+", -1)[1]);
             }
             if (rssKb > 0 && threads > 0) break;
         }
@@ -719,10 +719,10 @@ class MentorSandboxStressTest {
         try {
             workspaceLit = MAPPER.writeValueAsString(workspace.toString());
             runnerLit = MAPPER.writeValueAsString(runner.toUri().toString());
-        } catch (tools.jackson.core.JacksonException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException("failed to encode shim literals", e);
         }
-        return ("""
+        return """
             import path from "node:path";
             import fs from "node:fs";
             const WORKSPACE_REAL = __WORKSPACE__;
@@ -736,7 +736,7 @@ class MentorSandboxStressTest {
             const origMkdir = fs.mkdirSync; fs.mkdirSync = (p, opts) => origMkdir(rewrite(p), opts);
             const origReadFile = fs.readFileSync; fs.readFileSync = (p, opts) => origReadFile(rewrite(p), opts);
             await import(__RUNNER_URL__);
-            """).replace("__WORKSPACE__", workspaceLit).replace("__RUNNER_URL__", runnerLit);
+            """.replace("__WORKSPACE__", workspaceLit).replace("__RUNNER_URL__", runnerLit);
     }
 
     /** Per-runner metric capture for the multi-session test. K threads opened in one runner. */
@@ -748,14 +748,13 @@ class MentorSandboxStressTest {
         long spawnStartNanos;
         long readyNanos;
         long allThreadsOpenedNanos;
-        long allTurnsDoneNanos;
         long rssAfterOpenKb;
         long rssAfterAllTurnsKb;
         long rssOneSessionFloorKb;
         final UUID[] threadIds;
         final List<Long> perTurnMs = new CopyOnWriteArrayList<>();
         final List<long[]> samples = new CopyOnWriteArrayList<>();
-        volatile @org.jspecify.annotations.Nullable Throwable failure;
+        volatile @Nullable Throwable failure;
 
         MultiSessionRunnerMetrics(int id, int k) {
             this.id = id;
@@ -776,7 +775,7 @@ class MentorSandboxStressTest {
         long promptAcceptedNanos;
         long agentEndNanos;
         final List<long[]> samples = new CopyOnWriteArrayList<>();
-        volatile @org.jspecify.annotations.Nullable Throwable failure;
+        volatile @Nullable Throwable failure;
 
         SessionMetrics(int id) {
             this.id = id;

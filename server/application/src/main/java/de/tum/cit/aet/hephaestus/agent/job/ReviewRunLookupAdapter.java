@@ -2,8 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeCoverageLedger;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository.ReviewRunFactsRow;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRunLookup;
 import java.util.Collection;
 import java.util.List;
@@ -22,9 +20,6 @@ class ReviewRunLookupAdapter implements ReviewRunLookup {
 
     private final AgentJobRepository repository;
     private final ReviewRunTargets targets;
-
-    /** A list: a provider can be switched off, and then its runs carry no feedback address. */
-    private final List<SummaryChannel> summaryChannels;
 
     @Override
     @Transactional(readOnly = true)
@@ -54,18 +49,9 @@ class ReviewRunLookupAdapter implements ReviewRunLookup {
         }));
     }
 
-    /** The summary comment on the work's own page, addressed by the channel that posted it; null otherwise. */
-    private @Nullable String feedbackUrl(ReviewRunFactsRow row, Target target) {
-        String commentId = row.getDeliveryCommentId();
-        String workUrl = target.url();
-        IntegrationKind provider = row.getIntegrationKind();
-        if (commentId == null || workUrl == null || provider == null) {
-            return null;
-        }
-        return summaryChannels.stream()
-                .filter(channel -> channel.kind() == provider)
-                .findFirst()
-                .map(channel -> channel.summaryCommentUrl(workUrl, commentId))
+    /** The run's summary comment, linked only when the recorded address is a comment on the reviewed work itself. */
+    private static @Nullable String feedbackUrl(ReviewRunFactsRow row, Target target) {
+        return DeliveredWorkFeedbackService.verifiedLink(target.url(), target.provider(), row.getFeedbackUrl())
                 .orElse(null);
     }
 }

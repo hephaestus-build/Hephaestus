@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
+import de.tum.cit.aet.hephaestus.agent.handler.ObservationOrder;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJobRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -32,6 +33,7 @@ import de.tum.cit.aet.hephaestus.practices.model.Outcome;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeGroup;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeRevision;
+import de.tum.cit.aet.hephaestus.practices.model.Severity;
 import de.tum.cit.aet.hephaestus.practices.observation.dto.DeveloperPracticeSummaryProjection;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
@@ -46,6 +48,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -123,7 +126,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     void setUp() {
         databaseTestUtils.cleanDatabase();
 
-        workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("finding-test"));
+        workspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("observation-test"));
 
         practice = new Practice();
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
@@ -463,7 +466,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     class InsertIfAbsentTests {
 
         @Test
-        void insertsNewFinding() {
+        void insertsNewObservation() {
             UUID id = UUID.randomUUID();
             int result = observationRepository.insertIfAbsent(
                     id,
@@ -582,8 +585,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
     class WorkspacePurgeTests {
 
         @Test
-        @DisplayName("deleteAllByPracticeWorkspaceId removes findings for workspace practices")
-        void deletesFindings() {
+        @DisplayName("deleteAllByPracticeWorkspaceId removes observations for workspace practices")
+        void deletesObservations() {
             UUID id = UUID.randomUUID();
             observationRepository.insertIfAbsent(
                     id,
@@ -595,7 +598,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
-                    "Purge test finding",
+                    "Purge test observation",
                     "MET",
                     null,
                     null,
@@ -643,7 +646,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "scm.pull_request",
                     1L,
                     aboutUser.getId(),
-                    "WS-A finding",
+                    "WS-A observation",
                     "MET",
                     null,
                     null,
@@ -661,7 +664,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "scm.pull_request",
                     2L,
                     aboutUser.getId(),
-                    "WS-B finding",
+                    "WS-B observation",
                     "NOT_MET",
                     "MINOR",
                     null,
@@ -769,7 +772,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
                     "scm.pull_request",
                     artifactId,
                     aboutUser.getId(),
-                    "finding",
+                    "observation",
                     outcome,
                     severity,
                     null,
@@ -1064,8 +1067,9 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
 
             AgentJob jobA = anotherJob();
             AgentJob jobB = anotherJob();
-            AgentJob winner = jobA.getId().toString().compareTo(jobB.getId().toString()) > 0 ? jobA : jobB;
-            AgentJob loser = winner == jobA ? jobB : jobA;
+            boolean jobAWins = jobA.getId().toString().compareTo(jobB.getId().toString()) > 0;
+            AgentJob winner = jobAWins ? jobA : jobB;
+            AgentJob loser = jobAWins ? jobB : jobA;
 
             Instant sameInstant = Instant.parse("2026-03-20T10:00:00Z");
             insert("tb-loser", loser.getId(), 42L, "NOT_MET", sameInstant);
@@ -1100,7 +1104,8 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             long artifactId = 42L;
             insert("workspace-a", agentJob.getId(), artifactId, "MET", Instant.parse("2026-03-20T10:00:00Z"));
 
-            Workspace otherWorkspace = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("finding-other"));
+            Workspace otherWorkspace =
+                    workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("observation-other"));
             Practice otherPractice = new Practice();
             otherPractice.setAutomatedReviewPolicy(PracticeTestEvidence.pullRequest());
             otherPractice.setWorkspace(otherWorkspace);
@@ -1369,7 +1374,7 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
-        @DisplayName("a campaign's finding on the developer's own work reaches the reflective surface")
+        @DisplayName("a campaign's observation on the developer's own work reaches the reflective surface")
         void backfilledObservationsAreVisibleToTheDeveloper() {
             insert("bf-only", campaignJob().getId(), 900L, Instant.parse("2026-03-20T10:00:00Z"), "BACKFILL");
 
@@ -1429,6 +1434,57 @@ class ObservationRepositoryIntegrationTest extends BaseIntegrationTest {
             assertThat(summary).hasSize(1);
             assertThat(summary.get(0).getTotalObservations()).isEqualTo(1L);
             assertThat(summary.get(0).getLastObservedAt()).isEqualTo(Instant.parse("2026-03-20T10:00:00Z"));
+        }
+    }
+
+    @Nested
+    class OperatorOrderTests {
+
+        @Test
+        void shouldRankSeveritiesLikeWorstFirstWhenPrioritizingActionable() {
+            Instant base = Instant.parse("2026-03-20T10:00:00Z");
+            // The less severe, the newer: newest-first alone would invert the expected order.
+            List<UUID> ids = Stream.of(Severity.MINOR, Severity.CRITICAL, Severity.INFO, Severity.MAJOR)
+                    .map(severity -> insertNotMet(severity, base.plusSeconds(severity.rank())))
+                    .toList();
+            ObservationQueryFilter thisRun = new ObservationQueryFilter(
+                    null, null, null, null, null, null, agentJob.getId(), null, null, null, null, null, null);
+
+            var operatorOrder = observationRepository
+                    .findForWorkspace(workspace.getId(), thisRun, true, PageRequest.of(0, 10))
+                    .map(row -> Objects.requireNonNull(row.getSeverity()))
+                    .getContent();
+            var worstFirst = observationRepository.findAllById(ids).stream()
+                    .sorted(ObservationOrder.worstFirst())
+                    .map(Observation::getSeverity)
+                    .toList();
+
+            assertThat(operatorOrder).containsExactly(Severity.CRITICAL, Severity.MAJOR, Severity.MINOR, Severity.INFO);
+            assertThat(worstFirst).containsExactlyElementsOf(operatorOrder);
+        }
+
+        private UUID insertNotMet(Severity severity, Instant observedAt) {
+            UUID id = UUID.randomUUID();
+            assertThat(observationRepository.insertIfAbsent(
+                            id,
+                            "operator-order-" + severity,
+                            agentJob.getId(),
+                            workspace.getId(),
+                            practice.getId(),
+                            null,
+                            "scm.pull_request",
+                            42L,
+                            aboutUser.getId(),
+                            "Operator order observation",
+                            "NOT_MET",
+                            severity.name(),
+                            null,
+                            null,
+                            null,
+                            observedAt,
+                            "LIVE"))
+                    .isOne();
+            return id;
         }
     }
 }

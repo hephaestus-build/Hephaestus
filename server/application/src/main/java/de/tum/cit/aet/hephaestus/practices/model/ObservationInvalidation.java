@@ -87,8 +87,8 @@ public class ObservationInvalidation {
     @Column(name = "reason", nullable = false, length = MAX_REASON_LENGTH)
     private String reason;
 
-    @Column(name = "invalidated_by_account_id", nullable = false)
-    private Long invalidatedByAccountId;
+    @Column(name = "invalidated_by_account_id")
+    private @Nullable Long invalidatedByAccountId;
 
     @Column(name = "invalidated_at", nullable = false)
     private Instant invalidatedAt;

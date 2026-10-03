@@ -44,12 +44,30 @@ const alan: ReviewSubject = { id: 11, login: "alan", name: "Alan Turing" };
 const katherine: ReviewSubject = { id: 14, login: "katherine", name: "Katherine Johnson" };
 const barbara: ReviewSubject = { id: 18, login: "barbara", name: "Barbara Liskov" };
 
+const membership = {
+	createdAt: new Date(STORY_NOW),
+	hidden: false,
+	eligibleForPracticeReview: true,
+};
+
 export const workspaceMembers: WorkspaceMembership[] = [
-	{ userId: ada.id, userLogin: ada.login, userName: ada.name, role: "MEMBER" },
-	{ userId: grace.id, userLogin: grace.login, userName: grace.name, role: "ADMIN" },
-	{ userId: alan.id, userLogin: alan.login, userName: alan.name, role: "MEMBER" },
-	{ userId: katherine.id, userLogin: katherine.login, userName: katherine.name, role: "MEMBER" },
-	{ userId: barbara.id, userLogin: barbara.login, userName: barbara.name, role: "MEMBER" },
+	{ ...membership, userId: ada.id, userLogin: ada.login, userName: ada.name, role: "MEMBER" },
+	{ ...membership, userId: grace.id, userLogin: grace.login, userName: grace.name, role: "ADMIN" },
+	{ ...membership, userId: alan.id, userLogin: alan.login, userName: alan.name, role: "MEMBER" },
+	{
+		...membership,
+		userId: katherine.id,
+		userLogin: katherine.login,
+		userName: katherine.name,
+		role: "MEMBER",
+	},
+	{
+		...membership,
+		userId: barbara.id,
+		userLogin: barbara.login,
+		userName: barbara.name,
+		role: "MEMBER",
+	},
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -1231,9 +1249,9 @@ export function manyMembers(count: number): WorkspaceMembership[] {
 		}
 		return {
 			...source,
-			userId: (source.userId ?? 0) + cycle * 100,
+			userId: source.userId + cycle * 100,
 			userLogin: `${source.userLogin}-${cycle}`,
-			userName: `${source.userName} ${cycle}`,
+			userName: source.userName === undefined ? undefined : `${source.userName} ${cycle}`,
 		};
 	});
 }

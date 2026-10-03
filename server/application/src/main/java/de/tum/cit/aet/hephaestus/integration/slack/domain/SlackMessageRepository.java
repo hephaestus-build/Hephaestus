@@ -1,13 +1,18 @@
 package de.tum.cit.aet.hephaestus.integration.slack.domain;
 
 import de.tum.cit.aet.hephaestus.integration.slack.retention.SlackRetentionSweeper;
+import jakarta.persistence.QueryHint;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Stream;
+import org.hibernate.jpa.HibernateHints;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,22 +28,32 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
           AND m.deletedAt IS NULL AND NOT EXISTS
             (SELECT 1 FROM SlackParticipantConsent p WHERE p.workspaceId=:workspaceId
              AND p.slackUserId=m.authorSlackUserId AND p.ingestionOptedOut=TRUE)
+          AND NOT EXISTS (
+            SELECT 1 FROM PersonSuppression s, IdentityProvider provider
+            WHERE s.providerId=provider.id
+              AND provider.type=de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType.SLACK
+              AND provider.serverUrl='https://slack.com'
+              AND s.subject=m.authorSlackUserId AND s.teamKey=m.slackTeamId)
         """;
 
     @Query("""
         SELECT m.id AS id, m.slackChannelId AS slackChannelId, m.slackTs AS slackTs,
-          m.slackThreadTs AS slackThreadTs, m.authorMemberId AS authorMemberId,
+          m.slackThreadTs AS slackThreadTs, m.authorMemberId AS authorMemberId, m.slackTeamId AS slackTeamId, m.authorSlackUserId AS authorSlackUserId,
           m.text AS text, m.ingestedAt AS ingestedAt
         FROM SlackMessage m JOIN SlackMonitoredChannel c
           ON c.workspaceId=m.workspaceId AND c.slackChannelId=m.slackChannelId
         WHERE m.workspaceId=:workspaceId
         """ + MESSAGE_READ_GUARD + " ORDER BY m.slackChannelId,m.slackTs,m.id")
-    @org.springframework.data.jpa.repository.QueryHints(
-            @jakarta.persistence.QueryHint(name = org.hibernate.jpa.HibernateHints.HINT_FETCH_SIZE, value = "256"))
-    java.util.stream.Stream<WorkspaceMessage> streamWorkspaceMessages(@Param("workspaceId") long workspaceId);
+    @QueryHints(@QueryHint(name = HibernateHints.HINT_FETCH_SIZE, value = "256"))
+    Stream<WorkspaceMessage> streamWorkspaceMessages(@Param("workspaceId") long workspaceId);
 
     /** Scalar projection keeps the full-folder stream out of Hibernate's managed-entity cache. */
     interface WorkspaceMessage {
+        String getSlackTeamId();
+
+        @Nullable
+        String getAuthorSlackUserId();
+
         Long getId();
 
         String getSlackChannelId();
@@ -82,7 +97,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
            AND COALESCE(m.slack_thread_ts, m.slack_ts) = t.slack_thread_ts
         """, nativeQuery = true)
     int deleteByWorkspaceIdAndThreadIds(
-            @Param("workspaceId") long workspaceId, @Param("threadIds") java.util.Collection<Long> threadIds);
+            @Param("workspaceId") long workspaceId, @Param("threadIds") Collection<Long> threadIds);
 
     long deleteByWorkspaceId(Long workspaceId);
 
@@ -228,7 +243,7 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
      */
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.integration.slack.domain.SlackThreadMessageRow(
-            m.slackTs, m.authorSlackUserId, m.authorMemberId, u.login, u.name, m.text, m.editedAt
+            m.slackTs, m.slackTeamId, m.authorSlackUserId, m.authorMemberId, u.login, u.name, m.text, m.editedAt
         )
         FROM SlackMessage m
         JOIN SlackMonitoredChannel c ON c.workspaceId = m.workspaceId AND c.slackChannelId = m.slackChannelId

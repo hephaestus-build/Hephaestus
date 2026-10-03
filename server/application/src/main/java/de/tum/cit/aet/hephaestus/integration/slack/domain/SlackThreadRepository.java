@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.slack.domain;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -103,8 +104,7 @@ public interface SlackThreadRepository extends JpaRepository<SlackThread, Long> 
     @Modifying
     @Transactional
     @Query("DELETE FROM SlackThread t WHERE t.workspaceId = :workspaceId AND t.id IN :ids")
-    int deleteByWorkspaceIdAndIdIn(
-            @Param("workspaceId") Long workspaceId, @Param("ids") java.util.Collection<Long> ids);
+    int deleteByWorkspaceIdAndIdIn(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<Long> ids);
 
     /**
      * Person erasure (opt-out / account hard-delete): drop one member's id out of every thread's
@@ -262,4 +262,35 @@ public interface SlackThreadRepository extends JpaRepository<SlackThread, Long> 
             "UPDATE SlackThread t SET t.lastReviewedTs = :lastTs WHERE t.workspaceId = :workspaceId AND t.id = :threadId")
     int advanceReviewWatermark(
             @Param("workspaceId") long workspaceId, @Param("threadId") long threadId, @Param("lastTs") String lastTs);
+
+    interface PersonSourceIdentityRow {
+        long getProviderId();
+
+        String getSubject();
+
+        String getTeamId();
+    }
+
+    @WorkspaceAgnostic("Instance-admin person selection pins an exact provider and native identity across workspaces")
+    @Query(value = """
+        SELECT DISTINCT t.id
+                FROM slack_message m JOIN slack_thread t ON t.workspace_id=m.workspace_id
+                    AND t.slack_channel_id=m.slack_channel_id
+                    AND t.slack_thread_ts=COALESCE(m.slack_thread_ts,m.slack_ts)
+                JOIN identity_provider p ON p.type='SLACK' AND p.server_url='https://slack.com'
+                 WHERE p.id=:providerId AND m.author_slack_user_id=:subject AND m.slack_team_id=:teamId
+        """, nativeQuery = true)
+    List<Long> findPersonSourceIds(
+            @Param("providerId") long providerId, @Param("subject") String subject, @Param("teamId") String teamId);
+
+    @Query(value = """
+        SELECT DISTINCT p.id AS providerId,m.author_slack_user_id AS subject,m.slack_team_id AS teamId
+                FROM slack_message m JOIN slack_thread t ON t.workspace_id=m.workspace_id
+                    AND t.slack_channel_id=m.slack_channel_id
+                    AND t.slack_thread_ts=COALESCE(m.slack_thread_ts,m.slack_ts)
+                JOIN identity_provider p ON p.type='SLACK' AND p.server_url='https://slack.com'
+                 WHERE t.workspace_id=:workspaceId AND t.id=:artifactId AND m.author_slack_user_id IS NOT NULL AND m.author_slack_user_id<>''
+        """, nativeQuery = true)
+    List<PersonSourceIdentityRow> findPersonSourceIdentities(
+            @Param("workspaceId") long workspaceId, @Param("artifactId") long artifactId);
 }

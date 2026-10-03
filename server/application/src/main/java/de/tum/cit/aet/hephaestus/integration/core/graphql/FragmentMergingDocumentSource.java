@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.springframework.core.io.Resource;
 import org.springframework.graphql.support.ResourceDocumentSource;
 import reactor.core.publisher.Mono;
@@ -143,7 +144,7 @@ public class FragmentMergingDocumentSource extends ResourceDocumentSource {
      * Parses raw GraphQL content into a map of fragment name to complete fragment text
      * (including the {@code fragment Name on Type { ... }} block).
      */
-    static Map<String, String> parseFragments(@org.jspecify.annotations.Nullable String rawContent) {
+    static Map<String, String> parseFragments(@Nullable String rawContent) {
         if (rawContent == null || rawContent.isBlank()) {
             return Collections.emptyMap();
         }

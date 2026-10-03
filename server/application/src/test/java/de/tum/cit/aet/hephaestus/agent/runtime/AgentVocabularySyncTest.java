@@ -17,7 +17,9 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 class AgentVocabularySyncTest extends BaseUnitTest {
@@ -62,14 +64,11 @@ class AgentVocabularySyncTest extends BaseUnitTest {
         // schema's properties but not in its required list. Keeping it out of both would let the two
         // vocabularies drift apart silently, which is the whole point of this test.
         List<String> requiredFields = Arrays.stream(ComposedFeedbackUnit.ConversationBrief.class.getRecordComponents())
-                .filter(component ->
-                        component.getAnnotatedType().getAnnotation(org.jspecify.annotations.Nullable.class) == null)
+                .filter(component -> component.getAnnotatedType().getAnnotation(Nullable.class) == null)
                 .map(component -> component.getName())
                 .toList();
         String required = "required: ["
-                + requiredFields.stream()
-                        .map(field -> "\"" + field + "\"")
-                        .collect(java.util.stream.Collectors.joining(", "))
+                + requiredFields.stream().map(field -> "\"" + field + "\"").collect(Collectors.joining(", "))
                 + "]";
 
         String runner = Files.readString(RUNNER, StandardCharsets.UTF_8);

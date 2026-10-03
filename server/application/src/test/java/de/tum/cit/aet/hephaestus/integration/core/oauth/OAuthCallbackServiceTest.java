@@ -23,12 +23,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import jakarta.persistence.EntityNotFoundException;
-import java.lang.reflect.Field;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.assertj.core.api.Assertions;
 import org.hibernate.exception.ConstraintViolationException;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +37,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @Tag("unit")
@@ -152,7 +151,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 });
         when(credentialBundleConverter.encrypt(any(), any())).thenReturn(new byte[] {0x02, 1, 2, 3});
 
-        Connection result = service.completeConnection(pending, completed, "alice@example.com");
+        Connection result = service.completeConnection(pending, completed, 42L);
 
         assertThat(result.getInstanceKey()).isEqualTo("T123");
         assertThat(result.getDisplayName()).isEqualTo("Acme");
@@ -164,13 +163,13 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         assertThat(req.getValue().next()).isEqualTo(IntegrationState.ACTIVE);
         assertThat(req.getValue().eventType()).isEqualTo("OAUTH_COMPLETE");
         assertThat(req.getValue().actorKind()).isEqualTo("USER");
-        assertThat(req.getValue().actorRef()).isEqualTo("alice@example.com");
+        assertThat(req.getValue().actorAccountId()).isEqualTo(42L);
         assertThat(req.getValue().correlationId()).startsWith("oauth-T123-");
         assertThat(req.getValue().detail()).isEqualTo("Acme");
     }
 
     @Test
-    void complete_nullActorRef_usesSentinel() {
+    void shouldKeepAccountActorAbsentWhenOAuthStateHasNone() {
         Connection pending = newConnection(7L, 42L, IntegrationKind.SLACK, null, IntegrationState.PENDING);
         ConnectFinalization.Completed completed =
                 new ConnectFinalization.Completed("T1", new BearerToken("t", null), null);
@@ -182,7 +181,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
 
         ArgumentCaptor<TransitionRequest> req = ArgumentCaptor.forClass(TransitionRequest.class);
         verify(connectionService).transition(any(Connection.class), req.capture());
-        assertThat(req.getValue().actorRef()).isEqualTo(OAuthCallbackService.ACTOR_FALLBACK);
+        assertThat(req.getValue().actorAccountId()).isNull();
     }
 
     @Test
@@ -190,7 +189,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         Connection existing = newConnection(7L, 42L, IntegrationKind.SLACK, "T_ORIG", IntegrationState.ACTIVE);
         ConnectFinalization.Completed completed =
                 new ConnectFinalization.Completed("T_NEW", new BearerToken("t", null), "Renamed");
-        Assertions.assertThatThrownBy(() -> service.completeConnection(existing, completed, "alice"))
+        assertThatThrownBy(() -> service.completeConnection(existing, completed, 42L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("instance_key");
     }
@@ -209,7 +208,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         when(credentialBundleConverter.encrypt(any(), any())).thenReturn(new byte[] {0x02, 4, 5, 6});
 
-        Connection result = service.completeConnection(stalePending, completed, "alice");
+        Connection result = service.completeConnection(stalePending, completed, 42L);
 
         assertThat(result).isSameAs(active);
         assertThat(active.getDisplayName()).isEqualTo("Acme");
@@ -228,7 +227,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 .thenAnswer(inv -> inv.getArgument(0));
         when(credentialBundleConverter.encrypt(any(), any())).thenReturn(new byte[] {0x02, 4, 5, 6});
 
-        service.completeConnection(pending, slackCompletion(), "alice");
+        service.completeConnection(pending, slackCompletion(), 42L);
 
         assertThat(pending.getConfig()).isEqualTo(new ConnectionConfig.SlackConfig("T1", "Acme", null, Set.of()));
     }
@@ -258,7 +257,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 });
         when(credentialBundleConverter.encrypt(any(), any())).thenReturn(new byte[] {0x02, 7, 8, 9});
 
-        Connection result = service.completeConnection(stalePending, completed, "alice");
+        Connection result = service.completeConnection(stalePending, completed, 42L);
 
         assertThat(result).isSameAs(uninstalled);
         assertThat(uninstalled.getDisplayName()).isEqualTo("Acme");
@@ -278,7 +277,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
                 .thenThrow(new IllegalStateException("Illegal transition for connection 7"));
 
-        assertThatThrownBy(() -> service.completeConnection(pending, completed, "alice"))
+        assertThatThrownBy(() -> service.completeConnection(pending, completed, 42L))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Illegal transition");
     }
@@ -291,7 +290,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        Connection result = service.completeConnection(pending, completed, "alice");
+        Connection result = service.completeConnection(pending, completed, 42L);
 
         assertThat(result.getCredentialsAlg()).isNull();
         assertThat(result.getCredentialsEncrypted()).isNull();
@@ -310,7 +309,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
         when(connectionService.transition(any(Connection.class), any(TransitionRequest.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-        Connection result = service.completeConnection(pending, verifiedInstallation(4242L), "5");
+        Connection result = service.completeConnection(pending, verifiedInstallation(4242L), 5L);
 
         assertThat(result.getInstanceKey()).isEqualTo("4242");
         assertThat(result.getDisplayName()).isEqualTo("acme");
@@ -326,7 +325,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                 .thenReturn(List.of(heldBy(43L, IntegrationState.ACTIVE)));
         when(membershipQuery.isAdministrator(43L, 5L)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), "5"))
+        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), 5L))
                 .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
                 .hasMessage("This GitHub App installation is already connected to the Hephaestus workspace"
                         + " \"Acme Engineering\" (acme-eng). Disconnect GitHub there before connecting it here.");
@@ -341,7 +340,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                         IntegrationKind.GITHUB, "4242", HOLDING_AN_INSTALLATION))
                 .thenReturn(List.of(heldBy(43L, IntegrationState.SUSPENDED)));
 
-        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), "5"))
+        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), 5L))
                 .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
                 .hasMessage("This GitHub App installation is already connected to another Hephaestus workspace."
                         + " An administrator of that workspace must disconnect GitHub there first.");
@@ -362,7 +361,7 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                         "duplicate key", new SQLException("duplicate key"), "uq_connection_one_github_installation"));
         when(connectionRepository.save(any(Connection.class))).thenThrow(violation);
 
-        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), "5"))
+        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), 5L))
                 .isInstanceOf(OAuthCallbackService.InstanceConnectedElsewhereException.class)
                 .hasCause(violation)
                 .hasMessageContaining("another Hephaestus workspace");
@@ -382,11 +381,9 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                         "duplicate key", new SQLException("duplicate key"), "uq_connection_one_active_slack_per_team"));
         when(connectionRepository.save(any(Connection.class))).thenThrow(violation);
 
-        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), "5"))
+        assertThatThrownBy(() -> service.completeConnection(pending, verifiedInstallation(4242L), 5L))
                 .isSameAs(violation);
     }
-
-    // helpers
 
     private void givenActiveSlackTeam(Connection... active) {
         when(connectionRepository.findAllByKindAndInstanceKeyAndStateIn(
@@ -429,18 +426,11 @@ class OAuthCallbackServiceTest extends BaseUnitTest {
                                 null);
                     case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
                     case OUTLINE ->
-                        new ConnectionConfig.OutlineConfig(
-                                "https://app.getoutline.com", null, null, java.util.Set.of());
+                        new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
                 };
         Connection c = new Connection(ws, kind, instanceKey, cfg);
         c.setState(state);
-        try {
-            Field idField = Connection.class.getDeclaredField("id");
-            idField.setAccessible(true);
-            idField.set(c, id);
-        } catch (ReflectiveOperationException e) {
-            throw new AssertionError(e);
-        }
+        ReflectionTestUtils.setField(c, "id", id);
         return c;
     }
 }

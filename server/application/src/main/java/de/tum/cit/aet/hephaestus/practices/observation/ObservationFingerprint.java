@@ -29,17 +29,15 @@ public final class ObservationFingerprint {
         Objects.requireNonNull(practiceSlug, "practiceSlug");
         Objects.requireNonNull(artifactKind, "artifactKind");
 
-        String canonical = new StringBuilder()
-                .append(practiceSlug)
-                .append(SEP)
-                .append(artifactKind)
-                .append(SEP)
-                .append(artifactId)
-                .append(SEP)
-                .append(aboutUserId)
-                .append(SEP)
-                .append(firstLocationPath == null ? "" : firstLocationPath)
-                .toString();
+        String canonical = practiceSlug
+                + SEP
+                + artifactKind
+                + SEP
+                + artifactId
+                + SEP
+                + aboutUserId
+                + SEP
+                + (firstLocationPath == null ? "" : firstLocationPath);
 
         return sha256Hex(canonical);
     }

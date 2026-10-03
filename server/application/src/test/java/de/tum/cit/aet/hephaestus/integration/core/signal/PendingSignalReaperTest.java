@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -104,9 +105,7 @@ class PendingSignalReaperTest extends BaseUnitTest {
         ArtifactSignal failing = pendingSignal("scm.pull_request", "scm.pull_request.ready");
         ArtifactSignal following = pendingSignal("scm.pull_request", "scm.pull_request.merged");
         when(repository.findRetryablePending(any(), any(Pageable.class))).thenReturn(List.of(failing, following));
-        org.mockito.Mockito.doThrow(new IllegalStateException("boom"))
-                .when(resubmitter)
-                .resubmit(failing);
+        doThrow(new IllegalStateException("boom")).when(resubmitter).resubmit(failing);
 
         reaper(resubmitter).sweep();
 
@@ -121,9 +120,7 @@ class PendingSignalReaperTest extends BaseUnitTest {
         PendingSignalResubmitter resubmitter = resubmitterFor("scm.pull_request");
         ArtifactSignal signal = pendingSignal("scm.pull_request", "scm.pull_request.ready");
         when(repository.findRetryablePending(any(), any(Pageable.class))).thenReturn(List.of(signal));
-        org.mockito.Mockito.doThrow(new IllegalStateException("boom"))
-                .when(resubmitter)
-                .resubmit(signal);
+        doThrow(new IllegalStateException("boom")).when(resubmitter).resubmit(signal);
 
         reaper(resubmitter).sweep();
 

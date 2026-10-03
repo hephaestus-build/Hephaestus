@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback.inapp;
 
 import static de.tum.cit.aet.hephaestus.practices.model.Outcome.NOT_MET;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -39,14 +40,18 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceMembership;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -428,7 +433,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
                 .isTrue();
         long admin = withdrawingAdmin();
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(
+        assertThatThrownBy(
                         () -> withdrawalService.setWithdrawn(workspace.getId(), first.getId(), admin, true, "Too late"))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
@@ -447,7 +452,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     @DisplayName("an older card withdrawn today is on a full page, first, as a notice")
     void shouldListAnOlderCardWithdrawnTodayAheadOfAFullPageOfNewerCards() {
         Feedback older = firstCard(NOW.minus(Duration.ofDays(25)));
-        List<String> newer = new java.util.ArrayList<>();
+        List<String> newer = new ArrayList<>();
         for (int i = 0; i < InAppFeedbackService.MAX_CARDS; i++) {
             newer.add(card(NOW.minus(Duration.ofDays(10)).plusSeconds(i), 100 + i)
                     .getId()
@@ -469,7 +474,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
                 .doesNotExist()
                 // The rest newest first; the oldest of the newer cards is the one the limit leaves out.
                 .jsonPath("$[1:].id")
-                .isEqualTo(new java.util.ArrayList<>(newer.reversed().subList(0, InAppFeedbackService.MAX_CARDS - 1)));
+                .isEqualTo(new ArrayList<>(newer.reversed().subList(0, InAppFeedbackService.MAX_CARDS - 1)));
     }
 
     /**
@@ -503,8 +508,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     void shouldDeliverACardReadBeforeItsWithdrawalAndThenShowItWithdrawn() throws Exception {
         Feedback waiting = card(NOW.minus(Duration.ofDays(1)), 10, FeedbackDeliveryState.PREPARED);
         long admin = withdrawingAdmin();
-        java.util.concurrent.atomic.AtomicReference<List<InAppFeedbackDTO>> shown =
-                new java.util.concurrent.atomic.AtomicReference<>();
+        AtomicReference<List<InAppFeedbackDTO>> shown = new AtomicReference<>();
         Holder read = holdIn(() -> shown.set(readAsDeveloper()));
 
         CompletableFuture<Void> withdrawal = CompletableFuture.runAsync(
@@ -539,7 +543,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
     private Holder holdIn(Runnable work) throws InterruptedException {
         CountDownLatch holding = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        java.util.concurrent.atomic.AtomicInteger pid = new java.util.concurrent.atomic.AtomicInteger();
+        AtomicInteger pid = new AtomicInteger();
         CompletableFuture<Void> done =
                 CompletableFuture.runAsync(() -> transactionTemplate.executeWithoutResult(status -> {
                     work.run();
@@ -564,7 +568,7 @@ class InAppFeedbackLifecycleIntegrationTest extends AbstractPracticeReviewIntegr
 
     /** The page read on this thread, as the developer the request filter would name. */
     private List<InAppFeedbackDTO> readAsDeveloper() {
-        CurrentScmIdentityHolder.set(developer.getId(), developer.getLogin(), java.util.Set.of(developer.getId()));
+        CurrentScmIdentityHolder.set(developer.getId(), developer.getLogin(), Set.of(developer.getId()));
         try {
             return inAppFeedbackService.getInAppFeedback(workspace.getId());
         } finally {

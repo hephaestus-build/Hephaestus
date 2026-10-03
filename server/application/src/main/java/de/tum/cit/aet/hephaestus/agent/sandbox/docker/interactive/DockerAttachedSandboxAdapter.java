@@ -351,7 +351,9 @@ public final class DockerAttachedSandboxAdapter implements AttachedSandbox, Stdi
     private void closeChannel() {
         try {
             channel.close();
-        } catch (IOException | RuntimeException ignored) {
+        } catch (IOException | RuntimeException exception) {
+            // Best-effort: the sandbox is closing and its transport goes with it.
+            log.debug("Closing the gateway channel failed for sessionId={}: {}", sessionId, exception.toString());
         }
     }
 

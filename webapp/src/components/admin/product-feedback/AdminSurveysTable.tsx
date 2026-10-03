@@ -11,7 +11,7 @@ import {
 	SURVEY_AVAILABILITY_DEFS,
 	surveyAvailability,
 } from "@/components/product-feedback/survey-availability-defs";
-import { SURVEY_PURPOSE_DEFS } from "@/components/product-feedback/survey-purpose-defs";
+import { isResearch, SURVEY_PURPOSE_DEFS } from "@/components/product-feedback/survey-purpose-defs";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import {
 	Empty,
@@ -59,7 +59,7 @@ export function surveyAudience(
 	survey: Pick<Survey, "workspace" | "purpose" | "researchOrganization">,
 ): string {
 	const workspace = survey.workspace?.displayName ?? "All workspaces";
-	return survey.purpose === "RESEARCH"
+	return isResearch(survey)
 		? `${workspace} · participants in the study by ${survey.researchOrganization}`
 		: workspace;
 }

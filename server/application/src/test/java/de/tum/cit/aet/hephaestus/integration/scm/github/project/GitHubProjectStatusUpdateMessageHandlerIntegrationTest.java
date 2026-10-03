@@ -35,7 +35,6 @@ class GitHubProjectStatusUpdateMessageHandlerIntegrationTest extends BaseIntegra
     // Fixture values from projects_v2_status_update.created.json
     private static final Long FIXTURE_STATUS_UPDATE_ID = 160033L;
     private static final String FIXTURE_STATUS_UPDATE_NODE_ID = "PVTSU_lADODNYmp84BHA5ozgACcSE";
-    private static final String FIXTURE_PROJECT_NODE_ID = "PVT_kwDODNYmp84BHA5o";
     private static final String FIXTURE_CREATED_BODY = "Initial status update for payload fixtures";
     private static final String FIXTURE_EDITED_BODY = "Updated status highlighting risks";
 

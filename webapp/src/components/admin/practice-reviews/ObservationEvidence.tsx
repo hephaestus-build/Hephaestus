@@ -15,14 +15,10 @@ import { hasText } from "@/lib/text";
 
 export interface ObservationEvidenceProps {
 	evidence: ObservationEvidenceData | null | undefined;
-	/** Identifies the secret scanner when a quote was redacted. */
-	detector?: string;
 }
 
-const SECRET_SCANNER = "secret-diff-scanner";
-
 /** Non-code coordinates refer to serialized input, not a location a reader can open in the source. */
-export function ObservationEvidence({ evidence, detector }: ObservationEvidenceProps) {
+export function ObservationEvidence({ evidence }: ObservationEvidenceProps) {
 	const citations = evidence?.citations ?? [];
 	if (citations.length === 0) {
 		return (
@@ -39,11 +35,7 @@ export function ObservationEvidence({ evidence, detector }: ObservationEvidenceP
 				{summaryLine(citations.length, groups.length)}
 			</p>
 			{groups.map((group) => (
-				<EvidenceSourceSection
-					key={group.sourceKind}
-					group={group}
-					fromSecretScanner={detector === SECRET_SCANNER}
-				/>
+				<EvidenceSourceSection key={group.sourceKind} group={group} />
 			))}
 		</div>
 	);
@@ -57,13 +49,7 @@ function summaryLine(citations: number, sources: number): string {
 	return `${passages} from ${sources} sources.`;
 }
 
-function EvidenceSourceSection({
-	group,
-	fromSecretScanner,
-}: {
-	group: EvidenceSourceGroup;
-	fromSecretScanner: boolean;
-}) {
+function EvidenceSourceSection({ group }: { group: EvidenceSourceGroup }) {
 	const { def, citations } = group;
 	const Icon = def.icon;
 	return (
@@ -88,7 +74,7 @@ function EvidenceSourceSection({
 					>
 						<CitationHeader citation={citation} locator={def.locator} />
 						{citation.quoteRedacted ? (
-							<RedactedQuote fromSecretScanner={fromSecretScanner} />
+							<RedactedQuote />
 						) : (
 							<pre className="overflow-x-auto p-3 text-xs break-words whitespace-pre-wrap">
 								{citation.quote}
@@ -129,18 +115,11 @@ function CitationHeader({
 	);
 }
 
-/**
- * The server accepts a missing quote from exactly one detector, so when that is the one that ran the
- * reason is knowable and can be said. When some other detector produced it the app does not know
- * why, and says only that.
- */
-function RedactedQuote({ fromSecretScanner }: { fromSecretScanner: boolean }) {
+function RedactedQuote() {
 	return (
 		<p className="flex items-start gap-2 p-3 text-sm text-muted-foreground">
 			<ShieldAlertIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-			{fromSecretScanner
-				? "Not quoted. This looked like a credential, so the text was never stored — open the line above to read it."
-				: "Not quoted. The passage was withheld, so only its location was kept."}
+			Not quoted. The passage was withheld, so only its location was kept.
 		</p>
 	);
 }

@@ -21,7 +21,7 @@ class PracticeRevisionTest extends BaseUnitTest {
         practice.setSlug("clear-feedback");
         practice.setName("Clear feedback");
         PracticeTestEvidence.configure(practice, ScmSignals.PULL_REQUEST_OPENED);
-        practice.setCriteria("Detect clear feedback");
+        practice.setCriteria("Check for clear feedback");
         practice.setPrecomputeScript("export default {}");
         practice.setAutomatedReviewPolicy(PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST));
         practice.setWhyItMatters("Prevents rework");
@@ -37,7 +37,7 @@ class PracticeRevisionTest extends BaseUnitTest {
         assertThat(revision.getName()).isEqualTo("Clear feedback");
         assertThat(revision.getArtifactKind()).isEqualTo(ArtifactKinds.PULL_REQUEST);
         assertThat(revision.getSignals()).isEqualTo(PracticeTestEvidence.signals(ScmSignals.PULL_REQUEST_OPENED));
-        assertThat(revision.getCriteria()).isEqualTo("Detect clear feedback");
+        assertThat(revision.getCriteria()).isEqualTo("Check for clear feedback");
         assertThat(revision.getPrecomputeScript()).isEqualTo("export default {}");
         assertThat(revision.getAutomatedReviewPolicy()).isEqualTo(practice.getAutomatedReviewPolicy());
         assertThat(revision.getWhyItMatters()).isEqualTo("Prevents rework");

@@ -35,7 +35,7 @@ public sealed interface ContextRequest
     }
 
     /**
-     * Build the materialised issue-detection context: issue metadata, the comment thread, and the
+     * Build the materialised issue review context: issue metadata, the comment thread, and the
      * state-transition timeline — NO diff. Carries the {@link AgentJob} the practice runner executes.
      */
     record IssueReviewRequest(AgentJob job) implements ContextRequest {
@@ -72,7 +72,7 @@ public sealed interface ContextRequest
         }
 
         public MentorChatRequest {
-            threadId = Objects.requireNonNull(threadId, "threadId must not be null");
+            Objects.requireNonNull(threadId, "threadId must not be null");
             if (workspaceId <= 0) {
                 throw new IllegalArgumentException("workspaceId must be positive, got " + workspaceId);
             }

@@ -144,7 +144,7 @@ it as prepared would promise a delivery that will not happen.
 **Observation, not finding**, for the measurement — in copy, URLs, API schema, field names, and Java.
 Delivery uses `FeedbackAnchor` and `InlineFeedbackChannel`; the mentor uses `link_observation` and
 `data-observation`. The schema, wire protocol and web routes have no aliases for the retired
-vocabulary: the former reviews URL no longer opens, and nothing redirects from it.
+vocabulary, and no address redirects from a retired word.
 
 Everything else is an observation, including the read APIs and the reviews UI — the surfaces an operator
 actually reads are exactly where the banned word does the most damage. Those names are

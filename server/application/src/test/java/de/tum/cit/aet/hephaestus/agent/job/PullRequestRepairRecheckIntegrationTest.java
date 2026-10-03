@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.context.ReviewedWork;
 import de.tum.cit.aet.hephaestus.agent.context.ReviewedWorkFixtures;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.LinkedWorkItemContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.CitationVerification;
 import de.tum.cit.aet.hephaestus.agent.handler.JobTypeHandlerRegistry;
 import de.tum.cit.aet.hephaestus.agent.handler.ObservationAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
@@ -103,6 +104,7 @@ import de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import java.nio.file.Files;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -117,6 +119,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -129,6 +132,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * A merge request whose author answered a problem — by editing the description or pushing — is reviewed again
@@ -409,7 +413,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         }
         UUID producingRunId = laterNegativeRun.getId();
         assertThat(admitted)
-                .allSatisfy(row -> assertThat(de.tum.cit.aet.hephaestus.agent.handler.CitationVerification.isVerified(
+                .allSatisfy(row -> assertThat(CitationVerification.isVerified(
                                 producingRunId,
                                 0,
                                 Objects.requireNonNull(row.getEvidence()).path("citations")))
@@ -446,9 +450,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 gateCapture,
                 capturedRevision,
                 () -> jdbcTemplate.update(
-                        "UPDATE issue SET deleted_at = ? WHERE id = ?",
-                        java.sql.Timestamp.from(Instant.now()),
-                        pr.getId()));
+                        "UPDATE issue SET deleted_at = ? WHERE id = ?", Timestamp.from(Instant.now()), pr.getId()));
         jdbcTemplate.update("UPDATE issue SET deleted_at = NULL WHERE id = ?", pr.getId());
         assertPrimaryAdmissionWaitsAndRefuses(
                 pr,
@@ -604,7 +606,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 .put("nextStep", "Keep the completed criteria visible")
                 .putObject("placement")
                 .put("kind", "ARTIFACT");
-        ((tools.jackson.databind.node.ObjectNode) feedback.path("units").get(0))
+        ((ObjectNode) feedback.path("units").get(0))
                 .putArray("basedOn")
                 .add(positive.getFirst().getId().toString());
         output.putObject("practiceCoverage").put("eligible", 1).put("evaluated", 1);
@@ -632,6 +634,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         job.setStatus(AgentJobStatus.RUNNING);
         job.setWorkerId("test-worker");
         job = agentJobRepository.saveAndFlush(job);
+        evidenceFiles.beginPersonCapture(job);
         var raw = folderBuilder.prepare(
                 new ContextRequest.PracticeReviewRequest(job), EvidencePlan.compile(List.of(linked)));
         JobFolderIndex manifest = Objects.requireNonNull(raw.manifest());
@@ -659,7 +662,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                 null);
         String path = SandboxLayout.CONTEXT_PREFIX + "linked_work_items/18.md";
         List<String> lines = Files.readAllLines(inputs.filesOnDisk().get(path));
-        int line = java.util.stream.IntStream.range(0, lines.size())
+        int line = IntStream.range(0, lines.size())
                         .filter(index -> lines.get(index).contains(expectedBody))
                         .findFirst()
                         .orElseThrow()
@@ -706,7 +709,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         ExecutorService primaryThreads = Executors.newFixedThreadPool(2);
         try {
             Future<Boolean> admission = primaryThreads.submit(() -> transactions.execute(status -> {
-                pullRequestRepository.findByIdWithAllForGate(pr.getId()).orElseThrow();
+                assertThat(pullRequestRepository.findByIdWithAllForGate(pr.getId()))
+                        .isPresent();
                 primaryLoaded.countDown();
                 awaitUninterruptibly(releasePrimaryReader);
                 return reviewedWorkChanges.linkedCaptureCurrent(
@@ -720,10 +724,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                         awaitUninterruptibly(releasePrimaryWriter);
                     }),
                     primaryThreads);
-            writer.whenComplete((result, failure) -> {
-                if (failure != null) primaryWritten.completeExceptionally(failure);
-            });
-            primaryWritten.get(30, TimeUnit.SECONDS);
+            // The writer only completes after primaryWritten unless it failed, so this surfaces that failure.
+            CompletableFuture.anyOf(primaryWritten, writer).get(30, TimeUnit.SECONDS);
             releasePrimaryReader.countDown();
             assertThat(aBackendWaitsOnALock()).isTrue();
             releasePrimaryWriter.countDown();
@@ -739,7 +741,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     private AgentJob linkedReviewJob(PullRequest pr) {
         AgentJob job = persistPullRequestReview(workspace, pr.getNumber(), pr.getId(), null);
         var metadata = Objects.requireNonNull(job.getMetadata()).deepCopy();
-        ((tools.jackson.databind.node.ObjectNode) metadata)
+        ((ObjectNode) metadata)
                 .put("repository_id", repository.getId())
                 .put("repository_full_name", REPO)
                 .put("pr_url", pr.getHtmlUrl())
@@ -769,13 +771,12 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     private AgentJob admittedLinkedReview(PullRequest pr, Practice linked) throws Exception {
         try (LinkedAttempt capture = captureLinkedAttempt(linkedReviewJob(pr), linked, "- [ ] Confirm repair")) {
             var observations = MAPPER.createArrayNode();
-            var result = (tools.jackson.databind.node.ObjectNode)
-                    capture.observations().get(0).deepCopy();
+            var result = (ObjectNode) capture.observations().get(0).deepCopy();
             result.put("summary", "Linked criteria need confirmation")
                     .put("outcome", "NOT_MET")
                     .put("severity", "MINOR")
                     .put("evidenceRationale", "The captured criterion remains unchecked.");
-            var search = ((tools.jackson.databind.node.ObjectNode) result.path("evidence")).putObject("search");
+            var search = ((ObjectNode) result.path("evidence")).putObject("search");
             search.putArray("consulted").add("scm.linked-work-items");
             search.put("lookedFor", "confirmation of the acceptance criterion");
             search.put("boundary", "the captured closing issue #18");
@@ -860,9 +861,9 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         ExecutorService threads = Executors.newFixedThreadPool(2);
         try {
             Future<?> editing = threads.submit(() -> transactions.executeWithoutResult(status -> {
-                pullRequestRepository
-                        .findForUpdateByRepositoryIdAndNumber(repository.getId(), pr.getNumber())
-                        .orElseThrow();
+                assertThat(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(
+                                repository.getId(), pr.getNumber()))
+                        .isPresent();
                 upsert(false, HEAD, "Adds the thing because reviewers could not tell why");
                 listener.onPullRequestUpdated(new ScmDomainEvent.PullRequestUpdated(
                         ScmEventPayload.PullRequestData.from(reload()), Set.of("body"), liveContext()));
@@ -1002,11 +1003,10 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         UUID supersededId = observe(superseded, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         jdbcTemplate.update(
                 "UPDATE observation SET superseded_at = ? WHERE id = ?",
-                java.sql.Timestamp.from(NOW.plusSeconds(90)),
+                Timestamp.from(NOW.plusSeconds(90)),
                 supersededId);
         obsolete.setCriteria("Changed review criteria");
-        obsolete.setCurrentRevision(practiceRevisionRepository.save(
-                new de.tum.cit.aet.hephaestus.practices.model.PracticeRevision(obsolete, 2)));
+        obsolete.setCurrentRevision(practiceRevisionRepository.save(new PracticeRevision(obsolete, 2)));
         practiceRepository.saveAndFlush(obsolete);
         UUID invalid = observe(withdrawn, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
         observe(unanswered, opened, pr.getId(), developer, Outcome.NOT_MET, Severity.MINOR, NOW);
@@ -1020,8 +1020,8 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
         assertThat(rechecked(revision(pr))).containsExactly("states-how-to-verify-the-change");
         assertThat(gate.evaluate(pr, ScmSignals.PULL_REQUEST_OPENED, TriggerMode.AUTO))
                 .isInstanceOfSatisfying(
-                        GateDecision.Detect.class,
-                        detect -> assertThat(detect.recheckedPractices()).isEmpty());
+                        GateDecision.Run.class,
+                        run -> assertThat(run.recheckedPractices()).isEmpty());
     }
 
     @Test
@@ -1157,7 +1157,6 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
                     agentJobRepository,
                     memberAiPolicy,
                     handlers,
-                    mock(JobEvidenceFiles.class),
                     mock(PracticePiAdapter.class),
                     mock(WorkerJwtIssuer.class),
                     sandbox,
@@ -1458,7 +1457,7 @@ class PullRequestRepairRecheckIntegrationTest extends AbstractPracticeReviewInte
     }
 
     private static Set<String> rechecked(GateDecision decision) {
-        assertThat(decision).isInstanceOf(GateDecision.Detect.class);
-        return ((GateDecision.Detect) decision).recheckedPractices();
+        assertThat(decision).isInstanceOf(GateDecision.Run.class);
+        return ((GateDecision.Run) decision).recheckedPractices();
     }
 }

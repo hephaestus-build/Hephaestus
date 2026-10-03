@@ -51,14 +51,14 @@ public class InstanceSettingsAdminController {
             @NonNull String etag,
             @Nullable String silentModeReason,
             @Nullable Instant silentModeChangedAt,
-            @Nullable String silentModeChangedBy) {
+            @Nullable Long silentModeChangedByAccountId) {
         static InstanceSettingsDTO from(InstanceSettings settings) {
             return new InstanceSettingsDTO(
                     settings.isSilentModeEngaged(),
                     EntityTagPrecondition.format(Long.toString(settings.getVersion())),
                     settings.getSilentModeReason(),
                     settings.getSilentModeChangedAt(),
-                    settings.getSilentModeChangedBy());
+                    settings.getSilentModeChangedByAccountId());
         }
     }
 
@@ -98,7 +98,7 @@ public class InstanceSettingsAdminController {
         InstanceSettings updated = instanceSettingsService.updateSilentMode(
                 body.engaged(),
                 body.reason(),
-                CurrentAccount.preferredUsernameOrNull(),
+                CurrentAccount.requireId(),
                 ifMatch == null ? null : EntityTagPrecondition.parse(ifMatch));
         return response(updated);
     }

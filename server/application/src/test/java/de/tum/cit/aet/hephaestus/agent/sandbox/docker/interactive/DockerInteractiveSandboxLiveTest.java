@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker.interactive;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -48,7 +49,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import org.assertj.core.api.Assertions;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -60,7 +60,6 @@ import org.junit.jupiter.api.Test;
 import org.testcontainers.DockerClientFactory;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 /** Live integration tests — boots real Docker. Run with {@code -Pgroups=live} or {@code live-tests}. */
 @LiveDockerTest
@@ -118,7 +117,7 @@ class DockerInteractiveSandboxLiveTest {
                 /* attachFirstFrameTimeoutSeconds */ 15,
                 /* maxSessionsPerUser */ 3,
                 /* maxSessionsTotal */ 50,
-                /* maxFrameChars */ 64 * 1024);
+                /* maxFrameBytes */ 64 * 1024);
 
         dockerClient = DockerClientImpl.getInstance(
                 DefaultDockerClientConfig.createDefaultConfigBuilder().build(),
@@ -137,12 +136,7 @@ class DockerInteractiveSandboxLiveTest {
         metrics = new InteractiveSandboxMetrics(meterRegistry);
         watchdog = new StdinWriteWatchdog();
         registry = new InteractiveSandboxRegistry(
-                interactiveProperties,
-                containerManager,
-                metrics,
-                watchdog,
-                meterRegistry,
-                new SandboxCreator(dockerOps));
+                interactiveProperties, containerManager, watchdog, meterRegistry, new SandboxCreator(dockerOps));
         proxyCredentialRegistry = new MentorProxyCredentialRegistry();
         adapter = new DockerInteractiveSandboxAdapter(
                 interactiveProperties,
@@ -176,18 +170,22 @@ class DockerInteractiveSandboxLiveTest {
                 try {
                     containerManager.forceRemove(c.id());
                 } catch (Exception ignored) {
+                    // One resource that refuses to go must not stop the sweep of the rest.
                 }
             });
         } catch (Exception ignored) {
+            // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
         try {
             networkManager.listOrphanedNetworks().forEach(n -> {
                 try {
                     networkManager.removeNetwork(n.id());
                 } catch (Exception ignored) {
+                    // One resource that refuses to go must not stop the sweep of the rest.
                 }
             });
         } catch (Exception ignored) {
+            // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
         if (dockerWaitExecutor != null) {
             dockerWaitExecutor.shutdownNow();
@@ -254,11 +252,11 @@ class DockerInteractiveSandboxLiveTest {
     }
 
     private static JsonNode echo(String payload) {
-        return (MAPPER.createObjectNode().put("type", "echo")).put("payload", payload);
+        return MAPPER.createObjectNode().put("type", "echo").put("payload", payload);
     }
 
     private static JsonNode emit(int count, String tag) {
-        return (MAPPER.createObjectNode().put("type", "emit").put("count", count)).put("tag", tag);
+        return MAPPER.createObjectNode().put("type", "emit").put("count", count).put("tag", tag);
     }
 
     @Nested
@@ -569,8 +567,7 @@ class DockerInteractiveSandboxLiveTest {
                     base.resourceLimits(),
                     base.securityProfile(),
                     base.inputFiles());
-            Assertions.assertThatThrownBy(() -> adapter.attach(brokenSpec))
-                    .isInstanceOf(InteractiveSandboxException.class);
+            assertThatThrownBy(() -> adapter.attach(brokenSpec)).isInstanceOf(InteractiveSandboxException.class);
             // Must distinguish runner-crash from flow-control timeout for dashboards.
             assertThat(metrics.attachFailureFirstFrameFailed.count() - failedBefore)
                     .isEqualTo(1.0);
@@ -661,9 +658,9 @@ class DockerInteractiveSandboxLiveTest {
 
             String helloId = UUID.randomUUID().toString();
             sb.send(MAPPER.createObjectNode()
-                    .<ObjectNode>put("jsonrpc", "2.0")
-                    .<ObjectNode>put("id", helloId)
-                    .<ObjectNode>put("method", "hello")
+                    .put("jsonrpc", "2.0")
+                    .put("id", helloId)
+                    .put("method", "hello")
                     .set("params", MAPPER.createObjectNode()));
 
             await().atMost(RPC_TIMEOUT).untilAsserted(() -> {
@@ -697,9 +694,9 @@ class DockerInteractiveSandboxLiveTest {
 
             String helloId = UUID.randomUUID().toString();
             sb.send(MAPPER.createObjectNode()
-                    .<ObjectNode>put("jsonrpc", "2.0")
-                    .<ObjectNode>put("id", helloId)
-                    .<ObjectNode>put("method", "hello")
+                    .put("jsonrpc", "2.0")
+                    .put("id", helloId)
+                    .put("method", "hello")
                     .set("params", MAPPER.createObjectNode()));
             await().atMost(RPC_TIMEOUT)
                     .untilAsserted(() -> assertThat(frames.stream()
@@ -709,9 +706,9 @@ class DockerInteractiveSandboxLiveTest {
             String threadId = UUID.randomUUID().toString();
             String openId = UUID.randomUUID().toString();
             sb.send(MAPPER.createObjectNode()
-                    .<ObjectNode>put("jsonrpc", "2.0")
-                    .<ObjectNode>put("id", openId)
-                    .<ObjectNode>put("method", "open_thread")
+                    .put("jsonrpc", "2.0")
+                    .put("id", openId)
+                    .put("method", "open_thread")
                     .set("params", MAPPER.createObjectNode().put("threadId", threadId)));
             await().atMost(RPC_TIMEOUT).untilAsserted(() -> {
                 JsonNode openResp = frames.stream()
@@ -724,9 +721,9 @@ class DockerInteractiveSandboxLiveTest {
 
             String promptId = UUID.randomUUID().toString();
             sb.send(MAPPER.createObjectNode()
-                    .<ObjectNode>put("jsonrpc", "2.0")
-                    .<ObjectNode>put("id", promptId)
-                    .<ObjectNode>put("method", "prompt")
+                    .put("jsonrpc", "2.0")
+                    .put("id", promptId)
+                    .put("method", "prompt")
                     .set(
                             "params",
                             MAPPER.createObjectNode().put("threadId", threadId).put("text", "Hello, stub!")));
@@ -786,7 +783,7 @@ class DockerInteractiveSandboxLiveTest {
         void sendAfterClose() {
             AttachedSandbox sb = adapter.attach(buildSpec("u9", "w9"));
             sb.close(Duration.ofSeconds(2));
-            Assertions.assertThatThrownBy(() -> sb.send(ping())).isInstanceOf(InteractiveSandboxException.class);
+            assertThatThrownBy(() -> sb.send(ping())).isInstanceOf(InteractiveSandboxException.class);
         }
     }
 }

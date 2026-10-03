@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.tenancy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -13,7 +14,6 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentMatchers;
 
 class WorkspaceStatementInspectorTest extends BaseUnitTest {
 
@@ -85,7 +85,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         // Hibernate emits composite-key lookups as
         //   (col1, workspace_id) IN ((?, ?))
         // The inspector MUST treat this as a legitimate workspace_id reference and not
-        // throw. Regression for false positive that broke ObservationControllerIntegrationTest.
+        // throw.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         String sql = "select wm.user_id, wm.workspace_id from workspace_membership wm "
                 + "where (wm.user_id, wm.workspace_id) in ((?,?))";
@@ -121,7 +121,7 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
 
     @Test
     void backslashEscapedPostgresCastDoesNotPropagate() {
-        // Regression: @Query native queries can contain Postgres casts like
+        // @Query native queries can contain Postgres casts like
         // CONCAT(:id\:\:text, ...). The inspector MUST NOT propagate exceptions on those —
         // would brick UserRepository.tryAcquireLoginLock and the whole context.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
@@ -137,8 +137,8 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
     void insertOnScopedTableIsAllowed() {
         // INSERTs cannot leak existing data across workspaces. The workspace_id (or FK
         // chain) is placed into the row by application code, not enforced by the inspector.
-        // Regression: observation/reaction inserts emitted at Hibernate flush
-        // time triggered TenancyViolationException despite being safe by construction.
+        // Observation and reaction inserts emitted at Hibernate flush time are safe by construction
+        // and must not raise a TenancyViolationException.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.THROW);
         inspector.inspect("insert into observation (id, title, practice_id) values (?, ?, ?)");
         verifyNoInteractions(reporter, scopedTables);
@@ -463,8 +463,6 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
 
     @Test
     void theSingleKeyFormIsHeldToTheSameRules() {
-        // The older exemption used to accept these, so the newer one could simply be routed around
-        // by naming one key column instead of two.
         WorkspaceStatementInspector inspector = newInspector(TenancyEnforcement.LOG);
         when(scopedTables.isScoped("repository_collaborator")).thenReturn(true);
         for (String sql : List.of(
@@ -488,10 +486,5 @@ class WorkspaceStatementInspectorTest extends BaseUnitTest {
         String sql = "delete from repository_collaborator where repository_id" + " ".repeat(9000) + "=? and user_id=?";
         inspector.inspect(sql);
         verify(reporter).report(sql, Set.of("repository_collaborator"), TenancyEnforcement.LOG);
-    }
-
-    // helper: Mockito.any() shorthand
-    private static <T> T any() {
-        return ArgumentMatchers.any();
     }
 }

@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.github.label;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -27,15 +28,6 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-/**
- * Integration tests for GitHubLabelProcessor.
- * <p>
- * Tests the processor independently from the webhook handler to verify:
- * - Label upsert logic (create vs update)
- * - Domain event publishing (LabelProcessed, LabelDeleted)
- * - Context handling and workspace association
- * - Edge cases in DTO processing
- */
 class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
     private static final Long TEST_ORG_ID = 215361191L;
@@ -138,7 +130,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
             Label result = processor.process(dto, testRepository, createContext());
 
-            // Then - verify label created
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(labelId);
             assertThat(result.getName()).isEqualTo("new-feature");
@@ -165,7 +156,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateExistingLabelAndPublishEvent() {
-            // Given - create existing label
             Long labelId = 444555666L;
             Label existing = new Label();
             existing.setNativeId(labelId);
@@ -184,7 +174,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
             Label result = processor.process(dto, testRepository, createContext());
             assertNotNull(result);
 
-            // Then - verify label updated
             assertThat(result.getName()).isEqualTo("updated-name");
             assertThat(result.getColor()).isEqualTo("ff0000");
             assertThat(result.getDescription()).isEqualTo("Updated description");
@@ -210,7 +199,7 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldCreateLabelWithGeneratedIdWhenDtoHasNullId() {
-            // Given - DTO without ID (like GraphQL sync)
+            // A GraphQL sync DTO carries no ID.
             GitHubLabelDTO dto = new GitHubLabelDTO(
                     null, // null ID - simulates GraphQL response
                     "LA_node",
@@ -222,7 +211,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
             Label result = processor.process(dto, testRepository, createContext());
 
-            // Then - label should be created with a generated negative ID
             assertNotNull(result);
             assertThat(result.getNativeId()).isNotNull();
             assertThat(result.getNativeId()).isNegative(); // Generated IDs are negative to avoid collision
@@ -232,7 +220,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldUpdateExistingLabelByNameWhenDtoHasNullId() {
-            // Given - existing label
             Long existingId = 999888777L;
             Label existingLabel = new Label();
             existingLabel.setNativeId(existingId);
@@ -255,7 +242,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
             Label result = processor.process(dto, testRepository, createContext());
 
-            // Then - should update existing label, not create new one
             assertNotNull(result);
             assertThat(result.getNativeId()).isEqualTo(existingId); // keeps original native ID
             assertThat(result.getDescription()).isEqualTo("new description");
@@ -293,12 +279,10 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
             GitHubLabelDTO dto =
                     new GitHubLabelDTO(labelId, "LA_idem", "idempotent-label", "Same every time", "112233", null, null);
 
-            // When - process twice
             processor.process(dto, testRepository, createContext());
             eventListener.clear();
             processor.process(dto, testRepository, createContext());
 
-            // Then - only one label exists, second time emits LabelUpdated (not Created)
             assertThat(labelRepository.count()).isEqualTo(1);
             assertThat(eventListener.ofType(ScmDomainEvent.LabelUpdated.class)).hasSize(1);
             assertThat(eventListener.ofType(ScmDomainEvent.LabelCreated.class)).isEmpty();
@@ -312,7 +296,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldDeleteLabelAndPublishEvent() {
-            // Given - create label
             Long labelId = 555666777L;
             Label label = new Label();
             label.setNativeId(labelId);
@@ -328,7 +311,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
             processor.delete(savedLabelId, createContext());
 
-            // Then - label deleted
             assertThat(labelRepository.findByNativeIdAndProviderId(labelId, gitProviderId()))
                     .isEmpty();
 
@@ -347,12 +329,10 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldHandleDeletionOfNonExistentLabel() {
-            // Given - label doesn't exist
             Long nonExistentId = 999999999L;
             assertThat(labelRepository.findByNativeIdAndProviderId(nonExistentId, gitProviderId()))
                     .isEmpty();
 
-            // When/Then - should not throw
             assertThatCode(() -> processor.delete(nonExistentId, createContext()))
                     .doesNotThrowAnyException();
 
@@ -362,7 +342,6 @@ class GitHubLabelProcessorIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldHandleNullLabelId() {
-            // When/Then - should not throw
             assertThatCode(() -> processor.delete(null, createContext())).doesNotThrowAnyException();
 
             // No event published

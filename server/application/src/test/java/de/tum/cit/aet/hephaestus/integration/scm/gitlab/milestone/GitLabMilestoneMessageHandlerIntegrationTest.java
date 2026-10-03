@@ -128,7 +128,7 @@ class GitLabMilestoneMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(milestone.getTitle()).isEqualTo(FIXTURE_MILESTONE_TITLE);
             assertThat(milestone.getDescription()).isEqualTo(FIXTURE_MILESTONE_DESC);
             assertThat(milestone.getState()).isEqualTo(Milestone.State.OPEN);
-            assertThat(milestone.getDueOn()).isNotNull();
+            assertThat(milestone.getDueOn()).isEqualTo(Instant.parse(FIXTURE_DUE_DATE + "T00:00:00Z"));
             assertThat(milestone.getHtmlUrl()).isEqualTo(FIXTURE_MILESTONE_HTML_URL);
             assertThat(milestone.getRepository().getId()).isEqualTo(savedRepo.getId());
 

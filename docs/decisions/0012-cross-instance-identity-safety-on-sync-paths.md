@@ -44,7 +44,7 @@ for **multiple** failure modes:
 4. Rate limit exhausted with no retry budget
 5. Generic exception classification miss
 
-The caller in `GithubDataSyncService` collapsed all of these into "repo
+The caller in `GitHubDataSyncService` collapsed all of these into "repo
 not on GitHub" and called `syncTargetProvider.removeSyncTarget(syncTarget.id())`
 — **permanently deleting the user-configured `repository_to_monitor` row**.
 
@@ -91,7 +91,7 @@ exception in the **one** code path where GitHub definitively responded
 Every other failure mode still returns `Optional.empty()` — the **transient**
 signal.
 
-`GithubDataSyncService` now:
+`GitHubDataSyncService` now:
 
 ```java
 try {
@@ -109,7 +109,7 @@ if (syncedRepository.isEmpty()) {
 }
 ```
 
-The existing classification-based `removeSyncTarget` in `GithubDataSyncService`
+The existing classification-based `removeSyncTarget` in `GitHubDataSyncService`
 (inside `case NOT_FOUND` of the exception classifier) is already correct — it
 only fires on genuine 404 errors from the GraphQL response. The fix brings the
 earlier code path up to the same safety bar.
@@ -161,7 +161,7 @@ exception is reusable).
   follow-up — flagged at the relevant GitLab call sites in code.
 - The new exception is checked-by-convention not by `throws` clause
   (`RuntimeException`). Static analysis can't catch a caller that forgets to
-  handle it. The caller in `GithubDataSyncService` is the only one today; if
+  handle it. The caller in `GitHubDataSyncService` is the only one today; if
   the method gets new callers they must explicitly catch.
 
 ## Revisit trigger
@@ -194,7 +194,7 @@ exception is reusable).
 Supersedes § Decision "For defect 2" on what a definitive 404 does, and corrects one name in
 "For defect 1".
 
-- `GithubDataSyncService` (`integration/scm/github/sync/`) catches
+- `GitHubDataSyncService` (`integration/scm/github/sync/`) catches
   `RepositoryNotFoundOnGitProviderException` and removes the monitor only for a row with no
   `native_id`; a monitor whose native id resolves upstream is kept and retried, because a name-404
   for it is a rename or transfer, which

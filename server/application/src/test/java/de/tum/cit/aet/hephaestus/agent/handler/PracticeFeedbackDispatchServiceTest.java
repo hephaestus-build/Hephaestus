@@ -16,6 +16,8 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.AgentJobType;
 import de.tum.cit.aet.hephaestus.agent.job.AgentJob;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
@@ -25,6 +27,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.ExistingSummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.FeedbackContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryChannel.SummaryHandle;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.practices.feedback.Feedback;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatch;
 import de.tum.cit.aet.hephaestus.practices.feedback.FeedbackDispatchCompletion;
@@ -54,6 +58,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -83,12 +88,25 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
     @Mock
     private ObservationRepository observationRepository;
 
+    @Mock
+    private PersonDataCopyFence personCopies;
+
+    @Mock
+    private PersonProcessingSuppression personSuppression;
+
     private PracticeFeedbackDispatchService service;
     private AgentJob job;
     private FeedbackDispatch dispatch;
 
     @BeforeEach
     void setUp() {
+        var capture = mock(PersonDataCopyFence.Lease.class);
+        var admissionJdbc = mock(JdbcOperations.class);
+        lenient().when(personCopies.capture()).thenReturn(capture);
+        lenient().when(capture.jdbc()).thenReturn(admissionJdbc);
+        lenient()
+                .when(admissionJdbc.queryForObject(anyString(), eq(Boolean.class), any(), any(), any()))
+                .thenReturn(true);
         var mapper = JsonMapper.builder().build();
         var stateMachine =
                 new FeedbackDispatchStateMachine(repository, transactions, new SimpleMeterRegistry(), mapper);
@@ -103,7 +121,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 diffNotePoster,
                 stateMachine,
                 mock(ObservationInvalidationRepository.class),
-                new RepeatedSummaryCheck(observationRepository, feedbackRepository));
+                new RepeatedSummaryCheck(observationRepository, feedbackRepository),
+                new PracticeFeedbackPersonDataAdmission(personCopies, personSuppression));
         lenient()
                 .when(channel.formatPullRequestSubjectId(anyString(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(0) + "!" + invocation.getArgument(1));
@@ -140,8 +159,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(new DiffNotePoster.DiffNoteResult(0, 0, List.of()));
         lenient()
                 .when(policy.evaluatePullRequest(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(
-                        new de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest()));
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new PullRequest()));
     }
 
     @Test
@@ -454,10 +472,8 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
 
     @Test
     void aPauseSuppressesAnApprovedProposalTerminally() {
-        var feedback = de.tum.cit.aet.hephaestus.practices.feedback.Feedback.builder()
-                .id(UUID.randomUUID())
-                .body("approved body")
-                .build();
+        var feedback =
+                Feedback.builder().id(UUID.randomUUID()).body("approved body").build();
         FeedbackDispatch approved = dispatch(FeedbackDispatchState.PENDING, feedback.getId());
         when(repository.findByDestinationKeyAndWorkspaceId("approved:" + feedback.getId(), 7L))
                 .thenReturn(Optional.of(approved));
@@ -607,8 +623,7 @@ class PracticeFeedbackDispatchServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(withoutInlineNotes(sent)));
         when(feedbackRepository.findByIdAndWorkspaceId(feedback.getId(), 7L)).thenReturn(Optional.of(feedback));
         when(policy.evaluateIssue(any(), any(), any(), any()))
-                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(
-                        new de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue()));
+                .thenReturn(PracticeFeedbackDeliveryPolicy.Decision.allowed(new Issue()));
         when(channel.findExistingSummary(any(), any())).thenReturn(ExistingSummaryLookup.absent());
         when(channel.postSummary(any(), any())).thenReturn(new SummaryHandle("gid://gitlab/Note/5"));
 

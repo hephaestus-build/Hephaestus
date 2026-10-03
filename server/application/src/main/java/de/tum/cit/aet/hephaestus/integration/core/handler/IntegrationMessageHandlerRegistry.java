@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -50,7 +51,7 @@ public class IntegrationMessageHandlerRegistry {
     /**
      * Resolve the handler bound to the given key.
      */
-    public Optional<IntegrationMessageHandler> resolve(@org.jspecify.annotations.Nullable EventTypeKey key) {
+    public Optional<IntegrationMessageHandler> resolve(@Nullable EventTypeKey key) {
         if (key == null) {
             return Optional.empty();
         }

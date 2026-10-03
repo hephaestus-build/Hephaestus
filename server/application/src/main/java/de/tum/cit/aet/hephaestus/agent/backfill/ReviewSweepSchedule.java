@@ -189,7 +189,7 @@ public class ReviewSweepSchedule {
      */
     public void advancePast(Instant now) {
         Duration interval = cadence.interval();
-        long missed = Math.max(0, Duration.between(nextRunAt, now).getSeconds() / interval.getSeconds());
+        long missed = Math.max(0, Duration.between(nextRunAt, now).toSeconds() / interval.toSeconds());
         this.nextRunAt = nextRunAt.plus(interval.multipliedBy(missed + 1));
         this.updatedAt = now;
     }

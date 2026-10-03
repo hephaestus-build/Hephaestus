@@ -14,7 +14,7 @@ const meta = {
 		removedDefaultsToReview: 0,
 		summary: {
 			total: 49,
-			updatesChangingDetection: 0,
+			updatesChangingReview: 0,
 			updatesChangingWordingOnly: 0,
 			updatesChangingPresentation: 0,
 			editedHere: 0,
@@ -33,7 +33,7 @@ export const UpdatesWaiting: Story = {
 		onReviewChanges: fn(),
 		summary: {
 			total: 49,
-			updatesChangingDetection: 2,
+			updatesChangingReview: 2,
 			updatesChangingWordingOnly: 5,
 			updatesChangingPresentation: 1,
 			editedHere: 3,
@@ -56,7 +56,7 @@ export const RemovedDefault: Story = {
 		removedDefaultsToReview: 1,
 		summary: {
 			total: 49,
-			updatesChangingDetection: 0,
+			updatesChangingReview: 0,
 			updatesChangingWordingOnly: 0,
 			updatesChangingPresentation: 0,
 			editedHere: 1,

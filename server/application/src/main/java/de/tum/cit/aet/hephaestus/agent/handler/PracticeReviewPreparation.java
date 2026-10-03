@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.StreamSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
@@ -71,6 +72,23 @@ final class PracticeReviewPreparation {
             ContextRequest request,
             Supplier<TaskEnvelope> envelope,
             Consumer<Map<String, byte[]>> staging) {
+        evidenceFiles.beginPersonCapture(job);
+        try {
+            return prepareCaptured(job, artifactKind, request, envelope, staging);
+        } catch (InsufficientEvidenceException refused) {
+            throw refused;
+        } catch (RuntimeException failure) {
+            evidenceFiles.abortPersonCapture(job);
+            throw failure;
+        }
+    }
+
+    private PreparedJobInputs prepareCaptured(
+            AgentJob job,
+            ArtifactKind artifactKind,
+            ContextRequest request,
+            Supplier<TaskEnvelope> envelope,
+            Consumer<Map<String, byte[]>> staging) {
         List<Practice> eligible = practiceCatalogInjector.resolveEligiblePractices(job, artifactKind);
         eligible.forEach(practice -> practice.setCurrentRevision(practiceRevisionService.forReview(practice)));
         PreparedEvidence prepared = workspaceContextBuilder.prepare(request, EvidencePlan.compile(eligible));
@@ -98,8 +116,8 @@ final class PracticeReviewPreparation {
             }
             Map<String, byte[]> files = new LinkedHashMap<>(prepared.files());
             if (artifactKind.equals(ArtifactKinds.PULL_REQUEST) && change != null) {
-                var metadata = java.util.Objects.requireNonNull(job.getMetadata());
-                var patterns = java.util.stream.StreamSupport.stream(
+                var metadata = Objects.requireNonNull(job.getMetadata());
+                var patterns = StreamSupport.stream(
                                 metadata.path("generated_path_patterns").spliterator(), false)
                         .map(JsonNode::asString)
                         .toList();

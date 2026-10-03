@@ -13,7 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
  *
  * Usage:
  * <pre>
- *  @RequireAtLeastWorkspaceAdmin
+ *  {@literal @}RequireAtLeastWorkspaceAdmin
  *  public ResponseEntity<Void> someAdminEndpoint() { ... }
  * </pre>
  */

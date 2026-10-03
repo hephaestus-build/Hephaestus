@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRe
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -87,16 +88,15 @@ public class ReviewThreadContentSource implements EvidenceSource {
 
     private ObjectNode collect(long pullRequestId) {
         try {
-            List<Long> threadIds = new java.util.ArrayList<>(
-                    threadRepository.findRecentIdsByPullRequestId(pullRequestId, Pageable.unpaged()));
+            List<Long> threadIds =
+                    new ArrayList<>(threadRepository.findRecentIdsByPullRequestId(pullRequestId, Pageable.unpaged()));
             boolean threadsTruncated = false;
             List<PullRequestReviewThread> threads =
                     threadIds.isEmpty() ? List.of() : threadRepository.findAllByIdWithResolvedBy(threadIds);
-            List<PullRequestReview> reviews =
-                    new java.util.ArrayList<>(reviewRepository.findRecentByPullRequestIdWithAuthor(
-                            pullRequestId,
-                            Set.of(PullRequestReview.State.PENDING, PullRequestReview.State.UNKNOWN),
-                            Pageable.unpaged()));
+            List<PullRequestReview> reviews = new ArrayList<>(reviewRepository.findRecentByPullRequestIdWithAuthor(
+                    pullRequestId,
+                    Set.of(PullRequestReview.State.PENDING, PullRequestReview.State.UNKNOWN),
+                    Pageable.unpaged()));
             boolean decisionsTruncated = false;
             reviews.sort(Comparator.comparing(
                     PullRequestReview::getSubmittedAt, Comparator.nullsLast(Comparator.naturalOrder())));

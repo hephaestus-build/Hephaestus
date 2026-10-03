@@ -50,7 +50,7 @@ class AccountSecurityEmailIntegrationTest extends BaseIntegrationTest {
         var current = settings.get();
         if (current.isSilentModeEngaged()) {
             settings.updateSilentMode(
-                    false, null, "security-test", EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
+                    false, null, null, EntityTagPrecondition.parse("\"" + current.getVersion() + "\""));
         }
     }
 

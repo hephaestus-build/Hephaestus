@@ -1,5 +1,4 @@
 ---
-"hephaestus": patch
 ---
 
-Merged GitLab merge requests can recover approval dates reported by GitLab without inventing when an approval happened. Heph keeps the original approved commit unknown when GitLab only supplied a recorded association.
+No release note of its own: gitlab-approval-time-stays-unknown.md carries it.

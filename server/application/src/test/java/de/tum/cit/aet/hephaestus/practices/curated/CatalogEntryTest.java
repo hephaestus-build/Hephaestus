@@ -76,11 +76,11 @@ class CatalogEntryTest extends BaseUnitTest {
     }
 
     @Test
-    void anUpdateThatChangesWhatGetsDetectedIsMarkedAsSuch() {
+    void anUpdateThatChangesWhatGetsReviewedIsMarkedAsSuch() {
         PracticeDefinition mine = practice("Small PRs", "Our criteria", "Shipped reason");
         PracticeDefinition newer = practice("Small PRs", "Newer criteria", "Shipped reason");
 
-        assertThat(entry(mine, newer, "0".repeat(64)).changeKind()).isEqualTo(CatalogChangeKind.DETECTION);
+        assertThat(entry(mine, newer, "0".repeat(64)).changeKind()).isEqualTo(CatalogChangeKind.REVIEW);
     }
 
     @Test
@@ -101,7 +101,7 @@ class CatalogEntryTest extends BaseUnitTest {
     }
 
     @Test
-    void anGroupUpdateIsPresentationNotDetection() {
+    void aGroupUpdateIsPresentationNotReview() {
         var mine = new GroupDefinition("Maintainability", "Our description", "Wrench", "sky");
         var shipped = new GroupDefinition("Maintainability", "New description", "Wrench", "sky");
         var entry = new CatalogEntry<>("maintainability", mine, shipped, mine, "0".repeat(64), false, 0, null);
