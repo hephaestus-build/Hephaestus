@@ -1,6 +1,7 @@
 import { Meter } from "@base-ui/react/meter";
 import { ArrowRightIcon, CheckIcon, ChevronRightIcon, ClockIcon, PackageIcon } from "lucide-react";
 import { type ComponentType, type Ref, useId, useState } from "react";
+import { useSpinDelay } from "spin-delay";
 
 import { cn } from "cn";
 import type { InAppEvidence, InAppFeedback, ReviewedWorkRef } from "@/api/types.gen";
@@ -239,6 +240,10 @@ export function PracticeFeedbackCard({
 	// that asked for it and not on a pressed button in the other row.
 	const [lastPressed, setLastPressed] = useState<"rating" | "answer">("rating");
 	const shownTimestamp = formatTimestamp(timestamp, state, new Date(useNow()));
+	// The write is optimistic, so a quick one says nothing: the controls wait at once, and the
+	// pressed button says "Saving…" only once the write outlasts a second. `ssr` off, since its
+	// default shows the word at once on a card that mounts with a write in flight.
+	const showSaving = useSpinDelay(isPending, { delay: 1000, minDuration: 500, ssr: false });
 	const resolved = state === "resolved";
 	// No work can tick a closed card, so it draws no count towards the threshold.
 	const closed = state === "closed";
@@ -417,7 +422,7 @@ export function PracticeFeedbackCard({
 							{RESOLVING_ANSWERS.map((value) => {
 								const def = FEEDBACK_RESOLUTION_DEFS[value];
 								const pressed = resolution === value;
-								const saving = isPending && pressed && lastPressed === "answer";
+								const saving = showSaving && pressed && lastPressed === "answer";
 								return (
 									<ResponseButton
 										key={value}
@@ -450,7 +455,7 @@ export function PracticeFeedbackCard({
 						statusValues(FEEDBACK_USEFULNESS_DEFS).map((value) => {
 							const { icon: Icon, label } = FEEDBACK_USEFULNESS_DEFS[value];
 							const pressed = usefulness === value;
-							const saving = isPending && pressed && lastPressed === "rating";
+							const saving = showSaving && pressed && lastPressed === "rating";
 							return (
 								<ResponseButton
 									key={value}

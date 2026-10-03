@@ -503,8 +503,8 @@ export const Withdrawn: Story = {
 };
 
 /**
- * The moment after a press on "Helpful": the rating being written is the one shown, saying so,
- * and the other rating and the band the press opened wait rather than take a second press.
+ * A press on "Helpful" whose write takes a while: every response control waits at once, and the
+ * pressed one says it is saving only after a second, so a quick write never flashes the word.
  */
 export const RatingPending: Story = {
 	args: {
@@ -514,7 +514,11 @@ export const RatingPending: Story = {
 		isPending: true,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Saving…" })).toBeDisabled();
+		await expect(canvas.getByRole("button", { name: "Helpful" })).toBeDisabled();
+		await expect(canvas.queryByRole("button", { name: "Saving…" })).toBeNull();
+		await expect(
+			await canvas.findByRole("button", { name: "Saving…" }, { timeout: 2000 }),
+		).toBeDisabled();
 		await expect(canvas.queryByRole("button", { name: "Helpful" })).toBeNull();
 		await expect(canvas.getByRole("button", { name: "Not helpful" })).toBeDisabled();
 		await expect(canvas.getByRole("button", { name: "Sending…" })).toBeDisabled();
