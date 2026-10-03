@@ -8,7 +8,7 @@ tags: composition, state, architecture
 ## Decouple State Management from UI
 
 The provider component should be the only place that knows how state is managed.
-UI components consume the context interface—they don't know if state comes from
+UI components consume the context interface—they do not know if state comes from
 useState, Zustand, or a server sync.
 
 **Incorrect (UI coupled to state implementation):**

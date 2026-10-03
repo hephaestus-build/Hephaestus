@@ -7,7 +7,7 @@ tags: async, await, conditional, optimization
 
 ## Defer Await Until Needed
 
-Move `await` operations into the branches where they're actually used to avoid blocking code paths that don't need them.
+Move `await` operations into the branches where they are actually used to avoid blocking code paths that do not need them.
 
 **Incorrect (blocks both branches):**
 
