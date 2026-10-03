@@ -6,10 +6,11 @@ description: The authoritative map from personal-data stores to export, retentio
 # Personal-data map and erasure verification
 
 This inventory maps each personal-data store to its removal control and executable evidence. Add a
-store or derived copy here, with an erasure or retention test, before it receives personal data:
+store or derived copy here, with implemented export and erasure operations and focused behavioural tests, before it receives personal data:
 `PersonalDataMapArchTest` fails the build when a database table is named in neither this map nor the
 test's own list of tables that hold no personal data, and when a source or test cited below has
-moved.
+moved. The architecture test also requires a single catalog owner and citations in the dedicated
+implementation table; a mention elsewhere in prose cannot satisfy ownership.
 Workspace purge applies storage limitation when a workspace loses its purpose; a verified
 person-erasure request follows the [instance-admin procedure](../production-operations-runbook#access-and-erasure-for-one-person).
 The implementation inventory below owns each store's exact selection, export and erasure citations.
@@ -49,6 +50,8 @@ The self-service account export and cooldown remain separate, narrower operation
 | Configured LLM provider | Prompts and responses for enabled purposes; provider/operator access process | A completed request cannot be retracted | Provider process | Deployment-specific provider terms must define the bound before processing starts; see the [processor checklist](./processor-checklist.md). |
 | GitHub/GitLab/Slack delivery destination | Posted feedback; source-provider export | Not silently crawled or rewritten | Best-effort correction/removal through the operator path | The provider controls its copy and audit history. |
 | Application metrics | Aggregate operational counts without account, workspace, export or source labels | Not applicable | No subject-level series exists | Backend retention is deployment-specific; operators must record it. |
+| Optional browser/server Sentry and tracing | Error diagnostics, stacks and operational correlation; server reporting does not use browser consent | Recipient-specific process | Recipient-specific process | Configure and document exact recipients, lawful bases, retention and scrubbing; browser consent withdrawal stops new browser reports only. The processor checklist owns the approval evidence. |
+| External avatar hosts and browser caches | Image request address and visitor network metadata, including on public pages | Host/browser process | Host/browser process | No Hephaestus export or erasure of a third party's request logs; record actual hosts and their privacy terms. |
 | Container logs and support bundles | Operational output; logging policy excludes raw request bodies and secrets, but operators must assess exported bundles | No selective deletion | No selective deletion | Shipped container logs rotate by size; support-bundle retention is deployment-specific. |
 | PostgreSQL and filesystem backups | A copy of the backed-up personal-data corpus | No selective deletion inside a backup | Expiry of the backup copy | The optional encrypted off-host PostgreSQL backup overlay retains full backup chains by count, not by a legal time limit. Operators must document and enforce destination retention, including copies of `.env` and broker evidence; see [backup and restore](../backup-restore.mdx). |
 
@@ -244,3 +247,38 @@ a second subject identity. This applies to automatic packages, approved packages
 even when no dispatch or feedback placement was projected. It lists the exact reviewed-work
 locator and freezes those inspection facts with the same fingerprint rule. A changed legacy
 comment reference requires a new preview; a missing exact locator fails closed before deletion.
+
+## Contributor change contract
+
+Keep each store in its owning module's `PersonDataCatalog`; the core privacy service coordinates
+frozen selections and receipts, not provider-specific matching. Use the existing contributor SPI
+instead of a second deletion service or an operator-SQL fallback. A new store cannot ship until:
+
+1. Its physical table or derived-copy kind is classified here, and exactly one catalog declares it.
+2. The catalog implements exact identity selection, an explicit export projection and idempotent
+   erasure. Credentials and other people's profiles are excluded. A shared operational row needs
+   an explicit anonymisation or empty-selection policy, not a name/email match.
+3. Both implementation citations are in the inventory table above. Runtime registration verifies
+   that declared stores equal implemented contributors; architecture checks verify coverage.
+4. Focused tests cover a source-only identity, two workspaces, another person left intact, changed
+   preview, failure/resume, and any writer or derived-copy boundary relevant to the new store.
+5. The controller-facing retention and source-governance records and data-subject disclosure match
+   the implementation. Declare broker, backup and provider limits rather than promising their erasure.
+
+The existing executable proof includes
+`server/application/src/test/java/de/tum/cit/aet/hephaestus/core/privacy/PersonDataErasureIntegrationTest.java`,
+`server/application/src/test/java/de/tum/cit/aet/hephaestus/core/privacy/PersonDataJobResumptionIntegrationTest.java`,
+`server/application/src/test/java/de/tum/cit/aet/hephaestus/core/privacy/EvidenceFolderPersonErasureIntegrationTest.java`
+and `server/application/src/test/java/de/tum/cit/aet/hephaestus/core/privacy/PersonDataRegistryTest.java`.
+The architecture test proves ownership and documentation coverage; it does not prove arbitrary
+contributor behaviour. Those behaviour tests remain required.
+
+### Upgrade attribution clearing
+
+The person-data migration clears old administrator attribution on instance/silent-mode and model
+settings, legacy ADMIN/USER connection-audit actor references and details, and membership-history
+subject references without an exact contributor ID. It resets hidden Heph journals once, preserving
+visible conversation messages, titles and times. It also invalidates pending integration authorisations.
+No identity is inferred from a display name, login or email. A legacy Outline mirror without an exact
+provider instance stops the upgrade. Back up and verify recovery before applying the upgrade; the
+shipped migration fragment owns the exact operator procedure.
