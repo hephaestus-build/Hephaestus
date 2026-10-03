@@ -1,18 +1,19 @@
-import { cn } from "cn";
 import type { CatalogOrigin } from "@/api/types.gen";
-import { badgeVariants } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
+import { Item, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 
-export interface CatalogOriginBadgeProps {
+export interface CatalogOriginProps {
 	origin?: CatalogOrigin | null;
 	kind: "practice" | "group";
-	className?: string;
 }
 
 /**
- * A badge summarizes the relationship; the release inbox owns the field-by-field decision.
+ * What the badge says, and the sentence that goes with it. The badge sits inside accordion triggers
+ * and list rows, where a focusable control cannot nest, so only the label travels there. The
+ * sentence is written out where the thing is opened, the practice's panel and the group's edit dialog,
+ * where it is read rather than hovered.
  */
-export function CatalogOriginBadge({ origin, kind, className }: CatalogOriginBadgeProps) {
+function describeOrigin({ origin, kind }: CatalogOriginProps) {
 	if (!origin) {
 		return null;
 	}
@@ -21,73 +22,69 @@ export function CatalogOriginBadge({ origin, kind, className }: CatalogOriginBad
 	const noun = kind === "practice" ? "practice" : "group";
 
 	if (!origin.sourceOffered) {
-		return (
-			<OriginBadge
-				className={className}
-				label="No longer in the catalog"
-				explanation={`New workspaces no longer receive this ${noun}. Yours keeps working exactly as it is.`}
-			/>
-		);
+		return {
+			label: "No longer in the catalog",
+			explanation: `New workspaces no longer receive this ${noun}. Yours keeps working exactly as it is.`,
+		};
 	}
 	if (origin.link === "UPDATE_AVAILABLE") {
-		return (
-			<OriginBadge
-				className={className}
-				label="Catalog changed, yours did not"
-				explanation={
-					kind === "practice"
-						? "The catalogue changed. Your copy is untouched. Review the proposed fields in Practice updates."
-						: `The catalog now has different ${subject}. Your copy is untouched — bring anything you want across by editing it.`
-				}
-			/>
-		);
+		return {
+			label: "Catalog changed, yours did not",
+			explanation:
+				kind === "practice"
+					? "The catalogue changed. Your copy is untouched. Review the proposed fields in Practice updates."
+					: `The catalog now has different ${subject}. Your copy is untouched — bring anything you want across by editing it.`,
+		};
 	}
 	if (origin.link === "DECLINED") {
-		return (
-			<OriginBadge
-				className={className}
-				label="Update declined"
-				explanation="You declined this catalogue version. Your copy is unchanged. A different version can be offered later."
-			/>
-		);
+		return {
+			label: "Update declined",
+			explanation:
+				"You declined this catalogue version. Your copy is unchanged. A different version can be offered later.",
+		};
 	}
 	if (origin.link === "IN_SYNC") {
-		return (
-			<OriginBadge
-				className={className}
-				label="Same as the catalog"
-				explanation={`These ${subject} match the catalog now. A later catalog change will not edit your copy without your decision.`}
-			/>
-		);
+		return {
+			label: "Same as the catalog",
+			explanation: `These ${subject} match the catalog now. A later catalog change will not edit your copy without your decision.`,
+		};
+	}
+	return {
+		label: "Edited here",
+		explanation:
+			kind === "practice"
+				? "This workspace changed the practice. A separate catalogue update may also be waiting in Practice updates."
+				: `The ${subject} differ from the version copied into this workspace.`,
+	};
+}
+
+export function CatalogOriginBadge({
+	className,
+	...props
+}: CatalogOriginProps & { className?: string }) {
+	const text = describeOrigin(props);
+	if (text === null) {
+		return null;
 	}
 	return (
-		<OriginBadge
-			className={className}
-			label="Edited here"
-			explanation={
-				kind === "practice"
-					? "This workspace changed the practice. A separate catalogue update may also be waiting in Practice updates."
-					: `The ${subject} differ from the version copied into this workspace.`
-			}
-		/>
+		<Badge variant="outline" className={className}>
+			{text.label}
+		</Badge>
 	);
 }
 
-function OriginBadge({
-	label,
-	explanation,
-	className,
-}: {
-	label: string;
-	explanation: string;
-	className?: string;
-}) {
+/** The badge's label as a heading and its explanation in full. Renders nothing without provenance. */
+export function CatalogOriginNote(props: CatalogOriginProps) {
+	const text = describeOrigin(props);
+	if (text === null) {
+		return null;
+	}
 	return (
-		<Tooltip>
-			<TooltipTrigger className={cn(badgeVariants({ variant: "outline" }), className)}>
-				{label}
-			</TooltipTrigger>
-			<TooltipContent>{explanation}</TooltipContent>
-		</Tooltip>
+		<Item variant="muted" size="sm" role="listitem">
+			<ItemContent>
+				<ItemTitle>{text.label}</ItemTitle>
+				<ItemDescription className="line-clamp-none">{text.explanation}</ItemDescription>
+			</ItemContent>
+		</Item>
 	);
 }

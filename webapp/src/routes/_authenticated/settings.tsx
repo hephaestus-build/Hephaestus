@@ -43,11 +43,13 @@ import { SettingsPage } from "@/components/settings/SettingsPage";
 import type { SlackPreferencesSectionProps } from "@/components/settings/SlackPreferencesSection";
 import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { productSurveyQueryScope } from "@/hooks/use-product-feedback";
+import { pageHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
 export const Route = createFileRoute("/_authenticated/settings")({
+	head: pageHead("User settings"),
 	component: RouteComponent,
 });
 

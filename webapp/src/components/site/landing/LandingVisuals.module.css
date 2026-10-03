@@ -90,8 +90,9 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+	/* Once, within five seconds: the bubble holds text, so a loop would need a pause control (SC 2.2.2). */
 	.hephFigure {
-		animation: landing-heph-float 4s ease-in-out infinite;
+		animation: landing-heph-float 4s ease-in-out;
 	}
 
 	.atom {

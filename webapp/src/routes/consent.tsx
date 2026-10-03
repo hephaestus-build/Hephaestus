@@ -8,6 +8,7 @@ import {
 	getConsentStatusQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import { ConsentPage, type ConsentSubmission } from "@/components/auth/ConsentPage";
+import { pageHead } from "@/lib/page-title";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { resolveCurrentUser, safeReturnTo } from "@/runtime/auth/guard";
 
@@ -16,6 +17,7 @@ interface ConsentSearch {
 }
 
 export const Route = createFileRoute("/consent")({
+	head: pageHead("Terms and consent"),
 	staticData: { surface: "auth" },
 	validateSearch: (search): ConsentSearch => ({
 		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,

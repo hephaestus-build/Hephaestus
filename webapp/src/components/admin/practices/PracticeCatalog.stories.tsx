@@ -173,8 +173,33 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Populated: Story = {
-	play: async () => {
+	play: async ({ canvas }) => {
 		await expectNoPageOverflow();
+		// The page's own `<h1>` sits above this component, so a group is a level-2 heading, not the
+		// level 3 an accordion defaults to — axe cannot see the skip with no `<h1>` in the story.
+		await expect(canvas.getAllByRole("heading", { level: 2 })).toHaveLength(groups.length);
+	},
+};
+
+/** Each group header is one button, so its provenance badge has to be plain text inside it. */
+export const WithCatalogProvenance: Story = {
+	args: {
+		groups: groups.map((group) => ({
+			...group,
+			catalogOrigin: { slug: group.slug, link: "IN_SYNC" as const, sourceOffered: true },
+		})),
+		practices: practices.map((practice) => ({
+			...practice,
+			catalogOrigin: {
+				slug: practice.slug,
+				link: "UPDATE_AVAILABLE" as const,
+				sourceOffered: true,
+			},
+		})),
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getAllByText("Same as the catalog")).not.toHaveLength(0);
+		await expect(canvas.getAllByText("Catalog changed, yours did not")).not.toHaveLength(0);
 	},
 };
 

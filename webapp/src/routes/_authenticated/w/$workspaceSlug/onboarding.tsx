@@ -18,11 +18,13 @@ import {
 import type { MemberAiChoice } from "@/components/practice-vocabulary/data-handling-defs";
 import { memberOnboardingQueryScope } from "@/hooks/use-member-onboarding";
 import { openRequiredLinks } from "@/lib/onboarding-links";
+import { pageHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/onboarding")({
+	head: pageHead("Choose your AI"),
 	staticData: { surface: "auth" },
 	validateSearch: (search): { returnTo?: string; step?: "accounts" } => ({
 		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,

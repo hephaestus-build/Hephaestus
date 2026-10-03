@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 
 import type { PracticeGroup } from "@/api/types.gen";
+import { CatalogOriginNote } from "@/components/admin/practices/CatalogOriginBadge";
 import { Button } from "@/components/ui/button";
 import {
 	Dialog,
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { ItemGroup } from "@/components/ui/item";
 import { Spinner } from "@/components/ui/spinner";
 
 import { GroupVisualPicker } from "./GroupVisualPicker";
@@ -95,7 +97,14 @@ function GroupDetailsForm({
 			<DialogHeader>
 				<DialogTitle>{editing ? "Edit group" : "Create group"}</DialogTitle>
 			</DialogHeader>
-			<DialogBody className="py-1">
+			<DialogBody className="space-y-4 py-1">
+				{group?.catalogOrigin != null && (
+					// The group row carries only the badge's label; what it means is written here, where
+					// the group is edited.
+					<ItemGroup>
+						<CatalogOriginNote origin={group.catalogOrigin} kind="group" />
+					</ItemGroup>
+				)}
 				<FieldGroup>
 					<Field>
 						<FieldLabel htmlFor={fieldId}>Name</FieldLabel>

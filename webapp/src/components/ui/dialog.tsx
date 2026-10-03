@@ -3,6 +3,7 @@
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 import type * as React from "react";
+import { useRef } from "react";
 
 import { cn } from "cn";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,11 @@ import { Button } from "@/components/ui/button";
  * 2. `DialogBody`, the opt-in scrollable middle, keyboard-focusable for the same reason as
  *    `DrawerBody`: a submitting form disables everything inside it.
  * 3. `DialogForm`, the `display: contents` form wrapper.
+ * 4. `DialogContent` opens on the first field inside the body, through Base UI's `initialFocus`
+ *    (https://base-ui.com/react/components/dialog). The body is keyboard-focusable (2), so it is the
+ *    first tab stop, and the default would land focus on an unnamed box instead of the field the
+ *    reader came to fill in (WCAG 2.2 SC 2.4.3). A body with no field keeps the default, and a
+ *    caller's own `initialFocus` wins.
  */
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
 	return <DialogPrimitive.Root data-slot="dialog" {...props} />;
@@ -51,13 +57,23 @@ function DialogContent({
 	children,
 	showCloseButton = true,
 	...props
-}: DialogPrimitive.Popup.Props & {
+}: Omit<DialogPrimitive.Popup.Props, "ref"> & {
 	showCloseButton?: boolean;
 }) {
+	const popup = useRef<HTMLDivElement>(null);
 	return (
 		<DialogPortal>
 			<DialogOverlay />
 			<DialogPrimitive.Popup
+				ref={popup}
+				initialFocus={(interaction) =>
+					// Touch keeps the default so the on-screen keyboard stays shut.
+					interaction === "touch"
+						? true
+						: (popup.current?.querySelector<HTMLElement>(
+								"[data-slot=dialog-body] :is(input, textarea, select, [role=checkbox], [role=radio], [role=switch], [role=combobox]):not([disabled])",
+							) ?? true)
+				}
 				data-slot="dialog-content"
 				className={cn(
 					"fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-background p-4 text-sm ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",

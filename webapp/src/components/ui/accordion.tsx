@@ -35,14 +35,27 @@ function AccordionItem({
 	);
 }
 
-function AccordionTrigger({ className, children, ...props }: AccordionPrimitive.Trigger.Props) {
+/**
+ * ⚠️ Diverges from the shadcn registry: `headingLevel` sets the level of the header, which Base UI
+ * fixes at `<h3>`. A trigger is a heading, so its level has to follow the page it sits in: directly
+ * under a page's `<h1>` it is a 2, and 3 is only right under an `<h2>` (WCAG 2.2 SC 1.3.1). Neither
+ * upstream offers the choice: https://github.com/shadcn-ui/ui/issues/1989 and
+ * https://github.com/mui/base-ui/issues/1678.
+ */
+function AccordionTrigger({
+	className,
+	children,
+	headingLevel = 3,
+	...props
+}: AccordionPrimitive.Trigger.Props & { headingLevel?: 2 | 3 | 4 }) {
+	const Heading = `h${headingLevel}` as const;
 	return (
 		// `w-full min-w-0 flex-1`, not the bare `flex` shadcn ships. Base UI's Header renders an `<h3>`
 		// wrapping the trigger, so a caller's `<AccordionTrigger className="…">` lands on the button
 		// *inside* it: wherever the header is the layout item rather than a full-width block — a flex
 		// row, a grid cell — the trigger is only as wide as its own text and the caller cannot widen it
 		// from outside. Sizing the header here restores that control, and is inert in block flow.
-		<AccordionPrimitive.Header className="flex w-full min-w-0 flex-1">
+		<AccordionPrimitive.Header render={<Heading />} className="flex w-full min-w-0 flex-1">
 			<AccordionPrimitive.Trigger
 				data-slot="accordion-trigger"
 				// `aria-disabled:`, never `disabled:`: Base UI keeps a disabled trigger focusable, so it

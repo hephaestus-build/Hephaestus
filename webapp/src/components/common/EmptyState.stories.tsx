@@ -16,6 +16,7 @@ const meta = {
 	args: {
 		icon: <FileQuestion className="size-6" />,
 		title: "No content found",
+		headingLevel: 2,
 		description: "There is no content to display at the moment.",
 	},
 } satisfies Meta<typeof EmptyState>;

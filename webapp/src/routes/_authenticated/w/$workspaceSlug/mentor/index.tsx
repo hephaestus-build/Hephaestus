@@ -79,6 +79,7 @@ function MentorContainer() {
 				<EmptyState
 					icon={<MessagesSquare />}
 					title="No conversation selected"
+					headingLevel={1}
 					description="Open a saved conversation from the conversation list."
 				/>
 			</div>
@@ -87,6 +88,7 @@ function MentorContainer() {
 
 	return (
 		<div className="flex h-full min-h-0 flex-1 flex-col">
+			<h1 className="sr-only">Conversation with Heph</h1>
 			<Greeting />
 		</div>
 	);

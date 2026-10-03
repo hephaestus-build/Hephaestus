@@ -126,6 +126,25 @@ export const NoWorkspace: Story = {
 	},
 };
 
+/** Open, so the accessibility check sees links as menu items, which a wrapping link would break. */
+export const AccountMenu: Story = {
+	args: {
+		isAuthenticated: true,
+		isLoading: false,
+	},
+	play: async ({ canvas }) => {
+		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
+		const menu = within(await screen.findByRole("menu"));
+		const activity = menu.getByRole("menuitem", { name: "Activity" });
+		await expectSettledVisible(activity);
+		await expect(activity).toHaveAttribute("href", "/w/demo-workspace/activity");
+		await expect(menu.getByRole("menuitem", { name: "Settings" })).toHaveAttribute(
+			"href",
+			"/settings",
+		);
+	},
+};
+
 /** During a user view the menu holds only what acts on the signed-in administrator. */
 export const ReadOnly: Story = {
 	args: {
@@ -151,5 +170,14 @@ export const Mobile: Story = {
 		viewport: { defaultViewport: "reflow" },
 		chromatic: { viewports: [320] },
 	},
-	play: expectNoPageOverflow,
+	play: async ({ canvas }) => {
+		await expectNoPageOverflow();
+		// Firefox lays this row out wider than Chromium does, so Chromium has to show room to spare
+		// between the logo and the controls: a row that fits exactly here overflows there.
+		const logo = canvas.getByRole("link", { name: "Hephaestus home" });
+		const feedback = canvas.getByRole("button", { name: /^Feedback/u });
+		await expect(
+			feedback.getBoundingClientRect().left - logo.getBoundingClientRect().right,
+		).toBeGreaterThanOrEqual(40);
+	},
 };

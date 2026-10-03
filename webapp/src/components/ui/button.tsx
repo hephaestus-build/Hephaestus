@@ -11,8 +11,8 @@ import { cn } from "cn";
  * 2. `destructive-outline` and `warning-outline`, one outlined shape in each status tone.
  * 3. `size="inline"`, a button that sits inside a sentence.
  * 4. The `shape` axis.
- * 5. `aria-pressed` is styled wherever `aria-expanded` is: a pressed toggle rendered as a Button has
- *    to look pressed, and upstream styles only the expanded case.
+ * 5. `aria-pressed` is styled wherever `aria-expanded` is, in the dark theme too: a pressed toggle
+ *    rendered as a Button has to look pressed, and upstream styles only the expanded case.
  * 6. `mentor`, the accent a practice surface carries at most one of — `webapp/AGENTS.md`
  *    § Practice surfaces palette owns when a surface may wear it.
  */
@@ -25,7 +25,7 @@ const buttonVariants = cva(
 				// hover feedback to a button rendered as a link and to no other.
 				default: "bg-primary text-primary-foreground hover:bg-primary/80",
 				outline:
-					"border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+					"border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground aria-pressed:bg-muted aria-pressed:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50 dark:aria-expanded:bg-muted dark:aria-pressed:bg-muted",
 				secondary:
 					"bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground aria-pressed:bg-secondary aria-pressed:text-secondary-foreground",
 				ghost:

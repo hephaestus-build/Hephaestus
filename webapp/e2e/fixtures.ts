@@ -1,25 +1,43 @@
-import { test as base, expect, type Page } from "@playwright/test";
+import { test as base, type BrowserContext, expect, type Page } from "@playwright/test";
 
 import { E2E_BASE_URL } from "./urls.ts";
 
 const SERVER_URL = process.env.E2E_SERVER_URL ?? "http://localhost:8080";
 
-export const test = base.extend({
+async function serveEnvConfig(context: BrowserContext): Promise<void> {
+	await context.route("**/env-config.js", async (route) =>
+		route.fulfill({
+			contentType: "application/javascript",
+			body: `window.__ENV__ = ${JSON.stringify({
+				APPLICATION_SERVER_URL: SERVER_URL,
+				APPLICATION_CLIENT_URL: E2E_BASE_URL,
+				XSRF_COOKIE_NAME: "XSRF-TOKEN",
+				TANSTACK_DEVTOOLS_ENABLED: "false",
+				SENTRY_DSN: "",
+			})};`,
+		}),
+	);
+}
+
+export const test = base.extend<
+	object,
+	{ adminSession: Awaited<ReturnType<BrowserContext["storageState"]>> }
+>({
 	context: async ({ context }, use) => {
-		await context.route("**/env-config.js", async (route) =>
-			route.fulfill({
-				contentType: "application/javascript",
-				body: `window.__ENV__ = ${JSON.stringify({
-					APPLICATION_SERVER_URL: SERVER_URL,
-					APPLICATION_CLIENT_URL: E2E_BASE_URL,
-					XSRF_COOKIE_NAME: "XSRF-TOKEN",
-					TANSTACK_DEVTOOLS_ENABLED: "false",
-					SENTRY_DSN: "",
-				})};`,
-			}),
-		);
+		await serveEnvConfig(context);
 		await use(context);
 	},
+	// One sign-in for every test of a worker, for a spec that visits many routes as the same person.
+	adminSession: [
+		async ({ browser }, use) => {
+			const context = await browser.newContext({ baseURL: E2E_BASE_URL });
+			await serveEnvConfig(context);
+			await loginAsDevAdmin(await context.newPage());
+			await use(await context.storageState());
+			await context.close();
+		},
+		{ scope: "worker" },
+	],
 });
 
 export { expect } from "@playwright/test";

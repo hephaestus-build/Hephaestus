@@ -9,7 +9,6 @@ import {
 import {
 	createRootRouteWithContext,
 	HeadContent,
-	Link,
 	Outlet,
 	useLocation,
 	useMatches,
@@ -33,10 +32,12 @@ import type { SurveyInvitation } from "@/api/types.gen";
 import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { LoginDialog } from "@/components/auth/LoginDialog";
+import { NotFoundPage } from "@/components/common/NotFoundPage";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { CookieConsentBanner } from "@/components/layout/CookieConsentBanner";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
+import { RouteAnnouncer } from "@/components/layout/RouteAnnouncer";
 import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
@@ -177,6 +178,16 @@ function RootLayout() {
 				</ErrorBoundary>
 			)}
 			{!userView && <FeatureFlagDevTools />}
+		</>
+	);
+}
+
+/** The announcer sits above the layout, whose auth and app branches each remount what they hold. */
+function RootRoute() {
+	return (
+		<>
+			<RouteAnnouncer />
+			<RootLayout />
 		</>
 	);
 }
@@ -332,18 +343,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	}),
 	// Fallback tab title; the deepest match that sets its own `head` wins.
 	head: () => ({ meta: [{ title: "Hephaestus" }] }),
-	component: RootLayout,
-	notFoundComponent: () => (
-		<div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center py-16 text-center">
-			<h1 className="mb-4 text-3xl font-bold">Page Not Found</h1>
-			<p className="mb-8 text-muted-foreground">
-				The page you’re looking for doesn’t exist or you don’t have permission to view it.
-			</p>
-			<Link to="/" className="font-medium text-primary hover:underline">
-				Return to Home
-			</Link>
-		</div>
-	),
+	component: RootRoute,
+	// An address no route matches is `routes/$.tsx`, which sets a title; this serves a thrown `notFound()`.
+	notFoundComponent: NotFoundPage,
 });
 
 function HeaderContainer() {

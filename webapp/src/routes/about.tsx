@@ -4,8 +4,10 @@ import { createFileRoute } from "@tanstack/react-router";
 import { listGlobalContributorsOptions } from "@/api/@tanstack/react-query.gen";
 import { AboutPage } from "@/components/site/about/AboutPage";
 import type { ProjectManager } from "@/components/site/about/ProjectManagerCard";
+import { pageHead } from "@/lib/page-title";
 
 export const Route = createFileRoute("/about")({
+	head: pageHead("About"),
 	component: AboutContainer,
 });
 

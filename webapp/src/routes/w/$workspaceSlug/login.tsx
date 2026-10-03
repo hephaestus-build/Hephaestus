@@ -4,6 +4,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { getWorkspaceOptions } from "@/api/@tanstack/react-query.gen";
 import { LoginPage } from "@/components/auth/LoginPage";
 import { useSignInProviders } from "@/hooks/use-sign-in-providers";
+import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { resolveCurrentUser } from "@/runtime/auth/guard";
@@ -13,6 +14,7 @@ interface WorkspaceLoginSearch {
 }
 
 export const Route = createFileRoute("/w/$workspaceSlug/login")({
+	head: pageHead("Sign in"),
 	staticData: { surface: "auth" },
 	validateSearch: (search): WorkspaceLoginSearch => ({
 		error: typeof search.error === "string" ? search.error : undefined,

@@ -72,8 +72,28 @@ it.each([
 
 	renderRouteAt(`/w/acme/mentor/${threadId}`);
 
-	await screen.findByText("This conversation could not be opened", {}, ROUTE_RENDER_WAIT);
+	// The only thing on the page, so it is the page's heading.
+	await screen.findByRole(
+		"heading",
+		{ level: 1, name: "This conversation could not be opened" },
+		ROUTE_RENDER_WAIT,
+	);
 	expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
+});
+
+it("names the page for a screen reader when the conversation opens", async () => {
+	server.use(
+		http.get("*/workspaces/acme/mentor/threads/:threadId", () => HttpResponse.json(stored)),
+	);
+
+	renderRouteAt(`/w/acme/mentor/${threadId}`);
+
+	await screen.findByRole(
+		"heading",
+		{ level: 1, name: "Conversation with Heph" },
+		ROUTE_RENDER_WAIT,
+	);
+	screen.getByRole("textbox", { name: "Message" });
 });
 
 it("opens the conversation when trying again succeeds", async () => {

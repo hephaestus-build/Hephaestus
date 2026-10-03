@@ -10,14 +10,17 @@ import {
 	EmptyTitle,
 } from "@/components/ui/empty";
 
-export function NoWorkspace() {
+/** Level 1 where this is the whole page; 2 where it sits under something else, such as the sidebar. */
+export function NoWorkspace({ headingLevel = 1 }: { headingLevel?: 1 | 2 }) {
 	return (
 		<Empty>
 			<EmptyHeader>
 				<EmptyMedia variant="icon">
 					<Folders />
 				</EmptyMedia>
-				<EmptyTitle>No workspace</EmptyTitle>
+				<EmptyTitle role="heading" aria-level={headingLevel}>
+					No workspace
+				</EmptyTitle>
 				<EmptyDescription>You&apos;re not a member of any workspace yet.</EmptyDescription>
 			</EmptyHeader>
 			<Link to="/workspaces/new" className={buttonVariants()}>

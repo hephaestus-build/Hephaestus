@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, waitFor, within } from "storybook/test";
+import { expect } from "storybook/test";
 
-import { CatalogOriginBadge } from "./CatalogOriginBadge";
+import { ItemGroup } from "@/components/ui/item";
+
+import { CatalogOriginBadge, CatalogOriginNote } from "./CatalogOriginBadge";
 
 const meta = {
 	component: CatalogOriginBadge,
@@ -15,12 +17,11 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The only place that says the relationship is permanent. */
 export const MatchesCatalog: Story = {
 	play: async ({ canvas }) => {
-		canvas.getByRole("button", { name: "Same as the catalog" }).focus();
-		const tooltip = await within(document.body).findByText(/will not edit your copy/u);
-		await waitFor(async () => expect(tooltip).toBeVisible());
+		await expect(canvas.getByText("Same as the catalog")).toBeVisible();
+		// A badge sits inside accordion triggers, so it must not be a control of its own.
+		await expect(canvas.queryByRole("button")).not.toBeInTheDocument();
 	},
 };
 
@@ -28,10 +29,12 @@ export const MatchesCatalog: Story = {
 export const NoProvenance: Story = {
 	args: { origin: null },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("button")).not.toBeInTheDocument();
+		await expect(canvas.queryByText(/catalog|Edited here/u)).not.toBeInTheDocument();
 	},
 };
 
+// The label carries the outcome, not just the event: nothing applies a catalog update to a
+// workspace copy, so "the catalog changed" on its own invites the opposite reading.
 export const CatalogChanged: Story = {
 	args: {
 		origin: {
@@ -41,11 +44,7 @@ export const CatalogChanged: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		canvas.getByRole("button", { name: "Catalog changed, yours did not" }).focus();
-		// The label carries the outcome, not just the event: nothing applies a catalog update to a
-		// workspace copy, so "the catalog changed" on its own invites the opposite reading.
-		const tooltip = await within(document.body).findByText(/Your copy is untouched/u);
-		await waitFor(async () => expect(tooltip).toBeVisible());
+		await expect(canvas.getByText("Catalog changed, yours did not")).toBeVisible();
 	},
 };
 
@@ -58,11 +57,7 @@ export const UpdateDeclined: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		canvas.getByRole("button", { name: "Update declined" }).focus();
-		const tooltip = await within(document.body).findByText(
-			/different version can be offered later/u,
-		);
-		await waitFor(async () => expect(tooltip).toBeVisible());
+		await expect(canvas.getByText("Update declined")).toBeVisible();
 	},
 };
 
@@ -73,6 +68,9 @@ export const Customized: Story = {
 			link: "LOCALLY_EDITED",
 			sourceOffered: true,
 		},
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Edited here")).toBeVisible();
 	},
 };
 
@@ -85,10 +83,7 @@ export const NoLongerIncluded: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const status = canvas.getByRole("button", { name: "No longer in the catalog" });
-		status.focus();
-		const tooltip = await within(document.body).findByText(/Yours keeps working exactly as it is/u);
-		await waitFor(async () => expect(tooltip).toBeVisible());
+		await expect(canvas.getByText("No longer in the catalog")).toBeVisible();
 	},
 };
 
@@ -102,9 +97,19 @@ export const GroupChanged: Story = {
 		},
 	},
 	play: async ({ canvas }) => {
-		const status = canvas.getByRole("button", { name: "Catalog changed, yours did not" });
-		status.focus();
-		const tooltip = await within(document.body).findByText(/different group details/u);
-		await waitFor(async () => expect(tooltip).toBeVisible());
+		await expect(canvas.getByText("Catalog changed, yours did not")).toBeVisible();
+	},
+};
+
+/** The sentence a badge cannot carry, written out where the practice is read. */
+export const Explained: Story = {
+	render: (args) => (
+		<ItemGroup>
+			<CatalogOriginNote {...args} />
+		</ItemGroup>
+	),
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Same as the catalog")).toBeVisible();
+		await expect(canvas.getByText(/will not edit your copy without your decision/u)).toBeVisible();
 	},
 };

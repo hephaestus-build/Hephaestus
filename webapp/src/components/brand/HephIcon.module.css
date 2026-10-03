@@ -36,17 +36,21 @@
 	--mentor-blush-opacity: 0.2;
 }
 
+/*
+ * The idle motion plays once and stops within five seconds, so it needs no pause control (WCAG 2.2
+ * SC 2.2.2). Only `streaming` repeats: it says Heph is working, and ends with the work.
+ */
 @media (prefers-reduced-motion: no-preference) {
 	.animated .float {
-		animation: float 4s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+		animation: float 4s cubic-bezier(0.25, 0.1, 0.25, 1);
 	}
 
 	.animated .wobble {
-		animation: wobble 3.6s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+		animation: wobble 3.6s cubic-bezier(0.25, 0.1, 0.25, 1);
 	}
 
 	.animated .ping {
-		animation: ping 2.2s ease-out infinite;
+		animation: ping 2.2s ease-out 2;
 	}
 
 	.animated .streaming {
@@ -54,11 +58,11 @@
 	}
 
 	.animated .eyes {
-		animation: blink 6.5s steps(1, end) infinite;
+		animation: blink 5s steps(1, end);
 	}
 
 	.animated .shadow {
-		animation: shadow 4s cubic-bezier(0.25, 0.1, 0.25, 1) infinite;
+		animation: shadow 4s cubic-bezier(0.25, 0.1, 0.25, 1);
 	}
 }
 

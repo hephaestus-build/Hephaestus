@@ -42,6 +42,28 @@ export const Creating: Story = {
 	},
 };
 
+/** The body scrolls, so it is the first tab stop; focus belongs on the field, not on the box around it. */
+export const OpensOnTheName: Story = {
+	play: async () => {
+		const field = await screen.findByLabelText("Name");
+		await waitFor(async () => expect(field).toHaveFocus());
+	},
+};
+
+/** The group row only labels where the group stands against the catalog; the dialog says what that means. */
+export const FromTheCatalog: Story = {
+	args: {
+		group: {
+			...reviewReadyGroup,
+			catalogOrigin: { slug: reviewReadyGroup.slug, link: "UPDATE_AVAILABLE", sourceOffered: true },
+		},
+	},
+	play: async () => {
+		await expectSettledVisible(await screen.findByText("Catalog changed, yours did not"));
+		await expect(screen.getByText(/bring anything you want across by editing it/u)).toBeVisible();
+	},
+};
+
 export const Renaming: Story = {
 	args: { group: reviewReadyGroup },
 	play: async ({ args }) => {

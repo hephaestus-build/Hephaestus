@@ -74,7 +74,7 @@ const WORK_STATES = {
 	merged: {
 		label: "Merged",
 		icon: GitMerge,
-		className: "bg-provider-done text-provider-done-foreground",
+		className: "bg-provider-done text-provider-done-foreground dark:text-foreground",
 	},
 } as const;
 

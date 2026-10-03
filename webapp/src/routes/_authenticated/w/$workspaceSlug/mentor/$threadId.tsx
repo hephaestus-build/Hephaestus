@@ -48,6 +48,7 @@ function ThreadContainer() {
 			<EmptyState
 				icon={<MessageSquareWarning />}
 				title="This conversation could not be opened"
+				headingLevel={1}
 				description="Loading it failed, or it no longer exists for you. Try again, or start a new chat."
 				action={
 					<Button
@@ -85,6 +86,7 @@ function ThreadChat({
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
+			<h1 className="sr-only">Conversation with Heph</h1>
 			<Chat
 				messages={mentorChat.messages}
 				votes={mentorChat.votes}

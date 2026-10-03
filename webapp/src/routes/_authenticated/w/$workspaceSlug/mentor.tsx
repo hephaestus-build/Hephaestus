@@ -8,10 +8,12 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import { WorkspaceMentorPreferenceNotice } from "@/components/onboarding/WorkspaceMentorPreferenceNotice";
 import { mentorPreferenceReason } from "@/lib/mentor-preference";
+import { pageHead } from "@/lib/page-title";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")({
+	head: pageHead("Mentor"),
 	staticData: { surface: "fullscreen" },
 	// Usually a cache hit, since the workspace gate fetched this on the way in; when the gate's
 	// fetch failed, a cold-load outage reaches the router error surface rather than a skeleton.

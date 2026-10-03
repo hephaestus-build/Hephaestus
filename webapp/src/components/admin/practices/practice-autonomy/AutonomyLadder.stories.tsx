@@ -110,6 +110,12 @@ export const Full: Story = {
 	},
 };
 
+/** The chosen rung's tint and the muted sentence on it are the dark theme's weakest pair. */
+export const FullInDarkMode: Story = {
+	args: { variant: "full" },
+	globals: { theme: "dark" },
+};
+
 /**
  * The width the owner was shown by the old default. The ladder turns its axis and nothing else: one
  * border, one radius, the same lines between the rungs.

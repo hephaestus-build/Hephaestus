@@ -5,6 +5,7 @@ import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
+import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
@@ -80,6 +81,7 @@ function describe(code: string | undefined): { title: string; description: strin
 }
 
 export const Route = createFileRoute("/auth/error")({
+	head: pageHead("Sign-in problem"),
 	staticData: { surface: "auth" },
 	validateSearch: (search): ErrorSearch => ({
 		code: typeof search.code === "string" ? search.code : undefined,

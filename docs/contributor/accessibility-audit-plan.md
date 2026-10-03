@@ -35,8 +35,9 @@ from those pages remain in scope.
 | Workspace administration | members, practices, review operations, models, usage and integrations |
 | Instance administration | users, workspaces, audit, catalogue, providers, models and usage |
 
-The dated [audit record](./accessibility-audit-record-template.md) expands this inventory to the routes,
-states and roles present in the tested revision.
+The dated audit record, filled from the [record template](./accessibility-audit-record-template.md),
+expands this inventory to the routes, states and roles present in the tested revision. The latest is
+[the 2026-10-03 record](./accessibility-audit-record-2026-10-03.md).
 
 ## Evaluation
 
@@ -54,6 +55,10 @@ assistive-technology versions.
    colour, target size and motion. Record the results with the
    [WCAG-EM Report Tool](https://www.w3.org/WAI/eval/report-tool/).
 4. Run axe on the integrated sampled pages and reconcile its results with the manual evaluation.
+   `vp run --filter webapp test:e2e accessibility.spec.ts` does this against the built application and
+   a running server: every route in both colour schemes, the page title, a Tab walk, reflow at 320 and
+   640 CSS pixels, looping motion, menus and dialogs, the announcement of a page change, and three
+   complete keyboard-only processes. It decides nothing that NVDA or VoiceOver decide.
 
 ## Findings and completion
 
@@ -63,6 +68,11 @@ milestones for ownership and scheduling. Check other callers when the failure is
 
 `vp run --filter webapp test:storybook` runs axe against the maintained Storybook states in Chromium.
 Retain its report, revision and browser version with the audit, and document any rule exclusions.
+A story shows a component alone, so a defect that appears only where components meet, such as one
+control nested in another, needs a story that renders the meeting.
+
+Record a check that was not run as `Not tested`, never as `Not applicable`, and list it under
+*Remaining work* in the record. A statement that claims conformance has no `Not tested` rows.
 
 An AA conformance claim requires every scoped page and complete process to pass every applicable Level
 A and AA criterion. Follow W3C's

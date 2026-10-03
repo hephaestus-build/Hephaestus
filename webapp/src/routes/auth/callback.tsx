@@ -3,6 +3,7 @@ import { useEffect } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { pageHead } from "@/lib/page-title";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/guard";
 
@@ -11,6 +12,7 @@ interface CallbackSearch {
 }
 
 export const Route = createFileRoute("/auth/callback")({
+	head: pageHead("Signing in"),
 	staticData: { surface: "auth" },
 	validateSearch: (search): CallbackSearch => ({
 		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,

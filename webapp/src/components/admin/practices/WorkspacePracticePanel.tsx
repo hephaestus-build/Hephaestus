@@ -4,7 +4,7 @@ import { ClipboardCheck, Pencil } from "lucide-react";
 import { cn } from "cn";
 import type { Practice, PracticeDefinitionOptions } from "@/api/types.gen";
 import { practiceLevel } from "@/components/admin/practice-reviews/review-levels";
-import { CatalogOriginBadge } from "@/components/admin/practices/CatalogOriginBadge";
+import { CatalogOriginNote } from "@/components/admin/practices/CatalogOriginBadge";
 import {
 	PRACTICE_SETUP_LEVEL_LABELS,
 	practiceFormLevel,
@@ -93,12 +93,12 @@ export function WorkspacePracticePanel({
 				current={PRACTICE_SETUP_LEVEL_LABELS.practice}
 				mark={<GroupPill size="lg" slug={practice.groupSlug} name={groupName} />}
 				title={practice.name}
-				chips={<CatalogOriginBadge origin={practice.catalogOrigin} kind="practice" />}
 				description={<WorkTypeLabel artifactKind={practice.artifactKind} />}
 			/>
 
 			<DrawerBody className="space-y-6">
 				<ItemGroup className="gap-2">
+					<CatalogOriginNote origin={practice.catalogOrigin} kind="practice" />
 					<Item variant="muted" size="sm" role="listitem">
 						<ItemContent>
 							<ItemTitle className="flex flex-wrap items-center gap-2">

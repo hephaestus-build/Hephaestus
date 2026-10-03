@@ -22,7 +22,7 @@ import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useActivityOverview, useActivityWork, useOpenWork } from "@/hooks/use-activity";
 import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
 import { ARTIFACT_KIND } from "@/lib/artifact-kinds";
-import { workspaceHead } from "@/lib/page-title";
+import { pageHead } from "@/lib/page-title";
 import { toScmProviderType } from "@/lib/provider/provider-terms";
 import { useSearchState, carriedSearchParams } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
@@ -31,7 +31,7 @@ import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/activity")({
 	component: Activity,
-	head: workspaceHead("Activity"),
+	head: pageHead("Activity"),
 	validateSearch: activitySearchSchema,
 	search: {
 		middlewares: carriedSearchParams<ActivitySearch>(["range"], ACTIVITY_SEARCH_DEFAULTS),
