@@ -13,6 +13,7 @@ import {
 	developerCount,
 	HELD_BACK,
 	isSplitStanding,
+	SPLIT_FIELDS,
 	SPLIT_STANDINGS,
 	type SplitContext,
 	type SplitStanding,
@@ -55,12 +56,6 @@ const HELD_BACK_TRACK = "h-2 rounded-sm border border-dashed border-muted-foregr
 function standingFill(standing: SplitStanding): string {
 	return cn("bg-current", statusToneClass(PRACTICE_GROUP_STANDING_DEFS[standing].badgeVariant));
 }
-
-const SPLIT_FIELDS = {
-	DEVELOPING: "needsAttention",
-	MIXED: "mixedFeedback",
-	STRENGTH: "goingWell",
-} as const;
 
 function partsOf(
 	split: WorkspaceSplit,

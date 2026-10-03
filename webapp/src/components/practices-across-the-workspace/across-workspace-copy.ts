@@ -84,6 +84,13 @@ export const standingLabel = (standing: PracticeGroupStandingValue): string =>
 export const SPLIT_STANDINGS = ["DEVELOPING", "MIXED", "STRENGTH"] as const;
 export type SplitStanding = (typeof SPLIT_STANDINGS)[number];
 
+/** The field of a split that counts each standing. */
+export const SPLIT_FIELDS = {
+	DEVELOPING: "needsAttention",
+	MIXED: "mixedFeedback",
+	STRENGTH: "goingWell",
+} as const satisfies Record<SplitStanding, keyof WorkspaceSplit>;
+
 export function isSplitStanding(standing: PracticeGroupStandingValue): standing is SplitStanding {
 	return (SPLIT_STANDINGS as readonly string[]).includes(standing);
 }
@@ -133,10 +140,11 @@ export function splitDescription(
 	if (split.shape === "WITHHELD") {
 		return `${HELD_BACK}. ${you}.`;
 	}
-	const needs = split.needsAttention ?? 0;
-	const mixed = split.mixedFeedback ?? 0;
-	const well = split.goingWell ?? 0;
+	// Each standing in the registry's own words, so the bar's text says what its legend says.
+	const standings = SPLIT_STANDINGS.map(
+		(standing) => `${split[SPLIT_FIELDS[standing]] ?? 0} ${standingLabel(standing)}`,
+	);
 	const noneYet = split.noneYet ?? 0;
 	const counted = context.readerCounted;
-	return `${reference}: ${needs} Needs attention, ${mixed} Mixed feedback, ${well} Going well, ${noneYet} none yet. ${you}${counted ? "" : ", not counted in the split"}.`;
+	return `${reference}: ${standings.join(", ")}, ${noneYet} none yet. ${you}${counted ? "" : ", not counted in the split"}.`;
 }
