@@ -35,6 +35,8 @@ import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole;
 import de.tum.cit.aet.hephaestus.integration.scm.ReviewTargetQuery;
 import de.tum.cit.aet.hephaestus.practices.EvidenceStance;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation;
 import de.tum.cit.aet.hephaestus.practices.PracticeEvidenceRequirement;
 import de.tum.cit.aet.hephaestus.practices.PracticeRevisionRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeSignalOptions;
@@ -51,6 +53,7 @@ import de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedWorkChanges;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1693,7 +1696,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             testPractice.setName("Describe what and why");
             testPractice.setCriteria("Judge the description.");
             testPractice.setEvidenceRequirements(
-                    java.util.Arrays.stream(sourceKinds).map(this::required).toList());
+                    Arrays.stream(sourceKinds).map(this::required).toList());
             PracticeRevision pinned = new PracticeRevision(testPractice, 1);
             ReflectionTestUtils.setField(pinned, "id", 11L);
             when(practiceRevisionRepository.findByIdAndWorkspaceId(11L, 1L)).thenReturn(Optional.of(pinned));
@@ -1754,22 +1757,20 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             ReflectionTestUtils.setField(
                     service,
                     "fence",
-                    new de.tum.cit.aet.hephaestus.practices.review.AutomatedReviewFence(Map.of(
+                    new AutomatedReviewFence(Map.of(
                             "withdrawn",
-                            new de.tum.cit.aet.hephaestus.practices.PracticeDefinition(
+                            new PracticeDefinition(
                                     "Withdrawn",
                                     PracticeTestEvidence.signals(ArtifactKinds.PULL_REQUEST),
                                     List.of(required("scm.pull-request.diff")),
                                     Map.of(),
-                                    de.tum.cit.aet.hephaestus.integration.core.spi.ActorRole.AUTHOR,
+                                    ActorRole.AUTHOR,
                                     null,
                                     "Criteria",
                                     null,
                                     PracticeTestEvidence.forArtifact(ArtifactKinds.PULL_REQUEST)
-                                            .withdrawnFor(
-                                                    new de.tum.cit.aet.hephaestus.practices.PracticeEvidenceLimitation(
-                                                            "AT_CLOSE_STATE_NOT_CAPTURED",
-                                                            "Nothing records the close.")),
+                                            .withdrawnFor(new PracticeEvidenceLimitation(
+                                                    "AT_CLOSE_STATE_NOT_CAPTURED", "Nothing records the close.")),
                                     null,
                                     null,
                                     null))));
@@ -1814,7 +1815,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
             ReflectionTestUtils.setField(testsRevision, "id", 13L);
             when(practiceRevisionRepository.findByIdAndWorkspaceId(13L, 1L)).thenReturn(Optional.of(testsRevision));
             EvidenceSnapshotFixtures.admittedPractice(
-                    (ObjectNode) java.util.Objects.requireNonNull(testJob.getEvidenceSnapshot()),
+                    (ObjectNode) Objects.requireNonNull(testJob.getEvidenceSnapshot()),
                     "ships-tests-with-the-change",
                     13L);
 
